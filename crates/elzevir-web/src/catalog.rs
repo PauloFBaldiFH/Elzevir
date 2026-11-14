@@ -15,14 +15,15 @@ use elzevir_app::export::{
 };
 use elzevir_app::items::ItemGridSource;
 use elzevir_app::listing::{
-    self, CatalogListing, FamilyCursor, FamilyHead, FamilyRow, InstanceRow, ItemPill, Match,
+    self, CatalogListing, FamilyCursor, FamilyHead, FamilyRow, InstanceRow, ItemPill, Match, Scan,
     WorkRow,
 };
 use elzevir_app::staff::Permission;
 use elzevir_app::suggestions::AuthoritySuggestions;
 use elzevir_domain::catalog::{InstanceId, MaterialType};
 use elzevir_web_templates::{
-    AuthorityLine, FamilyLine, HubLine, InstanceLine, PillLine, StaffCatalog, WorkLine, url_encode,
+    AuthorityLine, FamilyLine, HubLine, InstanceLine, PillLine, ScanLine, StaffCatalog, WorkLine,
+    url_encode,
 };
 use serde::Deserialize;
 
@@ -59,7 +60,8 @@ pub(crate) struct CatalogParams {
 /// One page, as read.
 enum Page {
     Browse(listing::ListingPage),
-    Search(listing::SearchPage),
+    /// A search, with what its text was taken for.
+    Search(listing::SearchPage, Scan),
 }
 
 /// `GET /equipe/acervo?q=&after=&from=`: the listing, or a search when `q` is given. An
@@ -83,14 +85,24 @@ pub(crate) async fn catalog(
             listing::browse(&*listing, after.as_ref())
                 .map(Page::Browse)
                 .map_err(drop)
-        } else {
-            let from = params
-                .from
-                .and_then(|from| from.parse::<usize>().ok())
-                .unwrap_or(0);
+        } else if let Some(from) = params.from {
+            // A later page of a text search: the scan rule saw the first one.
+            let from = from.parse::<usize>().unwrap_or(0);
             listing::search(&*index, &*listing, &params.q, from)
-                .map(Page::Search)
+                .map(|page| Page::Search(page, Scan::Text))
                 .map_err(drop)
+        } else {
+            // One field for everything (docs/specs/catalogo/bipe.md).
+            let scan = listing::scan(&*listing, &params.q).map_err(drop)?;
+            match &scan {
+                Scan::Known(owner) => {
+                    listing::scanned_page(&*listing, &params.q, owner).map_err(drop)
+                }
+                Scan::NewIsbn(_) | Scan::Text => {
+                    listing::search(&*index, &*listing, &params.q, 0).map_err(drop)
+                }
+            }
+            .map(|page| Page::Search(page, scan))
         }?;
         Ok::<_, ()>((page, codes))
     })
@@ -106,6 +118,7 @@ pub(crate) async fn catalog(
             can_catalogue,
             query: "",
             total: None,
+            scan: None,
             rows: page
                 .rows
                 .iter()
@@ -116,12 +129,13 @@ pub(crate) async fn catalog(
                 .as_ref()
                 .map(|next| format!("/equipe/acervo?after={}", url_encode(&next.token()))),
         },
-        Page::Search(page) => StaffCatalog {
+        Page::Search(page, scan) => StaffCatalog {
             t: &state.inner.i18n,
             csrf: &session.csrf,
             can_catalogue,
             query: &page.query,
             total: Some(page.total),
+            scan: scan_line(scan, can_catalogue),
             rows: opened(
                 page.rows
                     .iter()
@@ -145,6 +159,26 @@ pub(crate) async fn catalog(
         }
     } else {
         render(&page)
+    }
+}
+
+/// What the page's script does with a scanned code (bipe.md, items 7 and 8): the grid of
+/// a known code's Instance, or a new family for an unknown ISBN, for cataloguers.
+fn scan_line(scan: &Scan, can_catalogue: bool) -> Option<ScanLine> {
+    match scan {
+        Scan::Known(owner) => Some(ScanLine {
+            kind: "known",
+            instance: Some(owner.instance.0),
+            item: owner.item.map(|item| item.0),
+            isbn: None,
+        }),
+        Scan::NewIsbn(isbn) if can_catalogue => Some(ScanLine {
+            kind: "new-isbn",
+            instance: None,
+            item: None,
+            isbn: Some(isbn.clone()),
+        }),
+        Scan::NewIsbn(_) | Scan::Text => None,
     }
 }
 

@@ -131,6 +131,24 @@ impl CatalogListing for Families {
             .cloned()
             .collect())
     }
+
+    /// Barcode `000123` is Item 3 of Instance 10 (Work 1), whose ISBN is 9788535910667.
+    fn scanned(
+        &self,
+        code: elzevir_app::listing::ScanCode<'_>,
+    ) -> Result<Option<elzevir_app::listing::Scanned>, CatalogReadError> {
+        use elzevir_app::listing::{ScanCode, Scanned};
+        let item = match code {
+            ScanCode::Barcode("000123") => Some(elzevir_domain::catalog::ItemId(3)),
+            ScanCode::Isbn("9788535910667") => None,
+            _ => return Ok(None),
+        };
+        Ok(Some(Scanned {
+            head: FamilyHead::Work(WorkId(1)),
+            instance: InstanceId(10),
+            item,
+        }))
+    }
 }
 
 /// Stored records held in memory, in Instance order.

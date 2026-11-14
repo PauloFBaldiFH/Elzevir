@@ -1005,3 +1005,45 @@ async fn a_cataloguer_lists_and_renames_the_codes() {
         body(send(&app, get("/equipe/admin/codigos?saved=1", Some(&ana), None)).await).await;
     assert!(after.contains("Saved."));
 }
+
+/// docs/specs/catalogo/bipe.md, items 4 to 10.
+#[tokio::test]
+async fn a_scanned_code_opens_its_family_and_tells_the_page_what_to_open() {
+    let app = app();
+    let ana = signed_in(&app).await;
+    let page = |uri: &'static str, session: String| {
+        let app = app.clone();
+        async move { body(send(&app, get(uri, Some(&session), None)).await).await }
+    };
+
+    // A barcode: the family alone, open, with the Instance and the Item for the grid.
+    let barcode = page("/equipe/acervo?q=000123", ana.clone()).await;
+    assert!(barcode.contains(
+        r#"<section id="families" aria-live="polite" data-scan="known" data-scan-instance="10" data-scan-item="3">"#
+    ));
+    assert_eq!(barcode.matches(r#"<li class="family" id="f-w"#).count(), 1);
+    assert!(barcode.contains(r#"<details class="family-focus" open>"#));
+
+    // An ISBN, as ISBN-10 with hyphens: the same Instance, no Item.
+    let isbn = page("/equipe/acervo?q=85-359-1066-2", ana.clone()).await;
+    assert!(isbn.contains(r#"data-scan="known" data-scan-instance="10">"#));
+
+    // A valid ISBN nobody has: a new family with it, for a cataloguer only.
+    let unknown = page("/equipe/acervo?q=9788535902778", ana.clone()).await;
+    assert!(unknown.contains(r#"data-scan="new-isbn" data-scan-isbn="9788535902778">"#));
+    let bia = signed_in_as(&app, "bia").await;
+    let reader = page("/equipe/acervo?q=9788535902778", bia).await;
+    assert!(!reader.contains("data-scan="));
+
+    // Text, and a later page of a search, are searches.
+    let text = page("/equipe/acervo?q=casmurro", ana.clone()).await;
+    assert!(!text.contains("data-scan="));
+    let later = page("/equipe/acervo?q=000123&from=0", ana.clone()).await;
+    assert!(!later.contains("data-scan="));
+
+    // The new family's form starts with the ISBN; an invalid one is ignored.
+    let form = page("/equipe/acervo/nova?isbn=8535902775", ana.clone()).await;
+    assert!(form.contains("9788535902778"));
+    let invalid = page("/equipe/acervo/nova?isbn=9788535902779", ana).await;
+    assert!(!invalid.contains("978853590277"));
+}
