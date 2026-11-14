@@ -14,6 +14,7 @@
 //!   `effect_outbox` inside the same transaction as the change that causes them.
 
 mod catalog;
+mod codes;
 mod config;
 mod digest;
 mod editing;

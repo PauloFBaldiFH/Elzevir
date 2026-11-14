@@ -2,9 +2,9 @@
 //! Catalog commands and reads on SQLite (docs/specs/catalogo/modelo-bibliografico.md).
 
 use elzevir_app::catalog::{
-    CatalogCommand, CatalogOutput, CatalogReadError, CatalogReader, CatalogRefusal, InstanceView,
-    ItemData, ItemStatus, ItemView, NewContribution, NewIdentifier, NewInstance, NewInstanceOfWork,
-    NewNote, NewRecord, NewSubject, NewWorkRelation,
+    CatalogCommand, CatalogOutput, CatalogReadError, CatalogReader, CatalogRefusal, CodeLists,
+    InstanceView, ItemData, ItemStatus, ItemView, NewContribution, NewIdentifier, NewInstance,
+    NewInstanceOfWork, NewNote, NewRecord, NewSubject, NewWorkRelation,
 };
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
 use elzevir_app::listing::sort_key;
@@ -76,6 +76,7 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CatalogCommand) -> Applied {
         CatalogCommand::UpdateInstance(update) => crate::editing::update_instance(tx, update)?,
         CatalogCommand::AddInstance(new) => add_instance_of_work(tx, new)?,
         CatalogCommand::SaveItems(update) => crate::items::save_items(tx, update)?,
+        CatalogCommand::NameCodes(codes) => crate::codes::name_codes(tx, codes)?,
         CatalogCommand::AddItem(new) => {
             if !exists(
                 connection,
@@ -652,6 +653,12 @@ impl CatalogReader for ElzevirStore {
                     .collect::<Result<Vec<_>, _>>()
             })
             .map_err(|e: rusqlite::Error| CatalogReadError(e.to_string()))
+    }
+
+    fn codes(&self) -> Result<CodeLists, CatalogReadError> {
+        self.readers()
+            .read(crate::items::code_lists)
+            .map_err(|e| CatalogReadError(e.to_string()))
     }
 }
 

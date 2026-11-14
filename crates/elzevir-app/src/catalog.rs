@@ -12,6 +12,7 @@ use elzevir_domain::catalog::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::codes::{NamedCode, NamingCount};
 use crate::items::{ItemsUpdate, RowRefusal};
 use crate::matching::Matching;
 
@@ -65,6 +66,9 @@ pub enum CatalogCommand {
     /// Saves an Instance's Items in one batch, all or nothing
     /// (docs/specs/catalogo/exemplares.md).
     SaveItems(Box<ItemsUpdate>),
+    /// Gives codes of the code tables their names, creating the missing ones
+    /// (docs/specs/catalogo/tabelas-de-codigos.md).
+    NameCodes(Vec<NamedCode>),
 }
 
 /// A new Instance of a stored Work.
@@ -469,6 +473,8 @@ pub enum CatalogOutput {
         /// The Items of the batch's rows, in the batch's order.
         items: Vec<ItemId>,
     },
+    /// Codes were named, counted per table in [`crate::codes::CodeTable::ALL`] order.
+    CodesNamed([NamingCount; 4]),
     /// An Instance was added to a Work.
     InstanceAdded {
         /// The Work.
@@ -502,6 +508,9 @@ pub enum CatalogRefusal {
     /// Another Item has this barcode.
     #[error("barcode `{0}` is already in use")]
     BarcodeTaken(String),
+    /// A code or name of `catalog.name_codes` is empty or too long; the position.
+    #[error("code {0} of the list is empty or too long")]
+    BadCodeName(usize),
     /// Cells of an Item batch that cannot be stored, all of them.
     #[error("{} cells of the item batch were refused", .0.len())]
     ItemRows(Vec<RowRefusal>),
@@ -582,6 +591,62 @@ pub struct ItemView {
     pub status: ItemStatus,
 }
 
+/// One code of a code table with the name people read
+/// (docs/specs/catalogo/exemplares.md, item 29).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CodeName {
+    /// The code, as records and batches carry it.
+    pub code: String,
+    /// The name shown in its place.
+    pub name: String,
+}
+
+/// The code tables an Item refers to, each in code order.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CodeLists {
+    /// Branches.
+    pub branches: Vec<CodeName>,
+    /// Item types.
+    pub item_types: Vec<CodeName>,
+    /// Shelving locations already used.
+    pub locations: Vec<CodeName>,
+    /// Collections already used.
+    pub collections: Vec<CodeName>,
+}
+
+impl CodeLists {
+    /// The name of a branch; the code itself when the table does not have it.
+    #[must_use]
+    pub fn branch<'a>(&'a self, code: &'a str) -> &'a str {
+        name_in(&self.branches, code)
+    }
+
+    /// The name of an item type; the code itself when the table does not have it.
+    #[must_use]
+    pub fn item_type<'a>(&'a self, code: &'a str) -> &'a str {
+        name_in(&self.item_types, code)
+    }
+
+    /// The name of a shelving location; the code itself when the table does not have it.
+    #[must_use]
+    pub fn location<'a>(&'a self, code: &'a str) -> &'a str {
+        name_in(&self.locations, code)
+    }
+
+    /// The name of a collection; the code itself when the table does not have it.
+    #[must_use]
+    pub fn collection<'a>(&'a self, code: &'a str) -> &'a str {
+        name_in(&self.collections, code)
+    }
+}
+
+fn name_in<'a>(table: &'a [CodeName], code: &'a str) -> &'a str {
+    table
+        .iter()
+        .find(|entry| entry.code == code)
+        .map_or(code, |entry| entry.name.as_str())
+}
+
 /// Port: reading the catalog.
 pub trait CatalogReader: Send + Sync {
     /// One Instance, or `None`.
@@ -616,6 +681,13 @@ pub trait CatalogReader: Send + Sync {
         &self,
         instances: &[InstanceId],
     ) -> Result<Vec<(InstanceId, ItemStatus)>, CatalogReadError>;
+
+    /// The code tables, for showing names in place of codes.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn codes(&self) -> Result<CodeLists, CatalogReadError>;
 }
 
 /// The catalog could not be read.

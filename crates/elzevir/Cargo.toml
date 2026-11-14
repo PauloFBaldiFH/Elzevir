@@ -20,6 +20,9 @@ elzevir-web-templates.workspace = true
 axum.workspace = true
 clap.workspace = true
 mimalloc.workspace = true
+rustls.workspace = true
+rustls-native-certs.workspace = true
+ureq.workspace = true
 stats_alloc = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "net", "signal", "macros"] }
 

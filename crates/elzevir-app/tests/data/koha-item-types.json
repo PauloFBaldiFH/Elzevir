@@ -1,0 +1,42 @@
+[
+ {
+  "item_type_id": "AL",
+  "description": "Audiolivros",
+  "hide_in_opac": false
+ },
+ {
+  "item_type_id": "BK",
+  "description": "Livros",
+  "hide_in_opac": false
+ },
+ {
+  "item_type_id": "DV",
+  "description": "DVDs",
+  "hide_in_opac": false
+ },
+ {
+  "item_type_id": "GB",
+  "description": "Gibis",
+  "hide_in_opac": false
+ },
+ {
+  "item_type_id": "JV",
+  "description": "Livros juvenis",
+  "hide_in_opac": false
+ },
+ {
+  "item_type_id": "LB",
+  "description": "Livros em braille",
+  "hide_in_opac": false
+ },
+ {
+  "item_type_id": "LI",
+  "description": "Livros infantis",
+  "hide_in_opac": false
+ },
+ {
+  "item_type_id": "RO",
+  "description": "Romances",
+  "hide_in_opac": false
+ }
+]
