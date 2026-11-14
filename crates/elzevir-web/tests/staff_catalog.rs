@@ -928,3 +928,80 @@ async fn a_cataloguer_gets_the_item_grid_with_its_rows_and_lists() {
     assert!(grid.contains(r#"<td role="gridcell" tabindex="-1" data-value="BK">Book</td>"#));
     assert!(grid.contains(r#"<datalist id="grid-list-branches"><option value="Main Library" data-code="MAIN"></option><option value="PAL" data-code="PAL"></option></datalist>"#));
 }
+
+fn post_form(uri: &str, session: Option<&str>, form: &str) -> Request<Body> {
+    let mut builder =
+        Request::post(uri).header(header::CONTENT_TYPE, "application/x-www-form-urlencoded");
+    if let Some(session) = session {
+        builder = builder.header(header::COOKIE, session);
+    }
+    builder.body(Body::from(form.to_owned())).unwrap()
+}
+
+/// docs/specs/catalogo/tabelas-de-codigos.md, items 14 to 17.
+#[tokio::test]
+async fn a_cataloguer_lists_and_renames_the_codes() {
+    let app = app();
+    let uri = "/equipe/admin/codigos";
+    let anonymous = send(&app, get(uri, None, None)).await;
+    assert_eq!(anonymous.status(), StatusCode::SEE_OTHER);
+    let bia = signed_in_as(&app, "bia").await;
+    assert_eq!(
+        send(&app, get(uri, Some(&bia), None)).await.status(),
+        StatusCode::FORBIDDEN
+    );
+
+    let ana = signed_in(&app).await;
+    let token = page_token(&app, &ana).await;
+    let page = body(send(&app, get(uri, Some(&ana), None)).await).await;
+    assert!(page.contains(r#"<section id="codes-branches">"#));
+    assert!(page.contains(r#"<input type="hidden" name="code" value="MAIN">"#));
+    assert!(page.contains(r#"name="name" value="Main Library""#));
+    assert!(page.contains(r#"name="name" value="General stacks""#));
+    assert!(page.contains("No codes yet."));
+    assert!(!page.contains("Saved."));
+
+    let rename =
+        |csrf: &str, name: &str| format!("csrf={csrf}&table=locations&code=GEN&name={name}");
+    let unsigned = send(&app, post_form(uri, None, &rename(&token, "Estantes"))).await;
+    assert_eq!(unsigned.status(), StatusCode::UNAUTHORIZED);
+    let wrong_token = send(&app, post_form(uri, Some(&ana), &rename("x", "Estantes"))).await;
+    assert_eq!(wrong_token.status(), StatusCode::FORBIDDEN);
+    let bia_token = page_token(&app, &bia).await;
+    let reader = send(
+        &app,
+        post_form(uri, Some(&bia), &rename(&bia_token, "Estantes")),
+    )
+    .await;
+    assert_eq!(reader.status(), StatusCode::FORBIDDEN);
+    let unknown = send(
+        &app,
+        post_form(
+            uri,
+            Some(&ana),
+            &format!("csrf={token}&table=patrons&code=A&name=B"),
+        ),
+    )
+    .await;
+    assert_eq!(unknown.status(), StatusCode::BAD_REQUEST);
+
+    let empty = send(&app, post_form(uri, Some(&ana), &rename(&token, "+"))).await;
+    assert_eq!(empty.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(
+        body(empty)
+            .await
+            .contains(r#"<p class="codes-alert codes-refused" role="alert">"#)
+    );
+
+    let saved = send(
+        &app,
+        post_form(uri, Some(&ana), &rename(&token, "Estantes+gerais")),
+    )
+    .await;
+    assert_eq!(saved.status(), StatusCode::SEE_OTHER);
+    let location = saved.headers().get(header::LOCATION).unwrap();
+    assert_eq!(location, "/equipe/admin/codigos?saved=1#codes-locations");
+    let after =
+        body(send(&app, get("/equipe/admin/codigos?saved=1", Some(&ana), None)).await).await;
+    assert!(after.contains("Saved."));
+}

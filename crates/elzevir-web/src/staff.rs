@@ -25,6 +25,7 @@ pub(crate) async fn home(State(state): State<AppState>, headers: HeaderMap) -> R
         t: &state.inner.i18n,
         login: &session.identity.login,
         is_admin: session.identity.can(Permission::Administration),
+        can_catalogue: session.identity.can(Permission::Cataloguing),
         csrf: &session.csrf,
     })
 }

@@ -47,6 +47,15 @@ pub(crate) struct RecordCache {
 }
 
 impl RecordCache {
+    /// Forgets every body: something every record shows, such as the name of a code,
+    /// changed without changing any record's version.
+    pub(crate) fn clear(&self) {
+        self.bodies
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clear();
+    }
+
     fn get(&self, instance: InstanceId, version: i64) -> Option<Arc<RenderedRecord>> {
         let bodies = self.bodies.lock().unwrap_or_else(PoisonError::into_inner);
         bodies

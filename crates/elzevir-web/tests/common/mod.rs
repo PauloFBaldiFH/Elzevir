@@ -175,6 +175,12 @@ impl elzevir_app::editing::CatalogEditor for Editor {
             Edit::NewInstance(new) if new.work.0 == 404 => {
                 return Err(EditFailed::Refused(CatalogRefusal::UnknownWork(new.work)));
             }
+            Edit::Codes(codes) => {
+                if let Err(position) = elzevir_app::codes::checked(codes) {
+                    return Err(EditFailed::Refused(CatalogRefusal::BadCodeName(position)));
+                }
+                1
+            }
             Edit::NewRecord(_) | Edit::NewInstance(_) => 1,
         };
         if read != 1 {
@@ -205,6 +211,7 @@ impl elzevir_app::editing::CatalogEditor for Editor {
                     .map(|(new, row)| row.id.unwrap_or(elzevir_domain::catalog::ItemId(new)))
                     .collect(),
             },
+            Edit::Codes(_) => CatalogOutput::CodesNamed(Default::default()),
             Edit::NewInstance(new) => CatalogOutput::InstanceAdded {
                 work: new.work,
                 instance: InstanceId(902),

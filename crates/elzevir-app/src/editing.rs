@@ -9,6 +9,7 @@ use crate::catalog::{
     CatalogOutput, CatalogRefusal, InstanceChange, InstanceUpdate, NewIdentifier,
     NewInstanceOfWork, NewRecord, WorkChange, WorkUpdate,
 };
+use crate::codes::NamedCode;
 use crate::items::ItemsUpdate;
 use crate::staff::StaffId;
 
@@ -25,6 +26,8 @@ pub enum Edit {
     NewInstance(Box<NewInstanceOfWork>),
     /// A batch of an Instance's Items (docs/specs/catalogo/exemplares.md).
     Items(Box<ItemsUpdate>),
+    /// Names for codes of the code tables (docs/specs/catalogo/tabelas-de-codigos.md).
+    Codes(Vec<NamedCode>),
 }
 
 /// Why an edit was not stored.
