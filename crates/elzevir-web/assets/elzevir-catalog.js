@@ -680,12 +680,14 @@ async function openNew(url, place) {
   (empty ?? form.querySelector("input, textarea, select"))?.focus();
 }
 
-function newFamily() {
+function newFamily(isbn) {
   const params = new URLSearchParams();
   const previous = recalled(PREVIOUS);
   const material = recalled(MATERIAL);
   if (previous) params.set("from", previous);
   else if (material) params.set("material", material);
+  // A scanned ISBN the catalog does not have (bipe.md, item 10).
+  if (isbn) params.set("isbn", isbn);
   const query = params.toString();
   openNew(`/equipe/acervo/nova${query ? `?${query}` : ""}`, (panel) => {
     const families = document.getElementById("families");
@@ -1469,6 +1471,30 @@ async function openItemGrid(button) {
   trail(grid.closest(".family-focus"));
   slot.querySelector("elz-item-grid")?.active?.focus();
 }
+
+// One field for everything (bipe.md, items 7 and 8): the server says what a scanned code
+// was; the page opens the grid of its Instance, or a new family with the ISBN.
+async function openScanned() {
+  const families = document.getElementById("families");
+  const kind = families?.dataset.scan;
+  if (!kind) return;
+  // Once per answer: the attributes stay in the page while it is edited.
+  delete families.dataset.scan;
+  if (kind === "new-isbn") {
+    if (document.querySelector('[data-action="new-family"]')) newFamily(families.dataset.scanIsbn);
+    return;
+  }
+  const button = families.querySelector(`[data-action="edit-items"][data-from="${CSS.escape(families.dataset.scanInstance ?? "")}"]`);
+  if (!button) return;
+  await openItemGrid(button);
+  const grid = families.querySelector("elz-item-grid");
+  const item = families.dataset.scanItem;
+  const row = item ? grid?.querySelector(`tbody tr[data-id="${CSS.escape(item)}"]`) : null;
+  const cell = row?.querySelector("td[role=gridcell]");
+  if (cell) grid.place(cell);
+}
+openScanned();
+document.addEventListener("htmx:afterSettle", openScanned);
 
 document.addEventListener("grid-close", (event) => {
   const element = event.target;

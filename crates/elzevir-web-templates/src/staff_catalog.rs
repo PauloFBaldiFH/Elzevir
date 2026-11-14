@@ -19,6 +19,9 @@ pub struct StaffCatalog<'a> {
     pub query: &'a str,
     /// Records found, for a search.
     pub total: Option<usize>,
+    /// What a scanned code was, for the page's script to open
+    /// (docs/specs/catalogo/bipe.md, item 8).
+    pub scan: Option<ScanLine>,
     /// The rows of this page.
     pub rows: Vec<FamilyLine>,
     /// Where the next page is, when there is one.
@@ -188,4 +191,17 @@ pub struct PillLine {
     pub signal_class: &'static str,
     /// Message key of its signal.
     pub signal_key: &'static str,
+}
+
+/// What the server found for a scanned code.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScanLine {
+    /// `known` (open the Instance's grid) or `new-isbn` (open a new family).
+    pub kind: &'static str,
+    /// The Instance whose grid opens.
+    pub instance: Option<i64>,
+    /// The Item whose row gets the cursor, for a barcode.
+    pub item: Option<i64>,
+    /// The ISBN a new family starts with.
+    pub isbn: Option<String>,
 }

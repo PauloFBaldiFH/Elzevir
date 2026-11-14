@@ -9,10 +9,10 @@ use std::num::NonZeroUsize;
 
 use elzevir_app::catalog::{CatalogReadError, ItemView};
 use elzevir_app::listing::{
-    CatalogListing, Family, FamilyCursor, FamilyHead, FamilyInstance, FamilyWork,
+    CatalogListing, Family, FamilyCursor, FamilyHead, FamilyInstance, FamilyWork, ScanCode, Scanned,
 };
-use elzevir_domain::catalog::{HubId, IdentifierKind, InstanceId, ItemId, WorkId};
-use rusqlite::{Connection, params, params_from_iter};
+use elzevir_domain::catalog::{HubId, IdentifierKind, InstanceId, ItemId, MatchRule, WorkId};
+use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 
 use crate::ElzevirStore;
 use crate::catalog::{ReadFailure, material_type, status_at};
@@ -32,6 +32,53 @@ impl CatalogListing for ElzevirStore {
         self.readers()
             .read(|c| load(c, cursors_of(c, heads)?))
             .map_err(|e| CatalogReadError(e.to_string()))
+    }
+
+    fn scanned(&self, code: ScanCode<'_>) -> Result<Option<Scanned>, CatalogReadError> {
+        self.readers()
+            .read(|c| owner_of(c, code))
+            .map_err(|e| CatalogReadError(e.to_string()))
+    }
+}
+
+/// The owner of a barcode (unique) or of an ISBN match key (the oldest Instance, as in
+/// matching).
+fn owner_of(c: &Connection, code: ScanCode<'_>) -> Result<Option<Scanned>, rusqlite::Error> {
+    let owner = |row: &rusqlite::Row<'_>| {
+        let work: i64 = row.get(0)?;
+        let hub: Option<i64> = row.get(1)?;
+        Ok(Scanned {
+            head: hub.map_or(FamilyHead::Work(WorkId(work)), |hub| {
+                FamilyHead::Hub(HubId(hub))
+            }),
+            instance: InstanceId(row.get(2)?),
+            item: row.get::<_, Option<i64>>(3)?.map(ItemId),
+        })
+    };
+    match code {
+        ScanCode::Barcode(barcode) => c
+            .query_row(
+                "SELECT works.id, works.hub_id, instances.id, items.id
+                 FROM items
+                 JOIN instances ON instances.id = items.instance_id
+                 JOIN works ON works.id = instances.work_id
+                 WHERE items.barcode = ?1",
+                params![barcode],
+                owner,
+            )
+            .optional(),
+        ScanCode::Isbn(key) => c
+            .query_row(
+                "SELECT works.id, works.hub_id, instances.id, NULL
+                 FROM match_keys
+                 JOIN instances ON instances.id = match_keys.instance_id
+                 JOIN works ON works.id = instances.work_id
+                 WHERE match_keys.rule = ?1 AND match_keys.key = ?2
+                 ORDER BY instances.id LIMIT 1",
+                params![MatchRule::Isbn.code(), key],
+                owner,
+            )
+            .optional(),
     }
 }
 

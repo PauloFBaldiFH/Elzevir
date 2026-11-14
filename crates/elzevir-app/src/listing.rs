@@ -7,7 +7,7 @@
 
 use std::num::NonZeroUsize;
 
-use elzevir_domain::catalog::{HubId, InstanceId, ItemId, MaterialType, WorkId};
+use elzevir_domain::catalog::{HubId, InstanceId, ItemId, MaterialType, WorkId, isbn13};
 use unicode_normalization::UnicodeNormalization;
 use unicode_normalization::char::is_combining_mark;
 
@@ -176,6 +176,113 @@ pub trait CatalogListing: Send + Sync {
     ///
     /// When storage fails or holds a value this build does not understand.
     fn families(&self, heads: &[FamilyHead]) -> Result<Vec<Family>, CatalogReadError>;
+
+    /// Whose code this is, read straight from the catalog
+    /// (docs/specs/catalogo/bipe.md, item 11). `None` when nothing has it.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn scanned(&self, code: ScanCode<'_>) -> Result<Option<Scanned>, CatalogReadError>;
+}
+
+/// A code looked up in the catalog.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScanCode<'a> {
+    /// An Item's barcode, as written.
+    Barcode(&'a str),
+    /// An ISBN as its 13-digit match key.
+    Isbn(&'a str),
+}
+
+/// The owner of a scanned code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Scanned {
+    /// The family it belongs to.
+    pub head: FamilyHead,
+    /// The Instance.
+    pub instance: InstanceId,
+    /// The Item, for a barcode.
+    pub item: Option<ItemId>,
+}
+
+/// What the text typed or scanned in the search field is (bipe.md, item 4).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Scan {
+    /// A stored barcode or ISBN: its owner.
+    Known(Scanned),
+    /// A valid ISBN the catalog does not have, as 13 digits.
+    NewIsbn(String),
+    /// Anything else: a text search.
+    Text,
+}
+
+/// Longest text taken for a code (bipe.md, item 3).
+pub const MAX_CODE_CHARS: usize = 64;
+
+/// The ISBN in `text` as 13 digits, when `text` is nothing but a valid ISBN (digits,
+/// hyphens and `X`, with the right check digit).
+#[must_use]
+pub fn scanned_isbn(text: &str) -> Option<String> {
+    let text = text.trim();
+    let plain = !text.is_empty()
+        && text
+            .chars()
+            .all(|c| c.is_ascii_digit() || matches!(c, '-' | 'X' | 'x'));
+    plain.then(|| isbn13(text)).flatten()
+}
+
+/// Decides what `query` is: a barcode first, then an ISBN, else text (bipe.md, items 3
+/// to 5). The one place this rule lives.
+///
+/// # Errors
+///
+/// When storage fails.
+pub fn scan<L: CatalogListing + ?Sized>(
+    listing: &L,
+    query: &str,
+) -> Result<Scan, CatalogReadError> {
+    let code = query.trim();
+    let is_code = !code.is_empty()
+        && code.chars().count() <= MAX_CODE_CHARS
+        && !code.chars().any(char::is_whitespace);
+    if !is_code {
+        return Ok(Scan::Text);
+    }
+    if let Some(owner) = listing.scanned(ScanCode::Barcode(code))? {
+        return Ok(Scan::Known(owner));
+    }
+    let Some(isbn) = scanned_isbn(code) else {
+        return Ok(Scan::Text);
+    };
+    Ok(match listing.scanned(ScanCode::Isbn(&isbn))? {
+        Some(owner) => Scan::Known(owner),
+        None => Scan::NewIsbn(isbn),
+    })
+}
+
+/// The page of a scanned code: its family alone, with the Instance marked as found
+/// (bipe.md, item 6). Empty if the family went away in between.
+///
+/// # Errors
+///
+/// When storage fails.
+pub fn scanned_page<L: CatalogListing + ?Sized>(
+    listing: &L,
+    query: &str,
+    owner: &Scanned,
+) -> Result<SearchPage, CatalogReadError> {
+    let rows: Vec<FamilyRow> = listing
+        .families(&[owner.head])?
+        .into_iter()
+        .map(|family| row(family, &[owner.instance]))
+        .collect();
+    Ok(SearchPage {
+        query: query.trim().to_owned(),
+        total: rows.len(),
+        rows,
+        next: None,
+    })
 }
 
 /// One page of the listing.
@@ -581,6 +688,72 @@ mod tests {
                 .cloned()
                 .collect())
         }
+
+        /// Item 7 of Instance 70 (Work 7) has barcode `9788535910667`, which is also a
+        /// valid ISBN; Instance 80 (Work 8) has ISBN 9788535902778.
+        fn scanned(&self, code: ScanCode<'_>) -> Result<Option<Scanned>, CatalogReadError> {
+            let owner = |work, instance, item| Scanned {
+                head: FamilyHead::Work(WorkId(work)),
+                instance: InstanceId(instance),
+                item,
+            };
+            Ok(match code {
+                ScanCode::Barcode("9788535910667") => Some(owner(7, 70, Some(ItemId(7)))),
+                ScanCode::Isbn("9788535902778") => Some(owner(8, 80, None)),
+                _ => None,
+            })
+        }
+    }
+
+    #[test]
+    fn a_scanned_code_is_a_barcode_then_an_isbn_then_text() {
+        let fake = Fake((1..=9).map(family).collect());
+        let known = |work, instance, item: Option<i64>| {
+            Scan::Known(Scanned {
+                head: FamilyHead::Work(WorkId(work)),
+                instance: InstanceId(instance),
+                item: item.map(ItemId),
+            })
+        };
+        // A barcode wins even when it is also a valid ISBN.
+        assert_eq!(
+            scan(&fake, " 9788535910667 ").unwrap(),
+            known(7, 70, Some(7))
+        );
+        // ISBN-13, hyphenated, and the ISBN-10 of the same book find the Instance.
+        for isbn in ["9788535902778", "978-85-359-0277-8", "8535902775"] {
+            assert_eq!(scan(&fake, isbn).unwrap(), known(8, 80, None), "{isbn}");
+        }
+        // A valid ISBN nobody has opens a new family with its 13 digits.
+        assert_eq!(
+            scan(&fake, "85-359-1067-0").unwrap(),
+            Scan::NewIsbn("9788535910674".to_owned())
+        );
+        // Wrong check digit, words, text around an ISBN, long codes: text.
+        for text in [
+            "9788535902779",
+            "dom casmurro",
+            "isbn:9788535902778",
+            "9788535902778 x",
+            "",
+            &"1".repeat(MAX_CODE_CHARS + 1),
+        ] {
+            assert_eq!(scan(&fake, text).unwrap(), Scan::Text, "{text}");
+        }
+    }
+
+    #[test]
+    fn a_scanned_page_is_the_family_alone() {
+        let fake = Fake((1..=9).map(family).collect());
+        let owner = Scanned {
+            head: FamilyHead::Work(WorkId(8)),
+            instance: InstanceId(80),
+            item: None,
+        };
+        let page = scanned_page(&fake, " 8535902775 ", &owner).unwrap();
+        assert_eq!(page.query, "8535902775");
+        assert_eq!((page.total, page.next), (1, None));
+        assert_eq!(page.rows[0].cursor.head, owner.head);
     }
 
     fn family(n: i64) -> Family {

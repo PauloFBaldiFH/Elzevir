@@ -7,11 +7,12 @@ use std::sync::Arc;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
-use elzevir_app::catalog::{NewInstance, NewRecord};
+use elzevir_app::catalog::{NewIdentifier, NewInstance, NewRecord};
 use elzevir_app::export::stored_record;
+use elzevir_app::listing::scanned_isbn;
 use elzevir_app::profiles::profile_for;
 use elzevir_app::staff::Permission;
-use elzevir_domain::catalog::{InstanceId, MaterialType};
+use elzevir_domain::catalog::{IdentifierKind, InstanceId, MaterialType};
 use elzevir_web_templates::{FormField, FormPart, I18n, NewRecordForm};
 use serde::Deserialize;
 
@@ -31,6 +32,8 @@ pub(crate) struct NewFamilyParams {
     material: Option<String>,
     /// The Instance created before, whose values carry over.
     from: Option<i64>,
+    /// A scanned ISBN the new family starts with (docs/specs/catalogo/bipe.md, item 10).
+    isbn: Option<String>,
 }
 
 /// `GET /equipe/acervo/nova?material=&from=`: the form of a new family (items 14 and 17).
@@ -50,7 +53,7 @@ pub(crate) async fn new_family(
         None => None,
     };
     let t = &state.inner.i18n;
-    let (start, inherited) = if let Some(previous) = &previous {
+    let (mut start, inherited) = if let Some(previous) = &previous {
         (carried_over(previous), true)
     } else {
         let material = params
@@ -60,6 +63,14 @@ pub(crate) async fn new_family(
             .unwrap_or(MaterialType::Book);
         (blank(material), false)
     };
+    // Checked again here: only a valid ISBN is taken, as its 13 digits.
+    if let Some(isbn) = params.isbn.as_deref().and_then(scanned_isbn) {
+        start.instance.identifiers = vec![NewIdentifier {
+            kind: IdentifierKind::Isbn,
+            value: isbn,
+            qualifier: None,
+        }];
+    }
     render(&family_form(t, &start, inherited))
 }
 

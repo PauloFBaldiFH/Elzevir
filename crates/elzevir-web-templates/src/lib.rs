@@ -11,7 +11,7 @@ mod staff_record_fields;
 mod staff_record_form;
 
 pub use staff_catalog::{
-    AuthorityLine, FamilyLine, HubLine, InstanceLine, PillLine, StaffCatalog, WorkLine,
+    AuthorityLine, FamilyLine, HubLine, InstanceLine, PillLine, ScanLine, StaffCatalog, WorkLine,
 };
 pub use staff_codes::{CodeRow, CodeTablePart, StaffCodes};
 pub use staff_item_grid::{GridCell, GridColumn, GridList, GridRow, ItemGrid};

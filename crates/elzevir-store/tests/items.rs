@@ -312,3 +312,82 @@ fn a_batch_read_before_another_change_is_stale() {
         )))
     );
 }
+
+/// docs/specs/catalogo/bipe.md, items 4 and 11.
+#[test]
+fn a_scanned_barcode_or_isbn_finds_its_instance() {
+    use elzevir_app::listing::{CatalogListing, Scan, ScanCode, scan, scanned_page};
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = imported(&dir);
+    let (item, instance, barcode): (i64, i64, String) = store
+        .readers()
+        .read(|c| {
+            c.query_row(
+                "SELECT id, instance_id, barcode FROM items WHERE barcode IS NOT NULL
+                 ORDER BY id LIMIT 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+        })
+        .unwrap();
+    let Scan::Known(owner) = scan(&store, &format!(" {barcode} ")).unwrap() else {
+        panic!("the barcode {barcode} is stored");
+    };
+    assert_eq!(owner.instance, InstanceId(instance));
+    assert_eq!(owner.item, Some(ItemId(item)));
+    let page = scanned_page(&store, &barcode, &owner).unwrap();
+    assert_eq!(page.total, 1);
+    assert_eq!(page.rows[0].cursor.head, owner.head);
+
+    // An ISBN finds the oldest Instance that has it, written as 13 digits or with hyphens.
+    let (isbn, oldest): (String, i64) = store
+        .readers()
+        .read(|c| {
+            c.query_row(
+                "SELECT key, min(instance_id) FROM match_keys
+                 WHERE rule = 1 AND length(key) = 13 GROUP BY key ORDER BY key LIMIT 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+        })
+        .unwrap();
+    let (prefix, rest) = isbn.split_at(3);
+    let hyphenated = format!("{prefix}-{rest}");
+    for typed in [isbn.clone(), hyphenated] {
+        let Scan::Known(owner) = scan(&store, &typed).unwrap() else {
+            panic!("the ISBN {typed} is stored");
+        };
+        assert_eq!(owner.instance, InstanceId(oldest));
+        assert_eq!(owner.item, None);
+    }
+    assert_eq!(
+        store.scanned(ScanCode::Isbn("9790000000001")).unwrap(),
+        None
+    );
+
+    // A new Item is found at once: the lookup does not wait for the index.
+    let version = store.record_version(InstanceId(oldest)).unwrap().unwrap();
+    run(
+        &store,
+        CatalogCommand::SaveItems(Box::new(ItemsUpdate {
+            instance: InstanceId(oldest),
+            row_version: version,
+            rows: vec![ItemRow {
+                id: None,
+                fields: ItemFields {
+                    barcode: Some("JUST-SCANNED".to_owned()),
+                    home_branch: "MAIN".to_owned(),
+                    holding_branch: "MAIN".to_owned(),
+                    item_type: "BK".to_owned(),
+                    ..ItemFields::default()
+                },
+            }],
+        })),
+    )
+    .unwrap();
+    let Scan::Known(owner) = scan(&store, "JUST-SCANNED").unwrap() else {
+        panic!("the new barcode is stored");
+    };
+    assert_eq!(owner.instance, InstanceId(oldest));
+}
