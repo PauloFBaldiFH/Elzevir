@@ -264,3 +264,19 @@ new-work-part = Work
 new-instance-part = Instance
 new-create = Create
 new-cancel = Cancel
+
+## Code tables (docs/specs/catalogo/tabelas-de-codigos.md)
+codes-title = Code tables
+codes-intro = Records keep the code; every screen shows the name. Change a name and press Enter.
+codes-table-branches = Branches
+codes-table-item-types = Item types
+codes-table-locations = Shelving locations
+codes-table-collections = Collections
+codes-column-code = Code
+codes-column-name = Name
+codes-save = Save
+codes-new-code = New code
+codes-add = Add
+codes-saved = Saved.
+codes-error-name = Give the code and the name: a code of at most 64 characters and a name of at most 256.
+codes-empty = No codes yet.

@@ -5,6 +5,7 @@
 //! (English first, then Brazilian Portuguese; docs/arquitetura/04-decisoes.md, §1 item 7).
 
 mod staff_catalog;
+mod staff_codes;
 mod staff_item_grid;
 mod staff_record_fields;
 mod staff_record_form;
@@ -12,6 +13,7 @@ mod staff_record_form;
 pub use staff_catalog::{
     AuthorityLine, FamilyLine, HubLine, InstanceLine, PillLine, StaffCatalog, WorkLine,
 };
+pub use staff_codes::{CodeRow, CodeTablePart, StaffCodes};
 pub use staff_item_grid::{GridCell, GridColumn, GridList, GridRow, ItemGrid};
 pub use staff_record_fields::{FieldEntry, FieldGroup, FieldValue, ItemFields, RecordFields};
 pub use staff_record_form::{
@@ -327,6 +329,8 @@ pub struct StaffHome<'a> {
     pub login: &'a str,
     /// Whether to show administration links.
     pub is_admin: bool,
+    /// Whether to show what cataloguers may change.
+    pub can_catalogue: bool,
     /// Anti-forgery token for the sign-out form.
     pub csrf: &'a str,
 }

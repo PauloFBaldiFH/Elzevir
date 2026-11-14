@@ -495,3 +495,14 @@ a.field-value:hover { text-decoration: underline; }
 .item-grid .grid-signal::before { content: ""; display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--signal-border, var(--elzevir-color-border)); }
 .item-grid .grid-signal-head { width: 1.2rem; }
 .item-grid .grid-keys { margin: 6px 0 0; font-size: 0.72rem; color: var(--text-muted); }
+/* Code tables (tabelas-de-codigos.md, items 14 to 19). */
+.code-tables { max-width: 46rem; margin: 0 auto; padding: 16px; }
+.code-tables h2 { font-size: 1rem; margin: 22px 0 8px; }
+.code-rows { list-style: none; margin: 0; padding: 0; }
+.code-rows form { display: grid; grid-template-columns: 9rem 1fr auto; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--elzevir-color-border); }
+.code-rows code { font-size: 0.85rem; }
+.code-rows input[type=text] { font: inherit; padding: 4px 8px; border: 1px solid var(--elzevir-color-border); border-radius: 6px; min-width: 0; }
+.code-rows button { font: inherit; color: inherit; padding: 4px 12px; border: 1px solid var(--elzevir-color-border); border-radius: 6px; background: transparent; cursor: pointer; }
+.code-new form { border-bottom: 0; padding-top: 10px; }
+.codes-alert { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--elzevir-color-border); }
+.codes-refused { border-color: var(--elzevir-color-signal-out); background: var(--elzevir-color-out-bg); color: var(--elzevir-color-out-text); }

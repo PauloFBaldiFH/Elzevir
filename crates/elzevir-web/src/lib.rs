@@ -7,6 +7,7 @@
 
 mod assets;
 mod catalog;
+mod codes;
 mod creating;
 mod editing;
 mod items;
@@ -148,6 +149,10 @@ pub fn router(state: AppState) -> Router {
         .route("/equipe/login", get(staff::login_form).post(staff::log_in))
         .route("/equipe/logout", post(staff::log_out))
         .route("/equipe/admin/memory", get(staff::memory))
+        .route(
+            "/equipe/admin/codigos",
+            get(codes::code_tables).post(codes::name_code),
+        )
         .layer(axum::middleware::map_response(security::headers))
         .with_state(state)
 }

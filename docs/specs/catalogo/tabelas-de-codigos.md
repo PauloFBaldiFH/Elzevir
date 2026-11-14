@@ -39,10 +39,10 @@ Duas partes, cada uma num PR:
 
 ### Tela (parte b)
 
-14. `GET /equipe/admin/codigos` lista as quatro tabelas, cada linha com código e nome, para quem tem a permissão de catalogação (sem ela: 403).
-15. O nome se edita na própria linha; `Enter` grava aquela linha com `catalog.name_codes`, com CSRF e `audit_log`, e limpa as páginas do OPAC (item 5).
-16. Acrescentar um código novo (unidade, tipo, localização ou coleção) com nome.
-17. Nome vazio é recusado na célula, com a mensagem do Fluent.
+14. `GET /equipe/admin/codigos` lista as quatro tabelas, cada linha com código e nome, para quem tem a permissão de catalogação (sem sessão: vai para o login; sem a permissão: 403). A página inicial da equipe tem o link para ela.
+15. Cada linha é um formulário HTML comum, sem JavaScript: o nome se edita na própria linha e `Enter` (ou "Gravar") envia `POST /equipe/admin/codigos` com a tabela, o código, o nome e o token CSRF da sessão. O servidor grava com `catalog.name_codes` em nome de quem está na sessão (`audit_log`), limpa as páginas guardadas do OPAC (item 5) e redireciona de volta para a tabela, com o aviso "Gravado".
+16. A última linha de cada tabela acrescenta um código novo com seu nome, pelo mesmo `POST`. Um código que já existe só troca de nome.
+17. Código ou nome vazio ou longo demais (item 3) volta a página com 422 e a mensagem do Fluent. Sem sessão: 401; token errado ou sem a permissão: 403; tabela desconhecida: 400.
 18. Apagar código fica de fora: exemplar pode apontar para ele.
 19. Textos só via Fluent; os nomes são dados e aparecem como foram gravados.
 
@@ -60,4 +60,5 @@ Duas partes, cada uma num PR:
 Testes:
 - `crates/elzevir-app/src/koha_codes.rs`: leitura das quatro respostas, com fixture das respostas reais do oráculo (2026-11-14) reduzidas aos campos usados; limites; entradas puladas.
 - `crates/elzevir-store/tests/codes.rs`: criar, renomear e manter; recusa sem gravar nada.
+- `crates/elzevir-web/tests/staff_catalog.rs` (`a_cataloguer_lists_and_renames_the_codes`): permissões, token, recusa e gravação pela tela.
 - `crates/elzevir/tests/koha_codes.rs`: o binário contra um Koha simulado local (login com CSRF, as quatro rotas), gravando os nomes; senha ausente e login recusado saem com 1.
