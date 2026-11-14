@@ -121,7 +121,7 @@ mod tests {
         }
         assert_eq!(
             Parallelism::Threads(cores(4)).map(Vec::<u32>::new(), |n| n),
-            []
+            Vec::<u32>::new()
         );
     }
 }

@@ -72,6 +72,7 @@ impl WriteCommand {
             Self::Catalog(CatalogCommand::UpdateInstance(_)) => "catalog.update_instance",
             Self::Catalog(CatalogCommand::AddInstance(_)) => "catalog.add_instance",
             Self::Catalog(CatalogCommand::SaveItems(_)) => "catalog.save_items",
+            Self::Catalog(CatalogCommand::NameCodes(_)) => "catalog.name_codes",
         }
     }
 

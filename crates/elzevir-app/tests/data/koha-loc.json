@@ -1,0 +1,27 @@
+[
+ {
+  "value": "CHILD",
+  "description": "(Área infantil)",
+  "opac_description": null
+ },
+ {
+  "value": "GEN",
+  "description": "(Estantes gerais)",
+  "opac_description": null
+ },
+ {
+  "value": "JV",
+  "description": "(Área juvenil)",
+  "opac_description": null
+ },
+ {
+  "value": "MU",
+  "description": "(Museu)",
+  "opac_description": null
+ },
+ {
+  "value": "PROC",
+  "description": "(Depósito)",
+  "opac_description": null
+ }
+]

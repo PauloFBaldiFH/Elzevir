@@ -14,6 +14,7 @@ elzevir-data.workspace = true
 elzevir-marc.workspace = true
 argon2.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 unicode-normalization.workspace = true
 

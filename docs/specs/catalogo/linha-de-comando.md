@@ -28,6 +28,10 @@
 8. **Registro que ninguém mudou sai com os bytes guardados.** Quando o modelo ainda diz o mesmo que o registro de origem mapeado (`marc_to_bibframe`), a exportação escreve o registro de origem como está. Registro mudado passa por `bibframe_to_marc` a partir do de origem ([mapeamento MARC21](mapeamento-marc21.md) §7). Isso cobre registros que os leitores aceitam mas a escrita ISO 2709 recusa: 8 dos 250.000 registros da LC têm um delimitador de subcampo dentro do `001`.
 9. Registro sem origem (catalogado no Elzevir) é escrito só a partir do modelo. Registro que não cabe em ISO 2709 é relatado e pulado.
 
+### `elzevir koha-codes --data-dir DIR --url URL --user USUÁRIO`
+
+Traz do Koha os nomes de unidades, tipos de item, localizações e coleções: ver [tabelas de códigos](tabelas-de-codigos.md).
+
 ### Trava da pasta de dados
 
 10. Todo papel que abre a base (`serve`, `staff`, `import`, `export`) trava `DIR/elzevir.lock` com uma trava exclusiva do sistema (`File::try_lock`) até terminar. Um segundo processo na mesma pasta para com "another Elzevir process is using DIR". Assim só existe uma escritora por base, como manda o desenho. Importar com o servidor no ar fica para a importação pela tela, que roda dentro do servidor. A trava some com o processo, mesmo se ele cair.

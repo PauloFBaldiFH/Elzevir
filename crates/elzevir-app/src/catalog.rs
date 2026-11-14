@@ -12,6 +12,7 @@ use elzevir_domain::catalog::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::codes::{NamedCode, NamingCount};
 use crate::items::{ItemsUpdate, RowRefusal};
 use crate::matching::Matching;
 
@@ -65,6 +66,9 @@ pub enum CatalogCommand {
     /// Saves an Instance's Items in one batch, all or nothing
     /// (docs/specs/catalogo/exemplares.md).
     SaveItems(Box<ItemsUpdate>),
+    /// Gives codes of the code tables their names, creating the missing ones
+    /// (docs/specs/catalogo/tabelas-de-codigos.md).
+    NameCodes(Vec<NamedCode>),
 }
 
 /// A new Instance of a stored Work.
@@ -469,6 +473,8 @@ pub enum CatalogOutput {
         /// The Items of the batch's rows, in the batch's order.
         items: Vec<ItemId>,
     },
+    /// Codes were named, counted per table in [`crate::codes::CodeTable::ALL`] order.
+    CodesNamed([NamingCount; 4]),
     /// An Instance was added to a Work.
     InstanceAdded {
         /// The Work.
@@ -502,6 +508,9 @@ pub enum CatalogRefusal {
     /// Another Item has this barcode.
     #[error("barcode `{0}` is already in use")]
     BarcodeTaken(String),
+    /// A code or name of `catalog.name_codes` is empty or too long; the position.
+    #[error("code {0} of the list is empty or too long")]
+    BadCodeName(usize),
     /// Cells of an Item batch that cannot be stored, all of them.
     #[error("{} cells of the item batch were refused", .0.len())]
     ItemRows(Vec<RowRefusal>),

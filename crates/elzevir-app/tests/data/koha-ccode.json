@@ -1,0 +1,17 @@
+[
+ {
+  "value": "FIC",
+  "description": "Ficção",
+  "opac_description": null
+ },
+ {
+  "value": "NFIC",
+  "description": "Não ficção",
+  "opac_description": null
+ },
+ {
+  "value": "REF",
+  "description": "Referência",
+  "opac_description": null
+ }
+]

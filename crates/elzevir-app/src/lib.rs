@@ -2,6 +2,7 @@
 //! Use cases and ports (repository, index, clock and mail traits). Knows only traits, never concrete storage.
 
 pub mod catalog;
+pub mod codes;
 pub mod commands;
 pub mod creating;
 pub mod editing;
