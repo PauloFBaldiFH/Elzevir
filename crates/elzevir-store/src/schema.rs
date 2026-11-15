@@ -12,7 +12,8 @@ use std::time::Duration;
 use elzevir_app::description::{instance_of_material, work_of_material};
 use elzevir_app::listing::sort_key;
 use elzevir_app::marc_mapping::{
-    source_audience, source_description, source_notes, source_titles, source_typed_notes,
+    source_audience, source_description, source_notes, source_provision, source_publication,
+    source_titles, source_typed_notes,
 };
 use elzevir_app::matching::{identifier_key, koha_biblionumber_key};
 use elzevir_domain::catalog::IdentifierKind;
@@ -355,6 +356,10 @@ const MIGRATIONS: &[&str] = &[
     // 19: notes with a type, custodial history and frequency become statements (item 29,
     // part 5b); the migration only fills them from the stored source records.
     "SELECT 1;",
+    // 20: production, distribution, manufacture and copyright dates become statements, and
+    // every place and publisher of the publication is kept (item 29, part 5c); the
+    // migration only fills them from the stored source records.
+    "SELECT 1;",
 ];
 
 /// The migration that creates `match_keys`.
@@ -378,6 +383,8 @@ const POLICIES_VERSION: i64 = 16;
 const TITLES_VERSION: i64 = 18;
 /// Migration that fills the typed notes, custodial history and frequency.
 const TYPED_NOTES_VERSION: i64 = 19;
+/// Migration that fills the other provision activities and every place and publisher.
+const PROVISION_VERSION: i64 = 20;
 /// Migration that drops `extra`.
 const DROP_EXTRA_VERSION: i64 = 13;
 /// Migration that adds the classes, and fills them with content, media, carrier and issuance.
@@ -469,6 +476,10 @@ fn apply_migrations(connection: &mut Connection, current: i64) -> Result<(), Sto
             }
             if version == TYPED_NOTES_VERSION {
                 backfill_from_source(&tx, source_typed_notes)?;
+            }
+            if version == PROVISION_VERSION {
+                backfill_from_source(&tx, source_provision)?;
+                backfill_publication(&tx)?;
             }
             if version == NO_CODES_VERSION || version == POLICIES_VERSION {
                 check_foreign_keys(&tx, version)?;
@@ -610,6 +621,31 @@ fn backfill_descriptions(connection: &Connection) -> Result<(), StoreError> {
                 &instance_description,
             )?;
         }
+    }
+    Ok(())
+}
+
+/// Gives every stored record all the places and publishers of its source record. A value
+/// changed since the import (not the first `$a` or `$b` any more) is left as it is.
+fn backfill_publication(connection: &Connection) -> Result<(), StoreError> {
+    let mut rows = connection.prepare(
+        "SELECT i.id, s.record FROM instances i JOIN source_records s ON s.instance_id = i.id",
+    )?;
+    let mut rows = rows.query([])?;
+    let mut place =
+        connection.prepare("UPDATE instances SET place = ?2 WHERE id = ?1 AND place IS ?3")?;
+    let mut publisher = connection
+        .prepare("UPDATE instances SET publisher = ?2 WHERE id = ?1 AND publisher IS ?3")?;
+    while let Some(row) = rows.next()? {
+        let id: i64 = row.get(0)?;
+        let source: Vec<u8> = row.get(1)?;
+        let Some([(old_place, new_place), (old_publisher, new_publisher)]) =
+            source_publication(&source)
+        else {
+            continue;
+        };
+        place.execute(params![id, new_place, old_place])?;
+        publisher.execute(params![id, new_publisher, old_publisher])?;
     }
     Ok(())
 }
@@ -909,6 +945,82 @@ mod catalog_tests {
                 .statements
                 .iter()
                 .any(|statement| statement.property == "custodialHistory")
+        );
+    }
+
+    #[test]
+    fn migration_20_keeps_every_place_and_the_manufacture_but_not_over_an_edit() {
+        use elzevir_marc::{Field, Record, Subfield, Tag};
+        let subfield = |code: u8, value: &str| Subfield {
+            code,
+            value: value.as_bytes().to_vec(),
+        };
+        let mut source = Vec::new();
+        let record = Record {
+            leader: *b"00000nam a2200000 a 4500",
+            fields: vec![
+                Field::Data {
+                    tag: Tag::new(*b"245"),
+                    indicators: *b"10",
+                    subfields: vec![subfield(b'a', "Dom Casmurro")],
+                },
+                Field::Data {
+                    tag: Tag::new(*b"260"),
+                    indicators: *b"  ",
+                    subfields: vec![
+                        subfield(b'a', "São Paulo :"),
+                        subfield(b'a', "Curitiba :"),
+                        subfield(b'b', "EdUSP :"),
+                        subfield(b'b', "FAPESP,"),
+                        subfield(b'c', "2000"),
+                        subfield(b'f', "(Gráfica)"),
+                    ],
+                },
+            ],
+        };
+        record.write_iso2709(&mut source).unwrap();
+        let (_dir, mut connection) = catalog();
+        connection
+            .execute(
+                "UPDATE source_records SET record = ?1 WHERE instance_id = 1",
+                params![source],
+            )
+            .unwrap();
+        // As part 5c found it: the first place, and a publisher edited since the import.
+        connection
+            .execute(
+                "UPDATE instances SET place = 'São Paulo', publisher = 'Editada' WHERE id = 1",
+                [],
+            )
+            .unwrap();
+        connection
+            .pragma_update(None, "user_version", PROVISION_VERSION - 1)
+            .unwrap();
+        migrate(&mut connection).unwrap();
+        let (place, publisher): (String, String) = connection
+            .query_row(
+                "SELECT place, publisher FROM instances WHERE id = 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            (place.as_str(), publisher.as_str()),
+            ("São Paulo ; Curitiba", "Editada")
+        );
+        let instance = read_description(
+            &connection,
+            EntityRef {
+                entity: EntityKind::Instance,
+                id: 1,
+            },
+        )
+        .unwrap();
+        assert!(
+            instance
+                .statements
+                .iter()
+                .any(elzevir_domain::statement::is_other_provision)
         );
     }
 

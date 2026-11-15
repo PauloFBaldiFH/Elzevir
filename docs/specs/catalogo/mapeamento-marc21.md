@@ -57,7 +57,7 @@ Hub e relações entre Obras não são criados na importação desta versão (AD
 |---|---|
 | título | `245$a`, `$n`, `$p` e `$b`, nessa ordem dentro do campo, `$b` depois de ` : ` |
 | edição | `250$a` |
-| local, editora, data | primeiro `264` com 2º indicador `1`, senão `260`: `$a`, `$b`, `$c` |
+| local, editora, data | primeiro `264` com 2º indicador `1`, senão `260`: todos os `$a` unidos por ` ; `, todos os `$b` unidos por ` : ` (como na ISBD), o primeiro `$c`; na exportação cada parte volta ao seu subcampo |
 | descrição física | `300` `$a`, `$b`, `$c` unidos por espaço, sem tirar a pontuação do meio |
 | série | `490$a` (e ` ; ` + `$v`), senão `830$a`, senão `440$a` |
 | ISBN | `020$a`; o que vem entre parênteses depois do número vira qualificador, e também `$q` |

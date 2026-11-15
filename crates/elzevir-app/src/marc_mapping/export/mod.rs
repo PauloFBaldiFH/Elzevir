@@ -18,6 +18,7 @@ mod coded;
 mod described;
 mod fields;
 mod notes;
+mod provision;
 mod titles;
 
 use fields::{data_field, first_index, insert_in_tag_order, set_subfield};
@@ -58,6 +59,11 @@ pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record 
                 .map(|b| (&b.work_description, &b.instance.description)),
         );
     }
+    provision::write(
+        &mut out,
+        &model.instance.description,
+        before.as_ref().map(|b| &b.instance.description),
+    );
     write_titles(&mut out, model, before.as_ref());
     write_publication(&mut out, model, before.as_ref());
     write_lists(&mut out, model, before.as_ref());
@@ -178,15 +184,55 @@ fn write_publication(out: &mut Record, model: &NewRecord, before: Option<&NewRec
     if before.is_some_and(|b| parts(b) == parts(model)) {
         return;
     }
-    let tag = if out.fields.iter().any(|f| matches!(f, Field::Data { tag, indicators, .. } if tag.as_bytes() == b"264" && indicators[1] == b'1')) || first_index(out, *b"260").is_none() {
-        *b"264"
-    } else {
-        *b"260"
+    // Several places and publishers were joined as ISBD does; each goes back to its own
+    // subfield, in the order `$a`, `$b`, `$c`, before the subfields the model does not hold.
+    let split = |text: &Option<String>, separator: &str| -> Vec<String> {
+        text.as_deref()
+            .map(|t| t.split(separator).map(str::to_owned).collect())
+            .unwrap_or_default()
     };
-    let indicators = if tag == *b"264" { *b" 1" } else { *b"  " };
-    set_subfield(out, tag, indicators, b'a', instance.place.as_deref());
-    set_subfield(out, tag, indicators, b'b', instance.publisher.as_deref());
-    set_subfield(out, tag, indicators, b'c', instance.date.as_deref());
+    let mut wanted: Vec<(u8, String)> = Vec::new();
+    wanted.extend(split(&instance.place, " ; ").into_iter().map(|v| (b'a', v)));
+    wanted.extend(
+        split(&instance.publisher, " : ")
+            .into_iter()
+            .map(|v| (b'b', v)),
+    );
+    wanted.extend(instance.date.iter().map(|v| (b'c', v.clone())));
+    let index = out
+        .fields
+        .iter()
+        .position(|f| {
+            matches!(f, Field::Data { tag, indicators, .. }
+                if tag.as_bytes() == b"264" && indicators[1] == b'1')
+        })
+        .or_else(|| first_index(out, *b"260"));
+    let Some(index) = index else {
+        if !wanted.is_empty() {
+            let subfields: Vec<(u8, &str)> = wanted.iter().map(|(c, v)| (*c, v.as_str())).collect();
+            insert_in_tag_order(out, vec![data_field(*b"264", *b" 1", &subfields)]);
+        }
+        return;
+    };
+    let Some(Field::Data { subfields, .. }) = out.fields.get_mut(index) else {
+        return;
+    };
+    let kept: Vec<Subfield> = subfields
+        .iter()
+        .filter(|s| !matches!(s.code, b'a' | b'b' | b'c'))
+        .cloned()
+        .collect();
+    *subfields = wanted
+        .into_iter()
+        .map(|(code, value)| Subfield {
+            code,
+            value: value.into_bytes(),
+        })
+        .chain(kept)
+        .collect();
+    if subfields.is_empty() {
+        out.fields.remove(index);
+    }
 }
 
 fn write_lists(out: &mut Record, model: &NewRecord, before: Option<&NewRecord>) {
