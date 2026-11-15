@@ -5,7 +5,8 @@
 //! `01-001-008.xml` and `02-010-048.xml`).
 //!
 //! One `bf:AdminMetadata` of the Instance gathers what MARC spreads over the Leader, the
-//! control fields and `040`: the record status (Leader/05), the control number (`001`) and
+//! control fields and `040`: the record status (Leader/05), the description conventions
+//! (Leader/18 and `040 $e`), the control number (`001`) and
 //! who assigned it (`003`), the creation date (`008/00-05`), the date of the last change
 //! (`005`), and the cataloguing source (`040`).
 
@@ -22,6 +23,7 @@ pub(super) fn of_instance(marc: &Marc<'_>) -> Vec<Statement> {
     if known("mstatus", &status) {
         statements.push(concept("status", "mstatus", &status));
     }
+    statements.extend(leader_conventions(marc));
     if let Some(number) = control_text(marc, *b"001") {
         let mut local = Vec::new();
         if let Some(assigner) = control_text(marc, *b"003") {
@@ -72,6 +74,35 @@ pub(super) fn of_instance(marc: &Marc<'_>) -> Vec<Statement> {
         return Vec::new();
     }
     vec![resource("adminMetadata", "AdminMetadata", None, statements)]
+}
+
+/// The conventions Leader/18 names, as `ConvSpec-LDR.xsl` reads them: `a` AACR 2, `c` and
+/// `i` ISBD. Like the LC conversion, a record whose `040 $e` says RDA and whose Leader says
+/// AACR 2 gets none from the Leader: the `040` is the newer word.
+pub(super) fn leader_conventions(marc: &Marc<'_>) -> Option<Statement> {
+    let code = match marc.leader_byte(18) {
+        b'a' => "aacr",
+        b'c' | b'i' => "isbd",
+        _ => return None,
+    };
+    let rda = marc.first(b"040").is_some_and(|field| {
+        field
+            .values(b'e')
+            .any(|e| text::trimmed(e).as_deref() == Some("rda"))
+    });
+    if rda && code == "aacr" {
+        return None;
+    }
+    Some(concept(
+        "descriptionConventions",
+        "descriptionConventions",
+        code,
+    ))
+}
+
+/// Whether a convention is one Leader/18 says, which `040 $e` leaves out.
+pub(super) fn in_leader(code: &str) -> bool {
+    matches!(code, "aacr" | "isbd")
 }
 
 fn control_text(marc: &Marc<'_>, tag: [u8; 3]) -> Option<String> {
@@ -218,6 +249,7 @@ mod tests {
             properties,
             [
                 "status",
+                "descriptionConventions",
                 "identifiedBy",
                 "assigner",
                 "descriptionLanguage",
@@ -228,16 +260,20 @@ mod tests {
                 "changeDate"
             ]
         );
+        // Leader/18 `i`: ISBD, beside the RDA of `040 $e`.
         assert!(
-            matches!(&admin.statements[5].value, Value::Resource(r) if r.class == "DescriptionConventions")
+            matches!(&admin.statements[1].value, Value::Concept { code, .. } if code == "isbd")
         );
-        assert!(matches!(&admin.statements[6].value, Value::Concept { code, .. } if code == "rda"));
+        assert!(
+            matches!(&admin.statements[6].value, Value::Resource(r) if r.class == "DescriptionConventions")
+        );
+        assert!(matches!(&admin.statements[7].value, Value::Concept { code, .. } if code == "rda"));
         assert_eq!(
-            admin.statements[7],
+            admin.statements[8],
             literal("creationDate", "2025-03-21".to_owned())
         );
         assert_eq!(
-            admin.statements[8],
+            admin.statements[9],
             literal("changeDate", "2026-08-23T19:29:13".to_owned())
         );
         assert_eq!(creation_date(b"991231"), Some("1999-12-31".to_owned()));

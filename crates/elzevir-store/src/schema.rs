@@ -13,14 +13,14 @@ use elzevir_app::description::{instance_of_material, work_of_material};
 use elzevir_app::listing::sort_key;
 use elzevir_app::marc_mapping::{
     source_admin, source_audience, source_content, source_contributions, source_description,
-    source_extent, source_fixed, source_notes, source_physical, source_provision,
-    source_publication, source_relations, source_responsibility, source_subjects, source_titles,
-    source_typed_notes,
+    source_extent, source_fixed, source_leader_conventions, source_notes, source_physical,
+    source_provision, source_publication, source_relations, source_responsibility, source_subjects,
+    source_titles, source_typed_notes,
 };
 use elzevir_app::matching::{identifier_key, koha_biblionumber_key};
 use elzevir_domain::catalog::IdentifierKind;
 use elzevir_domain::catalog::{MaterialType, SubjectKind};
-use elzevir_domain::statement::{Description, EntityKind, EntityRef, Statement};
+use elzevir_domain::statement::{Description, EntityKind, EntityRef, Statement, Value};
 use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
 
 use crate::catalog::{
@@ -427,6 +427,10 @@ const MIGRATIONS: &[&str] = &[
          FOREIGN KEY (work_id, subject) REFERENCES work_subjects (work_id, position)
              ON DELETE CASCADE
      ) STRICT, WITHOUT ROWID;",
+    // 31: the description conventions of Leader/18 (AACR 2, ISBD) join the administrative
+    // metadata (item 29, part 5f); the migration only fills them from the stored source
+    // records.
+    "SELECT 1;",
 ];
 
 /// The migration that creates `match_keys`.
@@ -472,6 +476,8 @@ const NAME_PARTS_VERSION: i64 = 28;
 const AGENT_IDENTIFIERS_VERSION: i64 = 29;
 /// Migration that tells the agents named as subjects apart and keeps their parts and links.
 const SUBJECT_AGENTS_VERSION: i64 = 30;
+/// Migration that reads the description conventions of Leader/18.
+const LEADER_CONVENTIONS_VERSION: i64 = 31;
 /// Migration that drops `extra`.
 const DROP_EXTRA_VERSION: i64 = 13;
 /// Migration that adds the classes, and fills them with content, media, carrier and issuance.
@@ -597,6 +603,9 @@ fn apply_migrations(connection: &mut Connection, current: i64) -> Result<(), Sto
             }
             if version == SUBJECT_AGENTS_VERSION {
                 backfill_subject_agents(&tx)?;
+            }
+            if version == LEADER_CONVENTIONS_VERSION {
+                backfill_leader_conventions(&tx)?;
             }
             if version == NO_CODES_VERSION || version == POLICIES_VERSION {
                 check_foreign_keys(&tx, version)?;
@@ -976,6 +985,53 @@ fn backfill_from_source(connection: &Connection, read: FromSource) -> Result<(),
     Ok(())
 }
 
+/// Gives every Instance with a stored source record the description conventions its
+/// Leader/18 names: in its administrative metadata, after the status, or as the
+/// administrative metadata the source record gives when the Instance has none.
+fn backfill_leader_conventions(connection: &Connection) -> Result<(), StoreError> {
+    let mut rows = connection.prepare(
+        "SELECT i.id, s.record FROM instances i JOIN source_records s ON s.instance_id = i.id",
+    )?;
+    let mut rows = rows.query([])?;
+    while let Some(row) = rows.next()? {
+        let instance: i64 = row.get(0)?;
+        let source: Vec<u8> = row.get(1)?;
+        let Some(conventions) = source_leader_conventions(&source) else {
+            continue;
+        };
+        let subject = EntityRef {
+            entity: EntityKind::Instance,
+            id: instance,
+        };
+        let mut description = read_description(connection, subject)?;
+        let admin = description
+            .statements
+            .iter_mut()
+            .find_map(|s| match &mut s.value {
+                Value::Resource(admin) if s.property == "adminMetadata" => Some(admin),
+                _ => None,
+            });
+        match admin {
+            Some(admin) if admin.statements.contains(&conventions) => continue,
+            Some(admin) => {
+                let after_status = usize::from(
+                    admin
+                        .statements
+                        .first()
+                        .is_some_and(|s| s.property == "status"),
+                );
+                admin.statements.insert(after_status, conventions);
+            }
+            None => match source_admin(&source) {
+                Some((_, admin)) if !admin.is_empty() => description.statements.extend(admin),
+                _ => continue,
+            },
+        }
+        describe(connection, EntityKind::Instance, instance, &description)?;
+    }
+    Ok(())
+}
+
 fn add_missing(
     connection: &Connection,
     entity: EntityKind,
@@ -1096,7 +1152,7 @@ mod catalog_tests {
         };
         let mut source = Vec::new();
         Record {
-            leader: *b"00000nam a2200000 a 4500",
+            leader: *b"00000nam a2200000   4500",
             fields: vec![
                 field(b"245", "Dom Casmurro"),
                 field(b"500", "Inclui índice."),
@@ -1156,7 +1212,7 @@ mod catalog_tests {
         };
         let mut source = Vec::new();
         let record = Record {
-            leader: *b"00000nam a2200000 a 4500",
+            leader: *b"00000nam a2200000   4500",
             fields: vec![
                 field(b"245", b"10", "Dom Casmurro"),
                 field(b"246", b"3 ", "Capitu"),
@@ -1207,7 +1263,7 @@ mod catalog_tests {
         };
         let mut source = Vec::new();
         let record = Record {
-            leader: *b"00000nam a2200000 a 4500",
+            leader: *b"00000nam a2200000   4500",
             fields: vec![
                 field(b"245", "Dom Casmurro"),
                 field(b"504", "Inclui bibliografia."),
@@ -1250,7 +1306,7 @@ mod catalog_tests {
         };
         let mut source = Vec::new();
         let record = Record {
-            leader: *b"00000nam a2200000 a 4500",
+            leader: *b"00000nam a2200000   4500",
             fields: vec![
                 Field::Data {
                     tag: Tag::new(*b"245"),
@@ -1328,7 +1384,7 @@ mod catalog_tests {
         };
         let mut source = Vec::new();
         let record = Record {
-            leader: *b"00000nam a2200000 a 4500",
+            leader: *b"00000nam a2200000   4500",
             fields: vec![
                 data(*b"245", *b"10", "Dom Casmurro"),
                 data(*b"740", *b"02", "O Alienista"),
@@ -1377,7 +1433,7 @@ mod catalog_tests {
         };
         let mut source = Vec::new();
         let record = Record {
-            leader: *b"00000nam a2200000 a 4500",
+            leader: *b"00000nam a2200000   4500",
             fields: vec![
                 data(*b"041", *b"1 ", &[(b'a', "por"), (b'h', "fre")]),
                 data(*b"043", *b"  ", &[(b'a', "s-bl---")]),
@@ -1416,7 +1472,7 @@ mod catalog_tests {
         let source_of = |extent: &str| {
             let mut source = Vec::new();
             Record {
-                leader: *b"00000nam a2200000 a 4500",
+                leader: *b"00000nam a2200000   4500",
                 fields: vec![
                     Field::Data {
                         tag: Tag::new(*b"245"),
@@ -1489,7 +1545,7 @@ mod catalog_tests {
         use elzevir_marc::{Field, Record, Subfield, Tag};
         let mut source = Vec::new();
         Record {
-            leader: *b"00000nam a2200000 a 4500",
+            leader: *b"00000nam a2200000   4500",
             fields: vec![
                 Field::Control {
                     tag: Tag::new(*b"001"),
@@ -1533,11 +1589,61 @@ mod catalog_tests {
     }
 
     #[test]
+    fn migration_31_adds_the_conventions_of_the_leader_to_the_admin_metadata() {
+        use elzevir_marc::{Field, Record};
+        let source = |leader: &[u8; 24]| {
+            let mut bytes = Vec::new();
+            Record {
+                leader: *leader,
+                fields: vec![Field::Control {
+                    tag: elzevir_marc::Tag::new(*b"001"),
+                    value: b"42".to_vec(),
+                }],
+            }
+            .write_iso2709(&mut bytes)
+            .unwrap();
+            bytes
+        };
+        let (_dir, mut connection) = catalog();
+        let instance = EntityRef {
+            entity: EntityKind::Instance,
+            id: 1,
+        };
+        // The administrative metadata as stored before: Leader/18 was not read.
+        let (_, before) = source_admin(&source(b"00000nam a2200000   4500")).unwrap();
+        store_description(
+            &connection,
+            instance,
+            &Description {
+                classes: Vec::new(),
+                statements: before,
+            },
+        )
+        .unwrap();
+        connection
+            .execute(
+                "UPDATE source_records SET record = ?1 WHERE instance_id = 1",
+                params![source(b"00000nam a2200000 a 4500")],
+            )
+            .unwrap();
+        rewind(&connection, LEADER_CONVENTIONS_VERSION - 1);
+        migrate(&mut connection).unwrap();
+        let (_, wanted) = source_admin(&source(b"00000nam a2200000 a 4500")).unwrap();
+        let admin: Vec<Statement> = read_description(&connection, instance)
+            .unwrap()
+            .statements
+            .into_iter()
+            .filter(|s| s.property == "adminMetadata")
+            .collect();
+        assert_eq!(admin, wanted);
+    }
+
+    #[test]
     fn migration_25_reads_the_coded_publication_from_the_source_record() {
         use elzevir_marc::{Field, Record, Subfield, Tag};
         let mut source = Vec::new();
         Record {
-            leader: *b"00000nam a2200000 a 4500",
+            leader: *b"00000nam a2200000   4500",
             fields: vec![
                 Field::Control {
                     tag: Tag::new(*b"008"),
@@ -1581,7 +1687,7 @@ mod catalog_tests {
         use elzevir_marc::{Field, Record, Subfield, Tag};
         let mut source = Vec::new();
         Record {
-            leader: *b"00000nam a2200000 a 4500",
+            leader: *b"00000nam a2200000   4500",
             fields: vec![Field::Data {
                 tag: Tag::new(*b"245"),
                 indicators: *b"10",
@@ -1620,7 +1726,7 @@ mod catalog_tests {
             instance.statements,
             [Statement {
                 property: "responsibilityStatement".to_owned(),
-                value: elzevir_domain::statement::Value::Literal {
+                value: Value::Literal {
                     text: "Machado de Assis".to_owned(),
                     language: None,
                 },
@@ -1637,7 +1743,7 @@ mod catalog_tests {
         };
         let mut source = Vec::new();
         Record {
-            leader: *b"00000nam a2200000 a 4500",
+            leader: *b"00000nam a2200000   4500",
             fields: vec![Field::Data {
                 tag: Tag::new(*b"650"),
                 indicators: *b" 4",
@@ -1681,7 +1787,7 @@ mod catalog_tests {
         };
         let mut source = Vec::new();
         Record {
-            leader: *b"00000nam a2200000 a 4500",
+            leader: *b"00000nam a2200000   4500",
             fields: vec![Field::Data {
                 tag: Tag::new(*b"100"),
                 indicators: *b"1 ",
@@ -1726,7 +1832,7 @@ mod catalog_tests {
         };
         let mut source = Vec::new();
         Record {
-            leader: *b"00000nam a2200000 a 4500",
+            leader: *b"00000nam a2200000   4500",
             fields: vec![Field::Data {
                 tag: Tag::new(*b"100"),
                 indicators: *b"1 ",
@@ -1796,7 +1902,7 @@ mod catalog_tests {
         };
         let mut source = Vec::new();
         Record {
-            leader: *b"00000nam a2200000 a 4500",
+            leader: *b"00000nam a2200000   4500",
             fields: vec![Field::Data {
                 tag: Tag::new(*b"610"),
                 indicators: *b"14",

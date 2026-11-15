@@ -76,13 +76,13 @@ pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record 
                 .map(|b| (&b.work_description, &b.instance.description)),
         );
     }
+    write_titles(&mut out, model, before.as_ref());
+    write_publication(&mut out, model, before.as_ref());
     provision::write(
         &mut out,
         &model.instance.description,
         before.as_ref().map(|b| &b.instance.description),
     );
-    write_titles(&mut out, model, before.as_ref());
-    write_publication(&mut out, model, before.as_ref());
     write_lists(&mut out, model, before.as_ref());
     content::write(&mut out, &model.work_description);
     physical::write(&mut out, &model.instance.description);
@@ -233,6 +233,30 @@ fn write_245(out: &mut Record, model: &NewRecord, statement: Option<&str>) {
     set_subfield(out, *b"245", indicators, b'p', None);
 }
 
+/// The ISBD punctuation of the publication area, as the LC way back writes it: ` ;`
+/// between places, ` :` before a publisher, `,` before the date and a period at the end.
+fn with_publication_punctuation(subfields: Vec<(u8, String)>) -> Vec<(u8, String)> {
+    let next_codes: Vec<Option<u8>> = subfields
+        .iter()
+        .skip(1)
+        .map(|(code, _)| Some(*code))
+        .chain([None])
+        .collect();
+    subfields
+        .into_iter()
+        .zip(next_codes)
+        .map(|((code, value), next)| {
+            let value = match next {
+                Some(b'a') => format!("{value} ;"),
+                Some(b'b') => format!("{value} :"),
+                Some(_) => format!("{value},"),
+                None => closed(&value),
+            };
+            (code, value)
+        })
+        .collect()
+}
+
 /// `text` ending with a period, unless it already ends with one.
 fn closed(text: &str) -> String {
     if text.ends_with('.') {
@@ -269,6 +293,7 @@ fn write_publication(out: &mut Record, model: &NewRecord, before: Option<&NewRec
             .map(|v| (b'b', v)),
     );
     wanted.extend(instance.date.iter().map(|v| (b'c', v.clone())));
+    let wanted = with_publication_punctuation(wanted);
     let index = out
         .fields
         .iter()
@@ -280,7 +305,13 @@ fn write_publication(out: &mut Record, model: &NewRecord, before: Option<&NewRec
     let Some(index) = index else {
         if !wanted.is_empty() {
             let subfields: Vec<(u8, &str)> = wanted.iter().map(|(c, v)| (*c, v.as_str())).collect();
-            insert_in_tag_order(out, vec![data_field(*b"264", *b" 1", &subfields)]);
+            // AACR 2 publishes in `260`; RDA, and the LC way back, in `264`.
+            let field = if admin::description_follows(&instance.description, "aacr") {
+                data_field(*b"260", *b"  ", &subfields)
+            } else {
+                data_field(*b"264", *b" 1", &subfields)
+            };
+            insert_in_tag_order(out, vec![field]);
         }
         return;
     };

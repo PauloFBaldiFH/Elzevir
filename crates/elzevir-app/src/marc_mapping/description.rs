@@ -155,7 +155,8 @@ mod tests {
     use super::*;
 
     fn record(leader: [u8; 2], fields: &[(&[u8; 3], &[&str])]) -> Record {
-        let mut full = *b"00000nam a2200000 i 4500";
+        // Leader/18 blank: no description conventions, so no administrative metadata.
+        let mut full = *b"00000nam a2200000   4500";
         full[6] = leader[0];
         full[7] = leader[1];
         Record {

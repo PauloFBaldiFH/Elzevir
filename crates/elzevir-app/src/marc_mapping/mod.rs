@@ -191,6 +191,15 @@ pub fn source_admin(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>)> {
     Some((Vec::new(), admin::of_instance(&Marc(&record))))
 }
 
+/// The description conventions Leader/18 of a stored source record names, for records
+/// stored before the model read them (bibframe-completo.md, item 29, part 5f).
+#[must_use]
+pub fn source_leader_conventions(source: &[u8]) -> Option<Statement> {
+    let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
+    let record = Record::from_ref(&parsed);
+    admin::leader_conventions(&Marc(&record))
+}
+
 /// The physical details, dimensions and accompanying material of a stored source record,
 /// for records stored before the model had them (bibframe-completo.md, item 29, part 5e).
 /// The Work gets none.

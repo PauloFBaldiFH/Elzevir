@@ -249,7 +249,6 @@ impl Gap {
 /// removes a line, and the test fails until the list says so.
 const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     ("LDR/17", 133, Gap::Pending("encoding level")),
-    ("LDR/18", 186, Gap::Pending("descriptive cataloguing form")),
     (
         "007",
         8,
@@ -397,15 +396,24 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     ("250 punctuation", 23, Gap::Punctuation),
     (
         "260",
-        190,
-        Gap::Pending("the publication comes back as 264"),
+        11,
+        Gap::Pending(
+            "places and publishers joined lose their pairs; $b and $c swapped in the source; \
+             a 260 of a record not under AACR 2 comes back as 264",
+        ),
+    ),
+    ("260 punctuation", 72, Gap::Punctuation),
+    (
+        "260/ind1",
+        2,
+        Gap::Pending("sequence of publishing statements not mapped"),
     ),
     (
         "264",
-        190,
-        Gap::Pending("a 260 comes back as 264 with second indicator 1"),
+        4,
+        Gap::Pending("a 260 of a record not under AACR 2 comes back as 264"),
     ),
-    ("264 punctuation", 2, Gap::Punctuation),
+    ("264 punctuation", 10, Gap::Punctuation),
     ("290", 1, Gap::Local),
     ("300 punctuation", 87, Gap::Punctuation),
     ("334", 12, Gap::Pending("mode of issuance not written")),
