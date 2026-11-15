@@ -70,14 +70,20 @@ subjects:
     heading: Economia
     thesaurus: ~
     subdivisions: []
+    name_parts: []
+    identifiers: []
   - kind: place
     heading: Brasil -- Condições econômicas
     thesaurus: ~
     subdivisions: []
+    name_parts: []
+    identifiers: []
   - kind: place
     heading: Brasil -- Política econômica
     thesaurus: ~
     subdivisions: []
+    name_parts: []
+    identifiers: []
 instance:
   title: "Economia aplicada : EA / [Universidade de Sao Paulo, Departamento de Economia; Fundacao Instituto de Pesquisas Economicas]"
   material_type: ~

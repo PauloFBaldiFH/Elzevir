@@ -2,9 +2,9 @@
 //! Catalog commands and reads on SQLite (docs/specs/catalogo/modelo-bibliografico.md).
 
 use elzevir_app::catalog::{
-    CatalogCommand, CatalogOutput, CatalogReadError, CatalogReader, CatalogRefusal, CodeLists,
-    InstanceView, ItemData, ItemStatus, ItemView, NamePart, NewContribution, NewIdentifier,
-    NewInstance, NewInstanceOfWork, NewNote, NewRecord, NewSubject, NewWorkRelation,
+    AuthorityLink, CatalogCommand, CatalogOutput, CatalogReadError, CatalogReader, CatalogRefusal,
+    CodeLists, InstanceView, ItemData, ItemStatus, ItemView, NamePart, NewContribution,
+    NewIdentifier, NewInstance, NewInstanceOfWork, NewNote, NewRecord, NewSubject, NewWorkRelation,
 };
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
 use elzevir_app::listing::sort_key;
@@ -381,23 +381,50 @@ pub(crate) fn insert_contribution_identifiers(
     position: i64,
     contribution: &NewContribution,
 ) -> rusqlite::Result<()> {
-    let mut insert = connection.prepare_cached(
+    insert_links(
+        connection,
         "INSERT INTO contribution_identifiers (work_id, contribution, position, kind, value)
          VALUES (?1, ?2, ?3, ?4, ?5)",
-    )?;
-    for (identifier, order) in contribution.identifiers.iter().zip(0_i64..) {
-        insert.execute(params![
-            work,
-            position,
-            order,
-            identifier.kind.code(),
-            identifier.value
-        ])?;
+        work,
+        position,
+        &contribution.identifiers,
+    )
+}
+
+/// Stores the links of the subject at `position` of `work`.
+pub(crate) fn insert_subject_identifiers(
+    connection: &Connection,
+    work: i64,
+    position: i64,
+    subject: &NewSubject,
+) -> rusqlite::Result<()> {
+    insert_links(
+        connection,
+        "INSERT INTO subject_identifiers (work_id, subject, position, kind, value)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        work,
+        position,
+        &subject.identifiers,
+    )
+}
+
+/// Runs `insert` (a fixed statement) for each link of the heading at `position` of `work`.
+fn insert_links(
+    connection: &Connection,
+    insert: &'static str,
+    work: i64,
+    position: i64,
+    links: &[AuthorityLink],
+) -> rusqlite::Result<()> {
+    let mut insert = connection.prepare_cached(insert)?;
+    for (link, order) in links.iter().zip(0_i64..) {
+        insert.execute(params![work, position, order, link.kind.code(), link.value])?;
     }
     Ok(())
 }
 
-/// The name parts as `agents.name_parts` keeps them: `kind@start`, separated by commas.
+/// The name parts as `agents.name_parts` and `subjects.name_parts` keep them:
+/// `kind@start`, separated by commas.
 fn name_parts_column(parts: &[NamePart]) -> String {
     parts
         .iter()
@@ -406,7 +433,7 @@ fn name_parts_column(parts: &[NamePart]) -> String {
         .join(",")
 }
 
-/// The name parts `agents.name_parts` keeps.
+/// The name parts `agents.name_parts` or `subjects.name_parts` keeps.
 pub(crate) fn name_parts_of_column(column: &str) -> Result<Vec<NamePart>, ReadFailure> {
     column
         .split(',')
@@ -446,12 +473,14 @@ pub(crate) fn link_subjects(
                 params![work, position, subject_id],
             )
             .map_err(StoreError::from)?;
+        insert_subject_identifiers(connection, work, position, subject)
+            .map_err(StoreError::from)?;
     }
     Ok(())
 }
 
 /// The id of `subject`, which is created when no subject has its kind, heading, thesaurus
-/// and subdivisions.
+/// and subdivisions, and which gets the name parts of `subject` when it has none.
 pub(crate) fn subject_id(
     connection: &Connection,
     subject: &NewSubject,
@@ -468,7 +497,7 @@ pub(crate) fn subject_id(
             subdivisions
         ],
     )?;
-    connection.query_row(
+    let id = connection.query_row(
         "SELECT id FROM subjects
          WHERE kind = ?1 AND heading = ?2 AND coalesce(thesaurus, 0) = coalesce(?3, 0)
            AND subdivisions = ?4",
@@ -479,7 +508,16 @@ pub(crate) fn subject_id(
             subdivisions
         ],
         |row| row.get(0),
-    )
+    )?;
+    // The parts belong to the heading, shared by every Work, like an agent's: a heading
+    // typed without them keeps those the subject has.
+    if !subject.name_parts.is_empty() {
+        connection.execute(
+            "UPDATE subjects SET name_parts = ?2 WHERE id = ?1 AND name_parts = ''",
+            params![id, name_parts_column(&subject.name_parts)],
+        )?;
+    }
+    Ok(id)
 }
 
 /// The kinds of the subdivisions as `subjects.subdivisions` keeps them: their codes,

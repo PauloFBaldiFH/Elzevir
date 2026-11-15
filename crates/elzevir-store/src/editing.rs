@@ -17,7 +17,7 @@ use rusqlite::{Connection, OptionalExtension, ToSql, params};
 
 use crate::catalog::{
     insert_identifiers, insert_notes, link_contributions, link_languages, link_subjects,
-    optional_term, record_changed, refused, subdivisions_of_column,
+    optional_term, record_changed, refused,
 };
 use crate::statements::recategorize;
 use crate::{CommandFailed, StoreError, WriteTx};
@@ -196,7 +196,7 @@ fn apply_work_change(
             link_contributions(connection, id, &contributions)?;
         }
         WorkChange::Subjects(subjects) => {
-            let subjects = keep_subdivisions(connection, id, subjects).map_err(StoreError::from)?;
+            let subjects = keep_subject_details(connection, id, subjects)?;
             clear(
                 connection,
                 "DELETE FROM work_subjects WHERE work_id = ?1",
@@ -216,13 +216,7 @@ fn keep_role_terms(
     work: i64,
     contributions: &[NewContribution],
 ) -> Result<Vec<NewContribution>, StoreError> {
-    // A stored code this build cannot read is a corrupt or newer database: report it as
-    // the store error the writer answers with.
-    let mut current =
-        crate::export::contributions(connection, work).map_err(|failure| match failure {
-            crate::catalog::ReadFailure::Store(error) => error,
-            other => StoreError::Sqlite(other.to_string()),
-        })?;
+    let mut current = crate::export::contributions(connection, work).map_err(store_error)?;
     Ok(contributions
         .iter()
         .map(|contribution| {
@@ -246,40 +240,32 @@ fn keep_role_terms(
         .collect())
 }
 
-/// `subjects` with the subdivisions of the Work's current subjects: the form edits a heading
-/// as text, so a subject that keeps its kind, heading and thesaurus keeps what its
-/// subdivisions name.
-fn keep_subdivisions(
+/// `subjects` with what the Work's current subjects say beyond the heading: the form edits
+/// each heading as text, so a subject that keeps its kind, heading and thesaurus keeps the
+/// kinds of its subdivisions and the links the record gave it.
+fn keep_subject_details(
     connection: &Connection,
     work: i64,
     subjects: &[NewSubject],
-) -> rusqlite::Result<Vec<NewSubject>> {
-    let mut statement = connection.prepare(
-        "SELECT s.kind, s.heading, t.code, s.subdivisions FROM work_subjects ws
-         JOIN subjects s ON s.id = ws.subject_id
-         LEFT JOIN terms t ON t.id = s.thesaurus
-         WHERE ws.work_id = ?1 AND s.subdivisions <> '' ORDER BY ws.position",
-    )?;
-    let mut current: Vec<(u8, String, Option<String>, String)> = statement
-        .query_map(params![work], |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
-        })?
-        .collect::<Result<_, _>>()?;
+) -> Result<Vec<NewSubject>, StoreError> {
+    let mut current = crate::export::subjects(connection, work).map_err(store_error)?;
     Ok(subjects
         .iter()
         .map(|subject| {
             let mut subject = subject.clone();
-            let found = current.iter().position(|(kind, heading, thesaurus, _)| {
-                *kind == subject.kind.code()
-                    && *heading == subject.heading
-                    && *thesaurus == subject.thesaurus
+            let found = current.iter().position(|present| {
+                present.kind == subject.kind
+                    && present.heading == subject.heading
+                    && present.thesaurus == subject.thesaurus
             });
-            if subject.subdivisions.is_empty()
-                && let Some(found) = found
-            {
-                let (_, _, _, column) = current.remove(found);
-                // A column the store wrote always parses; one that does not keeps none.
-                subject.subdivisions = subdivisions_of_column(&column).unwrap_or_default();
+            if let Some(found) = found {
+                let present = current.remove(found);
+                if subject.subdivisions.is_empty() {
+                    subject.subdivisions = present.subdivisions;
+                }
+                if subject.identifiers.is_empty() {
+                    subject.identifiers = present.identifiers;
+                }
             }
             subject
         })
@@ -385,4 +371,13 @@ pub(crate) fn instances_of(
         .query_map(params![work.0], |row| row.get(0).map(InstanceId))?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(ids)
+}
+
+/// A stored code this build cannot read is a corrupt or newer database: it is reported as
+/// the store error the writer answers with.
+fn store_error(failure: crate::catalog::ReadFailure) -> StoreError {
+    match failure {
+        crate::catalog::ReadFailure::Store(error) => error,
+        other => StoreError::Sqlite(other.to_string()),
+    }
 }

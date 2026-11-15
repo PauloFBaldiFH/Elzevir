@@ -381,7 +381,7 @@ A validação de onde uma cordinha pode cair é por **papel da ligação**, não
 | Papel | Autoridades aceitas | Destinos válidos | Modelo |
 |---|---|---|---|
 | Contribuição (autor, ilustrador, tradutor…) | Pessoa, Família, Instituição, Evento | Obra; Instância (contribuidor da edição); Hub (criador) | `contributions` com `relator`; `instance_contributions` (§10) |
-| Assunto | todas | Obra | `work_subjects` (agente como assunto: `SubjectKind::Agent`) |
+| Assunto | todas | Obra | `work_subjects` (agente como assunto: `SubjectKind::Person`, `Family`, `Organization` ou `Meeting`) |
 | Local de publicação | Lugar | Instância | `instances.place_id` (§10) |
 
 - Ao começar a arrastar, o papel padrão vem da classe (agentes: contribuição; assuntos e lugares: assunto), e só os destinos válidos para **algum** papel se iluminam. Ao soltar num destino que aceita mais de um papel, aparece uma escolha curta de papel (lista com setas, `Enter` confirma), já marcada no padrão; o papel de contribuição pede o termo relator (autocomplete em `terms`, vocabulário `Relator`).

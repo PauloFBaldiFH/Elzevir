@@ -116,15 +116,17 @@ stable_enum! {
         Place = 6,
         /// The number of a meeting or part (`$n`).
         Number = 7,
+        /// The title of a work the name heading is joined to (`$t`; MADS `TitleElement`).
+        Title = 8,
     }
 }
 
 stable_enum! {
-    /// What an identifier of an agent points at (MARC21 `$0` and `$1`).
-    AgentIdentifierKind {
-        /// An authority record that describes the agent, such as a LC name authority.
+    /// What an authority link of a name or subject points at (MARC21 `$0` and `$1`).
+    AuthorityLinkKind {
+        /// An authority record that describes the entity, such as a LC name authority.
         AuthorityRecord = 1,
-        /// The agent itself, as another dataset names it, such as VIAF or Wikidata.
+        /// The entity itself, as another dataset names it, such as VIAF or Wikidata.
         RealWorldObject = 2,
     }
 }
@@ -136,14 +138,37 @@ stable_enum! {
         Topic = 1,
         /// A geographic name (651).
         Place = 2,
-        /// A person, organization, meeting or family as subject (600, 610, 611).
-        Agent = 3,
+        /// A person as subject (600); headings stored before the agent kinds were told
+        /// apart have this number too, as they were written back as 600.
+        #[serde(alias = "agent")]
+        Person = 3,
         /// A uniform title as subject (630).
         Title = 4,
         /// A genre or form (655).
         GenreForm = 5,
         /// A chronological term (648).
         Temporal = 6,
+        /// An organization as subject (610).
+        Organization = 7,
+        /// A meeting as subject (611).
+        Meeting = 8,
+        /// A family as subject (600 with first indicator 3).
+        Family = 9,
+    }
+}
+
+impl SubjectKind {
+    /// The kind of agent a subject of this kind is, if it names one (BIBFRAME `Agent`
+    /// subclasses as subject).
+    #[must_use]
+    pub const fn agent(self) -> Option<AgentKind> {
+        match self {
+            Self::Person => Some(AgentKind::Person),
+            Self::Organization => Some(AgentKind::Organization),
+            Self::Meeting => Some(AgentKind::Meeting),
+            Self::Family => Some(AgentKind::Family),
+            Self::Topic | Self::Place | Self::Title | Self::GenreForm | Self::Temporal => None,
+        }
     }
 }
 

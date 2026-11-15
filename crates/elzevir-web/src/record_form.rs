@@ -40,7 +40,14 @@ const AGENTS: &[(AgentKind, &str, &str)] = &[
 const SUBJECTS: &[(SubjectKind, &str, &str)] = &[
     (SubjectKind::Topic, "topic", "staff-subject-topic"),
     (SubjectKind::Place, "place", "staff-subject-place"),
-    (SubjectKind::Agent, "agent", "staff-subject-agent"),
+    (SubjectKind::Person, "person", "staff-subject-person"),
+    (
+        SubjectKind::Organization,
+        "organization",
+        "staff-subject-organization",
+    ),
+    (SubjectKind::Meeting, "meeting", "staff-subject-meeting"),
+    (SubjectKind::Family, "family", "staff-subject-family"),
     (SubjectKind::Title, "title", "staff-subject-title"),
     (
         SubjectKind::GenreForm,

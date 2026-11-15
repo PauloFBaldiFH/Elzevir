@@ -6,7 +6,7 @@
 //! whose mapping did not change. An unedited record therefore comes back byte for byte.
 
 use elzevir_domain::catalog::{
-    AgentIdentifierKind, AgentKind, IdentifierKind, MaterialType, NoteKind, SubjectKind,
+    AgentKind, AuthorityLinkKind, IdentifierKind, MaterialType, NoteKind, SubjectKind,
 };
 use elzevir_marc::{Field, Record, Subfield, Tag};
 use std::borrow::Cow;
@@ -15,7 +15,10 @@ use super::instance::{IDENTIFIER_TAGS, NOTE_TAGS, identifier_of, note_of};
 use super::items::{defaults, item_of};
 use super::work::{CONTRIBUTION_TAGS, SUBJECT_TAGS, contribution_of, name_part_code, subject_of};
 use super::{DataField, Marc, marc_to_bibframe, responsibility};
-use crate::catalog::{ItemData, NewContribution, NewIdentifier, NewNote, NewRecord, NewSubject};
+use crate::catalog::{
+    AuthorityLink, ItemData, NamePart, NewContribution, NewIdentifier, NewNote, NewRecord,
+    NewSubject,
+};
 
 mod admin;
 mod coded;
@@ -494,10 +497,14 @@ fn contribution_field(contribution: &NewContribution) -> Field {
             && term.is_none_or(|term| term.to_lowercase() != *role)
     });
     let term = term.or(role.filter(|_| code.is_none()));
-    let mut name: Vec<(u8, Cow<'_, str>)> = name_subfields(contribution)
-        .into_iter()
-        .map(|(code, text)| (code, Cow::Borrowed(text)))
-        .collect();
+    let mut name: Vec<(u8, Cow<'_, str>)> = name_subfields(
+        contribution.kind,
+        &contribution.heading,
+        &contribution.name_parts,
+    )
+    .into_iter()
+    .map(|(code, text)| (code, Cow::Borrowed(text)))
+    .collect();
     // ISBD puts a comma between the name and the relator term.
     if term.is_some()
         && let Some((_, last)) = name.last_mut()
@@ -507,24 +514,17 @@ fn contribution_field(contribution: &NewContribution) -> Field {
     }
     let mut subfields: Vec<(u8, &str)> = name.iter().map(|(code, text)| (*code, &**text)).collect();
     subfields.extend(term.map(|term| (b'e', term)));
-    subfields.extend(contribution.identifiers.iter().map(|identifier| {
-        let code = match identifier.kind {
-            AgentIdentifierKind::AuthorityRecord => b'0',
-            AgentIdentifierKind::RealWorldObject => b'1',
-        };
-        (code, identifier.value.as_str())
-    }));
+    subfields.extend(contribution.identifiers.iter().map(link_subfield));
     subfields.extend(code.map(|code| (b'4', code)));
     data_field(tag, [first_indicator, b' '], &subfields)
 }
 
 /// The heading as `$a` and a subfield for each name part, cut where the part starts; a
 /// heading whose parts do not fit it goes out whole in `$a`.
-fn name_subfields(contribution: &NewContribution) -> Vec<(u8, &str)> {
-    let heading = contribution.heading.as_str();
+fn name_subfields<'a>(kind: AgentKind, heading: &'a str, parts: &[NamePart]) -> Vec<(u8, &'a str)> {
     let mut cuts = Vec::new();
     let mut previous = 0;
-    for part in &contribution.name_parts {
+    for part in parts {
         // Characters to bytes; a part outside the heading or out of order is no cut.
         let Some((at, _)) = heading.char_indices().nth(part.start) else {
             return vec![(b'a', heading)];
@@ -532,7 +532,7 @@ fn name_subfields(contribution: &NewContribution) -> Vec<(u8, &str)> {
         if at <= previous {
             return vec![(b'a', heading)];
         }
-        cuts.push((at, name_part_code(contribution.kind, part.kind)));
+        cuts.push((at, name_part_code(kind, part.kind)));
         previous = at;
     }
     let mut subfields = Vec::new();
@@ -547,9 +547,21 @@ fn name_subfields(contribution: &NewContribution) -> Vec<(u8, &str)> {
     subfields
 }
 
+/// A link as `$0` (an authority record) or `$1` (the entity itself).
+fn link_subfield(link: &AuthorityLink) -> (u8, &str) {
+    let code = match link.kind {
+        AuthorityLinkKind::AuthorityRecord => b'0',
+        AuthorityLinkKind::RealWorldObject => b'1',
+    };
+    (code, link.value.as_str())
+}
+
 fn subject_field(subject: &NewSubject) -> Field {
     let (tag, first_indicator) = match subject.kind {
-        SubjectKind::Agent => (*b"600", b'1'),
+        SubjectKind::Person => (*b"600", b'1'),
+        SubjectKind::Family => (*b"600", b'3'),
+        SubjectKind::Organization => (*b"610", b'2'),
+        SubjectKind::Meeting => (*b"611", b'2'),
         SubjectKind::Title => (*b"630", b'0'),
         SubjectKind::Temporal => (*b"648", b' '),
         SubjectKind::Topic => (*b"650", b' '),
@@ -566,10 +578,18 @@ fn subject_field(subject: &NewSubject) -> Field {
         Some("rvm") => (b'6', None),
         Some(other) => (b'7', Some(other)),
     };
-    let mut subfields: Vec<(u8, &str)> = subject_parts(subject)
-        .into_iter()
-        .map(|(kind, part)| (kind.map_or(b'a', subdivision_code), part))
-        .collect();
+    // The name cut into its parts, the subdivisions, the links, then the thesaurus.
+    let mut subfields: Vec<(u8, &str)> = Vec::new();
+    for (kind, part) in subject_parts(subject) {
+        match (kind, subject.kind.agent()) {
+            (Some(kind), _) => subfields.push((subdivision_code(kind), part)),
+            (None, Some(agent)) => {
+                subfields.extend(name_subfields(agent, part, &subject.name_parts));
+            }
+            (None, None) => subfields.push((b'a', part)),
+        }
+    }
+    subfields.extend(subject.identifiers.iter().map(link_subfield));
     subfields.extend(source.map(|source| (b'2', source)));
     data_field(tag, [first_indicator, second_indicator], &subfields)
 }
@@ -608,7 +628,12 @@ const fn subdivision_code(kind: SubjectKind) -> u8 {
         SubjectKind::GenreForm => b'v',
         SubjectKind::Temporal => b'y',
         SubjectKind::Place => b'z',
-        SubjectKind::Topic | SubjectKind::Agent | SubjectKind::Title => b'x',
+        SubjectKind::Topic
+        | SubjectKind::Title
+        | SubjectKind::Person
+        | SubjectKind::Organization
+        | SubjectKind::Meeting
+        | SubjectKind::Family => b'x',
     }
 }
 

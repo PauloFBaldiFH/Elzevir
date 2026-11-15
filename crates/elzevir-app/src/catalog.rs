@@ -7,7 +7,7 @@
 //! thesauri) are created on first use with the code as their label.
 
 use elzevir_domain::catalog::{
-    AgentIdentifierKind, AgentKind, BranchId, CollectionId, HubId, IdentifierKind, InstanceId,
+    AgentKind, AuthorityLinkKind, BranchId, CollectionId, HubId, IdentifierKind, InstanceId,
     ItemId, MaterialType, Money, NamePartKind, NoteKind, PolicyId, SubjectKind, SublocationId,
     WorkId, WorkRelationKind,
 };
@@ -317,14 +317,15 @@ pub struct NewContribution {
     pub name_parts: Vec<NamePart>,
     /// The agent's identifiers in other datasets (VIAF, Wikidata, LC names), in order.
     #[serde(default)]
-    pub identifiers: Vec<AgentIdentifier>,
+    pub identifiers: Vec<AuthorityLink>,
 }
 
-/// An identifier of an agent in another dataset, as an IRI or a control number.
+/// A link of a name or subject to an authority or another dataset, as an IRI or a
+/// control number.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AgentIdentifier {
+pub struct AuthorityLink {
     /// What it points at.
-    pub kind: AgentIdentifierKind,
+    pub kind: AuthorityLinkKind,
     /// The IRI or number.
     pub value: String,
 }
@@ -354,6 +355,13 @@ pub struct NewSubject {
     /// without a kind is a topic.
     #[serde(default)]
     pub subdivisions: Vec<SubjectKind>,
+    /// Where each part of the name starts, for a subject that names an agent: as the
+    /// parts of a contribution's heading, counted in its name before the subdivisions.
+    #[serde(default)]
+    pub name_parts: Vec<NamePart>,
+    /// The links the record gives the heading, in order.
+    #[serde(default)]
+    pub identifiers: Vec<AuthorityLink>,
 }
 
 /// An Instance's own data.
