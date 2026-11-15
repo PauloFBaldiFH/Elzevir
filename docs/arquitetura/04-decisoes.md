@@ -27,7 +27,7 @@
 | 2 | Porte | **Biblioteca única e redes de bibliotecas.** Uma base atende uma instituição com uma ou várias unidades (até ~20 unidades e ~2 milhões de itens por base SQLite). Várias instituições independentes podem dividir o mesmo servidor (§4). | sim |
 | 3 | Código do Koha | Fica em **`reference/`, fora do workspace Cargo**: nunca é compilado nem empacotado com o Elzevir. Pode virar um repositório separado mais tarde sem mudar nada no resto. | sim |
 | 4 | Formatos | **Importação e exportação em MARC21, MARCXML e UNIMARC; a base interna é BIBFRAME 2.0.** MARC21 primeiro (Fase 1), UNIMARC na Fase 4. | sim |
-| 5 | Modelo de dados | **Relacional, inspirado em BIBFRAME 2.0** (Obra, Instância, Item, Agente, Assunto em tabelas tipadas), **com o registro MARC original preservado** para exportação sem perdas. Sem triple store RDF; BIBFRAME em RDF só como formato de exportação. | sim |
+| 5 | Modelo de dados | **Relacional, com a ontologia BIBFRAME da LC completa** (diretriz de 2026-11-14, [ADR 0003](../adr/0003-bibframe-completo.md); antes: "inspirado em BIBFRAME 2.0") (Obra, Instância, Item, Agente, Assunto em tabelas tipadas), **com o registro MARC original preservado** para exportação sem perdas. Sem triple store RDF; BIBFRAME em RDF só como formato de exportação. | sim |
 | 6 | Acesso ao SQLite | **`rusqlite` com ator de escrita única**: uma thread dedicada é dona de todas as escritas (fila limitada, transações em lote), e um pool de conexões atende as leituras em paralelo (WAL). | sim |
 | 7 | Idiomas | **Inglês como idioma principal da v1, depois português do Brasil.** Os demais idiomas entram mais tarde. Todo texto de interface passa por Fluent desde o primeiro dia, para que traduzir seja só acrescentar arquivos. | sim |
 

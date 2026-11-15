@@ -1,5 +1,7 @@
 # Visão de arquitetura: núcleo BIBFRAME 2.0, borda MARC21/Koha e frontend
 
+> **Atenção (2026-11-14):** a diretriz de BIBFRAME completo ([ADR 0003](adr/0003-bibframe-completo.md), [spec](specs/catalogo/bibframe-completo.md)) substitui o que este documento diz sobre categoria de material, perfil de campos e subconjunto de propriedades: o núcleo implementa a ontologia inteira.
+>
 > Status: aprovada por Paulo como direção em 2026-11-12 (21:59 BRT), junto com o novo nome do projeto, **Elzevir**. A parte A é a especificação dele, sem cortes de conteúdo. A parte B é o plano de integração com o código existente. Onde B diverge de A, a divergência está dita e justificada; Paulo aprovou o plano na íntegra, com as escolhas de B.2, em 2026-11-12 (22:07 BRT).
 >
 > Quando aplicar: na tarefa 1.5 (parte 3) e 1.6 (núcleo e mapeamento), 1.8 e 1.9 (busca e listagem), 1.11 (round-trip), Fase 2 (Onda 1) e depois dela (Onda 2). Nada aqui interrompe a tarefa em andamento.

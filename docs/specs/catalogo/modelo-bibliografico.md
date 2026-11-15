@@ -1,5 +1,7 @@
 # Modelo bibliográfico (v0)
 
+> **Atenção (2026-11-14):** a diretriz de BIBFRAME completo ([ADR 0003](../../adr/0003-bibframe-completo.md), [spec](../../specs/catalogo/bibframe-completo.md)) substitui os itens 8 (tipos de item), 12 (`extra`) e 16 (`material_type`), nas etapas 3 e 4 daquela spec.
+>
 > Status: v0, tarefa 1.5. Base: decisões 4 e 5 do [doc 04](../../arquitetura/04-decisoes.md) (modelo relacional inspirado em BIBFRAME 2.0, com o MARC original preservado), [ADR 0001](../../adr/0001-modelo-bibliografico.md), [ADR 0002](../../adr/0002-hub-relacoes-e-categoria.md) e a [visão de arquitetura](../../ARCHITECTURE_VISION.md). Esta versão define as entidades e as tabelas; o que cada campo MARC preenche é da tarefa 1.6.
 
 ## 1. Comportamento
