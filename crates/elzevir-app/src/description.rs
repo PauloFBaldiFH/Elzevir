@@ -55,6 +55,35 @@ pub fn concept(property: &str, scheme: &str, code: &str) -> Statement {
     }
 }
 
+/// The other titles of `descriptions`, in order, each as its main title and subtitle joined
+/// as on the title page, for search and display (bibframe-completo.md, item 29, part 5a).
+#[must_use]
+pub fn other_titles(descriptions: &[&Description]) -> Vec<String> {
+    descriptions
+        .iter()
+        .flat_map(|description| &description.statements)
+        .filter(|statement| elzevir_domain::statement::is_other_title(statement))
+        .filter_map(|statement| match &statement.value {
+            Value::Resource(title) => {
+                let part = |property: &str| {
+                    title.statements.iter().find_map(|s| match &s.value {
+                        Value::Literal { text, .. } if s.property == property => {
+                            Some(text.as_str())
+                        }
+                        _ => None,
+                    })
+                };
+                let main = part("mainTitle")?;
+                Some(match part("subtitle") {
+                    Some(subtitle) => format!("{main} : {subtitle}"),
+                    None => main.to_owned(),
+                })
+            }
+            _ => None,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

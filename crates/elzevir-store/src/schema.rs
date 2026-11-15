@@ -11,15 +11,15 @@ use std::time::Duration;
 
 use elzevir_app::description::{instance_of_material, work_of_material};
 use elzevir_app::listing::sort_key;
-use elzevir_app::marc_mapping::{source_audience, source_description, source_notes};
+use elzevir_app::marc_mapping::{source_audience, source_description, source_notes, source_titles};
 use elzevir_app::matching::{identifier_key, koha_biblionumber_key};
 use elzevir_domain::catalog::IdentifierKind;
 use elzevir_domain::catalog::MaterialType;
-use elzevir_domain::statement::{Description, EntityKind, EntityRef};
+use elzevir_domain::statement::{Description, EntityKind, EntityRef, Statement};
 use rusqlite::{Connection, OpenFlags, params};
 
 use crate::catalog::insert_notes;
-use crate::statements::store_description;
+use crate::statements::{read_description, store_description};
 use crate::{CommandFailed, StoreError};
 
 /// Ordered migrations; migration `n` (1-based) moves `user_version` from `n - 1` to `n`.
@@ -347,6 +347,9 @@ const MIGRATIONS: &[&str] = &[
          value     TEXT NOT NULL,
          PRIMARY KEY (code, entity, position)
      ) STRICT, WITHOUT ROWID;",
+    // 18: titles other than the preferred one become statements (item 29, part 5a); the
+    // migration only fills them from the stored source records.
+    "SELECT 1;",
 ];
 
 /// The migration that creates `match_keys`.
@@ -366,6 +369,8 @@ const PLACES_VERSION: i64 = 14;
 const NO_CODES_VERSION: i64 = 15;
 /// Migration that turns item types into circulation policies; it needs foreign keys off.
 const POLICIES_VERSION: i64 = 16;
+/// Migration that fills the titles other than the preferred one.
+const TITLES_VERSION: i64 = 18;
 /// Migration that drops `extra`.
 const DROP_EXTRA_VERSION: i64 = 13;
 /// Migration that adds the classes, and fills them with content, media, carrier and issuance.
@@ -451,6 +456,9 @@ fn apply_migrations(connection: &mut Connection, current: i64) -> Result<(), Sto
             }
             if version == PLACES_VERSION {
                 crate::places::backfill(&tx)?;
+            }
+            if version == TITLES_VERSION {
+                backfill_titles(&tx)?;
             }
             if version == NO_CODES_VERSION || version == POLICIES_VERSION {
                 check_foreign_keys(&tx, version)?;
@@ -596,6 +604,51 @@ fn backfill_descriptions(connection: &Connection) -> Result<(), StoreError> {
     Ok(())
 }
 
+/// Adds to every stored record the titles of its source record that its Work and its
+/// Instance do not have yet. A Work takes them from its first Instance with a source.
+fn backfill_titles(connection: &Connection) -> Result<(), StoreError> {
+    let mut rows = connection.prepare(
+        "SELECT i.work_id, i.id, s.record FROM instances i
+         JOIN source_records s ON s.instance_id = i.id ORDER BY i.work_id, i.id",
+    )?;
+    let mut rows = rows.query([])?;
+    let mut done_work = None;
+    while let Some(row) = rows.next()? {
+        let work: i64 = row.get(0)?;
+        let instance: i64 = row.get(1)?;
+        let source: Vec<u8> = row.get(2)?;
+        let Some((work_titles, instance_titles)) = source_titles(&source) else {
+            continue;
+        };
+        if done_work != Some(work) {
+            done_work = Some(work);
+            add_missing(connection, EntityKind::Work, work, work_titles)?;
+        }
+        add_missing(connection, EntityKind::Instance, instance, instance_titles)?;
+    }
+    Ok(())
+}
+
+fn add_missing(
+    connection: &Connection,
+    entity: EntityKind,
+    id: i64,
+    statements: Vec<Statement>,
+) -> Result<(), StoreError> {
+    let subject = EntityRef { entity, id };
+    let mut description = read_description(connection, subject)?;
+    let before = description.statements.len();
+    for statement in statements {
+        if !description.statements.contains(&statement) {
+            description.statements.push(statement);
+        }
+    }
+    if description.statements.len() == before {
+        return Ok(());
+    }
+    describe(connection, entity, id, &description)
+}
+
 fn material(code: Option<u8>) -> Result<Option<MaterialType>, StoreError> {
     code.map(|code| {
         MaterialType::from_code(code)
@@ -723,9 +776,8 @@ mod catalog_tests {
             |sql: &str| -> String { connection.query_row(sql, [], |row| row.get(0)).unwrap() };
         assert_eq!(read("SELECT text FROM instance_notes"), "Inclui índice.");
         assert_eq!(read("SELECT audience FROM works"), "Ensino médio");
-        let description = |entity, id| {
-            crate::statements::read_description(&connection, EntityRef { entity, id }).unwrap()
-        };
+        let description =
+            |entity, id| read_description(&connection, EntityRef { entity, id }).unwrap();
         let work = description(EntityKind::Work, 1);
         assert_eq!(work.classes, ["Text", "Monograph"]);
         assert_eq!(
@@ -741,6 +793,58 @@ mod catalog_tests {
             [elzevir_app::description::concept(
                 "issuance", "issuance", "mono"
             )]
+        );
+    }
+
+    #[test]
+    fn migration_18_reads_the_other_titles_from_the_source_record() {
+        use elzevir_marc::{Field, Record, Subfield, Tag};
+        let field = |tag: &[u8; 3], indicators: &[u8; 2], text: &str| Field::Data {
+            tag: Tag::new(*tag),
+            indicators: *indicators,
+            subfields: vec![Subfield {
+                code: b'a',
+                value: text.as_bytes().to_vec(),
+            }],
+        };
+        let mut source = Vec::new();
+        let record = Record {
+            leader: *b"00000nam a2200000 a 4500",
+            fields: vec![
+                field(b"245", b"10", "Dom Casmurro"),
+                field(b"246", b"3 ", "Capitu"),
+                field(b"246", b"18", "D. Casmurro"),
+            ],
+        };
+        record.write_iso2709(&mut source).unwrap();
+        let (_dir, mut connection) = catalog();
+        connection
+            .execute(
+                "UPDATE source_records SET record = ?1 WHERE instance_id = 1",
+                params![source],
+            )
+            .unwrap();
+        connection
+            .pragma_update(None, "user_version", TITLES_VERSION - 1)
+            .unwrap();
+        migrate(&mut connection).unwrap();
+        let titles = |entity| {
+            read_description(&connection, EntityRef { entity, id: 1 })
+                .unwrap()
+                .statements
+                .into_iter()
+                .filter(elzevir_domain::statement::is_other_title)
+                .count()
+        };
+        assert_eq!(
+            (titles(EntityKind::Work), titles(EntityKind::Instance)),
+            (1, 1)
+        );
+        // Titles a record already has are not added again.
+        backfill_titles(&connection).unwrap();
+        assert_eq!(
+            (titles(EntityKind::Work), titles(EntityKind::Instance)),
+            (1, 1)
         );
     }
 

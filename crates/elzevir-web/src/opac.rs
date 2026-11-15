@@ -198,6 +198,7 @@ fn record_body<'a>(
         t: &state.inner.i18n,
         title: &instance.title,
         work_title: (instance.work_title != instance.title).then_some(&*instance.work_title),
+        other_titles: instance.other_titles.iter().map(String::as_str).collect(),
         contributors: instance
             .contributors
             .iter()

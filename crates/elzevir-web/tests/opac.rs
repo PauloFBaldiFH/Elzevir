@@ -59,6 +59,7 @@ fn view(id: i64, title: &str) -> InstanceView {
         material_type: Some(MaterialType::Book),
         relations: Vec::new(),
         title: title.to_owned(),
+        other_titles: Vec::new(),
         publisher: Some("Editora".to_owned()),
         date: Some("1995".to_owned()),
         classification: Some("310.62".to_owned()),

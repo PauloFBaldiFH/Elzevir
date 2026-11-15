@@ -9,6 +9,7 @@ use elzevir_domain::statement::{Description, Statement};
 use elzevir_marc::Field;
 
 use super::Marc;
+use super::titles::{self, Owner};
 use crate::description::concept;
 
 /// The Work: classes from Leader/06 and /07, content from `336 $b` or else Leader/06.
@@ -23,6 +24,7 @@ pub(super) fn work(marc: &Marc<'_>) -> Description {
     {
         statements.push(concept("content", "contentTypes", code));
     }
+    statements.extend(titles::of_owner(marc, Owner::Work));
     Description {
         classes: classes.into_iter().map(str::to_owned).collect(),
         statements,
@@ -40,6 +42,7 @@ pub(super) fn instance(marc: &Marc<'_>) -> Description {
     }
     statements.extend(coded(marc, *b"337", "media", "mediaTypes"));
     statements.extend(coded(marc, *b"338", "carrier", "carriers"));
+    statements.extend(titles::of_owner(marc, Owner::Instance));
     Description {
         classes: Vec::new(),
         statements,

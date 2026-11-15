@@ -139,6 +139,7 @@ impl TantivyIndex {
             document.add_text(f.main_contributor, main);
         }
         let texts = [
+            (f.other_title, &source.other_titles),
             (f.contributor, &source.contributors),
             (f.subject, &source.subjects),
             (f.note, &source.notes),
@@ -184,6 +185,7 @@ impl TantivyIndex {
             vec![
                 f.title,
                 f.work_title,
+                f.other_title,
                 f.contributor,
                 f.subject,
                 f.publisher,
@@ -194,6 +196,7 @@ impl TantivyIndex {
         parser.set_conjunction_by_default();
         parser.set_field_boost(f.title, 2.0);
         parser.set_field_boost(f.work_title, 2.0);
+        parser.set_field_boost(f.other_title, 2.0);
         // User input is never an error: whatever the grammar cannot read is dropped.
         let (words, _ignored) = parser.parse_query_lenient(text);
         let typed = text.trim();

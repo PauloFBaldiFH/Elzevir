@@ -177,6 +177,7 @@ fn catalog_with_record() -> common::Catalog {
         material_type: Some(MaterialType::Book),
         relations: Vec::new(),
         title: "Dom Casmurro".to_owned(),
+        other_titles: Vec::new(),
         publisher: None,
         date: None,
         classification: None,
