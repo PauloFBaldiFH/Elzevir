@@ -218,6 +218,7 @@ pub fn check(subject: EntityKind, statements: &[Statement]) -> Result<(), Statem
             && !is_other_title(statement)
             && !is_typed_note(statement)
             && !is_other_provision(statement)
+            && !is_language_part(statement)
         {
             return Err(StatementRefusal::Typed(statement.property.clone()));
         }
@@ -261,6 +262,16 @@ pub fn is_other_provision(statement: &Statement) -> bool {
     statement.property == "provisionActivity"
         && matches!(&statement.value, Value::Resource(activity)
             if matches!(activity.class.as_str(), "Production" | "Distribution" | "Manufacture"))
+}
+
+/// Whether `statement` is the language of a part of the content, such as the original or
+/// the summary (bibframe-completo.md, item 29, part 5e). The languages of the content itself
+/// have their own field.
+#[must_use]
+pub fn is_language_part(statement: &Statement) -> bool {
+    statement.property == "language"
+        && matches!(&statement.value, Value::Resource(language)
+            if language.class == "Language" && language.statements.iter().any(|s| s.property == "part"))
 }
 
 /// Checks a whole description: its classes, then its statements (item 10h).
@@ -515,6 +526,25 @@ mod tests {
                 &[statement("note", resource("Note", vec![]))]
             ),
             Err(StatementRefusal::Typed("note".to_owned()))
+        );
+        // The language of a part is a statement; the language of the content is not.
+        let part = resource(
+            "Language",
+            vec![
+                statement("code", literal("fre")),
+                statement("part", literal("original")),
+            ],
+        );
+        assert_eq!(
+            check(EntityKind::Work, &[statement("language", part)]),
+            Ok(())
+        );
+        assert_eq!(
+            check(
+                EntityKind::Work,
+                &[statement("language", resource("Language", vec![]))]
+            ),
+            Err(StatementRefusal::Typed("language".to_owned()))
         );
         assert_eq!(
             check(EntityKind::Item, &[statement("colour", literal("x"))]),

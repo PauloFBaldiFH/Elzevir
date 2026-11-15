@@ -59,6 +59,9 @@ instance:
                   Literal:
                     text: bibliography
                     language: ~
+      - property: electronicLocator
+        value:
+          Iri: "https://biblioteca.utfpr.edu.br/pergamumweb/download/3B11F21829ABEDCCE0631E0886C819E6.png"
   edition: 3. ed
   place: "Campinas, SP"
   publisher: Papirus

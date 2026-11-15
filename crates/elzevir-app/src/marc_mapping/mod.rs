@@ -4,10 +4,12 @@
 //! This is the only place, with the export that will mirror it, that reads MARC tags.
 //! Everything it does not map stays in the preserved source record.
 
+mod content;
 mod description;
 mod export;
 mod instance;
 pub(crate) mod items;
+mod locators;
 mod notes;
 mod provision;
 mod relations;
@@ -115,6 +117,17 @@ pub fn source_relations(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>
     let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
     let record = Record::from_ref(&parsed);
     Some((relations::of_work(&Marc(&record)), Vec::new()))
+}
+
+/// The geographic coverage, the languages of the parts and the scripts of the Work and the
+/// electronic locations of the Instance of a stored source record, for records stored
+/// before the model had them (bibframe-completo.md, item 29, part 5e).
+#[must_use]
+pub fn source_content(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>)> {
+    let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
+    let record = Record::from_ref(&parsed);
+    let marc = Marc(&record);
+    Some((content::of_work(&marc), locators::of_instance(&marc)))
 }
 
 /// The place and the publisher of a stored source record as they were mapped before part

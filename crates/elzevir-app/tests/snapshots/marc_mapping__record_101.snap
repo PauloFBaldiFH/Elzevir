@@ -14,6 +14,22 @@ work_description:
         Concept:
           scheme: contentTypes
           code: txt
+    - property: language
+      value:
+        Resource:
+          class: Language
+          label: ~
+          statements:
+            - property: code
+              value:
+                Literal:
+                  text: eng
+                  language: ~
+            - property: part
+              value:
+                Literal:
+                  text: original
+                  language: ~
 hub: ~
 relations: []
 classification: "242"

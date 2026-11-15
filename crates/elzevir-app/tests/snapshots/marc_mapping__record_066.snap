@@ -1027,6 +1027,15 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: electronicLocator
+        value:
+          Iri: "https://biblioteca.utfpr.edu.br/pergamumweb/vinculos/000046/0000464f.png"
+      - property: electronicLocator
+        value:
+          Iri: "https://biblioteca.utfpr.edu.br/pergamumweb/vinculos/000046/00004650.png"
+      - property: electronicLocator
+        value:
+          Iri: "https://biblioteca.utfpr.edu.br/pergamumweb/vinculos/000046/00004651.png"
   edition: 6. ed
   place: "São Paulo, SP"
   publisher: Moderna

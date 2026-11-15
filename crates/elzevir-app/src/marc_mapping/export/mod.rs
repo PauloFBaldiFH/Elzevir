@@ -15,8 +15,10 @@ use super::{DataField, Marc, marc_to_bibframe};
 use crate::catalog::{ItemData, NewContribution, NewIdentifier, NewNote, NewRecord, NewSubject};
 
 mod coded;
+mod content;
 mod described;
 mod fields;
+mod locators;
 mod notes;
 mod provision;
 mod relations;
@@ -49,7 +51,12 @@ pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record 
             .as_ref()
             .map(|b| (&b.work_description, &b.instance.description)),
     );
-    for group in [&titles::TITLES, &notes::NOTES, &relations::RELATIONS] {
+    for group in [
+        &titles::TITLES,
+        &notes::NOTES,
+        &relations::RELATIONS,
+        &locators::LOCATORS,
+    ] {
         described::write(
             &mut out,
             group,
@@ -68,6 +75,7 @@ pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record 
     write_titles(&mut out, model, before.as_ref());
     write_publication(&mut out, model, before.as_ref());
     write_lists(&mut out, model, before.as_ref());
+    content::write(&mut out, &model.work_description);
     out
 }
 

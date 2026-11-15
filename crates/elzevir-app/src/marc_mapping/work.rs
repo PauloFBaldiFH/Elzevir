@@ -85,7 +85,7 @@ fn languages(marc: &Marc<'_>) -> Vec<String> {
 }
 
 /// `porfre` → `por`, `fre`; an incomplete tail is dropped (spec §4, case 5).
-fn split_codes(joined: &str) -> Vec<String> {
+pub(super) fn split_codes(joined: &str) -> Vec<String> {
     let letters: Vec<char> = joined.chars().filter(char::is_ascii_alphabetic).collect();
     letters
         .chunks_exact(3)
