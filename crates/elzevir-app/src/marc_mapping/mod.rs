@@ -8,6 +8,7 @@ mod description;
 mod export;
 mod instance;
 pub(crate) mod items;
+mod notes;
 mod text;
 mod titles;
 mod work;
@@ -78,6 +79,20 @@ pub fn source_titles(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>)> 
     Some((
         titles::of_owner(&marc, titles::Owner::Work),
         titles::of_owner(&marc, titles::Owner::Instance),
+    ))
+}
+
+/// The typed notes, custodial history and frequency of a stored source record, of the
+/// Work and of the Instance, for records stored before the model had them
+/// (bibframe-completo.md, item 29, part 5b).
+#[must_use]
+pub fn source_typed_notes(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>)> {
+    let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
+    let record = Record::from_ref(&parsed);
+    let marc = Marc(&record);
+    Some((
+        notes::of_owner(&marc, titles::Owner::Work),
+        notes::of_owner(&marc, titles::Owner::Instance),
     ))
 }
 

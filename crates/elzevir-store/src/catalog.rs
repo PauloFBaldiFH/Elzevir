@@ -771,7 +771,7 @@ fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>,
     let languages = statement
         .query_map(params![work], |row| row.get(0))?
         .collect::<Result<Vec<String>, _>>()?;
-    let other_titles = other_titles(c, work, id.0)?;
+    let (other_titles, typed_notes) = described_texts(c, work, id.0)?;
     Ok(Some(InstanceView {
         id,
         version: row.version,
@@ -793,17 +793,27 @@ fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>,
         subjects,
         identifiers,
         notes,
+        typed_notes,
         languages,
     }))
 }
 
-/// The other titles of a Work and of its Instance (bibframe-completo.md, item 29, part 5a).
-fn other_titles(c: &Connection, work: i64, instance: i64) -> Result<Vec<String>, ReadFailure> {
+/// The other titles and the typed notes of a Work and of its Instance (bibframe-completo.md,
+/// item 29, parts 5a and 5b).
+fn described_texts(
+    c: &Connection,
+    work: i64,
+    instance: i64,
+) -> Result<(Vec<String>, Vec<String>), ReadFailure> {
     let described = |entity, id| crate::statements::read_description(c, EntityRef { entity, id });
-    Ok(elzevir_app::description::other_titles(&[
+    let both = [
         &described(EntityKind::Work, work)?,
         &described(EntityKind::Instance, instance)?,
-    ]))
+    ];
+    Ok((
+        elzevir_app::description::other_titles(&both),
+        elzevir_app::description::typed_notes(&both),
+    ))
 }
 
 /// The columns of one Instance and its Work.

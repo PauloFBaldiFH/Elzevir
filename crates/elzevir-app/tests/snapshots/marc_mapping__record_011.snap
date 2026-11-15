@@ -55,6 +55,17 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: note
+        value:
+          Resource:
+            class: Note
+            label: Inclui índice remissivo e notas de rodapé.
+            statements:
+              - property: noteType
+                value:
+                  Literal:
+                    text: bibliography
+                    language: ~
   edition: ~
   place: "Brasília, DF"
   publisher: "Senado Federal, Subsecretaria de Edições Técnicas"

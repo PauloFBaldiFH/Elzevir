@@ -628,6 +628,8 @@ pub struct InstanceView {
     pub identifiers: Vec<(IdentifierKind, String)>,
     /// Notes with their kind, in order.
     pub notes: Vec<(NoteKind, String)>,
+    /// The notes with a type from the `mnotetype` list, of the Work and of the Instance.
+    pub typed_notes: Vec<String>,
     /// Language codes, in order.
     pub languages: Vec<String>,
 }
