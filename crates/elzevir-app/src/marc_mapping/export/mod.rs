@@ -28,6 +28,7 @@ mod content;
 mod described;
 mod fields;
 mod fixed;
+mod form;
 mod locators;
 mod national;
 mod notes;
@@ -70,6 +71,7 @@ pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record 
         &relations::RELATIONS,
         &locators::LOCATORS,
         &national::NATIONAL,
+        &form::FORMS,
     ] {
         described::write(
             &mut out,

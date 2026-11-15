@@ -11,6 +11,7 @@ mod content;
 mod description;
 mod export;
 mod fixed;
+mod form;
 mod instance;
 pub(crate) mod items;
 mod locators;
@@ -222,6 +223,15 @@ pub fn source_periods_and_numbers(source: &[u8]) -> Option<(Vec<Statement>, Vec<
     let record = Record::from_ref(&parsed);
     let marc = Marc(&record);
     Some((temporal::of_work(&marc), national::of_instance(&marc)))
+}
+
+/// The forms of the Work (`380`) of a stored source record, for records stored before the
+/// model read them (bibframe-completo.md, item 29, part 5f).
+#[must_use]
+pub fn source_forms(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>)> {
+    let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
+    let record = Record::from_ref(&parsed);
+    Some((form::of_work(&Marc(&record)), Vec::new()))
 }
 
 /// The description conventions Leader/18 of a stored source record names, for records

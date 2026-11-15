@@ -14,6 +14,7 @@ use super::books;
 use super::classification;
 use super::content;
 use super::fixed;
+use super::form;
 use super::locators;
 use super::national;
 use super::notes;
@@ -44,6 +45,7 @@ pub(super) fn work(marc: &Marc<'_>) -> Description {
     statements.extend(fixed::of_work(marc));
     statements.extend(books::of_work(marc));
     statements.extend(temporal::of_work(marc));
+    statements.extend(form::of_work(marc));
     statements.extend(classification::of_work(marc));
     Description {
         classes: classes.into_iter().map(str::to_owned).collect(),

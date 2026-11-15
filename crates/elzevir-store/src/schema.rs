@@ -13,7 +13,7 @@ use elzevir_app::description::{instance_of_material, work_of_material};
 use elzevir_app::listing::sort_key;
 use elzevir_app::marc_mapping::{
     source_admin, source_audience, source_books, source_classification, source_content,
-    source_contributions, source_description, source_extent, source_fixed,
+    source_contributions, source_description, source_extent, source_fixed, source_forms,
     source_leader_conventions, source_notes, source_periods_and_numbers, source_physical,
     source_provision, source_publication, source_relations, source_responsibility, source_subjects,
     source_titles, source_typed_notes,
@@ -445,6 +445,9 @@ const MIGRATIONS: &[&str] = &[
     // national bibliographic agencies of `016` statements of the Instance (item 29, part
     // 5f); the migration only fills them from the stored source records.
     "SELECT 1;",
+    // 35: the forms of the Work of `380` become `bf:genreForm` statements (item 29, part
+    // 5f); the migration only fills them from the stored source records.
+    "SELECT 1;",
 ];
 
 /// The migration that creates `match_keys`.
@@ -498,6 +501,8 @@ const CLASSIFICATIONS_VERSION: i64 = 32;
 const BOOKS_VERSION: i64 = 33;
 /// Migration that reads the time periods (`045`) and the national numbers (`016`).
 const PERIODS_VERSION: i64 = 34;
+/// Migration that reads the forms of the Work (`380`).
+const FORMS_VERSION: i64 = 35;
 /// Migration that drops `extra`.
 const DROP_EXTRA_VERSION: i64 = 13;
 /// Migration that adds the classes, and fills them with content, media, carrier and issuance.
@@ -635,6 +640,9 @@ fn apply_migrations(connection: &mut Connection, current: i64) -> Result<(), Sto
             }
             if version == PERIODS_VERSION {
                 backfill_from_source(&tx, source_periods_and_numbers)?;
+            }
+            if version == FORMS_VERSION {
+                backfill_from_source(&tx, source_forms)?;
             }
             if version == NO_CODES_VERSION || version == POLICIES_VERSION {
                 check_foreign_keys(&tx, version)?;
@@ -1665,6 +1673,45 @@ mod catalog_tests {
             .filter(|s| s.property == "adminMetadata")
             .collect();
         assert_eq!(admin, wanted);
+    }
+
+    #[test]
+    fn migration_35_reads_the_forms_of_the_work_from_the_source_record() {
+        use elzevir_marc::{Field, Record, Subfield, Tag};
+        let mut source = Vec::new();
+        Record {
+            leader: *b"00000nam a2200000   4500",
+            fields: vec![Field::Data {
+                tag: Tag::new(*b"380"),
+                indicators: *b"  ",
+                subfields: vec![Subfield {
+                    code: b'a',
+                    value: "Ficção".as_bytes().to_vec(),
+                }],
+            }],
+        }
+        .write_iso2709(&mut source)
+        .unwrap();
+        let (_dir, mut connection) = catalog();
+        connection
+            .execute(
+                "UPDATE source_records SET record = ?1 WHERE instance_id = 1",
+                params![source],
+            )
+            .unwrap();
+        rewind(&connection, FORMS_VERSION - 1);
+        migrate(&mut connection).unwrap();
+        let work = read_description(
+            &connection,
+            EntityRef {
+                entity: EntityKind::Work,
+                id: 1,
+            },
+        )
+        .unwrap();
+        let (wanted, _) = source_forms(&source).unwrap();
+        assert_eq!(wanted.len(), 1);
+        assert!(wanted.iter().all(|s| work.statements.contains(s)));
     }
 
     #[test]

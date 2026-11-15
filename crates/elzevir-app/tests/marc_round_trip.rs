@@ -227,6 +227,9 @@ enum Gap {
     /// The source holds fill characters (`|`, no attempt to code); the export writes what
     /// the LC way back writes there.
     Fill,
+    /// A standard field that the LC conversions do not read: BIBFRAME has no place for it,
+    /// so it stays only in the source record.
+    NoDestination(&'static str),
     /// The source breaks the MARC format there; the export writes it right.
     Source(&'static str),
     /// Only the ISBD punctuation differs: the export writes it as the LC way back does.
@@ -243,7 +246,7 @@ impl Gap {
             Self::Blank => "blank indicator in the source",
             Self::Fill => "fill characters in the source",
             Self::Punctuation => "ISBD punctuation only",
-            Self::Source(reason) | Self::Pending(reason) => reason,
+            Self::NoDestination(reason) | Self::Source(reason) | Self::Pending(reason) => reason,
         }
     }
 }
@@ -259,7 +262,10 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     (
         "007",
         8,
-        Gap::Pending("physical description fixed field not mapped"),
+        Gap::NoDestination(
+            "text (t): the LC conversion reads nothing of it, and its way back writes t| for \
+             every printed resource",
+        ),
     ),
     (
         "008 length",
@@ -383,11 +389,7 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
         2,
         Gap::Pending("codes come back in lowercase and padded"),
     ),
-    (
-        "044",
-        4,
-        Gap::Pending("country of producing entity: the LC conversions have no destination"),
-    ),
+    ("044", 4, Gap::NoDestination("country of producing entity")),
     (
         "045",
         1,
@@ -399,7 +401,7 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
         Gap::Pending("$2 written before $a in the source; a local $d not kept"),
     ),
     ("082/ind2 blank", 88, Gap::Blank),
-    ("083", 1, Gap::Pending("additional Dewey number not mapped")),
+    ("083", 1, Gap::NoDestination("additional Dewey number")),
     ("090", 33, Gap::Local),
     ("092", 51, Gap::Local),
     ("094", 1, Gap::Local),
@@ -508,7 +510,6 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
         2,
         Gap::Pending("serials: dates of publication not mapped"),
     ),
-    ("380", 1, Gap::Pending("form of work not mapped")),
     ("440 punctuation", 2, Gap::Punctuation),
     (
         "440/ind2",
@@ -544,7 +545,11 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
         Gap::Pending("display constant (partial contents) not mapped"),
     ),
     ("520 punctuation", 6, Gap::Punctuation),
-    ("541", 2, Gap::Pending("source of acquisition not mapped")),
+    (
+        "541",
+        2,
+        Gap::Pending("source of acquisition: an Item property, with the items of the Koha edge"),
+    ),
     ("555/ind1", 1, Gap::Pending("display constant not mapped")),
     ("590", 1, Gap::Pending("$8 not kept")),
     ("593", 1, Gap::Local),
