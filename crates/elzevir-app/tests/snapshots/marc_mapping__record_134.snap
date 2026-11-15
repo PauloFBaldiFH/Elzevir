@@ -41,6 +41,12 @@ work_description:
                 Literal:
                   text: language
                   language: ~
+    - property: notation
+      value:
+        Resource:
+          class: Notation
+          label: b
+          statements: []
 hub: ~
 relations: []
 classification: ~

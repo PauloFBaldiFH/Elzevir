@@ -9,6 +9,8 @@ use elzevir_domain::statement::{Description, Statement};
 use elzevir_marc::Field;
 
 use super::Marc;
+use super::content;
+use super::locators;
 use super::notes;
 use super::provision;
 use super::relations;
@@ -30,6 +32,7 @@ pub(super) fn work(marc: &Marc<'_>) -> Description {
     statements.extend(titles::of_owner(marc, Owner::Work));
     statements.extend(notes::of_owner(marc, Owner::Work));
     statements.extend(relations::of_work(marc));
+    statements.extend(content::of_work(marc));
     Description {
         classes: classes.into_iter().map(str::to_owned).collect(),
         statements,
@@ -50,6 +53,7 @@ pub(super) fn instance(marc: &Marc<'_>) -> Description {
     statements.extend(titles::of_owner(marc, Owner::Instance));
     statements.extend(notes::of_owner(marc, Owner::Instance));
     statements.extend(provision::of_instance(marc));
+    statements.extend(locators::of_instance(marc));
     Description {
         classes: Vec::new(),
         statements,

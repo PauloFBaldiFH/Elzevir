@@ -42,6 +42,22 @@ work_description:
                                 Literal:
                                   text: A Democracia norte-americana e o negro
                                   language: ~
+    - property: language
+      value:
+        Resource:
+          class: Language
+          label: ~
+          statements:
+            - property: code
+              value:
+                Literal:
+                  text: fre
+                  language: ~
+            - property: part
+              value:
+                Literal:
+                  text: original
+                  language: ~
 hub: ~
 relations: []
 classification: "301.451"
