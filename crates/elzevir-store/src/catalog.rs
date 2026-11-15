@@ -78,6 +78,9 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CatalogCommand) -> Applied {
         CatalogCommand::SaveItems(update) => crate::items::save_items(tx, update)?,
         CatalogCommand::NameCodes(codes) => crate::codes::name_codes(tx, codes)?,
         CatalogCommand::ChangeRegistry(change) => crate::registries::change_registry(tx, change)?,
+        CatalogCommand::SetTypeTranslations(translations) => {
+            crate::koha_types::set(tx, translations)?
+        }
         CatalogCommand::SetStatements(update) => crate::statements::set_statements(tx, update)?,
         CatalogCommand::AddItem(new) => {
             if !exists(

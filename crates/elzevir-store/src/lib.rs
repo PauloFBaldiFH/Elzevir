@@ -25,6 +25,7 @@ mod error;
 mod export;
 mod import;
 mod items;
+mod koha_types;
 mod listing;
 mod matching;
 mod places;

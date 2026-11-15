@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::codes::{CodeTable, NamedCode, NamingCount};
 use crate::items::{ItemsUpdate, RowRefusal};
+use crate::koha_types::TypeTranslations;
 use crate::matching::Matching;
 use crate::registries::{BranchContact, RegistryChange, RegistryEntry, RegistryRefusal};
 use elzevir_domain::statement::{Description, EntityRef, Statement, StatementRefusal};
@@ -70,6 +71,9 @@ pub enum CatalogCommand {
     /// Changes the registries of branches, shelving places, collections and policies
     /// (docs/specs/catalogo/bibframe-completo.md, item 23d).
     ChangeRegistry(RegistryChange),
+    /// Replaces the library's translation of its Koha item types, kept at the MARC edge
+    /// (docs/specs/catalogo/bibframe-completo.md, item 23e).
+    SetTypeTranslations(TypeTranslations),
     /// Replaces every BIBFRAME statement of a Hub, Work, Instance or Item, if it is still
     /// at `row_version` (docs/specs/catalogo/bibframe-completo.md, items 10a to 10g).
     SetStatements(Box<StatementsUpdate>),
@@ -515,6 +519,8 @@ pub enum CatalogOutput {
     CodesNamed([NamingCount; 4]),
     /// A registry changed; the row, when it was created, renamed or given contact data.
     RegistryChanged(Option<RegistryEntry>),
+    /// The translation of Koha item types was replaced; how many types it has.
+    TypeTranslationsSet(usize),
     /// The statements of an entity were replaced.
     StatementsSet {
         /// The entity.

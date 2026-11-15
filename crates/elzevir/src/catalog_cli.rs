@@ -8,10 +8,11 @@ use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
 use clap::{Args, ValueEnum};
-use elzevir_app::catalog::{CatalogCommand, CatalogReader};
-use elzevir_app::commands::WriteCommand;
+use elzevir_app::catalog::{CatalogCommand, CatalogOutput, CatalogReader};
+use elzevir_app::commands::{WriteCommand, WriteOutput};
 use elzevir_app::export::{ExportOptions, export_marc21, item_codes};
 use elzevir_app::import::{ImportOptions, ImportReport, Parallelism, import_marc21};
+use elzevir_app::koha_types::{self, TypeTranslationSource};
 use elzevir_app::matching::{self, Matching, OnMatch, OnNoMatch};
 use elzevir_domain::catalog::MatchRule;
 use elzevir_marc::Limits;
@@ -131,11 +132,45 @@ pub(crate) fn import(args: &ImportArgs) -> Result<(), String> {
     let options = ImportOptions {
         parallelism: Parallelism::from_serial_switch(switch.as_deref(), "import", cores),
         matching: args.matching(),
+        translations: data.store.type_translations().map_err(|e| e.to_string())?,
         ..ImportOptions::default()
     };
     let report =
         import_marc21(open_input(&args.file)?, &data.store, &options).map_err(|e| e.to_string())?;
     print_import(&report);
+    Ok(())
+}
+
+/// `elzevir koha-types`.
+#[derive(Args)]
+pub(crate) struct KohaTypesArgs {
+    /// Institution data directory.
+    #[arg(long)]
+    data_dir: PathBuf,
+    /// Tab-separated translation of this library's Koha item types into BIBFRAME classes
+    /// and statements (docs/specs/catalogo/bibframe-completo.md, item 23e).
+    file: PathBuf,
+}
+
+/// Replaces the stored translation of Koha item types with the one in the file.
+pub(crate) fn koha_types(args: &KohaTypesArgs) -> Result<(), String> {
+    let text = std::fs::read_to_string(&args.file)
+        .map_err(|e| format!("cannot read {}: {e}", args.file.display()))?;
+    let translations =
+        koha_types::parse(&text).map_err(|e| format!("{}: {e}", args.file.display()))?;
+    let data = open_store(&args.data_dir)?;
+    let answer = data
+        .store
+        .submit(WriteCommand::Catalog(CatalogCommand::SetTypeTranslations(
+            translations,
+        )))
+        .map_err(|e| e.to_string())?
+        .wait()
+        .map_err(|e| e.to_string())?;
+    let WriteOutput::Catalog(CatalogOutput::TypeTranslationsSet(count)) = answer else {
+        return Err("unexpected answer from the store".to_owned());
+    };
+    println!("{count} Koha item types translated");
     Ok(())
 }
 
