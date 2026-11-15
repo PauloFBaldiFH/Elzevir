@@ -50,10 +50,17 @@ pub fn new_record(
         ..new_instance
     };
     instance.description = instance_of_material(instance.material_type);
+    let mut work_description = work_of_material(material_type);
+    for (property, statements) in record_parts.statements {
+        work_description
+            .statements
+            .retain(|statement| statement.property != property);
+        work_description.statements.extend(statements);
+    }
     Ok(NewRecord {
         work_title,
         material_type,
-        work_description: work_of_material(material_type),
+        work_description,
         hub: None,
         relations: Vec::new(),
         classification: record_parts.classification,
@@ -104,6 +111,7 @@ struct RecordParts {
     languages: Vec<String>,
     contributions: Vec<crate::catalog::NewContribution>,
     subjects: Vec<crate::catalog::NewSubject>,
+    statements: Vec<(String, Vec<elzevir_domain::statement::Statement>)>,
 }
 
 impl RecordParts {
@@ -118,6 +126,10 @@ impl RecordParts {
             WorkChange::Languages(codes) => self.languages = codes,
             WorkChange::Contributions(contributions) => self.contributions = contributions,
             WorkChange::Subjects(subjects) => self.subjects = subjects,
+            WorkChange::Statements {
+                property,
+                statements,
+            } => self.statements.push((property, statements)),
             // Title and category are read by the caller before the rest.
             WorkChange::Title(_) | WorkChange::MaterialType(_) => {}
         }

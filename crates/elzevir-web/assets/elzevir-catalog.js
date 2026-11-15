@@ -491,8 +491,15 @@ function fieldValue(field) {
 
 // Each field by its block and change: a new family has a Title in the Work and another in
 // the Instance (criacao.md, item 5). An edit form has one block, named "".
+// The rows of a BIBFRAME property are one change each, named by the property
+// (bibframe-completo.md, items 24 to 26).
 function fieldKey(field) {
-  return `${field.closest("[data-part]")?.dataset.part ?? ""}|${field.dataset.change}`;
+  return `${field.closest("[data-part]")?.dataset.part ?? ""}|${field.dataset.change}|${field.dataset.property ?? ""}`;
+}
+
+function changeOf(field, value) {
+  const property = field.dataset.property;
+  return property ? { [field.dataset.change]: { property, rows: value } } : { [field.dataset.change]: value };
 }
 
 function snapshot(form) {
@@ -512,7 +519,7 @@ function changes(form) {
     const value = now[key];
     // A select left empty has no value to send (a category cannot be cleared).
     if (value === before[key] || (value === "null" && field.querySelector("select:not(.cell)"))) continue;
-    list.push({ [field.dataset.change]: JSON.parse(value) });
+    list.push(changeOf(field, JSON.parse(value)));
   }
   return list;
 }
@@ -523,7 +530,7 @@ function filled(scope) {
   for (const field of scope.querySelectorAll(".form-field[data-change]")) {
     const value = fieldValue(field);
     if (value === null || value === "" || (Array.isArray(value) && value.length === 0)) continue;
-    list.push({ [field.dataset.change]: value });
+    list.push(changeOf(field, value));
   }
   return list;
 }

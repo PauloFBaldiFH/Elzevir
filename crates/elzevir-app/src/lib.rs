@@ -21,4 +21,5 @@ pub mod profiles;
 pub mod registries;
 pub mod search;
 pub mod staff;
+pub mod statement_rows;
 pub mod suggestions;

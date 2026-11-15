@@ -18,8 +18,10 @@ use elzevir_app::editing::{
 use elzevir_app::items::RowRefusal;
 use elzevir_app::listing::{FamilyCursor, FamilyHead, sort_key};
 use elzevir_app::staff::Permission;
+use elzevir_app::statement_rows::{StatementRows, statements_of};
 use elzevir_app::suggestions::{AuthoritySuggestions, SUGGESTION_LIMIT, lookup_prefix};
 use elzevir_domain::catalog::{InstanceId, WorkId};
+use elzevir_domain::statement::EntityKind;
 use elzevir_web_templates::url_encode;
 use serde::{Deserialize, Serialize};
 
@@ -38,6 +40,44 @@ const CSRF_HEADER: &str = "x-elzevir-csrf";
 pub(crate) struct EditBody<C> {
     version: i64,
     changes: Vec<C>,
+}
+
+/// One change as the screen sends it: the rows of a BIBFRAME property, or a change in
+/// the command's own JSON form.
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub(crate) enum FormChange<C> {
+    /// `{"Statements": {"property": ..., "rows": [...]}}`.
+    Statements {
+        #[serde(rename = "Statements")]
+        rows: StatementRows,
+    },
+    /// Any other change.
+    Model(C),
+}
+
+/// The changes of a Work, with the rows of each property read into its statements
+/// (bibframe-completo.md, items 24 to 26).
+fn work_changes(changes: Vec<FormChange<WorkChange>>) -> Result<Vec<WorkChange>, Vec<FieldError>> {
+    let mut errors = Vec::new();
+    let mut read = Vec::new();
+    for change in changes {
+        match change {
+            FormChange::Model(change) => read.push(change),
+            FormChange::Statements { rows } => match statements_of(EntityKind::Work, &rows) {
+                Ok((property, statements)) => read.push(WorkChange::Statements {
+                    property: property.to_owned(),
+                    statements,
+                }),
+                Err(error) => errors.push(error),
+            },
+        }
+    }
+    if errors.is_empty() {
+        Ok(read)
+    } else {
+        Err(errors)
+    }
 }
 
 /// One refused field, with its message in the interface language.
@@ -136,13 +176,16 @@ pub(crate) async fn edit_work(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<i64>,
-    Json(body): Json<EditBody<WorkChange>>,
+    Json(body): Json<EditBody<FormChange<WorkChange>>>,
 ) -> Response {
     let session = match authorize(&state, &headers) {
         Ok(session) => session,
         Err(status) => return status.into_response(),
     };
-    let mut changes = body.changes;
+    let mut changes = match work_changes(body.changes) {
+        Ok(changes) => changes,
+        Err(errors) => return invalid(&state, &errors),
+    };
     if let Err(errors) = validate_work_changes(&mut changes) {
         return invalid(&state, &errors);
     }

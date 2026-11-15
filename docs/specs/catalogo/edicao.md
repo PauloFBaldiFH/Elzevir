@@ -63,7 +63,7 @@ A tarefa 2.5 tem três partes, cada uma num PR:
     - Obra, nos dois perfis: título, categoria, contribuições, classificação com esquema, idiomas, assuntos, resumo e público-alvo.
     - Instância, livro: título, edição, local, editora, data, descrição física, série, identificadores (novo identificador começa como ISBN), notas e categoria.
     - Instância, periódico: o mesmo, com o novo identificador começando como ISSN. Periodicidade (310) e numeração (362) ainda não existem no modelo e por isso não entram no perfil (spec de UI §4.2).
-27. Os campos preenchidos aparecem primeiro; os vazios do perfil ficam numa seção recolhível "Campos ainda não preenchidos", na ordem do perfil.
+27. Todos os campos aparecem sempre, preenchidos ou não, sem seção recolhível (bibframe-completo.md, itens 24 e 25). A Obra mostra cada propriedade da ontologia em seções fixas (etapa 6a); a Instância ainda mostra os campos do perfil, numa seção só, até a etapa 6b.
 28. Listas (contribuições, assuntos, identificadores, notas, idiomas) são linhas com "+" para acrescentar e "×" para tirar. Os *chips* com autocompletar são a parte 2.5c.
 29. **Concluir** (botão ou `Ctrl+Enter`) envia só as partes que mudaram, numa edição, com a versão lida quando o formulário abriu. Sem mudança, nada é enviado.
 30. A recusa aparece junto do campo (item 19) ou no topo do bloco ("alterado por outra pessoa; recarregar", item 20), e o formulário continua aberto com o que a pessoa digitou.

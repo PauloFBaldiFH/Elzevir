@@ -108,7 +108,9 @@ pub fn validate_work_changes(changes: &mut [WorkChange]) -> Result<(), Vec<Field
                 }
                 subjects.retain(|subject| !subject.heading.is_empty());
             }
-            WorkChange::MaterialType(_) => {}
+            // The form's rows were read and checked by `statement_rows`; the store checks
+            // the whole description again.
+            WorkChange::MaterialType(_) | WorkChange::Statements { .. } => {}
         }
     }
     if errors.is_empty() {

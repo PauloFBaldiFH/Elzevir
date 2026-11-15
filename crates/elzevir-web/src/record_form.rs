@@ -7,9 +7,11 @@ use elzevir_app::catalog::NewRecord;
 use elzevir_app::profiles::{InstanceField, WorkField, profile_for};
 use elzevir_domain::catalog::{AgentKind, IdentifierKind, MaterialType, NoteKind, SubjectKind};
 use elzevir_web_templates::{
-    ColumnKind, FormCell, FormColumn, FormField, FormInput, FormOption, I18n, RecordForm,
+    ColumnKind, FormCell, FormColumn, FormField, FormInput, FormOption, FormSection, I18n,
+    RecordForm,
 };
 
+use crate::form_sections::work_sections;
 use crate::opac::material_key;
 
 /// The serde names of the vocabularies, with their labels. A unit test checks each name
@@ -101,7 +103,7 @@ fn options<T>(t: &I18n, table: &[(T, &'static str, &'static str)]) -> Vec<FormOp
     table
         .iter()
         .map(|(_, value, key)| FormOption {
-            value,
+            value: (*value).to_owned(),
             label: t.get(key),
         })
         .collect()
@@ -111,7 +113,7 @@ fn material_options(t: &I18n) -> Vec<FormOption> {
     MATERIALS
         .iter()
         .map(|(material, value)| FormOption {
-            value,
+            value: (*value).to_owned(),
             label: t.get(material_key(*material)),
         })
         .collect()
@@ -189,6 +191,8 @@ fn field(
             error,
             label_key,
             input,
+            property: "",
+            ontology_label: "",
             inherited: false,
         },
         filled,
@@ -314,14 +318,6 @@ pub(crate) fn instance_field(
     }
 }
 
-fn split(fields: impl Iterator<Item = (FormField, bool)>) -> (Vec<FormField>, Vec<FormField>) {
-    let (filled, empty): (Vec<_>, Vec<_>) = fields.partition(|(_, filled)| *filled);
-    (
-        filled.into_iter().map(|(field, _)| field).collect(),
-        empty.into_iter().map(|(field, _)| field).collect(),
-    )
-}
-
 /// The form of the Work of `record`, read at `version`.
 pub(crate) fn work_form<'a>(
     t: &'a I18n,
@@ -329,19 +325,11 @@ pub(crate) fn work_form<'a>(
     work: i64,
     version: i64,
 ) -> RecordForm<'a> {
-    let profile = profile_for(
-        record
-            .instance
-            .material_type
-            .unwrap_or(record.material_type),
-    );
-    let (filled, empty) = split(profile.work.iter().map(|part| work_field(t, record, *part)));
     RecordForm {
         t,
         endpoint: format!("/equipe/acervo/obra/{work}"),
         version,
-        filled,
-        empty,
+        sections: work_sections(t, record),
     }
 }
 
@@ -358,18 +346,19 @@ pub(crate) fn instance_form<'a>(
             .material_type
             .unwrap_or(record.material_type),
     );
-    let (filled, empty) = split(
-        profile
-            .instance
-            .iter()
-            .map(|part| instance_field(t, record, profile.identifier, *part)),
-    );
+    let fields = profile
+        .instance
+        .iter()
+        .map(|part| instance_field(t, record, profile.identifier, *part).0)
+        .collect();
     RecordForm {
         t,
         endpoint: format!("/equipe/acervo/instancia/{instance}"),
         version,
-        filled,
-        empty,
+        sections: vec![FormSection {
+            heading_key: None,
+            fields,
+        }],
     }
 }
 
@@ -545,6 +534,7 @@ mod tests {
         let sources = [
             include_str!("record_form.rs"),
             include_str!("record_fields.rs"),
+            include_str!("form_sections.rs"),
             include_str!("../../elzevir-app/src/editing.rs"),
         ];
         let mut missing = Vec::new();

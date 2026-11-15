@@ -152,6 +152,14 @@ pub enum WorkChange {
     Contributions(Vec<NewContribution>),
     /// Subjects.
     Subjects(Vec<NewSubject>),
+    /// The statements of one property, replaced whole (docs/specs/catalogo/
+    /// bibframe-completo.md, items 24 to 26).
+    Statements {
+        /// The property's local name.
+        property: String,
+        /// Its statements, in order.
+        statements: Vec<Statement>,
+    },
 }
 
 /// An edit of an Instance, read at `row_version`.

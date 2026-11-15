@@ -8,7 +8,7 @@ use elzevir_app::catalog::{
 use elzevir_app::commands::WriteRefusal;
 use elzevir_domain::catalog::{InstanceId, WorkId};
 use elzevir_domain::statement::{
-    self, Description, EntityKind, EntityRef, Resource, Statement, Value,
+    self, Description, EntityKind, EntityRef, Resource, Statement, StatementRefusal, Value,
 };
 use rusqlite::{Connection, params};
 
@@ -101,6 +101,50 @@ pub(crate) fn store_description(
         .map_err(StoreError::from)?;
     insert_classes(connection, subject, &description.classes)?;
     insert_level(connection, Owner::Subject(subject), &description.statements)?;
+    Ok(())
+}
+
+/// Replaces the statements of one `property` of `subject` (bibframe-completo.md, items 24
+/// to 26): the new ones take the place of the first old one, or go last; the statements of
+/// every other property stay as they are. The edit that calls it raises the version.
+pub(crate) fn replace_property(
+    connection: &Connection,
+    subject: EntityRef,
+    property: &str,
+    replacing: &[Statement],
+) -> Result<(), CommandFailed<WriteRefusal>> {
+    let current = read_statements(connection, subject)?;
+    let at = current
+        .iter()
+        .position(|statement| statement.property == property)
+        .unwrap_or(current.len());
+    let mut statements: Vec<Statement> = current
+        .into_iter()
+        .filter(|statement| statement.property != property)
+        .collect();
+    let at = at.min(statements.len());
+    statements.splice(at..at, replacing.iter().cloned());
+    if replacing
+        .iter()
+        .any(|statement| statement.property != property)
+    {
+        return Err(refused(CatalogRefusal::BadStatement(
+            StatementRefusal::NotApplicable {
+                property: property.to_owned(),
+                entity: subject.entity,
+            },
+        )));
+    }
+    statement::check(subject.entity, &statements)
+        .map_err(|refusal| refused(CatalogRefusal::BadStatement(refusal)))?;
+    check_entities(connection, replacing)?;
+    connection
+        .execute(
+            "DELETE FROM statements WHERE subject_kind = ?1 AND subject_id = ?2",
+            params![kind_number(subject.entity), subject.id],
+        )
+        .map_err(StoreError::from)?;
+    insert_level(connection, Owner::Subject(subject), &statements)?;
     Ok(())
 }
 

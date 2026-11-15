@@ -137,7 +137,7 @@ async fn read(state: &AppState, instance: InstanceId) -> Result<Option<NewRecord
     }
 }
 
-fn blank(material_type: MaterialType) -> NewRecord {
+pub(crate) fn blank(material_type: MaterialType) -> NewRecord {
     NewRecord {
         work_title: String::new(),
         material_type,
