@@ -28,6 +28,8 @@ pub(crate) enum Mode {
 const MARC8_JSON: &str = "data/loc/marc8.json";
 /// The BIBFRAME ontology, extracted by `tools/bibframe-extractor/extract.pl`.
 const BIBFRAME_JSON: &str = "data/loc/bibframe.json";
+/// The LC vocabularies, extracted by `tools/bibframe-extractor/vocabularies.pl`.
+const VOCABULARIES_JSON: &str = "data/loc/vocabularies.json";
 
 /// Path of an extracted data file, relative to the repository root.
 fn data_path(series: &str, name: &str) -> String {
@@ -41,7 +43,8 @@ struct Generated {
 }
 
 /// Generates every file and writes or checks it according to `mode`.
-pub(crate) fn run(root: &Path, mode: Mode) -> Result<(), String> {
+/// Every generated file, unformatted.
+fn all_files(root: &Path) -> Result<Vec<Generated>, String> {
     let lock = read_json(&root.join("koha-lock.json"))?;
     let series = str_field(&lock, "series")?;
     let data = |name: &str| read_json(&root.join(data_path(series, name)));
@@ -51,6 +54,7 @@ pub(crate) fn run(root: &Path, mode: Mode) -> Result<(), String> {
     let search_fields = data("search_fields.json")?;
     let marc8 = read_json(&root.join(MARC8_JSON))?;
     let bibframe = read_json(&root.join(BIBFRAME_JSON))?;
+    let vocabularies = read_json(&root.join(VOCABULARIES_JSON))?;
 
     let mut files = vec![
         Generated {
@@ -87,6 +91,14 @@ pub(crate) fn run(root: &Path, mode: Mode) -> Result<(), String> {
         },
     ];
     files.extend(
+        crate::vocabularies::files(&vocabularies, VOCABULARIES_JSON, &header)?
+            .into_iter()
+            .map(|file| Generated {
+                name: file.name,
+                source: file.source,
+            }),
+    );
+    files.extend(
         crate::charsets::marc8(&marc8, MARC8_JSON, &header(MARC8_JSON))?
             .into_iter()
             .map(|(name, source)| Generated { name, source }),
@@ -103,7 +115,11 @@ pub(crate) fn run(root: &Path, mode: Mode) -> Result<(), String> {
             source: file.source,
         }),
     );
+    Ok(files)
+}
 
+pub(crate) fn run(root: &Path, mode: Mode) -> Result<(), String> {
+    let files = all_files(root)?;
     let out_dir = root.join(OUT_DIR);
     let mut stale = Vec::new();
     for file in &files {
@@ -172,7 +188,11 @@ fn module_index() -> String {
          pub(crate) mod marc21_framework_9xx;\n\
          pub(crate) mod marc8;\n\
          pub(crate) mod marc8_eacc;\n\
-         pub(crate) mod search_fields;\n",
+         pub(crate) mod search_fields;\n\
+         pub(crate) mod vocabularies;\n\
+         pub(crate) mod vocabulary_cataloging;\n\
+         pub(crate) mod vocabulary_countries;\n\
+         pub(crate) mod vocabulary_languages;\n",
     );
     out
 }

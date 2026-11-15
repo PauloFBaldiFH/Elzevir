@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Tables generated from the pinned Koha reference (circulation rule kinds, MARC frameworks, vocabularies)
-//! and from the Library of Congress MARC-8 code tables and BIBFRAME ontology.
+//! and from the Library of Congress MARC-8 code tables, BIBFRAME ontology and controlled vocabularies.
 //!
 //! The types in this file are written by hand. The tables live in `src/generated/`, which
 //! `cargo xtask codegen` writes from `koha-lock.json`, `data/koha-<series>/` and `data/loc/`; never edit
@@ -8,6 +8,7 @@
 
 pub mod bibframe;
 mod generated;
+pub mod vocabulary;
 
 pub use generated::circulation_rule_kinds::RuleKind;
 pub use generated::koha_version::KOHA_REFERENCE;

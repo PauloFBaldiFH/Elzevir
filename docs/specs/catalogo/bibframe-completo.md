@@ -39,6 +39,7 @@ A diretriz, em quatro frases:
     - `contentTypes` (`bf:content`), `mediaTypes` (`bf:media`), `carriers` (`bf:carrier`), `issuance` (`bf:issuance`);
     - `relators` (`bf:role`), `languages`, `countries`;
     - `maudience` (`bf:intendedAudience`), `mstatus` (`bf:status`) e as demais listas que a ontologia aponta como contradomínio.
+    Como está feito (etapa 2): os três arquivos em lote de `id.loc.gov/download` (`cataloging`, `languages`, `countries`, SKOS em N-Triples) ficam em `reference/loc-vocabularies/`, sem alteração; `tools/bibframe-extractor/vocabularies.pl` escreve `data/loc/vocabularies.json` e o `cargo xtask codegen` gera `elzevir_data::vocabulary`: 57 vocabulários e 2.205 conceitos, cada um com código, IRI, rótulo em inglês e a marca de descontinuado (lido, nunca oferecido). Que propriedade usa que vocabulário é a única tabela escrita à mão (`PROPERTY_SCHEMES`, 41 propriedades, conferida contra a conversão `marc2bibframe2`). Os 6 vocabulários que nenhuma propriedade do BIBFRAME usa ficam numa lista com o motivo (`UNUSED_SCHEMES`; por exemplo, os da extensão BFLC), e um teste exige que todo vocabulário baixado esteja numa das duas listas.
 12. `bf:genreForm` usa os termos da LCGFT que a biblioteca escolher (a lista inteira tem milhares) e aceita termo local com rótulo. Romance, HQ/Gibi, Poesia, Teatro e Biografia entram aqui, na Obra.
 13. Nenhuma tela aceita código digitado para essas propriedades: é caixa de seleção sobre a lista oficial.
 
