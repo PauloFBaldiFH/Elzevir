@@ -103,6 +103,22 @@ instance:
           Concept:
             scheme: carriers
             code: nc
+      - property: provisionActivity
+        value:
+          Resource:
+            class: Publication
+            label: ~
+            statements:
+              - property: date
+                value:
+                  Literal:
+                    text: "1968"
+                    language: ~
+              - property: place
+                value:
+                  Concept:
+                    scheme: countries
+                    code: bl
       - property: adminMetadata
         value:
           Resource:

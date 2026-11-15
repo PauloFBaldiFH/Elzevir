@@ -5,6 +5,7 @@
 use elzevir_domain::statement::{Description, Statement, Value, is_other_provision};
 use elzevir_marc::{Field, Record};
 
+use super::super::fixed::is_coded_year;
 use super::super::provision::of_264;
 use super::fields::{data_field, first_index, set_subfield};
 use super::{mapped, rebuild};
@@ -50,7 +51,8 @@ fn write_264(out: &mut Record, wanted: &[Statement]) {
         .collect();
     let dates: Vec<Statement> = wanted
         .iter()
-        .filter(|s| s.property == "copyrightDate")
+        // A coded year belongs to `008` (type `t`), which holds it.
+        .filter(|s| s.property == "copyrightDate" && !is_coded_copyright(s))
         .cloned()
         .collect();
     if !dates.is_empty() {
@@ -59,12 +61,19 @@ fn write_264(out: &mut Record, wanted: &[Statement]) {
     rebuild(out, &current, &groups, |group| field_of(group), |_, _| None);
 }
 
+/// Whether `statement` is a copyright date as `008` codes it (four digits).
+fn is_coded_copyright(statement: &Statement) -> bool {
+    matches!(&statement.value, Value::Literal { text, .. } if is_coded_year(text))
+}
+
 /// The statements this module writes, in order.
 fn of(description: &Description) -> Vec<Statement> {
     description
         .statements
         .iter()
-        .filter(|s| is_other_provision(s) || s.property == "copyrightDate")
+        .filter(|s| {
+            is_other_provision(s) || (s.property == "copyrightDate" && !is_coded_copyright(s))
+        })
         .cloned()
         .collect()
 }

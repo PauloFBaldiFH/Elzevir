@@ -98,6 +98,33 @@ instance:
                   Literal:
                     text: index
                     language: ~
+      - property: provisionActivity
+        value:
+          Resource:
+            class: Publication
+            label: ~
+            statements:
+              - property: date
+                value:
+                  Literal:
+                    text: 1997/..
+                    language: ~
+              - property: status
+                value:
+                  Concept:
+                    scheme: mstatus
+                    code: current
+              - property: place
+                value:
+                  Resource:
+                    class: Place
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: "xx#"
+                            language: ~
       - property: adminMetadata
         value:
           Resource:

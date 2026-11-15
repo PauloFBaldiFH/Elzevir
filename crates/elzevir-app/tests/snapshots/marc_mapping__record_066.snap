@@ -1027,6 +1027,28 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: provisionActivity
+        value:
+          Resource:
+            class: Publication
+            label: ~
+            statements:
+              - property: date
+                value:
+                  Literal:
+                    text: "1993"
+                    language: ~
+              - property: place
+                value:
+                  Resource:
+                    class: Place
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: spb
+                            language: ~
       - property: electronicLocator
         value:
           Iri: "https://biblioteca.utfpr.edu.br/pergamumweb/vinculos/000046/0000464f.png"

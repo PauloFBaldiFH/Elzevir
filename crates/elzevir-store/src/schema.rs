@@ -12,9 +12,9 @@ use std::time::Duration;
 use elzevir_app::description::{instance_of_material, work_of_material};
 use elzevir_app::listing::sort_key;
 use elzevir_app::marc_mapping::{
-    source_admin, source_audience, source_content, source_description, source_extent, source_notes,
-    source_physical, source_provision, source_publication, source_relations, source_titles,
-    source_typed_notes,
+    source_admin, source_audience, source_content, source_description, source_extent, source_fixed,
+    source_notes, source_physical, source_provision, source_publication, source_relations,
+    source_titles, source_typed_notes,
 };
 use elzevir_app::matching::{identifier_key, koha_biblionumber_key};
 use elzevir_domain::catalog::IdentifierKind;
@@ -375,6 +375,9 @@ const MIGRATIONS: &[&str] = &[
     // becomes a statement of the Instance (item 29, part 5e); the migration only fills it
     // from the stored source records.
     "SELECT 1;",
+    // 25: the coded publication of `008` (type of date, dates, country) becomes statements
+    // (item 29, part 5e); the migration only fills them from the stored source records.
+    "SELECT 1;",
 ];
 
 /// The migration that creates `match_keys`.
@@ -408,6 +411,8 @@ const CONTENT_VERSION: i64 = 22;
 const PHYSICAL_VERSION: i64 = 23;
 /// Migration that fills the administrative metadata.
 const ADMIN_VERSION: i64 = 24;
+/// Migration that fills the coded publication of `008`.
+const FIXED_VERSION: i64 = 25;
 /// Migration that drops `extra`.
 const DROP_EXTRA_VERSION: i64 = 13;
 /// Migration that adds the classes, and fills them with content, media, carrier and issuance.
@@ -515,6 +520,9 @@ fn apply_migrations(connection: &mut Connection, current: i64) -> Result<(), Sto
             }
             if version == ADMIN_VERSION {
                 backfill_from_source(&tx, source_admin)?;
+            }
+            if version == FIXED_VERSION {
+                backfill_from_source(&tx, source_fixed)?;
             }
             if version == NO_CODES_VERSION || version == POLICIES_VERSION {
                 check_foreign_keys(&tx, version)?;
@@ -1306,6 +1314,52 @@ mod catalog_tests {
                 .iter()
                 .any(|statement| statement.property == "adminMetadata")
         );
+    }
+
+    #[test]
+    fn migration_25_reads_the_coded_publication_from_the_source_record() {
+        use elzevir_marc::{Field, Record, Subfield, Tag};
+        let mut source = Vec::new();
+        Record {
+            leader: *b"00000nam a2200000 a 4500",
+            fields: vec![
+                Field::Control {
+                    tag: Tag::new(*b"008"),
+                    value: b"870910r19849999bl            000 0 por d".to_vec(),
+                },
+                Field::Data {
+                    tag: Tag::new(*b"245"),
+                    indicators: *b"10",
+                    subfields: vec![Subfield {
+                        code: b'a',
+                        value: b"Dom Casmurro".to_vec(),
+                    }],
+                },
+            ],
+        }
+        .write_iso2709(&mut source)
+        .unwrap();
+        let (_dir, mut connection) = catalog();
+        connection
+            .execute(
+                "UPDATE source_records SET record = ?1 WHERE instance_id = 1",
+                params![source],
+            )
+            .unwrap();
+        connection
+            .pragma_update(None, "user_version", FIXED_VERSION - 1)
+            .unwrap();
+        migrate(&mut connection).unwrap();
+        let properties = |entity| {
+            read_description(&connection, EntityRef { entity, id: 1 })
+                .unwrap()
+                .statements
+                .into_iter()
+                .map(|statement| statement.property)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(properties(EntityKind::Work), ["originDate"]);
+        assert_eq!(properties(EntityKind::Instance), ["provisionActivity"]);
     }
 
     fn catalog() -> (tempfile::TempDir, Connection) {

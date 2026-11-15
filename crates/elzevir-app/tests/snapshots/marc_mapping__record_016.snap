@@ -48,6 +48,28 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: provisionActivity
+        value:
+          Resource:
+            class: Publication
+            label: ~
+            statements:
+              - property: date
+                value:
+                  Literal:
+                    text: "1979"
+                    language: ~
+              - property: place
+                value:
+                  Resource:
+                    class: Place
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: bl-
+                            language: ~
       - property: adminMetadata
         value:
           Resource:

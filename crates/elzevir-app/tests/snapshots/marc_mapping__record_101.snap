@@ -58,6 +58,28 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: provisionActivity
+        value:
+          Resource:
+            class: Publication
+            label: ~
+            statements:
+              - property: date
+                value:
+                  Literal:
+                    text: "2001"
+                    language: ~
+              - property: place
+                value:
+                  Resource:
+                    class: Place
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: spb
+                            language: ~
       - property: dimensions
         value:
           Literal:

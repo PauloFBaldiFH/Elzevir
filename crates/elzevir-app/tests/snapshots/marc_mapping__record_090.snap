@@ -70,6 +70,28 @@ instance:
                   Literal:
                     text: bibliography
                     language: ~
+      - property: provisionActivity
+        value:
+          Resource:
+            class: Publication
+            label: ~
+            statements:
+              - property: date
+                value:
+                  Literal:
+                    text: "2007"
+                    language: ~
+              - property: place
+                value:
+                  Resource:
+                    class: Place
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: prb
+                            language: ~
       - property: note
         value:
           Resource:

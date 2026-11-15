@@ -8,6 +8,7 @@ mod admin;
 mod content;
 mod description;
 mod export;
+mod fixed;
 mod instance;
 pub(crate) mod items;
 mod locators;
@@ -130,6 +131,17 @@ pub fn source_content(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>)>
     let record = Record::from_ref(&parsed);
     let marc = Marc(&record);
     Some((content::of_work(&marc), locators::of_instance(&marc)))
+}
+
+/// The coded publication of `008` of a stored source record: the original date of a
+/// reprint for the Work, the publication and a copyright date for the Instance, for records
+/// stored before the model had them (bibframe-completo.md, item 29, part 5e).
+#[must_use]
+pub fn source_fixed(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>)> {
+    let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
+    let record = Record::from_ref(&parsed);
+    let marc = Marc(&record);
+    Some((fixed::of_work(&marc), fixed::of_instance(&marc)))
 }
 
 /// The administrative metadata of a stored source record, for records stored before the
