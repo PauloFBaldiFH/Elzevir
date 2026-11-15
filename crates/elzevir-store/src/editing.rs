@@ -105,7 +105,7 @@ pub(crate) fn version(
         .optional()?)
 }
 
-fn bump(connection: &Connection, sql: &str, id: i64) -> Result<i64, StoreError> {
+pub(crate) fn bump(connection: &Connection, sql: &str, id: i64) -> Result<i64, StoreError> {
     Ok(connection.query_row(sql, params![id], |row| row.get(0))?)
 }
 
@@ -271,7 +271,10 @@ fn clear(connection: &Connection, sql: &str, id: i64) -> Result<(), StoreError> 
     Ok(())
 }
 
-fn instances_of(connection: &Connection, work: WorkId) -> Result<Vec<InstanceId>, StoreError> {
+pub(crate) fn instances_of(
+    connection: &Connection,
+    work: WorkId,
+) -> Result<Vec<InstanceId>, StoreError> {
     let mut statement =
         connection.prepare_cached("SELECT id FROM instances WHERE work_id = ?1 ORDER BY id")?;
     let ids = statement

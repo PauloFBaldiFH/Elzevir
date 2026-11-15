@@ -29,6 +29,7 @@ mod listing;
 mod matching;
 mod readers;
 mod schema;
+mod statements;
 mod suggestions;
 mod writer;
 

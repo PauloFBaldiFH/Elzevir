@@ -77,6 +77,7 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CatalogCommand) -> Applied {
         CatalogCommand::AddInstance(new) => add_instance_of_work(tx, new)?,
         CatalogCommand::SaveItems(update) => crate::items::save_items(tx, update)?,
         CatalogCommand::NameCodes(codes) => crate::codes::name_codes(tx, codes)?,
+        CatalogCommand::SetStatements(update) => crate::statements::set_statements(tx, update)?,
         CatalogCommand::AddItem(new) => {
             if !exists(
                 connection,

@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::codes::{NamedCode, NamingCount};
 use crate::items::{ItemsUpdate, RowRefusal};
 use crate::matching::Matching;
+use elzevir_domain::statement::{EntityRef, Statement, StatementRefusal};
 
 /// Catalog commands.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,6 +70,30 @@ pub enum CatalogCommand {
     /// Gives codes of the code tables their names, creating the missing ones
     /// (docs/specs/catalogo/tabelas-de-codigos.md).
     NameCodes(Vec<NamedCode>),
+    /// Replaces every BIBFRAME statement of a Hub, Work, Instance or Item, if it is still
+    /// at `row_version` (docs/specs/catalogo/bibframe-completo.md, items 10a to 10g).
+    SetStatements(Box<StatementsUpdate>),
+}
+
+/// The statements of one entity, as `catalog.set_statements` stores them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StatementsUpdate {
+    /// The entity described.
+    pub subject: EntityRef,
+    /// The version the editor read: the entity's own, or, for an Instance, its record's.
+    pub row_version: i64,
+    /// Every statement, in order; what is not here is removed.
+    pub statements: Vec<Statement>,
+}
+
+/// Reads the BIBFRAME statements of an entity (items 10a to 10g).
+pub trait StatementReader {
+    /// The statements of `subject`, in the order stored; empty for an unknown entity.
+    ///
+    /// # Errors
+    ///
+    /// When the store cannot be read.
+    fn statements(&self, subject: EntityRef) -> Result<Vec<Statement>, CatalogReadError>;
 }
 
 /// A new Instance of a stored Work.
@@ -475,6 +500,13 @@ pub enum CatalogOutput {
     },
     /// Codes were named, counted per table in [`crate::codes::CodeTable::ALL`] order.
     CodesNamed([NamingCount; 4]),
+    /// The statements of an entity were replaced.
+    StatementsSet {
+        /// The entity.
+        subject: EntityRef,
+        /// Its new version.
+        row_version: i64,
+    },
     /// An Instance was added to a Work.
     InstanceAdded {
         /// The Work.
@@ -511,6 +543,12 @@ pub enum CatalogRefusal {
     /// A code or name of `catalog.name_codes` is empty or too long; the position.
     #[error("code {0} of the list is empty or too long")]
     BadCodeName(usize),
+    /// A statement breaks a rule of the ontology.
+    #[error("{0}")]
+    BadStatement(StatementRefusal),
+    /// No Hub, Work, Instance or Item has this id.
+    #[error("unknown {:?} {}", .0.entity, .0.id)]
+    UnknownEntity(EntityRef),
     /// Cells of an Item batch that cannot be stored, all of them.
     #[error("{} cells of the item batch were refused", .0.len())]
     ItemRows(Vec<RowRefusal>),
