@@ -595,6 +595,7 @@ mod tests {
     use super::*;
     use crate::catalog::ItemStatus;
     use crate::search::SearchHit;
+    use elzevir_domain::catalog::PolicyId;
 
     #[test]
     fn sort_keys_ignore_case_accents_and_punctuation() {
@@ -628,7 +629,7 @@ mod tests {
             barcode: None,
             inventory_number: Some(inventory.to_owned()),
             home_branch: BranchId(1),
-            item_type: "BK".to_owned(),
+            policy: PolicyId(1),
             call_number: None,
             location: None,
             status,

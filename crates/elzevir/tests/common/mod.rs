@@ -46,14 +46,13 @@ pub(crate) fn imported() -> (tempfile::TempDir, ElzevirStore) {
                 code,
             }])
         })
-        .chain(
-            item_types
-                .into_iter()
-                .map(|code| CatalogCommand::CreateItemType {
-                    description: code.clone(),
-                    code,
-                }),
-        );
+        .chain(item_types.into_iter().map(|code| {
+            CatalogCommand::NameCodes(vec![NamedCode {
+                table: CodeTable::ItemType,
+                name: code.clone(),
+                code,
+            }])
+        }));
     for command in setup {
         store
             .submit(WriteCommand::Catalog(command))

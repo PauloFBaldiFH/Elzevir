@@ -16,6 +16,8 @@ pub(crate) enum Coded {
     Sublocation = 2,
     /// A collection of a branch (`952 $8`).
     Collection = 3,
+    /// A circulation policy, from a Koha item type (`952 $y`, `942 $c`).
+    Policy = 4,
 }
 
 /// The constant SQL of one per-branch list.

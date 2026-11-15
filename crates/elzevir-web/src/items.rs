@@ -12,7 +12,7 @@ use elzevir_app::catalog::{CodeLists, Place};
 use elzevir_app::editing::Edit;
 use elzevir_app::items::{GridItem, ItemFields, ItemsUpdate, MAX_ROWS, TypedRow, item_rows};
 use elzevir_app::staff::Permission;
-use elzevir_domain::catalog::{BranchId, CollectionId, InstanceId, Money, SublocationId};
+use elzevir_domain::catalog::{BranchId, CollectionId, InstanceId, Money, PolicyId, SublocationId};
 use elzevir_web_templates::{GridCell, GridColumn, GridList, GridRow, ItemGrid};
 use serde::Deserialize;
 
@@ -60,12 +60,7 @@ const COLUMNS: &[GridColumn] = &[
         Some("collections"),
         true,
     ),
-    column(
-        "item_type",
-        "items-column-item-type",
-        Some("item-types"),
-        true,
-    ),
+    column("policy", "items-column-policy", Some("policies"), true),
     column("copy_number", "items-column-copy", None, false),
     column("price", "items-column-price", None, false),
 ];
@@ -84,7 +79,7 @@ fn cells(fields: ItemFields, codes: &CodeLists) -> Vec<GridCell> {
         Some(fields.holding_branch.0.to_string()),
         fields.location.map(|id| id.0.to_string()),
         fields.collection.map(|id| id.0.to_string()),
-        Some(fields.item_type),
+        Some(fields.policy.0.to_string()),
         fields.copy_number,
         price,
     ]
@@ -105,7 +100,7 @@ fn name_in<'a>(codes: &'a CodeLists, list: &str, key: &'a str) -> &'a str {
     let id = key.parse::<i64>().unwrap_or_default();
     match list {
         "branches" => codes.branch(BranchId(id)),
-        "item-types" => codes.item_type(key),
+        "policies" => codes.policy(PolicyId(id)),
         "locations" => codes.location(SublocationId(id)),
         "collections" => codes.collection(CollectionId(id)),
         _ => key,
@@ -189,11 +184,11 @@ pub(crate) async fn item_grid(
                     .collect(),
             ),
             grid_list(
-                "item-types",
+                "policies",
                 codes
-                    .item_types
+                    .policies
                     .iter()
-                    .map(|entry| (entry.code.clone(), entry.name.clone()))
+                    .map(|policy| (policy.id.0.to_string(), policy.name.clone()))
                     .collect(),
             ),
             grid_list(
@@ -272,7 +267,8 @@ mod tests {
             RowProblem::Required,
             RowProblem::Price,
             RowProblem::UnknownBranch,
-            RowProblem::UnknownItemType,
+            RowProblem::UnknownPolicy,
+            RowProblem::NotInBranch,
             RowProblem::BarcodeTaken,
             RowProblem::UnknownItem,
         ] {

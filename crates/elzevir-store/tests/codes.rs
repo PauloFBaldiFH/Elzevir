@@ -60,15 +60,14 @@ fn count(created: usize, renamed: usize, unchanged: usize, unused: usize) -> Nam
     }
 }
 
-/// The edge codes and item types with their names.
+/// The edge codes with the names of their rows.
 fn names(store: &ElzevirStore) -> Vec<(String, String)> {
     let codes = store.codes().unwrap();
-    let edge = codes.edge.into_iter().map(|entry| (entry.code, entry.name));
-    let types = codes
-        .item_types
+    codes
+        .edge
         .into_iter()
-        .map(|entry| (entry.code, entry.name));
-    edge.chain(types).collect()
+        .map(|entry| (entry.code, entry.name))
+        .collect()
 }
 
 #[test]

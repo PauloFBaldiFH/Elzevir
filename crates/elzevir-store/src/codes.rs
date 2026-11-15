@@ -78,33 +78,31 @@ fn branch(connection: &Connection, entry: &NamedCode) -> Result<Change, StoreErr
     Ok(Change::Renamed)
 }
 
-/// Item types keep their code until stage 4b.
+/// A Koha item type names a circulation policy, found by its edge code; a new code
+/// creates the policy (bibframe-completo.md, item 23c).
 fn item_type(connection: &Connection, entry: &NamedCode) -> Result<Change, StoreError> {
-    let current: Option<String> = connection
-        .query_row(
-            "SELECT description FROM item_types WHERE code = ?1",
-            params![entry.code],
-            |row| row.get(0),
-        )
-        .optional()?;
-    Ok(match current {
-        None => {
-            connection.execute(
-                "INSERT INTO item_types (code, description) VALUES (?1, ?2)",
-                params![entry.code, entry.name],
-            )?;
-            Change::Created
-        }
-        Some(current) if current == entry.name => Change::Unchanged,
-        Some(_) => {
-            connection.execute(
-                "UPDATE item_types SET description = ?2, row_version = row_version + 1
-                 WHERE code = ?1",
-                params![entry.code, entry.name],
-            )?;
-            Change::Renamed
-        }
-    })
+    let Some(id) = places::by_code(connection, Coded::Policy, &entry.code)? else {
+        connection.execute(
+            "INSERT INTO circulation_policies (name) VALUES (?1)",
+            params![entry.name],
+        )?;
+        let id = connection.last_insert_rowid();
+        places::set_code(connection, Coded::Policy, id, &entry.code)?;
+        return Ok(Change::Created);
+    };
+    let current: String = connection.query_row(
+        "SELECT name FROM circulation_policies WHERE id = ?1",
+        params![id],
+        |row| row.get(0),
+    )?;
+    if current == entry.name {
+        return Ok(Change::Unchanged);
+    }
+    connection.execute(
+        "UPDATE circulation_policies SET name = ?2, row_version = row_version + 1 WHERE id = ?1",
+        params![id, entry.name],
+    )?;
+    Ok(Change::Renamed)
 }
 
 /// Every row of `table` with the code takes the name; Koha's lists are not per branch.

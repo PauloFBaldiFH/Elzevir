@@ -297,7 +297,9 @@ fn item_fields(item: &ItemData, codes: &CodeLists) -> ItemFields {
                 .edge_name(CodeTable::Branch, &item.holding_branch)
                 .to_owned()
         }),
-        item_type: codes.item_type(&item.item_type).to_owned(),
+        policy: codes
+            .edge_name(CodeTable::ItemType, &item.item_type)
+            .to_owned(),
         call_number: item.call_number.clone(),
         location: item
             .location

@@ -7,8 +7,8 @@
 //! thesauri) are created on first use with the code as their label.
 
 use elzevir_domain::catalog::{
-    AgentKind, BranchId, CollectionId, HubId, IdentifierKind, InstanceId, ItemId, ItemTypeId,
-    MaterialType, Money, NoteKind, SubjectKind, SublocationId, WorkId, WorkRelationKind,
+    AgentKind, BranchId, CollectionId, HubId, IdentifierKind, InstanceId, ItemId, MaterialType,
+    Money, NoteKind, PolicyId, SubjectKind, SublocationId, WorkId, WorkRelationKind,
 };
 use serde::{Deserialize, Serialize};
 
@@ -25,12 +25,10 @@ pub enum CatalogCommand {
         /// Display name.
         name: String,
     },
-    /// Creates an item type.
-    CreateItemType {
-        /// Unique code, such as `BK`.
-        code: String,
-        /// Display description.
-        description: String,
+    /// Creates a circulation policy.
+    CreatePolicy {
+        /// Display name.
+        name: String,
     },
     /// Creates a Hub that Works can join.
     CreateHub {
@@ -467,8 +465,8 @@ pub struct ItemData {
 pub enum CatalogOutput {
     /// A branch was created.
     Branch(BranchId),
-    /// An item type was created.
-    ItemType(ItemTypeId),
+    /// A circulation policy was created.
+    Policy(PolicyId),
     /// A Hub was created.
     Hub(HubId),
     /// A record was added.
@@ -530,13 +528,10 @@ pub enum CatalogOutput {
 /// Why a catalog command was refused.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CatalogRefusal {
-    /// A branch or item type with this code exists.
-    #[error("code `{0}` is already in use")]
-    CodeTaken(String),
     /// No branch has this code.
     #[error("unknown branch `{0}`")]
     UnknownBranch(String),
-    /// No item type has this code.
+    /// No circulation policy has this Koha item type code at the MARC edge.
     #[error("unknown item type `{0}`")]
     UnknownItemType(String),
     /// No Instance has this id.
@@ -630,8 +625,8 @@ pub struct ItemView {
     pub inventory_number: Option<String>,
     /// Home branch.
     pub home_branch: BranchId,
-    /// Item type code.
-    pub item_type: String,
+    /// Circulation policy.
+    pub policy: PolicyId,
     /// Call number.
     pub call_number: Option<String>,
     /// Shelving place.
@@ -661,29 +656,20 @@ pub struct Place<Id> {
     pub name: String,
 }
 
-/// One item type code with its name. Item types give way to circulation policies in
-/// stage 4b (bibframe-completo.md, item 23c).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CodeName {
-    /// The code, as records and batches carry it.
-    pub code: String,
-    /// The name shown in its place.
-    pub name: String,
-}
-
 /// The registries an Item refers to, each in name order.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CodeLists {
     /// Branches.
     pub branches: Vec<Named<BranchId>>,
-    /// Item types.
-    pub item_types: Vec<CodeName>,
+    /// Circulation policies.
+    pub policies: Vec<Named<PolicyId>>,
     /// Shelving places of every branch.
     pub locations: Vec<Place<SublocationId>>,
     /// Collections of every branch.
     pub collections: Vec<Place<CollectionId>>,
-    /// The Koha codes of the MARC edge, each with the name of the branch, shelving place
-    /// or collection it stands for (bibframe-completo.md, item 23b).
+    /// The Koha codes of the MARC edge, each with the name of the branch, shelving place,
+    /// collection or circulation policy it stands for (bibframe-completo.md, items 23b
+    /// and 23c).
     pub edge: Vec<NamedCode>,
 }
 
@@ -697,13 +683,13 @@ impl CodeLists {
             .map_or("", |entry| entry.name.as_str())
     }
 
-    /// The name of an item type; the code itself when the table does not have it.
+    /// The name of a circulation policy.
     #[must_use]
-    pub fn item_type<'a>(&'a self, code: &'a str) -> &'a str {
-        self.item_types
+    pub fn policy(&self, id: PolicyId) -> &str {
+        self.policies
             .iter()
-            .find(|entry| entry.code == code)
-            .map_or(code, |entry| entry.name.as_str())
+            .find(|entry| entry.id == id)
+            .map_or("", |entry| entry.name.as_str())
     }
 
     /// The name of a shelving place.
@@ -728,9 +714,6 @@ impl CodeLists {
     /// has the code, since the edge writes the name of a row without one.
     #[must_use]
     pub fn edge_name<'a>(&'a self, table: CodeTable, code: &'a str) -> &'a str {
-        if table == CodeTable::ItemType {
-            return self.item_type(code);
-        }
         self.edge
             .iter()
             .find(|entry| entry.table == table && entry.code == code)

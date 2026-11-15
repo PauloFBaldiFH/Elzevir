@@ -60,10 +60,11 @@ fn setup(store: &ElzevirStore) {
     .unwrap();
     run(
         store,
-        CatalogCommand::CreateItemType {
+        CatalogCommand::NameCodes(vec![NamedCode {
+            table: CodeTable::ItemType,
             code: "BK".to_owned(),
-            description: "Livro".to_owned(),
-        },
+            name: "Livro".to_owned(),
+        }]),
     )
     .unwrap();
 }
@@ -246,13 +247,14 @@ fn items_are_added_and_listed_in_creation_order() {
     let codes = store.codes().unwrap();
     let home = codes.branches[0].id;
     let stacks = codes.locations[0].id;
+    let policy = codes.policies[0].id;
     assert_eq!(codes.locations[0].branch, home);
     let expected = |id, barcode: &str| ItemView {
         id,
         barcode: Some(barcode.to_owned()),
         inventory_number: Some(format!("2026/{barcode}")),
         home_branch: home,
-        item_type: "BK".to_owned(),
+        policy,
         call_number: Some("869.3 A848d".to_owned()),
         location: Some(stacks),
         status: ItemStatus::default(),
@@ -335,23 +337,6 @@ fn item_refusals_name_the_problem() {
         refusal(CatalogRefusal::UnknownItemType("DVD".to_owned()))
     );
     assert_eq!(store.items(instance).unwrap().len(), 1);
-}
-
-#[test]
-fn item_type_codes_are_unique() {
-    let dir = tempfile::tempdir().unwrap();
-    let store = open(&dir);
-    setup(&store);
-    assert_eq!(
-        run(
-            &store,
-            CatalogCommand::CreateItemType {
-                code: "BK".to_owned(),
-                description: "Other".to_owned(),
-            }
-        ),
-        refusal(CatalogRefusal::CodeTaken("BK".to_owned()))
-    );
 }
 
 #[test]

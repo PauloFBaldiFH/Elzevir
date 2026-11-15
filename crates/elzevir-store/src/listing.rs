@@ -12,7 +12,7 @@ use elzevir_app::listing::{
     CatalogListing, Family, FamilyCursor, FamilyHead, FamilyInstance, FamilyWork, ScanCode, Scanned,
 };
 use elzevir_domain::catalog::{
-    BranchId, HubId, IdentifierKind, InstanceId, ItemId, MatchRule, SublocationId, WorkId,
+    BranchId, HubId, IdentifierKind, InstanceId, ItemId, MatchRule, PolicyId, SublocationId, WorkId,
 };
 use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 
@@ -386,10 +386,9 @@ fn items_of(
     }
     let sql = format!(
         "SELECT items.instance_id, items.id, barcode, inventory_number, items.home_branch,
-                item_types.code, call_number, items.sublocation_id, not_for_loan, damaged, lost,
-                withdrawn, restricted
+                items.policy_id, call_number, items.sublocation_id, not_for_loan, damaged,
+                lost, withdrawn, restricted
          FROM items
-         JOIN item_types ON item_types.id = items.item_type
          WHERE items.instance_id IN ({}) ORDER BY items.id",
         placeholders(instances.len())
     );
@@ -401,7 +400,7 @@ fn items_of(
             barcode: row.get(2)?,
             inventory_number: row.get(3)?,
             home_branch: BranchId(row.get(4)?),
-            item_type: row.get(5)?,
+            policy: PolicyId(row.get(5)?),
             call_number: row.get(6)?,
             location: row.get::<_, Option<i64>>(7)?.map(SublocationId),
             status: status_at(row, 8)?,

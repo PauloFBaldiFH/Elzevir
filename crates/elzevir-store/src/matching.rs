@@ -162,14 +162,14 @@ fn replace_item(
     let Places {
         home,
         holding,
-        item_type,
+        policy,
         location,
         collection,
     } = item_codes(connection, item)?;
     connection
         .execute(
             "UPDATE items SET barcode = ?2, inventory_number = ?3, home_branch = ?4,
-                 holding_branch = ?5, item_type = ?6, call_number = ?7, sublocation_id = ?8,
+                 holding_branch = ?5, policy_id = ?6, call_number = ?7, sublocation_id = ?8,
                  collection_id = ?9, price_cents = ?10, replacement_price_cents = ?11,
                  copy_number = ?12, not_for_loan = ?13, damaged = ?14, lost = ?15,
                  withdrawn = ?16, restricted = ?17, acquired_on = ?18,
@@ -181,7 +181,7 @@ fn replace_item(
                 item.inventory_number,
                 home,
                 holding,
-                item_type,
+                policy,
                 item.call_number,
                 location,
                 collection,

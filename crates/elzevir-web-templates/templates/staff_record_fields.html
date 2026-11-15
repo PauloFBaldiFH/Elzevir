@@ -25,7 +25,7 @@
           <th scope="col">{{ t.get("staff-fields-branch") }}</th>
           <th scope="col">{{ t.get("staff-fields-location") }}</th>
           <th scope="col">{{ t.get("staff-fields-collection") }}</th>
-          <th scope="col">{{ t.get("staff-fields-item-type") }}</th>
+          <th scope="col">{{ t.get("staff-fields-policy") }}</th>
           <th scope="col">{{ t.get("staff-fields-copy") }}</th>
           <th scope="col">{{ t.get("staff-fields-acquired") }}</th>
         </tr>
@@ -40,7 +40,7 @@
           <td>{{ item.home_branch }}{% if let Some(holding) = item.holding_branch %} → {{ holding }}{% endif %}</td>
           <td>{% if let Some(location) = item.location %}{{ location }}{% endif %}</td>
           <td>{% if let Some(collection) = item.collection %}{{ collection }}{% endif %}</td>
-          <td>{{ item.item_type }}</td>
+          <td>{{ item.policy }}</td>
           <td>{% if let Some(copy) = item.copy_number %}{{ copy }}{% endif %}</td>
           <td>{% if let Some(acquired) = item.acquired_on %}{{ acquired }}{% endif %}</td>
         </tr>

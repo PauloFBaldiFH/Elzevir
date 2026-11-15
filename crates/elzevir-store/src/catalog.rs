@@ -11,8 +11,8 @@ use elzevir_app::listing::sort_key;
 use elzevir_app::matching::{identifier_key, match_keys};
 use elzevir_app::search::REINDEX_INSTANCE;
 use elzevir_domain::catalog::{
-    AgentKind, BranchId, HubId, IdentifierKind, InstanceId, ItemId, ItemTypeId, MaterialType,
-    NoteKind, SourceFormat, SubjectKind, SublocationId, Vocabulary, WorkId, WorkRelationKind,
+    AgentKind, BranchId, HubId, IdentifierKind, InstanceId, ItemId, MaterialType, NoteKind,
+    PolicyId, SourceFormat, SubjectKind, SublocationId, Vocabulary, WorkId, WorkRelationKind,
 };
 use rusqlite::{Connection, ErrorCode, OptionalExtension, params};
 
@@ -33,14 +33,14 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CatalogCommand) -> Applied {
                 .map_err(StoreError::from)?;
             CatalogOutput::Branch(BranchId(connection.last_insert_rowid()))
         }
-        CatalogCommand::CreateItemType { code, description } => {
-            insert_coded(
-                connection,
-                "INSERT INTO item_types (code, description) VALUES (?1, ?2)",
-                code,
-                description,
-            )?;
-            CatalogOutput::ItemType(ItemTypeId(connection.last_insert_rowid()))
+        CatalogCommand::CreatePolicy { name } => {
+            connection
+                .execute(
+                    "INSERT INTO circulation_policies (name) VALUES (?1)",
+                    params![name],
+                )
+                .map_err(StoreError::from)?;
+            CatalogOutput::Policy(PolicyId(connection.last_insert_rowid()))
         }
         CatalogCommand::CreateHub { title } => {
             connection
@@ -100,19 +100,6 @@ pub(crate) fn refused(refusal: CatalogRefusal) -> CommandFailed<WriteRefusal> {
 
 fn is_constraint(error: &rusqlite::Error) -> bool {
     matches!(error, rusqlite::Error::SqliteFailure(e, _) if e.code == ErrorCode::ConstraintViolation)
-}
-
-fn insert_coded(
-    connection: &Connection,
-    sql: &str,
-    code: &str,
-    text: &str,
-) -> Result<(), CommandFailed<WriteRefusal>> {
-    match connection.execute(sql, params![code, text]) {
-        Ok(_) => Ok(()),
-        Err(e) if is_constraint(&e) => Err(refused(CatalogRefusal::CodeTaken(code.to_owned()))),
-        Err(e) => Err(StoreError::from(e).into()),
-    }
 }
 
 /// Imports one record with its matching rule (docs/specs/catalogo/casamento.md).
@@ -466,7 +453,7 @@ pub(crate) fn insert_notes(
 pub(crate) struct Places {
     pub(crate) home: i64,
     pub(crate) holding: i64,
-    pub(crate) item_type: i64,
+    pub(crate) policy: i64,
     pub(crate) location: Option<i64>,
     pub(crate) collection: Option<i64>,
 }
@@ -484,12 +471,8 @@ pub(crate) fn item_codes(
     };
     let home = branch(&item.home_branch)?;
     let holding = branch(&item.holding_branch)?;
-    let item_type = lookup(
-        connection,
-        "SELECT id FROM item_types WHERE code = ?1",
-        &item.item_type,
-    )?
-    .ok_or_else(|| refused(CatalogRefusal::UnknownItemType(item.item_type.clone())))?;
+    let policy = places::by_code(connection, Coded::Policy, &item.item_type)?
+        .ok_or_else(|| refused(CatalogRefusal::UnknownItemType(item.item_type.clone())))?;
     let location = item
         .location
         .as_deref()
@@ -503,7 +486,7 @@ pub(crate) fn item_codes(
     Ok(Places {
         home,
         holding,
-        item_type,
+        policy,
         location,
         collection,
     })
@@ -528,7 +511,7 @@ pub(crate) fn insert_item(
 ) -> Result<ItemId, CommandFailed<WriteRefusal>> {
     let inserted = connection.execute(
         "INSERT INTO items (instance_id, barcode, inventory_number, home_branch, holding_branch,
-                            item_type, call_number, sublocation_id, collection_id, price_cents,
+                            policy_id, call_number, sublocation_id, collection_id, price_cents,
                             replacement_price_cents, copy_number, not_for_loan, damaged, lost,
                             withdrawn, restricted, acquired_on)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
@@ -538,7 +521,7 @@ pub(crate) fn insert_item(
             item.inventory_number,
             places.home,
             places.holding,
-            places.item_type,
+            places.policy,
             item.call_number,
             places.location,
             places.collection,
@@ -617,11 +600,10 @@ impl CatalogReader for ElzevirStore {
         self.readers()
             .read(|c| {
                 let mut statement = c.prepare(
-                    "SELECT items.id, barcode, inventory_number, home_branch, item_types.code,
+                    "SELECT items.id, barcode, inventory_number, home_branch, policy_id,
                             call_number, sublocation_id, not_for_loan, damaged, lost, withdrawn,
                             restricted
                      FROM items
-                     JOIN item_types ON item_types.id = items.item_type
                      WHERE instance_id = ?1 ORDER BY items.id",
                 )?;
                 statement
@@ -631,7 +613,7 @@ impl CatalogReader for ElzevirStore {
                             barcode: row.get(1)?,
                             inventory_number: row.get(2)?,
                             home_branch: BranchId(row.get(3)?),
-                            item_type: row.get(4)?,
+                            policy: PolicyId(row.get(4)?),
                             call_number: row.get(5)?,
                             location: row.get::<_, Option<i64>>(6)?.map(SublocationId),
                             status: status_at(row, 7)?,

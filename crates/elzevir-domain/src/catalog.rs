@@ -36,8 +36,8 @@ row_id! {
     SublocationId,
     /// A collection of a branch.
     CollectionId,
-    /// An item type (Koha `itemtypes`).
-    ItemTypeId,
+    /// A circulation policy of the library (`bf:usageAndAccessPolicy`).
+    PolicyId,
     /// A code in one of the [`Vocabulary`] lists.
     TermId,
 }
