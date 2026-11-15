@@ -14,7 +14,9 @@ use elzevir_domain::catalog::{
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use crate::ElzevirStore;
-use crate::catalog::{ReadFailure, status_at, subdivisions_of_column, work_relations};
+use crate::catalog::{
+    ReadFailure, name_parts_of_column, status_at, subdivisions_of_column, work_relations,
+};
 use crate::statements::read_description;
 use elzevir_domain::statement::{EntityKind, EntityRef};
 
@@ -187,23 +189,31 @@ fn languages(c: &Connection, work: i64) -> Result<Vec<String>, ReadFailure> {
 
 fn contributions(c: &Connection, work: i64) -> Result<Vec<NewContribution>, ReadFailure> {
     let mut statement = c.prepare_cached(
-        "SELECT agents.kind, agents.heading, terms.code, is_primary FROM contributions
+        "SELECT agents.kind, agents.heading, terms.code, is_primary, agents.name_parts
+         FROM contributions
          JOIN agents ON agents.id = contributions.agent_id
          LEFT JOIN terms ON terms.id = contributions.role
          WHERE work_id = ?1 ORDER BY position",
     )?;
     let rows = statement
         .query_map(params![work], |row| {
-            Ok((row.get::<_, u8>(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            Ok((
+                row.get::<_, u8>(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get::<_, String>(4)?,
+            ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     rows.into_iter()
-        .map(|(kind, heading, role, primary)| {
+        .map(|(kind, heading, role, primary, name_parts)| {
             Ok(NewContribution {
                 kind: required(kind, "agent kind", AgentKind::from_code)?,
                 heading,
                 role,
                 primary,
+                name_parts: name_parts_of_column(&name_parts)?,
             })
         })
         .collect()

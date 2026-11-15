@@ -10,7 +10,7 @@ use elzevir_marc::{Field, Record, Subfield, Tag};
 
 use super::instance::{IDENTIFIER_TAGS, NOTE_TAGS, identifier_of, note_of};
 use super::items::{defaults, item_of};
-use super::work::{CONTRIBUTION_TAGS, SUBJECT_TAGS, contribution_of, subject_of};
+use super::work::{CONTRIBUTION_TAGS, SUBJECT_TAGS, contribution_of, name_part_code, subject_of};
 use super::{DataField, Marc, marc_to_bibframe, responsibility};
 use crate::catalog::{ItemData, NewContribution, NewIdentifier, NewNote, NewRecord, NewSubject};
 
@@ -482,12 +482,41 @@ fn contribution_field(contribution: &NewContribution) -> Field {
         AgentKind::Meeting => (*b"111", *b"711", b'2'),
     };
     let tag = if contribution.primary { main } else { added };
-    let mut subfields = vec![(b'a', contribution.heading.as_str())];
+    let mut subfields = name_subfields(contribution);
     if let Some(role) = contribution.role.as_deref() {
         let code = role.len() == 3 && role.bytes().all(|b| b.is_ascii_lowercase());
         subfields.push((if code { b'4' } else { b'e' }, role));
     }
     data_field(tag, [first_indicator, b' '], &subfields)
+}
+
+/// The heading as `$a` and a subfield for each name part, cut where the part starts; a
+/// heading whose parts do not fit it goes out whole in `$a`.
+fn name_subfields(contribution: &NewContribution) -> Vec<(u8, &str)> {
+    let heading = contribution.heading.as_str();
+    let mut cuts = Vec::new();
+    let mut previous = 0;
+    for part in &contribution.name_parts {
+        // Characters to bytes; a part outside the heading or out of order is no cut.
+        let Some((at, _)) = heading.char_indices().nth(part.start) else {
+            return vec![(b'a', heading)];
+        };
+        if at <= previous {
+            return vec![(b'a', heading)];
+        }
+        cuts.push((at, name_part_code(contribution.kind, part.kind)));
+        previous = at;
+    }
+    let mut subfields = Vec::new();
+    let mut from = 0;
+    let mut code = b'a';
+    for (at, next) in cuts {
+        subfields.push((code, heading.get(from..at).unwrap_or_default().trim_end()));
+        from = at;
+        code = next;
+    }
+    subfields.push((code, heading.get(from..).unwrap_or_default()));
+    subfields
 }
 
 fn subject_field(subject: &NewSubject) -> Field {

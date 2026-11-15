@@ -38,6 +38,7 @@ contributions:
     heading: "Camargo, Camila"
     role: ~
     primary: true
+    name_parts: []
 subjects:
   - kind: topic
     heading: Investimentos -- Análise

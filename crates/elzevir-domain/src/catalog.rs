@@ -99,6 +99,27 @@ stable_enum! {
 }
 
 stable_enum! {
+    /// A part of an agent's name after the first, as the elements of a MADS name
+    /// (`madsrdf:elementList`): `Eichner, Alfred S.,` is the name, `1937-1988` its dates.
+    NamePartKind {
+        /// The ordinal or roman numeral of a person (MARC21 X00 `$b`).
+        Numeration = 1,
+        /// Titles and words associated with a name, such as `Sir` (X00 `$c`).
+        TermsOfAddress = 2,
+        /// Dates of the agent or of the meeting (`$d`).
+        Date = 3,
+        /// The fuller form of a name (X00 `$q`).
+        FullerForm = 4,
+        /// A subordinate unit of an organization or a meeting (X10 `$b`, X11 `$q`).
+        Subordinate = 5,
+        /// The place of a meeting (X10 and X11 `$c`).
+        Place = 6,
+        /// The number of a meeting or part (`$n`).
+        Number = 7,
+    }
+}
+
+stable_enum! {
     /// What a Subject heading names (MARC21 6XX tags).
     SubjectKind {
         /// A topic (650).
@@ -315,6 +336,11 @@ mod tests {
     fn stable_codes_round_trip_and_reject_unknown_numbers() {
         round_trips(AgentKind::ALL, AgentKind::code, AgentKind::from_code);
         round_trips(SubjectKind::ALL, SubjectKind::code, SubjectKind::from_code);
+        round_trips(
+            NamePartKind::ALL,
+            NamePartKind::code,
+            NamePartKind::from_code,
+        );
         round_trips(
             IdentifierKind::ALL,
             IdentifierKind::code,

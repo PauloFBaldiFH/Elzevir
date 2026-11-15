@@ -27,6 +27,9 @@ contributions:
     heading: "Brasil Presidente (1979-1985 : Figueiredo)"
     role: aut
     primary: true
+    name_parts:
+      - kind: subordinate
+        start: 7
 subjects:
   - kind: topic
     heading: Administração pública

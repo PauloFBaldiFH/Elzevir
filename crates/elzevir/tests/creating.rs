@@ -74,6 +74,7 @@ fn a_family_and_an_instance_created_on_screen_export_and_are_found() {
                 heading: "Assis, Machado de, 1839-1908".to_owned(),
                 role: Some("aut".to_owned()),
                 primary: true,
+                name_parts: Vec::new(),
             }]),
         ],
         vec![

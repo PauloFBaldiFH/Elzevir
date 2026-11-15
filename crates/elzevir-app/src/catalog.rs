@@ -8,7 +8,7 @@
 
 use elzevir_domain::catalog::{
     AgentKind, BranchId, CollectionId, HubId, IdentifierKind, InstanceId, ItemId, MaterialType,
-    Money, NoteKind, PolicyId, SubjectKind, SublocationId, WorkId, WorkRelationKind,
+    Money, NamePartKind, NoteKind, PolicyId, SubjectKind, SublocationId, WorkId, WorkRelationKind,
 };
 use serde::{Deserialize, Serialize};
 
@@ -306,6 +306,20 @@ pub struct NewContribution {
     pub role: Option<String>,
     /// Whether this is the main entry (MARC21 1XX).
     pub primary: bool,
+    /// Where each part of the heading after the first starts, in order. Empty when the
+    /// heading is one part or was typed as text.
+    #[serde(default)]
+    pub name_parts: Vec<NamePart>,
+}
+
+/// A part of an agent's heading after the first: its kind and the character where it
+/// starts in the heading.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NamePart {
+    /// What the part is.
+    pub kind: NamePartKind,
+    /// The position of its first character in the heading, counted in characters.
+    pub start: usize,
 }
 
 /// One subject of a Work.

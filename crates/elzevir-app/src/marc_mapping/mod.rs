@@ -25,7 +25,7 @@ use elzevir_marc::{Field, Limits, Record, RecordRef, Subfield};
 
 use elzevir_domain::statement::{Description, Statement};
 
-use crate::catalog::{NewNote, NewRecord, NewSubject};
+use crate::catalog::{NewContribution, NewNote, NewRecord, NewSubject};
 
 pub use export::bibframe_to_marc;
 
@@ -152,6 +152,20 @@ pub fn source_responsibility(source: &[u8]) -> Option<(Vec<Statement>, Vec<State
     let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
     let record = Record::from_ref(&parsed);
     Some((Vec::new(), responsibility::of_instance(&Marc(&record))))
+}
+
+/// The contributions of a stored source record, for records stored before the model kept
+/// the parts of an agent's heading (bibframe-completo.md, item 29, part 5f).
+#[must_use]
+pub fn source_contributions(source: &[u8]) -> Option<Vec<NewContribution>> {
+    let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
+    let record = Record::from_ref(&parsed);
+    let marc = Marc(&record);
+    Some(
+        marc.data_in(&work::CONTRIBUTION_TAGS)
+            .filter_map(|(tag, field)| work::contribution_of(*tag, field))
+            .collect(),
+    )
 }
 
 /// The subjects of a stored source record, for records stored before the model kept what
