@@ -1,6 +1,6 @@
 [package]
 name = "elzevir-data"
-description = "Tables generated from the pinned Koha reference (circulation rule kinds, MARC frameworks, vocabularies)."
+description = "Tables generated from the pinned Koha reference (circulation rule kinds, MARC frameworks, vocabularies) and from the Library of Congress BIBFRAME ontology."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

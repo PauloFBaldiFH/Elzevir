@@ -26,6 +26,8 @@ pub(crate) enum Mode {
 
 /// MARC-8 code tables from the Library of Congress, which do not depend on the Koha release.
 const MARC8_JSON: &str = "data/loc/marc8.json";
+/// The BIBFRAME ontology, extracted by `tools/bibframe-extractor/extract.pl`.
+const BIBFRAME_JSON: &str = "data/loc/bibframe.json";
 
 /// Path of an extracted data file, relative to the repository root.
 fn data_path(series: &str, name: &str) -> String {
@@ -48,6 +50,7 @@ pub(crate) fn run(root: &Path, mode: Mode) -> Result<(), String> {
     let iso5426 = data("iso5426.json")?;
     let search_fields = data("search_fields.json")?;
     let marc8 = read_json(&root.join(MARC8_JSON))?;
+    let bibframe = read_json(&root.join(BIBFRAME_JSON))?;
 
     let mut files = vec![
         Generated {
@@ -77,6 +80,10 @@ pub(crate) fn run(root: &Path, mode: Mode) -> Result<(), String> {
                 &data_path(series, "search_fields.json"),
                 &header(&data_path(series, "search_fields.json")),
             )?,
+        },
+        Generated {
+            name: "bibframe.rs".to_owned(),
+            source: crate::bibframe::generate(&bibframe, BIBFRAME_JSON, &header(BIBFRAME_JSON))?,
         },
     ];
     files.extend(
@@ -147,7 +154,8 @@ fn header(from: &str) -> String {
 fn module_index() -> String {
     let mut out = header("xtask/src/codegen.rs");
     out.push_str(
-        "//! Tables generated from the pinned Koha reference.\n\n\
+        "//! Tables generated from the pinned Koha reference and from Library of Congress sources.\n\n\
+         pub(crate) mod bibframe;\n\
          #[expect(clippy::too_many_lines, reason = \"one match arm per Koha rule kind\")]\n\
          pub(crate) mod circulation_rule_kinds;\n\
          pub(crate) mod iso5426;\n\

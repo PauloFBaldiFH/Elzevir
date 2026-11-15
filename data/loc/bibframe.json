@@ -1,0 +1,5657 @@
+{
+  "classes" : [
+    {
+      "definition" : "Title as abbreviated for citation, indexing, and/or identification",
+      "label" : "Abbreviated title",
+      "name" : "AbbreviatedTitle",
+      "sub_class_of" : [
+        "VariantTitle"
+      ]
+    },
+    {
+      "definition" : "Access restrictions and allowances regarding access to a resource, e.g., lending policy, access restrictions, embargos",
+      "label" : "Access policy",
+      "name" : "AccessPolicy",
+      "sub_class_of" : [
+        "UsageAndAccessPolicy"
+      ]
+    },
+    {
+      "definition" : "Accession Number",
+      "label" : "Accession number",
+      "name" : "AccessionNumber",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Information about an organization, person, etc., from which a resource may be obtained",
+      "label" : "Acquisition source",
+      "name" : "AcquisitionSource",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Metadata about the metadata, especially provenance information",
+      "label" : "Administrative metadata",
+      "name" : "AdminMetadata",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Entity having a role in a resource, such as a person or organization",
+      "label" : "Agent",
+      "name" : "Agent",
+      "sub_class_of" : [
+        "http://xmlns.com/foaf/0.1/Agent"
+      ]
+    },
+    {
+      "definition" : "American National Standards Institute identifier",
+      "label" : "ANSI number",
+      "name" : "Ansi",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Physical or chemical substance applied to a base material of a resource",
+      "label" : "Applied material",
+      "name" : "AppliedMaterial",
+      "sub_class_of" : [
+        "Material"
+      ]
+    },
+    {
+      "definition" : "Resources organically created, accumulated, and/or used by a person, family, or organization in the course of conduct of affairs and preserved because of their continuing value",
+      "label" : "Archival controlled",
+      "name" : "Archival",
+      "sub_class_of" : [
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Resource that represents an arrangement of another resource",
+      "label" : "Arrangement",
+      "name" : "Arrangement",
+      "sub_class_of" : [
+        "Work"
+      ]
+    },
+    {
+      "definition" : "Proportional relationship between an image's width and its height",
+      "label" : "Aspect ratio",
+      "name" : "AspectRatio",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Resources expressed in an audible form, including music or other sounds",
+      "label" : "Audio",
+      "name" : "Audio",
+      "sub_class_of" : [
+        "Work"
+      ]
+    },
+    {
+      "definition" : "Number assigned by publishers of sound recordings to identify the issue designation, or serial identification, of the resource",
+      "label" : "Audio issue number",
+      "name" : "AudioIssueNumber",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Identifier assigned to the smallest identifiable unit of a recording session, e.g., a specific recording of an individual song",
+      "label" : "Audio recording take",
+      "name" : "AudioTake",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Optical machine-readable representation of data relating to the item to which it is attached",
+      "label" : "Barcode",
+      "name" : "Barcode",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Underlying physical material of a resource",
+      "label" : "Base material",
+      "name" : "BaseMaterial",
+      "sub_class_of" : [
+        "Material"
+      ]
+    },
+    {
+      "definition" : "Information about methods used to bind a published or unpublished resource, or other binding information",
+      "label" : "Binding method",
+      "name" : "Binding",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Result of folding a printed sheet to form a gathering of leaves",
+      "label" : "Book format",
+      "name" : "BookFormat",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "System used to format a video resource for television broadcast, e.g., HDTV, PAL",
+      "label" : "Broadcast standard",
+      "name" : "BroadcastStandard",
+      "sub_class_of" : [
+        "VideoCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Information about place and date associated with the capture (i.e., recording, filming, etc.) of the content of a resource",
+      "label" : "Capture of content",
+      "name" : "Capture",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Specifies the sound capture and storage technique used on a sound recording resource",
+      "label" : "Capture and Storage Technique",
+      "name" : "CaptureStorage",
+      "sub_class_of" : [
+        "SoundCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Categorization reflecting the format of the storage medium and housing of a carrier",
+      "label" : "Carrier type",
+      "name" : "Carrier",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Content that represents the whole or part of the earth, any celestial body, or imaginary place at any scale",
+      "label" : "Cartographic information",
+      "name" : "Cartographic",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Data type for encoding of geospatial information in a cartographic resource, e.g., raster, vector, point",
+      "label" : "Digital cartographic data type",
+      "name" : "CartographicDataType",
+      "sub_class_of" : [
+        "DigitalCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Object type for encoding of geospatial information in a cartographic resource, e.g., point, line, polygon",
+      "label" : "Digital cartographic object type",
+      "name" : "CartographicObjectType",
+      "sub_class_of" : [
+        "DigitalCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Resource that shows spatial information, including maps, atlases, globes, digital, and other cartographic resources",
+      "label" : "Cartography",
+      "name" : "Cartography",
+      "sub_class_of" : [
+        "Work"
+      ]
+    },
+    {
+      "definition" : "Dates associated with issues or items held",
+      "label" : "Chronology",
+      "name" : "Chronology",
+      "sub_class_of" : [
+        "EnumerationAndChronology"
+      ]
+    },
+    {
+      "definition" : "System of coding and organizing materials according to their subject",
+      "label" : "Classification entity",
+      "name" : "Classification",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Dewey Decimal Classification number used for subject access",
+      "label" : "DDC Classification",
+      "name" : "ClassificationDdc",
+      "sub_class_of" : [
+        "Classification"
+      ]
+    },
+    {
+      "definition" : "Library of Congress Classification number used for subject access",
+      "label" : "LCC Classification",
+      "name" : "ClassificationLcc",
+      "sub_class_of" : [
+        "Classification"
+      ]
+    },
+    {
+      "definition" : "National Library of Agriculture number used for subject access",
+      "label" : "NAL classification",
+      "name" : "ClassificationNal",
+      "sub_class_of" : [
+        "Classification"
+      ]
+    },
+    {
+      "definition" : "National Library of Medicine Classification number used for subject access",
+      "label" : "NLM classification",
+      "name" : "ClassificationNlm",
+      "sub_class_of" : [
+        "Classification"
+      ]
+    },
+    {
+      "definition" : "Universal Decimal Classification number used for subject access",
+      "label" : "UDC Classification",
+      "name" : "ClassificationUdc",
+      "sub_class_of" : [
+        "Classification"
+      ]
+    },
+    {
+      "definition" : "Identifier for scientific and technical periodical titles assigned by the International CODEN Section of Chemical Abstracts Service",
+      "label" : "CODEN",
+      "name" : "Coden",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Aggregation of resources, generally gathered together artificially",
+      "label" : "Collection",
+      "name" : "Collection",
+      "sub_class_of" : [
+        "Work"
+      ]
+    },
+    {
+      "definition" : "Information about the organization and arrangement of a collection of items",
+      "label" : "Organization of materials information",
+      "name" : "CollectionArrangement",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Title for a compilation of resources",
+      "label" : "Collective title",
+      "name" : "CollectiveTitle",
+      "sub_class_of" : [
+        "VariantTitle"
+      ]
+    },
+    {
+      "definition" : "Color characteristics of a resource, e.g., black and white, multicolored, etc.",
+      "label" : "Color content",
+      "name" : "ColorContent",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Categorization reflecting the fundamental form of communication in which the content is expressed and the human sense through which it is intended to be perceived",
+      "label" : "Content type",
+      "name" : "Content",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Information that assists those with a sensory impairment for greater understanding of content, e.g., captions",
+      "label" : "Content accessibility information",
+      "name" : "ContentAccessibility",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Agent and role with respect to the resource being described",
+      "label" : "Contribution",
+      "name" : "Contribution",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Identifier assigned to a copyright registration or legal deposit",
+      "label" : "Copyright-legal deposit number",
+      "name" : "CopyrightNumber",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Copyright or Legal Deposit registration information",
+      "label" : "Copyright registration",
+      "name" : "CopyrightRegistration",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Cover illustration of a resource",
+      "label" : "Cover art",
+      "name" : "CoverArt",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Data encoded in a defined structure, including numeric data, environmental data, etc., used by applications software",
+      "label" : "Dataset",
+      "name" : "Dataset",
+      "sub_class_of" : [
+        "Work"
+      ]
+    },
+    {
+      "definition" : "Indication of specific types of reviews that have been carried out on the description information",
+      "label" : "Metadata authentication",
+      "name" : "DescriptionAuthentication",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Rules used for the descriptive content of the resource description",
+      "label" : "Description conventions",
+      "name" : "DescriptionConventions",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Designation of the descriptive content of the metadata",
+      "label" : "Description level",
+      "name" : "DescriptionLevel",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Technical specification relating to the digital encoding of text, image, audio, video, and other types of data in a resource",
+      "label" : "Digital characteristic",
+      "name" : "DigitalCharacteristic",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Information about a work presented as part of the formal requirements for an academic degree",
+      "label" : "Dissertation information",
+      "name" : "Dissertation",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Identifier assigned to a thesis or dissertation for identification purposes",
+      "label" : "Dissertation Identifier",
+      "name" : "DissertationIdentifier",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Information relating to distribution of a resource",
+      "label" : "Distributor",
+      "name" : "Distribution",
+      "sub_class_of" : [
+        "ProvisionActivity"
+      ]
+    },
+    {
+      "definition" : "Digital Object Identifier",
+      "label" : "DOI",
+      "name" : "Doi",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "The dramatic role performed by a contributing agent",
+      "label" : "Dramatic role",
+      "name" : "DramaticRole",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "International Article Identifier",
+      "label" : "EAN",
+      "name" : "Ean",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Entertainment Identifier Registry",
+      "label" : "EIDR",
+      "name" : "Eidr",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Resource that is intended for manipulation by a computer, accessed either directly or remotely",
+      "label" : "Electronic",
+      "name" : "Electronic",
+      "sub_class_of" : [
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Suspension of light-sensitive chemicals used as a coating on a microfilm or microfiche, e.g., silver halide",
+      "label" : "Emulsion",
+      "name" : "Emulsion",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Speed at which streaming audio, video, etc., is designed to play, e.g., 32 kbps",
+      "label" : "Encoded bitrate",
+      "name" : "EncodedBitrate",
+      "sub_class_of" : [
+        "DigitalCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Schema, standard, etc., used to encode the digital content of a resource, e.g., MP3, XML, JPEG",
+      "label" : "Encoding format",
+      "name" : "EncodingFormat",
+      "sub_class_of" : [
+        "DigitalCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Composition of the ensemble, including the size of the ensemble and the medium of performance components",
+      "label" : "Ensemble",
+      "name" : "Ensemble",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "A designation of the size of the individual musical ensemble",
+      "label" : "Ensemble size",
+      "name" : "EnsembleSize",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Numbering or other enumeration associated with issues or items held",
+      "label" : "Enumeration",
+      "name" : "Enumeration",
+      "sub_class_of" : [
+        "EnumerationAndChronology"
+      ]
+    },
+    {
+      "definition" : "Numbering or other enumeration and dates associated with issues or items held",
+      "label" : "Enumeration and chronology",
+      "name" : "EnumerationAndChronology",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Something that happens at a certain time and location, such as a performance, speech, or athletic event",
+      "label" : "Event entity",
+      "name" : "Event",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Number and type of units and/or subunits making up a resource",
+      "label" : "Extent",
+      "name" : "Extent",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Two or more persons related by birth, marriage, adoption, civil union, or similar legal status, or who otherwise present themselves as a family",
+      "label" : "Family",
+      "name" : "Family",
+      "sub_class_of" : [
+        "Agent"
+      ]
+    },
+    {
+      "definition" : "Number of bytes in a digital file, e.g., 162 KB",
+      "label" : "File size",
+      "name" : "FileSize",
+      "sub_class_of" : [
+        "DigitalCharacteristic"
+      ]
+    },
+    {
+      "definition" : "General type of data content encoded in a computer file, e.g., text file, audio file",
+      "label" : "File type",
+      "name" : "FileType",
+      "sub_class_of" : [
+        "DigitalCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Identifier that is used to assist in the identification of antiquarian books by recording information comprising groups of characters taken from specified positions on specified pages of the book",
+      "label" : "Fingerprint identifier",
+      "name" : "Fingerprint",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Size of the type used to represent the characters and symbols in a resource",
+      "label" : "Font size",
+      "name" : "FontSize",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Information about intervals at which the parts of a serially produced resource or the updates to an integrating resource are issued",
+      "label" : "Frequency",
+      "name" : "Frequency",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Relationship between an original carrier and the carrier of a reproduction made from the original",
+      "label" : "Generation",
+      "name" : "Generation",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Indication of the program or process used to generate the description by application of a particular transformation",
+      "label" : "Generation process",
+      "name" : "GenerationProcess",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Form category or genre to which a resource belongs",
+      "label" : "Genre/form",
+      "name" : "GenreForm",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Geographic coverage of the content of the resource",
+      "label" : "Geographic coverage",
+      "name" : "GeographicCoverage",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Groove width of an analog disc or the groove pitch of an analog cylinder, e.g., coarse groove, microgroove",
+      "label" : "Groove characteristic",
+      "name" : "GrooveCharacteristic",
+      "sub_class_of" : [
+        "SoundCharacteristic"
+      ]
+    },
+    {
+      "definition" : "14-digit number assigned to identify trade items as various packaging levels that encompasses EAN/UCC-128 and ITF-14",
+      "label" : "Global Trade Item Number 14",
+      "name" : "Gtin14Number",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Unique and persistent identifier for digital objects developed by the Corporation for National Research Initiatives",
+      "label" : "Handle",
+      "name" : "Hdl",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "An abstract resource that functions as a bridge between two Works",
+      "label" : "Hub",
+      "name" : "Hub",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Token or name that is associated with a resource, such as a URI or an ISBN",
+      "label" : "Identifier",
+      "name" : "Identifier",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Information about content intended to illustrate a resource",
+      "label" : "Illustrative content",
+      "name" : "Illustration",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Information about the circumstances, e.g., source, date, method, under which the resource was directly acquired",
+      "label" : "Immediate acquisition",
+      "name" : "ImmediateAcquisition",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Resource reflecting an individual, material embodiment of a Work",
+      "label" : "Instance",
+      "name" : "Instance",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Resource that is added to or changed by updates that do not remain discrete but are integrated into the whole",
+      "label" : "Integrating resource",
+      "name" : "Integrating",
+      "sub_class_of" : [
+        "Work"
+      ]
+    },
+    {
+      "definition" : "Information that identifies the specific intended or target audience or intellectual level for which the content described is considered appropriate; also used to record interest and motivation levels and special learner characteristics",
+      "label" : "Intended audience information",
+      "name" : "IntendedAudience",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "International Standard Audiovisual Number",
+      "label" : "ISAN",
+      "name" : "Isan",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "International Standard Book Number",
+      "label" : "ISBN",
+      "name" : "Isbn",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "International Standard Music Number",
+      "label" : "ISMN",
+      "name" : "Ismn",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "International Standard Name Identifier, a unique, persistent reference number for the identities of contributors to creative works",
+      "label" : "ISNI",
+      "name" : "Isni",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "International Organization for Standardization standard number",
+      "label" : "ISO number",
+      "name" : "Iso",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "International Standard Recording Code",
+      "label" : "ISRC",
+      "name" : "Isrc",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "International Standard Serial Number",
+      "label" : "ISSN",
+      "name" : "Issn",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "International Standard Serial Number that links together various media versions of a continuing resource",
+      "label" : "ISSN-L",
+      "name" : "IssnL",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Information about whether a resource is issued in one or more parts, the way it is updated, and its intended termination",
+      "label" : "Mode of issuance",
+      "name" : "Issuance",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "International Standard Text Code, a numbering system developed to enable the unique identification of textual works",
+      "label" : "ISTC",
+      "name" : "Istc",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "International Standard Musical Work Code, a unique, persistent reference number for the identification of musical works",
+      "label" : "ISWC",
+      "name" : "Iswc",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Single example of an Instance",
+      "label" : "Item",
+      "name" : "Item",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Legal or political unit administering a geographic area",
+      "label" : "Jurisdiction",
+      "name" : "Jurisdiction",
+      "sub_class_of" : [
+        "Agent"
+      ]
+    },
+    {
+      "definition" : "Key and mode, or key only if no mode is present, of a music work",
+      "label" : "Key and mode",
+      "name" : "KeyMode",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Unique title for a continuing resource that is assigned by the ISSN International Center in conjunction with an ISSN",
+      "label" : "Key title",
+      "name" : "KeyTitle",
+      "sub_class_of" : [
+        "VariantTitle"
+      ]
+    },
+    {
+      "definition" : "Resource that contains a mixture of various components issued as a unit and intended primarily for instructional purposes",
+      "label" : "Kit",
+      "name" : "Kit",
+      "sub_class_of" : [
+        "MixedMaterial"
+      ]
+    },
+    {
+      "definition" : "Language entity",
+      "label" : "Language entity",
+      "name" : "Language",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Arrangement of text, images, tactile notation, etc., in a resource",
+      "label" : "Layout",
+      "name" : "Layout",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Identification number assigned by the Library of Congress to works acquired through one of its collaborative overseas acquisition programs",
+      "label" : "LC acquisition program",
+      "name" : "LcOverseasAcq",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Library of Congress Control Number that identifies a resource description",
+      "label" : "LCCN",
+      "name" : "Lccn",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Identifier established locally and not a standard number",
+      "label" : "Local identifier",
+      "name" : "Local",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Information relating to manufacture of a resource",
+      "label" : "Manufacturer",
+      "name" : "Manufacture",
+      "sub_class_of" : [
+        "ProvisionActivity"
+      ]
+    },
+    {
+      "definition" : "Resource which is written in handwriting or typescript",
+      "label" : "Manuscript",
+      "name" : "Manuscript",
+      "sub_class_of" : [
+        "Work"
+      ]
+    },
+    {
+      "definition" : "Substance or composition of the resource",
+      "label" : "Material",
+      "name" : "Material",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Matrix identifier assigned to the master from which a specific sound recording was pressed",
+      "label" : "Audio matrix number",
+      "name" : "MatrixNumber",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Categorization reflecting the general type of intermediation device required to view, play, run, etc., the content of a resource",
+      "label" : "Media type",
+      "name" : "Media",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "An individual component of a medium of performance, gathering together the medium of performance, medium count, number of hands, and component qualifier",
+      "label" : "Medium component",
+      "name" : "MediumComponent",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Relates a medium component to a qualifier (solo, optional, etc.) that affects the medium component",
+      "label" : "Medium component qualifier",
+      "name" : "MediumComponentQualifier",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "An individual instrument, voice, ensemble, or instrumental group",
+      "label" : "Medium of performance",
+      "name" : "MediumOfPerformance",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Gathering of individuals or representatives of various bodies for the purpose of discussing and/or acting on topics of common interest",
+      "label" : "Meeting",
+      "name" : "Meeting",
+      "sub_class_of" : [
+        "Agent"
+      ]
+    },
+    {
+      "definition" : "Resource that contains microimages, either transparent or opaque, that may be reproductions of existing textual or graphic materials or may be original publications",
+      "label" : "Microform",
+      "name" : "Microform",
+      "sub_class_of" : [
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Resource comprised of multiple types which is not driven by software, e.g. an archival collection of text, photographs and sound recordings",
+      "label" : "Mixed material",
+      "name" : "MixedMaterial",
+      "sub_class_of" : [
+        "Work"
+      ]
+    },
+    {
+      "definition" : "Mode (not associated with a key) of a musical work",
+      "label" : "Mode",
+      "name" : "Mode",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Information relating to modification of a resource",
+      "label" : "Modification",
+      "name" : "Modification",
+      "sub_class_of" : [
+        "ProvisionActivity"
+      ]
+    },
+    {
+      "definition" : "Resource that is issued as a single physical unit or intangible single logical unit",
+      "label" : "Monograph",
+      "name" : "Monograph",
+      "sub_class_of" : [
+        "Work"
+      ]
+    },
+    {
+      "definition" : "Physical material or object used for the support or backing to which the base material of a resource has been attached",
+      "label" : "Mount",
+      "name" : "Mount",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Information on the symbol system used to convey the content of a movement resource",
+      "label" : "Movement notation",
+      "name" : "MovementNotation",
+      "sub_class_of" : [
+        "Notation"
+      ]
+    },
+    {
+      "definition" : "Images intended to be perceived as moving, including motion pictures (using live action and/or animation) or video recordings of performances or events",
+      "label" : "Moving image",
+      "name" : "MovingImage",
+      "sub_class_of" : [
+        "Work"
+      ]
+    },
+    {
+      "definition" : "Electronic resource which is a computer program or consists of multiple media types that are software driven, such as videogames",
+      "label" : "Software or multimedia",
+      "name" : "Multimedia",
+      "sub_class_of" : [
+        "Work"
+      ]
+    },
+    {
+      "definition" : "Music resource expressed in an audible form",
+      "label" : "Music audio",
+      "name" : "MusicAudio",
+      "sub_class_of" : [
+        "Audio"
+      ]
+    },
+    {
+      "definition" : "Identifier appearing on a resource assigned by a distributor to a specific audio recording, notated music publication, music-related publication, or videorecording",
+      "label" : "Music distributor number",
+      "name" : "MusicDistributorNumber",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Ensemble for which a musical work is appropriate",
+      "label" : "Music ensemble",
+      "name" : "MusicEnsemble",
+      "sub_class_of" : [
+        "Ensemble"
+      ]
+    },
+    {
+      "definition" : "Layout for content of a resource that is presented in the form of musical notation",
+      "label" : "Notated music format",
+      "name" : "MusicFormat",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Instrument for which a musical work is appropriate",
+      "label" : "Musical instrument",
+      "name" : "MusicInstrument",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Summary statement of the medium for a musical work",
+      "label" : "Music medium information",
+      "name" : "MusicMedium",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Information on the symbol system used to convey the content of a music resource",
+      "label" : "Music notation",
+      "name" : "MusicNotation",
+      "sub_class_of" : [
+        "Notation"
+      ]
+    },
+    {
+      "definition" : "Identifiers assigned by a music publisher or printer to the printing plates for the notated portion of a notated music publication, or an identifier that emulates the printing plate tradition in contemporary publications",
+      "label" : "Music plate number",
+      "name" : "MusicPlate",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Identifier assigned to a notated music publication other than an issue, matrix, or plate number",
+      "label" : "Music publisher number",
+      "name" : "MusicPublisherNumber",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Voice for which a musical work is appropriate",
+      "label" : "Music voice",
+      "name" : "MusicVoice",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "National Bibliography Number that identifies a resource description",
+      "label" : "NBN",
+      "name" : "Nbn",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Resource expressed in an audible form, including spoken word and other non-musical sounds",
+      "label" : "Non-music audio",
+      "name" : "NonMusicAudio",
+      "sub_class_of" : [
+        "Audio"
+      ]
+    },
+    {
+      "definition" : "Graphic, non-realized representations of movement intended to be perceived visually, e.g. dance",
+      "label" : "Notated movement",
+      "name" : "NotatedMovement",
+      "sub_class_of" : [
+        "Work"
+      ]
+    },
+    {
+      "definition" : "Graphic, non-realized representations of musical works intended to be perceived visually",
+      "label" : "Notated music",
+      "name" : "NotatedMusic",
+      "sub_class_of" : [
+        "Work"
+      ]
+    },
+    {
+      "definition" : "Information on the alphabet, script, or symbol system used to convey the content of the resource, including specialized scripts, typefaces, tactile notation, movement notation, and musical notation",
+      "label" : "Notation",
+      "name" : "Notation",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Information, usually in textual form, on attributes of a resource or some aspect of a resource",
+      "label" : "Note",
+      "name" : "Note",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Resource in a form intended to be perceived visually in three-dimensions, including man-made objects such as models, sculptures, clothing, and toys, as well as naturally occurring objects such as specimens mounted for viewing",
+      "label" : "Three-dimensional object",
+      "name" : "Object",
+      "sub_class_of" : [
+        "Work"
+      ]
+    },
+    {
+      "definition" : "Number of objects in encoded geospatial information in a cartographic resource",
+      "label" : "Digital cartographic object count",
+      "name" : "ObjectCount",
+      "sub_class_of" : [
+        "DigitalCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Identifier assigned by OCLC",
+      "label" : "OCLC number",
+      "name" : "OclcNumber",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "An opus number assigned to a musical work",
+      "label" : "Opus number",
+      "name" : "OpusNumber",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Corporation or group of persons and/or organizations that acts, or may act, as a unit",
+      "label" : "Organization",
+      "name" : "Organization",
+      "sub_class_of" : [
+        "Agent"
+      ]
+    },
+    {
+      "definition" : "Title in another language and/or script",
+      "label" : "Parallel title proper",
+      "name" : "ParallelTitle",
+      "sub_class_of" : [
+        "VariantTitle"
+      ]
+    },
+    {
+      "definition" : "Individual or identity established by an individual (either alone or in collaboration with one or more other individuals)",
+      "label" : "Person",
+      "name" : "Person",
+      "sub_class_of" : [
+        "http://xmlns.com/foaf/0.1/Person",
+        "Agent"
+      ]
+    },
+    {
+      "definition" : "Geographic location",
+      "label" : "Place",
+      "name" : "Place",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Configuration/number of sound channels used to make a recording, such as one channel for a monophonic recording, e.g., mono, stereo, quadraphonic, surround",
+      "label" : "Configuration of playback channels",
+      "name" : "PlaybackChannels",
+      "sub_class_of" : [
+        "SoundCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Equalization system, noise reduction system, etc., used in making an audio recording, e.g., CCIR standard, CX encoded, Dolby",
+      "label" : "Special playback characteristics",
+      "name" : "PlaybackCharacteristic",
+      "sub_class_of" : [
+        "SoundCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Speed at which an audio carrier must be operated to produce the sound intended, e.g., 78 rpm, 19 cm/s",
+      "label" : "Playing speed",
+      "name" : "PlayingSpeed",
+      "sub_class_of" : [
+        "SoundCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Relationship of the colors and tones in an image to the colors and tones of the object reproduced",
+      "label" : "Polarity",
+      "name" : "Polarity",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Number assigned to a publication for which the specified postal service permits the use of a special mailing class privilege",
+      "label" : "Postal registration number",
+      "name" : "PostalRegistration",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Format used in the production of a projected image, e.g., Cinerama, IMAX",
+      "label" : "Presentation format",
+      "name" : "PresentationFormat",
+      "sub_class_of" : [
+        "ProjectionCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Contribution for which the agent is the name chosen as the name part of the name and title access point",
+      "label" : "Primary contribution",
+      "name" : "PrimaryContribution",
+      "sub_class_of" : [
+        "Contribution"
+      ]
+    },
+    {
+      "definition" : "Resource that is printed",
+      "label" : "Printed",
+      "name" : "Print",
+      "sub_class_of" : [
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Information relating to production of a resource",
+      "label" : "Producer",
+      "name" : "Production",
+      "sub_class_of" : [
+        "ProvisionActivity"
+      ]
+    },
+    {
+      "definition" : "Process used to produce a resource",
+      "label" : "Production method",
+      "name" : "ProductionMethod",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Method or system used to represent the surface of the earth or of a celestial sphere on a plane",
+      "label" : "Projection",
+      "name" : "Projection",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Technical specification relating to the projection of a motion picture film",
+      "label" : "Projection characteristic",
+      "name" : "ProjectionCharacteristic",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Speed at which a projected carrier must be operated to produce the moving image intended, e.g., 20 fps",
+      "label" : "Projection speed",
+      "name" : "ProjectionSpeed",
+      "sub_class_of" : [
+        "ProjectionCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Information about the agent or place relating to the publication, printing, distribution, issue, release, or production of a resource",
+      "label" : "Provider entity",
+      "name" : "ProvisionActivity",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Information about the publication frequency of a resource",
+      "label" : "Publication Frequency",
+      "name" : "PubFrequency",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Information relating to publication of a resource",
+      "label" : "Publisher",
+      "name" : "Publication",
+      "sub_class_of" : [
+        "ProvisionActivity"
+      ]
+    },
+    {
+      "definition" : "Number assigned by a publisher that is not one of the specific defined types",
+      "label" : "Publisher number",
+      "name" : "PublisherNumber",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Type of medium used to record sound on an audio carrier, e.g., magnetic, optical",
+      "label" : "Recording medium",
+      "name" : "RecordingMedium",
+      "sub_class_of" : [
+        "SoundCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Method used to encode audio content for playback, e.g., analog, digital",
+      "label" : "Type of recording",
+      "name" : "RecordingMethod",
+      "sub_class_of" : [
+        "SoundCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Size of a micro-image in relation to the original from which it was produced",
+      "label" : "Reduction ratio",
+      "name" : "ReductionRatio",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Identification of the region of the world for which a videodisc has been encoded, e.g., region 4",
+      "label" : "Regional encoding",
+      "name" : "RegionalEncoding",
+      "sub_class_of" : [
+        "DigitalCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Associated resource and its relationship to the resource being described",
+      "label" : "Relation",
+      "name" : "Relation",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Type of relationship between resources",
+      "label" : "Relationship",
+      "name" : "Relationship",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Relief term specified on a cartographic resource",
+      "label" : "Relief",
+      "name" : "Relief",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Identification number of a technical report that is not a Standard Technical Report Number",
+      "label" : "Technical report number",
+      "name" : "ReportNumber",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Clarity or fineness of detail in a digital image, expressed by the measurement of the image in pixels, etc., e.g., 3.1 megapixels",
+      "label" : "Resolution",
+      "name" : "Resolution",
+      "sub_class_of" : [
+        "DigitalCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Policy of holding institution for retaining resource",
+      "label" : "Retention policy",
+      "name" : "RetentionPolicy",
+      "sub_class_of" : [
+        "UsageAndAccessPolicy"
+      ]
+    },
+    {
+      "definition" : "Review of a resource",
+      "label" : "Review",
+      "name" : "Review",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Function played or provided by a contributor, e.g., author or illustrator",
+      "label" : "Role",
+      "name" : "Role",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Ratio of the dimensions of a form contained or embodied in a resource to the dimensions of the entity it represents, e.g., for images or cartographic resources",
+      "label" : "Scale",
+      "name" : "Scale",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Information on the script, or symbol system used to convey the content of a text resource",
+      "label" : "Script",
+      "name" : "Script",
+      "sub_class_of" : [
+        "Notation"
+      ]
+    },
+    {
+      "definition" : "Resource that is issued in successive parts, usually numbered, that has no predetermined conclusion",
+      "label" : "Serial",
+      "name" : "Serial",
+      "sub_class_of" : [
+        "Work"
+      ]
+    },
+    {
+      "definition" : "A serial number assigned to a work",
+      "label" : "Serial number",
+      "name" : "SerialNumber",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Resource with a collective title that applies to a group of separate resources, each of which also has its own title",
+      "label" : "Series",
+      "name" : "Series",
+      "sub_class_of" : [
+        "Work"
+      ]
+    },
+    {
+      "definition" : "Piece/item identifier, such as a call or other type of number",
+      "label" : "Shelf location",
+      "name" : "ShelfMark",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Shelf mark based on Dewey Decimal Classification",
+      "label" : "DDC call number",
+      "name" : "ShelfMarkDdc",
+      "sub_class_of" : [
+        "ShelfMark"
+      ]
+    },
+    {
+      "definition" : "Shelf mark based on Library of Congress Classification",
+      "label" : "LCC call number",
+      "name" : "ShelfMarkLcc",
+      "sub_class_of" : [
+        "ShelfMark"
+      ]
+    },
+    {
+      "definition" : "Shelf mark based on National Library of Medicine Classification",
+      "label" : "NLM call number",
+      "name" : "ShelfMarkNlm",
+      "sub_class_of" : [
+        "ShelfMark"
+      ]
+    },
+    {
+      "definition" : "Shelf mark based on Universal Decimal Classification",
+      "label" : "UDC call number",
+      "name" : "ShelfMarkUdc",
+      "sub_class_of" : [
+        "ShelfMark"
+      ]
+    },
+    {
+      "definition" : "Serial Item and Contribution Identifier",
+      "label" : "SICI",
+      "name" : "Sici",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Technical specification relating to the encoding of sound in a resource",
+      "label" : "Sound characteristic",
+      "name" : "SoundCharacteristic",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Indication of whether the production of sound is an integral part of the resource",
+      "label" : "Sound content",
+      "name" : "SoundContent",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Resource from which value or label came or was derived",
+      "label" : "Source",
+      "name" : "Source",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Designation of the validity or position of something, e.g., whether something is incorrect or available",
+      "label" : "Status",
+      "name" : "Status",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Resource expressed through line, shape, shading, etc., intended to be perceived visually as a still image or images in two dimensions, including two-dimensional images and slides and transparencies",
+      "label" : "Still image",
+      "name" : "StillImage",
+      "sub_class_of" : [
+        "Work"
+      ]
+    },
+    {
+      "definition" : "Identification number used for stock purposes and assigned by agencies such as distributors, publishers, or vendors",
+      "label" : "Stock number",
+      "name" : "StockNumber",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Standard Technical Report Number",
+      "label" : "STRN",
+      "name" : "Strn",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Identification number for a computer data file",
+      "label" : "Study number",
+      "name" : "StudyNumber",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Specific place within the holding entity where the item is located or made available",
+      "label" : "Sublocation",
+      "name" : "Sublocation",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Description of the content of a resource, such as an abstract, summary, etc.",
+      "label" : "Summary",
+      "name" : "Summary",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Index, bibliography, appendix, etc. intended to supplement the primary content of a resource",
+      "label" : "Supplementary material",
+      "name" : "SupplementaryContent",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Equipment or system requirements beyond what is normal and obvious for the type of carrier or type of file, such as make and model of equipment or hardware, operating system, amount of memory, programming language, other necessary software, any plug-ins or peripherals required to play, view, or run the resource",
+      "label" : "System Requirement",
+      "name" : "SystemRequirement",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Table of contents of a resource",
+      "label" : "Table of contents",
+      "name" : "TableOfContents",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Resource that is intended to be perceived by touch",
+      "label" : "Tactile material",
+      "name" : "Tactile",
+      "sub_class_of" : [
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Information on the symbol system used to convey the content of a tactile resource",
+      "label" : "Tactile notation",
+      "name" : "TactileNotation",
+      "sub_class_of" : [
+        "Notation"
+      ]
+    },
+    {
+      "definition" : "Number of tracks on an audiotape, e.g., 12 track",
+      "label" : "Tape configuration",
+      "name" : "TapeConfig",
+      "sub_class_of" : [
+        "SoundCharacteristic"
+      ]
+    },
+    {
+      "definition" : "The speed of pace of a music work, whether declared in a score or performed",
+      "label" : "Tempo",
+      "name" : "Tempo",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Chronological period",
+      "label" : "Temporal concept",
+      "name" : "Temporal",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Resource intended to be perceived visually and understood through the use of language in written or spoken form",
+      "label" : "Text",
+      "name" : "Text",
+      "sub_class_of" : [
+        "Work"
+      ]
+    },
+    {
+      "definition" : "A numeric or alphanumeric designation of a musical work as found in a thematic index or catalog",
+      "label" : "Thematic catalog number",
+      "name" : "ThematicCatalogNumber",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Title information relating to a resource: work title, preferred title, instance title, transcribed title, translated title, variant form of title, etc.",
+      "label" : "Title entity",
+      "name" : "Title",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Concept or area of knowledge",
+      "label" : "Topic",
+      "name" : "Topic",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Configuration of the audio track on a sound-track film, e.g., center track, edge track",
+      "label" : "Track configuration",
+      "name" : "TrackConfig",
+      "sub_class_of" : [
+        "SoundCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Title transliterated from one script to another",
+      "label" : "Transliterated title",
+      "name" : "TransliteratedTitle",
+      "sub_class_of" : [
+        "VariantTitle"
+      ]
+    },
+    {
+      "definition" : "Units in which a value is expressed",
+      "label" : "Unit",
+      "name" : "Unit",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Universal Product Code",
+      "label" : "UPC",
+      "name" : "Upc",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Uniform Resource Name",
+      "label" : "URN",
+      "name" : "Urn",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "General statement of allowances and restrictions on access to a resource, including retention, reproduction, access, and lending",
+      "label" : "Use and access conditions",
+      "name" : "UsageAndAccessPolicy",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Usage limitations placed on a resource with respect to reproduction, publication, exhibition, etc.",
+      "label" : "Use policy",
+      "name" : "UsePolicy",
+      "sub_class_of" : [
+        "UsageAndAccessPolicy"
+      ]
+    },
+    {
+      "definition" : "Title associated with the resource that is different from the Work or Instance title",
+      "label" : "Title variation",
+      "name" : "VariantTitle",
+      "sub_class_of" : [
+        "Title"
+      ]
+    },
+    {
+      "definition" : "Technical specification relating to the encoding of video images in a resource",
+      "label" : "Video characteristic",
+      "name" : "VideoCharacteristic",
+      "sub_class_of" : []
+    },
+    {
+      "definition" : "Standard, etc., used to encode the analog video content of a resource, e.g., Beta, 8mm",
+      "label" : "Video format",
+      "name" : "VideoFormat",
+      "sub_class_of" : [
+        "VideoCharacteristic"
+      ]
+    },
+    {
+      "definition" : "Number assigned by a publisher to a video recording",
+      "label" : "Video recording number",
+      "name" : "VideoRecordingNumber",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "An identifier assigned to a videogame platform",
+      "label" : "Videogame platform identifier",
+      "name" : "VideogamePlatformId",
+      "sub_class_of" : [
+        "Identifier"
+      ]
+    },
+    {
+      "definition" : "Resource reflecting a conceptual essence of a cataloging resource",
+      "label" : "Work",
+      "name" : "Work",
+      "sub_class_of" : []
+    }
+  ],
+  "properties" : [
+    {
+      "definition" : "Resource that has been incorporated into another resource",
+      "domain" : [],
+      "inverse_of" : [
+        "absorbedBy"
+      ],
+      "kind" : "object",
+      "label" : "Absorption of",
+      "name" : "absorbed",
+      "range" : [],
+      "sub_property_of" : [
+        "precededBy"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Resource that incorporates another resource",
+      "domain" : [],
+      "inverse_of" : [
+        "absorbed"
+      ],
+      "kind" : "object",
+      "label" : "Absorbed by",
+      "name" : "absorbedBy",
+      "range" : [],
+      "sub_property_of" : [
+        "succeededBy"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Resource that accompanies the described resource",
+      "domain" : [],
+      "inverse_of" : [
+        "accompanies"
+      ],
+      "kind" : "object",
+      "label" : "Accompanied by",
+      "name" : "accompaniedBy",
+      "range" : [],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance",
+        "Item"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item"
+      ]
+    },
+    {
+      "definition" : "Resource that adds to or is issued with the described resource",
+      "domain" : [],
+      "inverse_of" : [
+        "accompaniedBy"
+      ],
+      "kind" : "object",
+      "label" : "Accompanies",
+      "name" : "accompanies",
+      "range" : [],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance",
+        "Item"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item"
+      ]
+    },
+    {
+      "definition" : "Information about an organization, person, etc., from which a resource may be obtained.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Source of acquisition",
+      "name" : "acquisitionSource",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Conditions under which the publisher, distributor, etc., will normally supply a resource, e.g., price of a resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Terms of acquisition",
+      "name" : "acquisitionTerms",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Metadata about the metadata, especially provenance information.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Administrative metadata",
+      "name" : "adminMetadata",
+      "range" : [
+        "AdminMetadata"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relates an Administrative metadata resource to the resource it captures information about.",
+      "domain" : [
+        "AdminMetadata"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Administrative metadata for",
+      "name" : "adminMetadataFor",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Entity associated with a resource or element of description, such as the name of the entity responsible for the content or of the publication, printing, distribution, issue, release or production of a resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Associated agent",
+      "name" : "agent",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [
+        "Agent",
+        "foaf:Agent"
+      ],
+      "used_with" : []
+    },
+    {
+      "definition" : "Property relating an agent, such as an entity responsible for the content or of the publication, printing, distribution, issue, release or production, to another resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Associated agent of",
+      "name" : "agentOf",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Agent",
+        "foaf:Agent"
+      ]
+    },
+    {
+      "definition" : "Physical or chemical substance applied to a base material of a resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Applied material",
+      "name" : "appliedMaterial",
+      "range" : [],
+      "sub_property_of" : [
+        "material"
+      ],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item"
+      ]
+    },
+    {
+      "definition" : "Relates a Material resource to that which it is the applied material of.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Applied material of",
+      "name" : "appliedMaterialOf",
+      "range" : [],
+      "sub_property_of" : [
+        "materialOf"
+      ],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relates one resource to another of which it is an arrangement of the first",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [
+        "arrangementOf"
+      ],
+      "kind" : "object",
+      "label" : "Arrangement",
+      "name" : "arrangement",
+      "range" : [
+        "Work"
+      ],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relates an arrangement to the resource of which it is an arrangement.",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [
+        "arrangement"
+      ],
+      "kind" : "object",
+      "label" : "Arrangement of",
+      "name" : "arrangementOf",
+      "range" : [
+        "Work"
+      ],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "System for identifying the location of a celestial object in the sky covered by the cartographic content of a resource using the angles of right ascension and declination.",
+      "domain" : [
+        "Cartographic"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Cartographic ascension and declination",
+      "name" : "ascensionAndDeclination",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Proportional relationship between an image's width and its height.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Aspect ratio",
+      "name" : "aspectRatio",
+      "range" : [
+        "AspectRatio"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Entity that assigned the metadata, such as the entity that assigned a classification number, entity that assigned a name, entity that assigned an identifier.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Assigner",
+      "name" : "assigner",
+      "range" : [
+        "Agent"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Associated resource",
+      "domain" : [
+        "Relation"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Associated resource",
+      "name" : "associatedResource",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [
+        "Work",
+        "Hub"
+      ],
+      "used_with" : []
+    },
+    {
+      "definition" : "Information on awards associated with the described resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Award note",
+      "name" : "awards",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Underlying physical material of a resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Base material",
+      "name" : "baseMaterial",
+      "range" : [],
+      "sub_property_of" : [
+        "material"
+      ],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item"
+      ]
+    },
+    {
+      "definition" : "Relates a Material resource to that which it is the base material of.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Base material of",
+      "name" : "baseMaterialOf",
+      "range" : [],
+      "sub_property_of" : [
+        "materialOf"
+      ],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "A method used to bind a published or unpublished resource,or other binding information.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Binding method",
+      "name" : "binding",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Result of folding a printed sheet to form a gathering of leaves.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Book format",
+      "name" : "bookFormat",
+      "range" : [
+        "BookFormat"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Information about place and date associated with the capture (e.g., recording, filming) of the content of a resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Capture of content",
+      "name" : "capture",
+      "range" : [
+        "Capture"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Categorization reflecting the format of the storage medium and housing of a carrier.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Carrier type",
+      "name" : "carrier",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [
+        "Carrier",
+        "skos:Concept"
+      ],
+      "used_with" : []
+    },
+    {
+      "definition" : "Cartographic data that identifies characteristics of the resource, such as coordinates, projection, etc.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Cartographic data",
+      "name" : "cartographicAttributes",
+      "range" : [
+        "Cartographic"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Date or date and time on which the metadata was modified",
+      "domain" : [
+        "AdminMetadata"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Description change date",
+      "name" : "changeDate",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [
+        "date"
+      ],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Classification number in any scheme.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Classification",
+      "name" : "classification",
+      "range" : [
+        "Classification"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item"
+      ]
+    },
+    {
+      "definition" : "Classification number (single class number or beginning number of a span) that indicates the subject by applying a formal system of coding and organizing resources.",
+      "domain" : [
+        "Classification"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Classification number",
+      "name" : "classificationPortion",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "String of characters that serves as a code representing information.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Code",
+      "name" : "code",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Information about the organization and arrangement of a collection of resources.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Collection Organization and arrangement",
+      "name" : "collectionArrangement",
+      "range" : [
+        "CollectionArrangement"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Relates an Arrangement resource to that which it describes.",
+      "domain" : [
+        "CollectionArrangement"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Organization and arrangement of Collection",
+      "name" : "collectionArrangementOf",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : []
+    },
+    {
+      "definition" : "Manner in which the resource is divided into smaller units.",
+      "domain" : [
+        "CollectionArrangement"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Organization of material",
+      "name" : "collectionOrganization",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Color characteristics, e.g., black and white, multicolored.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Color content",
+      "name" : "colorContent",
+      "range" : [
+        "ColorContent"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item"
+      ]
+    },
+    {
+      "definition" : "Categorization reflecting the fundamental form of communication in which the content is expressed and the human sense through which it is intended to be perceived.",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Content type",
+      "name" : "content",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [
+        "Content",
+        "skos:Concept"
+      ],
+      "used_with" : []
+    },
+    {
+      "definition" : "Information that assists those with a sensory impairment for greater understanding of content, e.g., captions.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Content accessibility information",
+      "name" : "contentAccessibility",
+      "range" : [
+        "ContentAccessibility"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Resource whose content continues an earlier resource under a new title",
+      "domain" : [],
+      "inverse_of" : [
+        "continues"
+      ],
+      "kind" : "object",
+      "label" : "Continued by",
+      "name" : "continuedBy",
+      "range" : [],
+      "sub_property_of" : [
+        "succeededBy"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Resource part of whose content separated from an earlier resource to form a new resource",
+      "domain" : [],
+      "inverse_of" : [
+        "separatedFrom"
+      ],
+      "kind" : "object",
+      "label" : "Continued in part by",
+      "name" : "continuedInPartBy",
+      "range" : [],
+      "sub_property_of" : [
+        "succeededBy"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Resource that is continued by the content of a later resource under a new title",
+      "domain" : [],
+      "inverse_of" : [
+        "continuedBy"
+      ],
+      "kind" : "object",
+      "label" : "Continuation of",
+      "name" : "continues",
+      "range" : [],
+      "sub_property_of" : [
+        "precededBy"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Resource that split into two or more separate resources with new titles",
+      "domain" : [],
+      "inverse_of" : [
+        "splitInto"
+      ],
+      "kind" : "object",
+      "label" : "Continuation in part of",
+      "name" : "continuesInPart",
+      "range" : [],
+      "sub_property_of" : [
+        "precededBy"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Agent and its role in relation to the resource",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Contributor and role",
+      "name" : "contribution",
+      "range" : [
+        "Contribution"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item"
+      ]
+    },
+    {
+      "definition" : "Relates a contribution resource, which associates an Agent and Role together, to the relevant resource",
+      "domain" : [
+        "Contribution"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Contribution of",
+      "name" : "contributionOf",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [
+        "Work",
+        "Instance",
+        "Item"
+      ],
+      "used_with" : []
+    },
+    {
+      "definition" : "Mathematical system for identifying the area covered by the cartographic content of a resource, expressed either by means of longitude and latitude on the surface of planets or by the angles of right ascension and declination for celestial cartographic content.",
+      "domain" : [
+        "Cartographic"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Cartographic coordinates",
+      "name" : "coordinates",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Date associated with a claim of protection under copyright or a similar regime.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Copyright date",
+      "name" : "copyrightDate",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [
+        "date"
+      ],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Copyright and Legal Deposit registration information",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Copyright registration information",
+      "name" : "copyrightRegistration",
+      "range" : [
+        "CopyrightRegistration"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Number associated with a measure of units, such as the number of units and/or subunits making up a resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Number of units",
+      "name" : "count",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Cover art image of a resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Cover art",
+      "name" : "coverArt",
+      "range" : [
+        "CoverArt"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Date or date and time on which the original metadata first created",
+      "domain" : [
+        "AdminMetadata"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Description creation date",
+      "name" : "creationDate",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [
+        "date"
+      ],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Information in note form of credits for persons or organizations who have participated in the creation and/or production of the resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Credits note",
+      "name" : "credits",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Information about the provenance, such as origin, ownership and custodial history (chain of custody), of a resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Custodial history",
+      "name" : "custodialHistory",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item"
+      ]
+    },
+    {
+      "definition" : "Resource that is a data source to which the described resource is related; may contain information about other files, printed sources, or collection procedures",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Data source",
+      "name" : "dataSource",
+      "range" : [],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Date designation associated with a resource or element of description, such as date of title variation; year a degree was awarded; date associated with the publication, printing, distribution, issue, release or production of a resource. May be date typed.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Date",
+      "name" : "date",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Degree for which author was a candidate.",
+      "domain" : [
+        "Dissertation"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Degree",
+      "name" : "degree",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "A relationship that records the fact that one resource is a derivative of another resource",
+      "domain" : [],
+      "inverse_of" : [
+        "hasDerivative"
+      ],
+      "kind" : "object",
+      "label" : "Is derivative of",
+      "name" : "derivativeOf",
+      "range" : [],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Meant to establish a link from a description that was derived from, perhaps via copy, another description; example: X description/metadata was derived from Y description/metadata",
+      "domain" : [
+        "AdminMetadata"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Source metadata",
+      "name" : "derivedFrom",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Indication of specific types of reviews that have been carried out on the description information",
+      "domain" : [
+        "AdminMetadata"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Description authentication",
+      "name" : "descriptionAuthentication",
+      "range" : [
+        "DescriptionAuthentication"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Rules used for the descriptive content of the resource description",
+      "domain" : [
+        "AdminMetadata"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Description conventions",
+      "name" : "descriptionConventions",
+      "range" : [
+        "DescriptionConventions"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Language used for the metadata",
+      "domain" : [
+        "AdminMetadata"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Description language",
+      "name" : "descriptionLanguage",
+      "range" : [
+        "Language"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Designation of the descriptive content of the metadata",
+      "domain" : [
+        "AdminMetadata"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Description level",
+      "name" : "descriptionLevel",
+      "range" : [
+        "DescriptionLevel"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Agency that modified a description",
+      "domain" : [
+        "AdminMetadata"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Description modifier",
+      "name" : "descriptionModifier",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Technical specification relating to the digital encoding of text, image, audio, video, and other types of data in a resource.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Digital characteristic",
+      "name" : "digitalCharacteristic",
+      "range" : [
+        "DigitalCharacteristic"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Measurements of the carrier or carriers and/or the container of a resource.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Dimensions",
+      "name" : "dimensions",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Work presented as part of the formal requirements for an academic degree.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Dissertation Information",
+      "name" : "dissertation",
+      "range" : [
+        "Dissertation"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Statement related to the distribution of the resources; usually transcribed.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Distribution statement",
+      "name" : "distributionStatement",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relates a contribution to a dramatic role",
+      "domain" : [
+        "Contribution"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Dramatic Role",
+      "name" : "dramaticRole",
+      "range" : [
+        "DramaticRole"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Information about the playing time, running time, etc. of a resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Duration",
+      "name" : "duration",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Edition of the classification scheme, such as full, abridged or a number, when a classification scheme designates editions.",
+      "domain" : [
+        "Classification"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Classification scheme edition",
+      "name" : "edition",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Enumeration of the edition; usually transcribed.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Edition enumeration",
+      "name" : "editionEnumeration",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Information identifying the edition or version of the resource and associated statements of responsibility for the edition; usually transcribed.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Edition statement",
+      "name" : "editionStatement",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Electronic location from which the resource is available.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Electronic location",
+      "name" : "electronicLocator",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Suspension of light-sensitive chemicals used as a coating on a microfilm or microfiche, e.g., silver halide.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Emulsion",
+      "name" : "emulsion",
+      "range" : [
+        "Emulsion"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Composition of the ensemble applicable to the Work.",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Ensemble",
+      "name" : "ensemble",
+      "range" : [
+        "Ensemble"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relates a work to the musical ensemble size",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Ensemble size",
+      "name" : "ensembleSize",
+      "range" : [
+        "EnsembleSize"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Specific type of ensemble, such as orchestra, band, guitar ensemble.",
+      "domain" : [
+        "Ensemble"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Ensemble type",
+      "name" : "ensembleType",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Numbering and dates of issues or items held.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Enumeration and chronology",
+      "name" : "enumerationAndChronology",
+      "range" : [
+        "EnumerationAndChronology"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "One of two points of intersection of the ecliptic and the celestial equator, occupied by the sun when its declination is 0 degrees.",
+      "domain" : [
+        "Cartographic"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Cartographic equinox",
+      "name" : "equinox",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Work whose content is the described event",
+      "domain" : [
+        "Event"
+      ],
+      "inverse_of" : [
+        "eventContentOf"
+      ],
+      "kind" : "object",
+      "label" : "Event content",
+      "name" : "eventContent",
+      "range" : [
+        "Work"
+      ],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Event that is the content of the described work",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [
+        "eventContent"
+      ],
+      "kind" : "object",
+      "label" : "Has event content",
+      "name" : "eventContentOf",
+      "range" : [
+        "Event"
+      ],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Coordinate pairs that identify the closed non-intersecting boundary of the area contained within the G-polygon outer ring that is excluded.",
+      "domain" : [
+        "Cartographic"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Cartographic G ring area excluded",
+      "name" : "exclusionGRing",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Work or Hub that the described Work or Hub is an expression of; used to connect Works and/or Hubs under LRM/RDA guidelines or similar implementations",
+      "domain" : [],
+      "inverse_of" : [
+        "hasExpression"
+      ],
+      "kind" : "object",
+      "label" : "Expression of",
+      "name" : "expressionOf",
+      "range" : [],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Hub"
+      ],
+      "used_with" : [
+        "Work",
+        "Hub"
+      ]
+    },
+    {
+      "definition" : "Number and type of units and/or subunits making up a resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Extent",
+      "name" : "extent",
+      "range" : [
+        "Extent"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relationship for archival, visual, and manuscript resources to a finding aid or similar control materials",
+      "domain" : [],
+      "inverse_of" : [
+        "findingAidOf"
+      ],
+      "kind" : "object",
+      "label" : "Finding aid",
+      "name" : "findingAid",
+      "range" : [],
+      "sub_property_of" : [
+        "accompaniedBy"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Finding aid or similar control materials for archival, visual, and manuscript resources",
+      "domain" : [],
+      "inverse_of" : [
+        "findingAid"
+      ],
+      "kind" : "object",
+      "label" : "Finding aid for",
+      "name" : "findingAidOf",
+      "range" : [],
+      "sub_property_of" : [
+        "accompanies"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Beginning date of a resource and/or the sequential designations.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Multipart first issue",
+      "name" : "firstIssue",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Size of the type used to represent the characters and symbols in a resource.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Font size",
+      "name" : "fontSize",
+      "range" : [
+        "FontSize"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Intervals at which the parts of a serially produced resource or the updates to an integrating resource are issued.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Frequency",
+      "name" : "frequency",
+      "range" : [
+        "Frequency"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relationship between an original carrier and the carrier of a reproduction made from the original.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Generation",
+      "name" : "generation",
+      "range" : [
+        "Generation"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Date of conversion of the metadata from another format",
+      "domain" : [
+        "AdminMetadata"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Date generated",
+      "name" : "generationDate",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [
+        "date"
+      ],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Indication of the program or process used to generate the description by application of a particular transformation",
+      "domain" : [
+        "AdminMetadata"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Description generation",
+      "name" : "generationProcess",
+      "range" : [
+        "GenerationProcess"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Form category or genre to which a resource belongs",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Genre/form",
+      "name" : "genreForm",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [
+        "GenreForm",
+        "madsrdf:GenreForm",
+        "skos:Concept"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item"
+      ]
+    },
+    {
+      "definition" : "Geographic coverage of the content of the resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Geographic coverage",
+      "name" : "geographicCoverage",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [
+        "GeographicCoverage",
+        "Place",
+        "madsrdf:Geographic"
+      ],
+      "used_with" : []
+    },
+    {
+      "definition" : "Name of degree granting institution.",
+      "domain" : [
+        "Dissertation"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Degree issuing institution",
+      "name" : "grantingInstitution",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "A relationship which records that the described resource has a derivative resource",
+      "domain" : [],
+      "inverse_of" : [
+        "derivativeOf"
+      ],
+      "kind" : "object",
+      "label" : "Has derivative",
+      "name" : "hasDerivative",
+      "range" : [],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Resource embodies the same content as the described resource",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "symmetric",
+      "label" : "Equivalence",
+      "name" : "hasEquivalent",
+      "range" : [],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance",
+        "Item"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item"
+      ]
+    },
+    {
+      "definition" : "Work or Hub that is an expression of a described Work or Hub; used to relate Works and/or Hubs under LRM/RDA guidelines or similar implementations",
+      "domain" : [],
+      "inverse_of" : [
+        "expressionOf"
+      ],
+      "kind" : "object",
+      "label" : "Expressed as",
+      "name" : "hasExpression",
+      "range" : [],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Hub"
+      ],
+      "used_with" : [
+        "Work",
+        "Hub"
+      ]
+    },
+    {
+      "definition" : "Instance is related to described Work ; used to connect Works to Instances in the BIBFRAME structure",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [
+        "instanceOf"
+      ],
+      "kind" : "object",
+      "label" : "Instance of Work",
+      "name" : "hasInstance",
+      "range" : [
+        "Instance"
+      ],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Item which is an example of the described Instance",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [
+        "itemOf"
+      ],
+      "kind" : "object",
+      "label" : "Has holding",
+      "name" : "hasItem",
+      "range" : [
+        "Item"
+      ],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Resource that is included either physically or logically in the described resource",
+      "domain" : [],
+      "inverse_of" : [
+        "partOf"
+      ],
+      "kind" : "object",
+      "label" : "Has part",
+      "name" : "hasPart",
+      "range" : [],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance",
+        "Item",
+        "Event"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item",
+        "Event"
+      ]
+    },
+    {
+      "definition" : "Resource that reproduces another Resource",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [
+        "reproductionOf"
+      ],
+      "kind" : "object",
+      "label" : "Reproduced as",
+      "name" : "hasReproduction",
+      "range" : [
+        "Instance"
+      ],
+      "sub_property_of" : [
+        "hasEquivalent"
+      ],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relation between a resource and the larger resource in which it has been issued; the title of the encompassing larger resource features on the part",
+      "domain" : [],
+      "inverse_of" : [
+        "seriesOf"
+      ],
+      "kind" : "object",
+      "label" : "In series",
+      "name" : "hasSeries",
+      "range" : [],
+      "sub_property_of" : [
+        "partOf"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Relation between a resource and the larger Series resource in which it has been issued; the larger Series resource is part of another overarching Series resource",
+      "domain" : [],
+      "inverse_of" : [
+        "subseriesOf"
+      ],
+      "kind" : "object",
+      "label" : "Subseries",
+      "name" : "hasSubseries",
+      "range" : [],
+      "sub_property_of" : [
+        "partOf"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Entity holding the item or from which it is available.",
+      "domain" : [
+        "Item"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Held by",
+      "name" : "heldBy",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Hierarchical position of the described materials relative to other material from the same source.",
+      "domain" : [
+        "CollectionArrangement"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Hierarchical level of material",
+      "name" : "hierarchicalLevel",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Information about the history of a Work.",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "History of the work",
+      "name" : "historyOfWork",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Character string associated with a resource that serves to differentiate that resource from other resources, i.e., that uniquely identifies an entity.",
+      "domain" : [],
+      "inverse_of" : [
+        "identifies"
+      ],
+      "kind" : "object",
+      "label" : "Identifier",
+      "name" : "identifiedBy",
+      "range" : [
+        "Identifier"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Resource that is associated with a character string that serves to differentiate one resource from another.",
+      "domain" : [
+        "Identifier"
+      ],
+      "inverse_of" : [
+        "identifiedBy"
+      ],
+      "kind" : "object",
+      "label" : "Resource identified",
+      "name" : "identifies",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Information about content intended to illustrate a resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Illustrative content information",
+      "name" : "illustrativeContent",
+      "range" : [
+        "Illustration"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Information about the circumstances, e.g., source, date, method, under which the resource was directly acquired.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Immediate acquisition",
+      "name" : "immediateAcquisition",
+      "range" : [
+        "ImmediateAcquisition"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Resource has an accompanying index",
+      "domain" : [],
+      "inverse_of" : [
+        "indexOf"
+      ],
+      "kind" : "object",
+      "label" : "Has index",
+      "name" : "index",
+      "range" : [],
+      "sub_property_of" : [
+        "accompaniedBy"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Index that accompanies a resource",
+      "domain" : [],
+      "inverse_of" : [
+        "index"
+      ],
+      "kind" : "object",
+      "label" : "Index to",
+      "name" : "indexOf",
+      "range" : [],
+      "sub_property_of" : [
+        "accompanies"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Work the Instance described instantiates or manifests; used to connect Instances to Works in the BIBFRAME structure",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [
+        "hasInstance"
+      ],
+      "kind" : "object",
+      "label" : "Instance of",
+      "name" : "instanceOf",
+      "range" : [
+        "Work"
+      ],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Instrument for which a musical Work is appropriate.",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Instrument",
+      "name" : "instrument",
+      "range" : [
+        "MusicInstrument"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Specific role of instrument, such as alternate, doubling, solo, ensemble.",
+      "domain" : [
+        "MusicInstrument"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Instrument role",
+      "name" : "instrumentalType",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Information that identifies the specific audience or intellectual level for which the content of the resource is considered appropriate.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Intended audience",
+      "name" : "intendedAudience",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Categorization reflecting whether a resource is issued in one or more parts, the way it is updated, and its intended termination.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Mode of issuance",
+      "name" : "issuance",
+      "range" : [
+        "Issuance"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Resource that is issued on the same carrier as the resource being described",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "symmetric",
+      "label" : "Issued with",
+      "name" : "issuedWith",
+      "range" : [],
+      "sub_property_of" : [
+        "accompanies"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Instance for which the described Item is an example",
+      "domain" : [
+        "Item"
+      ],
+      "inverse_of" : [
+        "hasItem"
+      ],
+      "kind" : "object",
+      "label" : "Holding for",
+      "name" : "itemOf",
+      "range" : [
+        "Instance"
+      ],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Number attached to a classification string that indicates a particular item.",
+      "domain" : [
+        "Classification"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Classification item number",
+      "name" : "itemPortion",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relates a work to a musical key and mode",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Key and mode",
+      "name" : "keyMode",
+      "range" : [
+        "KeyMode"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Hub"
+      ]
+    },
+    {
+      "definition" : "Language associated with a resource or its parts.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Language information",
+      "name" : "language",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [
+        "Language",
+        "madsrdf:Language"
+      ],
+      "used_with" : []
+    },
+    {
+      "definition" : "Ending date of a resource and/or the sequential designations.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Multipart last issue",
+      "name" : "lastIssue",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Arrangement of text, images, tactile notation, etc., in a resource.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Layout",
+      "name" : "layout",
+      "range" : [
+        "Layout"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Date of legal work, or promulgation of a law, or signing of a treaty.",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Date of legal work",
+      "name" : "legalDate",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [
+        "date"
+      ],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Title being addressed. Possible title component.",
+      "domain" : [
+        "Title"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Main title",
+      "name" : "mainTitle",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Statement related to the manufacture of the resources; usually transcribed.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Manufacture statement",
+      "name" : "manufactureStatement",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Resource uses, is composed of, integrates, etc. the related material.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Material",
+      "name" : "material",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item"
+      ]
+    },
+    {
+      "definition" : "This material is related to a resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Material of",
+      "name" : "materialOf",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item"
+      ]
+    },
+    {
+      "definition" : "Categorization reflecting the general type of intermediation device required to view, play, run, etc., the content of a resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Media type",
+      "name" : "media",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [
+        "Media",
+        "skos:Concept"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Relates a work to a medium component",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Medium component",
+      "name" : "mediumComponent",
+      "range" : [
+        "MediumComponent"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relates a medium component to a qualifier that affects the medium of component",
+      "domain" : [
+        "MediumComponent"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Medium component qualifier",
+      "name" : "mediumComponentQualifier",
+      "range" : [
+        "MediumComponentQualifer"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relates a work to a musical medium of performance",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Medium of performance",
+      "name" : "mediumOfPerformance",
+      "range" : [
+        "MediumOfPerformance"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "MediumComponent",
+        "Contribution"
+      ]
+    },
+    {
+      "definition" : "One of two or more resources that come together to form a new resource",
+      "domain" : [],
+      "inverse_of" : [
+        "mergerOf"
+      ],
+      "kind" : "object",
+      "label" : "Merged to form",
+      "name" : "mergedToForm",
+      "range" : [],
+      "sub_property_of" : [
+        "succeededBy"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "One of two or more resources which came together to form a new resource",
+      "domain" : [],
+      "inverse_of" : [
+        "mergedToForm"
+      ],
+      "kind" : "object",
+      "label" : "Merger of",
+      "name" : "mergerOf",
+      "range" : [],
+      "sub_property_of" : [
+        "precededBy"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Relates a work to a music mode",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Mode",
+      "name" : "mode",
+      "range" : [
+        "Mode"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Hub"
+      ]
+    },
+    {
+      "definition" : "Physical material or object used for the support or backing to which the base material of a resource has been attached.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Mount material or object",
+      "name" : "mount",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Layout for content of a resource that is presented in the form of musical notation, such as full score, condensed score, vocal score, etc.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Format of notated music",
+      "name" : "musicFormat",
+      "range" : [
+        "MusicFormat"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Pitch and mode for music.",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Music key",
+      "name" : "musicKey",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Instrumental, vocal, and/or other medium of performance for which a musical resource was originally conceived, written or performed.",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Music medium",
+      "name" : "musicMedium",
+      "range" : [
+        "MusicMedium"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Numeric designation of a musical work assigned by a composer, publisher, or a musicologist.",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Music opus number",
+      "name" : "musicOpusNumber",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Numeric designation for musical works consecutively numbered in music reference sources.",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Music serial number",
+      "name" : "musicSerialNumber",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Numeric designation for a musical work as found in a thematic index for the composer.",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Music thematic number",
+      "name" : "musicThematicNumber",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Characterization that epitomizes the primary content of a resource, e.g., field recording of birdsong; combined time series analysis and graph plotting system.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Content nature",
+      "name" : "natureOfContent",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Alphabet, script, or symbol system used to convey the content of the resource, including specialized scripts, typefaces, tactile notation, movement notation, and musical notation.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Notation system",
+      "name" : "notation",
+      "range" : [
+        "Notation"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "General textual information relating to a resource, such as Information about a specific copy of a resource or information about a particular attribute of a resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Note",
+      "name" : "note",
+      "range" : [
+        "Note"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relates a Note resource to the resource to which the note pertains.",
+      "domain" : [
+        "Note"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Note for",
+      "name" : "noteFor",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Type of note.",
+      "domain" : [
+        "Note"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Note type",
+      "name" : "noteType",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relates a medium component to the number of hands required for performance",
+      "domain" : [
+        "MediumComponent"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Number of hands",
+      "name" : "numberOfHands",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Date or date range associated with the creation of a Work.",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Origin date",
+      "name" : "originDate",
+      "range" : [],
+      "sub_property_of" : [
+        "date"
+      ],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Place from which the creation of the resource originated.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Origin place",
+      "name" : "originPlace",
+      "range" : [],
+      "sub_property_of" : [
+        "place"
+      ],
+      "suggested_value" : [
+        "Place",
+        "madsrdf:Geographic"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Resource is the original version of which this resource is a reproduction",
+      "domain" : [],
+      "inverse_of" : [
+        "originalVersionOf"
+      ],
+      "kind" : "object",
+      "label" : "Original version",
+      "name" : "originalVersion",
+      "range" : [],
+      "sub_property_of" : [
+        "derivativeOf"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Original version of a resource",
+      "domain" : [],
+      "inverse_of" : [
+        "originalVersion"
+      ],
+      "kind" : "object",
+      "label" : "Original version of",
+      "name" : "originalVersionOf",
+      "range" : [],
+      "sub_property_of" : [
+        "hasDerivative"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Resource has other available editions, for example simultaneously published language editions or reprints",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "symmetric",
+      "label" : "Other edition",
+      "name" : "otherEdition",
+      "range" : [],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Resource that is manifested in another physical carrier",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "symmetric",
+      "label" : "Has other physical format",
+      "name" : "otherPhysicalFormat",
+      "range" : [
+        "Instance"
+      ],
+      "sub_property_of" : [
+        "hasEquivalent"
+      ],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Coordinate pairs that identify the closed non-intersecting boundary of the area covered.",
+      "domain" : [
+        "Cartographic"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Cartographic outer G ring area covered",
+      "name" : "outerGRing",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Part of a resource to which information applies.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Part",
+      "name" : "part",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Part or section name of a title. Possible title component.",
+      "domain" : [
+        "Title"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Part title",
+      "name" : "partName",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Part or section enumeration of a title. Possible title component.",
+      "domain" : [
+        "Title"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Part number",
+      "name" : "partNumber",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Resource in which the described resource is physically or logically contained",
+      "domain" : [],
+      "inverse_of" : [
+        "hasPart"
+      ],
+      "kind" : "object",
+      "label" : "Is part of",
+      "name" : "partOf",
+      "range" : [],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance",
+        "Item",
+        "Event"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item",
+        "Event"
+      ]
+    },
+    {
+      "definition" : "Pattern of arrangement of materials within a unit.",
+      "domain" : [
+        "CollectionArrangement"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Arrangement of material",
+      "name" : "pattern",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relates a work or instance to a phonogram copyright date for a work that is an audio recording",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Phonogram date",
+      "name" : "phonogramDate",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [
+        "date"
+      ],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Location in the holding agency where the item is shelved or stored.",
+      "domain" : [
+        "Item"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Storing or shelving location",
+      "name" : "physicalLocation",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Geographic location or place entity associated with a resource or element of description, such as the place associated with the publication, printing, distribution, issue, release or production of a resource, place of an event.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Place",
+      "name" : "place",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [
+        "Place",
+        "madsrdf:Geographic"
+      ],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relationship of the colors and tones in an image to the colors and tones of the object reproduced.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Polarity",
+      "name" : "polarity",
+      "range" : [
+        "Polarity"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Resource that precedes the resource being described, e.g., is earlier in time or before in narrative",
+      "domain" : [],
+      "inverse_of" : [
+        "succeededBy"
+      ],
+      "kind" : "object",
+      "label" : "Preceded by",
+      "name" : "precededBy",
+      "range" : [],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Citation to the resource preferred by its custodian of the resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Preferred citation",
+      "name" : "preferredCitation",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Process used to produce a resource.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Production method",
+      "name" : "productionMethod",
+      "range" : [
+        "ProductionMethod"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Statement related to the production of the resources; usually transcribed.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Production statement",
+      "name" : "productionStatement",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Method or system used to represent the surface of the earth or of a celestial sphere on a plane.",
+      "domain" : [
+        "Cartographic"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Cartographic projection",
+      "name" : "projection",
+      "range" : [
+        "Projection"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Technical specification relating to the projection of a motion picture film.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Projection characteristic",
+      "name" : "projectionCharacteristic",
+      "range" : [
+        "ProjectionCharacteristic"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Place, name, and/or date information relating to the publication, printing, distribution, issue, release, production, etc. of a resource.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Provision activity",
+      "name" : "provisionActivity",
+      "range" : [
+        "ProvisionActivity"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Statement relating to providers of a resource; usually transcribed.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Provider statement",
+      "name" : "provisionActivityStatement",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relates a resource to a publication frequency resource to capture such details as first issue, last issue, status, etc.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Publication frequency",
+      "name" : "pubFrequency",
+      "range" : [
+        "PubFrequency"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Statement related to the publication of the resources; usually transcribed.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Publication statement",
+      "name" : "publicationStatement",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Qualifier of information, such as an addition to a title to make it unique or qualifying information associated with an identifier.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Qualifier",
+      "name" : "qualifier",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Size of a micro-image in relation to the original from which it was produced.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Reduction ratio",
+      "name" : "reductionRatio",
+      "range" : [
+        "ReductionRatio"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Resource that references the described resource",
+      "domain" : [],
+      "inverse_of" : [
+        "references"
+      ],
+      "kind" : "object",
+      "label" : "Referenced by",
+      "name" : "referencedBy",
+      "range" : [],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance",
+        "Item"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item"
+      ]
+    },
+    {
+      "definition" : "Resource that is referenced by the described resource",
+      "domain" : [],
+      "inverse_of" : [
+        "referencedBy"
+      ],
+      "kind" : "object",
+      "label" : "References",
+      "name" : "references",
+      "range" : [],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance",
+        "Item"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item"
+      ]
+    },
+    {
+      "definition" : "Any relationship between Work, Instance, Item, and Event resources",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "symmetric",
+      "label" : "Related resource",
+      "name" : "relatedTo",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Associated resource and its relationship to the resource being described",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Relation",
+      "name" : "relation",
+      "range" : [
+        "Relation"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item"
+      ]
+    },
+    {
+      "definition" : "Type of relationship between resources",
+      "domain" : [
+        "Relation"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Relationship",
+      "name" : "relationship",
+      "range" : [
+        "Relationship"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relief term specified on a cartographic resource",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Relief",
+      "name" : "relief",
+      "range" : [
+        "Relief"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Later resource used in place of an earlier resource, usually because the later resource contains updated or new information",
+      "domain" : [],
+      "inverse_of" : [
+        "replacementOf"
+      ],
+      "kind" : "object",
+      "label" : "Replaced by",
+      "name" : "replacedBy",
+      "range" : [],
+      "sub_property_of" : [
+        "succeededBy"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Earlier resource whose content has been replaced by a later resource, usually because the later resource contains updated or new information",
+      "domain" : [],
+      "inverse_of" : [
+        "replacedBy"
+      ],
+      "kind" : "object",
+      "label" : "Replacement of",
+      "name" : "replacementOf",
+      "range" : [],
+      "sub_property_of" : [
+        "precededBy"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Resource that is a reproduction of another Resource",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [
+        "hasReproduction"
+      ],
+      "kind" : "object",
+      "label" : "Reproduction of",
+      "name" : "reproductionOf",
+      "range" : [
+        "Instance"
+      ],
+      "sub_property_of" : [
+        "hasEquivalent"
+      ],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Statement relating to any persons, families, or corporate bodies responsible for the creation of, or contributing to the content of a resource; usually transcribed.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Creative responsibility statement",
+      "name" : "responsibilityStatement",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Review of a resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Review content",
+      "name" : "review",
+      "range" : [
+        "Review"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Function provided by a contributor, e.g., author, illustrator, etc.",
+      "domain" : [
+        "Contribution"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Contributor role",
+      "name" : "role",
+      "range" : [
+        "Role"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Ratio of the dimensions of a form contained or embodied in a resource to the dimensions of the entity it represents, e.g., for images or cartographic resources.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Scale",
+      "name" : "scale",
+      "range" : [
+        "Scale"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Designates whether the classification number is from the standard or optional part of a schedule or table.",
+      "domain" : [
+        "Classification"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Classification designation",
+      "name" : "schedulePart",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Resource that spun off a part of its content to form a new resource",
+      "domain" : [],
+      "inverse_of" : [
+        "continuedInPartBy"
+      ],
+      "kind" : "object",
+      "label" : "Separated from",
+      "name" : "separatedFrom",
+      "range" : [],
+      "sub_property_of" : [
+        "precededBy"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Series enumeration of the resource; usually transcribed.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Series enumeration",
+      "name" : "seriesEnumeration",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Relation between a larger resource and the resources it encompasses, forming a series, the title of the larger resource appears on the parts",
+      "domain" : [],
+      "inverse_of" : [
+        "hasSeries"
+      ],
+      "kind" : "object",
+      "label" : "Series container of",
+      "name" : "seriesOf",
+      "range" : [],
+      "sub_property_of" : [
+        "hasPart"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Statement of the series the resource is in; usually transcribed; includes the ISSN if applicable.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Series statement",
+      "name" : "seriesStatement",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Piece identifier, such as a call or other type of number.",
+      "domain" : [
+        "Item"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Shelf mark",
+      "name" : "shelfMark",
+      "range" : [
+        "ShelfMark"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Technical specification relating to the encoding of sound in a resource.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Sound characteristic",
+      "name" : "soundCharacteristic",
+      "range" : [
+        "SoundCharacteristic"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Indication of whether the production of sound is an integral part of the resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Sound content",
+      "name" : "soundContent",
+      "range" : [
+        "SoundContent"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Resource from which value or label came or was derived, such as the formal source/scheme from which a classification number is taken or derived, list from which an agent name is taken or derived, source within which an identifier is unique.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Source",
+      "name" : "source",
+      "range" : [
+        "Source"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Ending number of classification number span.",
+      "domain" : [
+        "Classification"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Classification number span end",
+      "name" : "spanEnd",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "One of two or more resources resulting from the division of an earlier resource into separate resources",
+      "domain" : [],
+      "inverse_of" : [
+        "continuesInPart"
+      ],
+      "kind" : "object",
+      "label" : "Split into",
+      "name" : "splitInto",
+      "range" : [],
+      "sub_property_of" : [
+        "succeededBy"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Designation of the validity or position of something, such as indication that the classification number is canceled or invalid, circulation availability of an item, indication of whether the identifier is canceled or invalid.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Status",
+      "name" : "status",
+      "range" : [
+        "Status"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Subject term(s) describing a resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Subject",
+      "name" : "subject",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [
+        "Agent",
+        "Topic",
+        "Hub"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item",
+        "Event"
+      ]
+    },
+    {
+      "definition" : "Relates a subject to that which it describes.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Subject of",
+      "name" : "subjectOf",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [
+        "Work",
+        "Instance",
+        "Item",
+        "Event"
+      ],
+      "used_with" : [
+        "Agent",
+        "Topic",
+        "Hub"
+      ]
+    },
+    {
+      "definition" : "Specific place within the holding entity where the item is located or made available.",
+      "domain" : [
+        "Item"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Held in sublocation",
+      "name" : "sublocation",
+      "range" : [
+        "Sublocation"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Subseries enumeration of the resource; usually transcribed.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Subseries enumeration",
+      "name" : "subseriesEnumeration",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relation between a Series resource and the resources it encompasses, forming a Subseries; the Series resource itself has a relation with a larger resource, of which it is a part",
+      "domain" : [],
+      "inverse_of" : [
+        "hasSubseries"
+      ],
+      "kind" : "object",
+      "label" : "Subseries of",
+      "name" : "subseriesOf",
+      "range" : [],
+      "sub_property_of" : [
+        "hasPart"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Statement of the subseries the resource is in; usually transcribed; includes the ISSN if applicable.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Subseries statement",
+      "name" : "subseriesStatement",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Word, character, or group of words and/or characters that contains the remainder of the title after the main title. Possible title component.",
+      "domain" : [
+        "Title"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Subtitle",
+      "name" : "subtitle",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Resource that succeeds the resource being described, e.g., later in time or after in a narrative",
+      "domain" : [],
+      "inverse_of" : [
+        "precededBy"
+      ],
+      "kind" : "object",
+      "label" : "Succeeded by",
+      "name" : "succeededBy",
+      "range" : [],
+      "sub_property_of" : [
+        "relatedTo"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Summary or abstract of the resource described.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Summary content",
+      "name" : "summary",
+      "range" : [
+        "Summary"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Resource that updates or otherwise complements the predominant resource",
+      "domain" : [],
+      "inverse_of" : [
+        "supplementTo"
+      ],
+      "kind" : "object",
+      "label" : "Supplement",
+      "name" : "supplement",
+      "range" : [],
+      "sub_property_of" : [
+        "accompaniedBy"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Resource that is updated or otherwise complemented by the augmenting resource",
+      "domain" : [],
+      "inverse_of" : [
+        "supplement"
+      ],
+      "kind" : "object",
+      "label" : "Supplement to",
+      "name" : "supplementTo",
+      "range" : [],
+      "sub_property_of" : [
+        "accompanies"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Material such as an index, bibliography, appendix intended to supplement the primary content of a resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Supplementary material",
+      "name" : "supplementaryContent",
+      "range" : [
+        "SupplementaryContent"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Equipment or system requirement beyond what is normal and obvious for the type of carrier or type of file, such as make and model of equipment or hardware, operating system, amount of memory, programming language, other necessary software, any plug-ins or peripherals required to play, view, or run the resource, etc.",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Equipment or system requirements",
+      "name" : "systemRequirement",
+      "range" : [
+        "SystemRequirement"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Number of the table from which the classification number in a subdivision entry is taken, e.g., a DDC table.",
+      "domain" : [
+        "Classification"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Classification table identification",
+      "name" : "table",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Table of contents of the described resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Table of contents content",
+      "name" : "tableOfContents",
+      "range" : [
+        "TableOfContents"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Sequence number or other identifier for an internal classification sub arrangement or add in a classification scheme.",
+      "domain" : [
+        "Classification"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Classification table sequence number",
+      "name" : "tableSeq",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Relates a work to a music tempo",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Tempo",
+      "name" : "tempo",
+      "range" : [
+        "Tempo"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Hub"
+      ]
+    },
+    {
+      "definition" : "Time period coverage of the content of the resource.",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Temporal coverage",
+      "name" : "temporalCoverage",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Name given to a resource.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Title resource",
+      "name" : "title",
+      "range" : [
+        "Title"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item",
+        "Event"
+      ]
+    },
+    {
+      "definition" : "Relates a title resource to that which it is the title of.",
+      "domain" : [
+        "Title"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Title of",
+      "name" : "titleOf",
+      "range" : [],
+      "sub_property_of" : [],
+      "suggested_value" : [
+        "Work",
+        "Instance",
+        "Item",
+        "Event"
+      ],
+      "used_with" : []
+    },
+    {
+      "definition" : "Resource that translates the text of the source entity into a language different from that of the original",
+      "domain" : [],
+      "inverse_of" : [
+        "translationOf"
+      ],
+      "kind" : "object",
+      "label" : "Translation as",
+      "name" : "translation",
+      "range" : [],
+      "sub_property_of" : [
+        "hasDerivative"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Resource that has been translated, i.e., the text is expressed in a language different from that of the original resource",
+      "domain" : [],
+      "inverse_of" : [
+        "translation"
+      ],
+      "kind" : "object",
+      "label" : "Translation of",
+      "name" : "translationOf",
+      "range" : [],
+      "sub_property_of" : [
+        "derivativeOf"
+      ],
+      "suggested_value" : [
+        "Work",
+        "Instance"
+      ],
+      "used_with" : [
+        "Work",
+        "Instance"
+      ]
+    },
+    {
+      "definition" : "Units in which a value is expressed, such as the physical or logical constituent of a resource (e.g., a volume, audiocassette, film reel, a map, a digital file).",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Type of unit",
+      "name" : "unit",
+      "range" : [
+        "Unit"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "General statement of allowances and restrictions on access to a resource, including retention, reproduction, access, and lending.",
+      "domain" : [],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Use and access condition",
+      "name" : "usageAndAccessPolicy",
+      "range" : [
+        "UsageAndAccessPolicy"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : [
+        "Work",
+        "Instance",
+        "Item"
+      ]
+    },
+    {
+      "definition" : "The medium of performance used by a contributing agent",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Uses medium of performance",
+      "name" : "usesMediumOfPerformance",
+      "range" : [
+        "MediumOfPerformance"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "The date or date range during which the resource is accurate.",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Valid date",
+      "name" : "validDate",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [
+        "date"
+      ],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Type of title variation, e.g., acronym, cover, spine, earlier, later, series version.",
+      "domain" : [
+        "VariantTitle"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Variant title type",
+      "name" : "variantType",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Term or terms that identify works such as arranged for music, vulgate for religious work, etc.",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Version",
+      "name" : "version",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Technical specification relating to the encoding of video images in a resource",
+      "domain" : [
+        "Instance"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Video characteristic",
+      "name" : "videoCharacteristic",
+      "range" : [
+        "VideoCharacteristic"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Voice for which a musical work is appropriate, such as soprano, tenor, mixed.",
+      "domain" : [
+        "Work"
+      ],
+      "inverse_of" : [],
+      "kind" : "object",
+      "label" : "Voice",
+      "name" : "voice",
+      "range" : [
+        "MusicVoice"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    },
+    {
+      "definition" : "Specific type of voice group, such as chorus, solo.",
+      "domain" : [
+        "MusicVoice"
+      ],
+      "inverse_of" : [],
+      "kind" : "datatype",
+      "label" : "Type of voice",
+      "name" : "voiceType",
+      "range" : [
+        "http://www.w3.org/2000/01/rdf-schema#Literal"
+      ],
+      "sub_property_of" : [],
+      "suggested_value" : [],
+      "used_with" : []
+    }
+  ],
+  "source" : {
+    "issued" : "2025-12-03T12:00:00.000-05:00",
+    "sha256" : "bac76ca817071521f8ef6e49a71cc2044d4ff4b019e7b7fefa1f5847ec6c69ca",
+    "url" : "https://id.loc.gov/ontologies/bibframe.rdf",
+    "version" : "3.0.1",
+    "version_iri" : "http://id.loc.gov/ontologies/bibframe-3-0-1/"
+  }
+}
