@@ -229,7 +229,8 @@ pub fn check(subject: EntityKind, statements: &[Statement]) -> Result<(), Statem
             });
         }
     }
-    check_level(statements, 1, &mut count)
+    // The subject's own statements are level 0: only nested resources count.
+    check_level(statements, 0, &mut count)
 }
 
 /// Whether `statement` is a title other than the preferred one: a `bf:VariantTitle` or one
@@ -531,9 +532,15 @@ mod tests {
     #[test]
     fn limits_are_enforced() {
         let mut deep = resource("Work", vec![]);
-        for _ in 0..MAX_DEPTH {
+        for _ in 1..MAX_DEPTH {
             deep = resource("Work", vec![statement("hasPart", deep)]);
         }
+        // MAX_DEPTH nested resources are allowed; one more is refused.
+        assert_eq!(
+            check(EntityKind::Work, &[statement("hasPart", deep.clone())]),
+            Ok(())
+        );
+        deep = resource("Work", vec![statement("hasPart", deep)]);
         assert_eq!(
             check(EntityKind::Work, &[statement("hasPart", deep)]),
             Err(StatementRefusal::TooLarge)

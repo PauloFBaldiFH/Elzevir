@@ -14,6 +14,983 @@ work_description:
         Concept:
           scheme: contentTypes
           code: txt
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da física
+                                  language: ~
+                    - property: contribution
+                      value:
+                        Resource:
+                          class: Contribution
+                          label: ~
+                          statements:
+                            - property: agent
+                              value:
+                                Resource:
+                                  class: Agent
+                                  label: "Ramalho Júnior, Francisco"
+                                  statements: []
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: editionStatement
+                              value:
+                                Literal:
+                                  text: 7. ed
+                                  language: ~
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "153256"
+                                  statements: []
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da física
+                                  language: ~
+                    - property: contribution
+                      value:
+                        Resource:
+                          class: Contribution
+                          label: ~
+                          statements:
+                            - property: agent
+                              value:
+                                Resource:
+                                  class: Agent
+                                  label: "Ramalho Júnior, Francisco"
+                                  statements: []
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: editionStatement
+                              value:
+                                Literal:
+                                  text: 8. ed
+                                  language: ~
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "210593"
+                                  statements: []
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da física
+                                  language: ~
+                    - property: contribution
+                      value:
+                        Resource:
+                          class: Contribution
+                          label: ~
+                          statements:
+                            - property: agent
+                              value:
+                                Resource:
+                                  class: Agent
+                                  label: "Ramalho Júnior, Francisco"
+                                  statements: []
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: editionStatement
+                              value:
+                                Literal:
+                                  text: 4. ed
+                                  language: ~
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "185231"
+                                  statements: []
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da física
+                                  language: ~
+                    - property: contribution
+                      value:
+                        Resource:
+                          class: Contribution
+                          label: ~
+                          statements:
+                            - property: agent
+                              value:
+                                Resource:
+                                  class: Agent
+                                  label: "Ramalho Júnior, Francisco"
+                                  statements: []
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: editionStatement
+                              value:
+                                Literal:
+                                  text: 9. ed
+                                  language: ~
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "218876"
+                                  statements: []
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da física
+                                  language: ~
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: editionStatement
+                              value:
+                                Literal:
+                                  text: 2. ed
+                                  language: ~
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "183425"
+                                  statements: []
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da física
+                                  language: ~
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: editionStatement
+                              value:
+                                Literal:
+                                  text: 3. ed
+                                  language: ~
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "162156"
+                                  statements: []
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da fisica
+                                  language: ~
+                    - property: contribution
+                      value:
+                        Resource:
+                          class: Contribution
+                          label: ~
+                          statements:
+                            - property: agent
+                              value:
+                                Resource:
+                                  class: Agent
+                                  label: "Ramalho Júnior, Francisco"
+                                  statements: []
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: editionStatement
+                              value:
+                                Literal:
+                                  text: 3. ed
+                                  language: ~
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "162102"
+                                  statements: []
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da física
+                                  language: ~
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: editionStatement
+                              value:
+                                Literal:
+                                  text: 3. ed
+                                  language: ~
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "183506"
+                                  statements: []
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da física
+                                  language: ~
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: editionStatement
+                              value:
+                                Literal:
+                                  text: 4. ed
+                                  language: ~
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "182827"
+                                  statements: []
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da física
+                                  language: ~
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: editionStatement
+                              value:
+                                Literal:
+                                  text: 5. ed
+                                  language: ~
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "190968"
+                                  statements: []
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da física
+                                  language: ~
+                    - property: contribution
+                      value:
+                        Resource:
+                          class: Contribution
+                          label: ~
+                          statements:
+                            - property: agent
+                              value:
+                                Resource:
+                                  class: Agent
+                                  label: "Ramalho Júnior, Francisco"
+                                  statements: []
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: editionStatement
+                              value:
+                                Literal:
+                                  text: 5. ed
+                                  language: ~
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "183519"
+                                  statements: []
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da física
+                                  language: ~
+                    - property: contribution
+                      value:
+                        Resource:
+                          class: Contribution
+                          label: ~
+                          statements:
+                            - property: agent
+                              value:
+                                Resource:
+                                  class: Agent
+                                  label: "Ramalho Júnior, Francisco"
+                                  statements: []
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: editionStatement
+                              value:
+                                Literal:
+                                  text: 5. ed
+                                  language: ~
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "188935"
+                                  statements: []
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da física
+                                  language: ~
+                    - property: contribution
+                      value:
+                        Resource:
+                          class: Contribution
+                          label: ~
+                          statements:
+                            - property: agent
+                              value:
+                                Resource:
+                                  class: Agent
+                                  label: "Ramalho Júnior, Francisco"
+                                  statements: []
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: editionStatement
+                              value:
+                                Literal:
+                                  text: 6. ed
+                                  language: ~
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "125982"
+                                  statements: []
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da física
+                                  language: ~
+                    - property: contribution
+                      value:
+                        Resource:
+                          class: Contribution
+                          label: ~
+                          statements:
+                            - property: agent
+                              value:
+                                Resource:
+                                  class: Agent
+                                  label: "Ramalho Júnior, Francisco"
+                                  statements: []
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: editionStatement
+                              value:
+                                Literal:
+                                  text: 7. ed
+                                  language: ~
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "205318"
+                                  statements: []
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da física
+                                  language: ~
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "265533"
+                                  statements: []
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da física
+                                  language: ~
+                    - property: contribution
+                      value:
+                        Resource:
+                          class: Contribution
+                          label: ~
+                          statements:
+                            - property: agent
+                              value:
+                                Resource:
+                                  class: Agent
+                                  label: "Ramalho Júnior, Francisco"
+                                  statements: []
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: editionStatement
+                              value:
+                                Literal:
+                                  text: 5.ed
+                                  language: ~
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "146955"
+                                  statements: []
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da física
+                                  language: ~
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "176592"
+                                  statements: []
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da física
+                                  language: ~
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: editionStatement
+                              value:
+                                Literal:
+                                  text: 2.ed
+                                  language: ~
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "176595"
+                                  statements: []
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: otheredition
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Os fundamentos da física
+                                  language: ~
+                    - property: contribution
+                      value:
+                        Resource:
+                          class: Contribution
+                          label: ~
+                          statements:
+                            - property: agent
+                              value:
+                                Resource:
+                                  class: Agent
+                                  label: "Ramalho Júnior, Francisco"
+                                  statements: []
+                    - property: hasInstance
+                      value:
+                        Resource:
+                          class: Instance
+                          label: ~
+                          statements:
+                            - property: editionStatement
+                              value:
+                                Literal:
+                                  text: 7. ed. rev. e ampl
+                                  language: ~
+                            - property: identifiedBy
+                              value:
+                                Resource:
+                                  class: Local
+                                  label: "199864"
+                                  statements: []
 hub: ~
 relations: []
 classification: "530.07"

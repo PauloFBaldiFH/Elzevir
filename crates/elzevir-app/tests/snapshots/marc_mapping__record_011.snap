@@ -14,6 +14,39 @@ work_description:
         Concept:
           scheme: contentTypes
           code: txt
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: series
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Hub
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: Grandes vultos que honraram o Senado
+                                  language: ~
+            - property: seriesEnumeration
+              value:
+                Literal:
+                  text: "3"
+                  language: ~
 hub: ~
 relations: []
 classification: "320.089"

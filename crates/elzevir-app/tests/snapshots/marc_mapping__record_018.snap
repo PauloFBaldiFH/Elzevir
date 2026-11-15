@@ -14,6 +14,34 @@ work_description:
         Concept:
           scheme: contentTypes
           code: txt
+    - property: relation
+      value:
+        Resource:
+          class: Relation
+          label: ~
+          statements:
+            - property: relationship
+              value:
+                Concept:
+                  scheme: relationship
+                  code: part
+            - property: associatedResource
+              value:
+                Resource:
+                  class: Work
+                  label: ~
+                  statements:
+                    - property: title
+                      value:
+                        Resource:
+                          class: Title
+                          label: ~
+                          statements:
+                            - property: mainTitle
+                              value:
+                                Literal:
+                                  text: A Democracia norte-americana e o negro
+                                  language: ~
 hub: ~
 relations: []
 classification: "301.451"
