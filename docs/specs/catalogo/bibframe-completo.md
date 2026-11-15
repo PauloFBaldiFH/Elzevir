@@ -119,6 +119,26 @@ A diretriz, em quatro frases:
 22. A política de circulação é cadastro da circulação (Fase 3: prazo, renovações, multa), com nome legível. A descrição bibliográfica não a conhece além da ligação do item 21.
 23. A tela `/equipe/admin/codigos` e a tabela de tipos de item ([tabelas de códigos](tabelas-de-codigos.md)) são retiradas na etapa 4. No lugar entram as telas de Unidades, Localizações e Coleções, só com nomes.
 
+### Etapa 4 em partes
+
+A etapa 4 mexe em tudo o que o exemplar aponta, então sai em quatro PRs. O critério de todos é o mesmo: **a exportação MARC dos registros do oráculo sai byte a byte igual à de antes**.
+
+23a. **Tabela da borda** (`koha_codes`: tipo, id interno, código do Koha). É o único lugar onde ficam `MAIN`, `GEN`, `BK` e semelhantes. Só a importação e a exportação MARC e o comando `elzevir koha-codes` a leem; domínio, comandos da tela e telas não a veem.
+23b. **Parte 4a, unidades, localizações e coleções.**
+    - `branches` deixa de ter `code`; ganha os dados de contato do `bf:Organization` (endereço, telefone, e-mail, página), todos opcionais. O código antigo vai para a tabela da borda.
+    - `sublocations` e `collections`: id gerado, unidade e nome, com nome único dentro da unidade. O exemplar aponta o id. Os termos `Location` e `Collection` de hoje viram uma linha por unidade que os usa, com o código antigo na borda.
+    - Os comandos do exemplar (`ItemData`) passam a levar ids de unidade, localização e coleção. A localização e a coleção têm de ser da unidade de origem do exemplar; senão o comando recusa.
+    - A importação MARC resolve `952 $a`, `$b`, `$c` e `$8` pela borda. Código de localização ou coleção ainda não visto numa unidade cria a linha com o código como nome provisório (o `koha-codes` ou a tela dão o nome depois). Unidade desconhecida continua recusada.
+23c. **Parte 4b, política de circulação no lugar do tipo de item.**
+    - `circulation_policies`: id gerado e nome. Nesta fase é só o cadastro e a ligação; prazo, renovações e multa entram na Fase 3 (item 22).
+    - O exemplar aponta a política (`bf:usageAndAccessPolicy`), obrigatória. `item_types` e a coluna `items.item_type` saem.
+    - A migração cria uma política por tipo de item, com o mesmo nome, e guarda o código do tipo na borda (`952 $y`, `942 $c`). Gênero, público e classe que o nome do tipo dizia vão para a Obra e a Instância pela tabela do item 32, **depois de revisada por Paulo**; onde o registro de origem diz outra coisa, vale o registro.
+    - A importação resolve `952 $y` (ou `942 $c`) pela borda; código desconhecido continua recusado.
+23d. **Parte 4c, telas.** Saem `/equipe/admin/codigos` e a tabela de tipos. Entram Unidades (nome e contato), e dentro de cada unidade as listas de Localizações e Coleções, e Políticas de circulação: só nomes, criar, renomear e apagar o que não está em uso. A grade de exemplares mostra caixas de seleção com esses nomes; a de localização e a de coleção mostram só as da unidade escolhida.
+23e. **Parte 4d, `elzevir koha-codes`.** Continua lendo os nomes do Koha, mas grava pelos cadastros novos: acha a linha pelo código na borda e lhe dá o nome; código que não existe aqui cria a linha e a entrada da borda. Tipos de item do Koha viram nomes de políticas.
+23f. Renomear unidade, localização, coleção ou política não muda registro nenhum (o exemplar guarda o id), mas limpa as páginas guardadas do OPAC, como a tela de códigos já faz.
+23g. Apagar unidade, localização, coleção ou política em uso é recusado, com a contagem de exemplares que a usam.
+
 ### Formulários
 
 24. O formulário de cada entidade mostra **todas** as propriedades aplicáveis a ela, sempre, agrupadas em seções fixas na ordem da ontologia (título, conteúdo, contribuições, assuntos, classificação, relações, notas, metadados administrativos; para a Instância: título, responsabilidade, edição, provisão, descrição física, mídia e suporte, identificadores, série, notas, localizador eletrônico, metadados administrativos).
