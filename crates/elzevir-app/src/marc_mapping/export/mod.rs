@@ -21,6 +21,7 @@ use crate::catalog::{
 };
 
 mod admin;
+mod books;
 mod classification;
 mod coded;
 mod content;
@@ -88,6 +89,11 @@ pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record 
     content::write(&mut out, &model.work_description);
     physical::write(&mut out, &model.instance.description);
     admin::write(&mut out, &model.instance.description);
+    books::write(
+        &mut out,
+        &model.work_description,
+        before.as_ref().map(|b| &b.work_description),
+    );
     fixed::write(
         &mut out,
         &model.work_description,

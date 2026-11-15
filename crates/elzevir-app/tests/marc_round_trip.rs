@@ -283,10 +283,63 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     ),
     ("008/11-14 fill", 80, Gap::Fill),
     (
-        "008/18-34",
-        200,
-        Gap::Pending("positions of the material not mapped"),
+        "008/18-21",
+        4,
+        Gap::Source("hyphens as fill characters; a field out of place"),
     ),
+    ("008/18-21 fill", 80, Gap::Fill),
+    ("008/22", 2, Gap::Source("a hyphen as fill character")),
+    ("008/22 fill", 81, Gap::Fill),
+    (
+        "008/23",
+        16,
+        Gap::Pending(
+            "form of item r (regular print reproduction) not kept, and the LC way back \
+             never writes it; hyphens as fill characters",
+        ),
+    ),
+    ("008/23 fill", 81, Gap::Fill),
+    (
+        "008/24-27",
+        6,
+        Gap::Pending(
+            "a biography also gives h and law codes come back as g, as the LC way back \
+             writes them; hyphens and a field out of place in the source",
+        ),
+    ),
+    ("008/24-27 fill", 81, Gap::Fill),
+    (
+        "008/28",
+        4,
+        Gap::Pending("government publication: only an LC extension (bflc) holds it"),
+    ),
+    ("008/28 fill", 81, Gap::Fill),
+    (
+        "008/29-31",
+        8,
+        Gap::Source("blanks where a book takes 0 or 1; a field out of place"),
+    ),
+    ("008/29-31 fill", 80, Gap::Fill),
+    (
+        "008/32",
+        5,
+        Gap::Source("the undefined position filled; a field out of place"),
+    ),
+    (
+        "008/33",
+        4,
+        Gap::Source("blank where a book takes a code; a field out of place"),
+    ),
+    ("008/33 fill", 82, Gap::Fill),
+    (
+        "008/34",
+        15,
+        Gap::Pending(
+            "d (contains biographical information): the LC conversion does not read it; \
+             fields out of place",
+        ),
+    ),
+    ("008/34 fill", 80, Gap::Fill),
     (
         "008/35-37",
         4,
@@ -654,22 +707,32 @@ fn field_differences(original: &[Field], written: &[Field], tag: [u8; 3]) -> Vec
 
 /// What differs between `original` and `written`, by the keys of [`KNOWN_DIFFERENCES`].
 /// The groups of `008` positions of a book, as the conversions of the LC read them: date
-/// entered, type of date, the two dates, place, the positions of the material, language,
-/// modified record and cataloguing source.
-const FIXED_GROUPS: [(usize, usize); 9] = [
+/// entered, type of date, the two dates, place, illustrations, target audience, form of
+/// item, nature of contents, government publication, conference, festschrift and index,
+/// undefined, literary form, biography, language, modified record and cataloguing source.
+const FIXED_GROUPS: [(usize, usize); 17] = [
     (0, 6),
     (6, 7),
     (7, 11),
     (11, 15),
     (15, 18),
-    (18, 35),
+    (18, 22),
+    (22, 23),
+    (23, 24),
+    (24, 28),
+    (28, 29),
+    (29, 32),
+    (32, 33),
+    (33, 34),
+    (34, 35),
     (35, 38),
     (38, 39),
     (39, 40),
 ];
 
 /// What differs in `008`, by group of positions (`008/35-37`); `fill` after the key when
-/// the source holds only fill characters there (`|`, no attempt to code), and `length`
+/// the source holds only fill characters there (`|`, no attempt to code, or blank where
+/// the format defines nothing), and `length`
 /// when the source field does not have its 40 positions.
 fn fixed_differences(original: &Record, written: &Record) -> Vec<String> {
     let value = |record: &Record| match tags(record, *b"008").first() {
@@ -692,11 +755,14 @@ fn fixed_differences(original: &Record, written: &Record) -> Vec<String> {
         } else {
             format!("008/{start:02}-{:02}", end - 1)
         };
-        found.push(if !one.is_empty() && one.iter().all(|b| *b == b'|') {
-            format!("{key} fill")
-        } else {
-            key
-        });
+        // A fill character in every position the format defines (`32` is undefined).
+        found.push(
+            if one.contains(&b'|') && one.iter().all(|b| matches!(b, b'|' | b' ')) {
+                format!("{key} fill")
+            } else {
+                key
+            },
+        );
     }
     found
 }

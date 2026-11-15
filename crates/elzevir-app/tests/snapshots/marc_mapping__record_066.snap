@@ -991,6 +991,11 @@ work_description:
                                   class: Local
                                   label: "199864"
                                   statements: []
+    - property: illustrativeContent
+      value:
+        Concept:
+          scheme: millus
+          code: ill
     - property: classification
       value:
         Resource:

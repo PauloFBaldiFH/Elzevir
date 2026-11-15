@@ -221,6 +221,7 @@ pub fn check(subject: EntityKind, statements: &[Statement]) -> Result<(), Statem
             && !is_language_part(statement)
             && !is_coded_publication(statement)
             && !is_described_classification(statement)
+            && !is_coded_audience(statement)
         {
             return Err(StatementRefusal::Typed(statement.property.clone()));
         }
@@ -275,6 +276,14 @@ pub fn is_described_classification(statement: &Statement) -> bool {
     statement.property == "classification"
         && matches!(&statement.value, Value::Resource(classification)
             if bibframe::is_a(&classification.class, "Classification"))
+}
+
+/// Whether `statement` is a coded target audience, a concept of the MARC list
+/// (bibframe-completo.md, item 29, part 5f), as `008/22` gives it. The audience as written
+/// has its own field.
+#[must_use]
+pub fn is_coded_audience(statement: &Statement) -> bool {
+    statement.property == "intendedAudience" && matches!(&statement.value, Value::Concept { .. })
 }
 
 /// Whether `statement` is the coded publication (bibframe-completo.md, item 29, part 5e): a
@@ -436,6 +445,17 @@ mod tests {
             label: None,
             statements,
         })
+    }
+
+    #[test]
+    fn a_coded_audience_is_a_statement_and_a_written_one_is_not() {
+        let coded = [statement("intendedAudience", concept("maudience", "juv"))];
+        assert_eq!(check(EntityKind::Work, &coded), Ok(()));
+        let written = [statement("intendedAudience", literal("Infantil"))];
+        assert_eq!(
+            check(EntityKind::Work, &written),
+            Err(StatementRefusal::Typed("intendedAudience".to_owned()))
+        );
     }
 
     #[test]

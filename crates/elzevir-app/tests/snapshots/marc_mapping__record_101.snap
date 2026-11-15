@@ -30,6 +30,11 @@ work_description:
                 Literal:
                   text: original
                   language: ~
+    - property: illustrativeContent
+      value:
+        Concept:
+          scheme: millus
+          code: ill
     - property: classification
       value:
         Resource:

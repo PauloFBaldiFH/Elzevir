@@ -5,6 +5,7 @@
 //! Everything it does not map stays in the preserved source record.
 
 mod admin;
+mod books;
 mod classification;
 mod content;
 mod description;
@@ -199,6 +200,15 @@ pub fn source_classification(source: &[u8]) -> Option<(Vec<Statement>, Vec<State
     let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
     let record = Record::from_ref(&parsed);
     Some((classification::of_work(&Marc(&record)), Vec::new()))
+}
+
+/// The statements of the Work that `008/18-34` of a book codes, of a stored source record,
+/// for records stored before the model read them (bibframe-completo.md, item 29, part 5f).
+#[must_use]
+pub fn source_books(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>)> {
+    let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
+    let record = Record::from_ref(&parsed);
+    Some((books::of_work(&Marc(&record)), Vec::new()))
 }
 
 /// The description conventions Leader/18 of a stored source record names, for records
