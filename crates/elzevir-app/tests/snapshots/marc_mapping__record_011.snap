@@ -88,6 +88,11 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: responsibilityStatement
+        value:
+          Literal:
+            text: "Senado Federal, Subsecretaria de Edições Técnicas"
+            language: ~
       - property: note
         value:
           Resource:

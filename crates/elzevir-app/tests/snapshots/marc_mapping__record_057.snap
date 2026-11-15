@@ -48,6 +48,11 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: responsibilityStatement
+        value:
+          Literal:
+            text: João-Francisco Duarte Jr
+            language: ~
       - property: note
         value:
           Resource:

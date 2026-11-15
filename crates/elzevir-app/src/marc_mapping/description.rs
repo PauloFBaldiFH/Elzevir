@@ -17,6 +17,7 @@ use super::notes;
 use super::physical;
 use super::provision;
 use super::relations;
+use super::responsibility;
 use super::titles::{self, Owner};
 use crate::description::concept;
 
@@ -55,6 +56,7 @@ pub(super) fn instance(marc: &Marc<'_>) -> Description {
     statements.extend(coded(marc, *b"337", "media", "mediaTypes"));
     statements.extend(coded(marc, *b"338", "carrier", "carriers"));
     statements.extend(titles::of_owner(marc, Owner::Instance));
+    statements.extend(responsibility::of_instance(marc));
     statements.extend(notes::of_owner(marc, Owner::Instance));
     statements.extend(provision::of_instance(marc));
     // A copyright date that `264` already gave is not repeated from `008`.

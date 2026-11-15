@@ -103,6 +103,11 @@ instance:
           Concept:
             scheme: carriers
             code: nc
+      - property: responsibilityStatement
+        value:
+          Literal:
+            text: Eli Ginzberg e Alfred S. Eichner ; tradução de J.L. Mello
+            language: ~
       - property: provisionActivity
         value:
           Resource:

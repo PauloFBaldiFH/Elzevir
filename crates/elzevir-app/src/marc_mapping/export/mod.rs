@@ -11,7 +11,7 @@ use elzevir_marc::{Field, Record, Subfield, Tag};
 use super::instance::{IDENTIFIER_TAGS, NOTE_TAGS, identifier_of, note_of};
 use super::items::{defaults, item_of};
 use super::work::{CONTRIBUTION_TAGS, SUBJECT_TAGS, contribution_of, subject_of};
-use super::{DataField, Marc, marc_to_bibframe};
+use super::{DataField, Marc, marc_to_bibframe, responsibility};
 use crate::catalog::{ItemData, NewContribution, NewIdentifier, NewNote, NewRecord, NewSubject};
 
 mod admin;
@@ -130,15 +130,12 @@ fn set_instance_material_type(out: &mut Record, material_type: Option<MaterialTy
 
 fn write_titles(out: &mut Record, model: &NewRecord, before: Option<&NewRecord>) {
     let instance = &model.instance;
-    if before.is_none_or(|b| b.instance.title != instance.title) {
-        let (main, rest) = match instance.title.split_once(" : ") {
-            Some((main, rest)) => (main, Some(rest)),
-            None => (instance.title.as_str(), None),
-        };
-        set_subfield(out, *b"245", *b"10", b'a', Some(main));
-        set_subfield(out, *b"245", *b"10", b'b', rest);
-        set_subfield(out, *b"245", *b"10", b'n', None);
-        set_subfield(out, *b"245", *b"10", b'p', None);
+    let statement = responsibility::of_description(&instance.description);
+    if before.is_none_or(|b| {
+        b.instance.title != instance.title
+            || responsibility::of_description(&b.instance.description) != statement
+    }) {
+        write_245(out, model, statement);
     }
     if before.is_none_or(|b| b.work_title != model.work_title) {
         let main_title = instance.title.split(" : ").next().unwrap_or_default();
@@ -192,6 +189,50 @@ fn write_titles(out: &mut Record, model: &NewRecord, before: Option<&NewRecord>)
             _ => *b"082",
         };
         set_subfield(out, tag, *b"04", b'a', model.classification.as_deref());
+    }
+}
+
+/// The `245` with the ISBD punctuation of the LC way back: ` :` before the subtitle, ` /`
+/// before the statement of responsibility and a period at the end of `$b` or `$c`. The
+/// first indicator says whether the title is an added entry: it is when the Work has a main
+/// entry or a preferred title of its own; the second (characters to ignore) has no source
+/// in the model and is `0`.
+fn write_245(out: &mut Record, model: &NewRecord, statement: Option<&str>) {
+    let title = model.instance.title.as_str();
+    let (main, rest) = match title.split_once(" : ") {
+        Some((main, rest)) => (main, Some(rest)),
+        None => (title, None),
+    };
+    let added = model.contributions.iter().any(|c| c.primary) || model.work_title != main;
+    let indicators = [if added { b'1' } else { b'0' }, b'0'];
+    let main = match (rest, statement) {
+        (Some(_), _) => format!("{main} :"),
+        (None, Some(_)) => format!("{main} /"),
+        (None, None) => main.to_owned(),
+    };
+    let rest = rest.map(|rest| match statement {
+        Some(_) => format!("{rest} /"),
+        None => closed(rest),
+    });
+    set_subfield(out, *b"245", indicators, b'a', Some(&main));
+    set_subfield(out, *b"245", indicators, b'b', rest.as_deref());
+    set_subfield(
+        out,
+        *b"245",
+        indicators,
+        b'c',
+        statement.map(closed).as_deref(),
+    );
+    set_subfield(out, *b"245", indicators, b'n', None);
+    set_subfield(out, *b"245", indicators, b'p', None);
+}
+
+/// `text` ending with a period, unless it already ends with one.
+fn closed(text: &str) -> String {
+    if text.ends_with('.') {
+        text.to_owned()
+    } else {
+        format!("{text}.")
     }
 }
 

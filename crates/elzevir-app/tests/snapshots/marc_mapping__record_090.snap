@@ -59,6 +59,11 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: responsibilityStatement
+        value:
+          Literal:
+            text: Camila Camargo
+            language: ~
       - property: note
         value:
           Resource:
