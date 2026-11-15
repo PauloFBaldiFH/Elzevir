@@ -1,5 +1,7 @@
 # Interface BIBFRAME: listagem, catalogação e exemplares (especificação conceitual)
 
+> **Atenção (2026-11-14):** a diretriz de BIBFRAME completo ([ADR 0003](adr/0003-bibframe-completo.md), [spec](specs/catalogo/bibframe-completo.md)) substitui o foco 80/20 dentro do bloco de edição (§3), os perfis por categoria (§4.2) e "Todos os campos" (§20 item 10): o formulário mostra todas as propriedades oficiais, sem expandir, e o tipo de material vem das listas da LC.
+>
 > Status: v1. A v0 (2026-11-13) partiu do esboço interativo `bibframe-E.html` ("Esboço Teórico v4"); a v1 incorpora o esboço `elzevir-esboco-v9.html` (coluna de Autoridades, estações de captura no bloco, muro Acervo ↔ Leitores, `Esc` direto para a visão geral), com os ajustes aprovados por Paulo em 2026-11-13 (§16 a §19). **Não há código de produção aqui.** É o contrato de interação para a Onda 1 e a Onda 2 do frontend ([visão de arquitetura](ARCHITECTURE_VISION.md), A.3 e B.6) e para as rotas e comandos que as servem.
 >
 > Pré-condição de implementação (visão, A.4 item 4): núcleo BIBFRAME e testes de ida e volta MARC21 verdes (tarefas 1.5 e 1.6).
