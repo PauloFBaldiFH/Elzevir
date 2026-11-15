@@ -214,7 +214,10 @@ pub enum StatementRefusal {
 pub fn check(subject: EntityKind, statements: &[Statement]) -> Result<(), StatementRefusal> {
     let mut count = 0;
     for statement in statements {
-        if is_typed(subject.bibframe(), &statement.property) && !is_other_title(statement) {
+        if is_typed(subject.bibframe(), &statement.property)
+            && !is_other_title(statement)
+            && !is_typed_note(statement)
+        {
             return Err(StatementRefusal::Typed(statement.property.clone()));
         }
         let property = known(&statement.property)?;
@@ -236,6 +239,16 @@ pub fn is_other_title(statement: &Statement) -> bool {
     statement.property == "title"
         && matches!(&statement.value, Value::Resource(resource)
             if bibframe::is_a(&resource.class, "VariantTitle"))
+}
+
+/// Whether `statement` is a note with a `bf:noteType` (bibframe-completo.md, item 29,
+/// part 5b). General, contents and local notes have their own field; a note of a type
+/// from the `mnotetype` list is a statement.
+#[must_use]
+pub fn is_typed_note(statement: &Statement) -> bool {
+    statement.property == "note"
+        && matches!(&statement.value, Value::Resource(note)
+            if note.class == "Note" && note.statements.iter().any(|s| s.property == "noteType"))
 }
 
 /// Checks a whole description: its classes, then its statements (item 10h).
@@ -457,6 +470,19 @@ mod tests {
                 Ok(())
             );
         }
+        // A note with a type is a statement; a plain one has its own field.
+        let typed = resource("Note", vec![statement("noteType", literal("bibliography"))]);
+        assert_eq!(
+            check(EntityKind::Instance, &[statement("note", typed)]),
+            Ok(())
+        );
+        assert_eq!(
+            check(
+                EntityKind::Instance,
+                &[statement("note", resource("Note", vec![]))]
+            ),
+            Err(StatementRefusal::Typed("note".to_owned()))
+        );
         assert_eq!(
             check(EntityKind::Item, &[statement("colour", literal("x"))]),
             Err(StatementRefusal::UnknownProperty("colour".to_owned()))

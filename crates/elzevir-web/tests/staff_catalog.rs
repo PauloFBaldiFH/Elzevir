@@ -178,6 +178,7 @@ fn catalog_with_record() -> common::Catalog {
         relations: Vec::new(),
         title: "Dom Casmurro".to_owned(),
         other_titles: Vec::new(),
+        typed_notes: Vec::new(),
         publisher: None,
         date: None,
         classification: None,

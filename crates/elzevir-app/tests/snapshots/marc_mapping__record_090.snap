@@ -59,6 +59,17 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: note
+        value:
+          Resource:
+            class: Note
+            label: Inclui referências.
+            statements:
+              - property: noteType
+                value:
+                  Literal:
+                    text: bibliography
+                    language: ~
   edition: ~
   place: Curitiba
   publisher: IBPEX

@@ -30,6 +30,17 @@ work_description:
                 Literal:
                   text: distinctive
                   language: ~
+    - property: note
+      value:
+        Resource:
+          class: Note
+          label: Português
+          statements:
+            - property: noteType
+              value:
+                Literal:
+                  text: language
+                  language: ~
 hub: ~
 relations: []
 classification: ~
@@ -64,6 +75,23 @@ instance:
           Concept:
             scheme: issuance
             code: serl
+      - property: frequency
+        value:
+          Resource:
+            class: Frequency
+            label: Trimestral
+            statements: []
+      - property: note
+        value:
+          Resource:
+            class: Note
+            label: Não publica índice
+            statements:
+              - property: noteType
+                value:
+                  Literal:
+                    text: index
+                    language: ~
   edition: ~
   place: São Paulo
   publisher: "Departamento de Economia da Universidade de Sao Paulo : FIPE"

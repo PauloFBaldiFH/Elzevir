@@ -74,7 +74,7 @@ pub struct SearchDocument {
     pub publisher: Option<String>,
     /// The Work's summary.
     pub summary: Option<String>,
-    /// The Instance's notes (general, contents, local), in order.
+    /// The notes: general, contents and local, then the typed notes, in order.
     pub notes: Vec<String>,
     /// Date of publication, as written.
     pub date: Option<String>,
@@ -126,6 +126,7 @@ pub fn document_of(instance: &InstanceView, items: &[ItemView]) -> SearchDocumen
             .notes
             .iter()
             .map(|(_, text)| text.clone())
+            .chain(instance.typed_notes.iter().cloned())
             .collect(),
         date: instance.date.clone(),
         material_type: instance.material_type.or(instance.work_material_type),
@@ -410,6 +411,7 @@ mod tests {
                 relations: Vec::new(),
                 title: format!("Title {}", id.0),
                 other_titles: Vec::new(),
+                typed_notes: Vec::new(),
                 publisher: None,
                 date: None,
                 classification: None,

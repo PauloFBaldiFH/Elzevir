@@ -48,6 +48,17 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: note
+        value:
+          Resource:
+            class: Note
+            label: Inclui bibliografia
+            statements:
+              - property: noteType
+                value:
+                  Literal:
+                    text: bibliography
+                    language: ~
   edition: 3. ed
   place: "Campinas, SP"
   publisher: Papirus

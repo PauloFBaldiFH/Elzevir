@@ -19,10 +19,20 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 enum Command {
-    Add { key: String, by: i64 },
-    WriteThenRefuse { key: String },
-    Sleep { millis: u64 },
+    Add {
+        key: String,
+        by: i64,
+    },
+    WriteThenRefuse {
+        key: String,
+    },
+    /// Holds the writer until [`GATE`] opens.
+    WaitForGate,
 }
+
+/// Opened by the test that fills the queue: until then, `WaitForGate` holds the writer, so
+/// the test does not depend on how fast the machine is.
+static GATE: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, PartialEq, Eq)]
 struct Refused;
@@ -38,7 +48,7 @@ impl CommandHandler for Counters {
         match command {
             Command::Add { .. } => "add",
             Command::WriteThenRefuse { .. } => "write_then_refuse",
-            Command::Sleep { .. } => "sleep",
+            Command::WaitForGate => "wait_for_gate",
         }
     }
 
@@ -72,8 +82,10 @@ impl CommandHandler for Counters {
                 tx.emit_effect("counter_changed", key)?;
                 Err(CommandFailed::Rejected(Refused))
             }
-            Command::Sleep { millis } => {
-                std::thread::sleep(Duration::from_millis(*millis));
+            Command::WaitForGate => {
+                while !GATE.load(Ordering::SeqCst) {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
                 Ok(0)
             }
         }
@@ -258,13 +270,14 @@ fn a_full_queue_answers_busy_instead_of_blocking() {
     };
     let store = open(&dir.path().join("elzevir.db"), &config);
 
-    let results: Vec<_> = (0..3)
-        .map(|_| store.submit(Command::Sleep { millis: 300 }))
-        .collect();
+    let results: Vec<_> = (0..3).map(|_| store.submit(Command::WaitForGate)).collect();
+    // The writer holds at most one command and the queue one more: the third is refused
+    // however slowly the submits run.
     assert!(
         results.iter().any(|r| matches!(r, Err(SubmitError::Busy))),
-        "with one slot and a slow writer, at least one submit must be refused"
+        "with one slot and a held writer, at least one submit must be refused"
     );
+    GATE.store(true, Ordering::SeqCst);
     for pending in results.into_iter().flatten() {
         assert_eq!(pending.wait(), Ok(0));
     }

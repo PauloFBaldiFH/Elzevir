@@ -3,61 +3,25 @@
 //! (bibframe-completo.md, item 29, part 5a).
 
 use elzevir_data::vocabulary;
-use elzevir_domain::statement::{Description, Resource, Statement, Value, is_other_title};
-use elzevir_marc::{Field, Record};
+use elzevir_domain::statement::{Resource, Statement, Value, is_other_title};
+use elzevir_marc::Field;
 
 use super::super::titles::{Owner, TAGS, of_field, part_property};
+use super::described::StatementFields;
 use super::fields::data_field;
-use super::{mapped, rebuild};
 
-/// Rewrites the title fields when the titles differ from those of `before`.
-pub(super) fn write(
-    out: &mut Record,
-    work: &Description,
-    instance: &Description,
-    before: Option<(&Description, &Description)>,
-) {
-    let wanted = titles(work, instance);
-    if before.is_some_and(|(work, instance)| titles(work, instance) == wanted) {
-        return;
-    }
-    for tag in TAGS {
-        let current = mapped(out, &[tag], of_field);
-        let of_tag: Vec<(Owner, Statement)> = wanted
-            .iter()
-            .filter(|(owner, title)| {
-                field_of(*owner, title).is_some_and(|f| f.tag().as_bytes() == tag)
-            })
-            .cloned()
-            .collect();
-        rebuild(
-            out,
-            &current,
-            &of_tag,
-            |(owner, title)| {
-                field_of(*owner, title).unwrap_or_else(|| data_field(*tag, *b"  ", &[]))
-            },
-            |_, _| None,
-        );
-    }
-}
-
-fn titles(work: &Description, instance: &Description) -> Vec<(Owner, Statement)> {
-    let of = |owner: Owner, description: &Description| {
-        description
-            .statements
-            .iter()
-            .filter(|statement| is_other_title(statement))
-            .map(move |statement| (owner, statement.clone()))
-            .collect::<Vec<_>>()
-    };
-    let mut all = of(Owner::Work, work);
-    all.extend(of(Owner::Instance, instance));
-    all
-}
+/// The title fields.
+pub(super) const TITLES: StatementFields = StatementFields {
+    tags: &TAGS,
+    read: of_field,
+    write: field_of,
+};
 
 /// The field one title is written as; `None` for a statement that is not another title.
 fn field_of(owner: Owner, title: &Statement) -> Option<Field> {
+    if !is_other_title(title) {
+        return None;
+    }
     let Value::Resource(resource) = &title.value else {
         return None;
     };
@@ -138,6 +102,7 @@ fn second_of_246(code: Option<&str>) -> u8 {
 
 #[cfg(test)]
 mod tests {
+    use elzevir_domain::statement::Description;
     use elzevir_marc::Record;
 
     use super::super::super::Marc;
@@ -217,7 +182,7 @@ mod tests {
             leader: *b"00000nam a2200000 i 4500",
             fields: Vec::new(),
         };
-        write(&mut out, &work, &instance, None);
+        super::super::described::write(&mut out, &TITLES, &work, &instance, None);
         let tags: Vec<[u8; 3]> = out.fields.iter().map(|f| *f.tag().as_bytes()).collect();
         assert_eq!(
             tags,
@@ -234,7 +199,13 @@ mod tests {
         assert_eq!(back, expected);
         // Unchanged titles leave the record alone.
         let before = out.clone();
-        write(&mut out, &work, &instance, Some((&work, &instance)));
+        super::super::described::write(
+            &mut out,
+            &TITLES,
+            &work,
+            &instance,
+            Some((&work, &instance)),
+        );
         assert_eq!(out, before);
     }
 }

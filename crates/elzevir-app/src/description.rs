@@ -84,6 +84,21 @@ pub fn other_titles(descriptions: &[&Description]) -> Vec<String> {
         .collect()
 }
 
+/// The texts of the typed notes of `descriptions`, in order, for search and display
+/// (bibframe-completo.md, item 29, part 5b).
+#[must_use]
+pub fn typed_notes(descriptions: &[&Description]) -> Vec<String> {
+    descriptions
+        .iter()
+        .flat_map(|description| &description.statements)
+        .filter(|statement| elzevir_domain::statement::is_typed_note(statement))
+        .filter_map(|statement| match &statement.value {
+            Value::Resource(note) => note.label.clone(),
+            _ => None,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

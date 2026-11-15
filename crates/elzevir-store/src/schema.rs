@@ -11,7 +11,9 @@ use std::time::Duration;
 
 use elzevir_app::description::{instance_of_material, work_of_material};
 use elzevir_app::listing::sort_key;
-use elzevir_app::marc_mapping::{source_audience, source_description, source_notes, source_titles};
+use elzevir_app::marc_mapping::{
+    source_audience, source_description, source_notes, source_titles, source_typed_notes,
+};
 use elzevir_app::matching::{identifier_key, koha_biblionumber_key};
 use elzevir_domain::catalog::IdentifierKind;
 use elzevir_domain::catalog::MaterialType;
@@ -350,6 +352,9 @@ const MIGRATIONS: &[&str] = &[
     // 18: titles other than the preferred one become statements (item 29, part 5a); the
     // migration only fills them from the stored source records.
     "SELECT 1;",
+    // 19: notes with a type, custodial history and frequency become statements (item 29,
+    // part 5b); the migration only fills them from the stored source records.
+    "SELECT 1;",
 ];
 
 /// The migration that creates `match_keys`.
@@ -371,6 +376,8 @@ const NO_CODES_VERSION: i64 = 15;
 const POLICIES_VERSION: i64 = 16;
 /// Migration that fills the titles other than the preferred one.
 const TITLES_VERSION: i64 = 18;
+/// Migration that fills the typed notes, custodial history and frequency.
+const TYPED_NOTES_VERSION: i64 = 19;
 /// Migration that drops `extra`.
 const DROP_EXTRA_VERSION: i64 = 13;
 /// Migration that adds the classes, and fills them with content, media, carrier and issuance.
@@ -458,7 +465,10 @@ fn apply_migrations(connection: &mut Connection, current: i64) -> Result<(), Sto
                 crate::places::backfill(&tx)?;
             }
             if version == TITLES_VERSION {
-                backfill_titles(&tx)?;
+                backfill_from_source(&tx, source_titles)?;
+            }
+            if version == TYPED_NOTES_VERSION {
+                backfill_from_source(&tx, source_typed_notes)?;
             }
             if version == NO_CODES_VERSION || version == POLICIES_VERSION {
                 check_foreign_keys(&tx, version)?;
@@ -604,9 +614,13 @@ fn backfill_descriptions(connection: &Connection) -> Result<(), StoreError> {
     Ok(())
 }
 
-/// Adds to every stored record the titles of its source record that its Work and its
-/// Instance do not have yet. A Work takes them from its first Instance with a source.
-fn backfill_titles(connection: &Connection) -> Result<(), StoreError> {
+/// The statements of the Work and of the Instance that a stored source record gives.
+type FromSource = fn(&[u8]) -> Option<(Vec<Statement>, Vec<Statement>)>;
+
+/// Adds to every stored record the statements `read` finds in its source record that its
+/// Work and its Instance do not have yet. A Work takes them from its first Instance with a
+/// source.
+fn backfill_from_source(connection: &Connection, read: FromSource) -> Result<(), StoreError> {
     let mut rows = connection.prepare(
         "SELECT i.work_id, i.id, s.record FROM instances i
          JOIN source_records s ON s.instance_id = i.id ORDER BY i.work_id, i.id",
@@ -617,14 +631,14 @@ fn backfill_titles(connection: &Connection) -> Result<(), StoreError> {
         let work: i64 = row.get(0)?;
         let instance: i64 = row.get(1)?;
         let source: Vec<u8> = row.get(2)?;
-        let Some((work_titles, instance_titles)) = source_titles(&source) else {
+        let Some((of_work, of_instance)) = read(&source) else {
             continue;
         };
         if done_work != Some(work) {
             done_work = Some(work);
-            add_missing(connection, EntityKind::Work, work, work_titles)?;
+            add_missing(connection, EntityKind::Work, work, of_work)?;
         }
-        add_missing(connection, EntityKind::Instance, instance, instance_titles)?;
+        add_missing(connection, EntityKind::Instance, instance, of_instance)?;
     }
     Ok(())
 }
@@ -841,10 +855,60 @@ mod catalog_tests {
             (1, 1)
         );
         // Titles a record already has are not added again.
-        backfill_titles(&connection).unwrap();
+        backfill_from_source(&connection, source_titles).unwrap();
         assert_eq!(
             (titles(EntityKind::Work), titles(EntityKind::Instance)),
             (1, 1)
+        );
+    }
+
+    #[test]
+    fn migration_19_reads_the_typed_notes_from_the_source_record() {
+        use elzevir_app::description::typed_notes;
+        use elzevir_marc::{Field, Record, Subfield, Tag};
+        let field = |tag: &[u8; 3], text: &str| Field::Data {
+            tag: Tag::new(*tag),
+            indicators: *b"  ",
+            subfields: vec![Subfield {
+                code: b'a',
+                value: text.as_bytes().to_vec(),
+            }],
+        };
+        let mut source = Vec::new();
+        let record = Record {
+            leader: *b"00000nam a2200000 a 4500",
+            fields: vec![
+                field(b"245", "Dom Casmurro"),
+                field(b"504", "Inclui bibliografia."),
+                field(b"546", "Em português."),
+                field(b"561", "Doação."),
+            ],
+        };
+        record.write_iso2709(&mut source).unwrap();
+        let (_dir, mut connection) = catalog();
+        connection
+            .execute(
+                "UPDATE source_records SET record = ?1 WHERE instance_id = 1",
+                params![source],
+            )
+            .unwrap();
+        connection
+            .pragma_update(None, "user_version", TYPED_NOTES_VERSION - 1)
+            .unwrap();
+        migrate(&mut connection).unwrap();
+        let description =
+            |entity| read_description(&connection, EntityRef { entity, id: 1 }).unwrap();
+        let (work, instance) = (
+            description(EntityKind::Work),
+            description(EntityKind::Instance),
+        );
+        assert_eq!(typed_notes(&[&work]), ["Em português."]);
+        assert_eq!(typed_notes(&[&instance]), ["Inclui bibliografia."]);
+        assert!(
+            instance
+                .statements
+                .iter()
+                .any(|statement| statement.property == "custodialHistory")
         );
     }
 
