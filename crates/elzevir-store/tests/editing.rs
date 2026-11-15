@@ -466,6 +466,8 @@ fn a_contribution_typed_as_text_keeps_the_parts_of_its_agent() {
             role: None,
             primary: position == 0,
             name_parts: Vec::new(),
+            role_term: None,
+            identifiers: Vec::new(),
         })
         .rev()
         .collect();
@@ -483,5 +485,51 @@ fn a_contribution_typed_as_text_keeps_the_parts_of_its_agent() {
     assert!(
         names.contains("Figueirêdo, Argemiro de,\u{1f}d1901-1982"),
         "{names}"
+    );
+}
+
+#[test]
+fn a_contribution_list_edit_keeps_the_relator_terms_and_authority_links() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = imported(&dir);
+    // The nineteenth record has `100 $aGinzberg, Eli,$d1911-2002,$eautor$1…$0…$4aut`
+    // and `700 $aEichner, Alfred S.,$d1937-1988,$eautor$1…$0…`, whose role is the term.
+    let before = view(&store, 19);
+    // The form sends the agent and the role, not the term or the links.
+    let contributions: Vec<NewContribution> = before
+        .contributors
+        .iter()
+        .enumerate()
+        .map(|(position, (kind, heading))| NewContribution {
+            kind: *kind,
+            heading: heading.clone(),
+            role: Some(if position == 0 { "aut" } else { "autor" }.to_owned()),
+            primary: position == 0,
+            name_parts: Vec::new(),
+            role_term: None,
+            identifiers: Vec::new(),
+        })
+        .collect();
+    run(
+        &store,
+        update_work(&before, vec![WorkChange::Contributions(contributions)]),
+    )
+    .unwrap();
+    let edited = fields(&export(&store));
+    let names: Vec<String> = edited[18]
+        .iter()
+        .filter(|field| ["100", "700"].contains(&field.0.as_str()))
+        .map(|field| String::from_utf8_lossy(&field.1).into_owned())
+        .collect();
+    assert_eq!(names.len(), 2, "{names:?}");
+    assert!(
+        names[0].contains(
+            "\u{1f}eautor\u{1f}1http://viaf.org/viaf/108304418\u{1f}1https://www.wikidata.org/wiki/Q5360231\u{1f}0http://id.loc.gov/authorities/names/n79039850\u{1f}4aut"
+        ),
+        "{names:?}"
+    );
+    assert!(
+        names[1].contains("\u{1f}eautor\u{1f}1http://viaf.org/viaf/94384300"),
+        "{names:?}"
     );
 }

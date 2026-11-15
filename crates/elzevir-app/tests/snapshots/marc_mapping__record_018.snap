@@ -70,17 +70,33 @@ contributions:
   - kind: person
     heading: "Ginzberg, Eli, 1911-2002"
     role: aut
+    role_term: autor
     primary: true
     name_parts:
       - kind: date
         start: 15
+    identifiers:
+      - kind: real_world_object
+        value: "http://viaf.org/viaf/108304418"
+      - kind: real_world_object
+        value: "https://www.wikidata.org/wiki/Q5360231"
+      - kind: authority_record
+        value: "http://id.loc.gov/authorities/names/n79039850"
   - kind: person
     heading: "Eichner, Alfred S., 1937-1988"
     role: autor
+    role_term: autor
     primary: false
     name_parts:
       - kind: date
         start: 20
+    identifiers:
+      - kind: real_world_object
+        value: "http://viaf.org/viaf/94384300"
+      - kind: real_world_object
+        value: "https://www.wikidata.org/wiki/Q4722626"
+      - kind: authority_record
+        value: "http://id.loc.gov/authorities/names/n79107843"
 subjects:
   - kind: topic
     heading: Racismo -- Estados Unidos

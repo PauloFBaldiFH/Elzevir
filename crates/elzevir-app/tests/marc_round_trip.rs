@@ -326,8 +326,8 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     ("092", 51, Gap::Local),
     ("094", 1, Gap::Local),
     ("098", 1, Gap::Local),
-    ("100", 14, Gap::Pending("$e beside $4, $0 and $1 not kept")),
-    ("100 punctuation", 24, Gap::Punctuation),
+    ("100", 1, Gap::Pending("$2 source of the heading not kept")),
+    ("100 punctuation", 25, Gap::Punctuation),
     (
         "100/ind1",
         3,
@@ -484,8 +484,8 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     ("655 punctuation", 1, Gap::Punctuation),
     ("690", 2, Gap::Local),
     ("695", 2, Gap::Local),
-    ("700", 5, Gap::Pending("$e beside $4, $0 and $1 not kept")),
-    ("700 punctuation", 25, Gap::Punctuation),
+    ("700", 1, Gap::Pending("$2 source of the heading not kept")),
+    ("700 punctuation", 23, Gap::Punctuation),
     (
         "700/ind1",
         1,
@@ -494,10 +494,10 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     ("700/ind1 blank", 1, Gap::Blank),
     (
         "710",
-        3,
+        2,
         Gap::Pending("$k not kept; a repeated $a joins the $b"),
     ),
-    ("710 punctuation", 3, Gap::Punctuation),
+    ("710 punctuation", 4, Gap::Punctuation),
     (
         "710/ind1",
         2,

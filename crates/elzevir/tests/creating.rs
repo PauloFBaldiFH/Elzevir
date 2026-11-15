@@ -75,6 +75,8 @@ fn a_family_and_an_instance_created_on_screen_export_and_are_found() {
                 role: Some("aut".to_owned()),
                 primary: true,
                 name_parts: Vec::new(),
+                role_term: None,
+                identifiers: Vec::new(),
             }]),
         ],
         vec![

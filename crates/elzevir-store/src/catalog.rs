@@ -335,10 +335,19 @@ pub(crate) fn link_contributions(
         )?;
         connection
             .execute(
-                "INSERT INTO contributions (work_id, position, agent_id, role, is_primary)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![work, position, agent, role, contribution.primary],
+                "INSERT INTO contributions (work_id, position, agent_id, role, is_primary, role_term)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    work,
+                    position,
+                    agent,
+                    role,
+                    contribution.primary,
+                    contribution.role_term
+                ],
             )
+            .map_err(StoreError::from)?;
+        insert_contribution_identifiers(connection, work, position, contribution)
             .map_err(StoreError::from)?;
     }
     Ok(())
@@ -362,6 +371,29 @@ pub(crate) fn set_name_parts(
             name_parts_column(&contribution.name_parts)
         ],
     )?;
+    Ok(())
+}
+
+/// Stores the identifiers of the contribution at `position` of `work`.
+pub(crate) fn insert_contribution_identifiers(
+    connection: &Connection,
+    work: i64,
+    position: i64,
+    contribution: &NewContribution,
+) -> rusqlite::Result<()> {
+    let mut insert = connection.prepare_cached(
+        "INSERT INTO contribution_identifiers (work_id, contribution, position, kind, value)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+    )?;
+    for (identifier, order) in contribution.identifiers.iter().zip(0_i64..) {
+        insert.execute(params![
+            work,
+            position,
+            order,
+            identifier.kind.code(),
+            identifier.value
+        ])?;
+    }
     Ok(())
 }
 

@@ -120,6 +120,16 @@ stable_enum! {
 }
 
 stable_enum! {
+    /// What an identifier of an agent points at (MARC21 `$0` and `$1`).
+    AgentIdentifierKind {
+        /// An authority record that describes the agent, such as a LC name authority.
+        AuthorityRecord = 1,
+        /// The agent itself, as another dataset names it, such as VIAF or Wikidata.
+        RealWorldObject = 2,
+    }
+}
+
+stable_enum! {
     /// What a Subject heading names (MARC21 6XX tags).
     SubjectKind {
         /// A topic (650).
