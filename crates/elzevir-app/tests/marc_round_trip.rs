@@ -405,9 +405,13 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     ("264 punctuation", 10, Gap::Punctuation),
     ("290", 1, Gap::Local),
     ("300 punctuation", 87, Gap::Punctuation),
-    ("334", 12, Gap::Pending("mode of issuance not written")),
-    ("336", 13, Gap::Pending("content type not written")),
-    ("337", 13, Gap::Pending("$0 not kept")),
+    (
+        "334",
+        13,
+        Gap::Pending("$0 (RDA registry IRI) not kept; sources without 334 or $2"),
+    ),
+    ("336", 13, Gap::Pending("$0 not kept; labels in Portuguese")),
+    ("337", 13, Gap::Pending("$0 not kept; labels in Portuguese")),
     ("338", 13, Gap::Pending("$0 not kept")),
     (
         "362",
