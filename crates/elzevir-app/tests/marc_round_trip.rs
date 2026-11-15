@@ -224,6 +224,11 @@ enum Gap {
     Koha,
     /// The source leaves blank an indicator that MARC defines; the export writes it.
     Blank,
+    /// The source holds fill characters (`|`, no attempt to code); the export writes what
+    /// the LC way back writes there.
+    Fill,
+    /// The source breaks the MARC format there; the export writes it right.
+    Source(&'static str),
     /// Only the ISBD punctuation differs: the export writes it as the LC way back does.
     Punctuation,
     /// Still to be closed by a later part of stage 5f.
@@ -236,14 +241,16 @@ impl Gap {
             Self::Local => "local field, kept only in the source record",
             Self::Koha => "Koha data, written by the Koha edge",
             Self::Blank => "blank indicator in the source",
+            Self::Fill => "fill characters in the source",
             Self::Punctuation => "ISBD punctuation only",
-            Self::Pending(reason) => reason,
+            Self::Source(reason) | Self::Pending(reason) => reason,
         }
     }
 }
 
 /// What the export from the model alone still writes differently: the key of
-/// [`field_differences`] (or `LDR/nn` for a Leader position, `order` for the order of the
+/// [`field_differences`] (or `LDR/nn` for a Leader position, `008/nn-nn` for a group of
+/// [`fixed_differences`], `order` for the order of the
 /// tags), the number of the oracle's
 /// records where it differs and why. The list may only shrink: a fix lowers a count or
 /// removes a line, and the test fails until the list says so.
@@ -255,10 +262,44 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
         Gap::Pending("physical description fixed field not mapped"),
     ),
     (
-        "008",
-        200,
-        Gap::Pending("fill characters and positions 18-39 not mapped"),
+        "008 length",
+        29,
+        Gap::Source("the field does not have its 40 positions"),
     ),
+    (
+        "008/00-05",
+        2,
+        Gap::Source("the date entered is not a date"),
+    ),
+    (
+        "008/06",
+        1,
+        Gap::Pending("a type of date n (unknown) with dates comes back as m"),
+    ),
+    (
+        "008/11-14",
+        16,
+        Gap::Source("a second date that the type of date does not take (0000, 9999, ----)"),
+    ),
+    ("008/11-14 fill", 80, Gap::Fill),
+    (
+        "008/18-34",
+        200,
+        Gap::Pending("positions of the material not mapped"),
+    ),
+    (
+        "008/35-37",
+        4,
+        Gap::Source("a language code in uppercase or out of place"),
+    ),
+    ("008/38", 2, Gap::Source("a hyphen as fill character")),
+    ("008/38 fill", 80, Gap::Fill),
+    (
+        "008/39",
+        100,
+        Gap::Pending("cataloguing source: the LC conversion does not read it and writes blank"),
+    ),
+    ("008/39 fill", 80, Gap::Fill),
     ("012", 16, Gap::Local),
     (
         "016",
@@ -283,15 +324,11 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     ),
     (
         "041",
-        92,
-        Gap::Pending("written from the language of the 008 when the source has none"),
+        84,
+        Gap::Pending(
+            "a single language, already in 008, written in 041 by the source; $c not kept",
+        ),
     ),
-    (
-        "041/ind1",
-        1,
-        Gap::Pending("a translation without the original language ($h)"),
-    ),
-    ("041/ind1 blank", 80, Gap::Blank),
     (
         "043",
         2,
@@ -616,6 +653,54 @@ fn field_differences(original: &[Field], written: &[Field], tag: [u8; 3]) -> Vec
 }
 
 /// What differs between `original` and `written`, by the keys of [`KNOWN_DIFFERENCES`].
+/// The groups of `008` positions of a book, as the conversions of the LC read them: date
+/// entered, type of date, the two dates, place, the positions of the material, language,
+/// modified record and cataloguing source.
+const FIXED_GROUPS: [(usize, usize); 9] = [
+    (0, 6),
+    (6, 7),
+    (7, 11),
+    (11, 15),
+    (15, 18),
+    (18, 35),
+    (35, 38),
+    (38, 39),
+    (39, 40),
+];
+
+/// What differs in `008`, by group of positions (`008/35-37`); `fill` after the key when
+/// the source holds only fill characters there (`|`, no attempt to code), and `length`
+/// when the source field does not have its 40 positions.
+fn fixed_differences(original: &Record, written: &Record) -> Vec<String> {
+    let value = |record: &Record| match tags(record, *b"008").first() {
+        Some(Field::Control { value, .. }) => value.clone(),
+        _ => Vec::new(),
+    };
+    let (source, export) = (value(original), value(written));
+    let mut found = Vec::new();
+    if source.len() != 40 {
+        found.push("008 length".to_owned());
+    }
+    for (start, end) in FIXED_GROUPS {
+        let one = source.get(start..end.min(source.len())).unwrap_or_default();
+        let other = export.get(start..end.min(export.len())).unwrap_or_default();
+        if one == other || (source.len() < end && one.iter().all(|b| *b == b' ')) {
+            continue;
+        }
+        let key = if end - start == 1 {
+            format!("008/{start:02}")
+        } else {
+            format!("008/{start:02}-{:02}", end - 1)
+        };
+        found.push(if !one.is_empty() && one.iter().all(|b| *b == b'|') {
+            format!("{key} fill")
+        } else {
+            key
+        });
+    }
+    found
+}
+
 fn differences(original: &Record, written: &Record) -> Vec<String> {
     // Positions 00-04 and 12-16 are lengths and addresses, computed when writing.
     let mut found: Vec<String> = (5..12)
@@ -632,6 +717,10 @@ fn differences(original: &Record, written: &Record) -> Vec<String> {
     all.sort_unstable();
     all.dedup();
     for tag in all {
+        if tag == *b"008" {
+            found.extend(fixed_differences(original, written));
+            continue;
+        }
         found.extend(field_differences(
             &tags(original, tag),
             &tags(written, tag),
@@ -731,4 +820,24 @@ fn the_245_gets_the_isbd_punctuation_of_the_lc_way_back() {
             ]
         )
     );
+}
+
+#[test]
+fn one_language_goes_to_the_008_and_more_than_one_to_the_041_too() {
+    let (_, record) = &records()[0];
+    let mut edited = model(record);
+    assert_eq!(edited.languages, ["por"]);
+    let fixed = |record: &Record| match tags(record, *b"008").first() {
+        Some(Field::Control { value, .. }) => value.get(35..38).unwrap_or_default().to_vec(),
+        _ => Vec::new(),
+    };
+    let written = bibframe_to_marc(&edited, None);
+    assert_eq!(fixed(&written), b"por");
+    assert!(tags(&written, *b"041").is_empty());
+    assert_eq!(model(&written).languages, ["por"]);
+    // A second language writes both in `041 $a`, the first also in `008`.
+    edited.languages = vec!["eng".to_owned(), "por".to_owned()];
+    let written = bibframe_to_marc(&edited, Some(record));
+    assert_eq!(fixed(&written), b"eng");
+    assert_eq!(model(&written).languages, ["eng", "por"]);
 }

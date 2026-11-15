@@ -98,7 +98,8 @@ Os outros subcampos do `952` são dados que o Koha calcula ou mantém sozinho (`
    - Exemplar alterado com o mesmo código de barras: o `952` original é mantido e só os subcampos mapeados mudam (`$9`, `$6`, `$l`, `$r`... ficam).
    - Exemplar novo: `952` novo depois dos outros.
 5. Categoria: posições 06 e 07 do líder pela tabela de §1.1 ao contrário (livro `am`, periódico `as`, mapa `em`, partitura `cm`, gravação sonora `jm`, vídeo `gm`, digital `mm`, visual `km`, misto `pc`). Instância digital sem `007` ganha `007` = `cr`.
-6. Texto gerado sai sem pontuação ISBD; o registro novo é válido, mas não reproduz a pontuação que um catalogador digitaria.
+6. Idiomas: o primeiro vai para `008/35-37`; o `041 $a` só é escrito com mais de um idioma, ou quando o campo tem outros subcampos (o idioma do original, `$h`), como na volta da LC (`02-010-048.xml`). Um idioma só já está no `008`.
+7. Texto gerado sai sem pontuação ISBD; o registro novo é válido, mas não reproduz a pontuação que um catalogador digitaria.
 
 ## 2. Origem no Koha
 
