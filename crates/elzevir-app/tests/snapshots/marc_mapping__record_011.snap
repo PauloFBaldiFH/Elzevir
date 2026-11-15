@@ -60,10 +60,20 @@ contributions:
     heading: "Figueirêdo, Argemiro de, 1901-1982"
     role: ~
     primary: true
+    name_parts:
+      - kind: date
+        start: 25
   - kind: organization
     heading: Brasil. Congresso Nacional. Senado Federal. Subsecretaria de Edições Técnicas
     role: ~
     primary: false
+    name_parts:
+      - kind: subordinate
+        start: 8
+      - kind: subordinate
+        start: 28
+      - kind: subordinate
+        start: 44
 subjects:
   - kind: agent
     heading: "Figueirêdo, Argemiro de, 1901-1982 -- Atuação parlamentar"

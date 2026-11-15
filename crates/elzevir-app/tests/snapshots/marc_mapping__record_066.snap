@@ -1004,14 +1004,19 @@ contributions:
     heading: "Ramalho Júnior, Francisco"
     role: ~
     primary: true
+    name_parts: []
   - kind: person
     heading: "Ferraro, Nicolau Gilberto, 1940-"
     role: ~
     primary: false
+    name_parts:
+      - kind: date
+        start: 27
   - kind: person
     heading: "Soares, Paulo Antônio de Toledo"
     role: ~
     primary: false
+    name_parts: []
 subjects:
   - kind: topic
     heading: Física -- Estudo e ensino

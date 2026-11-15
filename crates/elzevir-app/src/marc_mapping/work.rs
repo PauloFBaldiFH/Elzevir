@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The Work: category, titles, classification, languages, contributors, subjects (spec §1.1, §1.2).
 
-use elzevir_domain::catalog::{AgentKind, MaterialType, SubjectKind};
+use elzevir_domain::catalog::{AgentKind, MaterialType, NamePartKind, SubjectKind};
 
 use super::{DataField, MappingError, Marc, text};
-use crate::catalog::{NewContribution, NewSubject};
+use crate::catalog::{NamePart, NewContribution, NewSubject};
 
 /// What the record says about the Work.
 pub(super) struct Work {
@@ -129,6 +129,7 @@ fn contribution(tag: [u8; 3], field: DataField<'_>, primary: bool) -> Option<New
     };
     // Join first and clean once, so inner punctuation (`Ginzberg, Eli, 1911-2002`) stays.
     let heading = text::clean(field.raw_joined(codes)?.as_bytes())?;
+    let name_parts = name_parts(kind, field, codes, &heading);
     let role = field
         .raw(b'4')
         .or_else(|| field.text(b'e').map(|role| role.to_lowercase()));
@@ -137,7 +138,58 @@ fn contribution(tag: [u8; 3], field: DataField<'_>, primary: bool) -> Option<New
         heading,
         role,
         primary,
+        name_parts,
     })
+}
+
+/// Where each name subfield after the first starts in `heading`, which joins them with a
+/// space. A part the cleaning left out of the heading has none.
+fn name_parts(kind: AgentKind, field: DataField<'_>, codes: &[u8], heading: &str) -> Vec<NamePart> {
+    let length = heading.chars().count();
+    let mut start = 0;
+    let mut parts = Vec::new();
+    for subfield in field.subfields.iter().filter(|s| codes.contains(&s.code)) {
+        let Some(text) = text::trimmed(&subfield.value) else {
+            continue;
+        };
+        if start > 0
+            && start < length
+            && let Some(kind) = name_part_kind(kind, subfield.code)
+        {
+            parts.push(NamePart { kind, start });
+        }
+        start += text.chars().count() + 1;
+    }
+    parts
+}
+
+/// What a name subfield is, by the kind of agent (MARC21 X00, X10, X11).
+pub(super) const fn name_part_kind(agent: AgentKind, code: u8) -> Option<NamePartKind> {
+    match (agent, code) {
+        (AgentKind::Person | AgentKind::Family, b'b') => Some(NamePartKind::Numeration),
+        (AgentKind::Person | AgentKind::Family, b'c') => Some(NamePartKind::TermsOfAddress),
+        (AgentKind::Person | AgentKind::Family, b'q') => Some(NamePartKind::FullerForm),
+        (AgentKind::Organization, b'b') | (AgentKind::Meeting, b'q') => {
+            Some(NamePartKind::Subordinate)
+        }
+        (AgentKind::Organization | AgentKind::Meeting, b'c') => Some(NamePartKind::Place),
+        (_, b'd') => Some(NamePartKind::Date),
+        (_, b'n') => Some(NamePartKind::Number),
+        _ => None,
+    }
+}
+
+/// The subfield of a name part, by the kind of agent: the way back of [`name_part_kind`].
+pub(super) const fn name_part_code(agent: AgentKind, part: NamePartKind) -> u8 {
+    match (agent, part) {
+        (_, NamePartKind::Numeration) | (AgentKind::Organization, NamePartKind::Subordinate) => {
+            b'b'
+        }
+        (_, NamePartKind::TermsOfAddress | NamePartKind::Place) => b'c',
+        (_, NamePartKind::Date) => b'd',
+        (_, NamePartKind::FullerForm | NamePartKind::Subordinate) => b'q',
+        (_, NamePartKind::Number) => b'n',
+    }
 }
 
 fn subjects(marc: &Marc<'_>) -> Vec<NewSubject> {

@@ -3,16 +3,17 @@
 
 use elzevir_app::catalog::{
     CatalogCommand, CatalogOutput, CatalogReadError, CatalogReader, CatalogRefusal, CodeLists,
-    InstanceView, ItemData, ItemStatus, ItemView, NewContribution, NewIdentifier, NewInstance,
-    NewInstanceOfWork, NewNote, NewRecord, NewSubject, NewWorkRelation,
+    InstanceView, ItemData, ItemStatus, ItemView, NamePart, NewContribution, NewIdentifier,
+    NewInstance, NewInstanceOfWork, NewNote, NewRecord, NewSubject, NewWorkRelation,
 };
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
 use elzevir_app::listing::sort_key;
 use elzevir_app::matching::{identifier_key, match_keys};
 use elzevir_app::search::REINDEX_INSTANCE;
 use elzevir_domain::catalog::{
-    AgentKind, BranchId, HubId, IdentifierKind, InstanceId, ItemId, MaterialType, NoteKind,
-    PolicyId, SourceFormat, SubjectKind, SublocationId, Vocabulary, WorkId, WorkRelationKind,
+    AgentKind, BranchId, HubId, IdentifierKind, InstanceId, ItemId, MaterialType, NamePartKind,
+    NoteKind, PolicyId, SourceFormat, SubjectKind, SublocationId, Vocabulary, WorkId,
+    WorkRelationKind,
 };
 use rusqlite::{Connection, ErrorCode, OptionalExtension, params};
 
@@ -326,6 +327,7 @@ pub(crate) fn link_contributions(
             contribution.kind.code(),
             &contribution.heading,
         )?;
+        set_name_parts(connection, contribution).map_err(StoreError::from)?;
         let role = optional_term(
             connection,
             Vocabulary::Relator,
@@ -340,6 +342,58 @@ pub(crate) fn link_contributions(
             .map_err(StoreError::from)?;
     }
     Ok(())
+}
+
+/// Gives the agent of `contribution` its name parts when it has none yet. The parts belong
+/// to the heading, which the agent shares with every Work, so a heading typed in the form
+/// without parts keeps those the agent has.
+pub(crate) fn set_name_parts(
+    connection: &Connection,
+    contribution: &NewContribution,
+) -> rusqlite::Result<()> {
+    if contribution.name_parts.is_empty() {
+        return Ok(());
+    }
+    connection.execute(
+        "UPDATE agents SET name_parts = ?3 WHERE kind = ?1 AND heading = ?2 AND name_parts = ''",
+        params![
+            contribution.kind.code(),
+            contribution.heading,
+            name_parts_column(&contribution.name_parts)
+        ],
+    )?;
+    Ok(())
+}
+
+/// The name parts as `agents.name_parts` keeps them: `kind@start`, separated by commas.
+fn name_parts_column(parts: &[NamePart]) -> String {
+    parts
+        .iter()
+        .map(|part| format!("{}@{}", part.kind.code(), part.start))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// The name parts `agents.name_parts` keeps.
+pub(crate) fn name_parts_of_column(column: &str) -> Result<Vec<NamePart>, ReadFailure> {
+    column
+        .split(',')
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let (kind, start) = part.split_once('@').unwrap_or((part, ""));
+            // A part the store did not write names no kind: 0 is none.
+            let code = kind.parse().unwrap_or(0);
+            let kind = NamePartKind::from_code(code).ok_or(ReadFailure::UnknownCode {
+                what: "name part",
+                code,
+            })?;
+            let start = start.parse().map_err(|_| ReadFailure::UnknownCode {
+                what: "name part start",
+                code,
+            })?;
+            Ok(NamePart { kind, start })
+        })
+        .collect()
 }
 
 pub(crate) fn link_subjects(

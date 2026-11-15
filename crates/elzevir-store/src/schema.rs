@@ -12,9 +12,10 @@ use std::time::Duration;
 use elzevir_app::description::{instance_of_material, work_of_material};
 use elzevir_app::listing::sort_key;
 use elzevir_app::marc_mapping::{
-    source_admin, source_audience, source_content, source_description, source_extent, source_fixed,
-    source_notes, source_physical, source_provision, source_publication, source_relations,
-    source_responsibility, source_subjects, source_titles, source_typed_notes,
+    source_admin, source_audience, source_content, source_contributions, source_description,
+    source_extent, source_fixed, source_notes, source_physical, source_provision,
+    source_publication, source_relations, source_responsibility, source_subjects, source_titles,
+    source_typed_notes,
 };
 use elzevir_app::matching::{identifier_key, koha_biblionumber_key};
 use elzevir_domain::catalog::IdentifierKind;
@@ -22,7 +23,7 @@ use elzevir_domain::catalog::MaterialType;
 use elzevir_domain::statement::{Description, EntityKind, EntityRef, Statement};
 use rusqlite::{Connection, OpenFlags, params};
 
-use crate::catalog::{insert_notes, subject_id};
+use crate::catalog::{insert_notes, set_name_parts, subject_id};
 use crate::statements::{read_description, store_description};
 use crate::{CommandFailed, StoreError};
 
@@ -388,6 +389,10 @@ const MIGRATIONS: &[&str] = &[
      DROP INDEX subjects_identity;
      CREATE UNIQUE INDEX subjects_identity
          ON subjects (kind, heading, coalesce(thesaurus, 0), subdivisions);",
+    // 28: an agent keeps where each part of its heading after the first starts (item 29,
+    // part 5f), as `kind@start` pairs separated by commas. The migration fills them from
+    // the stored source records.
+    "ALTER TABLE agents ADD COLUMN name_parts TEXT NOT NULL DEFAULT '';",
 ];
 
 /// The migration that creates `match_keys`.
@@ -427,6 +432,8 @@ const FIXED_VERSION: i64 = 25;
 const RESPONSIBILITY_VERSION: i64 = 26;
 /// Migration that keeps what each subdivision of a subject names.
 const SUBDIVISIONS_VERSION: i64 = 27;
+/// Migration that keeps the parts of an agent's heading.
+const NAME_PARTS_VERSION: i64 = 28;
 /// Migration that drops `extra`.
 const DROP_EXTRA_VERSION: i64 = 13;
 /// Migration that adds the classes, and fills them with content, media, carrier and issuance.
@@ -543,6 +550,9 @@ fn apply_migrations(connection: &mut Connection, current: i64) -> Result<(), Sto
             }
             if version == SUBDIVISIONS_VERSION {
                 backfill_subdivisions(&tx)?;
+            }
+            if version == NAME_PARTS_VERSION {
+                backfill_name_parts(&tx)?;
             }
             if version == NO_CODES_VERSION || version == POLICIES_VERSION {
                 check_foreign_keys(&tx, version)?;
@@ -732,6 +742,20 @@ fn backfill_physical(connection: &Connection) -> Result<(), StoreError> {
         let unedited = old == new || extent.execute(params![id, new, old])? == 1;
         if unedited && let Some((_, of_instance)) = source_physical(&source) {
             add_missing(connection, EntityKind::Instance, id, of_instance)?;
+        }
+    }
+    Ok(())
+}
+
+/// Gives every stored agent without name parts the parts the source records of its Works
+/// give it, for the same kind and heading.
+fn backfill_name_parts(connection: &Connection) -> Result<(), StoreError> {
+    let mut sources = connection.prepare("SELECT record FROM source_records")?;
+    let mut rows = sources.query([])?;
+    while let Some(row) = rows.next()? {
+        let source: Vec<u8> = row.get(0)?;
+        for contribution in source_contributions(&source).unwrap_or_default() {
+            set_name_parts(connection, &contribution)?;
         }
     }
     Ok(())
@@ -961,7 +985,7 @@ mod catalog_tests {
         connection
             .execute_batch(
                 "DROP TABLE instance_notes; ALTER TABLE works DROP COLUMN audience;
-                 DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; DROP TABLE koha_type_statements; ALTER TABLE circulation_policies ADD COLUMN code TEXT; UPDATE circulation_policies SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 4 AND local_id = circulation_policies.id), 'P' || id); ALTER TABLE circulation_policies RENAME COLUMN name TO description; ALTER TABLE circulation_policies RENAME TO item_types; ALTER TABLE items RENAME COLUMN policy_id TO item_type; DELETE FROM koha_codes WHERE kind = 4; ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id), 'B' || id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id; ALTER TABLE items DROP COLUMN collection_id; DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes; ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone; ALTER TABLE branches DROP COLUMN email; ALTER TABLE branches DROP COLUMN url; ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; DROP INDEX subjects_identity; ALTER TABLE subjects DROP COLUMN subdivisions; CREATE UNIQUE INDEX subjects_identity ON subjects (kind, heading, coalesce(thesaurus, 0)); PRAGMA user_version = 5;",
+                 DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; DROP TABLE koha_type_statements; ALTER TABLE circulation_policies ADD COLUMN code TEXT; UPDATE circulation_policies SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 4 AND local_id = circulation_policies.id), 'P' || id); ALTER TABLE circulation_policies RENAME COLUMN name TO description; ALTER TABLE circulation_policies RENAME TO item_types; ALTER TABLE items RENAME COLUMN policy_id TO item_type; DELETE FROM koha_codes WHERE kind = 4; ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id), 'B' || id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id; ALTER TABLE items DROP COLUMN collection_id; DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes; ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone; ALTER TABLE branches DROP COLUMN email; ALTER TABLE branches DROP COLUMN url; ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; ALTER TABLE agents DROP COLUMN name_parts; DROP INDEX subjects_identity; ALTER TABLE subjects DROP COLUMN subdivisions; CREATE UNIQUE INDEX subjects_identity ON subjects (kind, heading, coalesce(thesaurus, 0)); PRAGMA user_version = 5;",
             )
             .unwrap();
         migrate(&mut connection).unwrap();
@@ -1523,9 +1547,59 @@ mod catalog_tests {
         );
     }
 
+    #[test]
+    fn migration_28_reads_the_name_parts_from_the_source_record() {
+        use elzevir_marc::{Field, Record, Subfield, Tag};
+        let subfield = |code: u8, value: &str| Subfield {
+            code,
+            value: value.as_bytes().to_vec(),
+        };
+        let mut source = Vec::new();
+        Record {
+            leader: *b"00000nam a2200000 a 4500",
+            fields: vec![Field::Data {
+                tag: Tag::new(*b"100"),
+                indicators: *b"1 ",
+                subfields: vec![
+                    subfield(b'a', "Assis, Machado de,"),
+                    subfield(b'd', "1839-1908."),
+                ],
+            }],
+        }
+        .write_iso2709(&mut source)
+        .unwrap();
+        let (_dir, mut connection) = catalog();
+        connection
+            .execute_batch(
+                "INSERT INTO agents (id, kind, heading) VALUES (1, 1, 'Assis, Machado de, 1839-1908');
+                 INSERT INTO contributions (work_id, position, agent_id, is_primary)
+                     VALUES (1, 0, 1, 1);",
+            )
+            .unwrap();
+        connection
+            .execute(
+                "UPDATE source_records SET record = ?1 WHERE instance_id = 1",
+                params![source],
+            )
+            .unwrap();
+        rewind(&connection, NAME_PARTS_VERSION - 1);
+        migrate(&mut connection).unwrap();
+        let parts: String = connection
+            .query_row("SELECT name_parts FROM agents WHERE id = 1", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(parts, "3@19");
+    }
+
     /// Takes a catalog back to schema `version`, undoing the migrations after it that change
     /// tables, so they can run again as on a database stored before them.
     fn rewind(connection: &Connection, version: i64) {
+        if version < NAME_PARTS_VERSION {
+            connection
+                .execute_batch("ALTER TABLE agents DROP COLUMN name_parts;")
+                .unwrap();
+        }
         if version < SUBDIVISIONS_VERSION {
             connection
                 .execute_batch(

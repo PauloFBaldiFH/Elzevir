@@ -71,10 +71,16 @@ contributions:
     heading: "Ginzberg, Eli, 1911-2002"
     role: aut
     primary: true
+    name_parts:
+      - kind: date
+        start: 15
   - kind: person
     heading: "Eichner, Alfred S., 1937-1988"
     role: autor
     primary: false
+    name_parts:
+      - kind: date
+        start: 20
 subjects:
   - kind: topic
     heading: Racismo -- Estados Unidos

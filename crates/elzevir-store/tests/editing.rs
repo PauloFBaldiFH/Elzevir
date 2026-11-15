@@ -11,7 +11,7 @@ use std::collections::BTreeSet;
 
 use elzevir_app::catalog::{
     CatalogCommand, CatalogOutput, CatalogReader, CatalogRefusal, InstanceChange, InstanceUpdate,
-    InstanceView, NewIdentifier, NewSubject, WorkChange, WorkUpdate,
+    InstanceView, NewContribution, NewIdentifier, NewSubject, WorkChange, WorkUpdate,
 };
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::export::{ExportOptions, export_marc21, item_codes};
@@ -448,4 +448,40 @@ fn a_subject_list_edit_keeps_what_the_kept_subdivisions_name() {
     );
     // A new heading typed as text has topics only.
     assert!(subjects.iter().any(|f| f.contains("Retórica\u{1f}xBrasil")));
+}
+
+#[test]
+fn a_contribution_typed_as_text_keeps_the_parts_of_its_agent() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = imported(&dir);
+    // The twelfth record has `100 $aFigueirêdo, Argemiro de,$d1901-1982`.
+    let before = view(&store, 12);
+    let contributions: Vec<NewContribution> = before
+        .contributors
+        .iter()
+        .enumerate()
+        .map(|(position, (kind, heading))| NewContribution {
+            kind: *kind,
+            heading: heading.clone(),
+            role: None,
+            primary: position == 0,
+            name_parts: Vec::new(),
+        })
+        .rev()
+        .collect();
+    run(
+        &store,
+        update_work(&before, vec![WorkChange::Contributions(contributions)]),
+    )
+    .unwrap();
+    let edited = fields(&export(&store));
+    let names: String = edited[11]
+        .iter()
+        .filter(|field| ["100", "700"].contains(&field.0.as_str()))
+        .map(|field| String::from_utf8_lossy(&field.1).into_owned())
+        .collect();
+    assert!(
+        names.contains("Figueirêdo, Argemiro de,\u{1f}d1901-1982"),
+        "{names}"
+    );
 }

@@ -60,6 +60,9 @@ contributions:
     heading: Universidade de São Paulo. Departamento de Economia. Fundação Instituto de Pesquisas Econômicas (SP)
     role: ~
     primary: false
+    name_parts:
+      - kind: subordinate
+        start: 27
 subjects:
   - kind: topic
     heading: Economia

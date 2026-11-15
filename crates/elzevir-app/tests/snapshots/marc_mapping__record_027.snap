@@ -27,6 +27,9 @@ contributions:
     heading: "Löwy, Michael, 1938-"
     role: ~
     primary: true
+    name_parts:
+      - kind: date
+        start: 15
 subjects:
   - kind: topic
     heading: Sociologia educacional

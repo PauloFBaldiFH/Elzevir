@@ -75,6 +75,7 @@ fn contribution(heading: &str, primary: bool) -> NewContribution {
         heading: heading.to_owned(),
         role: Some("aut".to_owned()),
         primary,
+        name_parts: Vec::new(),
     }
 }
 

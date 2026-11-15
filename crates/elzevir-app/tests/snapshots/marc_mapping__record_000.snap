@@ -27,6 +27,7 @@ contributions:
     heading: PREFEITURA MUNICIPAL DE FOZ DO IGUACU
     role: ~
     primary: true
+    name_parts: []
 subjects:
   - kind: topic
     heading: ESTATÍSTICA FOZ DO IGUAÇU

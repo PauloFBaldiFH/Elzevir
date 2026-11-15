@@ -113,6 +113,7 @@ fn stored(instance: i64) -> StoredRecord {
                 heading: "Assis, Machado de, 1839-1908".to_owned(),
                 role: Some("author".to_owned()),
                 primary: true,
+                name_parts: Vec::new(),
             }],
             subjects: Vec::new(),
             instance: NewInstance {

@@ -326,26 +326,21 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     ("092", 51, Gap::Local),
     ("094", 1, Gap::Local),
     ("098", 1, Gap::Local),
-    (
-        "100",
-        66,
-        Gap::Pending("subfields joined into $a; $e, $0 and $1 not kept"),
-    ),
-    ("100 punctuation", 15, Gap::Punctuation),
+    ("100", 14, Gap::Pending("$e beside $4, $0 and $1 not kept")),
+    ("100 punctuation", 24, Gap::Punctuation),
     (
         "100/ind1",
         3,
         Gap::Pending("type of personal name (forename) not mapped"),
     ),
     ("100/ind1 blank", 73, Gap::Blank),
-    ("110", 1, Gap::Pending("subfields joined into $a")),
     (
         "110/ind1",
         2,
         Gap::Pending("type of corporate name (jurisdiction) not mapped"),
     ),
     ("110/ind1 blank", 6, Gap::Blank),
-    ("111", 1, Gap::Pending("subfields joined into $a")),
+    ("111 punctuation", 1, Gap::Punctuation),
     (
         "130",
         1,
@@ -489,12 +484,8 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     ("655 punctuation", 1, Gap::Punctuation),
     ("690", 2, Gap::Local),
     ("695", 2, Gap::Local),
-    (
-        "700",
-        17,
-        Gap::Pending("subfields joined into $a; $0 and $1 not kept"),
-    ),
-    ("700 punctuation", 22, Gap::Punctuation),
+    ("700", 5, Gap::Pending("$e beside $4, $0 and $1 not kept")),
+    ("700 punctuation", 25, Gap::Punctuation),
     (
         "700/ind1",
         1,
@@ -503,8 +494,8 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     ("700/ind1 blank", 1, Gap::Blank),
     (
         "710",
-        5,
-        Gap::Pending("subfields joined into $a; $k not kept"),
+        3,
+        Gap::Pending("$k not kept; a repeated $a joins the $b"),
     ),
     ("710 punctuation", 3, Gap::Punctuation),
     (

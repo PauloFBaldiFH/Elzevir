@@ -27,10 +27,18 @@ contributions:
     heading: "Seminário Internacional de Crédito Imobiliário São Paulo, SP) 2005 (1"
     role: ~
     primary: true
+    name_parts:
+      - kind: place
+        start: 47
+      - kind: date
+        start: 62
+      - kind: number
+        start: 67
   - kind: organization
     heading: Associação Brasileira das Entidades de Crédito Imobiliário e Poupança
     role: ~
     primary: false
+    name_parts: []
 subjects:
   - kind: topic
     heading: Habitação -- Financiamento -- Congressos
