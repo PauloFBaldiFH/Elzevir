@@ -10,6 +10,7 @@ use elzevir_marc::Field;
 
 use super::Marc;
 use super::notes;
+use super::provision;
 use super::titles::{self, Owner};
 use crate::description::concept;
 
@@ -46,6 +47,7 @@ pub(super) fn instance(marc: &Marc<'_>) -> Description {
     statements.extend(coded(marc, *b"338", "carrier", "carriers"));
     statements.extend(titles::of_owner(marc, Owner::Instance));
     statements.extend(notes::of_owner(marc, Owner::Instance));
+    statements.extend(provision::of_instance(marc));
     Description {
         classes: Vec::new(),
         statements,

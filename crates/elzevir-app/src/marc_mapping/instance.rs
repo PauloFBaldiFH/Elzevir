@@ -7,17 +7,15 @@ use super::{DataField, Marc, text};
 use crate::catalog::{NewIdentifier, NewInstance, NewNote};
 
 pub(super) fn map(marc: &Marc<'_>, work_material_type: MaterialType) -> NewInstance {
-    let publication = marc
-        .data(b"264")
-        .find(|field| field.indicators[1] == b'1')
-        .or_else(|| marc.first(b"260"));
+    let publication = publication(marc);
     NewInstance {
         title: marc.first(b"245").map(title).unwrap_or_default(),
         material_type: electronic(marc, work_material_type).then_some(MaterialType::Digital),
         description: elzevir_domain::statement::Description::default(),
         edition: marc.first_text(b"250", b'a'),
-        place: publication.and_then(|field| field.text(b'a')),
-        publisher: publication.and_then(|field| field.text(b'b')),
+        // Several places and publishers of one publication, joined as ISBD does.
+        place: publication.and_then(|field| field.joined(b"a", " ; ")),
+        publisher: publication.and_then(|field| field.joined(b"b", " : ")),
         date: publication.and_then(|field| field.text(b'c')),
         extent: marc
             .first(b"300")
@@ -26,6 +24,13 @@ pub(super) fn map(marc: &Marc<'_>, work_material_type: MaterialType) -> NewInsta
         identifiers: identifiers(marc),
         notes: notes(marc),
     }
+}
+
+/// The field of the publication: the first `264` with second indicator `1`, else `260`.
+pub(super) fn publication<'a>(marc: &Marc<'a>) -> Option<DataField<'a>> {
+    marc.data(b"264")
+        .find(|field| field.indicators[1] == b'1')
+        .or_else(|| marc.first(b"260"))
 }
 
 /// `245`: `$a`, `$n`, `$p` in field order, then ` : ` and `$b`.

@@ -217,6 +217,7 @@ pub fn check(subject: EntityKind, statements: &[Statement]) -> Result<(), Statem
         if is_typed(subject.bibframe(), &statement.property)
             && !is_other_title(statement)
             && !is_typed_note(statement)
+            && !is_other_provision(statement)
         {
             return Err(StatementRefusal::Typed(statement.property.clone()));
         }
@@ -249,6 +250,16 @@ pub fn is_typed_note(statement: &Statement) -> bool {
     statement.property == "note"
         && matches!(&statement.value, Value::Resource(note)
             if note.class == "Note" && note.statements.iter().any(|s| s.property == "noteType"))
+}
+
+/// Whether `statement` is a provision activity other than the publication: production,
+/// distribution or manufacture (bibframe-completo.md, item 29, part 5c). The publication
+/// has its own fields.
+#[must_use]
+pub fn is_other_provision(statement: &Statement) -> bool {
+    statement.property == "provisionActivity"
+        && matches!(&statement.value, Value::Resource(activity)
+            if matches!(activity.class.as_str(), "Production" | "Distribution" | "Manufacture"))
 }
 
 /// Checks a whole description: its classes, then its statements (item 10h).
@@ -470,6 +481,27 @@ mod tests {
                 Ok(())
             );
         }
+        // Production, distribution and manufacture are statements; the publication is not.
+        assert_eq!(
+            check(
+                EntityKind::Instance,
+                &[statement(
+                    "provisionActivity",
+                    resource("Manufacture", vec![])
+                )]
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            check(
+                EntityKind::Instance,
+                &[statement(
+                    "provisionActivity",
+                    resource("Publication", vec![])
+                )]
+            ),
+            Err(StatementRefusal::Typed("provisionActivity".to_owned()))
+        );
         // A note with a type is a statement; a plain one has its own field.
         let typed = resource("Note", vec![statement("noteType", literal("bibliography"))]);
         assert_eq!(

@@ -66,6 +66,24 @@ instance:
                   Literal:
                     text: bibliography
                     language: ~
+      - property: provisionActivity
+        value:
+          Resource:
+            class: Manufacture
+            label: ~
+            statements:
+              - property: place
+                value:
+                  Resource:
+                    class: Place
+                    label: Brasília
+                    statements: []
+              - property: agent
+                value:
+                  Resource:
+                    class: Agent
+                    label: Secretaria Especial de Editoração e Publicações
+                    statements: []
   edition: ~
   place: "Brasília, DF"
   publisher: "Senado Federal, Subsecretaria de Edições Técnicas"
