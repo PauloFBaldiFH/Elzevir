@@ -400,5 +400,8 @@ fn changing_the_category_changes_the_classes_and_keeps_other_statements() {
     .unwrap();
     let after = store.description(work).unwrap();
     assert_eq!(after.classes, ["NotatedMusic"]);
-    assert_eq!(after.statements, [concept("content", "contentTypes", "ntm")]);
+    assert_eq!(
+        after.statements,
+        [concept("content", "contentTypes", "ntm")]
+    );
 }
