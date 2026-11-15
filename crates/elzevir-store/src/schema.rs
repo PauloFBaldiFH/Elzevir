@@ -266,6 +266,12 @@ const MIGRATIONS: &[&str] = &[
          class         INTEGER NOT NULL REFERENCES ontology_names (id),
          PRIMARY KEY (subject_kind, subject_id, class)
      ) STRICT, WITHOUT ROWID;",
+    // 13: `extra` gives way to the statements (bibframe-completo.md, item 7). Nothing ever
+    // wrote it; `check_extra_is_empty` refuses to drop a column that holds data.
+    "ALTER TABLE hubs DROP COLUMN extra;
+     ALTER TABLE works DROP COLUMN extra;
+     ALTER TABLE instances DROP COLUMN extra;
+     ALTER TABLE items DROP COLUMN extra;",
 ];
 
 /// The migration that creates `match_keys`.
@@ -279,6 +285,8 @@ const AUDIENCE_VERSION: i64 = 7;
 
 /// The migration that adds the listing `sort_key` of Works and Hubs.
 const SORT_KEY_VERSION: i64 = 8;
+/// Migration that drops `extra`.
+const DROP_EXTRA_VERSION: i64 = 13;
 /// Migration that adds the classes, and fills them with content, media, carrier and issuance.
 const CLASSES_VERSION: i64 = 12;
 
@@ -328,6 +336,9 @@ fn migrate(connection: &mut Connection) -> Result<(), StoreError> {
     let tx = connection.transaction()?;
     for (version, sql) in (1_i64..).zip(MIGRATIONS) {
         if version > current {
+            if version == DROP_EXTRA_VERSION {
+                check_extra_is_empty(&tx)?;
+            }
             tx.execute_batch(sql)?;
             if version == MATCH_KEYS_VERSION {
                 backfill_match_keys(&tx)?;
@@ -404,6 +415,25 @@ fn backfill_audience(connection: &Connection) -> Result<(), StoreError> {
         let record: Vec<u8> = row.get(1)?;
         if let Some(audience) = source_audience(&record) {
             update.execute(params![row.get::<_, i64>(0)?, audience])?;
+        }
+    }
+    Ok(())
+}
+
+/// No version of Elzevir wrote `extra`, so a value in it came from outside: the migration
+/// stops rather than lose it.
+fn check_extra_is_empty(connection: &Connection) -> Result<(), StoreError> {
+    for table in ["hubs", "works", "instances", "items"] {
+        // Table names come from the constant list above, never from data.
+        let filled: i64 = connection.query_row(
+            &format!("SELECT count(*) FROM {table} WHERE extra <> '{{}}'"),
+            [],
+            |row| row.get(0),
+        )?;
+        if filled > 0 {
+            return Err(StoreError::Sqlite(format!(
+                "{filled} rows of {table} hold data in `extra`; move it to statements first"
+            )));
         }
     }
     Ok(())
@@ -571,7 +601,7 @@ mod catalog_tests {
         connection
             .execute_batch(
                 "DROP TABLE instance_notes; ALTER TABLE works DROP COLUMN audience;
-                 DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; PRAGMA user_version = 5;",
+                 DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; PRAGMA user_version = 5;",
             )
             .unwrap();
         migrate(&mut connection).unwrap();
@@ -771,15 +801,33 @@ mod catalog_tests {
     }
 
     #[test]
-    fn extra_must_be_json() {
-        let (_dir, connection) = catalog();
-        assert!(
+    fn extra_is_dropped_only_when_empty() {
+        let (_dir, mut connection) = catalog();
+        let columns = |connection: &Connection| -> i64 {
             connection
-                .execute(
-                    "INSERT INTO works (title, extra) VALUES ('x', 'not json')",
-                    []
+                .query_row(
+                    "SELECT count(*) FROM pragma_table_info('works') WHERE name = 'extra'",
+                    [],
+                    |row| row.get(0),
                 )
-                .is_err()
-        );
+                .unwrap()
+        };
+        assert_eq!(columns(&connection), 0);
+        connection
+            .execute_batch(
+                "ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}';
+                 ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}';
+                 ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}';
+                 ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}';
+                 UPDATE works SET extra = '{\"x\":1}';
+                 PRAGMA user_version = 12;",
+            )
+            .unwrap();
+        assert!(migrate(&mut connection).is_err());
+        connection
+            .execute_batch("UPDATE works SET extra = '{}'")
+            .unwrap();
+        migrate(&mut connection).unwrap();
+        assert_eq!(columns(&connection), 0);
     }
 }
