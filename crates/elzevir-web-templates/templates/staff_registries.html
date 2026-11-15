@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}{{ t.get("registries-title") }}{% endblock %}
+{% macro rename(list, row) %}
+<li>
+  <form method="post" action="/equipe/admin/cadastros" class="registry-row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="list" value="{{ list }}">
+    <input type="hidden" name="id" value="{{ row.id }}">
+    <input type="text" name="name" value="{{ row.name }}" maxlength="256" required aria-label="{{ t.get("registries-name") }}">
+    <button type="submit" name="action" value="rename">{{ t.get("registries-save") }}</button>
+    <button type="submit" name="action" value="delete" formnovalidate>{{ t.get("registries-delete") }}</button>
+  </form>
+</li>
+{% endmacro %}
+{% macro create(list, branch) %}
+<li class="registry-new">
+  <form method="post" action="/equipe/admin/cadastros">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="list" value="{{ list }}">
+    <input type="hidden" name="branch" value="{{ branch }}">
+    <input type="text" name="name" maxlength="256" required placeholder="{{ t.get("registries-new") }}" aria-label="{{ t.get("registries-new") }}">
+    <button type="submit" name="action" value="create">{{ t.get("registries-add") }}</button>
+  </form>
+</li>
+{% endmacro %}
+{% block content %}
+<div class="registries">
+<h1>{{ t.get("registries-title") }}</h1>
+<p class="form-hint">{{ t.get("registries-intro") }}</p>
+{% if saved %}<p class="codes-alert codes-saved" role="status">{{ t.get("registries-saved") }}</p>{% endif %}
+{% if let Some(key) = refused %}<p class="codes-alert codes-refused" role="alert">{{ t.get(key) }}</p>{% endif %}
+<section id="registry-branches">
+  <h2>{{ t.get("registries-branches") }}</h2>
+  {% for branch in branches %}
+  <article class="registry-branch" id="branch-{{ branch.row.id }}">
+    <ul class="code-rows">{% call rename("branches", branch.row) %}{% endcall %}</ul>
+    <form method="post" action="/equipe/admin/cadastros" class="registry-contact">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="list" value="branches">
+      <input type="hidden" name="id" value="{{ branch.row.id }}">
+      <label>{{ t.get("registries-address") }} <input type="text" name="address" value="{{ branch.address }}" maxlength="512"></label>
+      <label>{{ t.get("registries-phone") }} <input type="tel" name="phone" value="{{ branch.phone }}" maxlength="512"></label>
+      <label>{{ t.get("registries-email") }} <input type="email" name="email" value="{{ branch.email }}" maxlength="512"></label>
+      <label>{{ t.get("registries-url") }} <input type="url" name="url" value="{{ branch.url }}" maxlength="512"></label>
+      <button type="submit" name="action" value="contact">{{ t.get("registries-save") }}</button>
+    </form>
+    <h3>{{ t.get("registries-sublocations") }}</h3>
+    <ul class="code-rows">
+      {% for row in branch.sublocations %}{% call rename("sublocations", row) %}{% endcall %}{% endfor %}
+      {% call create("sublocations", branch.row.id) %}{% endcall %}
+    </ul>
+    <h3>{{ t.get("registries-collections") }}</h3>
+    <ul class="code-rows">
+      {% for row in branch.collections %}{% call rename("collections", row) %}{% endcall %}{% endfor %}
+      {% call create("collections", branch.row.id) %}{% endcall %}
+    </ul>
+  </article>
+  {% endfor %}
+  <h3>{{ t.get("registries-new-branch") }}</h3>
+  <ul class="code-rows">{% call create("branches", 0) %}{% endcall %}</ul>
+</section>
+<section id="registry-policies">
+  <h2>{{ t.get("registries-policies") }}</h2>
+  <p class="form-hint">{{ t.get("registries-policies-hint") }}</p>
+  <ul class="code-rows">
+    {% for row in policies %}{% call rename("policies", row) %}{% endcall %}{% endfor %}
+    {% call create("policies", 0) %}{% endcall %}
+  </ul>
+</section>
+</div>
+{% endblock %}

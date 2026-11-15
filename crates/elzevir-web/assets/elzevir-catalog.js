@@ -1093,6 +1093,10 @@ class ItemGridElement extends HTMLElement {
 
   edit(cell, typed) {
     const column = this.columns[this.at(cell).column];
+    if (column?.list) {
+      this.choose(cell, column);
+      return;
+    }
     const input = document.createElement("input");
     input.type = "text";
     input.maxLength = 256;
@@ -1106,6 +1110,28 @@ class ItemGridElement extends HTMLElement {
     this.input = input;
     input.focus();
     if (typed === undefined) input.select();
+  }
+
+  // A column that names a registry row is a select of its names (item 23d); shelving
+  // places and collections offer only those of the row's home branch.
+  choose(cell, column) {
+    const select = document.createElement("select");
+    select.dataset.before = cell.textContent;
+    select.setAttribute("aria-label", this.querySelector(`th[data-col="${column.name}"]`)?.textContent ?? "");
+    const home = this.columns.findIndex((other) => other.name === "home_branch");
+    const branch = home >= 0 ? this.value(this.cells(cell.parentElement)[home]) : "";
+    const perBranch = column.list === "locations" || column.list === "collections";
+    select.append(new Option("", ""));
+    for (const option of this.querySelector(`#grid-list-${column.list}`)?.options ?? []) {
+      if (perBranch && option.dataset.branch !== branch) continue;
+      select.append(new Option(option.value, option.dataset.code ?? option.value));
+    }
+    select.value = this.value(cell);
+    cell.textContent = "";
+    cell.classList.add("editing");
+    cell.append(select);
+    this.input = select;
+    select.focus();
   }
 
   commit() {
@@ -1196,7 +1222,7 @@ class ItemGridElement extends HTMLElement {
       const { row, rows, column } = this.at(this.input?.parentElement ?? cell);
       const above = rows[rows.indexOf(row) - 1];
       const source = above ? this.cells(above)[column] : null;
-      if (this.input) this.input.value = source?.textContent ?? "";
+      if (this.input) this.input.value = (this.input instanceof HTMLSelectElement && source ? this.value(source) : source?.textContent) ?? "";
       else {
         this.setValue(cell, source ? this.value(source) : "");
         this.mark(row);
@@ -1287,6 +1313,8 @@ class ItemGridElement extends HTMLElement {
       }
       case "ArrowUp":
       case "ArrowDown": {
+        // In a select the arrows choose the option.
+        if (this.input instanceof HTMLSelectElement) return;
         event.preventDefault();
         this.move(this.commit(), event.key === "ArrowUp" ? -1 : 1, 0);
         return;

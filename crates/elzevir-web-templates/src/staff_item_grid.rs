@@ -64,6 +64,17 @@ pub struct GridCell {
 pub struct GridList {
     /// Its name, as columns refer to it.
     pub name: &'static str,
-    /// Each code and its name, in code order.
-    pub options: Vec<(String, String)>,
+    /// Its rows, in name order.
+    pub options: Vec<GridOption>,
+}
+
+/// One row a list cell can name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GridOption {
+    /// What the batch carries: an id.
+    pub key: String,
+    /// What the cell shows.
+    pub name: String,
+    /// The branch the row belongs to, for shelving places and collections.
+    pub branch: Option<String>,
 }

@@ -17,6 +17,7 @@ pub mod memory;
 pub mod opac;
 pub mod parallelism;
 pub mod profiles;
+pub mod registries;
 pub mod search;
 pub mod staff;
 pub mod suggestions;

@@ -323,6 +323,7 @@ pub(crate) fn code_lists(c: &Connection) -> Result<CodeLists, rusqlite::Error> {
         .collect::<Result<Vec<_>, _>>()?;
     Ok(CodeLists {
         branches,
+        contacts: crate::registries::contacts(c)?,
         policies,
         locations: places_of(
             c,

@@ -7,7 +7,6 @@
 
 mod assets;
 mod catalog;
-mod codes;
 mod creating;
 mod editing;
 mod items;
@@ -15,6 +14,7 @@ mod new_record;
 mod opac;
 mod record_fields;
 mod record_form;
+mod registries;
 mod security;
 mod session;
 mod staff;
@@ -150,8 +150,8 @@ pub fn router(state: AppState) -> Router {
         .route("/equipe/logout", post(staff::log_out))
         .route("/equipe/admin/memory", get(staff::memory))
         .route(
-            "/equipe/admin/codigos",
-            get(codes::code_tables).post(codes::name_code),
+            "/equipe/admin/cadastros",
+            get(registries::registries).post(registries::change_registry),
         )
         .layer(axum::middleware::map_response(security::headers))
         .with_state(state)

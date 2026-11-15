@@ -9,8 +9,8 @@ use crate::catalog::{
     CatalogOutput, CatalogRefusal, InstanceChange, InstanceUpdate, NewIdentifier,
     NewInstanceOfWork, NewRecord, WorkChange, WorkUpdate,
 };
-use crate::codes::NamedCode;
 use crate::items::ItemsUpdate;
+use crate::registries::RegistryChange;
 use crate::staff::StaffId;
 
 /// One edit from the screen.
@@ -26,8 +26,8 @@ pub enum Edit {
     NewInstance(Box<NewInstanceOfWork>),
     /// A batch of an Instance's Items (docs/specs/catalogo/exemplares.md).
     Items(Box<ItemsUpdate>),
-    /// Names for codes of the code tables (docs/specs/catalogo/tabelas-de-codigos.md).
-    Codes(Vec<NamedCode>),
+    /// A change to the registries (docs/specs/catalogo/bibframe-completo.md, item 23d).
+    Registry(RegistryChange),
 }
 
 /// Why an edit was not stored.

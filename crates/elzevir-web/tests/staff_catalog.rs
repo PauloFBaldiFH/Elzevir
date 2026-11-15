@@ -938,11 +938,11 @@ fn post_form(uri: &str, session: Option<&str>, form: &str) -> Request<Body> {
     builder.body(Body::from(form.to_owned())).unwrap()
 }
 
-/// docs/specs/catalogo/tabelas-de-codigos.md, items 14 to 17.
+/// docs/specs/catalogo/bibframe-completo.md, item 23d.
 #[tokio::test]
-async fn a_cataloguer_lists_and_renames_the_codes() {
+async fn a_cataloguer_lists_and_changes_the_registries() {
     let app = app();
-    let uri = "/equipe/admin/codigos";
+    let uri = "/equipe/admin/cadastros";
     let anonymous = send(&app, get(uri, None, None)).await;
     assert_eq!(anonymous.status(), StatusCode::SEE_OTHER);
     let bia = signed_in_as(&app, "bia").await;
@@ -954,15 +954,17 @@ async fn a_cataloguer_lists_and_renames_the_codes() {
     let ana = signed_in(&app).await;
     let token = page_token(&app, &ana).await;
     let page = body(send(&app, get(uri, Some(&ana), None)).await).await;
-    assert!(page.contains(r#"<section id="codes-branches">"#));
-    assert!(page.contains(r#"<input type="hidden" name="code" value="CENTRAL">"#));
+    assert!(page.contains(r#"<article class="registry-branch" id="branch-1">"#));
     assert!(page.contains(r#"name="name" value="Main Library""#));
     assert!(page.contains(r#"name="name" value="General stacks""#));
-    assert!(page.contains("No codes yet."));
+    assert!(page.contains(r#"name="name" value="Normal loan""#));
+    // No Koha code on the page: the core does not know them.
+    assert!(!page.contains("STACKS"));
     assert!(!page.contains("Saved."));
 
-    let rename =
-        |csrf: &str, name: &str| format!("csrf={csrf}&table=locations&code=STACKS&name={name}");
+    let rename = |csrf: &str, name: &str| {
+        format!("csrf={csrf}&action=rename&list=sublocations&id=1&name={name}")
+    };
     let unsigned = send(&app, post_form(uri, None, &rename(&token, "Estantes"))).await;
     assert_eq!(unsigned.status(), StatusCode::UNAUTHORIZED);
     let wrong_token = send(&app, post_form(uri, Some(&ana), &rename("x", "Estantes"))).await;
@@ -979,7 +981,7 @@ async fn a_cataloguer_lists_and_renames_the_codes() {
         post_form(
             uri,
             Some(&ana),
-            &format!("csrf={token}&table=patrons&code=A&name=B"),
+            &format!("csrf={token}&action=rename&list=patrons&id=1&name=B"),
         ),
     )
     .await;
@@ -1000,9 +1002,31 @@ async fn a_cataloguer_lists_and_renames_the_codes() {
     .await;
     assert_eq!(saved.status(), StatusCode::SEE_OTHER);
     let location = saved.headers().get(header::LOCATION).unwrap();
-    assert_eq!(location, "/equipe/admin/codigos?saved=1#codes-locations");
-    let after =
-        body(send(&app, get("/equipe/admin/codigos?saved=1", Some(&ana), None)).await).await;
+    assert_eq!(
+        location,
+        "/equipe/admin/cadastros?saved=1#registry-branches"
+    );
+    let place = send(
+        &app,
+        post_form(
+            uri,
+            Some(&ana),
+            &format!("csrf={token}&action=create&list=collections&branch=1&name=Infantil"),
+        ),
+    )
+    .await;
+    assert_eq!(
+        place.headers().get(header::LOCATION).unwrap(),
+        "/equipe/admin/cadastros?saved=1#branch-1"
+    );
+    let after = body(
+        send(
+            &app,
+            get("/equipe/admin/cadastros?saved=1", Some(&ana), None),
+        )
+        .await,
+    )
+    .await;
     assert!(after.contains("Saved."));
 }
 
