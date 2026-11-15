@@ -203,6 +203,7 @@ fn update_item(
             ],
         )
         .map_err(StoreError::from)?;
+    crate::places::sync_item(connection, id.0)?;
     Ok(())
 }
 

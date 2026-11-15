@@ -398,7 +398,7 @@ mod tests {
         assert!(matches!(
             check(
                 EntityKind::Work,
-                &[statement("content", concept("contentTypes", "BK"))]
+                &[statement("content", concept("contentTypes", "book"))]
             ),
             Err(StatementRefusal::UnknownConcept { .. })
         ));

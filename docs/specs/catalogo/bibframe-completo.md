@@ -123,16 +123,17 @@ A diretriz, em quatro frases:
 
 A etapa 4 mexe em tudo o que o exemplar aponta, então sai em quatro PRs. O critério de todos é o mesmo: **a exportação MARC dos registros do oráculo sai byte a byte igual à de antes**.
 
-23a. **Tabela da borda** (`koha_codes`: tipo, id interno, código do Koha). É o único lugar onde ficam `MAIN`, `GEN`, `BK` e semelhantes. Só a importação e a exportação MARC e o comando `elzevir koha-codes` a leem; domínio, comandos da tela e telas não a veem.
+23a. **Tabela da borda** (`koha_codes`: tipo, id interno, código do Koha). É o único lugar onde ficam os códigos que cada biblioteca usa no Koha para unidade, localização, coleção e tipo de item. Só a importação e a exportação MARC e o comando `elzevir koha-codes` a leem; domínio, comandos da tela e telas não a veem.
 23b. **Parte 4a, unidades, localizações e coleções.**
     - `branches` deixa de ter `code`; ganha os dados de contato do `bf:Organization` (endereço, telefone, e-mail, página), todos opcionais. O código antigo vai para a tabela da borda.
     - `sublocations` e `collections`: id gerado, unidade e nome, com nome único dentro da unidade. O exemplar aponta o id. Os termos `Location` e `Collection` de hoje viram uma linha por unidade que os usa, com o código antigo na borda.
     - Os comandos do exemplar (`ItemData`) passam a levar ids de unidade, localização e coleção. A localização e a coleção têm de ser da unidade de origem do exemplar; senão o comando recusa.
+    - Sai em dois PRs. **4a-1:** a migração 14 cria os cadastros (`sublocations`, `collections`), os dados de contato das unidades e a tabela da borda, e os preenche com o que já existe; toda gravação de exemplar mantém `items.sublocation_id` e `items.collection_id` em dia com os códigos que o exemplar ainda carrega, por uma função só. Dois códigos com o mesmo nome na mesma unidade: o segundo ganha o código entre parênteses no nome. **4a-2:** comandos, leituras e telas passam a usar só os ids, e saem `branches.code`, `items.location`, `items.collection` e os termos `Location` e `Collection`.
     - A importação MARC resolve `952 $a`, `$b`, `$c` e `$8` pela borda. Código de localização ou coleção ainda não visto numa unidade cria a linha com o código como nome provisório (o `koha-codes` ou a tela dão o nome depois). Unidade desconhecida continua recusada.
 23c. **Parte 4b, política de circulação no lugar do tipo de item.**
     - `circulation_policies`: id gerado e nome. Nesta fase é só o cadastro e a ligação; prazo, renovações e multa entram na Fase 3 (item 22).
     - O exemplar aponta a política (`bf:usageAndAccessPolicy`), obrigatória. `item_types` e a coluna `items.item_type` saem.
-    - As políticas são livres: cada biblioteca cadastra as suas, com o nome que quiser. O núcleo não conhece nenhum código de tipo (`BK`, `RO`, `GB`...).
+    - As políticas são livres: cada biblioteca cadastra as suas, com o nome que quiser. O núcleo não conhece nenhum código de tipo.
     - A migração cria uma política por tipo de item que já existe no banco, com o nome que o tipo tinha, e guarda o código do tipo na borda (`952 $y`, `942 $c`). Não deduz classe, gênero nem público do tipo: a descrição vem do registro (itens 10j e 10l).
     - A importação resolve `952 $y` (ou `942 $c`) pela borda; código desconhecido continua recusado.
 23d. **Parte 4c, telas.** Saem `/equipe/admin/codigos` e a tabela de tipos. Entram Unidades (nome e contato), e dentro de cada unidade as listas de Localizações e Coleções, e Políticas de circulação: só nomes, criar, renomear e apagar o que não está em uso. A grade de exemplares mostra caixas de seleção com esses nomes; a de localização e a de coleção mostram só as da unidade escolhida.
@@ -160,20 +161,7 @@ A etapa 4 mexe em tudo o que o exemplar aponta, então sai em quatro PRs. O crit
     - tipo de item → política de circulação de mesmo nome, com o código na tabela da borda;
     - unidades, localizações e coleções → os cadastros do item 19 e 20, com o código antigo na tabela da borda;
     - `extra` → declarações.
-32. (Decisão de Paulo, 2026-11-15.) Os códigos de tipo são locais de cada biblioteca e **não entram no núcleo**: o Elzevir usa só as classes e os vocabulários do BIBFRAME, e as políticas de circulação são cadastro livre. A tabela abaixo é o exemplo da biblioteca de Paulo; ela existe só como tabela de tradução na borda MARC (parte 4d), para converter o acervo legado:
-
-    | Tipo | Classe e conteúdo | Suporte | Gênero ou público |
-    |---|---|---|---|
-    | BK Livros | `bf:Text` | `bf:Print`, volume | |
-    | RO Romances | `bf:Text` | `bf:Print`, volume | gênero Romance |
-    | GB Gibis | `bf:Text` + `bf:StillImage` | `bf:Print`, volume | gênero HQ |
-    | LI Livros infantis | `bf:Text` | `bf:Print`, volume | público infantil |
-    | JV Livros juvenis | `bf:Text` | `bf:Print`, volume | público juvenil |
-    | LB Livros em braille | `bf:Text`, texto tátil | `bf:Tactile`, volume | |
-    | AL Audiolivros | `bf:Audio`, palavra falada | disco de áudio ou online | |
-    | DV DVDs | `bf:MovingImage` | videodisco | |
-
-    Quando o líder e o `008`/`007` do registro dizem outra coisa, vale o registro.
+32. (Decisão de Paulo, 2026-11-15.) **Fronteira:** o núcleo é BIBFRAME puro e não sabe de instituição nenhuma. Códigos locais de uma biblioteca (tipos de item, unidades, localizações, coleções e qualquer outra sigla) não aparecem em domínio, comandos, migrações, enums, dados iniciais nem nas specs de domínio. Unidades, localizações, coleções e políticas de circulação são cadastros genéricos, criados livremente por quem usa. Os dados de uma instância real existem só como fixture de teste do adaptador de importação e exportação MARC, e a tradução dos tipos locais (parte 4d) é dado de cada biblioteca, lido pela borda.
 
 ## 2. Origem no Koha
 

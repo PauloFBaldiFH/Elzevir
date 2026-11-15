@@ -74,6 +74,7 @@ pub(crate) fn name_codes(
             Change::Unchanged => count.unchanged += 1,
         }
     }
+    crate::places::sync_branches(connection)?;
     Ok(CatalogOutput::CodesNamed(counts))
 }
 
