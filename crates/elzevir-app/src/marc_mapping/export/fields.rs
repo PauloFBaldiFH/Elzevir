@@ -26,17 +26,19 @@ pub(super) fn first_index(record: &Record, tag: [u8; 3]) -> Option<usize> {
         .position(|field| *field.tag().as_bytes() == tag)
 }
 
-/// Inserts `fields` before the first field with a greater tag (all with the first's tag).
+/// Inserts each of `fields` before the first field with a greater tag, so a group that
+/// spans tags (`100` and `700`, `600` and `651`) still lands in tag order; fields of the same
+/// tag keep their order.
 pub(super) fn insert_in_tag_order(record: &mut Record, fields: Vec<Field>) {
-    let Some(tag) = fields.first().map(Field::tag) else {
-        return;
-    };
-    let at = record
-        .fields
-        .iter()
-        .position(|field| field.tag().as_bytes() > tag.as_bytes())
-        .unwrap_or(record.fields.len());
-    record.fields.splice(at..at, fields);
+    for field in fields {
+        let tag = field.tag();
+        let at = record
+            .fields
+            .iter()
+            .position(|present| present.tag().as_bytes() > tag.as_bytes())
+            .unwrap_or(record.fields.len());
+        record.fields.insert(at, field);
+    }
 }
 
 /// Sets `$code` of the first `tag` field to `value`, replacing every `$code` there.
