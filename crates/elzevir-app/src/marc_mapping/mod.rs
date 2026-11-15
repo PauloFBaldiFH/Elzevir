@@ -66,6 +66,16 @@ pub fn source_description(source: &[u8]) -> Option<(Description, Description)> {
     Some((description::work(&marc), description::instance(&marc)))
 }
 
+/// The Koha item type of a record: `942 $c`, or else the `$y` of its first `952`. Only
+/// the edge translation of types reads it (bibframe-completo.md, item 23e).
+#[must_use]
+pub fn koha_record_type(record: &Record) -> Option<String> {
+    let marc = Marc(record);
+    marc.first(b"942")
+        .and_then(|field| field.raw(b'c'))
+        .or_else(|| marc.data(b"952").find_map(|field| field.raw(b'y')))
+}
+
 /// Maps one MARC21 record, already in UTF-8, to a Work, its Instance and its Items.
 ///
 /// `source` is the record as it arrived, kept byte for byte in `source_records`.

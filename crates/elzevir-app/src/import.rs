@@ -15,12 +15,13 @@ use elzevir_marc::{DetectedEncoding, Limits, MarcReader, ReadError, Record, Reco
 use crate::catalog::{
     CatalogOutput, CatalogRefusal, ImportOutcome, ImportedItems, NewRecord, RefusedItem,
 };
-use crate::marc_mapping::{MappingError, marc_to_bibframe};
+use crate::koha_types::TypeTranslations;
+use crate::marc_mapping::{MappingError, koha_record_type, marc_to_bibframe};
 use crate::matching::Matching;
 pub use crate::parallelism::Parallelism;
 
 /// Settings of one import.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImportOptions {
     /// Limits applied to every record read.
     pub limits: Limits,
@@ -31,6 +32,9 @@ pub struct ImportOptions {
     /// How records are matched with stored ones; `None` stores every record
     /// (docs/specs/catalogo/casamento.md).
     pub matching: Option<Matching>,
+    /// The library's translation of its Koha item types, applied to what each record does
+    /// not already say (bibframe-completo.md, item 23e).
+    pub translations: TypeTranslations,
 }
 
 impl Default for ImportOptions {
@@ -40,6 +44,7 @@ impl Default for ImportOptions {
             parallelism: Parallelism::Serial,
             chunk: NonZeroUsize::new(1024).unwrap_or(NonZeroUsize::MIN),
             matching: None,
+            translations: TypeTranslations::default(),
         }
     }
 }
@@ -279,21 +284,29 @@ fn map_chunk(
     chunk: Vec<RawRecord>,
     options: &ImportOptions,
 ) -> Vec<(RawPlace, Result<NewRecord, RecordFailure>)> {
-    options
-        .parallelism
-        .map(chunk, |raw| prepare(raw, &options.limits))
+    options.parallelism.map(chunk, |raw| prepare(raw, options))
 }
 
 /// Decodes and maps one record. Pure: the same bytes give the same result on any thread.
-fn prepare(raw: RawRecord, limits: &Limits) -> (RawPlace, Result<NewRecord, RecordFailure>) {
+fn prepare(
+    raw: RawRecord,
+    options: &ImportOptions,
+) -> (RawPlace, Result<NewRecord, RecordFailure>) {
     let place = RawPlace {
         index: raw.index,
         offset: raw.offset,
     };
-    (place, to_model(raw.bytes, limits))
+    (
+        place,
+        to_model(raw.bytes, &options.limits, &options.translations),
+    )
 }
 
-fn to_model(bytes: Vec<u8>, limits: &Limits) -> Result<NewRecord, RecordFailure> {
+fn to_model(
+    bytes: Vec<u8>,
+    limits: &Limits,
+    translations: &TypeTranslations,
+) -> Result<NewRecord, RecordFailure> {
     let parsed = RecordRef::parse(&bytes, limits).map_err(RecordFailure::Unreadable)?;
     let already_utf8 = parsed.leader().get(9) == Some(&b'a');
     let mut record = Record::from_ref(&parsed);
@@ -309,7 +322,15 @@ fn to_model(bytes: Vec<u8>, limits: &Limits) -> Result<NewRecord, RecordFailure>
             .map_err(RecordFailure::Source)?;
         converted
     };
-    marc_to_bibframe(&record, Some(source)).map_err(RecordFailure::Mapping)
+    let mut model = marc_to_bibframe(&record, Some(source)).map_err(RecordFailure::Mapping)?;
+    if let Some(code) = koha_record_type(&record) {
+        translations.apply(
+            &code,
+            &mut model.work_description,
+            &mut model.instance.description,
+        );
+    }
+    Ok(model)
 }
 
 fn collect<P: PendingRecord>(waiting: &mut VecDeque<(RawPlace, P)>, report: &mut ImportReport) {

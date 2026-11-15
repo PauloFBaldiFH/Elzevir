@@ -59,6 +59,8 @@ enum Command {
     Export(catalog_cli::ExportArgs),
     /// Names branches, item types, locations and collections as a Koha names them.
     KohaCodes(koha_codes::KohaCodesArgs),
+    /// Sets how this library's Koha item types translate into BIBFRAME on import.
+    KohaTypes(catalog_cli::KohaTypesArgs),
 }
 
 #[derive(Subcommand)]
@@ -97,6 +99,7 @@ fn main() -> ExitCode {
         Command::Import(args) => catalog_cli::import(&args),
         Command::Export(args) => catalog_cli::export(&args),
         Command::KohaCodes(args) => koha_codes::koha_codes(&args),
+        Command::KohaTypes(args) => catalog_cli::koha_types(&args),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,

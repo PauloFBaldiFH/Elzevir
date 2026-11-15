@@ -10,6 +10,7 @@ pub mod editing;
 pub mod export;
 pub mod import;
 pub mod items;
+pub mod koha_types;
 pub mod listing;
 pub mod marc_mapping;
 pub mod matching;

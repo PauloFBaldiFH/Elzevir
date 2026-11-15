@@ -14,6 +14,7 @@ use elzevir_app::commands::WriteCommand;
 use elzevir_app::import::{
     ImportOptions, ImportReport, Parallelism, RecordFailure, RecordRejected, import_marc21,
 };
+use elzevir_app::koha_types::TypeTranslations;
 use elzevir_app::marc_mapping::marc_to_bibframe;
 use elzevir_marc::{Limits, Record, RecordRef};
 use elzevir_store::{ElzevirHandler, ElzevirStore, StoreConfig};
@@ -79,6 +80,7 @@ fn options(parallelism: Parallelism, chunk: usize) -> ImportOptions {
         parallelism,
         chunk: NonZeroUsize::new(chunk).unwrap(),
         matching: None,
+        translations: TypeTranslations::default(),
     }
 }
 
@@ -214,5 +216,93 @@ fn a_refused_record_is_reported_and_the_rest_imported() {
     assert_eq!(
         count(&store, "SELECT count(*) FROM effect_outbox"),
         imported
+    );
+}
+
+/// A one-record file: a Leader that says "text, monograph" and a `942 $c` of `type_code`.
+fn typed_record(type_code: &str) -> Vec<u8> {
+    use elzevir_marc::{Field, Subfield, Tag};
+    let field = |tag: &[u8; 3], code: u8, value: &str| Field::Data {
+        tag: Tag::new(*tag),
+        indicators: *b"  ",
+        subfields: vec![Subfield {
+            code,
+            value: value.as_bytes().to_vec(),
+        }],
+    };
+    let record = Record {
+        leader: *b"00000nam a2200000 a 4500",
+        fields: vec![
+            field(b"245", b'a', "A translated record"),
+            field(b"942", b'c', type_code),
+        ],
+    };
+    let mut out = Vec::new();
+    record.write_iso2709(&mut out).unwrap();
+    out
+}
+
+#[test]
+fn the_stored_type_translation_fills_only_what_the_record_does_not_say() {
+    use elzevir_app::catalog::StatementReader;
+    use elzevir_app::description::concept;
+    use elzevir_app::koha_types::{TypeTranslationSource, parse};
+    use elzevir_domain::statement::{EntityKind, EntityRef};
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = open(&dir);
+    let translations = parse(
+        "# type\tentity\tproperty\tvalue\n\
+         X1\twork\tclass\tCartography\n\
+         X1\twork\tcontent\tcontentTypes:cri\n\
+         X1\tinstance\tmedia\tmediaTypes:n\n",
+    )
+    .unwrap();
+    store
+        .submit(WriteCommand::Catalog(CatalogCommand::SetTypeTranslations(
+            translations.clone(),
+        )))
+        .unwrap()
+        .wait()
+        .unwrap();
+    assert_eq!(store.type_translations().unwrap(), translations);
+
+    let options = ImportOptions {
+        translations: store.type_translations().unwrap(),
+        ..options(Parallelism::Serial, 1)
+    };
+    let file = [typed_record("X1"), typed_record("X2")].concat();
+    assert_eq!(import(&store, &file, &options).imported, 2);
+    let description = |entity, id| store.description(EntityRef { entity, id }).unwrap();
+    let translated = description(EntityKind::Work, 1);
+    // The Leader's classes stay first; the translation adds the class it lacks.
+    assert_eq!(translated.classes, ["Text", "Monograph", "Cartography"]);
+    // The Leader already gives content, so the translated content is not added.
+    assert_eq!(
+        translated.statements,
+        [concept("content", "contentTypes", "txt")]
+    );
+    assert!(
+        description(EntityKind::Instance, 1)
+            .statements
+            .contains(&concept("media", "mediaTypes", "n"))
+    );
+    // A type with no translation imports as the record says.
+    assert_eq!(
+        description(EntityKind::Work, 2).classes,
+        ["Text", "Monograph"]
+    );
+
+    // Setting a new translation replaces the old one.
+    store
+        .submit(WriteCommand::Catalog(CatalogCommand::SetTypeTranslations(
+            TypeTranslations::default(),
+        )))
+        .unwrap()
+        .wait()
+        .unwrap();
+    assert_eq!(
+        store.type_translations().unwrap(),
+        TypeTranslations::default()
     );
 }
