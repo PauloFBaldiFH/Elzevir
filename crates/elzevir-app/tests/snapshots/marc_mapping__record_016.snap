@@ -37,14 +37,20 @@ subjects:
     heading: Administração pública
     thesaurus: ~
     subdivisions: []
+    name_parts: []
+    identifiers: []
   - kind: topic
     heading: Discurso
     thesaurus: ~
     subdivisions: []
+    name_parts: []
+    identifiers: []
   - kind: place
     heading: Brasil
     thesaurus: ~
     subdivisions: []
+    name_parts: []
+    identifiers: []
 instance:
   title: Discursos
   material_type: ~

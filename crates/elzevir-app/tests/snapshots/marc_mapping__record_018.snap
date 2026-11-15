@@ -103,12 +103,16 @@ subjects:
     thesaurus: ~
     subdivisions:
       - place
+    name_parts: []
+    identifiers: []
   - kind: topic
     heading: Negros -- história -- Estados Unidos
     thesaurus: ~
     subdivisions:
       - topic
       - place
+    name_parts: []
+    identifiers: []
 instance:
   title: "A Presença inquietante : a democracia norte-americana e o negro"
   material_type: ~

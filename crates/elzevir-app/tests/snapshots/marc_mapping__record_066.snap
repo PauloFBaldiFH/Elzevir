@@ -1028,6 +1028,8 @@ subjects:
     heading: Física -- Estudo e ensino
     thesaurus: ~
     subdivisions: []
+    name_parts: []
+    identifiers: []
 instance:
   title: Os fundamentos da física
   material_type: ~

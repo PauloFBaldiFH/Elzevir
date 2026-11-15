@@ -2,11 +2,11 @@
 //! The Work: category, titles, classification, languages, contributors, subjects (spec §1.1, §1.2).
 
 use elzevir_domain::catalog::{
-    AgentIdentifierKind, AgentKind, MaterialType, NamePartKind, SubjectKind,
+    AgentKind, AuthorityLinkKind, MaterialType, NamePartKind, SubjectKind,
 };
 
 use super::{DataField, MappingError, Marc, text};
-use crate::catalog::{AgentIdentifier, NamePart, NewContribution, NewSubject};
+use crate::catalog::{AuthorityLink, NamePart, NewContribution, NewSubject};
 
 /// What the record says about the Work.
 pub(super) struct Work {
@@ -124,11 +124,7 @@ fn contribution(tag: [u8; 3], field: DataField<'_>, primary: bool) -> Option<New
         (Some(b"10"), _) => AgentKind::Organization,
         _ => AgentKind::Meeting,
     };
-    let codes: &[u8] = if kind == AgentKind::Meeting {
-        b"abcdnq"
-    } else {
-        b"abcdq"
-    };
+    let codes = name_codes(kind);
     // Join first and clean once, so inner punctuation (`Ginzberg, Eli, 1911-2002`) stays.
     let heading = text::clean(field.raw_joined(codes)?.as_bytes())?;
     let name_parts = name_parts(kind, field, codes, &heading);
@@ -139,18 +135,7 @@ fn contribution(tag: [u8; 3], field: DataField<'_>, primary: bool) -> Option<New
     // The term is kept as written: without it a short term such as `org.` would come back
     // as the code `$4 org`.
     let role_term = term;
-    let identifiers = field
-        .subfields
-        .iter()
-        .filter_map(|subfield| {
-            let kind = match subfield.code {
-                b'0' => AgentIdentifierKind::AuthorityRecord,
-                b'1' => AgentIdentifierKind::RealWorldObject,
-                _ => return None,
-            };
-            text::trimmed(&subfield.value).map(|value| AgentIdentifier { kind, value })
-        })
-        .collect();
+    let identifiers = authority_links(field);
     Some(NewContribution {
         kind,
         heading,
@@ -160,6 +145,31 @@ fn contribution(tag: [u8; 3], field: DataField<'_>, primary: bool) -> Option<New
         name_parts,
         identifiers,
     })
+}
+
+/// The subfields that make the name of an agent (MARC21 X00, X10, X11).
+const fn name_codes(kind: AgentKind) -> &'static [u8] {
+    match kind {
+        AgentKind::Meeting => b"abcdnq",
+        AgentKind::Person | AgentKind::Family | AgentKind::Organization => b"abcdq",
+    }
+}
+
+/// The links a field gives its heading, in order: `$0` an authority record, `$1` the
+/// entity itself (the IRI of the agent in the LC conversion).
+fn authority_links(field: DataField<'_>) -> Vec<AuthorityLink> {
+    field
+        .subfields
+        .iter()
+        .filter_map(|subfield| {
+            let kind = match subfield.code {
+                b'0' => AuthorityLinkKind::AuthorityRecord,
+                b'1' => AuthorityLinkKind::RealWorldObject,
+                _ => return None,
+            };
+            text::trimmed(&subfield.value).map(|value| AuthorityLink { kind, value })
+        })
+        .collect()
 }
 
 /// Where each name subfield after the first starts in `heading`, which joins them with a
@@ -195,6 +205,7 @@ pub(super) const fn name_part_kind(agent: AgentKind, code: u8) -> Option<NamePar
         (AgentKind::Organization | AgentKind::Meeting, b'c') => Some(NamePartKind::Place),
         (_, b'd') => Some(NamePartKind::Date),
         (_, b'n') => Some(NamePartKind::Number),
+        (_, b't') => Some(NamePartKind::Title),
         _ => None,
     }
 }
@@ -209,6 +220,7 @@ pub(super) const fn name_part_code(agent: AgentKind, part: NamePartKind) -> u8 {
         (_, NamePartKind::Date) => b'd',
         (_, NamePartKind::FullerForm | NamePartKind::Subordinate) => b'q',
         (_, NamePartKind::Number) => b'n',
+        (_, NamePartKind::Title) => b't',
     }
 }
 
@@ -220,24 +232,30 @@ fn subjects(marc: &Marc<'_>) -> Vec<NewSubject> {
 
 /// The subject one field describes.
 pub(super) fn subject_of(tag: [u8; 3], field: DataField<'_>) -> Option<NewSubject> {
-    let kind = match &tag {
-        b"630" => SubjectKind::Title,
-        b"648" => SubjectKind::Temporal,
-        b"650" => SubjectKind::Topic,
-        b"651" => SubjectKind::Place,
-        b"655" => SubjectKind::GenreForm,
-        _ => SubjectKind::Agent,
+    let kind = match (&tag, field.indicators[0]) {
+        (b"600", b'3') => SubjectKind::Family,
+        (b"600", _) => SubjectKind::Person,
+        (b"610", _) => SubjectKind::Organization,
+        (b"611", _) => SubjectKind::Meeting,
+        (b"630", _) => SubjectKind::Title,
+        (b"648", _) => SubjectKind::Temporal,
+        (b"651", _) => SubjectKind::Place,
+        (b"655", _) => SubjectKind::GenreForm,
+        _ => SubjectKind::Topic,
     };
     subject(kind, field)
 }
 
 fn subject(kind: SubjectKind, field: DataField<'_>) -> Option<NewSubject> {
-    let main: &[u8] = if kind == SubjectKind::Agent {
-        b"abcdt"
-    } else {
-        b"a"
-    };
-    let mut heading = text::clean(field.raw_joined(main)?.as_bytes())?;
+    // A name, and the title of a name/title heading (`Brasil. $t Lei de diretrizes…`).
+    let codes: Vec<u8> = kind
+        .agent()
+        .map_or_else(|| b"a".to_vec(), |agent| [name_codes(agent), b"t"].concat());
+    let mut heading = text::clean(field.raw_joined(&codes)?.as_bytes())?;
+    let name_parts = kind
+        .agent()
+        .map(|agent| name_parts(agent, field, &codes, &heading))
+        .unwrap_or_default();
     let mut subdivisions = Vec::new();
     for subfield in field.subfields {
         let Some(kind) = subdivision_kind(subfield.code) else {
@@ -268,6 +286,8 @@ fn subject(kind: SubjectKind, field: DataField<'_>) -> Option<NewSubject> {
         heading,
         thesaurus,
         subdivisions,
+        name_parts,
+        identifiers: authority_links(field),
     })
 }
 

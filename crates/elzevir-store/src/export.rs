@@ -4,13 +4,13 @@
 use std::num::NonZeroUsize;
 
 use elzevir_app::catalog::{
-    AgentIdentifier, CatalogReadError, ItemData, NewContribution, NewIdentifier, NewInstance,
+    AuthorityLink, CatalogReadError, ItemData, NewContribution, NewIdentifier, NewInstance,
     NewNote, NewRecord, NewSubject, NewWorkRelation,
 };
 use elzevir_app::export::{RecordSource, StoredRecord};
 use elzevir_domain::catalog::{
-    AgentIdentifierKind, AgentKind, HubId, IdentifierKind, InstanceId, MaterialType, Money,
-    NoteKind, SubjectKind,
+    AgentKind, AuthorityLinkKind, HubId, IdentifierKind, InstanceId, MaterialType, Money, NoteKind,
+    SubjectKind,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
@@ -218,44 +218,46 @@ pub(crate) fn contributions(
                     role_term,
                     primary,
                     name_parts: name_parts_of_column(&name_parts)?,
-                    identifiers: contribution_identifiers(c, work, position)?,
+                    identifiers: links(
+                        c,
+                        "SELECT kind, value FROM contribution_identifiers
+                         WHERE work_id = ?1 AND contribution = ?2 ORDER BY position",
+                        work,
+                        position,
+                    )?,
                 })
             },
         )
         .collect()
 }
 
-fn contribution_identifiers(
+/// The links of the heading at `position` of `work`, read by `select` (a fixed statement).
+fn links(
     c: &Connection,
+    select: &'static str,
     work: i64,
-    contribution: i64,
-) -> Result<Vec<AgentIdentifier>, ReadFailure> {
-    let mut statement = c.prepare_cached(
-        "SELECT kind, value FROM contribution_identifiers
-         WHERE work_id = ?1 AND contribution = ?2 ORDER BY position",
-    )?;
+    position: i64,
+) -> Result<Vec<AuthorityLink>, ReadFailure> {
+    let mut statement = c.prepare_cached(select)?;
     let rows = statement
-        .query_map(params![work, contribution], |row| {
+        .query_map(params![work, position], |row| {
             Ok((row.get::<_, u8>(0)?, row.get::<_, String>(1)?))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     rows.into_iter()
         .map(|(kind, value)| {
-            Ok(AgentIdentifier {
-                kind: required(
-                    kind,
-                    "agent identifier kind",
-                    AgentIdentifierKind::from_code,
-                )?,
+            Ok(AuthorityLink {
+                kind: required(kind, "authority link kind", AuthorityLinkKind::from_code)?,
                 value,
             })
         })
         .collect()
 }
 
-fn subjects(c: &Connection, work: i64) -> Result<Vec<NewSubject>, ReadFailure> {
+pub(crate) fn subjects(c: &Connection, work: i64) -> Result<Vec<NewSubject>, ReadFailure> {
     let mut statement = c.prepare_cached(
-        "SELECT subjects.kind, subjects.heading, terms.code, subjects.subdivisions
+        "SELECT subjects.kind, subjects.heading, terms.code, subjects.subdivisions,
+                subjects.name_parts, position
          FROM work_subjects
          JOIN subjects ON subjects.id = work_subjects.subject_id
          LEFT JOIN terms ON terms.id = subjects.thesaurus
@@ -264,22 +266,34 @@ fn subjects(c: &Connection, work: i64) -> Result<Vec<NewSubject>, ReadFailure> {
     let rows = statement
         .query_map(params![work], |row| {
             Ok((
-                row.get::<_, u8>(0)?,
-                row.get(1)?,
-                row.get(2)?,
-                row.get::<_, String>(3)?,
+                (row.get::<_, u8>(0)?, row.get(1)?, row.get(2)?),
+                (
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, i64>(5)?,
+                ),
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     rows.into_iter()
-        .map(|(kind, heading, thesaurus, subdivisions)| {
-            Ok(NewSubject {
-                kind: required(kind, "subject kind", SubjectKind::from_code)?,
-                heading,
-                thesaurus,
-                subdivisions: subdivisions_of_column(&subdivisions)?,
-            })
-        })
+        .map(
+            |((kind, heading, thesaurus), (subdivisions, name_parts, position))| {
+                Ok(NewSubject {
+                    kind: required(kind, "subject kind", SubjectKind::from_code)?,
+                    heading,
+                    thesaurus,
+                    subdivisions: subdivisions_of_column(&subdivisions)?,
+                    name_parts: name_parts_of_column(&name_parts)?,
+                    identifiers: links(
+                        c,
+                        "SELECT kind, value FROM subject_identifiers
+                         WHERE work_id = ?1 AND subject = ?2 ORDER BY position",
+                        work,
+                        position,
+                    )?,
+                })
+            },
+        )
         .collect()
 }
 

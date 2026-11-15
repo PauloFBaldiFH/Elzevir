@@ -87,6 +87,8 @@ fn subject(heading: &str) -> NewSubject {
         heading: heading.to_owned(),
         thesaurus: Some("lcsh".to_owned()),
         subdivisions: Vec::new(),
+        name_parts: Vec::new(),
+        identifiers: Vec::new(),
     }
 }
 

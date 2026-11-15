@@ -422,6 +422,8 @@ fn a_subject_list_edit_keeps_what_the_kept_subdivisions_name() {
             heading: heading.clone(),
             thesaurus: None,
             subdivisions: Vec::new(),
+            name_parts: Vec::new(),
+            identifiers: Vec::new(),
         })
         .collect();
     subjects.push(NewSubject {
@@ -429,6 +431,8 @@ fn a_subject_list_edit_keeps_what_the_kept_subdivisions_name() {
         heading: "Retórica -- Brasil".to_owned(),
         thesaurus: None,
         subdivisions: Vec::new(),
+        name_parts: Vec::new(),
+        identifiers: Vec::new(),
     });
     run(
         &store,
@@ -530,6 +534,56 @@ fn a_contribution_list_edit_keeps_the_relator_terms_and_authority_links() {
     );
     assert!(
         names[1].contains("\u{1f}eautor\u{1f}1http://viaf.org/viaf/94384300"),
+        "{names:?}"
+    );
+}
+
+#[test]
+fn a_subject_list_edit_keeps_the_parts_and_links_of_a_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = imported(&dir);
+    // The twentieth record has `600 14 $aQuércia, Orestes,$d1938-2010$1…$1…$0…`.
+    let before = view(&store, 20);
+    let mut subjects: Vec<NewSubject> = before
+        .subjects
+        .iter()
+        .map(|(kind, heading)| NewSubject {
+            kind: *kind,
+            heading: heading.clone(),
+            thesaurus: None,
+            subdivisions: Vec::new(),
+            name_parts: Vec::new(),
+            identifiers: Vec::new(),
+        })
+        .collect();
+    subjects.push(NewSubject {
+        kind: SubjectKind::Organization,
+        heading: "Brasil. Senado Federal".to_owned(),
+        thesaurus: None,
+        subdivisions: Vec::new(),
+        name_parts: Vec::new(),
+        identifiers: Vec::new(),
+    });
+    run(
+        &store,
+        update_work(&before, vec![WorkChange::Subjects(subjects)]),
+    )
+    .unwrap();
+    let edited = fields(&export(&store));
+    let names: Vec<String> = edited[19]
+        .iter()
+        .filter(|field| ["600", "610"].contains(&field.0.as_str()))
+        .map(|field| String::from_utf8_lossy(&field.1).into_owned())
+        .collect();
+    assert!(
+        names.iter().any(|f| f.contains(
+            "\u{1f}aQuércia, Orestes,\u{1f}d1938-2010\u{1f}1http://viaf.org/viaf/60476955"
+        )),
+        "{names:?}"
+    );
+    // A name typed in the form goes out as its kind, whole in `$a`.
+    assert!(
+        names.iter().any(|f| f == "24\u{1f}aBrasil. Senado Federal"),
         "{names:?}"
     );
 }

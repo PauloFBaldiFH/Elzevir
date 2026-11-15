@@ -37,22 +37,32 @@ subjects:
     heading: Sociologia educacional
     thesaurus: ~
     subdivisions: []
+    name_parts: []
+    identifiers: []
   - kind: topic
     heading: Sociologia do conhecimento
     thesaurus: ~
     subdivisions: []
+    name_parts: []
+    identifiers: []
   - kind: topic
     heading: Filosofia marxista
     thesaurus: ~
     subdivisions: []
+    name_parts: []
+    identifiers: []
   - kind: topic
     heading: Socialismo
     thesaurus: ~
     subdivisions: []
+    name_parts: []
+    identifiers: []
   - kind: topic
     heading: Positivismo
     thesaurus: ~
     subdivisions: []
+    name_parts: []
+    identifiers: []
 instance:
   title: "As aventuras de Karl Marx contra o Barão de Munchhausen : marxismo e positivismo na sociologia do conhecimento"
   material_type: ~

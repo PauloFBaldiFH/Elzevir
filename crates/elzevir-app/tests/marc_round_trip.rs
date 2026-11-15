@@ -459,11 +459,6 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     ("593", 1, Gap::Local),
     ("595", 14, Gap::Local),
     ("596", 1, Gap::Local),
-    (
-        "600",
-        9,
-        Gap::Pending("subfields joined into $a; $0 and $1 not kept; a 610 comes back as 600"),
-    ),
     ("600 punctuation", 1, Gap::Punctuation),
     (
         "600/ind1",
@@ -471,9 +466,9 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
         Gap::Pending("type of personal name (forename) not mapped"),
     ),
     (
-        "610",
-        3,
-        Gap::Pending("subject of an organization not written"),
+        "610/ind1",
+        2,
+        Gap::Pending("type of corporate name (jurisdiction) not mapped"),
     ),
     ("630 punctuation", 1, Gap::Punctuation),
     ("650", 1, Gap::Pending("a field without a heading, only $2")),

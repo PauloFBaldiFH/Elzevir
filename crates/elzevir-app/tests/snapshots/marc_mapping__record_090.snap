@@ -46,14 +46,20 @@ subjects:
     heading: Investimentos -- Análise
     thesaurus: ~
     subdivisions: []
+    name_parts: []
+    identifiers: []
   - kind: topic
     heading: Administração financeira
     thesaurus: ~
     subdivisions: []
+    name_parts: []
+    identifiers: []
   - kind: topic
     heading: Matemática financeira
     thesaurus: ~
     subdivisions: []
+    name_parts: []
+    identifiers: []
 instance:
   title: Análise de investimentos & demonstrativos financeiros
   material_type: ~

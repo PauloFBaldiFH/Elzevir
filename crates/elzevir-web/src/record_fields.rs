@@ -332,7 +332,10 @@ const fn subject_key(kind: SubjectKind) -> &'static str {
     match kind {
         SubjectKind::Topic => "staff-subject-topic",
         SubjectKind::Place => "staff-subject-place",
-        SubjectKind::Agent => "staff-subject-agent",
+        SubjectKind::Person => "staff-subject-person",
+        SubjectKind::Organization => "staff-subject-organization",
+        SubjectKind::Meeting => "staff-subject-meeting",
+        SubjectKind::Family => "staff-subject-family",
         SubjectKind::Title => "staff-subject-title",
         SubjectKind::GenreForm => "staff-subject-genre-form",
         SubjectKind::Temporal => "staff-subject-temporal",
