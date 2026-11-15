@@ -1036,11 +1036,27 @@ instance:
       - property: electronicLocator
         value:
           Iri: "https://biblioteca.utfpr.edu.br/pergamumweb/vinculos/000046/00004651.png"
+      - property: note
+        value:
+          Resource:
+            class: Note
+            label: il.
+            statements:
+              - property: noteType
+                value:
+                  Literal:
+                    text: physical details
+                    language: ~
+      - property: dimensions
+        value:
+          Literal:
+            text: 24 cm
+            language: ~
   edition: 6. ed
   place: "São Paulo, SP"
   publisher: Moderna
   date: "1997"
-  extent: "3 v.: il.; 24 cm"
+  extent: 3 v.
   series: ~
   identifiers:
     - kind: isbn

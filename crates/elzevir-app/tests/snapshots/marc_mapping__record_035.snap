@@ -46,11 +46,27 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: note
+        value:
+          Resource:
+            class: Note
+            label: il.
+            statements:
+              - property: noteType
+                value:
+                  Literal:
+                    text: physical details
+                    language: ~
+      - property: dimensions
+        value:
+          Literal:
+            text: 21cm
+            language: ~
   edition: ~
   place: Rio de Janeiro
   publisher: Publitetto
   date: "2007"
-  extent: "150p. : il. ; 21cm."
+  extent: 150p.
   series: ~
   identifiers:
     - kind: isbn

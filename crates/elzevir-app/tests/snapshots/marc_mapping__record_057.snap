@@ -62,11 +62,16 @@ instance:
       - property: electronicLocator
         value:
           Iri: "https://biblioteca.utfpr.edu.br/pergamumweb/download/3B11F21829ABEDCCE0631E0886C819E6.png"
+      - property: dimensions
+        value:
+          Literal:
+            text: 21 cm
+            language: ~
   edition: 3. ed
   place: "Campinas, SP"
   publisher: Papirus
   date: "1994"
-  extent: 150 p.; 21 cm
+  extent: 150 p.
   series: ~
   identifiers:
     - kind: isbn

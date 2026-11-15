@@ -117,11 +117,27 @@ instance:
                     class: Agent
                     label: Secretaria Especial de Editoração e Publicações
                     statements: []
+      - property: note
+        value:
+          Resource:
+            class: Note
+            label: "il., retr."
+            statements:
+              - property: noteType
+                value:
+                  Literal:
+                    text: physical details
+                    language: ~
+      - property: dimensions
+        value:
+          Literal:
+            text: 23 cm
+            language: ~
   edition: ~
   place: "Brasília, DF"
   publisher: "Senado Federal, Subsecretaria de Edições Técnicas"
   date: "1998"
-  extent: "529 p. : il., retr. ; 23 cm."
+  extent: 529 p.
   series: Grandes vultos que honraram o Senado ; 3
   identifiers:
     - kind: isbn

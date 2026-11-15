@@ -232,7 +232,10 @@ fn instance_group(t: &I18n, record: &NewRecord) -> FieldGroup {
     push(
         &mut fields,
         "staff-fields-extent",
-        optional(&instance.extent),
+        optional(&elzevir_app::description::physical_description(
+            instance.extent.as_deref(),
+            &instance.description,
+        )),
     );
     push(
         &mut fields,
