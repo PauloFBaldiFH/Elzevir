@@ -166,9 +166,16 @@ fn subject(kind: SubjectKind, field: DataField<'_>) -> Option<NewSubject> {
         b"a"
     };
     let mut heading = text::clean(field.raw_joined(main)?.as_bytes())?;
-    if let Some(subdivisions) = field.joined(b"vxyz", " -- ") {
-        heading.push_str(" -- ");
-        heading.push_str(&subdivisions);
+    let mut subdivisions = Vec::new();
+    for subfield in field.subfields {
+        let Some(kind) = subdivision_kind(subfield.code) else {
+            continue;
+        };
+        if let Some(text) = text::clean(&subfield.value) {
+            heading.push_str(" -- ");
+            heading.push_str(&text);
+            subdivisions.push(kind);
+        }
     }
     let thesaurus = match field.indicators[1] {
         b'0' => Some("lcsh".to_owned()),
@@ -180,11 +187,28 @@ fn subject(kind: SubjectKind, field: DataField<'_>) -> Option<NewSubject> {
         b'7' => field.raw(b'2'),
         _ => None,
     };
+    // Only subdivisions other than topics need saying; a heading of topics keeps none.
+    if subdivisions.iter().all(|kind| *kind == SubjectKind::Topic) {
+        subdivisions.clear();
+    }
     Some(NewSubject {
         kind,
         heading,
         thesaurus,
+        subdivisions,
     })
+}
+
+/// What a subdivision subfield names, after the LC conversion (`ConvSpec-600-662.xsl`):
+/// `$v` a genre or form, `$x` a topic, `$y` a period, `$z` a place.
+pub(super) const fn subdivision_kind(code: u8) -> Option<SubjectKind> {
+    match code {
+        b'v' => Some(SubjectKind::GenreForm),
+        b'x' => Some(SubjectKind::Topic),
+        b'y' => Some(SubjectKind::Temporal),
+        b'z' => Some(SubjectKind::Place),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

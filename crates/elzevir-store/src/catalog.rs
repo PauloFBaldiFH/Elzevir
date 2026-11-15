@@ -353,21 +353,7 @@ pub(crate) fn link_subjects(
             Vocabulary::Thesaurus,
             subject.thesaurus.as_deref(),
         )?;
-        connection
-            .execute(
-                "INSERT INTO subjects (kind, heading, thesaurus) VALUES (?1, ?2, ?3)
-                 ON CONFLICT DO NOTHING",
-                params![subject.kind.code(), subject.heading, thesaurus],
-            )
-            .map_err(StoreError::from)?;
-        let subject_id: i64 = connection
-            .query_row(
-                "SELECT id FROM subjects
-                 WHERE kind = ?1 AND heading = ?2 AND coalesce(thesaurus, 0) = coalesce(?3, 0)",
-                params![subject.kind.code(), subject.heading, thesaurus],
-                |row| row.get(0),
-            )
-            .map_err(StoreError::from)?;
+        let subject_id = subject_id(connection, subject, thesaurus).map_err(StoreError::from)?;
         connection
             .execute(
                 "INSERT INTO work_subjects (work_id, position, subject_id) VALUES (?1, ?2, ?3)",
@@ -376,6 +362,64 @@ pub(crate) fn link_subjects(
             .map_err(StoreError::from)?;
     }
     Ok(())
+}
+
+/// The id of `subject`, which is created when no subject has its kind, heading, thesaurus
+/// and subdivisions.
+pub(crate) fn subject_id(
+    connection: &Connection,
+    subject: &NewSubject,
+    thesaurus: Option<i64>,
+) -> rusqlite::Result<i64> {
+    let subdivisions = subdivisions_column(&subject.subdivisions);
+    connection.execute(
+        "INSERT INTO subjects (kind, heading, thesaurus, subdivisions) VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT DO NOTHING",
+        params![
+            subject.kind.code(),
+            subject.heading,
+            thesaurus,
+            subdivisions
+        ],
+    )?;
+    connection.query_row(
+        "SELECT id FROM subjects
+         WHERE kind = ?1 AND heading = ?2 AND coalesce(thesaurus, 0) = coalesce(?3, 0)
+           AND subdivisions = ?4",
+        params![
+            subject.kind.code(),
+            subject.heading,
+            thesaurus,
+            subdivisions
+        ],
+        |row| row.get(0),
+    )
+}
+
+/// The kinds of the subdivisions as `subjects.subdivisions` keeps them: their codes,
+/// separated by commas.
+pub(crate) fn subdivisions_column(kinds: &[SubjectKind]) -> String {
+    kinds
+        .iter()
+        .map(|kind| kind.code().to_string())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// The kinds `subjects.subdivisions` keeps.
+pub(crate) fn subdivisions_of_column(column: &str) -> Result<Vec<SubjectKind>, ReadFailure> {
+    column
+        .split(',')
+        .filter(|code| !code.is_empty())
+        .map(|code| {
+            // A code that is not a number is no kind either; 0 names no kind.
+            let code = code.parse().unwrap_or(0);
+            SubjectKind::from_code(code).ok_or(ReadFailure::UnknownCode {
+                what: "subject subdivision",
+                code,
+            })
+        })
+        .collect()
 }
 
 fn add_instance(

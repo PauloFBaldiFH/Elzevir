@@ -313,10 +313,16 @@ pub struct NewContribution {
 pub struct NewSubject {
     /// Kind of subject.
     pub kind: SubjectKind,
-    /// The heading, as written.
+    /// The heading, as written, its subdivisions after ` -- `.
     pub heading: String,
     /// Thesaurus code, such as `lcsh`.
     pub thesaurus: Option<String>,
+    /// What each subdivision names, in order: the last `subdivisions.len()` parts of the
+    /// heading, as the components of a `madsrdf:ComplexSubject` (a topic, a place, a period,
+    /// a genre or form). Empty when the heading has no typed subdivisions; a subdivision
+    /// without a kind is a topic.
+    #[serde(default)]
+    pub subdivisions: Vec<SubjectKind>,
 }
 
 /// An Instance's own data.

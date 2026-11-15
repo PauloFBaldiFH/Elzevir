@@ -25,7 +25,7 @@ use elzevir_marc::{Field, Limits, Record, RecordRef, Subfield};
 
 use elzevir_domain::statement::{Description, Statement};
 
-use crate::catalog::{NewNote, NewRecord};
+use crate::catalog::{NewNote, NewRecord, NewSubject};
 
 pub use export::bibframe_to_marc;
 
@@ -152,6 +152,20 @@ pub fn source_responsibility(source: &[u8]) -> Option<(Vec<Statement>, Vec<State
     let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
     let record = Record::from_ref(&parsed);
     Some((Vec::new(), responsibility::of_instance(&Marc(&record))))
+}
+
+/// The subjects of a stored source record, for records stored before the model kept what
+/// their subdivisions name (bibframe-completo.md, item 29, part 5f).
+#[must_use]
+pub fn source_subjects(source: &[u8]) -> Option<Vec<NewSubject>> {
+    let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
+    let record = Record::from_ref(&parsed);
+    let marc = Marc(&record);
+    Some(
+        marc.data_in(&work::SUBJECT_TAGS)
+            .filter_map(|(tag, field)| work::subject_of(*tag, field))
+            .collect(),
+    )
 }
 
 /// The administrative metadata of a stored source record, for records stored before the

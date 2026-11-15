@@ -31,12 +31,15 @@ subjects:
   - kind: topic
     heading: Educação -- Filosofia
     thesaurus: ~
+    subdivisions: []
   - kind: topic
     heading: Arte na educação
     thesaurus: ~
+    subdivisions: []
   - kind: topic
     heading: Arte -- Estudo e ensino
     thesaurus: ~
+    subdivisions: []
 instance:
   title: Fundamentos estéticos da educação
   material_type: ~

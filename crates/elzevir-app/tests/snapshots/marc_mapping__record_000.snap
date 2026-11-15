@@ -31,9 +31,11 @@ subjects:
   - kind: topic
     heading: ESTATÍSTICA FOZ DO IGUAÇU
     thesaurus: ~
+    subdivisions: []
   - kind: topic
     heading: PARANÁ ESTATÍSTICA
     thesaurus: ~
+    subdivisions: []
 instance:
   title: Perfil - Anuário Estatístico
   material_type: ~

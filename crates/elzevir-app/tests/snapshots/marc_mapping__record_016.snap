@@ -31,12 +31,15 @@ subjects:
   - kind: topic
     heading: Administração pública
     thesaurus: ~
+    subdivisions: []
   - kind: topic
     heading: Discurso
     thesaurus: ~
+    subdivisions: []
   - kind: place
     heading: Brasil
     thesaurus: ~
+    subdivisions: []
 instance:
   title: Discursos
   material_type: ~

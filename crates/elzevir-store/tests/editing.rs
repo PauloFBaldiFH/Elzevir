@@ -11,12 +11,12 @@ use std::collections::BTreeSet;
 
 use elzevir_app::catalog::{
     CatalogCommand, CatalogOutput, CatalogReader, CatalogRefusal, InstanceChange, InstanceUpdate,
-    InstanceView, NewIdentifier, WorkChange, WorkUpdate,
+    InstanceView, NewIdentifier, NewSubject, WorkChange, WorkUpdate,
 };
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::export::{ExportOptions, export_marc21, item_codes};
 use elzevir_app::import::{ImportOptions, import_marc21};
-use elzevir_domain::catalog::{IdentifierKind, InstanceId, WorkId};
+use elzevir_domain::catalog::{IdentifierKind, InstanceId, SubjectKind, WorkId};
 use elzevir_marc::{Limits, MarcReader};
 use elzevir_store::{CommandFailed, ElzevirHandler, ElzevirStore, StoreConfig};
 
@@ -405,4 +405,47 @@ fn changing_the_category_changes_the_classes_and_keeps_other_statements() {
         after.statements,
         [concept("content", "contentTypes", "ntm")]
     );
+}
+
+#[test]
+fn a_subject_list_edit_keeps_what_the_kept_subdivisions_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = imported(&dir);
+    // The twelfth record has `650 $aDiscursos parlamentares$zBrasil`.
+    let before = view(&store, 12);
+    // The form sends each heading as text, without the kinds of its subdivisions.
+    let mut subjects: Vec<NewSubject> = before
+        .subjects
+        .iter()
+        .map(|(kind, heading)| NewSubject {
+            kind: *kind,
+            heading: heading.clone(),
+            thesaurus: None,
+            subdivisions: Vec::new(),
+        })
+        .collect();
+    subjects.push(NewSubject {
+        kind: SubjectKind::Topic,
+        heading: "Retórica -- Brasil".to_owned(),
+        thesaurus: None,
+        subdivisions: Vec::new(),
+    });
+    run(
+        &store,
+        update_work(&before, vec![WorkChange::Subjects(subjects)]),
+    )
+    .unwrap();
+    let edited = fields(&export(&store));
+    let subjects: Vec<String> = edited[11]
+        .iter()
+        .filter(|field| field.0 == "650")
+        .map(|field| String::from_utf8_lossy(&field.1).into_owned())
+        .collect();
+    assert!(
+        subjects
+            .iter()
+            .any(|f| f.contains("Discursos parlamentares\u{1f}zBrasil"))
+    );
+    // A new heading typed as text has topics only.
+    assert!(subjects.iter().any(|f| f.contains("Retórica\u{1f}xBrasil")));
 }

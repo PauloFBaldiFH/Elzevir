@@ -509,12 +509,50 @@ fn subject_field(subject: &NewSubject) -> Field {
         Some("rvm") => (b'6', None),
         Some(other) => (b'7', Some(other)),
     };
-    let mut parts = subject.heading.split(" -- ");
-    let mut subfields: Vec<(u8, &str)> =
-        parts.next().map(|main| (b'a', main)).into_iter().collect();
-    subfields.extend(parts.map(|part| (b'x', part)));
+    let mut subfields: Vec<(u8, &str)> = subject_parts(subject)
+        .into_iter()
+        .map(|(kind, part)| (kind.map_or(b'a', subdivision_code), part))
+        .collect();
     subfields.extend(source.map(|source| (b'2', source)));
     data_field(tag, [first_indicator, second_indicator], &subfields)
+}
+
+/// The main heading (`None`) and each subdivision with its kind. The typed subdivisions are
+/// the last parts of the heading; the parts before them, after the first, are topics.
+fn subject_parts(subject: &NewSubject) -> Vec<(Option<SubjectKind>, &str)> {
+    let parts: Vec<&str> = subject.heading.split(" -- ").collect();
+    let typed = subject
+        .subdivisions
+        .len()
+        .min(parts.len().saturating_sub(1));
+    let untyped = parts.len() - typed;
+    let kinds = subject
+        .subdivisions
+        .iter()
+        .skip(subject.subdivisions.len() - typed);
+    parts
+        .iter()
+        .take(untyped)
+        .enumerate()
+        .map(|(position, part)| ((position > 0).then_some(SubjectKind::Topic), *part))
+        .chain(
+            parts
+                .iter()
+                .skip(untyped)
+                .zip(kinds)
+                .map(|(part, kind)| (Some(*kind), *part)),
+        )
+        .collect()
+}
+
+/// The subfield of a subdivision: `$v` genre or form, `$y` period, `$z` place, `$x` the rest.
+const fn subdivision_code(kind: SubjectKind) -> u8 {
+    match kind {
+        SubjectKind::GenreForm => b'v',
+        SubjectKind::Temporal => b'y',
+        SubjectKind::Place => b'z',
+        SubjectKind::Topic | SubjectKind::Agent | SubjectKind::Title => b'x',
+    }
 }
 
 fn identifier_field(identifier: &NewIdentifier) -> Field {

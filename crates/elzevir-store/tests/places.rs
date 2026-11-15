@@ -193,7 +193,7 @@ fn migration_14_fills_the_places_of_older_databases() {
              DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes;
              ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone;
              ALTER TABLE branches DROP COLUMN email; ALTER TABLE branches DROP COLUMN url;
-             PRAGMA user_version = 13;",
+             DROP INDEX subjects_identity; ALTER TABLE subjects DROP COLUMN subdivisions; CREATE UNIQUE INDEX subjects_identity ON subjects (kind, heading, coalesce(thesaurus, 0)); PRAGMA user_version = 13;",
         )
         .unwrap();
     drop(connection);

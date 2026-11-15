@@ -14,7 +14,7 @@ use elzevir_app::listing::sort_key;
 use elzevir_app::marc_mapping::{
     source_admin, source_audience, source_content, source_description, source_extent, source_fixed,
     source_notes, source_physical, source_provision, source_publication, source_relations,
-    source_responsibility, source_titles, source_typed_notes,
+    source_responsibility, source_subjects, source_titles, source_typed_notes,
 };
 use elzevir_app::matching::{identifier_key, koha_biblionumber_key};
 use elzevir_domain::catalog::IdentifierKind;
@@ -22,7 +22,7 @@ use elzevir_domain::catalog::MaterialType;
 use elzevir_domain::statement::{Description, EntityKind, EntityRef, Statement};
 use rusqlite::{Connection, OpenFlags, params};
 
-use crate::catalog::insert_notes;
+use crate::catalog::{insert_notes, subject_id};
 use crate::statements::{read_description, store_description};
 use crate::{CommandFailed, StoreError};
 
@@ -381,6 +381,13 @@ const MIGRATIONS: &[&str] = &[
     // 26: the statement of responsibility (`245 $c`) becomes a statement of the Instance
     // (item 29, part 5f); the migration only fills it from the stored source records.
     "SELECT 1;",
+    // 27: a subject keeps what each subdivision names (item 29, part 5f), as the codes of
+    // its kinds separated by commas; two headings with other subdivisions are two subjects.
+    // The migration fills them from the stored source records.
+    "ALTER TABLE subjects ADD COLUMN subdivisions TEXT NOT NULL DEFAULT '';
+     DROP INDEX subjects_identity;
+     CREATE UNIQUE INDEX subjects_identity
+         ON subjects (kind, heading, coalesce(thesaurus, 0), subdivisions);",
 ];
 
 /// The migration that creates `match_keys`.
@@ -418,6 +425,8 @@ const ADMIN_VERSION: i64 = 24;
 const FIXED_VERSION: i64 = 25;
 /// Migration that fills the statement of responsibility.
 const RESPONSIBILITY_VERSION: i64 = 26;
+/// Migration that keeps what each subdivision of a subject names.
+const SUBDIVISIONS_VERSION: i64 = 27;
 /// Migration that drops `extra`.
 const DROP_EXTRA_VERSION: i64 = 13;
 /// Migration that adds the classes, and fills them with content, media, carrier and issuance.
@@ -531,6 +540,9 @@ fn apply_migrations(connection: &mut Connection, current: i64) -> Result<(), Sto
             }
             if version == RESPONSIBILITY_VERSION {
                 backfill_from_source(&tx, source_responsibility)?;
+            }
+            if version == SUBDIVISIONS_VERSION {
+                backfill_subdivisions(&tx)?;
             }
             if version == NO_CODES_VERSION || version == POLICIES_VERSION {
                 check_foreign_keys(&tx, version)?;
@@ -725,6 +737,62 @@ fn backfill_physical(connection: &Connection) -> Result<(), StoreError> {
     Ok(())
 }
 
+/// A subject of a Work as stored: position, kind, heading, thesaurus id and its code.
+type StoredSubject = (i64, u8, String, Option<i64>, Option<String>);
+
+/// Gives the subjects of every stored Work what their subdivisions name, from the source
+/// record of its first Instance. A subject is changed only where the Work still has it as
+/// the source record gives it (kind, heading and thesaurus), so an edited one stays as is.
+fn backfill_subdivisions(connection: &Connection) -> Result<(), StoreError> {
+    let mut sources = connection.prepare(
+        "SELECT i.work_id, s.record FROM instances i
+         JOIN source_records s ON s.instance_id = i.id
+         WHERE i.id = (SELECT min(id) FROM instances WHERE work_id = i.work_id
+                       AND id IN (SELECT instance_id FROM source_records))",
+    )?;
+    let mut current = connection.prepare(
+        "SELECT ws.position, s.kind, s.heading, s.thesaurus, t.code FROM work_subjects ws
+         JOIN subjects s ON s.id = ws.subject_id
+         LEFT JOIN terms t ON t.id = s.thesaurus
+         WHERE ws.work_id = ?1 AND s.subdivisions = '' ORDER BY ws.position",
+    )?;
+    let mut repoint = connection
+        .prepare("UPDATE work_subjects SET subject_id = ?3 WHERE work_id = ?1 AND position = ?2")?;
+    let mut rows = sources.query([])?;
+    while let Some(row) = rows.next()? {
+        let work: i64 = row.get(0)?;
+        let source: Vec<u8> = row.get(1)?;
+        let Some(subjects) = source_subjects(&source) else {
+            continue;
+        };
+        let mut present: Vec<StoredSubject> = current
+            .query_map(params![work], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            })?
+            .collect::<Result<_, _>>()?;
+        for subject in subjects.iter().filter(|s| !s.subdivisions.is_empty()) {
+            let found = present.iter().position(|(_, kind, heading, _, thesaurus)| {
+                *kind == subject.kind.code()
+                    && *heading == subject.heading
+                    && *thesaurus == subject.thesaurus
+            });
+            let Some(found) = found else {
+                continue;
+            };
+            let (position, _, _, thesaurus, _) = present.remove(found);
+            let id = subject_id(connection, subject, thesaurus)?;
+            repoint.execute(params![work, position, id])?;
+        }
+    }
+    Ok(())
+}
+
 /// The statements of the Work and of the Instance that a stored source record gives.
 type FromSource = fn(&[u8]) -> Option<(Vec<Statement>, Vec<Statement>)>;
 
@@ -893,7 +961,7 @@ mod catalog_tests {
         connection
             .execute_batch(
                 "DROP TABLE instance_notes; ALTER TABLE works DROP COLUMN audience;
-                 DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; DROP TABLE koha_type_statements; ALTER TABLE circulation_policies ADD COLUMN code TEXT; UPDATE circulation_policies SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 4 AND local_id = circulation_policies.id), 'P' || id); ALTER TABLE circulation_policies RENAME COLUMN name TO description; ALTER TABLE circulation_policies RENAME TO item_types; ALTER TABLE items RENAME COLUMN policy_id TO item_type; DELETE FROM koha_codes WHERE kind = 4; ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id), 'B' || id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id; ALTER TABLE items DROP COLUMN collection_id; DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes; ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone; ALTER TABLE branches DROP COLUMN email; ALTER TABLE branches DROP COLUMN url; ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; PRAGMA user_version = 5;",
+                 DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; DROP TABLE koha_type_statements; ALTER TABLE circulation_policies ADD COLUMN code TEXT; UPDATE circulation_policies SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 4 AND local_id = circulation_policies.id), 'P' || id); ALTER TABLE circulation_policies RENAME COLUMN name TO description; ALTER TABLE circulation_policies RENAME TO item_types; ALTER TABLE items RENAME COLUMN policy_id TO item_type; DELETE FROM koha_codes WHERE kind = 4; ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id), 'B' || id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id; ALTER TABLE items DROP COLUMN collection_id; DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes; ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone; ALTER TABLE branches DROP COLUMN email; ALTER TABLE branches DROP COLUMN url; ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; DROP INDEX subjects_identity; ALTER TABLE subjects DROP COLUMN subdivisions; CREATE UNIQUE INDEX subjects_identity ON subjects (kind, heading, coalesce(thesaurus, 0)); PRAGMA user_version = 5;",
             )
             .unwrap();
         migrate(&mut connection).unwrap();
@@ -949,9 +1017,7 @@ mod catalog_tests {
                 params![source],
             )
             .unwrap();
-        connection
-            .pragma_update(None, "user_version", TITLES_VERSION - 1)
-            .unwrap();
+        rewind(&connection, TITLES_VERSION - 1);
         migrate(&mut connection).unwrap();
         let titles = |entity| {
             read_description(&connection, EntityRef { entity, id: 1 })
@@ -1003,9 +1069,7 @@ mod catalog_tests {
                 params![source],
             )
             .unwrap();
-        connection
-            .pragma_update(None, "user_version", TYPED_NOTES_VERSION - 1)
-            .unwrap();
+        rewind(&connection, TYPED_NOTES_VERSION - 1);
         migrate(&mut connection).unwrap();
         let description =
             |entity| read_description(&connection, EntityRef { entity, id: 1 }).unwrap();
@@ -1068,9 +1132,7 @@ mod catalog_tests {
                 [],
             )
             .unwrap();
-        connection
-            .pragma_update(None, "user_version", PROVISION_VERSION - 1)
-            .unwrap();
+        rewind(&connection, PROVISION_VERSION - 1);
         migrate(&mut connection).unwrap();
         let (place, publisher): (String, String) = connection
             .query_row(
@@ -1127,9 +1189,7 @@ mod catalog_tests {
                 params![source],
             )
             .unwrap();
-        connection
-            .pragma_update(None, "user_version", RELATIONS_VERSION - 1)
-            .unwrap();
+        rewind(&connection, RELATIONS_VERSION - 1);
         migrate(&mut connection).unwrap();
         let work = read_description(
             &connection,
@@ -1179,9 +1239,7 @@ mod catalog_tests {
                 params![source],
             )
             .unwrap();
-        connection
-            .pragma_update(None, "user_version", CONTENT_VERSION - 1)
-            .unwrap();
+        rewind(&connection, CONTENT_VERSION - 1);
         migrate(&mut connection).unwrap();
         let properties = |entity| {
             read_description(&connection, EntityRef { entity, id: 1 })
@@ -1248,9 +1306,7 @@ mod catalog_tests {
                 )
                 .unwrap();
         }
-        connection
-            .pragma_update(None, "user_version", PHYSICAL_VERSION - 1)
-            .unwrap();
+        rewind(&connection, PHYSICAL_VERSION - 1);
         migrate(&mut connection).unwrap();
         let read = |id: i64| {
             let extent: Option<String> = connection
@@ -1304,9 +1360,7 @@ mod catalog_tests {
                 params![source],
             )
             .unwrap();
-        connection
-            .pragma_update(None, "user_version", ADMIN_VERSION - 1)
-            .unwrap();
+        rewind(&connection, ADMIN_VERSION - 1);
         migrate(&mut connection).unwrap();
         let instance = read_description(
             &connection,
@@ -1354,9 +1408,7 @@ mod catalog_tests {
                 params![source],
             )
             .unwrap();
-        connection
-            .pragma_update(None, "user_version", FIXED_VERSION - 1)
-            .unwrap();
+        rewind(&connection, FIXED_VERSION - 1);
         migrate(&mut connection).unwrap();
         let properties = |entity| {
             read_description(&connection, EntityRef { entity, id: 1 })
@@ -1400,9 +1452,7 @@ mod catalog_tests {
                 params![source],
             )
             .unwrap();
-        connection
-            .pragma_update(None, "user_version", RESPONSIBILITY_VERSION - 1)
-            .unwrap();
+        rewind(&connection, RESPONSIBILITY_VERSION - 1);
         migrate(&mut connection).unwrap();
         let instance = read_description(
             &connection,
@@ -1422,6 +1472,73 @@ mod catalog_tests {
                 },
             }]
         );
+    }
+
+    #[test]
+    fn migration_27_reads_what_the_subdivisions_name_from_the_source_record() {
+        use elzevir_marc::{Field, Record, Subfield, Tag};
+        let subfield = |code: u8, value: &str| Subfield {
+            code,
+            value: value.as_bytes().to_vec(),
+        };
+        let mut source = Vec::new();
+        Record {
+            leader: *b"00000nam a2200000 a 4500",
+            fields: vec![Field::Data {
+                tag: Tag::new(*b"650"),
+                indicators: *b" 4",
+                subfields: vec![subfield(b'a', "Racismo"), subfield(b'z', "Estados Unidos.")],
+            }],
+        }
+        .write_iso2709(&mut source)
+        .unwrap();
+        let (_dir, mut connection) = catalog();
+        connection
+            .execute_batch(
+                "INSERT INTO subjects (id, kind, heading) VALUES (1, 1, 'Racismo -- Estados Unidos');
+                 INSERT INTO work_subjects (work_id, position, subject_id) VALUES (1, 0, 1);",
+            )
+            .unwrap();
+        connection
+            .execute(
+                "UPDATE source_records SET record = ?1 WHERE instance_id = 1",
+                params![source],
+            )
+            .unwrap();
+        rewind(&connection, SUBDIVISIONS_VERSION - 1);
+        migrate(&mut connection).unwrap();
+        let subdivisions: String = connection
+            .query_row(
+                "SELECT s.subdivisions FROM work_subjects ws JOIN subjects s ON s.id = ws.subject_id
+                 WHERE ws.work_id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            subdivisions,
+            elzevir_domain::catalog::SubjectKind::Place
+                .code()
+                .to_string()
+        );
+    }
+
+    /// Takes a catalog back to schema `version`, undoing the migrations after it that change
+    /// tables, so they can run again as on a database stored before them.
+    fn rewind(connection: &Connection, version: i64) {
+        if version < SUBDIVISIONS_VERSION {
+            connection
+                .execute_batch(
+                    "DROP INDEX subjects_identity;
+                     ALTER TABLE subjects DROP COLUMN subdivisions;
+                     CREATE UNIQUE INDEX subjects_identity
+                         ON subjects (kind, heading, coalesce(thesaurus, 0));",
+                )
+                .unwrap();
+        }
+        connection
+            .pragma_update(None, "user_version", version)
+            .unwrap();
     }
 
     fn catalog() -> (tempfile::TempDir, Connection) {
@@ -1618,10 +1735,10 @@ mod catalog_tests {
                  ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}';
                  ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}';
                  ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}';
-                 UPDATE works SET extra = '{\"x\":1}';
-                 PRAGMA user_version = 12;",
+                 UPDATE works SET extra = '{\"x\":1}';",
             )
             .unwrap();
+        rewind(&connection, 12);
         assert!(migrate(&mut connection).is_err());
         connection
             .execute_batch("UPDATE works SET extra = '{}'")

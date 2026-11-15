@@ -6,7 +6,8 @@
 //! only the fields the model maps, so fields nobody edited go out as they came in.
 
 use elzevir_app::catalog::{
-    CatalogOutput, CatalogRefusal, InstanceChange, InstanceUpdate, WorkChange, WorkUpdate,
+    CatalogOutput, CatalogRefusal, InstanceChange, InstanceUpdate, NewSubject, WorkChange,
+    WorkUpdate,
 };
 use elzevir_app::commands::WriteRefusal;
 use elzevir_app::listing::sort_key;
@@ -16,7 +17,7 @@ use rusqlite::{Connection, OptionalExtension, ToSql, params};
 
 use crate::catalog::{
     insert_identifiers, insert_notes, link_contributions, link_languages, link_subjects,
-    optional_term, record_changed, refused,
+    optional_term, record_changed, refused, subdivisions_of_column,
 };
 use crate::statements::recategorize;
 use crate::{CommandFailed, StoreError, WriteTx};
@@ -194,15 +195,56 @@ fn apply_work_change(
             link_contributions(connection, id, contributions)?;
         }
         WorkChange::Subjects(subjects) => {
+            let subjects = keep_subdivisions(connection, id, subjects).map_err(StoreError::from)?;
             clear(
                 connection,
                 "DELETE FROM work_subjects WHERE work_id = ?1",
                 id,
             )?;
-            link_subjects(connection, id, subjects)?;
+            link_subjects(connection, id, &subjects)?;
         }
     }
     Ok(())
+}
+
+/// `subjects` with the subdivisions of the Work's current subjects: the form edits a heading
+/// as text, so a subject that keeps its kind, heading and thesaurus keeps what its
+/// subdivisions name.
+fn keep_subdivisions(
+    connection: &Connection,
+    work: i64,
+    subjects: &[NewSubject],
+) -> rusqlite::Result<Vec<NewSubject>> {
+    let mut statement = connection.prepare(
+        "SELECT s.kind, s.heading, t.code, s.subdivisions FROM work_subjects ws
+         JOIN subjects s ON s.id = ws.subject_id
+         LEFT JOIN terms t ON t.id = s.thesaurus
+         WHERE ws.work_id = ?1 AND s.subdivisions <> '' ORDER BY ws.position",
+    )?;
+    let mut current: Vec<(u8, String, Option<String>, String)> = statement
+        .query_map(params![work], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })?
+        .collect::<Result<_, _>>()?;
+    Ok(subjects
+        .iter()
+        .map(|subject| {
+            let mut subject = subject.clone();
+            let found = current.iter().position(|(kind, heading, thesaurus, _)| {
+                *kind == subject.kind.code()
+                    && *heading == subject.heading
+                    && *thesaurus == subject.thesaurus
+            });
+            if subject.subdivisions.is_empty()
+                && let Some(found) = found
+            {
+                let (_, _, _, column) = current.remove(found);
+                // A column the store wrote always parses; one that does not keeps none.
+                subject.subdivisions = subdivisions_of_column(&column).unwrap_or_default();
+            }
+            subject
+        })
+        .collect())
 }
 
 fn apply_instance_change(
