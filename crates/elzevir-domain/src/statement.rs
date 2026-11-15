@@ -220,6 +220,7 @@ pub fn check(subject: EntityKind, statements: &[Statement]) -> Result<(), Statem
             && !is_other_provision(statement)
             && !is_language_part(statement)
             && !is_coded_publication(statement)
+            && !is_described_classification(statement)
         {
             return Err(StatementRefusal::Typed(statement.property.clone()));
         }
@@ -263,6 +264,17 @@ pub fn is_other_provision(statement: &Statement) -> bool {
     statement.property == "provisionActivity"
         && matches!(&statement.value, Value::Resource(activity)
             if matches!(activity.class.as_str(), "Production" | "Distribution" | "Manufacture"))
+}
+
+/// Whether `statement` is a classification described as a statement (bibframe-completo.md,
+/// item 29, part 5f): every classification but the Work's main number, which has its own
+/// field, and what the main one says beyond its number (edition, source, item number,
+/// assigner).
+#[must_use]
+pub fn is_described_classification(statement: &Statement) -> bool {
+    statement.property == "classification"
+        && matches!(&statement.value, Value::Resource(classification)
+            if bibframe::is_a(&classification.class, "Classification"))
 }
 
 /// Whether `statement` is the coded publication (bibframe-completo.md, item 29, part 5e): a
@@ -601,6 +613,22 @@ mod tests {
                 &[statement("provisionActivity", transcribed)]
             ),
             Err(StatementRefusal::Typed("provisionActivity".to_owned()))
+        );
+        // A classification is a statement; the main number keeps its field on the Work.
+        let udc = resource(
+            "ClassificationUdc",
+            vec![statement("classificationPortion", literal("316.7"))],
+        );
+        assert_eq!(
+            check(EntityKind::Work, &[statement("classification", udc)]),
+            Ok(())
+        );
+        assert_eq!(
+            check(
+                EntityKind::Work,
+                &[statement("classification", resource("Work", vec![]))]
+            ),
+            Err(StatementRefusal::Typed("classification".to_owned()))
         );
     }
 

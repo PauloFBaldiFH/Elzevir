@@ -5,6 +5,7 @@
 //! Everything it does not map stays in the preserved source record.
 
 mod admin;
+mod classification;
 mod content;
 mod description;
 mod export;
@@ -189,6 +190,15 @@ pub fn source_admin(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>)> {
     let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
     let record = Record::from_ref(&parsed);
     Some((Vec::new(), admin::of_instance(&Marc(&record))))
+}
+
+/// The classifications of a stored source record, for records stored before the model had
+/// them (bibframe-completo.md, item 29, part 5f). The Instance gets none.
+#[must_use]
+pub fn source_classification(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>)> {
+    let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
+    let record = Record::from_ref(&parsed);
+    Some((classification::of_work(&Marc(&record)), Vec::new()))
 }
 
 /// The description conventions Leader/18 of a stored source record names, for records

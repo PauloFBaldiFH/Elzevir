@@ -58,6 +58,39 @@ work_description:
                 Literal:
                   text: original
                   language: ~
+    - property: classification
+      value:
+        Resource:
+          class: ClassificationUdc
+          label: ~
+          statements:
+            - property: classificationPortion
+              value:
+                Literal:
+                  text: 323.1(73=96)(091)
+                  language: ~
+    - property: classification
+      value:
+        Resource:
+          class: ClassificationDdc
+          label: ~
+          statements:
+            - property: source
+              value:
+                Resource:
+                  class: Source
+                  label: ~
+                  statements:
+                    - property: code
+                      value:
+                        Literal:
+                          text: "23"
+                          language: ~
+            - property: edition
+              value:
+                Literal:
+                  text: full
+                  language: ~
 hub: ~
 relations: []
 classification: "301.451"

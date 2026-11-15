@@ -21,6 +21,7 @@ use crate::catalog::{
 };
 
 mod admin;
+mod classification;
 mod coded;
 mod content;
 mod described;
@@ -185,17 +186,7 @@ fn write_titles(out: &mut Record, model: &NewRecord, before: Option<&NewRecord>)
         set_subfield(out, *b"490", *b"0 ", b'a', name);
         set_subfield(out, *b"490", *b"0 ", b'v', number);
     }
-    if before.is_none_or(|b| {
-        (&b.classification, &b.classification_scheme)
-            != (&model.classification, &model.classification_scheme)
-    }) {
-        let tag = match model.classification_scheme.as_deref() {
-            Some("udc") => *b"080",
-            Some("lcc") => *b"050",
-            _ => *b"082",
-        };
-        set_subfield(out, tag, *b"04", b'a', model.classification.as_deref());
-    }
+    classification::write(out, model, before);
 }
 
 /// The `245` with the ISBD punctuation of the LC way back: ` :` before the subtitle, ` /`
