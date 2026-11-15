@@ -14,6 +14,7 @@ pub(super) fn map(marc: &Marc<'_>, work_material_type: MaterialType) -> NewInsta
     NewInstance {
         title: marc.first(b"245").map(title).unwrap_or_default(),
         material_type: electronic(marc, work_material_type).then_some(MaterialType::Digital),
+        description: elzevir_domain::statement::Description::default(),
         edition: marc.first_text(b"250", b'a'),
         place: publication.and_then(|field| field.text(b'a')),
         publisher: publication.and_then(|field| field.text(b'b')),

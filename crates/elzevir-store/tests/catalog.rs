@@ -87,6 +87,7 @@ fn record(title: &str) -> NewRecord {
     NewRecord {
         work_title: title.to_owned(),
         material_type: MaterialType::Book,
+        work_description: elzevir_domain::statement::Description::default(),
         hub: None,
         relations: Vec::new(),
         classification: Some("869.3".to_owned()),

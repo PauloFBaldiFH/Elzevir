@@ -9,14 +9,18 @@
 use std::path::Path;
 use std::time::Duration;
 
+use elzevir_app::description::{instance_of_material, work_of_material};
 use elzevir_app::listing::sort_key;
-use elzevir_app::marc_mapping::{source_audience, source_notes};
+use elzevir_app::marc_mapping::{source_audience, source_description, source_notes};
 use elzevir_app::matching::{identifier_key, koha_biblionumber_key};
 use elzevir_domain::catalog::IdentifierKind;
+use elzevir_domain::catalog::MaterialType;
+use elzevir_domain::statement::{Description, EntityKind, EntityRef};
 use rusqlite::{Connection, OpenFlags, params};
 
-use crate::StoreError;
 use crate::catalog::insert_notes;
+use crate::statements::store_description;
+use crate::{CommandFailed, StoreError};
 
 /// Ordered migrations; migration `n` (1-based) moves `user_version` from `n - 1` to `n`.
 const MIGRATIONS: &[&str] = &[
@@ -254,6 +258,14 @@ const MIGRATIONS: &[&str] = &[
      CREATE INDEX statements_of_subject ON statements (subject_kind, subject_id, position)
          WHERE parent IS NULL;
      CREATE INDEX statements_of_parent ON statements (parent, position) WHERE parent IS NOT NULL;",
+    // 12: the classes of each entity (bibframe-completo.md, item 10h).
+    "CREATE TABLE entity_classes (
+         subject_kind  INTEGER NOT NULL CHECK (subject_kind BETWEEN 1 AND 4),
+         subject_id    INTEGER NOT NULL,
+         position      INTEGER NOT NULL,
+         class         INTEGER NOT NULL REFERENCES ontology_names (id),
+         PRIMARY KEY (subject_kind, subject_id, class)
+     ) STRICT, WITHOUT ROWID;",
 ];
 
 /// The migration that creates `match_keys`.
@@ -267,6 +279,8 @@ const AUDIENCE_VERSION: i64 = 7;
 
 /// The migration that adds the listing `sort_key` of Works and Hubs.
 const SORT_KEY_VERSION: i64 = 8;
+/// Migration that adds the classes, and fills them with content, media, carrier and issuance.
+const CLASSES_VERSION: i64 = 12;
 
 /// How long a connection waits on a lock before failing. With a single writer this only
 /// covers checkpoints and external tools; it is not part of normal operation.
@@ -326,6 +340,9 @@ fn migrate(connection: &mut Connection) -> Result<(), StoreError> {
             }
             if version == SORT_KEY_VERSION {
                 backfill_sort_keys(&tx)?;
+            }
+            if version == CLASSES_VERSION {
+                backfill_descriptions(&tx)?;
             }
             tx.pragma_update(None, "user_version", version)?;
         }
@@ -390,6 +407,71 @@ fn backfill_audience(connection: &Connection) -> Result<(), StoreError> {
         }
     }
     Ok(())
+}
+
+/// Describes every Work and Instance already stored (bibframe-completo.md, item 31): from
+/// the source record as the import now reads it, or else from the category of material.
+fn backfill_descriptions(connection: &Connection) -> Result<(), StoreError> {
+    let mut works = connection.prepare(
+        "SELECT w.id, w.material_type, i.id, i.material_type, s.record
+         FROM works w
+         LEFT JOIN instances i ON i.work_id = w.id
+         LEFT JOIN source_records s ON s.instance_id = i.id
+         ORDER BY w.id, s.record IS NULL, i.id",
+    )?;
+    let mut rows = works.query([])?;
+    let mut described_work = None;
+    while let Some(row) = rows.next()? {
+        let work: i64 = row.get(0)?;
+        // Rows written before categories of material existed read as books, as the export does.
+        let work_material = material(row.get(1)?)?.unwrap_or(MaterialType::Book);
+        let instance: Option<i64> = row.get(2)?;
+        let source: Option<Vec<u8>> = row.get(4)?;
+        let from_source = source.as_deref().and_then(source_description);
+        let (work_description, instance_description) = match from_source {
+            Some(both) => both,
+            None => (
+                work_of_material(work_material),
+                instance_of_material(material(row.get(3)?)?),
+            ),
+        };
+        // The first row of a Work is the one with a source record, when it has one.
+        if described_work != Some(work) {
+            described_work = Some(work);
+            describe(connection, EntityKind::Work, work, &work_description)?;
+        }
+        if let Some(instance) = instance {
+            describe(
+                connection,
+                EntityKind::Instance,
+                instance,
+                &instance_description,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn material(code: Option<u8>) -> Result<Option<MaterialType>, StoreError> {
+    code.map(|code| {
+        MaterialType::from_code(code)
+            .ok_or_else(|| StoreError::Sqlite(format!("material type code {code} is unknown")))
+    })
+    .transpose()
+}
+
+fn describe(
+    connection: &Connection,
+    entity: EntityKind,
+    id: i64,
+    description: &Description,
+) -> Result<(), StoreError> {
+    store_description(connection, EntityRef { entity, id }, description).map_err(|failed| {
+        match failed {
+            CommandFailed::Storage(error) => error,
+            other => StoreError::Sqlite(format!("{entity:?} {id} cannot be described: {other}")),
+        }
+    })
 }
 
 /// Computes the listing key of every Work and Hub already stored.
@@ -489,7 +571,7 @@ mod catalog_tests {
         connection
             .execute_batch(
                 "DROP TABLE instance_notes; ALTER TABLE works DROP COLUMN audience;
-                 DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; PRAGMA user_version = 5;",
+                 DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; PRAGMA user_version = 5;",
             )
             .unwrap();
         migrate(&mut connection).unwrap();
@@ -497,6 +579,25 @@ mod catalog_tests {
             |sql: &str| -> String { connection.query_row(sql, [], |row| row.get(0)).unwrap() };
         assert_eq!(read("SELECT text FROM instance_notes"), "Inclui índice.");
         assert_eq!(read("SELECT audience FROM works"), "Ensino médio");
+        let description = |entity, id| {
+            crate::statements::read_description(&connection, EntityRef { entity, id }).unwrap()
+        };
+        let work = description(EntityKind::Work, 1);
+        assert_eq!(work.classes, ["Text", "Monograph"]);
+        assert_eq!(
+            work.statements,
+            [elzevir_app::description::concept(
+                "content",
+                "contentTypes",
+                "txt"
+            )]
+        );
+        assert_eq!(
+            description(EntityKind::Instance, 1).statements,
+            [elzevir_app::description::concept(
+                "issuance", "issuance", "mono"
+            )]
+        );
     }
 
     fn catalog() -> (tempfile::TempDir, Connection) {

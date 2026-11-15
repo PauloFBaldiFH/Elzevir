@@ -14,6 +14,7 @@ use super::work::{CONTRIBUTION_TAGS, SUBJECT_TAGS, contribution_of, subject_of};
 use super::{DataField, Marc, marc_to_bibframe};
 use crate::catalog::{ItemData, NewContribution, NewIdentifier, NewNote, NewRecord, NewSubject};
 
+mod coded;
 mod fields;
 
 use fields::{data_field, first_index, insert_in_tag_order, set_subfield};
@@ -35,6 +36,14 @@ pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record 
     if changed(&|b| b.instance.material_type == model.instance.material_type) {
         set_instance_material_type(&mut out, model.instance.material_type);
     }
+    coded::write(
+        &mut out,
+        &model.work_description,
+        &model.instance.description,
+        before
+            .as_ref()
+            .map(|b| (&b.work_description, &b.instance.description)),
+    );
     write_titles(&mut out, model, before.as_ref());
     write_publication(&mut out, model, before.as_ref());
     write_lists(&mut out, model, before.as_ref());

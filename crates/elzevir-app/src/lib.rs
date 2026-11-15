@@ -5,6 +5,7 @@ pub mod catalog;
 pub mod codes;
 pub mod commands;
 pub mod creating;
+pub mod description;
 pub mod editing;
 pub mod export;
 pub mod import;

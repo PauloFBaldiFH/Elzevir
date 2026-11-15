@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::codes::{NamedCode, NamingCount};
 use crate::items::{ItemsUpdate, RowRefusal};
 use crate::matching::Matching;
-use elzevir_domain::statement::{EntityRef, Statement, StatementRefusal};
+use elzevir_domain::statement::{Description, EntityRef, Statement, StatementRefusal};
 
 /// Catalog commands.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -94,6 +94,13 @@ pub trait StatementReader {
     ///
     /// When the store cannot be read.
     fn statements(&self, subject: EntityRef) -> Result<Vec<Statement>, CatalogReadError>;
+
+    /// The classes and statements of `subject` (item 10h); empty for an unknown entity.
+    ///
+    /// # Errors
+    ///
+    /// When the store cannot be read.
+    fn description(&self, subject: EntityRef) -> Result<Description, CatalogReadError>;
 }
 
 /// A new Instance of a stored Work.
@@ -245,6 +252,9 @@ pub struct NewRecord {
     pub work_title: String,
     /// Category of material of the Work.
     pub material_type: MaterialType,
+    /// The Work's classes and statements (bibframe-completo.md, item 10h).
+    #[serde(default)]
+    pub work_description: Description,
     /// The Hub the Work belongs to, if any.
     pub hub: Option<HubId>,
     /// Relations from this Work to existing Works, in order.
@@ -313,6 +323,9 @@ pub struct NewInstance {
     /// Category of material of the Instance; `None` takes the Work's (a digital
     /// edition of a printed book says `Digital` here).
     pub material_type: Option<MaterialType>,
+    /// The Instance's classes and statements (bibframe-completo.md, item 10h).
+    #[serde(default)]
+    pub description: Description,
     /// Edition statement.
     pub edition: Option<String>,
     /// Place of publication.

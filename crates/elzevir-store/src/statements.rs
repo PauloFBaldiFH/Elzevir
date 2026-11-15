@@ -7,7 +7,9 @@ use elzevir_app::catalog::{
 };
 use elzevir_app::commands::WriteRefusal;
 use elzevir_domain::catalog::{InstanceId, WorkId};
-use elzevir_domain::statement::{self, EntityKind, EntityRef, Resource, Statement, Value};
+use elzevir_domain::statement::{
+    self, Description, EntityKind, EntityRef, Resource, Statement, Value,
+};
 use rusqlite::{Connection, params};
 
 use crate::catalog::{record_changed, refused};
@@ -71,6 +73,83 @@ pub(crate) fn set_statements(tx: &WriteTx<'_>, update: &StatementsUpdate) -> Set
     Ok(CatalogOutput::StatementsSet {
         subject,
         row_version,
+    })
+}
+
+/// Replaces the classes and statements of `subject`, a stored entity, without touching
+/// its version: the command that changes the entity raises it (item 10h).
+pub(crate) fn store_description(
+    connection: &Connection,
+    subject: EntityRef,
+    description: &Description,
+) -> Result<(), CommandFailed<WriteRefusal>> {
+    statement::check_description(subject.entity, description)
+        .map_err(|refusal| refused(CatalogRefusal::BadStatement(refusal)))?;
+    check_entities(connection, &description.statements)?;
+    let key = params![kind_number(subject.entity), subject.id];
+    connection
+        .execute(
+            "DELETE FROM statements WHERE subject_kind = ?1 AND subject_id = ?2",
+            key,
+        )
+        .map_err(StoreError::from)?;
+    connection
+        .execute(
+            "DELETE FROM entity_classes WHERE subject_kind = ?1 AND subject_id = ?2",
+            key,
+        )
+        .map_err(StoreError::from)?;
+    for (position, class) in (0_i64..).zip(&description.classes) {
+        let class = name_id(connection, class)?;
+        connection
+            .execute(
+                "INSERT OR IGNORE INTO entity_classes (subject_kind, subject_id, position, class)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![kind_number(subject.entity), subject.id, position, class],
+            )
+            .map_err(StoreError::from)?;
+    }
+    insert_level(connection, Owner::Subject(subject), &description.statements)?;
+    Ok(())
+}
+
+/// Replaces the descriptions of a record's Work and Instance.
+pub(crate) fn store_record_descriptions(
+    connection: &Connection,
+    work: i64,
+    instance: i64,
+    record: &elzevir_app::catalog::NewRecord,
+) -> Result<(), CommandFailed<WriteRefusal>> {
+    let subject = |entity, id| EntityRef { entity, id };
+    store_description(
+        connection,
+        subject(EntityKind::Work, work),
+        &record.work_description,
+    )?;
+    store_description(
+        connection,
+        subject(EntityKind::Instance, instance),
+        &record.instance.description,
+    )
+}
+
+/// The classes and statements of `subject` (item 10h).
+pub(crate) fn read_description(
+    connection: &Connection,
+    subject: EntityRef,
+) -> Result<Description, StoreError> {
+    let mut query = connection.prepare_cached(
+        "SELECT n.name FROM entity_classes c JOIN ontology_names n ON n.id = c.class
+         WHERE c.subject_kind = ?1 AND c.subject_id = ?2 ORDER BY c.position",
+    )?;
+    let classes = query
+        .query_map(params![kind_number(subject.entity), subject.id], |row| {
+            row.get(0)
+        })?
+        .collect::<Result<Vec<String>, _>>()?;
+    Ok(Description {
+        classes,
+        statements: read_statements(connection, subject)?,
     })
 }
 
@@ -344,6 +423,12 @@ impl StatementReader for ElzevirStore {
     fn statements(&self, subject: EntityRef) -> Result<Vec<Statement>, CatalogReadError> {
         self.readers()
             .read(|c| read_statements(c, subject))
+            .map_err(|e| CatalogReadError(e.to_string()))
+    }
+
+    fn description(&self, subject: EntityRef) -> Result<Description, CatalogReadError> {
+        self.readers()
+            .read(|c| read_description(c, subject))
             .map_err(|e| CatalogReadError(e.to_string()))
     }
 }

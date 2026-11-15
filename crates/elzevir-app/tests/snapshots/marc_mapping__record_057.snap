@@ -4,6 +4,16 @@ expression: mapped
 ---
 work_title: Fundamentos estéticos da educação
 material_type: book
+work_description:
+  classes:
+    - Text
+    - Monograph
+  statements:
+    - property: content
+      value:
+        Concept:
+          scheme: contentTypes
+          code: txt
 hub: ~
 relations: []
 classification: "370.1"
@@ -30,6 +40,14 @@ subjects:
 instance:
   title: Fundamentos estéticos da educação
   material_type: ~
+  description:
+    classes: []
+    statements:
+      - property: issuance
+        value:
+          Concept:
+            scheme: issuance
+            code: mono
   edition: 3. ed
   place: "Campinas, SP"
   publisher: Papirus

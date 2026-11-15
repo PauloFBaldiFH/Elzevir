@@ -3,6 +3,7 @@
 //! the screen sends the same changes as an edit, applied to an empty Work and Instance.
 
 use crate::catalog::{InstanceChange, NewInstance, NewRecord, WorkChange};
+use crate::description::{instance_of_material, work_of_material};
 use crate::editing::{FieldError, validate_instance_changes, validate_work_changes};
 
 /// Builds a new family (a Work and its first Instance) from the screen's changes. The
@@ -44,13 +45,15 @@ pub fn new_record(
     else {
         return Err(errors);
     };
-    let instance = NewInstance {
+    let mut instance = NewInstance {
         title: instance_title.unwrap_or_else(|| work_title.clone()),
         ..new_instance
     };
+    instance.description = instance_of_material(instance.material_type);
     Ok(NewRecord {
         work_title,
         material_type,
+        work_description: work_of_material(material_type),
         hub: None,
         relations: Vec::new(),
         classification: record_parts.classification,
@@ -76,7 +79,11 @@ pub fn new_instance(mut changes: Vec<InstanceChange>) -> Result<NewInstance, Vec
     collect(&mut errors, validate_instance_changes(&mut changes));
     let (title, instance) = fold_instance(changes);
     match title {
-        Some(title) if errors.is_empty() => Ok(NewInstance { title, ..instance }),
+        Some(title) if errors.is_empty() => Ok(NewInstance {
+            title,
+            description: instance_of_material(instance.material_type),
+            ..instance
+        }),
         Some(_) => Err(errors),
         None => {
             if !errors.iter().any(|error| error.field == "title") {
@@ -196,6 +203,7 @@ mod tests {
         assert_eq!(record.languages, ["por"]);
         assert_eq!(record.summary, None);
         assert!(record.source.is_none() && record.items.is_empty());
+        assert_eq!(record.work_description.classes, ["Text", "Monograph"]);
     }
 
     #[test]

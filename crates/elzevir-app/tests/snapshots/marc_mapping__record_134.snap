@@ -4,6 +4,16 @@ expression: mapped
 ---
 work_title: Economia aplicada
 material_type: periodical
+work_description:
+  classes:
+    - Text
+    - Serial
+  statements:
+    - property: content
+      value:
+        Concept:
+          scheme: contentTypes
+          code: txt
 hub: ~
 relations: []
 classification: ~
@@ -30,6 +40,14 @@ subjects:
 instance:
   title: "Economia aplicada : EA / [Universidade de Sao Paulo, Departamento de Economia; Fundacao Instituto de Pesquisas Economicas]"
   material_type: ~
+  description:
+    classes: []
+    statements:
+      - property: issuance
+        value:
+          Concept:
+            scheme: issuance
+            code: serl
   edition: ~
   place: São Paulo
   publisher: "Departamento de Economia da Universidade de Sao Paulo : FIPE"

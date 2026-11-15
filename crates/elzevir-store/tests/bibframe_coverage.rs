@@ -15,11 +15,13 @@ use elzevir_app::catalog::{
     NewRecord, StatementReader, StatementsUpdate,
 };
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
+use elzevir_app::description::{concept, work_of_material};
 use elzevir_data::bibframe::{self, PropertyKind, properties_of};
 use elzevir_data::vocabulary;
-use elzevir_domain::catalog::MaterialType;
+use elzevir_domain::catalog::{HubId, MaterialType};
 use elzevir_domain::statement::{
-    EntityKind, EntityRef, Resource, Statement, StatementRefusal, TYPED, Value, is_typed,
+    Description, EntityKind, EntityRef, Resource, Statement, StatementRefusal, TYPED, Value,
+    is_typed,
 };
 use elzevir_store::{CommandFailed, ElzevirHandler, ElzevirStore, StoreConfig};
 
@@ -100,6 +102,35 @@ fn run(
 }
 
 /// A Hub with a Work, an Instance and an Item.
+fn record(
+    title: &str,
+    hub: Option<HubId>,
+    work_description: Description,
+    description: Description,
+) -> NewRecord {
+    NewRecord {
+        work_title: title.to_owned(),
+        material_type: MaterialType::Book,
+        work_description,
+        hub,
+        relations: Vec::new(),
+        classification: None,
+        classification_scheme: None,
+        summary: None,
+        audience: None,
+        languages: Vec::new(),
+        contributions: Vec::new(),
+        subjects: Vec::new(),
+        items: Vec::new(),
+        source: None,
+        instance: NewInstance {
+            title: title.to_owned(),
+            description,
+            ..NewInstance::default()
+        },
+    }
+}
+
 fn catalog() -> Catalog {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("elzevir.db");
@@ -129,25 +160,15 @@ fn catalog() -> Catalog {
     .unwrap() else {
         panic!("no hub");
     };
-    let record = NewRecord {
-        work_title: "Dom Casmurro".to_owned(),
-        material_type: MaterialType::Book,
-        hub: Some(hub),
-        relations: Vec::new(),
-        classification: None,
-        classification_scheme: None,
-        summary: None,
-        audience: None,
-        languages: Vec::new(),
-        contributions: Vec::new(),
-        subjects: Vec::new(),
-        items: Vec::new(),
-        source: None,
-        instance: NewInstance {
-            title: "Dom Casmurro".to_owned(),
-            ..NewInstance::default()
+    let record = record(
+        "Dom Casmurro",
+        Some(hub),
+        work_of_material(MaterialType::Book),
+        Description {
+            classes: vec!["Electronic".to_owned()],
+            statements: vec![concept("carrier", "carriers", "cr")],
         },
-    };
+    );
     let CatalogOutput::Record { work, instance, .. } =
         run(&store, CatalogCommand::AddRecord(Box::new(record))).unwrap()
     else {
@@ -379,10 +400,14 @@ fn nested_resources_entities_and_iris_come_back_in_order() {
     );
     let connection = rusqlite::Connection::open(&catalog.path).unwrap();
     let rows: i64 = connection
-        .query_row("SELECT count(*) FROM statements", [], |row| row.get(0))
+        .query_row(
+            "SELECT count(*) FROM statements WHERE subject_kind IS NOT 3",
+            [],
+            |row| row.get(0),
+        )
         .unwrap();
     assert_eq!(rows, 1);
-    assert!(catalog.store.statements(instance).unwrap().is_empty());
+    assert_eq!(catalog.store.statements(instance).unwrap().len(), 1);
 }
 
 #[test]
@@ -475,5 +500,44 @@ fn the_version_moves_and_stale_or_bad_edits_are_refused() {
         Err(CommandFailed::Rejected(WriteRefusal::Catalog(
             CatalogRefusal::UnknownEntity(missing)
         )))
+    );
+}
+
+#[test]
+fn a_record_keeps_its_classes_and_its_coded_values() {
+    let catalog = catalog();
+    let [_, work, instance, _] = catalog.subjects;
+    assert_eq!(
+        catalog.store.description(work).unwrap(),
+        work_of_material(MaterialType::Book)
+    );
+    let stored = catalog.store.description(instance).unwrap();
+    assert_eq!(stored.classes, ["Electronic"]);
+    assert_eq!(stored.statements, [concept("carrier", "carriers", "cr")]);
+    // Replacing the statements leaves the classes.
+    set(&catalog, instance, Vec::new()).unwrap();
+    assert_eq!(
+        catalog.store.description(instance).unwrap().classes,
+        ["Electronic"]
+    );
+}
+
+#[test]
+fn a_class_of_another_entity_is_refused() {
+    let catalog = catalog();
+    let print = Description {
+        classes: vec!["Print".to_owned()],
+        statements: Vec::new(),
+    };
+    let record = record("Errado", None, print, Description::default());
+    let refused = run(&catalog.store, CatalogCommand::AddRecord(Box::new(record))).unwrap_err();
+    assert!(
+        matches!(
+            refused,
+            CommandFailed::Rejected(WriteRefusal::Catalog(CatalogRefusal::BadStatement(
+                StatementRefusal::NotASubclass { .. }
+            )))
+        ),
+        "{refused:?}"
     );
 }

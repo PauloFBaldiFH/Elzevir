@@ -16,7 +16,9 @@ use elzevir_domain::catalog::{
 };
 use rusqlite::{Connection, ErrorCode, OptionalExtension, params};
 
+use crate::statements::store_description;
 use crate::{CommandFailed, ElzevirStore, StoreError, WriteTx};
+use elzevir_domain::statement::{EntityKind, EntityRef};
 
 type Applied = Result<WriteOutput, CommandFailed<WriteRefusal>>;
 
@@ -231,6 +233,14 @@ pub(crate) fn add_work_and_instance(
     link_languages(connection, work, &record.languages)?;
     link_contributions(connection, work, &record.contributions)?;
     link_subjects(connection, work, &record.subjects)?;
+    store_description(
+        connection,
+        EntityRef {
+            entity: EntityKind::Work,
+            id: work,
+        },
+        &record.work_description,
+    )?;
     let instance = add_instance(connection, work, record.material_type, &record.instance)?;
     let instance = InstanceId(instance);
     store_source_and_keys(connection, instance, record)?;
@@ -407,6 +417,14 @@ fn add_instance(
     let instance_id = connection.last_insert_rowid();
     insert_identifiers(connection, instance_id, &instance.identifiers)?;
     insert_notes(connection, instance_id, &instance.notes)?;
+    store_description(
+        connection,
+        EntityRef {
+            entity: EntityKind::Instance,
+            id: instance_id,
+        },
+        &instance.description,
+    )?;
     Ok(instance_id)
 }
 
@@ -684,6 +702,8 @@ pub(crate) enum ReadFailure {
     Sql(#[from] rusqlite::Error),
     #[error("unknown {what} number {code} in the database (newer schema?)")]
     UnknownCode { what: &'static str, code: u8 },
+    #[error(transparent)]
+    Store(#[from] StoreError),
 }
 
 fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>, ReadFailure> {

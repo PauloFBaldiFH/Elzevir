@@ -4,6 +4,7 @@
 //! This is the only place, with the export that will mirror it, that reads MARC tags.
 //! Everything it does not map stays in the preserved source record.
 
+mod description;
 mod export;
 mod instance;
 pub(crate) mod items;
@@ -11,6 +12,8 @@ mod text;
 mod work;
 
 use elzevir_marc::{Field, Limits, Record, RecordRef, Subfield};
+
+use elzevir_domain::statement::Description;
 
 use crate::catalog::{NewNote, NewRecord};
 
@@ -53,6 +56,16 @@ pub fn source_audience(source: &[u8]) -> Option<String> {
     Marc(&Record::from_ref(&parsed)).first_text(b"521", b'a')
 }
 
+/// The Work's and the Instance's classes and coded statements of a stored source record,
+/// for records stored before the model had them. A record that no longer parses has none.
+#[must_use]
+pub fn source_description(source: &[u8]) -> Option<(Description, Description)> {
+    let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
+    let record = Record::from_ref(&parsed);
+    let marc = Marc(&record);
+    Some((description::work(&marc), description::instance(&marc)))
+}
+
 /// Maps one MARC21 record, already in UTF-8, to a Work, its Instance and its Items.
 ///
 /// `source` is the record as it arrived, kept byte for byte in `source_records`.
@@ -66,11 +79,13 @@ pub fn marc_to_bibframe(
 ) -> Result<NewRecord, MappingError> {
     let marc = Marc(record);
     let work = work::map(&marc)?;
-    let instance = instance::map(&marc, work.material_type);
+    let mut instance = instance::map(&marc, work.material_type);
+    instance.description = description::instance(&marc);
     let items = items::map(&marc)?;
     Ok(NewRecord {
         work_title: work.title,
         material_type: work.material_type,
+        work_description: description::work(&marc),
         hub: None,
         relations: Vec::new(),
         classification: work.classification,
