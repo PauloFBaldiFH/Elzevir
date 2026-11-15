@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Content, media, carrier and issuance back to `336`, `337`, `338` and `334`.
 //!
-//! A field is written only when the Leader alone would not give the same values, so a
-//! record whose description only repeats its Leader gets no new field.
+//! A description under RDA, which records content, media, carrier and mode of issuance in
+//! these fields, always gets them. Any other gets a field only when the Leader alone would
+//! not give the same values, so a record whose description only repeats its Leader gets no
+//! new field.
 
 use elzevir_data::vocabulary;
 use elzevir_domain::statement::{Description, Statement, Value};
 use elzevir_marc::Record;
 
 use super::super::{Marc, description};
+use super::admin::description_follows;
 use super::fields::{data_field, insert_in_tag_order};
 
 /// One coded field: its tag, the property, and the source code for `$2`.
@@ -53,6 +56,7 @@ pub(super) fn write(
     instance: &Description,
     before: Option<(&Description, &Description)>,
 ) {
+    let rda = description_follows(instance, "rda");
     for coded in &CODED {
         let pick = |work: &Description, instance: &Description| {
             let description = if coded.on_work { work } else { instance };
@@ -70,7 +74,7 @@ pub(super) fn write(
         } else {
             description::instance(&marc)
         };
-        if of(&implied, coded.property) == wanted {
+        if !rda && of(&implied, coded.property) == wanted {
             continue;
         }
         let fields = wanted
@@ -99,4 +103,49 @@ fn of(description: &Description, property: &str) -> Vec<(String, String)> {
             _ => None,
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn record(conventions: &str) -> Record {
+        Record {
+            leader: *b"00000nam a2200000 i 4500",
+            fields: vec![data_field(
+                *b"040",
+                *b"  ",
+                &[(b'a', "BR-X"), (b'e', conventions)],
+            )],
+        }
+    }
+
+    fn written(source: &Record) -> Record {
+        let marc = Marc(source);
+        let (work, instance) = (description::work(&marc), description::instance(&marc));
+        let mut out = source.clone();
+        write(&mut out, &work, &instance, None);
+        out
+    }
+
+    fn tags(record: &Record) -> Vec<[u8; 3]> {
+        record.fields.iter().map(|f| *f.tag().as_bytes()).collect()
+    }
+
+    #[test]
+    fn a_description_under_rda_gets_the_fields_its_leader_already_implies() {
+        // The Leader gives text and a single unit; under RDA the fields say so too.
+        let out = written(&record("rda"));
+        assert_eq!(tags(&out), [*b"040", *b"334", *b"336"]);
+        assert_eq!(
+            out.fields.last(),
+            Some(&data_field(
+                *b"336",
+                *b"  ",
+                &[(b'a', "text"), (b'b', "txt"), (b'2', "rdacontent")]
+            ))
+        );
+        // Under other conventions, a description that only repeats its Leader adds nothing.
+        assert_eq!(tags(&written(&record("aacr"))), [*b"040"]);
+    }
 }
