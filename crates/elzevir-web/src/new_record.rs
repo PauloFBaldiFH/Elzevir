@@ -141,6 +141,7 @@ fn blank(material_type: MaterialType) -> NewRecord {
     NewRecord {
         work_title: String::new(),
         material_type,
+        work_description: elzevir_domain::statement::Description::default(),
         hub: None,
         relations: Vec::new(),
         classification: None,

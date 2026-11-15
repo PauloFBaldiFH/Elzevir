@@ -17,6 +17,7 @@ use crate::catalog::{
     link_contributions, link_languages, link_subjects, optional_term, record_changed, reindex,
     store_source_and_keys,
 };
+use crate::statements::store_record_descriptions;
 use crate::{CommandFailed, StoreError, WriteTx};
 
 /// Imports one record: finds the stored record it matches, then does what the matching
@@ -284,6 +285,7 @@ pub(crate) fn replace_description(
         .map_err(StoreError::from)?;
     insert_identifiers(connection, instance.0, &description.identifiers)?;
     insert_notes(connection, instance.0, &description.notes)?;
+    store_record_descriptions(connection, work, instance.0, record)?;
     store_source_and_keys(connection, instance, record)?;
     let mut siblings = connection
         .prepare_cached("SELECT id FROM instances WHERE work_id = ?1 ORDER BY id")

@@ -4,6 +4,16 @@ expression: mapped
 ---
 work_title: Discursos
 material_type: book
+work_description:
+  classes:
+    - Text
+    - Monograph
+  statements:
+    - property: content
+      value:
+        Concept:
+          scheme: contentTypes
+          code: txt
 hub: ~
 relations: []
 classification: ~
@@ -30,6 +40,14 @@ subjects:
 instance:
   title: Discursos
   material_type: ~
+  description:
+    classes: []
+    statements:
+      - property: issuance
+        value:
+          Concept:
+            scheme: issuance
+            code: mono
   edition: ~
   place: "Brasilia,DF"
   publisher: Presidência da República Secretária de Imprensa e Divulgação

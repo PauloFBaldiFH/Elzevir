@@ -144,6 +144,19 @@ pub struct Resource {
     pub statements: Vec<Statement>,
 }
 
+/// What BIBFRAME says of one entity beyond its typed columns (items 8 and 10h): the
+/// subclasses it belongs to and its statements.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct Description {
+    /// Local names of subclasses of the entity's class, such as `Text` and `Monograph`.
+    pub classes: Vec<String>,
+    /// Its statements.
+    pub statements: Vec<Statement>,
+}
+
+/// Most classes one entity carries.
+pub const MAX_CLASSES: usize = 16;
+
 /// Why a list of statements cannot be stored.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Serialize, Deserialize)]
 pub enum StatementRefusal {
@@ -180,6 +193,14 @@ pub enum StatementRefusal {
     /// A text, a label or an IRI is empty or too long.
     #[error("a value of `{0}` is empty or too long")]
     BadText(String),
+    /// The class is not a subclass of the entity's class (item 10h).
+    #[error("`{class}` is not a kind of {entity:?}")]
+    NotASubclass {
+        /// The class given.
+        class: String,
+        /// The entity.
+        entity: EntityKind,
+    },
     /// Too many statements or too deep (item 10d).
     #[error("too many statements or nested too deep")]
     TooLarge,
@@ -205,6 +226,33 @@ pub fn check(subject: EntityKind, statements: &[Statement]) -> Result<(), Statem
         }
     }
     check_level(statements, 1, &mut count)
+}
+
+/// Checks a whole description: its classes, then its statements (item 10h).
+///
+/// # Errors
+///
+/// The first class or statement that breaks a rule.
+pub fn check_description(
+    subject: EntityKind,
+    description: &Description,
+) -> Result<(), StatementRefusal> {
+    if description.classes.len() > MAX_CLASSES {
+        return Err(StatementRefusal::TooLarge);
+    }
+    let parent = subject.bibframe().class_name();
+    for class in &description.classes {
+        if bibframe::class(class).is_none() {
+            return Err(StatementRefusal::UnknownClass(class.clone()));
+        }
+        if class == parent || !bibframe::is_a(class, parent) {
+            return Err(StatementRefusal::NotASubclass {
+                class: class.clone(),
+                entity: subject,
+            });
+        }
+    }
+    check(subject, &description.statements)
 }
 
 fn known(name: &str) -> Result<&'static bibframe::Property, StatementRefusal> {
@@ -434,5 +482,42 @@ mod tests {
             let property = bibframe::property(name).unwrap();
             assert!(property.applies_to(*entity), "{name} on {entity:?}");
         }
+    }
+
+    #[test]
+    fn classes_must_be_subclasses_of_the_entity() {
+        let described = |classes: &[&str]| Description {
+            classes: classes.iter().map(|class| (*class).to_owned()).collect(),
+            statements: Vec::new(),
+        };
+        assert_eq!(
+            check_description(
+                EntityKind::Work,
+                &described(&["Text", "Monograph", "MusicAudio"])
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            check_description(EntityKind::Instance, &described(&["Electronic"])),
+            Ok(())
+        );
+        assert_eq!(
+            check_description(EntityKind::Work, &described(&["Print"])),
+            Err(StatementRefusal::NotASubclass {
+                class: "Print".to_owned(),
+                entity: EntityKind::Work
+            })
+        );
+        assert_eq!(
+            check_description(EntityKind::Work, &described(&["Work"])),
+            Err(StatementRefusal::NotASubclass {
+                class: "Work".to_owned(),
+                entity: EntityKind::Work
+            })
+        );
+        assert_eq!(
+            check_description(EntityKind::Work, &described(&["Livro"])),
+            Err(StatementRefusal::UnknownClass("Livro".to_owned()))
+        );
     }
 }

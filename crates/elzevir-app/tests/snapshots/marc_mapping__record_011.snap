@@ -4,6 +4,16 @@ expression: mapped
 ---
 work_title: Argemiro de Figueirêdo
 material_type: book
+work_description:
+  classes:
+    - Text
+    - Monograph
+  statements:
+    - property: content
+      value:
+        Concept:
+          scheme: contentTypes
+          code: txt
 hub: ~
 relations: []
 classification: "320.089"
@@ -37,6 +47,14 @@ subjects:
 instance:
   title: Argemiro de Figueirêdo
   material_type: ~
+  description:
+    classes: []
+    statements:
+      - property: issuance
+        value:
+          Concept:
+            scheme: issuance
+            code: mono
   edition: ~
   place: "Brasília, DF"
   publisher: "Senado Federal, Subsecretaria de Edições Técnicas"

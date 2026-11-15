@@ -4,6 +4,16 @@ expression: mapped
 ---
 work_title: Os fundamentos da física
 material_type: book
+work_description:
+  classes:
+    - Text
+    - Monograph
+  statements:
+    - property: content
+      value:
+        Concept:
+          scheme: contentTypes
+          code: txt
 hub: ~
 relations: []
 classification: "530.07"
@@ -32,6 +42,14 @@ subjects:
 instance:
   title: Os fundamentos da física
   material_type: ~
+  description:
+    classes: []
+    statements:
+      - property: issuance
+        value:
+          Concept:
+            scheme: issuance
+            code: mono
   edition: 6. ed
   place: "São Paulo, SP"
   publisher: Moderna

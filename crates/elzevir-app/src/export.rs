@@ -233,6 +233,7 @@ fn same_description(a: &NewRecord, b: &NewRecord) -> bool {
     let NewRecord {
         work_title,
         material_type,
+        work_description,
         hub,
         relations,
         classification,
@@ -248,6 +249,7 @@ fn same_description(a: &NewRecord, b: &NewRecord) -> bool {
     } = a;
     *work_title == b.work_title
         && *material_type == b.material_type
+        && *work_description == b.work_description
         && *hub == b.hub
         && *relations == b.relations
         && *classification == b.classification

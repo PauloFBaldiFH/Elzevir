@@ -111,6 +111,7 @@ fn record(title: &str, hub: Option<HubId>) -> NewRecord {
     NewRecord {
         work_title: title.to_owned(),
         material_type: MaterialType::Book,
+        work_description: elzevir_domain::statement::Description::default(),
         hub,
         relations: Vec::new(),
         classification: Some("869.3".to_owned()),
@@ -326,7 +327,7 @@ fn migration_8_computes_the_keys_of_older_databases() {
     connection
         .execute_batch(
             "DROP INDEX works_in_listing; DROP INDEX hubs_in_listing;
-             ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names;
+             ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names;
              PRAGMA user_version = 7;",
         )
         .unwrap();

@@ -4,6 +4,16 @@ expression: mapped
 ---
 work_title: Perfil - Anuário Estatístico
 material_type: book
+work_description:
+  classes:
+    - Text
+    - Monograph
+  statements:
+    - property: content
+      value:
+        Concept:
+          scheme: contentTypes
+          code: txt
 hub: ~
 relations: []
 classification: "310.62"
@@ -27,6 +37,14 @@ subjects:
 instance:
   title: Perfil - Anuário Estatístico
   material_type: ~
+  description:
+    classes: []
+    statements:
+      - property: issuance
+        value:
+          Concept:
+            scheme: issuance
+            code: mono
   edition: 1. ed
   place: Foz do IGUAÇU
   publisher: Secretaria Municipal da Coordenacao e Planejamento

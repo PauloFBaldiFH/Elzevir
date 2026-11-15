@@ -4,6 +4,16 @@ expression: mapped
 ---
 work_title: Stories for the heart
 material_type: book
+work_description:
+  classes:
+    - Text
+    - Monograph
+  statements:
+    - property: content
+      value:
+        Concept:
+          scheme: contentTypes
+          code: txt
 hub: ~
 relations: []
 classification: "242"
@@ -24,6 +34,14 @@ subjects:
 instance:
   title: "Histórias para o coração : mais de 100 histórias que tocam seu coração"
   material_type: ~
+  description:
+    classes: []
+    statements:
+      - property: issuance
+        value:
+          Concept:
+            scheme: issuance
+            code: mono
   edition: ~
   place: "Campinas, SP"
   publisher: United Press

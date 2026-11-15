@@ -49,6 +49,19 @@ A diretriz, em quatro frases:
 10f. Propriedade e classe são guardadas por número (tabela `ontology_names`), e conceito também (`lc_concepts`, vocabulário e código), como o resto do vocabulário (modelo bibliográfico, item 8).
 10g. A cobertura do modelo (item 3) passa a exigir que toda propriedade aplicável a cada entidade ou tenha lugar tipado, ou volte igual depois de gravada como declaração. A lista do que faltava fica vazia.
 
+### Classes, conteúdo, mídia e suporte (etapa 3b)
+
+10h. A **descrição** de uma entidade é o par classes + declarações. As classes (tabela `entity_classes`, em ordem) são subclasses da classe da entidade: uma Obra só leva subclasses de `bf:Work`, uma Instância só de `bf:Instance`. A regra do domínio (`check_description`) recusa classe desconhecida (`UnknownClass`), classe de outra entidade ou a própria classe da entidade (`NotASubclass`) e mais de 16 classes.
+10i. Criar um registro (importação ou formulário), criar uma Instância e substituir um registro pela importação gravam a descrição da Obra e da Instância na mesma transação. `catalog.set_statements` troca só as declarações; as classes ficam.
+10j. A importação MARC preenche a descrição como a conversão da LC (`marc2bibframe2`, `ConvSpec-LDR.xsl` e `conf/codeMaps.xml`):
+    - classes da Obra pelo Líder/06 (`a` Text, `c` NotatedMusic, `d` NotatedMusic + Manuscript, `e` Cartography, `f` Cartography + Manuscript, `g` MovingImage, `i` NonMusicAudio, `j` MusicAudio, `k` StillImage, `m` Multimedia, `o` e `p` MixedMaterial, `r` Object; `t` e o resto, nenhuma) e pelo Líder/07 (`a` e `m` Monograph, `b` e `s` Serial, `c` e `d` Collection, `i` Integrating);
+    - `bf:content` da Obra pelos `$b` do `336`; sem `336`, pelo código do Líder/06 na mesma tabela (`txt`, `ntm`, `cri`, `tdi`, `spw`, `prm`, `sti`, `cop`, `tdf`);
+    - `bf:issuance` da Instância pelos `$b` do `334`; sem `334`, pelo Líder/07 (`a`, `d` e `m` mono, `b` e `s` serl, `c` mulm, `i` intg);
+    - `bf:media` pelos `$b` do `337` e `bf:carrier` pelos do `338`;
+    - código que não está na lista da LC é ignorado (fica no registro de origem). A conversão da LC não dá classe à Instância.
+10k. A exportação MARC escreve `334`, `336`, `337` e `338` (`$a` rótulo, `$b` código, `$2` `rdami`, `rdacontent`, `rdamedia`, `rdacarrier`) só quando a descrição mudou e o Líder sozinho não daria os mesmos valores; registro sem edição continua saindo byte a byte.
+10l. A migração 12 descreve o que já está gravado: pelo registro de origem, como a importação faz; sem registro de origem, pela categoria de material (`Book` Text + Monograph + `txt`, `Periodical` Text + Serial + `txt`, `Map` Cartography + `cri`, `Score` NotatedMusic + `ntm`, `SoundRecording` Audio, `Video` MovingImage + `tdi`, `Digital` Multimedia + `cop`, `VisualMaterial` StillImage + `sti`, `Mixed` MixedMaterial; Instância `Digital` vira `bf:Electronic`). O formulário de criação usa a mesma tabela até a etapa 3b-2 trocar a categoria pelas classes e listas na tela. Até lá, editar a categoria de um registro existente não muda a descrição.
+
 ### Vocabulários da LC
 
 11. Os valores de propriedades categóricas vêm das listas oficiais de `id.loc.gov/vocabulary/`, copiadas para `reference/bibframe/vocabulary/` (domínio público) com código, IRI e rótulo em inglês; o rótulo em português vem do Fluent:

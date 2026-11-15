@@ -204,6 +204,7 @@ mod tests {
         NewRecord {
             work_title: "Dom Casmurro".to_owned(),
             material_type: elzevir_domain::catalog::MaterialType::Book,
+            work_description: elzevir_domain::statement::Description::default(),
             hub: None,
             relations: Vec::new(),
             classification: None,

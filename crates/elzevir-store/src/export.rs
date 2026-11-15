@@ -15,6 +15,8 @@ use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use crate::ElzevirStore;
 use crate::catalog::{ReadFailure, status_at, work_relations};
+use crate::statements::read_description;
+use elzevir_domain::statement::{EntityKind, EntityRef};
 
 impl RecordSource for ElzevirStore {
     fn records_after(
@@ -96,6 +98,10 @@ fn records_after(
     heads.into_iter().map(|head| stored(c, head)).collect()
 }
 
+const fn subject(entity: EntityKind, id: i64) -> EntityRef {
+    EntityRef { entity, id }
+}
+
 fn stored(c: &Connection, head: Head) -> Result<StoredRecord, ReadFailure> {
     // Rows written before categories of material existed read as books, the mapping's
     // own default.
@@ -113,6 +119,7 @@ fn stored(c: &Connection, head: Head) -> Result<StoredRecord, ReadFailure> {
     let record = NewRecord {
         work_title: head.work_title,
         material_type: work_material,
+        work_description: read_description(c, subject(EntityKind::Work, head.work))?,
         hub: head.hub.map(HubId),
         relations,
         classification: head.classification,
@@ -126,6 +133,7 @@ fn stored(c: &Connection, head: Head) -> Result<StoredRecord, ReadFailure> {
             title: head.title,
             // The model keeps the Instance's category only where it differs from the Work's.
             material_type: material.filter(|material| *material != work_material),
+            description: read_description(c, subject(EntityKind::Instance, head.instance))?,
             edition: head.edition,
             place: head.place,
             publisher: head.publisher,

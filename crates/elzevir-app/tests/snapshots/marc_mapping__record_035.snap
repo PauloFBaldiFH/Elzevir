@@ -4,6 +4,16 @@ expression: mapped
 ---
 work_title: Seminário Internacional de Crédito Imobiliário
 material_type: book
+work_description:
+  classes:
+    - Text
+    - Monograph
+  statements:
+    - property: content
+      value:
+        Concept:
+          scheme: contentTypes
+          code: txt
 hub: ~
 relations: []
 classification: "363.580981"
@@ -28,6 +38,14 @@ subjects:
 instance:
   title: "Seminário Internacional de Crédito Imobiliário : As contribuições das experiências dos sistemas  imobiliários da Espanha e do México para o aperfeiçoamento do modelo brasileiro"
   material_type: ~
+  description:
+    classes: []
+    statements:
+      - property: issuance
+        value:
+          Concept:
+            scheme: issuance
+            code: mono
   edition: ~
   place: Rio de Janeiro
   publisher: Publitetto
