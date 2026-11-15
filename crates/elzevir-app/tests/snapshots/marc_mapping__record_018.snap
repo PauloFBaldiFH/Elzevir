@@ -79,9 +79,14 @@ subjects:
   - kind: topic
     heading: Racismo -- Estados Unidos
     thesaurus: ~
+    subdivisions:
+      - place
   - kind: topic
     heading: Negros -- história -- Estados Unidos
     thesaurus: ~
+    subdivisions:
+      - topic
+      - place
 instance:
   title: "A Presença inquietante : a democracia norte-americana e o negro"
   material_type: ~

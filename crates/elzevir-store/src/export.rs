@@ -14,7 +14,7 @@ use elzevir_domain::catalog::{
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use crate::ElzevirStore;
-use crate::catalog::{ReadFailure, status_at, work_relations};
+use crate::catalog::{ReadFailure, status_at, subdivisions_of_column, work_relations};
 use crate::statements::read_description;
 use elzevir_domain::statement::{EntityKind, EntityRef};
 
@@ -211,22 +211,29 @@ fn contributions(c: &Connection, work: i64) -> Result<Vec<NewContribution>, Read
 
 fn subjects(c: &Connection, work: i64) -> Result<Vec<NewSubject>, ReadFailure> {
     let mut statement = c.prepare_cached(
-        "SELECT subjects.kind, subjects.heading, terms.code FROM work_subjects
+        "SELECT subjects.kind, subjects.heading, terms.code, subjects.subdivisions
+         FROM work_subjects
          JOIN subjects ON subjects.id = work_subjects.subject_id
          LEFT JOIN terms ON terms.id = subjects.thesaurus
          WHERE work_id = ?1 ORDER BY position",
     )?;
     let rows = statement
         .query_map(params![work], |row| {
-            Ok((row.get::<_, u8>(0)?, row.get(1)?, row.get(2)?))
+            Ok((
+                row.get::<_, u8>(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get::<_, String>(3)?,
+            ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     rows.into_iter()
-        .map(|(kind, heading, thesaurus)| {
+        .map(|(kind, heading, thesaurus, subdivisions)| {
             Ok(NewSubject {
                 kind: required(kind, "subject kind", SubjectKind::from_code)?,
                 heading,
                 thesaurus,
+                subdivisions: subdivisions_of_column(&subdivisions)?,
             })
         })
         .collect()

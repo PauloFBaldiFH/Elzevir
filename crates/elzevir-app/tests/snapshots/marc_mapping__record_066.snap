@@ -1016,6 +1016,7 @@ subjects:
   - kind: topic
     heading: Física -- Estudo e ensino
     thesaurus: ~
+    subdivisions: []
 instance:
   title: Os fundamentos da física
   material_type: ~
