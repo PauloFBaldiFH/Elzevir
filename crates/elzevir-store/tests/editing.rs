@@ -376,3 +376,32 @@ fn suggestions_find_existing_agents_and_subjects_by_the_start_of_their_name() {
         .unwrap();
     assert!(plan.contains("agents_by_heading"), "{plan}");
 }
+
+#[test]
+fn changing_the_category_changes_the_classes_and_keeps_other_statements() {
+    use elzevir_app::catalog::StatementReader;
+    use elzevir_app::description::concept;
+    use elzevir_domain::catalog::MaterialType;
+    use elzevir_domain::statement::{EntityKind, EntityRef};
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = imported(&dir);
+    let read = view(&store, 1);
+    let work = EntityRef {
+        entity: EntityKind::Work,
+        id: read.work.0,
+    };
+    let before = store.description(work).unwrap();
+    assert_eq!(before.classes, ["Text", "Monograph"]);
+    run(
+        &store,
+        update_work(&read, vec![WorkChange::MaterialType(MaterialType::Score)]),
+    )
+    .unwrap();
+    let after = store.description(work).unwrap();
+    assert_eq!(after.classes, ["NotatedMusic"]);
+    assert_eq!(
+        after.statements,
+        [concept("content", "contentTypes", "ntm")]
+    );
+}

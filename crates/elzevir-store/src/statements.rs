@@ -99,17 +99,52 @@ pub(crate) fn store_description(
             key,
         )
         .map_err(StoreError::from)?;
-    for (position, class) in (0_i64..).zip(&description.classes) {
-        let class = name_id(connection, class)?;
-        connection
-            .execute(
-                "INSERT OR IGNORE INTO entity_classes (subject_kind, subject_id, position, class)
-                 VALUES (?1, ?2, ?3, ?4)",
-                params![kind_number(subject.entity), subject.id, position, class],
-            )
-            .map_err(StoreError::from)?;
-    }
+    insert_classes(connection, subject, &description.classes)?;
     insert_level(connection, Owner::Subject(subject), &description.statements)?;
+    Ok(())
+}
+
+/// Follows a change of category of material (bibframe-completo.md, item 10l): the classes
+/// become those of `description`, and so do the statements of the `replaced` properties;
+/// every other statement stays where it was.
+pub(crate) fn recategorize(
+    connection: &Connection,
+    subject: EntityRef,
+    description: &Description,
+    replaced: &[&str],
+) -> Result<(), StoreError> {
+    let (kind, id) = (kind_number(subject.entity), subject.id);
+    connection.execute(
+        "DELETE FROM entity_classes WHERE subject_kind = ?1 AND subject_id = ?2",
+        params![kind, id],
+    )?;
+    insert_classes(connection, subject, &description.classes)?;
+    let kept: Vec<Statement> = read_statements(connection, subject)?
+        .into_iter()
+        .filter(|statement| !replaced.contains(&statement.property.as_str()))
+        .collect();
+    connection.execute(
+        "DELETE FROM statements WHERE subject_kind = ?1 AND subject_id = ?2",
+        params![kind, id],
+    )?;
+    let mut statements = kept;
+    statements.extend(description.statements.iter().cloned());
+    insert_level(connection, Owner::Subject(subject), &statements)
+}
+
+fn insert_classes(
+    connection: &Connection,
+    subject: EntityRef,
+    classes: &[String],
+) -> Result<(), StoreError> {
+    for (position, class) in (0_i64..).zip(classes) {
+        let class = name_id(connection, class)?;
+        connection.execute(
+            "INSERT OR IGNORE INTO entity_classes (subject_kind, subject_id, position, class)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![kind_number(subject.entity), subject.id, position, class],
+        )?;
+    }
     Ok(())
 }
 

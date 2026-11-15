@@ -60,7 +60,7 @@ A diretriz, em quatro frases:
     - `bf:media` pelos `$b` do `337` e `bf:carrier` pelos do `338`;
     - código que não está na lista da LC é ignorado (fica no registro de origem). A conversão da LC não dá classe à Instância.
 10k. A exportação MARC escreve `334`, `336`, `337` e `338` (`$a` rótulo, `$b` código, `$2` `rdami`, `rdacontent`, `rdamedia`, `rdacarrier`) só quando a descrição mudou e o Líder sozinho não daria os mesmos valores; registro sem edição continua saindo byte a byte.
-10l. A migração 12 descreve o que já está gravado: pelo registro de origem, como a importação faz; sem registro de origem, pela categoria de material (`Book` Text + Monograph + `txt`, `Periodical` Text + Serial + `txt`, `Map` Cartography + `cri`, `Score` NotatedMusic + `ntm`, `SoundRecording` Audio, `Video` MovingImage + `tdi`, `Digital` Multimedia + `cop`, `VisualMaterial` StillImage + `sti`, `Mixed` MixedMaterial; Instância `Digital` vira `bf:Electronic`). O formulário de criação usa a mesma tabela até a etapa 3b-2 trocar a categoria pelas classes e listas na tela. Até lá, editar a categoria de um registro existente não muda a descrição.
+10l. A migração 12 descreve o que já está gravado: pelo registro de origem, como a importação faz; sem registro de origem, pela categoria de material (`Book` Text + Monograph + `txt`, `Periodical` Text + Serial + `txt`, `Map` Cartography + `cri`, `Score` NotatedMusic + `ntm`, `SoundRecording` Audio, `Video` MovingImage + `tdi`, `Digital` Multimedia + `cop`, `VisualMaterial` StillImage + `sti`, `Mixed` MixedMaterial; Instância `Digital` vira `bf:Electronic`). O formulário usa a mesma tabela até a etapa 7 trocar a categoria pelas caixas de classe e das listas: criar com uma categoria grava a descrição dela, e mudar a categoria de um registro troca as classes (e, na Obra, o `bf:content`) pelas da nova categoria, sem mexer nas outras declarações.
 
 ### Vocabulários da LC
 
@@ -178,11 +178,11 @@ A diretriz, em quatro frases:
 | 0 | Esta spec, o ADR 0003 e os avisos nos documentos substituídos | Paulo aprova |
 | 1 | Ontologia no repositório, lista gerada, testes de cobertura ligados (com a lista do que falta registrada, que só pode diminuir) | `codegen --check` verde |
 | 2 | Vocabulários da LC no repositório e nos termos | toda propriedade categórica tem a lista oficial |
-| 3 | Modelo: classes, `bf:content`/`media`/`carrier`/`issuance`, tabela de declarações, fim de `extra` e de `material_type` | cobertura do modelo sem faltas |
+| 3 | Modelo: classes, `bf:content`/`media`/`carrier`/`issuance`, tabela de declarações, fim de `extra` | cobertura do modelo sem faltas |
 | 4 | Unidades como organização, localizações e coleções por unidade, fim do tipo de item, política por `bf:usageAndAccessPolicy`, tabela da borda, migração | exportação MARC idêntica à de antes |
 | 5 | Conversão MARC21 → BIBFRAME ampliada | ida e volta dos registros do oráculo |
 | 6 | Formulários completos, sem expandir | cobertura do formulário sem faltas |
-| 7 | Caixas de seleção e ícones em formulário, grade, pílulas e OPAC | toda categoria da tabela do item 15 com ícone |
+| 7 | Caixas de seleção e ícones em formulário, grade, pílulas e OPAC; fim de `material_type` (as caixas de classe e de conteúdo, mídia e suporte tomam o lugar da categoria nas telas, na busca e na exportação) | toda categoria da tabela do item 15 com ícone |
 | 8 | Exportação RDF/XML e Turtle (2.11) | cobertura da exportação sem faltas |
 
 As tarefas 2.9 (autoridades) e 2.10 (listas de trabalho e facetas) vêm depois da etapa 8.

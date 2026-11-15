@@ -18,7 +18,10 @@ use crate::catalog::{
     insert_identifiers, insert_notes, link_contributions, link_languages, link_subjects,
     optional_term, record_changed, refused,
 };
+use crate::statements::recategorize;
 use crate::{CommandFailed, StoreError, WriteTx};
+use elzevir_app::description::{instance_of_material, work_of_material};
+use elzevir_domain::statement::{EntityKind, EntityRef};
 
 type Edited = Result<CatalogOutput, CommandFailed<WriteRefusal>>;
 
@@ -131,12 +134,23 @@ fn apply_work_change(
                 )
                 .map_err(StoreError::from)?;
         }
-        WorkChange::MaterialType(kind) => set(
-            connection,
-            "UPDATE works SET material_type = ?2 WHERE id = ?1",
-            id,
-            &kind.code(),
-        )?,
+        WorkChange::MaterialType(kind) => {
+            set(
+                connection,
+                "UPDATE works SET material_type = ?2 WHERE id = ?1",
+                id,
+                &kind.code(),
+            )?;
+            recategorize(
+                connection,
+                EntityRef {
+                    entity: EntityKind::Work,
+                    id,
+                },
+                &work_of_material(*kind),
+                &["content"],
+            )?;
+        }
         WorkChange::Classification { number, scheme } => {
             let scheme = optional_term(
                 connection,
@@ -200,11 +214,20 @@ fn apply_instance_change(
     let (sql, value): (&str, &dyn ToSql) = match change {
         InstanceChange::Title(title) => ("UPDATE instances SET title = ?2 WHERE id = ?1", title),
         InstanceChange::MaterialType(kind) => {
-            return set(
+            set(
                 connection,
                 "UPDATE instances SET material_type = ?2 WHERE id = ?1",
                 id,
                 &kind.code(),
+            )?;
+            return recategorize(
+                connection,
+                EntityRef {
+                    entity: EntityKind::Instance,
+                    id,
+                },
+                &instance_of_material(Some(*kind)),
+                &[],
             );
         }
         InstanceChange::Edition(edition) => {
