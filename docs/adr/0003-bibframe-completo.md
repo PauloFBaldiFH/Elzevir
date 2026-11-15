@@ -34,5 +34,5 @@ O modelo era "inspirado em BIBFRAME 2.0": as entidades certas, um subconjunto da
 ## Alternativas descartadas
 
 - **Manter o subconjunto e ampliar aos poucos, sem teste de cobertura:** não garante "nenhuma propriedade perdida".
-- **Uma coluna por propriedade:** 235 propriedades, a maioria rara; a tabela de declarações guarda o mesmo com leitura única.
+- **Uma coluna por propriedade:** 231 propriedades, a maioria rara; a tabela de declarações guarda o mesmo com leitura única.
 - **Triple store:** contraria a decisão 5 do doc 04 e não é exigido pela diretriz.

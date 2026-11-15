@@ -29,6 +29,8 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo xtask ci
+      - name: BIBFRAME extraction is up to date
+        run: perl tools/bibframe-extractor/extract.pl --check
       - run: cargo test --doc --workspace --locked
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:

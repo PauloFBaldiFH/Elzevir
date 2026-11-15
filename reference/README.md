@@ -5,6 +5,7 @@ Código de **referência de leitura**, fora do workspace Cargo. Nada aqui é com
 | Caminho | O que é | Versão fixada |
 |---|---|---|
 | `koha/` | Koha upstream ([Koha-Community/Koha](https://github.com/Koha-Community/Koha)), GPLv3, como submódulo git raso | tag `v26.05.05-1`, commit `4f25ee4dced64026e546e047a0b7cbb371902e10` (`Koha.pm`: `26.05.05.000`) |
+| `bibframe/bibframe.rdf` | Ontologia BIBFRAME da Library of Congress ([id.loc.gov/ontologies/bibframe.rdf](https://id.loc.gov/ontologies/bibframe.rdf)), CC0, cópia sem alteração | 3.0.1 (2025-12-03), SHA-256 `bac76ca817071521f8ef6e49a71cc2044d4ff4b019e7b7fefa1f5847ec6c69ca` |
 
 Para baixar:
 
@@ -20,3 +21,12 @@ Para trocar de versão, num PR próprio:
 4. revise o diff dos JSON: cada mudança de comportamento do Koha aparece ali.
 
 O CI confere os passos 2 e 3 (`extract.pl --check` com o submódulo, e `cargo xtask codegen --check`). A versão-alvo é a estável mais recente do Koha (ver [docs/arquitetura/04-decisoes.md](../docs/arquitetura/04-decisoes.md), §3).
+
+## Ontologia BIBFRAME
+
+Para trocar de versão, num PR próprio ([spec](../docs/specs/catalogo/bibframe-completo.md), item 5):
+
+1. substitua `bibframe/bibframe.rdf` pelo arquivo publicado e atualize a linha da tabela acima;
+2. rode `perl tools/bibframe-extractor/extract.pl` para regenerar `data/loc/bibframe.json`;
+3. rode `cargo xtask codegen`;
+4. rode os testes: os de cobertura dizem que propriedade nova ficou sem lugar.

@@ -705,6 +705,7 @@ name = "elzevir-store"
 version = "0.0.0"
 dependencies = [
  "elzevir-app",
+ "elzevir-data",
  "elzevir-domain",
  "elzevir-marc",
  "rusqlite",
