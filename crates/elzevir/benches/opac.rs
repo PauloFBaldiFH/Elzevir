@@ -364,14 +364,13 @@ fn create_codes(store: &ElzevirStore, file: &[u8]) {
                 code,
             }])
         })
-        .chain(
-            item_types
-                .into_iter()
-                .map(|code| CatalogCommand::CreateItemType {
-                    description: code.clone(),
-                    code,
-                }),
-        );
+        .chain(item_types.into_iter().map(|code| {
+            CatalogCommand::NameCodes(vec![NamedCode {
+                table: CodeTable::ItemType,
+                name: code.clone(),
+                code,
+            }])
+        }));
     for command in commands {
         store
             .submit(WriteCommand::Catalog(command))

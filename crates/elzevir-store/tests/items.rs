@@ -36,13 +36,13 @@ fn imported(dir: &tempfile::TempDir) -> ElzevirStore {
             code,
         }])
     });
-    let types = codes
-        .item_types
-        .into_iter()
-        .map(|code| CatalogCommand::CreateItemType {
-            description: code.clone(),
+    let types = codes.item_types.into_iter().map(|code| {
+        CatalogCommand::NameCodes(vec![NamedCode {
+            table: CodeTable::ItemType,
+            name: code.clone(),
             code,
-        });
+        }])
+    });
     for command in branches.chain(types) {
         run(&store, command).unwrap();
     }
@@ -384,7 +384,7 @@ fn a_scanned_barcode_or_isbn_finds_its_instance() {
                     inventory_number: None,
                     home_branch: codes.branches[0].id,
                     holding_branch: codes.branches[0].id,
-                    item_type: codes.item_types[0].code.clone(),
+                    policy: codes.policies[0].id,
                     call_number: None,
                     location: None,
                     collection: None,

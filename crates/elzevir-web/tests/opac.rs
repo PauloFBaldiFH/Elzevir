@@ -19,7 +19,7 @@ use elzevir_app::memory::{MemoryProbe, MemoryReport};
 use elzevir_app::search::SearchHit;
 use elzevir_app::staff::{StaffAccount, StaffDirectory, StaffDirectoryError};
 use elzevir_domain::catalog::{
-    BranchId, InstanceId, ItemId, MaterialType, NoteKind, SublocationId, WorkId,
+    BranchId, InstanceId, ItemId, MaterialType, NoteKind, PolicyId, SublocationId, WorkId,
 };
 use elzevir_web::{AppState, OpacPorts, StaffPorts, WebConfig, router};
 use elzevir_web_templates::I18n;
@@ -81,7 +81,7 @@ fn item(id: i64, status: ItemStatus) -> ItemView {
         barcode: Some(format!("B{id}")),
         inventory_number: None,
         home_branch: BranchId(1),
-        item_type: "BK".to_owned(),
+        policy: PolicyId(1),
         call_number: Some("310.62 P94".to_owned()),
         location: Some(SublocationId(1)),
         status,

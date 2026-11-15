@@ -320,6 +320,22 @@ const MIGRATIONS: &[&str] = &[
      ALTER TABLE items DROP COLUMN location;
      ALTER TABLE items DROP COLUMN collection;
      DELETE FROM terms WHERE vocabulary IN (3, 4);",
+    // 16: circulation policies take the place of item types (item 23c). Each item type
+    // becomes a policy with the same id and its name; the type code goes to the edge.
+    // Renaming the table first carries the reference of `items` along; the rebuild then
+    // drops `code`. Foreign keys are off, as for migration 15.
+    "INSERT OR REPLACE INTO koha_codes (kind, local_id, code) SELECT 4, id, code FROM item_types;
+     ALTER TABLE item_types RENAME TO circulation_policies;
+     CREATE TABLE circulation_policies_without_code (
+         id          INTEGER PRIMARY KEY,
+         name        TEXT NOT NULL,
+         row_version INTEGER NOT NULL DEFAULT 1
+     ) STRICT;
+     INSERT INTO circulation_policies_without_code (id, name, row_version)
+         SELECT id, description, row_version FROM circulation_policies;
+     DROP TABLE circulation_policies;
+     ALTER TABLE circulation_policies_without_code RENAME TO circulation_policies;
+     ALTER TABLE items RENAME COLUMN item_type TO policy_id;",
 ];
 
 /// The migration that creates `match_keys`.
@@ -337,6 +353,8 @@ const SORT_KEY_VERSION: i64 = 8;
 const PLACES_VERSION: i64 = 14;
 /// Migration that drops the codes of the core; it needs foreign keys off.
 const NO_CODES_VERSION: i64 = 15;
+/// Migration that turns item types into circulation policies; it needs foreign keys off.
+const POLICIES_VERSION: i64 = 16;
 /// Migration that drops `extra`.
 const DROP_EXTRA_VERSION: i64 = 13;
 /// Migration that adds the classes, and fills them with content, media, carrier and issuance.
@@ -386,7 +404,7 @@ fn migrate(connection: &mut Connection) -> Result<(), StoreError> {
         });
     }
     // Foreign keys can only be switched outside a transaction.
-    let rebuilds = current < NO_CODES_VERSION;
+    let rebuilds = current < POLICIES_VERSION;
     if rebuilds {
         connection.execute_batch("PRAGMA foreign_keys = OFF;")?;
     }
@@ -423,8 +441,8 @@ fn apply_migrations(connection: &mut Connection, current: i64) -> Result<(), Sto
             if version == PLACES_VERSION {
                 crate::places::backfill(&tx)?;
             }
-            if version == NO_CODES_VERSION {
-                check_foreign_keys(&tx)?;
+            if version == NO_CODES_VERSION || version == POLICIES_VERSION {
+                check_foreign_keys(&tx, version)?;
             }
             tx.pragma_update(None, "user_version", version)?;
         }
@@ -492,14 +510,14 @@ fn backfill_audience(connection: &Connection) -> Result<(), StoreError> {
 }
 
 /// After a rebuild with foreign keys off, every reference must still hold.
-fn check_foreign_keys(connection: &Connection) -> Result<(), StoreError> {
+fn check_foreign_keys(connection: &Connection, version: i64) -> Result<(), StoreError> {
     let broken: i64 =
         connection.query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |row| {
             row.get(0)
         })?;
     if broken > 0 {
         return Err(StoreError::Sqlite(format!(
-            "{broken} rows reference missing rows after migration {NO_CODES_VERSION}"
+            "{broken} rows reference missing rows after migration {version}"
         )));
     }
     Ok(())
@@ -686,7 +704,7 @@ mod catalog_tests {
         connection
             .execute_batch(
                 "DROP TABLE instance_notes; ALTER TABLE works DROP COLUMN audience;
-                 DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = (SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id; ALTER TABLE items DROP COLUMN collection_id; DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes; ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone; ALTER TABLE branches DROP COLUMN email; ALTER TABLE branches DROP COLUMN url; ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; PRAGMA user_version = 5;",
+                 DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; ALTER TABLE circulation_policies ADD COLUMN code TEXT; UPDATE circulation_policies SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 4 AND local_id = circulation_policies.id), 'P' || id); ALTER TABLE circulation_policies RENAME COLUMN name TO description; ALTER TABLE circulation_policies RENAME TO item_types; ALTER TABLE items RENAME COLUMN policy_id TO item_type; DELETE FROM koha_codes WHERE kind = 4; ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id), 'B' || id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id; ALTER TABLE items DROP COLUMN collection_id; DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes; ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone; ALTER TABLE branches DROP COLUMN email; ALTER TABLE branches DROP COLUMN url; ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; PRAGMA user_version = 5;",
             )
             .unwrap();
         migrate(&mut connection).unwrap();
@@ -721,7 +739,7 @@ mod catalog_tests {
         connection
             .execute_batch(
                 "INSERT INTO branches (id, name) VALUES (1, 'Unit');
-                 INSERT INTO item_types (id, code, description) VALUES (1, 'T1', 'Type');
+                 INSERT INTO circulation_policies (id, name) VALUES (1, 'Policy');
                  INSERT INTO works (id, title) VALUES (1, 'Dom Casmurro');
                  INSERT INTO instances (id, work_id, title) VALUES (1, 1, 'Dom Casmurro');
                  INSERT INTO instance_identifiers (instance_id, position, kind, value)
@@ -738,7 +756,7 @@ mod catalog_tests {
         barcode: Option<&str>,
     ) -> rusqlite::Result<usize> {
         connection.execute(
-            "INSERT INTO items (instance_id, barcode, home_branch, holding_branch, item_type)
+            "INSERT INTO items (instance_id, barcode, home_branch, holding_branch, policy_id)
              VALUES (?1, ?2, 1, 1, 1)",
             params![instance, barcode],
         )
@@ -765,7 +783,7 @@ mod catalog_tests {
         );
         assert!(
             connection
-                .execute("DELETE FROM item_types WHERE id = 1", [])
+                .execute("DELETE FROM circulation_policies WHERE id = 1", [])
                 .is_err()
         );
     }
@@ -877,7 +895,7 @@ mod catalog_tests {
             connection
                 .execute(
                     "INSERT INTO items (instance_id, barcode, inventory_number, home_branch,
-                                        holding_branch, item_type)
+                                        holding_branch, policy_id)
                      VALUES (1, ?1, '2024/0001', 1, 1, 1)",
                     params![barcode],
                 )
@@ -900,7 +918,7 @@ mod catalog_tests {
         assert_eq!(columns(&connection), 0);
         connection
             .execute_batch(
-                "ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = (SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id;
+                "ALTER TABLE circulation_policies ADD COLUMN code TEXT; UPDATE circulation_policies SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 4 AND local_id = circulation_policies.id), 'P' || id); ALTER TABLE circulation_policies RENAME COLUMN name TO description; ALTER TABLE circulation_policies RENAME TO item_types; ALTER TABLE items RENAME COLUMN policy_id TO item_type; DELETE FROM koha_codes WHERE kind = 4; ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id), 'B' || id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id;
                  ALTER TABLE items DROP COLUMN collection_id;
                  DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes;
                  ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone;

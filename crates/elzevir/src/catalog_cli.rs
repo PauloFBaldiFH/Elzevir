@@ -8,14 +8,14 @@ use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
 use clap::{Args, ValueEnum};
-use elzevir_app::catalog::{CatalogCommand, CatalogRefusal};
-use elzevir_app::commands::{WriteCommand, WriteRefusal};
+use elzevir_app::catalog::{CatalogCommand, CatalogReader};
+use elzevir_app::commands::WriteCommand;
 use elzevir_app::export::{ExportOptions, export_marc21, item_codes};
 use elzevir_app::import::{ImportOptions, ImportReport, Parallelism, import_marc21};
 use elzevir_app::matching::{self, Matching, OnMatch, OnNoMatch};
 use elzevir_domain::catalog::MatchRule;
 use elzevir_marc::Limits;
-use elzevir_store::{CommandFailed, ElzevirStore};
+use elzevir_store::ElzevirStore;
 
 use crate::open_store;
 
@@ -139,36 +139,41 @@ pub(crate) fn import(args: &ImportArgs) -> Result<(), String> {
     Ok(())
 }
 
-/// Creates the branches and item types of the file that are missing.
+/// Creates the branches and circulation policies whose Koha codes the file uses and the
+/// MARC edge does not know yet, named by their code. Known codes keep their names.
 fn create_codes(store: &ElzevirStore, file: &Path) -> Result<(), String> {
     let codes = item_codes(open_input(file)?, Limits::default())
         .map_err(|e| format!("cannot read {}: {e}", file.display()))?;
-    let branches = codes.branches.into_iter().map(|code| {
-        CatalogCommand::NameCodes(vec![NamedCode {
-            table: CodeTable::Branch,
+    let known = store.codes().map_err(|e| e.to_string())?.edge;
+    let missing = |table: CodeTable, code: &String| {
+        !known
+            .iter()
+            .any(|entry| entry.table == table && entry.code == *code)
+    };
+    let new: Vec<NamedCode> = codes
+        .branches
+        .into_iter()
+        .map(|code| (CodeTable::Branch, code))
+        .chain(
+            codes
+                .item_types
+                .into_iter()
+                .map(|code| (CodeTable::ItemType, code)),
+        )
+        .filter(|(table, code)| missing(*table, code))
+        .map(|(table, code)| NamedCode {
+            table,
             name: code.clone(),
             code,
-        }])
-    });
-    let item_types = codes
-        .item_types
-        .into_iter()
-        .map(|code| CatalogCommand::CreateItemType {
-            description: code.clone(),
-            code,
-        });
-    let mut created = 0_u32;
-    for command in branches.chain(item_types) {
-        let answer = store
-            .submit(WriteCommand::Catalog(command))
+        })
+        .collect();
+    let created = new.len();
+    if created > 0 {
+        store
+            .submit(WriteCommand::Catalog(CatalogCommand::NameCodes(new)))
             .map_err(|e| e.to_string())?
-            .wait();
-        match answer {
-            Ok(_) => created = created.saturating_add(1),
-            // Already there: nothing to create.
-            Err(CommandFailed::Rejected(WriteRefusal::Catalog(CatalogRefusal::CodeTaken(_)))) => {}
-            Err(e) => return Err(e.to_string()),
-        }
+            .wait()
+            .map_err(|e| e.to_string())?;
     }
     println!("elzevir: {created} branch and item type codes created");
     Ok(())

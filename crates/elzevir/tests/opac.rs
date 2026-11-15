@@ -104,15 +104,17 @@ fn search_then_record_then_a_new_item_shows_up() {
     assert!(record.contains("310.62 P94"));
     let copies = record.matches("<tr>").count();
 
-    // The edge code of a branch: AddItem carries Items as MARC does.
-    let branch = store
-        .codes()
-        .unwrap()
-        .edge
-        .into_iter()
-        .find(|entry| entry.table == elzevir_app::codes::CodeTable::Branch)
-        .unwrap()
-        .code;
+    // The edge codes of a branch and a policy: AddItem carries Items as MARC does.
+    let edge = store.codes().unwrap().edge;
+    let code_of = |table| {
+        edge.iter()
+            .find(|entry| entry.table == table)
+            .unwrap()
+            .code
+            .clone()
+    };
+    let branch = code_of(elzevir_app::codes::CodeTable::Branch);
+    let item_type = code_of(elzevir_app::codes::CodeTable::ItemType);
     store
         .submit(WriteCommand::Catalog(CatalogCommand::AddItem(Box::new(
             NewItem {
@@ -122,7 +124,7 @@ fn search_then_record_then_a_new_item_shows_up() {
                     inventory_number: None,
                     home_branch: branch.clone(),
                     holding_branch: branch,
-                    item_type: store.items(instance).unwrap()[0].item_type.clone(),
+                    item_type,
                     call_number: Some("310.62 P94 ex.9".to_owned()),
                     location: None,
                     collection: None,

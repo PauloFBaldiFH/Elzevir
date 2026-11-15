@@ -7,13 +7,12 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use elzevir_app::catalog::{
-    CatalogReadError, CatalogReader, CodeLists, CodeName, InstanceView, ItemStatus, ItemView,
-    Named, Place,
+    CatalogReadError, CatalogReader, CodeLists, InstanceView, ItemStatus, ItemView, Named, Place,
 };
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::listing::{CatalogListing, Family, FamilyCursor, FamilyHead};
 use elzevir_app::search::{IndexBatch, SearchError, SearchHit, SearchIndex, SearchResults};
-use elzevir_domain::catalog::{BranchId, InstanceId, SublocationId, WorkId};
+use elzevir_domain::catalog::{BranchId, InstanceId, PolicyId, SublocationId, WorkId};
 
 /// One record: its version, the Instance and its Items.
 pub(crate) type Record = (i64, InstanceView, Vec<ItemView>);
@@ -89,9 +88,9 @@ impl CatalogReader for Catalog {
                     name: "East Branch".to_owned(),
                 },
             ],
-            item_types: vec![CodeName {
-                code: "BK".to_owned(),
-                name: "Book".to_owned(),
+            policies: vec![Named {
+                id: PolicyId(1),
+                name: "Normal loan".to_owned(),
             }],
             locations: vec![Place {
                 id: SublocationId(1),
@@ -102,6 +101,7 @@ impl CatalogReader for Catalog {
             edge: vec![
                 edge(CodeTable::Branch, "CENTRAL", "Main Library"),
                 edge(CodeTable::Location, "STACKS", "General stacks"),
+                edge(CodeTable::ItemType, "T1", "Normal loan"),
             ],
         })
     }
@@ -319,7 +319,7 @@ impl elzevir_app::items::ItemGridSource for ItemGrid {
                 inventory_number: Some("T-77".to_owned()),
                 home_branch: BranchId(1),
                 holding_branch: BranchId(1),
-                item_type: "BK".to_owned(),
+                policy: PolicyId(1),
                 call_number: Some("869.3 A848d".to_owned()),
                 location: None,
                 collection: None,

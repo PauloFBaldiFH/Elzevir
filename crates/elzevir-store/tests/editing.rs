@@ -38,13 +38,13 @@ fn imported(dir: &tempfile::TempDir) -> ElzevirStore {
             code,
         }])
     });
-    let types = codes
-        .item_types
-        .into_iter()
-        .map(|code| CatalogCommand::CreateItemType {
-            description: code.clone(),
+    let types = codes.item_types.into_iter().map(|code| {
+        CatalogCommand::NameCodes(vec![NamedCode {
+            table: CodeTable::ItemType,
+            name: code.clone(),
             code,
-        });
+        }])
+    });
     for command in branches.chain(types) {
         run(&store, command).unwrap();
     }

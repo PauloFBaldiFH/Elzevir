@@ -147,10 +147,11 @@ fn catalog() -> Catalog {
     .unwrap();
     run(
         &store,
-        CatalogCommand::CreateItemType {
+        CatalogCommand::NameCodes(vec![NamedCode {
+            table: CodeTable::ItemType,
             code: "BK".to_owned(),
-            description: "Book".to_owned(),
-        },
+            name: "Book".to_owned(),
+        }]),
     )
     .unwrap();
     let CatalogOutput::Hub(hub) = run(

@@ -50,13 +50,13 @@ fn imported(dir: &tempfile::TempDir) -> ElzevirStore {
             code,
         }])
     });
-    let types = codes
-        .item_types
-        .into_iter()
-        .map(|code| CatalogCommand::CreateItemType {
-            description: code.clone(),
+    let types = codes.item_types.into_iter().map(|code| {
+        CatalogCommand::NameCodes(vec![NamedCode {
+            table: CodeTable::ItemType,
+            name: code.clone(),
             code,
-        });
+        }])
+    });
     for command in branches.chain(types) {
         run(&store, command).unwrap();
     }
@@ -134,10 +134,11 @@ fn the_same_code_in_two_branches_is_two_places_and_names_stay_unique() {
     .unwrap();
     run(
         &store,
-        CatalogCommand::CreateItemType {
+        CatalogCommand::NameCodes(vec![NamedCode {
+            table: CodeTable::ItemType,
             code: "T1".to_owned(),
-            description: "Tipo".to_owned(),
-        },
+            name: "Tipo".to_owned(),
+        }]),
     )
     .unwrap();
     for (barcode, location) in [("f-1", "INF"), ("f-2", "KIDS"), ("f-3", "INF")] {
@@ -187,7 +188,7 @@ fn migration_14_fills_the_places_of_older_databases() {
     let connection = rusqlite::Connection::open(dir.path().join("elzevir.db")).unwrap();
     connection
         .execute_batch(
-            "ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = (SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id;
+            "ALTER TABLE circulation_policies ADD COLUMN code TEXT; UPDATE circulation_policies SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 4 AND local_id = circulation_policies.id), 'P' || id); ALTER TABLE circulation_policies RENAME COLUMN name TO description; ALTER TABLE circulation_policies RENAME TO item_types; ALTER TABLE items RENAME COLUMN policy_id TO item_type; DELETE FROM koha_codes WHERE kind = 4; ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id), 'B' || id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id;
              ALTER TABLE items DROP COLUMN collection_id;
              DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes;
              ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone;

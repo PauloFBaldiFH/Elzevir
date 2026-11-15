@@ -148,19 +148,8 @@ async fn page(
     response
 }
 
-/// The codes of one table with their names: item types from their table, the rest from
-/// the edge.
+/// The Koha codes of one table with the names of the rows they stand for.
 fn rows(codes: &CodeLists, table: CodeTable) -> Vec<CodeRow> {
-    if table == CodeTable::ItemType {
-        return codes
-            .item_types
-            .iter()
-            .map(|entry| CodeRow {
-                code: entry.code.clone(),
-                name: entry.name.clone(),
-            })
-            .collect();
-    }
     codes
         .edge
         .iter()

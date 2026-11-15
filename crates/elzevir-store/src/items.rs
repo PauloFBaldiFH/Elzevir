@@ -5,8 +5,7 @@
 use std::collections::HashMap;
 
 use elzevir_app::catalog::{
-    CatalogOutput, CatalogReadError, CatalogRefusal, CodeLists, CodeName, ItemData, ItemStatus,
-    Named, Place,
+    CatalogOutput, CatalogReadError, CatalogRefusal, CodeLists, ItemData, ItemStatus, Named, Place,
 };
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::WriteRefusal;
@@ -14,7 +13,9 @@ use elzevir_app::items::{
     GridItem, ItemColumn, ItemFields, ItemGridSource, ItemRow, ItemsUpdate, RowProblem, RowRefusal,
     repeated_barcodes,
 };
-use elzevir_domain::catalog::{BranchId, CollectionId, InstanceId, ItemId, Money, SublocationId};
+use elzevir_domain::catalog::{
+    BranchId, CollectionId, InstanceId, ItemId, Money, PolicyId, SublocationId,
+};
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::catalog::{Places, insert_item, lookup, record_changed, refused, status_at};
@@ -137,14 +138,12 @@ fn refusals(
         )? {
             refuse(ItemColumn::HoldingBranch, RowProblem::UnknownBranch);
         }
-        if lookup(
+        if !exists(
             connection,
-            "SELECT id FROM item_types WHERE code = ?1",
-            &fields.item_type,
-        )?
-        .is_none()
-        {
-            refuse(ItemColumn::ItemType, RowProblem::UnknownItemType);
+            "SELECT 1 FROM circulation_policies WHERE id = ?1",
+            fields.policy.0,
+        )? {
+            refuse(ItemColumn::Policy, RowProblem::UnknownPolicy);
         }
         // A shelving place or collection belongs to one branch: the Item's home one.
         let in_branch = |sql: &str, id: i64| -> Result<bool, StoreError> {
@@ -199,23 +198,14 @@ fn exists(connection: &Connection, sql: &str, id: i64) -> Result<bool, StoreErro
 }
 
 /// The rows a grid row names, checked in `refusals` inside the same savepoint.
-fn places(
-    connection: &Connection,
-    fields: &ItemFields,
-) -> Result<Places, CommandFailed<WriteRefusal>> {
-    let item_type = lookup(
-        connection,
-        "SELECT id FROM item_types WHERE code = ?1",
-        &fields.item_type,
-    )?
-    .ok_or_else(|| refused(CatalogRefusal::UnknownItemType(fields.item_type.clone())))?;
-    Ok(Places {
+fn places(fields: &ItemFields) -> Places {
+    Places {
         home: fields.home_branch.0,
         holding: fields.holding_branch.0,
-        item_type,
+        policy: fields.policy.0,
         location: fields.location.map(|id| id.0),
         collection: fields.collection.map(|id| id.0),
-    })
+    }
 }
 
 fn update_item(
@@ -223,11 +213,11 @@ fn update_item(
     id: ItemId,
     fields: &ItemFields,
 ) -> Result<(), CommandFailed<WriteRefusal>> {
-    let places = places(connection, fields)?;
+    let places = places(fields);
     connection
         .execute(
             "UPDATE items SET barcode = ?2, inventory_number = ?3, home_branch = ?4,
-                              holding_branch = ?5, item_type = ?6, call_number = ?7,
+                              holding_branch = ?5, policy_id = ?6, call_number = ?7,
                               sublocation_id = ?8, collection_id = ?9, copy_number = ?10,
                               price_cents = ?11, row_version = row_version + 1
              WHERE id = ?1",
@@ -237,7 +227,7 @@ fn update_item(
                 fields.inventory_number,
                 places.home,
                 places.holding,
-                places.item_type,
+                places.policy,
                 fields.call_number,
                 places.location,
                 places.collection,
@@ -255,13 +245,13 @@ fn add_grid_item(
     instance: InstanceId,
     fields: &ItemFields,
 ) -> Result<ItemId, CommandFailed<WriteRefusal>> {
-    let places = places(connection, fields)?;
+    let places = places(fields);
     let item = ItemData {
         barcode: fields.barcode.clone(),
         inventory_number: fields.inventory_number.clone(),
         home_branch: String::new(),
         holding_branch: String::new(),
-        item_type: fields.item_type.clone(),
+        item_type: String::new(),
         call_number: fields.call_number.clone(),
         location: None,
         collection: None,
@@ -280,11 +270,10 @@ impl ItemGridSource for ElzevirStore {
             .read(|c| {
                 let mut statement = c.prepare(
                     "SELECT items.id, barcode, inventory_number, home_branch, holding_branch,
-                            item_types.code, call_number, sublocation_id, collection_id,
+                            policy_id, call_number, sublocation_id, collection_id,
                             copy_number, price_cents,
                             not_for_loan, damaged, lost, withdrawn, restricted
                      FROM items
-                     JOIN item_types ON item_types.id = items.item_type
                      WHERE instance_id = ?1 ORDER BY items.id",
                 )?;
                 statement
@@ -296,7 +285,7 @@ impl ItemGridSource for ElzevirStore {
                                 inventory_number: row.get(2)?,
                                 home_branch: BranchId(row.get(3)?),
                                 holding_branch: BranchId(row.get(4)?),
-                                item_type: row.get(5)?,
+                                policy: PolicyId(row.get(5)?),
                                 call_number: row.get(6)?,
                                 location: row.get::<_, Option<i64>>(7)?.map(SublocationId),
                                 collection: row.get::<_, Option<i64>>(8)?.map(CollectionId),
@@ -323,18 +312,18 @@ pub(crate) fn code_lists(c: &Connection) -> Result<CodeLists, rusqlite::Error> {
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    let mut item_types = c.prepare("SELECT code, description FROM item_types ORDER BY code")?;
-    let item_types = item_types
+    let mut policies = c.prepare("SELECT id, name FROM circulation_policies ORDER BY name, id")?;
+    let policies = policies
         .query_map([], |row| {
-            Ok(CodeName {
-                code: row.get(0)?,
+            Ok(Named {
+                id: PolicyId(row.get(0)?),
                 name: row.get(1)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(CodeLists {
         branches,
-        item_types,
+        policies,
         locations: places_of(
             c,
             "SELECT id, branch_id, name FROM sublocations ORDER BY name, id",
@@ -352,11 +341,11 @@ pub(crate) fn code_lists(c: &Connection) -> Result<CodeLists, rusqlite::Error> {
 /// The Koha codes of the edge with the names of their rows, in code order.
 fn edge_names(c: &Connection) -> Result<Vec<NamedCode>, rusqlite::Error> {
     let mut statement = c.prepare(
-        "SELECT k.kind, k.code, COALESCE(b.name, s.name, l.name) FROM koha_codes k
+        "SELECT k.kind, k.code, COALESCE(b.name, s.name, l.name, p.name) FROM koha_codes k
          LEFT JOIN branches b ON k.kind = 1 AND b.id = k.local_id
          LEFT JOIN sublocations s ON k.kind = 2 AND s.id = k.local_id
          LEFT JOIN collections l ON k.kind = 3 AND l.id = k.local_id
-         WHERE k.kind BETWEEN 1 AND 3
+         LEFT JOIN circulation_policies p ON k.kind = 4 AND p.id = k.local_id
          ORDER BY k.kind, k.code, k.local_id",
     )?;
     let rows = statement
@@ -374,7 +363,8 @@ fn edge_names(c: &Connection) -> Result<Vec<NamedCode>, rusqlite::Error> {
             let table = match kind {
                 1 => CodeTable::Branch,
                 2 => CodeTable::Location,
-                _ => CodeTable::Collection,
+                3 => CodeTable::Collection,
+                _ => CodeTable::ItemType,
             };
             // A code whose row is gone names nothing.
             name.map(|name| NamedCode { table, code, name })

@@ -278,7 +278,7 @@ fn items(c: &Connection, instance: i64) -> Result<Vec<ItemData>, ReadFailure> {
     let mut statement = c.prepare_cached(
         "SELECT barcode, inventory_number,
                 COALESCE(home_code.code, home.name), COALESCE(holding_code.code, holding.name),
-                item_types.code, call_number,
+                COALESCE(policy_code.code, policy.name), call_number,
                 COALESCE(location_code.code, location.name),
                 COALESCE(collection_code.code, collection.name), price_cents,
                 replacement_price_cents, copy_number, acquired_on,
@@ -286,13 +286,15 @@ fn items(c: &Connection, instance: i64) -> Result<Vec<ItemData>, ReadFailure> {
          FROM items
          JOIN branches AS home ON home.id = items.home_branch
          JOIN branches AS holding ON holding.id = items.holding_branch
-         JOIN item_types ON item_types.id = items.item_type
+         JOIN circulation_policies AS policy ON policy.id = items.policy_id
          LEFT JOIN sublocations AS location ON location.id = items.sublocation_id
          LEFT JOIN collections AS collection ON collection.id = items.collection_id
          LEFT JOIN koha_codes AS home_code
               ON home_code.kind = 1 AND home_code.local_id = home.id
          LEFT JOIN koha_codes AS holding_code
               ON holding_code.kind = 1 AND holding_code.local_id = holding.id
+         LEFT JOIN koha_codes AS policy_code
+              ON policy_code.kind = 4 AND policy_code.local_id = policy.id
          LEFT JOIN koha_codes AS location_code
               ON location_code.kind = 2 AND location_code.local_id = location.id
          LEFT JOIN koha_codes AS collection_code

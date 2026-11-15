@@ -5,7 +5,9 @@
 
 use std::collections::HashMap;
 
-use elzevir_domain::catalog::{BranchId, CollectionId, InstanceId, ItemId, Money, SublocationId};
+use elzevir_domain::catalog::{
+    BranchId, CollectionId, InstanceId, ItemId, Money, PolicyId, SublocationId,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::{CatalogReadError, ItemStatus};
@@ -25,8 +27,8 @@ pub struct ItemFields {
     pub home_branch: BranchId,
     /// Holding branch.
     pub holding_branch: BranchId,
-    /// Item type code.
-    pub item_type: String,
+    /// Circulation policy.
+    pub policy: PolicyId,
     /// Call number.
     pub call_number: Option<String>,
     /// Shelving place, in the home branch.
@@ -71,8 +73,8 @@ pub enum ItemColumn {
     HomeBranch,
     /// Holding branch.
     HoldingBranch,
-    /// Item type.
-    ItemType,
+    /// Circulation policy.
+    Policy,
     /// Shelving place.
     Location,
     /// Collection.
@@ -93,8 +95,8 @@ pub enum RowProblem {
     UnknownBranch,
     /// The home branch has no shelving place or collection with this id.
     NotInBranch,
-    /// No item type has this code.
-    UnknownItemType,
+    /// No circulation policy has this id.
+    UnknownPolicy,
     /// Another Item, in the catalog or in the batch, has this barcode.
     BarcodeTaken,
     /// No Item of this Instance has this id.
@@ -110,7 +112,7 @@ impl ItemColumn {
             Self::Barcode => "barcode",
             Self::HomeBranch => "home_branch",
             Self::HoldingBranch => "holding_branch",
-            Self::ItemType => "item_type",
+            Self::Policy => "policy",
             Self::Location => "location",
             Self::Collection => "collection",
             Self::Price => "price",
@@ -127,7 +129,7 @@ impl RowProblem {
             Self::Price => "items-error-price",
             Self::UnknownBranch => "items-error-branch",
             Self::NotInBranch => "items-error-not-in-branch",
-            Self::UnknownItemType => "items-error-item-type",
+            Self::UnknownPolicy => "items-error-policy",
             Self::BarcodeTaken => "items-error-barcode-taken",
             Self::UnknownItem => "items-error-unknown-item",
         }
@@ -164,9 +166,9 @@ pub struct TypedRow {
     /// Holding branch id; empty takes the home branch.
     #[serde(default)]
     pub holding_branch: String,
-    /// Item type code.
+    /// Circulation policy id.
     #[serde(default)]
-    pub item_type: String,
+    pub policy: String,
     /// Call number.
     #[serde(default)]
     pub call_number: String,
@@ -201,7 +203,6 @@ pub fn item_rows(typed: Vec<TypedRow>) -> Result<Vec<ItemRow>, Vec<RowRefusal>> 
                 problem,
             });
         };
-        let item_type = row.item_type.trim().to_owned();
         let home_branch = match id_of(&row.home_branch) {
             Ok(Some(id)) => BranchId(id),
             Ok(None) => {
@@ -213,9 +214,17 @@ pub fn item_rows(typed: Vec<TypedRow>) -> Result<Vec<ItemRow>, Vec<RowRefusal>> 
                 BranchId(0)
             }
         };
-        if item_type.is_empty() {
-            refuse(ItemColumn::ItemType, RowProblem::Required);
-        }
+        let policy = match id_of(&row.policy) {
+            Ok(Some(id)) => PolicyId(id),
+            Ok(None) => {
+                refuse(ItemColumn::Policy, RowProblem::Required);
+                PolicyId(0)
+            }
+            Err(()) => {
+                refuse(ItemColumn::Policy, RowProblem::UnknownPolicy);
+                PolicyId(0)
+            }
+        };
         let price = optional(&row.price);
         let price = match price.as_deref().map(cents) {
             None => None,
@@ -244,7 +253,7 @@ pub fn item_rows(typed: Vec<TypedRow>) -> Result<Vec<ItemRow>, Vec<RowRefusal>> 
                 inventory_number: optional(&row.inventory_number),
                 home_branch,
                 holding_branch: holding_branch.map_or(home_branch, BranchId),
-                item_type,
+                policy,
                 call_number: optional(&row.call_number),
                 location: location.map(SublocationId),
                 collection: collection.map(CollectionId),
@@ -334,7 +343,7 @@ mod tests {
         TypedRow {
             barcode: barcode.to_owned(),
             home_branch: " 3 ".to_owned(),
-            item_type: "T1".to_owned(),
+            policy: "1".to_owned(),
             ..TypedRow::default()
         }
     }

@@ -56,8 +56,8 @@ pub struct ItemFields {
     pub home_branch: String,
     /// Holding branch code, when it differs from the home branch.
     pub holding_branch: Option<String>,
-    /// Item type code.
-    pub item_type: String,
+    /// Circulation policy name.
+    pub policy: String,
     /// Call number.
     pub call_number: Option<String>,
     /// Shelving location code.
