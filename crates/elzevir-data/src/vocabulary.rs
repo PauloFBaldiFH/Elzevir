@@ -144,12 +144,20 @@ const UNUSED_SCHEMES: &[(&str, &str)] = &[
         "encoding level of the BFLC extension, not BIBFRAME",
     ),
     (
+        "mgovtpubtype",
+        "government publication type; the conversion writes it to the BFLC extension",
+    ),
+    (
         "mscale",
         "kinds of scale; bf:scale takes the scale statement itself",
     ),
     (
         "mtechnique",
         "moving image technique; BIBFRAME has no property for it",
+    ),
+    (
+        "mserialpubtype",
+        "serial publication type; no BIBFRAME property takes it",
     ),
     (
         "rbmsrel",
