@@ -21,10 +21,24 @@ pub(super) fn write(out: &mut Record, instance: &Description, before: Option<&De
     if first_index(out, *b"260").is_some() {
         let in_260 = rest.iter().position(|s| class_of(s) == Some("Manufacture"));
         let parts = in_260.and_then(|at| rest.get(at)).map(parts_of);
-        for (code, index) in [(b'e', 0), (b'f', 1), (b'g', 2)] {
-            let values = parts.as_ref().and_then(|p: &[Vec<String>; 3]| p.get(index));
-            let joined = values.filter(|v| !v.is_empty()).map(|v| v.join(" "));
-            set_subfield(out, *b"260", *b"  ", code, joined.as_deref());
+        let present: Vec<(u8, String)> = b"efg"
+            .iter()
+            .copied()
+            .zip(parts.unwrap_or_default())
+            .filter(|(_, values)| !values.is_empty())
+            .map(|(code, values)| (code, values.join(" ")))
+            .collect();
+        let punctuated = manufacture_punctuation(present);
+        for code in *b"efg" {
+            let value = punctuated
+                .iter()
+                .find(|(c, _)| *c == code)
+                .map(|(_, v)| v.as_str());
+            set_subfield(out, *b"260", *b"  ", code, value);
+        }
+        if !punctuated.is_empty() {
+            // The period closes the area after the parenthesis, not the date before it.
+            open_date(out);
         }
         let others: Vec<Statement> = rest
             .iter()
@@ -36,6 +50,45 @@ pub(super) fn write(out: &mut Record, instance: &Description, before: Option<&De
         return;
     }
     write_264(out, rest);
+}
+
+/// The ISBD punctuation of the manufacture in `260`: in parentheses, ` :` before the
+/// manufacturer and `,` before the date (`(Curitiba : Mileart)`).
+fn manufacture_punctuation(parts: Vec<(u8, String)>) -> Vec<(u8, String)> {
+    let next: Vec<Option<u8>> = parts
+        .iter()
+        .skip(1)
+        .map(|(code, _)| Some(*code))
+        .chain([None])
+        .collect();
+    parts
+        .into_iter()
+        .zip(next)
+        .enumerate()
+        .map(|(at, ((code, value), next))| {
+            let opened = if at == 0 { format!("({value}") } else { value };
+            let value = match next {
+                Some(b'f') => format!("{opened} :"),
+                Some(_) => format!("{opened},"),
+                None => format!("{opened})"),
+            };
+            (code, value)
+        })
+        .collect()
+}
+
+/// Takes the closing period off the `260 $c` that a manufacture follows.
+fn open_date(out: &mut Record) {
+    let Some(Field::Data { subfields, .. }) =
+        first_index(out, *b"260").and_then(|index| out.fields.get_mut(index))
+    else {
+        return;
+    };
+    for subfield in subfields.iter_mut().filter(|s| s.code == b'c') {
+        if subfield.value.last() == Some(&b'.') {
+            subfield.value.pop();
+        }
+    }
 }
 
 fn write_264(out: &mut Record, wanted: &[Statement]) {
@@ -153,7 +206,12 @@ mod tests {
             data_field(
                 *b"260",
                 *b"  ",
-                &[(b'a', "Campo Erê"), (b'e', "Chapecó"), (b'f', "Gráfica")],
+                // The manufacture as ISBD writes it, in parentheses.
+                &[
+                    (b'a', "Campo Erê"),
+                    (b'e', "(Chapecó :"),
+                    (b'f', "Gráfica)"),
+                ],
             ),
             data_field(
                 *b"264",

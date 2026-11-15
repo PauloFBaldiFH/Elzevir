@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! The administrative metadata of the Instance back to Leader/05, `001`, `003`, `005`,
+//! The administrative metadata of the Instance back to Leader/05 and 18, `001`, `003`, `005`,
 //! `008/00-05` and `040` (bibframe-completo.md, item 29, part 5e), after the way back of
 //! the Library of Congress (`bibframe2marc`: `01-001-008.xml` and `02-010-048.xml`).
 //!
@@ -10,7 +10,7 @@ use elzevir_domain::statement::{Description, Resource, Statement, Value};
 use elzevir_marc::{Field, Record, Subfield, Tag};
 
 use super::super::Marc;
-use super::super::admin::of_instance;
+use super::super::admin::{in_leader, of_instance};
 use super::fields::{first_index, insert_in_tag_order};
 
 /// Writes the administrative metadata of `instance` when it differs from `out`'s.
@@ -39,6 +39,10 @@ pub(super) fn write(out: &mut Record, instance: &Description) {
     {
         *position = *byte;
     }
+    // ISBD is what the LC way back writes when nothing says otherwise.
+    if let Some(position) = out.leader.get_mut(18) {
+        *position = if follows(admin, "aacr") { b'a' } else { b'i' };
+    }
     let local = first("identifiedBy").and_then(|s| match &s.value {
         Value::Resource(local) if local.class == "Local" => Some(local),
         _ => None,
@@ -61,6 +65,26 @@ pub(super) fn write(out: &mut Record, instance: &Description) {
         write_008_date(out, &entered);
     }
     write_040(out, admin);
+}
+
+/// Whether the administrative metadata `description` holds names the description
+/// conventions `code`.
+pub(super) fn description_follows(description: &Description, code: &str) -> bool {
+    description
+        .statements
+        .iter()
+        .filter(|s| s.property == "adminMetadata")
+        .any(|s| match &s.value {
+            Value::Resource(admin) => follows(&admin.statements, code),
+            _ => false,
+        })
+}
+
+fn follows(admin: &[Statement], code: &str) -> bool {
+    admin
+        .iter()
+        .filter(|s| s.property == "descriptionConventions")
+        .any(|s| code_of(s) == Some(code))
 }
 
 /// `2026-08-23T19:29:13` → `20260823192913.0`; a date without a time gets midnight.
@@ -125,7 +149,12 @@ fn write_040(out: &mut Record, admin: &[Statement]) {
     push(b'b', &codes("descriptionLanguage"));
     push(b'c', assigners.get(..1).unwrap_or_default());
     push(b'd', &codes("descriptionModifier"));
-    push(b'e', &codes("descriptionConventions"));
+    // Leader/18 says AACR 2 and ISBD; `$e` names the others.
+    let conventions: Vec<&str> = codes("descriptionConventions")
+        .into_iter()
+        .filter(|code| !in_leader(code))
+        .collect();
+    push(b'e', &conventions);
     match first_index(out, *b"040") {
         Some(index) => {
             let Some(Field::Data {

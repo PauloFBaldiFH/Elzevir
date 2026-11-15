@@ -109,6 +109,11 @@ instance:
                   Concept:
                     scheme: mstatus
                     code: n
+              - property: descriptionConventions
+                value:
+                  Concept:
+                    scheme: descriptionConventions
+                    code: aacr
               - property: identifiedBy
                 value:
                   Resource:
