@@ -62,6 +62,66 @@ instance:
           Literal:
             text: 21cm
             language: ~
+      - property: adminMetadata
+        value:
+          Resource:
+            class: AdminMetadata
+            label: ~
+            statements:
+              - property: status
+                value:
+                  Concept:
+                    scheme: mstatus
+                    code: n
+              - property: identifiedBy
+                value:
+                  Resource:
+                    class: Local
+                    label: "000281792"
+                    statements:
+                      - property: assigner
+                        value:
+                          Resource:
+                            class: Agent
+                            label: ~
+                            statements:
+                              - property: code
+                                value:
+                                  Literal:
+                                    text: BR-RjBN
+                                    language: ~
+              - property: assigner
+                value:
+                  Resource:
+                    class: Agent
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: BR-RjBN
+                            language: ~
+              - property: descriptionLanguage
+                value:
+                  Resource:
+                    class: Language
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: por
+                            language: ~
+              - property: creationDate
+                value:
+                  Literal:
+                    text: 2011-07-11
+                    language: ~
+              - property: changeDate
+                value:
+                  Literal:
+                    text: "2026-10-19T14:38:36"
+                    language: ~
   edition: ~
   place: Rio de Janeiro
   publisher: Publitetto

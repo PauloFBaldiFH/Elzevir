@@ -48,6 +48,55 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: adminMetadata
+        value:
+          Resource:
+            class: AdminMetadata
+            label: ~
+            statements:
+              - property: status
+                value:
+                  Concept:
+                    scheme: mstatus
+                    code: n
+              - property: identifiedBy
+                value:
+                  Resource:
+                    class: Local
+                    label: "000579176"
+                    statements: []
+              - property: assigner
+                value:
+                  Resource:
+                    class: Agent
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: BR-PaURS
+                            language: ~
+              - property: descriptionLanguage
+                value:
+                  Resource:
+                    class: Language
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: por
+                            language: ~
+              - property: creationDate
+                value:
+                  Literal:
+                    text: 1998-11-16
+                    language: ~
+              - property: changeDate
+                value:
+                  Literal:
+                    text: "2026-09-21T08:39:42"
+                    language: ~
   edition: ~
   place: "Brasilia,DF"
   publisher: Presidência da República Secretária de Imprensa e Divulgação

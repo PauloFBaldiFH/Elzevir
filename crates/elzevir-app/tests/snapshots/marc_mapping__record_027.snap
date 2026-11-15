@@ -65,6 +65,66 @@ instance:
                   Literal:
                     text: bibliography
                     language: ~
+      - property: adminMetadata
+        value:
+          Resource:
+            class: AdminMetadata
+            label: ~
+            statements:
+              - property: status
+                value:
+                  Concept:
+                    scheme: mstatus
+                    code: n
+              - property: identifiedBy
+                value:
+                  Resource:
+                    class: Local
+                    label: "76329"
+                    statements:
+                      - property: assigner
+                        value:
+                          Resource:
+                            class: Agent
+                            label: ~
+                            statements:
+                              - property: code
+                                value:
+                                  Literal:
+                                    text: BR-FlUSC
+                                    language: ~
+              - property: assigner
+                value:
+                  Resource:
+                    class: Agent
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: BIBLIODATA
+                            language: ~
+              - property: descriptionLanguage
+                value:
+                  Resource:
+                    class: Language
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: por
+                            language: ~
+              - property: creationDate
+                value:
+                  Literal:
+                    text: 1990-05-03
+                    language: ~
+              - property: changeDate
+                value:
+                  Literal:
+                    text: "2026-09-21T09:44:07"
+                    language: ~
   edition: 3. ed
   place: São Paulo
   publisher: Busca Vida

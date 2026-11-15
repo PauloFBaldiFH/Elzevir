@@ -1052,6 +1052,88 @@ instance:
           Literal:
             text: 24 cm
             language: ~
+      - property: adminMetadata
+        value:
+          Resource:
+            class: AdminMetadata
+            label: ~
+            statements:
+              - property: status
+                value:
+                  Concept:
+                    scheme: mstatus
+                    code: n
+              - property: identifiedBy
+                value:
+                  Resource:
+                    class: Local
+                    label: "67"
+                    statements:
+                      - property: assigner
+                        value:
+                          Resource:
+                            class: Agent
+                            label: ~
+                            statements:
+                              - property: code
+                                value:
+                                  Literal:
+                                    text: BR-CuUTF
+                                    language: ~
+              - property: assigner
+                value:
+                  Resource:
+                    class: Agent
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: BlCuPUC
+                            language: ~
+              - property: descriptionLanguage
+                value:
+                  Resource:
+                    class: Language
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: por
+                            language: ~
+              - property: descriptionModifier
+                value:
+                  Resource:
+                    class: Agent
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: BR-CuCFE
+                            language: ~
+              - property: descriptionConventions
+                value:
+                  Resource:
+                    class: DescriptionConventions
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: aacr2
+                            language: ~
+              - property: creationDate
+                value:
+                  Literal:
+                    text: 2003-03-28
+                    language: ~
+              - property: changeDate
+                value:
+                  Literal:
+                    text: "2026-11-11T11:09:43"
+                    language: ~
   edition: 6. ed
   place: "São Paulo, SP"
   publisher: Moderna

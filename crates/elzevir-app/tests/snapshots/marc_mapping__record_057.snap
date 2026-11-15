@@ -67,6 +67,77 @@ instance:
           Literal:
             text: 21 cm
             language: ~
+      - property: adminMetadata
+        value:
+          Resource:
+            class: AdminMetadata
+            label: ~
+            statements:
+              - property: status
+                value:
+                  Concept:
+                    scheme: mstatus
+                    code: n
+              - property: identifiedBy
+                value:
+                  Resource:
+                    class: Local
+                    label: "170620"
+                    statements:
+                      - property: assigner
+                        value:
+                          Resource:
+                            class: Agent
+                            label: ~
+                            statements:
+                              - property: code
+                                value:
+                                  Literal:
+                                    text: BR-CuUTF
+                                    language: ~
+              - property: assigner
+                value:
+                  Resource:
+                    class: Agent
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: BR-CuCFE
+                            language: ~
+              - property: descriptionLanguage
+                value:
+                  Resource:
+                    class: Language
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: por
+                            language: ~
+              - property: descriptionConventions
+                value:
+                  Resource:
+                    class: DescriptionConventions
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: aacr2
+                            language: ~
+              - property: creationDate
+                value:
+                  Literal:
+                    text: 2004-01-27
+                    language: ~
+              - property: changeDate
+                value:
+                  Literal:
+                    text: "2026-10-20T11:20:18"
+                    language: ~
   edition: 3. ed
   place: "Campinas, SP"
   publisher: Papirus
