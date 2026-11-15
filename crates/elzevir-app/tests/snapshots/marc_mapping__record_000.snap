@@ -45,6 +45,22 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: provisionActivity
+        value:
+          Resource:
+            class: Publication
+            label: ~
+            statements:
+              - property: date
+                value:
+                  Literal:
+                    text: "1995"
+                    language: ~
+              - property: place
+                value:
+                  Concept:
+                    scheme: countries
+                    code: xx
       - property: adminMetadata
         value:
           Resource:

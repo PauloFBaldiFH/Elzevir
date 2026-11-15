@@ -219,6 +219,7 @@ pub fn check(subject: EntityKind, statements: &[Statement]) -> Result<(), Statem
             && !is_typed_note(statement)
             && !is_other_provision(statement)
             && !is_language_part(statement)
+            && !is_coded_publication(statement)
         {
             return Err(StatementRefusal::Typed(statement.property.clone()));
         }
@@ -262,6 +263,26 @@ pub fn is_other_provision(statement: &Statement) -> bool {
     statement.property == "provisionActivity"
         && matches!(&statement.value, Value::Resource(activity)
             if matches!(activity.class.as_str(), "Production" | "Distribution" | "Manufacture"))
+}
+
+/// Whether `statement` is the coded publication (bibframe-completo.md, item 29, part 5e): a
+/// `bf:Publication` that holds only a date, a status and countries, as `008` codes them. The
+/// publication as transcribed has its own fields.
+#[must_use]
+pub fn is_coded_publication(statement: &Statement) -> bool {
+    statement.property == "provisionActivity"
+        && matches!(&statement.value, Value::Resource(publication)
+        if publication.class == "Publication"
+            && !publication.statements.is_empty()
+            && publication.statements.iter().all(|s| match (&*s.property, &s.value) {
+                ("date", Value::Literal { .. }) | ("status" | "place", Value::Concept { .. }) => {
+                    true
+                }
+                ("place", Value::Resource(place)) => {
+                    place.label.is_none() && place.statements.iter().any(|c| c.property == "code")
+                }
+                _ => false,
+            }))
 }
 
 /// Whether `statement` is the language of a part of the content, such as the original or
@@ -556,6 +577,30 @@ mod tests {
                 &[statement("hasPart", resource("Book", vec![]))]
             ),
             Err(StatementRefusal::UnknownClass("Book".to_owned()))
+        );
+    }
+
+    #[test]
+    fn the_coded_publication_is_a_statement() {
+        // The coded publication is a statement; one with an agent is the transcribed one.
+        let coded = resource("Publication", vec![statement("date", literal("1995"))]);
+        assert_eq!(
+            check(
+                EntityKind::Instance,
+                &[statement("provisionActivity", coded)]
+            ),
+            Ok(())
+        );
+        let transcribed = resource(
+            "Publication",
+            vec![statement("agent", resource("Agent", vec![]))],
+        );
+        assert_eq!(
+            check(
+                EntityKind::Instance,
+                &[statement("provisionActivity", transcribed)]
+            ),
+            Err(StatementRefusal::Typed("provisionActivity".to_owned()))
         );
     }
 

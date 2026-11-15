@@ -65,6 +65,33 @@ instance:
                   Literal:
                     text: bibliography
                     language: ~
+      - property: provisionActivity
+        value:
+          Resource:
+            class: Publication
+            label: ~
+            statements:
+              - property: date
+                value:
+                  Literal:
+                    text: 1988/..
+                    language: ~
+              - property: status
+                value:
+                  Concept:
+                    scheme: mstatus
+                    code: current
+              - property: place
+                value:
+                  Resource:
+                    class: Place
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: spb
+                            language: ~
       - property: adminMetadata
         value:
           Resource:

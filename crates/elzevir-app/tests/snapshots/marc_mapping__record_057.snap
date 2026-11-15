@@ -59,6 +59,28 @@ instance:
                   Literal:
                     text: bibliography
                     language: ~
+      - property: provisionActivity
+        value:
+          Resource:
+            class: Publication
+            label: ~
+            statements:
+              - property: date
+                value:
+                  Literal:
+                    text: "1994"
+                    language: ~
+              - property: place
+                value:
+                  Resource:
+                    class: Place
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: spb
+                            language: ~
       - property: electronicLocator
         value:
           Iri: "https://biblioteca.utfpr.edu.br/pergamumweb/download/3B11F21829ABEDCCE0631E0886C819E6.png"

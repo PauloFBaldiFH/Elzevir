@@ -117,6 +117,28 @@ instance:
                     class: Agent
                     label: Secretaria Especial de Editoração e Publicações
                     statements: []
+      - property: provisionActivity
+        value:
+          Resource:
+            class: Publication
+            label: ~
+            statements:
+              - property: date
+                value:
+                  Literal:
+                    text: "1998"
+                    language: ~
+              - property: place
+                value:
+                  Resource:
+                    class: Place
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: df
+                            language: ~
       - property: note
         value:
           Resource:

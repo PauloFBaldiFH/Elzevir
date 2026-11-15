@@ -19,6 +19,7 @@ mod coded;
 mod content;
 mod described;
 mod fields;
+mod fixed;
 mod locators;
 mod notes;
 mod physical;
@@ -80,6 +81,14 @@ pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record 
     content::write(&mut out, &model.work_description);
     physical::write(&mut out, &model.instance.description);
     admin::write(&mut out, &model.instance.description);
+    fixed::write(
+        &mut out,
+        &model.work_description,
+        &model.instance.description,
+        before
+            .as_ref()
+            .map(|b| (&b.work_description, &b.instance.description)),
+    );
     out
 }
 

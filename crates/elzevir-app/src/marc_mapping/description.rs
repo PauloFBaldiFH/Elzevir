@@ -11,6 +11,7 @@ use elzevir_marc::Field;
 use super::Marc;
 use super::admin;
 use super::content;
+use super::fixed;
 use super::locators;
 use super::notes;
 use super::physical;
@@ -35,6 +36,7 @@ pub(super) fn work(marc: &Marc<'_>) -> Description {
     statements.extend(notes::of_owner(marc, Owner::Work));
     statements.extend(relations::of_work(marc));
     statements.extend(content::of_work(marc));
+    statements.extend(fixed::of_work(marc));
     Description {
         classes: classes.into_iter().map(str::to_owned).collect(),
         statements,
@@ -55,6 +57,12 @@ pub(super) fn instance(marc: &Marc<'_>) -> Description {
     statements.extend(titles::of_owner(marc, Owner::Instance));
     statements.extend(notes::of_owner(marc, Owner::Instance));
     statements.extend(provision::of_instance(marc));
+    // A copyright date that `264` already gave is not repeated from `008`.
+    for statement in fixed::of_instance(marc) {
+        if !statements.contains(&statement) {
+            statements.push(statement);
+        }
+    }
     statements.extend(locators::of_instance(marc));
     statements.extend(physical::of_instance(marc));
     statements.extend(admin::of_instance(marc));
