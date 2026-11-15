@@ -15,11 +15,13 @@ use super::classification;
 use super::content;
 use super::fixed;
 use super::locators;
+use super::national;
 use super::notes;
 use super::physical;
 use super::provision;
 use super::relations;
 use super::responsibility;
+use super::temporal;
 use super::titles::{self, Owner};
 use crate::description::concept;
 
@@ -41,6 +43,7 @@ pub(super) fn work(marc: &Marc<'_>) -> Description {
     statements.extend(content::of_work(marc));
     statements.extend(fixed::of_work(marc));
     statements.extend(books::of_work(marc));
+    statements.extend(temporal::of_work(marc));
     statements.extend(classification::of_work(marc));
     Description {
         classes: classes.into_iter().map(str::to_owned).collect(),
@@ -70,6 +73,7 @@ pub(super) fn instance(marc: &Marc<'_>) -> Description {
         }
     }
     statements.extend(locators::of_instance(marc));
+    statements.extend(national::of_instance(marc));
     statements.extend(physical::of_instance(marc));
     statements.extend(admin::of_instance(marc));
     Description {

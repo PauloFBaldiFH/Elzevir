@@ -354,11 +354,7 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     ),
     ("008/39 fill", 80, Gap::Fill),
     ("012", 16, Gap::Local),
-    (
-        "016",
-        1,
-        Gap::Pending("national bibliography agency number not mapped"),
-    ),
+    ("016/ind1 blank", 1, Gap::Blank),
     (
         "020",
         49,
@@ -390,9 +386,13 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     (
         "044",
         4,
-        Gap::Pending("country of producing entity not mapped"),
+        Gap::Pending("country of producing entity: the LC conversions have no destination"),
     ),
-    ("045", 3, Gap::Pending("time period of content not mapped")),
+    (
+        "045",
+        1,
+        Gap::Source("the field repeated, which MARC does not allow; the export joins them"),
+    ),
     (
         "082",
         11,
