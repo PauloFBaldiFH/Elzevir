@@ -219,6 +219,41 @@ const MIGRATIONS: &[&str] = &[
     // 10: name lookups for the cataloguing suggestions (docs/specs/catalogo/edicao.md, item 37).
     "CREATE INDEX agents_by_heading ON agents (heading COLLATE NOCASE);
      CREATE INDEX subjects_by_heading ON subjects (heading COLLATE NOCASE);",
+    // 11: BIBFRAME statements (docs/specs/catalogo/bibframe-completo.md, items 10a to 10g).
+    // A top-level statement names its subject (1 Hub, 2 Work, 3 Instance, 4 Item); a
+    // nested one names the statement whose resource it describes.
+    "CREATE TABLE ontology_names (
+         id    INTEGER PRIMARY KEY,
+         name  TEXT NOT NULL UNIQUE
+     ) STRICT;
+     CREATE TABLE lc_concepts (
+         id      INTEGER PRIMARY KEY,
+         scheme  TEXT NOT NULL,
+         code    TEXT NOT NULL,
+         UNIQUE (scheme, code)
+     ) STRICT;
+     CREATE TABLE statements (
+         id            INTEGER PRIMARY KEY,
+         subject_kind  INTEGER CHECK (subject_kind BETWEEN 1 AND 4),
+         subject_id    INTEGER,
+         parent        INTEGER REFERENCES statements (id) ON DELETE CASCADE,
+         position      INTEGER NOT NULL,
+         property      INTEGER NOT NULL REFERENCES ontology_names (id),
+         literal       TEXT,
+         language      TEXT CHECK (language IS NULL OR literal IS NOT NULL),
+         concept       INTEGER REFERENCES lc_concepts (id),
+         entity_kind   INTEGER CHECK (entity_kind BETWEEN 1 AND 4),
+         entity_id     INTEGER CHECK ((entity_id IS NULL) = (entity_kind IS NULL)),
+         iri           TEXT,
+         class         INTEGER REFERENCES ontology_names (id),
+         label         TEXT CHECK (label IS NULL OR class IS NOT NULL),
+         CHECK ((parent IS NULL) = (subject_kind IS NOT NULL AND subject_id IS NOT NULL)),
+         CHECK ((literal IS NOT NULL) + (concept IS NOT NULL) + (entity_kind IS NOT NULL)
+                + (iri IS NOT NULL) + (class IS NOT NULL) = 1)
+     ) STRICT;
+     CREATE INDEX statements_of_subject ON statements (subject_kind, subject_id, position)
+         WHERE parent IS NULL;
+     CREATE INDEX statements_of_parent ON statements (parent, position) WHERE parent IS NOT NULL;",
 ];
 
 /// The migration that creates `match_keys`.
@@ -454,7 +489,7 @@ mod catalog_tests {
         connection
             .execute_batch(
                 "DROP TABLE instance_notes; ALTER TABLE works DROP COLUMN audience;
-                 DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; PRAGMA user_version = 5;",
+                 DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; PRAGMA user_version = 5;",
             )
             .unwrap();
         migrate(&mut connection).unwrap();

@@ -33,6 +33,22 @@ A diretriz, em quatro frases:
 9. Agentes têm as cinco subclasses oficiais (`bf:Person`, `bf:Organization`, `bf:Meeting`, `bf:Family`, `bf:Jurisdiction`); identificadores, as 48 de `bf:Identifier`; classificação, `bf:ClassificationDdc`, `Udc`, `Lcc`, `Nlm`, `Nal`; número de chamada, `bf:ShelfMarkDdc`, `Udc`, `Lcc`, `Nlm` e `bf:ShelfMark`; atividade de provisão, `bf:Publication`, `Production`, `Distribution`, `Manufacture`, `Modification`.
 10. O Cutter PHA não é classe da ontologia: é a parte do item de `bf:ClassificationDdc` (`bf:itemPortion`) e do `bf:ShelfMarkDdc` do exemplar, com a tabela PHA indicada em `bf:source`.
 
+### Declarações (etapa 3a)
+
+10a. Cada propriedade que não tem lugar próprio numa tabela tipada é gravada como **declaração** (`statements`): o sujeito (Hub, Obra, Instância ou Exemplar), a propriedade, a ordem e o valor. Que propriedades têm lugar próprio é uma lista só, no domínio (`TYPED`); o comando de declarações recusa essas, para que nada fique gravado em dois lugares.
+10b. O valor é um de cinco tipos, conforme a ontologia:
+    - **literal**, com idioma opcional, só para propriedade de dado (`owl:DatatypeProperty`);
+    - **conceito** de vocabulário da LC (vocabulário e código), só para propriedade que tem lista (item 11) e só de uma das listas dela;
+    - **entidade** do catálogo (outra Obra, Instância, Exemplar ou Hub), para as relações;
+    - **IRI** externo, como uma autoridade de `id.loc.gov`;
+    - **recurso aninhado**: uma classe da ontologia, um rótulo opcional e as suas próprias declarações (uma `bf:Publication` com lugar, agente e data; um `bf:Title` com `bf:mainTitle`).
+    Os três últimos só para propriedade de objeto.
+10c. A regra é uma função pura do domínio, que o comando chama: a propriedade existe na ontologia; no primeiro nível, descreve a entidade (item 4); o tipo de valor combina com o tipo da propriedade; o conceito é de uma das listas da propriedade; a classe do recurso existe.
+10d. Limites de entrada: 4 níveis de recurso aninhado, 2.000 declarações por sujeito, 10.000 caracteres por literal e 2.000 por IRI.
+10e. `catalog.set_statements` troca todas as declarações de um sujeito de uma vez, se ele ainda está na versão lida (`Stale` como na edição). Sobe o `row_version` do sujeito; numa Instância ou num Exemplar, sobe também a versão do registro e pede a reindexação, como a edição já faz.
+10f. Propriedade e classe são guardadas por número (tabela `ontology_names`), e conceito também (`lc_concepts`, vocabulário e código), como o resto do vocabulário (modelo bibliográfico, item 8).
+10g. A cobertura do modelo (item 3) passa a exigir que toda propriedade aplicável a cada entidade ou tenha lugar tipado, ou volte igual depois de gravada como declaração. A lista do que faltava fica vazia.
+
 ### Vocabulários da LC
 
 11. Os valores de propriedades categóricas vêm das listas oficiais de `id.loc.gov/vocabulary/`, copiadas para `reference/bibframe/vocabulary/` (domínio público) com código, IRI e rótulo em inglês; o rótulo em português vem do Fluent:
