@@ -41,6 +41,32 @@ pub(super) fn insert_in_tag_order(record: &mut Record, fields: Vec<Field>) {
     }
 }
 
+/// Puts `bytes` in `008` from position `start`, padding the field to its 40 positions; a
+/// record without `008` gets one, blank elsewhere.
+pub(super) fn set_008(record: &mut Record, start: usize, bytes: &[u8]) {
+    let end = start + bytes.len();
+    for field in &mut record.fields {
+        if let Field::Control { tag, value } = field
+            && tag.as_bytes() == b"008"
+        {
+            if value.len() < 40.max(end) {
+                value.resize(40.max(end), b' ');
+            }
+            value.splice(start..end, bytes.iter().copied());
+            return;
+        }
+    }
+    let mut value = vec![b' '; 40.max(end)];
+    value.splice(start..end, bytes.iter().copied());
+    insert_in_tag_order(
+        record,
+        vec![Field::Control {
+            tag: Tag::new(*b"008"),
+            value,
+        }],
+    );
+}
+
 /// Sets `$code` of the first `tag` field to `value`, replacing every `$code` there.
 ///
 /// `None` removes `$code`; a field left without subfields is removed. A missing field is

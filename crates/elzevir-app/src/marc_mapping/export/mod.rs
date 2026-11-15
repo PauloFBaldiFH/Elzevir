@@ -34,7 +34,7 @@ mod provision;
 mod relations;
 mod titles;
 
-use fields::{data_field, first_index, insert_in_tag_order, set_subfield};
+use fields::{data_field, first_index, insert_in_tag_order, set_008, set_subfield};
 
 /// Writes a model record as MARC21, starting from `original` when there is one.
 ///
@@ -392,6 +392,7 @@ fn write_lists(out: &mut Record, model: &NewRecord, before: Option<&NewRecord>) 
     }
 }
 
+/// The languages of the Work to `008/35-37` and `041 $a`.
 fn write_languages(out: &mut Record, languages: &[String]) {
     let first = first_index(out, *b"041");
     let kept: Vec<Subfield> = first
@@ -407,7 +408,18 @@ fn write_languages(out: &mut Record, languages: &[String]) {
         })
         .unwrap_or_default();
     out.fields.retain(|field| field.tag().as_bytes() != b"041");
-    if languages.is_empty() {
+    // `008/35-37` holds the first language, which a three-letter code fills.
+    let first_code = languages
+        .first()
+        .filter(|code| code.len() == 3)
+        .map_or("   ", String::as_str);
+    if !languages.is_empty() || first_index(out, *b"008").is_some() {
+        set_008(out, 35, first_code.as_bytes());
+    }
+    // As the LC way back, `041` is written only for more than one language; a single one
+    // is already in `008`. Other subfields of the field (the language of the original...)
+    // keep it.
+    if languages.len() < 2 && kept.is_empty() {
         return;
     }
     let mut subfields: Vec<Subfield> = languages

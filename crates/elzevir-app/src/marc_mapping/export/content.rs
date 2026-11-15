@@ -58,7 +58,7 @@ fn write_language_parts(out: &mut Record, work: &Description) {
     if !differs(&wanted, &language_parts(&Marc(out))) {
         return;
     }
-    let subfields: Vec<Subfield> = wanted
+    let mut subfields: Vec<Subfield> = wanted
         .iter()
         .filter_map(|s| {
             let Value::Resource(language) = &s.value else {
@@ -68,6 +68,18 @@ fn write_language_parts(out: &mut Record, work: &Description) {
             Some(subfield(code, literal(&language.statements, "code")?))
         })
         .collect();
+    let has_field = out.fields.iter().any(|f| {
+        matches!(f, Field::Data { tag, indicators, .. }
+            if tag.as_bytes() == b"041" && indicators[1] == b' ')
+    });
+    // A single language is written only in `008/35-37`; a new `041` for the parts starts
+    // with it, so that the field says the language of the resource too.
+    if !has_field
+        && !subfields.is_empty()
+        && let Some(language) = language_of_008(out)
+    {
+        subfields.insert(0, subfield(b'a', &language));
+    }
     let original = subfields.iter().any(|s| s.code == b'h');
     let codes: Vec<u8> = PARTS.iter().map(|(code, _)| *code).collect();
     // Only the fields with MARC codes hold the parts the model reads.
@@ -88,6 +100,17 @@ fn write_language_parts(out: &mut Record, work: &Description) {
         // A record with the language of the original is or includes a translation.
         indicators[0] = b'1';
     }
+}
+
+/// The language code of `008/35-37`, when it holds one.
+fn language_of_008(out: &Record) -> Option<String> {
+    out.fields.iter().find_map(|field| match field {
+        Field::Control { tag, value } if tag.as_bytes() == b"008" => value
+            .get(35..38)
+            .filter(|code| code.iter().all(u8::is_ascii_alphabetic))
+            .map(|code| String::from_utf8_lossy(code).into_owned()),
+        _ => None,
+    })
 }
 
 fn write_notations(out: &mut Record, work: &Description) {
@@ -236,6 +259,30 @@ mod tests {
                 data_field(*b"041", *b"1 ", &[(b'a', "por")]),
                 data_field(*b"546", *b"  ", &[(b'a', "Em português.")]),
             ]
+        );
+    }
+
+    #[test]
+    fn a_new_041_for_the_parts_starts_with_the_language_of_the_008() {
+        let mut out = Record {
+            leader: *b"00000nam a2200000 i 4500",
+            fields: vec![Field::Control {
+                tag: Tag::new(*b"008"),
+                value: b"250321s1995    bl            000 0 por d".to_vec(),
+            }],
+        };
+        let work = Description {
+            classes: Vec::new(),
+            statements: vec![language_part("eng", "original")],
+        };
+        write(&mut out, &work);
+        assert_eq!(
+            out.fields.last(),
+            Some(&data_field(
+                *b"041",
+                *b"1 ",
+                &[(b'a', "por"), (b'h', "eng")]
+            ))
         );
     }
 }

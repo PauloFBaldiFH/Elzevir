@@ -11,7 +11,7 @@ use elzevir_marc::{Field, Record, Subfield, Tag};
 
 use super::super::Marc;
 use super::super::admin::{in_leader, of_instance};
-use super::fields::{first_index, insert_in_tag_order};
+use super::fields::{first_index, insert_in_tag_order, set_008};
 
 /// Writes the administrative metadata of `instance` when it differs from `out`'s.
 pub(super) fn write(out: &mut Record, instance: &Description) {
@@ -62,7 +62,7 @@ pub(super) fn write(out: &mut Record, instance: &Description) {
         literal(first("changeDate")).and_then(marc_005),
     );
     if let Some(entered) = literal(first("creationDate")).and_then(marc_008_date) {
-        write_008_date(out, &entered);
+        set_008(out, 0, entered.as_bytes());
     }
     write_040(out, admin);
 }
@@ -101,30 +101,6 @@ fn marc_005(date: &str) -> Option<String> {
 fn marc_008_date(date: &str) -> Option<String> {
     let digits: String = date.chars().filter(char::is_ascii_digit).collect();
     (digits.len() == 8).then(|| digits.get(2..).unwrap_or_default().to_owned())
-}
-
-/// Puts the date entered in `008/00-05`; a record without `008` gets one that holds only it.
-fn write_008_date(out: &mut Record, entered: &str) {
-    for field in &mut out.fields {
-        if let Field::Control { tag, value } = field
-            && tag.as_bytes() == b"008"
-        {
-            if value.len() < 40 {
-                value.resize(40, b' ');
-            }
-            value.splice(..6, entered.bytes());
-            return;
-        }
-    }
-    let mut value = entered.as_bytes().to_vec();
-    value.resize(40, b' ');
-    insert_in_tag_order(
-        out,
-        vec![Field::Control {
-            tag: Tag::new(*b"008"),
-            value,
-        }],
-    );
 }
 
 /// `040 $a $b $c $d $e`; `$c`, the transcribing agency, is the cataloguing agency, as the

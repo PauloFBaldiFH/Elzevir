@@ -3,10 +3,10 @@
 //! the way back of the Library of Congress (`bibframe2marc`: `01-001-008.xml`).
 
 use elzevir_domain::statement::{Description, Statement, Value, is_coded_publication};
-use elzevir_marc::{Field, Record, Tag};
+use elzevir_marc::Record;
 
 use super::super::fixed::{coded_of, is_coded_year};
-use super::fields::insert_in_tag_order;
+use super::fields::set_008;
 
 /// The statements `008/06-17` holds, of the Work and of the Instance.
 fn of_group<'a>(work: &'a Description, instance: &'a Description) -> Vec<&'a Statement> {
@@ -59,27 +59,7 @@ pub(super) fn write(
     positions.extend(coded.first);
     positions.extend(coded.second);
     positions.extend(coded.country);
-    for field in &mut out.fields {
-        if let Field::Control { tag, value } = field
-            && tag.as_bytes() == b"008"
-        {
-            if value.len() < 40 {
-                value.resize(40, b' ');
-            }
-            value.splice(6..18, positions);
-            return;
-        }
-    }
-    let mut value = vec![b' '; 6];
-    value.extend(positions);
-    value.resize(40, b' ');
-    insert_in_tag_order(
-        out,
-        vec![Field::Control {
-            tag: Tag::new(*b"008"),
-            value,
-        }],
-    );
+    set_008(out, 6, &positions);
 }
 
 fn year(statement: &Statement) -> Option<&str> {
@@ -91,6 +71,8 @@ fn year(statement: &Statement) -> Option<&str> {
 
 #[cfg(test)]
 mod tests {
+    use elzevir_marc::{Field, Tag};
+
     use super::super::super::Marc;
     use super::super::super::fixed::{of_instance, of_work};
     use super::*;
