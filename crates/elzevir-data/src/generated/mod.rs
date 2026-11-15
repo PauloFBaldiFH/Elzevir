@@ -21,3 +21,7 @@ pub(crate) mod marc21_framework_9xx;
 pub(crate) mod marc8;
 pub(crate) mod marc8_eacc;
 pub(crate) mod search_fields;
+pub(crate) mod vocabularies;
+pub(crate) mod vocabulary_cataloging;
+pub(crate) mod vocabulary_countries;
+pub(crate) mod vocabulary_languages;

@@ -27,6 +27,7 @@ mod ledger;
 mod marc_framework;
 mod search_fields;
 mod sysprefs;
+mod vocabularies;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
