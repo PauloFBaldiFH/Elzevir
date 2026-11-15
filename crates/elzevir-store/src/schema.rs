@@ -12,8 +12,9 @@ use std::time::Duration;
 use elzevir_app::description::{instance_of_material, work_of_material};
 use elzevir_app::listing::sort_key;
 use elzevir_app::marc_mapping::{
-    source_audience, source_content, source_description, source_notes, source_provision,
-    source_publication, source_relations, source_titles, source_typed_notes,
+    source_audience, source_content, source_description, source_extent, source_notes,
+    source_physical, source_provision, source_publication, source_relations, source_titles,
+    source_typed_notes,
 };
 use elzevir_app::matching::{identifier_key, koha_biblionumber_key};
 use elzevir_domain::catalog::IdentifierKind;
@@ -366,6 +367,10 @@ const MIGRATIONS: &[&str] = &[
     // become statements (item 29, part 5e); the migration only fills them from the stored
     // source records.
     "SELECT 1;",
+    // 23: the extent keeps `300 $a $f $g`; physical details, dimensions and accompanying
+    // material become statements (item 29, part 5e). The migration fills them from the
+    // stored source records.
+    "SELECT 1;",
 ];
 
 /// The migration that creates `match_keys`.
@@ -395,6 +400,8 @@ const PROVISION_VERSION: i64 = 20;
 const RELATIONS_VERSION: i64 = 21;
 /// Migration that fills coverage, languages of the parts, scripts and electronic locations.
 const CONTENT_VERSION: i64 = 22;
+/// Migration that splits the physical description out of the extent.
+const PHYSICAL_VERSION: i64 = 23;
 /// Migration that drops `extra`.
 const DROP_EXTRA_VERSION: i64 = 13;
 /// Migration that adds the classes, and fills them with content, media, carrier and issuance.
@@ -496,6 +503,9 @@ fn apply_migrations(connection: &mut Connection, current: i64) -> Result<(), Sto
             }
             if version == CONTENT_VERSION {
                 backfill_from_source(&tx, source_content)?;
+            }
+            if version == PHYSICAL_VERSION {
+                backfill_physical(&tx)?;
             }
             if version == NO_CODES_VERSION || version == POLICIES_VERSION {
                 check_foreign_keys(&tx, version)?;
@@ -662,6 +672,30 @@ fn backfill_publication(connection: &Connection) -> Result<(), StoreError> {
         };
         place.execute(params![id, new_place, old_place])?;
         publisher.execute(params![id, new_publisher, old_publisher])?;
+    }
+    Ok(())
+}
+
+/// Moves the physical details, dimensions and accompanying material of every stored record
+/// out of the extent into statements. An extent edited since the import is left as the
+/// cataloguer wrote it, and its record gets no statements that would repeat it.
+fn backfill_physical(connection: &Connection) -> Result<(), StoreError> {
+    let mut rows = connection.prepare(
+        "SELECT i.id, s.record FROM instances i JOIN source_records s ON s.instance_id = i.id",
+    )?;
+    let mut rows = rows.query([])?;
+    let mut extent =
+        connection.prepare("UPDATE instances SET extent = ?2 WHERE id = ?1 AND extent IS ?3")?;
+    while let Some(row) = rows.next()? {
+        let id: i64 = row.get(0)?;
+        let source: Vec<u8> = row.get(1)?;
+        let Some((old, new)) = source_extent(&source) else {
+            continue;
+        };
+        let unedited = old == new || extent.execute(params![id, new, old])? == 1;
+        if unedited && let Some((_, of_instance)) = source_physical(&source) {
+            add_missing(connection, EntityKind::Instance, id, of_instance)?;
+        }
     }
     Ok(())
 }
@@ -1137,6 +1171,82 @@ mod catalog_tests {
             ["geographicCoverage", "language"]
         );
         assert_eq!(properties(EntityKind::Instance), ["electronicLocator"]);
+    }
+
+    #[test]
+    fn migration_23_splits_the_extent_but_not_an_edited_one() {
+        use elzevir_marc::{Field, Record, Subfield, Tag};
+        let source_of = |extent: &str| {
+            let mut source = Vec::new();
+            Record {
+                leader: *b"00000nam a2200000 a 4500",
+                fields: vec![
+                    Field::Data {
+                        tag: Tag::new(*b"245"),
+                        indicators: *b"10",
+                        subfields: vec![Subfield {
+                            code: b'a',
+                            value: b"Dom Casmurro".to_vec(),
+                        }],
+                    },
+                    Field::Data {
+                        tag: Tag::new(*b"300"),
+                        indicators: *b"  ",
+                        subfields: [(b'a', extent), (b'b', "il. ;"), (b'c', "19 cm.")]
+                            .iter()
+                            .map(|(code, value)| Subfield {
+                                code: *code,
+                                value: value.as_bytes().to_vec(),
+                            })
+                            .collect(),
+                    },
+                ],
+            }
+            .write_iso2709(&mut source)
+            .unwrap();
+            source
+        };
+        let (_dir, mut connection) = catalog();
+        connection
+            .execute_batch(
+                "INSERT INTO instances (id, work_id, title) VALUES (2, 1, 'Dom Casmurro');
+                 INSERT INTO source_records (instance_id, format, record) VALUES (2, 1, x'00');
+                 UPDATE instances SET extent = '195 p. : il. ; 19 cm.' WHERE id = 1;
+                 UPDATE instances SET extent = 'Editada' WHERE id = 2;",
+            )
+            .unwrap();
+        for id in [1, 2] {
+            connection
+                .execute(
+                    "UPDATE source_records SET record = ?2 WHERE instance_id = ?1",
+                    params![id, source_of("195 p. :")],
+                )
+                .unwrap();
+        }
+        connection
+            .pragma_update(None, "user_version", PHYSICAL_VERSION - 1)
+            .unwrap();
+        migrate(&mut connection).unwrap();
+        let read = |id: i64| {
+            let extent: Option<String> = connection
+                .query_row("SELECT extent FROM instances WHERE id = ?1", [id], |row| {
+                    row.get(0)
+                })
+                .unwrap();
+            let statements = read_description(
+                &connection,
+                EntityRef {
+                    entity: EntityKind::Instance,
+                    id,
+                },
+            )
+            .unwrap()
+            .statements
+            .len();
+            (extent, statements)
+        };
+        assert_eq!(read(1), (Some("195 p.".to_owned()), 2));
+        assert_eq!(read(2), (Some("Editada".to_owned()), 0));
     }
 
     fn catalog() -> (tempfile::TempDir, Connection) {

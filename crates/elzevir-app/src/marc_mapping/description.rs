@@ -12,6 +12,7 @@ use super::Marc;
 use super::content;
 use super::locators;
 use super::notes;
+use super::physical;
 use super::provision;
 use super::relations;
 use super::titles::{self, Owner};
@@ -54,6 +55,7 @@ pub(super) fn instance(marc: &Marc<'_>) -> Description {
     statements.extend(notes::of_owner(marc, Owner::Instance));
     statements.extend(provision::of_instance(marc));
     statements.extend(locators::of_instance(marc));
+    statements.extend(physical::of_instance(marc));
     Description {
         classes: Vec::new(),
         statements,

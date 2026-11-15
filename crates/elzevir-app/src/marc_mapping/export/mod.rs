@@ -20,6 +20,7 @@ mod described;
 mod fields;
 mod locators;
 mod notes;
+mod physical;
 mod provision;
 mod relations;
 mod titles;
@@ -76,6 +77,7 @@ pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record 
     write_publication(&mut out, model, before.as_ref());
     write_lists(&mut out, model, before.as_ref());
     content::write(&mut out, &model.work_description);
+    physical::write(&mut out, &model.instance.description);
     out
 }
 
@@ -153,8 +155,9 @@ fn write_titles(out: &mut Record, model: &NewRecord, before: Option<&NewRecord>)
     }
     if scalar(|r| &r.instance.extent) {
         set_subfield(out, *b"300", *b"  ", b'a', instance.extent.as_deref());
-        set_subfield(out, *b"300", *b"  ", b'b', None);
-        set_subfield(out, *b"300", *b"  ", b'c', None);
+        // The extent is `$a $f $g`; `$b`, `$c` and `$e` are statements.
+        set_subfield(out, *b"300", *b"  ", b'f', None);
+        set_subfield(out, *b"300", *b"  ", b'g', None);
     }
     if scalar(|r| &r.instance.series) {
         let (name, number) = match instance

@@ -70,11 +70,27 @@ instance:
                   Literal:
                     text: bibliography
                     language: ~
+      - property: note
+        value:
+          Resource:
+            class: Note
+            label: il.
+            statements:
+              - property: noteType
+                value:
+                  Literal:
+                    text: physical details
+                    language: ~
+      - property: dimensions
+        value:
+          Literal:
+            text: 26 cm
+            language: ~
   edition: ~
   place: Curitiba
   publisher: IBPEX
   date: "2017"
-  extent: "252 p.: il.; 26 cm"
+  extent: 252 p.
   series: ~
   identifiers:
     - kind: isbn

@@ -17,9 +17,7 @@ pub(super) fn map(marc: &Marc<'_>, work_material_type: MaterialType) -> NewInsta
         place: publication.and_then(|field| field.joined(b"a", " ; ")),
         publisher: publication.and_then(|field| field.joined(b"b", " : ")),
         date: publication.and_then(|field| field.text(b'c')),
-        extent: marc
-            .first(b"300")
-            .and_then(|field| field.raw_joined(b"abc")),
+        extent: marc.first(b"300").and_then(super::physical::extent),
         series: series(marc),
         identifiers: identifiers(marc),
         notes: notes(marc),

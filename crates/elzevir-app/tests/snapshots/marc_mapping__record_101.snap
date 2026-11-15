@@ -58,11 +58,16 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: dimensions
+        value:
+          Literal:
+            text: 21cm
+            language: ~
   edition: ~
   place: "Campinas, SP"
   publisher: United Press
   date: "2001"
-  extent: "268, [8]p. ; 21cm."
+  extent: "268, [8]p."
   series: ~
   identifiers:
     - kind: isbn

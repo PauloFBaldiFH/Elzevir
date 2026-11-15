@@ -11,6 +11,7 @@ mod instance;
 pub(crate) mod items;
 mod locators;
 mod notes;
+mod physical;
 mod provision;
 mod relations;
 mod text;
@@ -128,6 +129,26 @@ pub fn source_content(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>)>
     let record = Record::from_ref(&parsed);
     let marc = Marc(&record);
     Some((content::of_work(&marc), locators::of_instance(&marc)))
+}
+
+/// The physical details, dimensions and accompanying material of a stored source record,
+/// for records stored before the model had them (bibframe-completo.md, item 29, part 5e).
+/// The Work gets none.
+#[must_use]
+pub fn source_physical(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>)> {
+    let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
+    let record = Record::from_ref(&parsed);
+    Some((Vec::new(), physical::of_instance(&Marc(&record))))
+}
+
+/// The extent of a stored source record as it was mapped before part 5e (`$a $b $c`) and
+/// as it is now (`$a $f $g`), in that order.
+#[must_use]
+pub fn source_extent(source: &[u8]) -> Option<(Option<String>, Option<String>)> {
+    let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
+    let record = Record::from_ref(&parsed);
+    let field = Marc(&record).first(b"300")?;
+    Some((physical::former_extent(field), physical::extent(field)))
 }
 
 /// The place and the publisher of a stored source record as they were mapped before part

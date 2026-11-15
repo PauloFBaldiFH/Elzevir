@@ -93,16 +93,112 @@ pub fn typed_notes(descriptions: &[&Description]) -> Vec<String> {
         .flat_map(|description| &description.statements)
         .filter(|statement| elzevir_domain::statement::is_typed_note(statement))
         .filter_map(|statement| match &statement.value {
-            Value::Resource(note) => note.label.clone(),
+            Value::Resource(note) if !is_physical(note) => note.label.clone(),
             _ => None,
         })
         .collect()
+}
+
+/// Whether `note` is part of the physical description (physical details or accompanying
+/// material), which is shown with the extent, not with the notes.
+fn is_physical(note: &elzevir_domain::statement::Resource) -> bool {
+    note.statements.iter().any(|s| {
+        s.property == "noteType"
+            && matches!(&s.value, Value::Literal { text, .. }
+                if text == "physical details" || text == "accompanying material")
+    })
+}
+
+/// The physical description of an Instance as ISBD writes it: the extent, then ` : ` and
+/// the physical details, ` ; ` and the dimensions, ` + ` and the accompanying material
+/// (bibframe-completo.md, item 29, part 5e).
+#[must_use]
+pub fn physical_description(extent: Option<&str>, instance: &Description) -> Option<String> {
+    let mut text = extent.unwrap_or_default().to_owned();
+    let mut add = |separator: &str, part: &str| {
+        if !text.is_empty() {
+            text.push_str(separator);
+        }
+        text.push_str(part);
+    };
+    for part in notes_of(instance, "physical details") {
+        add(" : ", part);
+    }
+    for statement in &instance.statements {
+        if let Value::Literal { text: part, .. } = &statement.value
+            && statement.property == "dimensions"
+        {
+            add(" ; ", part);
+        }
+    }
+    for part in notes_of(instance, "accompanying material") {
+        add(" + ", part);
+    }
+    (!text.is_empty()).then_some(text)
+}
+
+/// The texts of the notes of `instance` whose type is `kind`.
+fn notes_of<'a>(instance: &'a Description, kind: &'a str) -> impl Iterator<Item = &'a str> {
+    instance
+        .statements
+        .iter()
+        .filter_map(move |s| match &s.value {
+            Value::Resource(note)
+                if s.property == "note"
+                    && note.statements.iter().any(|t| {
+                        t.property == "noteType"
+                            && matches!(&t.value, Value::Literal { text, .. } if text == kind)
+                    }) =>
+            {
+                note.label.as_deref()
+            }
+            _ => None,
+        })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use elzevir_domain::statement::{EntityKind, check_description};
+
+    #[test]
+    fn the_physical_description_reads_as_isbd() {
+        let note = |kind: &str, text: &str| Statement {
+            property: "note".to_owned(),
+            value: Value::Resource(elzevir_domain::statement::Resource {
+                class: "Note".to_owned(),
+                label: Some(text.to_owned()),
+                statements: vec![Statement {
+                    property: "noteType".to_owned(),
+                    value: Value::Literal {
+                        text: kind.to_owned(),
+                        language: None,
+                    },
+                }],
+            }),
+        };
+        let instance = Description {
+            classes: Vec::new(),
+            statements: vec![
+                note("accompanying material", "1 CD-ROM"),
+                Statement {
+                    property: "dimensions".to_owned(),
+                    value: Value::Literal {
+                        text: "19 cm".to_owned(),
+                        language: None,
+                    },
+                },
+                note("physical details", "il."),
+                note("bibliography", "Inclui bibliografia."),
+            ],
+        };
+        assert_eq!(
+            physical_description(Some("195 p."), &instance).as_deref(),
+            Some("195 p. : il. ; 19 cm + 1 CD-ROM")
+        );
+        assert_eq!(typed_notes(&[&instance]), ["Inclui bibliografia."]);
+        assert_eq!(physical_description(None, &Description::default()), None);
+    }
 
     #[test]
     fn every_category_becomes_a_valid_description() {
