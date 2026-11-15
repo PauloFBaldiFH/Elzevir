@@ -68,9 +68,12 @@ impl Scheme {
 /// the characteristics of sound, video, projection and digital files, the materials and
 /// the notations are classes with subclasses, one vocabulary each.
 ///
-/// Source: the Library of Congress MARC 21 to BIBFRAME conversion (`marc2bibframe2`),
-/// which writes values from these vocabularies for these properties; each concept's
-/// `historyNote` names the MARC position it comes from.
+/// Source: the Library of Congress MARC 21 to BIBFRAME conversion (`marc2bibframe2`)
+/// writes `content`, `media`, `carrier`, `language`, `place`, `role`, `status`,
+/// `descriptionConventions` and `variantType` from these vocabularies. The sound, video,
+/// projection and digital characteristics, materials, notations and the other physical
+/// details come from generic templates there; they are tied here by the BIBFRAME class
+/// name and by each concept's `historyNote`, which names the MARC position it encodes.
 const PROPERTY_SCHEMES: &[(&str, &[&str])] = &[
     ("appliedMaterial", &["mmaterial"]),
     ("aspectRatio", &["maspect"]),
@@ -88,9 +91,6 @@ const PROPERTY_SCHEMES: &[(&str, &[&str])] = &[
     ("fontSize", &["mfont"]),
     ("frequency", &["frequencies"]),
     ("generation", &["mgeneration"]),
-    // Only the government and serial publication types; topical genres come from LCGFT,
-    // which the library chooses term by term (item 12).
-    ("genreForm", &["mgovtpubtype", "mserialpubtype"]),
     ("illustrativeContent", &["millus"]),
     ("intendedAudience", &["maudience"]),
     ("issuance", &["issuance"]),
