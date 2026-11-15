@@ -1027,6 +1027,11 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: responsibilityStatement
+        value:
+          Literal:
+            text: "Francisco Ramalho Junior, Nicolau Gilberto Ferraro, Paulo Antônio de Toledo Soares"
+            language: ~
       - property: provisionActivity
         value:
           Resource:

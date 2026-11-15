@@ -46,6 +46,11 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: responsibilityStatement
+        value:
+          Literal:
+            text: "[organizado por] Abecip"
+            language: ~
       - property: provisionActivity
         value:
           Resource:

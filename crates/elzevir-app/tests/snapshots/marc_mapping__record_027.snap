@@ -54,6 +54,11 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: responsibilityStatement
+        value:
+          Literal:
+            text: Michael Lowy
+            language: ~
       - property: note
         value:
           Resource:

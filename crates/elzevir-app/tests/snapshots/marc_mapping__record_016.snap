@@ -48,6 +48,11 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: responsibilityStatement
+        value:
+          Literal:
+            text: Presidente João Figueiredo
+            language: ~
       - property: provisionActivity
         value:
           Resource:

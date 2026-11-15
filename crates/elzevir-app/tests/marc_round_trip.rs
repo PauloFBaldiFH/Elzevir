@@ -222,6 +222,10 @@ enum Gap {
     Local,
     /// Koha's own data, written by the Koha edge (item 30 of bibframe-completo.md).
     Koha,
+    /// The source leaves blank an indicator that MARC defines; the export writes it.
+    Blank,
+    /// Only the ISBD punctuation differs: the export writes it as the LC way back does.
+    Punctuation,
     /// Still to be closed by a later part of stage 5f.
     Pending(&'static str),
 }
@@ -231,13 +235,16 @@ impl Gap {
         match self {
             Self::Local => "local field, kept only in the source record",
             Self::Koha => "Koha data, written by the Koha edge",
+            Self::Blank => "blank indicator in the source",
+            Self::Punctuation => "ISBD punctuation only",
             Self::Pending(reason) => reason,
         }
     }
 }
 
-/// What the export from the model alone still writes differently: the tag (or `LDR/nn`
-/// for a Leader position, `order` for the order of the tags), the number of the oracle's
+/// What the export from the model alone still writes differently: the key of
+/// [`field_differences`] (or `LDR/nn` for a Leader position, `order` for the order of the
+/// tags), the number of the oracle's
 /// records where it differs and why. The list may only shrink: a fix lowers a count or
 /// removes a line, and the test fails until the list says so.
 const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
@@ -264,7 +271,11 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
         49,
         Gap::Pending("a qualifier written in $a comes back in $q"),
     ),
-    ("022", 1, Gap::Pending("first indicator")),
+    (
+        "022/ind1",
+        1,
+        Gap::Pending("level of international interest not mapped"),
+    ),
     ("039", 3, Gap::Local),
     (
         "040",
@@ -273,9 +284,15 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     ),
     (
         "041",
-        172,
-        Gap::Pending("first indicator 0 where the source leaves it blank"),
+        92,
+        Gap::Pending("written from the language of the 008 when the source has none"),
     ),
+    (
+        "041/ind1",
+        1,
+        Gap::Pending("a translation without the original language ($h)"),
+    ),
+    ("041/ind1 blank", 80, Gap::Blank),
     (
         "043",
         2,
@@ -288,8 +305,21 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     ),
     ("045", 3, Gap::Pending("time period of content not mapped")),
     ("050", 1, Gap::Pending("LC classification not mapped")),
-    ("080", 19, Gap::Pending("UDC not mapped")),
-    ("082", 153, Gap::Pending("indicators")),
+    ("080", 14, Gap::Pending("UDC not mapped")),
+    ("080/ind1 blank", 5, Gap::Blank),
+    ("080/ind2 blank", 5, Gap::Blank),
+    (
+        "082",
+        66,
+        Gap::Pending("$2 (edition of the scheme) not kept"),
+    ),
+    (
+        "082/ind1",
+        5,
+        Gap::Pending("edition of the classification (full or abridged) not mapped"),
+    ),
+    ("082/ind1 blank", 86, Gap::Blank),
+    ("082/ind2 blank", 88, Gap::Blank),
     ("083", 1, Gap::Pending("additional Dewey number not mapped")),
     ("084", 1, Gap::Pending("other classification not mapped")),
     ("090", 33, Gap::Local),
@@ -298,34 +328,78 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     ("098", 1, Gap::Local),
     (
         "100",
-        154,
-        Gap::Pending("first indicator and subfields joined into $a"),
+        66,
+        Gap::Pending("subfields joined into $a; $e, $0 and $1 not kept"),
     ),
+    ("100 punctuation", 15, Gap::Punctuation),
     (
-        "110",
-        8,
-        Gap::Pending("first indicator and subfields joined into $a"),
+        "100/ind1",
+        3,
+        Gap::Pending("type of personal name (forename) not mapped"),
     ),
+    ("100/ind1 blank", 73, Gap::Blank),
+    ("110", 1, Gap::Pending("subfields joined into $a")),
+    (
+        "110/ind1",
+        2,
+        Gap::Pending("type of corporate name (jurisdiction) not mapped"),
+    ),
+    ("110/ind1 blank", 6, Gap::Blank),
     ("111", 1, Gap::Pending("subfields joined into $a")),
     (
         "130",
         1,
         Gap::Pending("a uniform title main entry comes back as 240"),
     ),
-    ("210", 1, Gap::Pending("ISBD punctuation")),
+    ("210 punctuation", 1, Gap::Punctuation),
     (
         "240",
-        15,
-        Gap::Pending("indicators, $l and ISBD punctuation; a 130 comes back here"),
+        14,
+        Gap::Pending("$l not kept; a 130 comes back here"),
+    ),
+    ("240 punctuation", 1, Gap::Punctuation),
+    (
+        "240/ind1",
+        9,
+        Gap::Pending("printed or displayed not mapped"),
     ),
     (
-        "243",
-        3,
-        Gap::Pending("indicators, $l and ISBD punctuation"),
+        "240/ind2",
+        4,
+        Gap::Pending("nonfiling characters not mapped"),
     ),
-    ("245", 199, Gap::Pending("indicators and ISBD punctuation")),
-    ("246", 5, Gap::Pending("indicators")),
-    ("250", 23, Gap::Pending("ISBD punctuation")),
+    ("243", 3, Gap::Pending("$l not kept")),
+    (
+        "243/ind1",
+        3,
+        Gap::Pending("printed or displayed not mapped"),
+    ),
+    (
+        "243/ind2",
+        1,
+        Gap::Pending("nonfiling characters not mapped"),
+    ),
+    ("245 punctuation", 99, Gap::Punctuation),
+    (
+        "245/ind1",
+        3,
+        Gap::Pending("added entry decided as the LC way back does; these sources differ"),
+    ),
+    ("245/ind1 blank", 80, Gap::Blank),
+    (
+        "245/ind2",
+        40,
+        Gap::Pending("nonfiling characters not mapped"),
+    ),
+    ("245/ind2 blank", 1, Gap::Blank),
+    ("246 punctuation", 4, Gap::Punctuation),
+    (
+        "246/ind1",
+        5,
+        Gap::Pending("note and added entry control not mapped"),
+    ),
+    ("246/ind2", 1, Gap::Pending("type of title not kept")),
+    ("250 punctuation", 23, Gap::Punctuation),
     (
         "260",
         190,
@@ -333,11 +407,12 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     ),
     (
         "264",
-        192,
-        Gap::Pending("second indicator 1 and ISBD punctuation"),
+        190,
+        Gap::Pending("a 260 comes back as 264 with second indicator 1"),
     ),
+    ("264 punctuation", 2, Gap::Punctuation),
     ("290", 1, Gap::Local),
-    ("300", 87, Gap::Pending("ISBD punctuation")),
+    ("300 punctuation", 87, Gap::Punctuation),
     ("334", 12, Gap::Pending("mode of issuance not written")),
     ("336", 13, Gap::Pending("content type not written")),
     ("337", 13, Gap::Pending("$0 not kept")),
@@ -348,46 +423,111 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
         Gap::Pending("serials: dates of publication not mapped"),
     ),
     ("380", 1, Gap::Pending("form of work not mapped")),
-    ("440", 3, Gap::Pending("indicators and ISBD punctuation")),
-    ("490", 38, Gap::Pending("first indicator")),
-    ("504", 2, Gap::Pending("repeated $a joined")),
-    ("505", 3, Gap::Pending("first indicator")),
-    ("520", 6, Gap::Pending("ISBD punctuation")),
+    ("440 punctuation", 2, Gap::Punctuation),
+    (
+        "440/ind2",
+        3,
+        Gap::Pending("nonfiling characters not mapped"),
+    ),
+    (
+        "490",
+        6,
+        Gap::Pending("a 490 with only $v is lost; a 440 also comes back as 490"),
+    ),
+    ("490 punctuation", 7, Gap::Punctuation),
+    (
+        "490/ind1",
+        14,
+        Gap::Pending("series traced differently not derived from the series relation"),
+    ),
+    ("490/ind1 blank", 18, Gap::Blank),
+    (
+        "490/ind2",
+        2,
+        Gap::Pending("not defined in MARC; the source fills it"),
+    ),
+    ("504", 1, Gap::Pending("repeated $a joined")),
+    (
+        "504/ind2",
+        1,
+        Gap::Pending("not defined in MARC; the source fills it"),
+    ),
+    (
+        "505/ind1",
+        3,
+        Gap::Pending("display constant (partial contents) not mapped"),
+    ),
+    ("520 punctuation", 6, Gap::Punctuation),
     ("541", 2, Gap::Pending("source of acquisition not mapped")),
-    ("555", 1, Gap::Pending("first indicator")),
+    ("555/ind1", 1, Gap::Pending("display constant not mapped")),
     ("590", 1, Gap::Pending("$8 not kept")),
     ("593", 1, Gap::Local),
     ("595", 14, Gap::Local),
     ("596", 1, Gap::Local),
-    ("600", 12, Gap::Pending("subfields joined into $a")),
+    (
+        "600",
+        9,
+        Gap::Pending("subfields joined into $a; $0 and $1 not kept; a 610 comes back as 600"),
+    ),
+    ("600 punctuation", 1, Gap::Punctuation),
+    (
+        "600/ind1",
+        3,
+        Gap::Pending("type of personal name (forename) not mapped"),
+    ),
     (
         "610",
         3,
         Gap::Pending("subject of an organization not written"),
     ),
-    ("630", 1, Gap::Pending("ISBD punctuation")),
-    ("650", 155, Gap::Pending("second indicator")),
-    ("651", 3, Gap::Pending("$y comes back as $x")),
-    ("655", 1, Gap::Pending("ISBD punctuation")),
+    ("630 punctuation", 1, Gap::Punctuation),
+    ("650", 30, Gap::Pending("$z, $y and $v come back as $x")),
+    ("650 punctuation", 23, Gap::Punctuation),
+    ("650/ind1", 90, Gap::Pending("level of subject not mapped")),
+    ("650/ind2 blank", 44, Gap::Blank),
+    ("651", 2, Gap::Pending("$y comes back as $x")),
+    ("651 punctuation", 1, Gap::Punctuation),
+    ("655 punctuation", 1, Gap::Punctuation),
     ("690", 2, Gap::Local),
     ("695", 2, Gap::Local),
     (
         "700",
-        40,
+        17,
         Gap::Pending("subfields joined into $a; $0 and $1 not kept"),
     ),
+    ("700 punctuation", 22, Gap::Punctuation),
+    (
+        "700/ind1",
+        1,
+        Gap::Pending("type of personal name (forename) not mapped"),
+    ),
+    ("700/ind1 blank", 1, Gap::Blank),
     (
         "710",
-        8,
-        Gap::Pending("first indicator and subfields joined into $a"),
+        5,
+        Gap::Pending("subfields joined into $a; $k not kept"),
     ),
+    ("710 punctuation", 3, Gap::Punctuation),
     (
-        "740",
+        "710/ind1",
         2,
-        Gap::Pending("first indicator and ISBD punctuation"),
+        Gap::Pending("type of corporate name (jurisdiction) not mapped"),
     ),
-    ("775", 2, Gap::Pending("ISBD punctuation")),
-    ("830", 8, Gap::Pending("ISBD punctuation")),
+    ("710/ind1 blank", 1, Gap::Blank),
+    ("740 punctuation", 2, Gap::Punctuation),
+    (
+        "740/ind1",
+        2,
+        Gap::Pending("nonfiling characters not mapped"),
+    ),
+    ("775 punctuation", 2, Gap::Punctuation),
+    ("830 punctuation", 6, Gap::Punctuation),
+    (
+        "830/ind2",
+        2,
+        Gap::Pending("nonfiling characters not mapped"),
+    ),
+    ("830/ind2 blank", 1, Gap::Blank),
     (
         "850",
         1,
@@ -416,6 +556,79 @@ const KNOWN_DIFFERENCES: &[(&str, usize, Gap)] = &[
     ("999", 200, Gap::Koha),
 ];
 
+/// The subfields of `field` without the ISBD punctuation and spaces around each value.
+fn without_punctuation(field: &Field) -> Vec<(u8, String)> {
+    let Field::Data { subfields, .. } = field else {
+        return vec![(0, format!("{field:?}"))];
+    };
+    subfields
+        .iter()
+        .map(|subfield| {
+            let text = String::from_utf8_lossy(&subfield.value);
+            let text = text.trim_matches([' ', '.', ',', ':', ';', '/', '=', '-', '+']);
+            (subfield.code, text.to_owned())
+        })
+        .collect()
+}
+
+/// What differs between the fields of one tag: `245` when a field is missing, added or has
+/// other subfields, `245 punctuation` when only the ISBD punctuation of the subfields differs, `245/ind1` when an indicator differs and `245/ind1 blank` when the
+/// source left blank an indicator that the export writes.
+fn field_differences(original: &[Field], written: &[Field], tag: [u8; 3]) -> Vec<String> {
+    let tag = String::from_utf8_lossy(&tag);
+    let mut found = Vec::new();
+    let same_subfields = original.len() == written.len()
+        && original.iter().zip(written).all(|pair| match pair {
+            (
+                Field::Data { subfields: one, .. },
+                Field::Data {
+                    subfields: other, ..
+                },
+            ) => one == other,
+            (one, other) => one == other,
+        });
+    if !same_subfields {
+        let same_text = original.len() == written.len()
+            && original
+                .iter()
+                .zip(written)
+                .all(|(one, other)| without_punctuation(one) == without_punctuation(other));
+        found.push(if same_text {
+            format!("{tag} punctuation")
+        } else {
+            tag.to_string()
+        });
+    }
+    let mut indicators: Vec<String> = original
+        .iter()
+        .zip(written)
+        .flat_map(|pair| match pair {
+            (
+                Field::Data {
+                    indicators: one, ..
+                },
+                Field::Data {
+                    indicators: other, ..
+                },
+            ) => one
+                .iter()
+                .zip(other)
+                .enumerate()
+                .filter(|(_, (one, other))| one != other)
+                .map(|(position, (one, _))| {
+                    let blank = if *one == b' ' { " blank" } else { "" };
+                    format!("{tag}/ind{}{blank}", position + 1)
+                })
+                .collect(),
+            _ => Vec::new(),
+        })
+        .collect();
+    indicators.sort_unstable();
+    indicators.dedup();
+    found.extend(indicators);
+    found
+}
+
 /// What differs between `original` and `written`, by the keys of [`KNOWN_DIFFERENCES`].
 fn differences(original: &Record, written: &Record) -> Vec<String> {
     // Positions 00-04 and 12-16 are lengths and addresses, computed when writing.
@@ -432,11 +645,13 @@ fn differences(original: &Record, written: &Record) -> Vec<String> {
         .collect();
     all.sort_unstable();
     all.dedup();
-    found.extend(
-        all.into_iter()
-            .filter(|&tag| tags(original, tag) != tags(written, tag))
-            .map(|tag| String::from_utf8_lossy(&tag).into_owned()),
-    );
+    for tag in all {
+        found.extend(field_differences(
+            &tags(original, tag),
+            &tags(written, tag),
+            tag,
+        ));
+    }
     // The tags both records have, in the order each writes them.
     let shared = |one: &Record, other: &Record| {
         let mut order: Vec<[u8; 3]> = one
@@ -481,4 +696,53 @@ fn records_written_from_the_model_alone_differ_only_where_listed() {
         format!("{key}: {actual} records differ, not listed; first: {first}")
     }));
     assert!(problems.is_empty(), "{}", problems.join("\n"));
+}
+
+#[test]
+fn the_245_gets_the_isbd_punctuation_of_the_lc_way_back() {
+    let subfields = |record: &Record| match &tags(record, *b"245")[0] {
+        Field::Data {
+            indicators,
+            subfields,
+            ..
+        } => (
+            *indicators,
+            subfields
+                .iter()
+                .map(|s| (s.code, String::from_utf8_lossy(&s.value).into_owned()))
+                .collect::<Vec<_>>(),
+        ),
+        Field::Control { .. } => panic!("245 is a data field"),
+    };
+    let (_, record) = &records()[10];
+    let mut written = model(record);
+    let as_written = |code: u8, text: &str| (code, text.to_owned());
+    assert_eq!(
+        subfields(&bibframe_to_marc(&written, None)),
+        (
+            *b"10",
+            vec![
+                as_written(b'a', "Regimes políticos :"),
+                as_written(b'b', "uma viagem /"),
+                as_written(b'c', "Jayme Brener."),
+            ]
+        )
+    );
+    // Without a statement of responsibility, the subtitle closes the field.
+    written
+        .instance
+        .description
+        .statements
+        .retain(|s| s.property != "responsibilityStatement");
+    written.contributions.retain(|c| !c.primary);
+    assert_eq!(
+        subfields(&bibframe_to_marc(&written, None)),
+        (
+            *b"00",
+            vec![
+                as_written(b'a', "Regimes políticos :"),
+                as_written(b'b', "uma viagem."),
+            ]
+        )
+    );
 }

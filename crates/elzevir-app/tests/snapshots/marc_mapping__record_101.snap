@@ -58,6 +58,11 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: responsibilityStatement
+        value:
+          Literal:
+            text: "Alice Gray, organizadora ; tradução: Maria Emília de Oliveira"
+            language: ~
       - property: provisionActivity
         value:
           Resource:
