@@ -240,6 +240,8 @@ pub struct OpacRecordBody<'a> {
     pub title: &'a str,
     /// The Work's title, when it differs from the Instance's.
     pub work_title: Option<&'a str>,
+    /// Variant, parallel and abbreviated titles.
+    pub other_titles: Vec<&'a str>,
     /// Contributor headings.
     pub contributors: Vec<&'a str>,
     /// Message key of the category of material.

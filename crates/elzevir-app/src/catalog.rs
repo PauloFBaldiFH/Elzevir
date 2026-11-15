@@ -607,6 +607,9 @@ pub struct InstanceView {
     pub relations: Vec<(WorkRelationKind, WorkId)>,
     /// The Instance's title.
     pub title: String,
+    /// The other titles of the Work and of the Instance (variant, parallel, abbreviated),
+    /// each as its main title and subtitle.
+    pub other_titles: Vec<String>,
     /// Publisher.
     pub publisher: Option<String>,
     /// Date of publication.

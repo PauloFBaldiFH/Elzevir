@@ -15,7 +15,7 @@
 
 ### Registro: `GET /record/{id}`
 
-7. Mostra título, título da Obra (se diferente), autores, categoria, publicação (editora e data), classificação, assuntos, identificadores, idiomas, resumo e a tabela de exemplares: biblioteca, localização, número de chamada e estado. O estado mostrado é o mais grave marcado (perdido, retirado, danificado, restrito, indisponível para empréstimo), senão "Disponível".
+7. Mostra título, título da Obra (se diferente), outros títulos (variante, paralelo, abreviado), autores, categoria, publicação (editora e data), classificação, assuntos, identificadores, idiomas, resumo e a tabela de exemplares: biblioteca, localização, número de chamada e estado. O estado mostrado é o mais grave marcado (perdido, retirado, danificado, restrito, indisponível para empréstimo), senão "Disponível".
 8. `id` que não é número, ou Instância que não existe, dá **404** com a página "Registro não encontrado".
 9. **Fragmento em cache por versão.** O corpo do registro é renderizado uma vez por **versão do registro** (`instances.row_version`) e guardado em memória. Cada pedido lê só a versão (uma consulta pela chave primária); se a versão guardada é a mesma, devolve o corpo guardado sem ler o registro. A versão sobe quando a Instância muda e quando um exemplar é acrescentado (`AddItem`); comandos futuros que mudem a Obra ou os exemplares precisam subir a versão também.
 10. A versão é lida **antes** do registro. Se o registro muda entre as duas leituras, o corpo novo fica guardado sob a versão velha e é renderizado de novo no pedido seguinte: nunca se guarda um corpo velho sob uma versão nova.

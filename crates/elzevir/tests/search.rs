@@ -146,6 +146,18 @@ fn codes_match_exactly_and_come_first() {
 }
 
 #[test]
+fn a_variant_title_finds_its_record() {
+    let (_dir, store) = imported();
+    let index = indexed(&store, Parallelism::Serial, 1024);
+    // The title page has "&"; only the variant title (246) spells it "e".
+    let found = titles(&store, &index, "investimentos e demonstrativos");
+    assert_eq!(
+        found,
+        ["Análise de investimentos & demonstrativos financeiros"]
+    );
+}
+
+#[test]
 fn a_classification_prefix_finds_the_class() {
     let (_dir, store) = imported();
     let index = indexed(&store, Parallelism::Serial, 1024);

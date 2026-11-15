@@ -16,6 +16,7 @@ use crate::catalog::{ItemData, NewContribution, NewIdentifier, NewNote, NewRecor
 
 mod coded;
 mod fields;
+mod titles;
 
 use fields::{data_field, first_index, insert_in_tag_order, set_subfield};
 
@@ -37,6 +38,14 @@ pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record 
         set_instance_material_type(&mut out, model.instance.material_type);
     }
     coded::write(
+        &mut out,
+        &model.work_description,
+        &model.instance.description,
+        before
+            .as_ref()
+            .map(|b| (&b.work_description, &b.instance.description)),
+    );
+    titles::write(
         &mut out,
         &model.work_description,
         &model.instance.description,

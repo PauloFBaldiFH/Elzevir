@@ -149,6 +149,20 @@ fn search_then_record_then_a_new_item_shows_up() {
 }
 
 #[test]
+fn a_record_shows_its_other_titles() {
+    let (_dir, store) = imported();
+    let store = Arc::new(store);
+    let index = Arc::new(TantivyIndex::in_memory(Parallelism::Serial).unwrap());
+    index_pending(&*store, &*store, &*index, &options()).unwrap();
+    let app = app(&store, &index);
+    let instance = index.search("textos perdidos", 0, 1).unwrap().hits[0].instance;
+    let (status, record) = get(&app, &format!("/record/{}", instance.0));
+    assert_eq!(status, StatusCode::OK);
+    assert!(record.contains("Other titles"));
+    assert!(record.contains("<dd>Textos perdidos</dd>"));
+}
+
+#[test]
 fn a_missing_record_is_404() {
     let (_dir, store) = imported();
     let store = Arc::new(store);

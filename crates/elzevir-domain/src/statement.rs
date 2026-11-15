@@ -214,7 +214,7 @@ pub enum StatementRefusal {
 pub fn check(subject: EntityKind, statements: &[Statement]) -> Result<(), StatementRefusal> {
     let mut count = 0;
     for statement in statements {
-        if is_typed(subject.bibframe(), &statement.property) {
+        if is_typed(subject.bibframe(), &statement.property) && !is_other_title(statement) {
             return Err(StatementRefusal::Typed(statement.property.clone()));
         }
         let property = known(&statement.property)?;
@@ -226,6 +226,16 @@ pub fn check(subject: EntityKind, statements: &[Statement]) -> Result<(), Statem
         }
     }
     check_level(statements, 1, &mut count)
+}
+
+/// Whether `statement` is a title other than the preferred one: a `bf:VariantTitle` or one
+/// of its subclasses (bibframe-completo.md, item 29, part 5a). The preferred title has its
+/// own field; every other title of a Work or an Instance is a statement.
+#[must_use]
+pub fn is_other_title(statement: &Statement) -> bool {
+    statement.property == "title"
+        && matches!(&statement.value, Value::Resource(resource)
+            if bibframe::is_a(&resource.class, "VariantTitle"))
 }
 
 /// Checks a whole description: its classes, then its statements (item 10h).
@@ -434,6 +444,19 @@ mod tests {
             ),
             Err(StatementRefusal::Typed("title".to_owned()))
         );
+        // Every other title is a statement.
+        for class in [
+            "VariantTitle",
+            "ParallelTitle",
+            "AbbreviatedTitle",
+            "CollectiveTitle",
+        ] {
+            let title = resource(class, vec![statement("mainTitle", literal("Capitu"))]);
+            assert_eq!(
+                check(EntityKind::Work, &[statement("title", title)]),
+                Ok(())
+            );
+        }
         assert_eq!(
             check(EntityKind::Item, &[statement("colour", literal("x"))]),
             Err(StatementRefusal::UnknownProperty("colour".to_owned()))

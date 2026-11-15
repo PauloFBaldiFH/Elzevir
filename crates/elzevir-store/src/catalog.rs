@@ -771,6 +771,7 @@ fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>,
     let languages = statement
         .query_map(params![work], |row| row.get(0))?
         .collect::<Result<Vec<String>, _>>()?;
+    let other_titles = other_titles(c, work, id.0)?;
     Ok(Some(InstanceView {
         id,
         version: row.version,
@@ -782,6 +783,7 @@ fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>,
         material_type: material_type(row.material_type)?,
         relations,
         title: row.title,
+        other_titles,
         publisher: row.publisher,
         date: row.date,
         classification: row.classification,
@@ -793,6 +795,15 @@ fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>,
         notes,
         languages,
     }))
+}
+
+/// The other titles of a Work and of its Instance (bibframe-completo.md, item 29, part 5a).
+fn other_titles(c: &Connection, work: i64, instance: i64) -> Result<Vec<String>, ReadFailure> {
+    let described = |entity, id| crate::statements::read_description(c, EntityRef { entity, id });
+    Ok(elzevir_app::description::other_titles(&[
+        &described(EntityKind::Work, work)?,
+        &described(EntityKind::Instance, instance)?,
+    ]))
 }
 
 /// The columns of one Instance and its Work.

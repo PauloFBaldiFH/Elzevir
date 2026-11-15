@@ -2,6 +2,10 @@
   <h1>{{ title }}</h1>
   {% if let Some(work_title) = work_title %}<p class="muted">{{ work_title }}</p>{% endif %}
   <dl class="record-fields">
+    {% if !other_titles.is_empty() %}
+    <dt>{{ t.get("opac-record-other-titles") }}</dt>
+    {% for other in other_titles %}<dd>{{ other }}</dd>{% endfor %}
+    {% endif %}
     {% if !contributors.is_empty() %}
     <dt>{{ t.get("opac-record-contributors") }}</dt>
     <dd>{% for contributor in contributors %}<span class="chip">{{ contributor }}</span>{% endfor %}</dd>

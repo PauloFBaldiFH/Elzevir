@@ -62,6 +62,8 @@ pub struct SearchDocument {
     pub title: String,
     /// The Work's preferred title.
     pub work_title: String,
+    /// The other titles of the Work and of the Instance: variant, parallel, abbreviated.
+    pub other_titles: Vec<String>,
     /// The first contributor (the main entry when the record has one).
     pub main_contributor: Option<String>,
     /// Every contributor heading, in order.
@@ -103,6 +105,7 @@ pub fn document_of(instance: &InstanceView, items: &[ItemView]) -> SearchDocumen
         hub: instance.hub,
         title: instance.title.clone(),
         work_title: instance.work_title.clone(),
+        other_titles: instance.other_titles.clone(),
         main_contributor: instance
             .contributors
             .first()
@@ -406,6 +409,7 @@ mod tests {
                 material_type: None,
                 relations: Vec::new(),
                 title: format!("Title {}", id.0),
+                other_titles: Vec::new(),
                 publisher: None,
                 date: None,
                 classification: None,
