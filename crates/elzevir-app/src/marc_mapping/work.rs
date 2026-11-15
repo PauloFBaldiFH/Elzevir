@@ -27,7 +27,7 @@ pub(super) fn map(marc: &Marc<'_>) -> Result<Work, MappingError> {
         .or_else(|| marc.first_text(b"240", b'a'))
         .or_else(|| marc.first_text(b"245", b'a'))
         .ok_or(MappingError::MissingTitle)?;
-    let (classification, classification_scheme) = classification(marc);
+    let (classification, classification_scheme) = super::classification::main(marc);
     Ok(Work {
         title,
         material_type: material_type(marc.leader_byte(6), marc.leader_byte(7)),
@@ -54,16 +54,6 @@ pub(super) fn material_type(record_type: u8, level: u8) -> MaterialType {
         b'o' | b'p' => MaterialType::Mixed,
         _ => MaterialType::Book,
     }
-}
-
-fn classification(marc: &Marc<'_>) -> (Option<String>, Option<String>) {
-    [(b"082", "ddc"), (b"080", "udc"), (b"050", "lcc")]
-        .into_iter()
-        .find_map(|(tag, scheme)| {
-            marc.first_text(tag, b'a')
-                .map(|number| (Some(number), Some(scheme.to_owned())))
-        })
-        .unwrap_or((None, None))
 }
 
 fn languages(marc: &Marc<'_>) -> Vec<String> {

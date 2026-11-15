@@ -25,6 +25,28 @@ work_description:
                 Literal:
                   text: Análise de investimentos e demonstrativos financeiros
                   language: ~
+    - property: classification
+      value:
+        Resource:
+          class: ClassificationUdc
+          label: ~
+          statements:
+            - property: classificationPortion
+              value:
+                Literal:
+                  text: 658.15 C18
+                  language: ~
+            - property: source
+              value:
+                Resource:
+                  class: Source
+                  label: ~
+                  statements:
+                    - property: code
+                      value:
+                        Literal:
+                          text: "1987"
+                          language: ~
 hub: ~
 relations: []
 classification: "658.15"

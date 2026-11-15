@@ -10,6 +10,7 @@ use elzevir_marc::Field;
 
 use super::Marc;
 use super::admin;
+use super::classification;
 use super::content;
 use super::fixed;
 use super::locators;
@@ -38,6 +39,7 @@ pub(super) fn work(marc: &Marc<'_>) -> Description {
     statements.extend(relations::of_work(marc));
     statements.extend(content::of_work(marc));
     statements.extend(fixed::of_work(marc));
+    statements.extend(classification::of_work(marc));
     Description {
         classes: classes.into_iter().map(str::to_owned).collect(),
         statements,

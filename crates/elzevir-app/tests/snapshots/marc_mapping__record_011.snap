@@ -47,6 +47,17 @@ work_description:
                 Literal:
                   text: "3"
                   language: ~
+    - property: classification
+      value:
+        Resource:
+          class: ClassificationDdc
+          label: ~
+          statements:
+            - property: edition
+              value:
+                Literal:
+                  text: full
+                  language: ~
 hub: ~
 relations: []
 classification: "320.089"

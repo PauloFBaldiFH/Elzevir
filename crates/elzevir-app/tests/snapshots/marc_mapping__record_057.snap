@@ -14,6 +14,28 @@ work_description:
         Concept:
           scheme: contentTypes
           code: txt
+    - property: classification
+      value:
+        Resource:
+          class: ClassificationDdc
+          label: ~
+          statements:
+            - property: source
+              value:
+                Resource:
+                  class: Source
+                  label: ~
+                  statements:
+                    - property: code
+                      value:
+                        Literal:
+                          text: "23"
+                          language: ~
+            - property: edition
+              value:
+                Literal:
+                  text: full
+                  language: ~
 hub: ~
 relations: []
 classification: "370.1"
