@@ -47,6 +47,11 @@ work_description:
                 Literal:
                   text: "3"
                   language: ~
+    - property: intendedAudience
+      value:
+        Concept:
+          scheme: maudience
+          code: pri
     - property: classification
       value:
         Resource:

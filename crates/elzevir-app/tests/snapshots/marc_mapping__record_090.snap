@@ -25,6 +25,16 @@ work_description:
                 Literal:
                   text: Análise de investimentos e demonstrativos financeiros
                   language: ~
+    - property: illustrativeContent
+      value:
+        Concept:
+          scheme: millus
+          code: ill
+    - property: intendedAudience
+      value:
+        Concept:
+          scheme: maudience
+          code: gen
     - property: classification
       value:
         Resource:

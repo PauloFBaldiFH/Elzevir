@@ -14,6 +14,16 @@ work_description:
         Concept:
           scheme: contentTypes
           code: txt
+    - property: illustrativeContent
+      value:
+        Concept:
+          scheme: millus
+          code: ill
+    - property: intendedAudience
+      value:
+        Concept:
+          scheme: maudience
+          code: gen
     - property: classification
       value:
         Resource:

@@ -12,10 +12,10 @@ use std::time::Duration;
 use elzevir_app::description::{instance_of_material, work_of_material};
 use elzevir_app::listing::sort_key;
 use elzevir_app::marc_mapping::{
-    source_admin, source_audience, source_classification, source_content, source_contributions,
-    source_description, source_extent, source_fixed, source_leader_conventions, source_notes,
-    source_physical, source_provision, source_publication, source_relations, source_responsibility,
-    source_subjects, source_titles, source_typed_notes,
+    source_admin, source_audience, source_books, source_classification, source_content,
+    source_contributions, source_description, source_extent, source_fixed,
+    source_leader_conventions, source_notes, source_physical, source_provision, source_publication,
+    source_relations, source_responsibility, source_subjects, source_titles, source_typed_notes,
 };
 use elzevir_app::matching::{identifier_key, koha_biblionumber_key};
 use elzevir_domain::catalog::IdentifierKind;
@@ -435,6 +435,11 @@ const MIGRATIONS: &[&str] = &[
     // Work (item 29, part 5f), beside the main number the Work keeps; the migration only fills
     // them from the stored source records.
     "SELECT 1;",
+    // 33: the positions of a book in `008/18-34` (illustrations, coded audience, nature of
+    // the contents, conference, festschrift, index, literary form, biography) become
+    // statements of the Work (item 29, part 5f); the migration only fills them from the
+    // stored source records.
+    "SELECT 1;",
 ];
 
 /// The migration that creates `match_keys`.
@@ -484,6 +489,8 @@ const SUBJECT_AGENTS_VERSION: i64 = 30;
 const LEADER_CONVENTIONS_VERSION: i64 = 31;
 /// Migration that reads the classifications.
 const CLASSIFICATIONS_VERSION: i64 = 32;
+/// Migration that reads the positions of a book in `008/18-34`.
+const BOOKS_VERSION: i64 = 33;
 /// Migration that drops `extra`.
 const DROP_EXTRA_VERSION: i64 = 13;
 /// Migration that adds the classes, and fills them with content, media, carrier and issuance.
@@ -615,6 +622,9 @@ fn apply_migrations(connection: &mut Connection, current: i64) -> Result<(), Sto
             }
             if version == CLASSIFICATIONS_VERSION {
                 backfill_from_source(&tx, source_classification)?;
+            }
+            if version == BOOKS_VERSION {
+                backfill_from_source(&tx, source_books)?;
             }
             if version == NO_CODES_VERSION || version == POLICIES_VERSION {
                 check_foreign_keys(&tx, version)?;
@@ -1645,6 +1655,45 @@ mod catalog_tests {
             .filter(|s| s.property == "adminMetadata")
             .collect();
         assert_eq!(admin, wanted);
+    }
+
+    #[test]
+    fn migration_33_reads_the_positions_of_a_book_from_the_source_record() {
+        use elzevir_marc::{Field, Record, Tag};
+        let mut source = Vec::new();
+        Record {
+            leader: *b"00000nam a2200000   4500",
+            fields: vec![Field::Control {
+                tag: Tag::new(*b"008"),
+                value: b"250321s1995    bl ac  j bd   111 1bpor d".to_vec(),
+            }],
+        }
+        .write_iso2709(&mut source)
+        .unwrap();
+        let (_dir, mut connection) = catalog();
+        connection
+            .execute(
+                "UPDATE source_records SET record = ?1 WHERE instance_id = 1",
+                params![source],
+            )
+            .unwrap();
+        rewind(&connection, BOOKS_VERSION - 1);
+        migrate(&mut connection).unwrap();
+        let work = read_description(
+            &connection,
+            EntityRef {
+                entity: EntityKind::Work,
+                id: 1,
+            },
+        )
+        .unwrap();
+        let (wanted, _) = source_books(&source).unwrap();
+        assert_eq!(wanted.len(), 10);
+        assert!(
+            wanted
+                .iter()
+                .all(|statement| work.statements.contains(statement))
+        );
     }
 
     #[test]
