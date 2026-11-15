@@ -3,6 +3,8 @@
 > **Atenção (2026-11-14):** a diretriz de BIBFRAME completo ([ADR 0003](../../adr/0003-bibframe-completo.md), [spec](../../specs/catalogo/bibframe-completo.md)) substitui esta spec na etapa 4: tipo de item deixa de existir, unidades ganham cadastro próprio e localizações e coleções viram listas por unidade, só com nomes. Até lá, o que está aqui continua valendo.
 >
 > Status: v0, pedido de Paulo em 2026-11-14 na revisão da grade de exemplares. Base: [modelo bibliográfico](modelo-bibliografico.md) §2 (tabelas `branches`, `item_types`, `terms`), [exemplares](exemplares.md) item 29 (toda tela mostra o nome, não o código) e [linha de comando](linha-de-comando.md). Critério: **depois de trazer os nomes do Koha, nenhuma tela mostra um código do Koha (como `B1` ou `T1`) onde o Koha tem nome**.
+>
+> **Substituída em parte pela etapa 4c** ([bibframe-completo](bibframe-completo.md) item 23d): a tela `/equipe/admin/codigos` saiu; nomes se editam em `/equipe/admin/cadastros`. O comando `koha-codes` continua, gravando pela borda.
 
 Duas partes, cada uma num PR:
 

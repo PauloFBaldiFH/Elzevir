@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::codes::{CodeTable, NamedCode, NamingCount};
 use crate::items::{ItemsUpdate, RowRefusal};
 use crate::matching::Matching;
+use crate::registries::{BranchContact, RegistryChange, RegistryEntry, RegistryRefusal};
 use elzevir_domain::statement::{Description, EntityRef, Statement, StatementRefusal};
 
 /// Catalog commands.
@@ -66,6 +67,9 @@ pub enum CatalogCommand {
     /// Gives codes of the code tables their names, creating the missing ones
     /// (docs/specs/catalogo/tabelas-de-codigos.md).
     NameCodes(Vec<NamedCode>),
+    /// Changes the registries of branches, shelving places, collections and policies
+    /// (docs/specs/catalogo/bibframe-completo.md, item 23d).
+    ChangeRegistry(RegistryChange),
     /// Replaces every BIBFRAME statement of a Hub, Work, Instance or Item, if it is still
     /// at `row_version` (docs/specs/catalogo/bibframe-completo.md, items 10a to 10g).
     SetStatements(Box<StatementsUpdate>),
@@ -509,6 +513,8 @@ pub enum CatalogOutput {
     },
     /// Codes were named, counted per table in [`crate::codes::CodeTable::ALL`] order.
     CodesNamed([NamingCount; 4]),
+    /// A registry changed; the row, when it was created, renamed or given contact data.
+    RegistryChanged(Option<RegistryEntry>),
     /// The statements of an entity were replaced.
     StatementsSet {
         /// The entity.
@@ -549,6 +555,9 @@ pub enum CatalogRefusal {
     /// A code or name of `catalog.name_codes` is empty or too long; the position.
     #[error("code {0} of the list is empty or too long")]
     BadCodeName(usize),
+    /// A registry change was refused.
+    #[error("registry change refused: {0:?}")]
+    Registry(RegistryRefusal),
     /// A statement breaks a rule of the ontology.
     #[error("{0}")]
     BadStatement(StatementRefusal),
@@ -661,6 +670,8 @@ pub struct Place<Id> {
 pub struct CodeLists {
     /// Branches.
     pub branches: Vec<Named<BranchId>>,
+    /// The contact data of each branch that has some.
+    pub contacts: Vec<(BranchId, BranchContact)>,
     /// Circulation policies.
     pub policies: Vec<Named<PolicyId>>,
     /// Shelving places of every branch.

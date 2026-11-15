@@ -78,6 +78,7 @@ impl CatalogReader for Catalog {
             name: name.to_owned(),
         };
         Ok(CodeLists {
+            contacts: Vec::new(),
             branches: vec![
                 Named {
                     id: BranchId(1),
@@ -216,9 +217,9 @@ impl elzevir_app::editing::CatalogEditor for Editor {
             Edit::NewInstance(new) if new.work.0 == 404 => {
                 return Err(EditFailed::Refused(CatalogRefusal::UnknownWork(new.work)));
             }
-            Edit::Codes(codes) => {
-                if let Err(position) = elzevir_app::codes::checked(codes) {
-                    return Err(EditFailed::Refused(CatalogRefusal::BadCodeName(position)));
+            Edit::Registry(change) => {
+                if let Err(refusal) = elzevir_app::registries::checked(change.clone()) {
+                    return Err(EditFailed::Refused(CatalogRefusal::Registry(refusal)));
                 }
                 1
             }
@@ -252,7 +253,7 @@ impl elzevir_app::editing::CatalogEditor for Editor {
                     .map(|(new, row)| row.id.unwrap_or(elzevir_domain::catalog::ItemId(new)))
                     .collect(),
             },
-            Edit::Codes(_) => CatalogOutput::CodesNamed(Default::default()),
+            Edit::Registry(_) => CatalogOutput::RegistryChanged(None),
             Edit::NewInstance(new) => CatalogOutput::InstanceAdded {
                 work: new.work,
                 instance: InstanceId(902),

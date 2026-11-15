@@ -29,6 +29,7 @@ mod listing;
 mod matching;
 mod places;
 mod readers;
+mod registries;
 mod schema;
 mod statements;
 mod suggestions;

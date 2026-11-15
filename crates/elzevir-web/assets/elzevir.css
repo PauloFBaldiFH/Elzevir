@@ -496,13 +496,20 @@ a.field-value:hover { text-decoration: underline; }
 .item-grid .grid-signal-head { width: 1.2rem; }
 .item-grid .grid-keys { margin: 6px 0 0; font-size: 0.72rem; color: var(--text-muted); }
 /* Code tables (tabelas-de-codigos.md, items 14 to 19). */
-.code-tables { max-width: 46rem; margin: 0 auto; padding: 16px; }
-.code-tables h2 { font-size: 1rem; margin: 22px 0 8px; }
+.registries { max-width: 46rem; margin: 0 auto; padding: 16px; }
+.registries h2 { font-size: 1.1rem; margin: 26px 0 8px; }
+.registries h3 { font-size: 0.95rem; margin: 14px 0 4px; }
+.registry-branch { border: 1px solid var(--elzevir-color-border); border-radius: 8px; padding: 8px 12px 12px; margin-bottom: 14px; }
+.registry-branch > .code-rows input[type=text] { font-weight: 600; }
+.registry-contact { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 8px; margin: 8px 0; }
+.registry-contact label { display: grid; gap: 2px; font-size: 0.85rem; }
+.registry-contact input { font: inherit; padding: 4px 8px; border: 1px solid var(--elzevir-color-border); border-radius: 6px; min-width: 0; }
+.registry-contact button { justify-self: start; align-self: end; font: inherit; color: inherit; padding: 4px 12px; border: 1px solid var(--elzevir-color-border); border-radius: 6px; background: transparent; cursor: pointer; }
 .code-rows { list-style: none; margin: 0; padding: 0; }
-.code-rows form { display: grid; grid-template-columns: 9rem 1fr auto; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--elzevir-color-border); }
-.code-rows code { font-size: 0.85rem; }
+.code-rows form { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--elzevir-color-border); }
+.registry-new form { grid-template-columns: 1fr auto; }
 .code-rows input[type=text] { font: inherit; padding: 4px 8px; border: 1px solid var(--elzevir-color-border); border-radius: 6px; min-width: 0; }
 .code-rows button { font: inherit; color: inherit; padding: 4px 12px; border: 1px solid var(--elzevir-color-border); border-radius: 6px; background: transparent; cursor: pointer; }
-.code-new form { border-bottom: 0; padding-top: 10px; }
+.registry-new form { border-bottom: 0; }
 .codes-alert { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--elzevir-color-border); }
 .codes-refused { border-color: var(--elzevir-color-signal-out); background: var(--elzevir-color-out-bg); color: var(--elzevir-color-out-text); }

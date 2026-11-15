@@ -17,7 +17,7 @@ impl CatalogEditor for ElzevirStore {
             Edit::NewRecord(record) => CatalogCommand::AddRecord(record),
             Edit::NewInstance(new) => CatalogCommand::AddInstance(new),
             Edit::Items(update) => CatalogCommand::SaveItems(update),
-            Edit::Codes(codes) => CatalogCommand::NameCodes(codes),
+            Edit::Registry(change) => CatalogCommand::ChangeRegistry(change),
         };
         let pending = self
             .submit_as(actor.0, WriteCommand::Catalog(command))

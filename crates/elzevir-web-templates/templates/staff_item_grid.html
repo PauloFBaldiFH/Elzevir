@@ -27,6 +27,6 @@
   </table>
   </div>
   <template class="grid-columns">{% for column in columns %}<i data-col="{{ column.name }}"{% if let Some(list) = column.list %} data-list="{{ list }}"{% endif %}{% if column.inherited %} data-inherited{% endif %}></i>{% endfor %}</template>
-  {% for list in lists %}<datalist id="grid-list-{{ list.name }}">{% for (code, name) in list.options %}<option value="{{ name }}" data-code="{{ code }}"></option>{% endfor %}</datalist>{% endfor %}
+  {% for list in lists %}<datalist id="grid-list-{{ list.name }}">{% for option in list.options %}<option value="{{ option.name }}" data-code="{{ option.key }}"{% if let Some(branch) = option.branch %} data-branch="{{ branch }}"{% endif %}></option>{% endfor %}</datalist>{% endfor %}
   <p class="form-hint grid-keys">{{ t.get("items-keys-hint") }}</p>
 </elz-item-grid>

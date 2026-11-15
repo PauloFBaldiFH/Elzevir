@@ -8,12 +8,12 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
-use elzevir_app::catalog::{CodeLists, Place};
+use elzevir_app::catalog::{CodeLists, Named, Place};
 use elzevir_app::editing::Edit;
 use elzevir_app::items::{GridItem, ItemFields, ItemsUpdate, MAX_ROWS, TypedRow, item_rows};
 use elzevir_app::staff::Permission;
 use elzevir_domain::catalog::{BranchId, CollectionId, InstanceId, Money, PolicyId, SublocationId};
-use elzevir_web_templates::{GridCell, GridColumn, GridList, GridRow, ItemGrid};
+use elzevir_web_templates::{GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid};
 use serde::Deserialize;
 
 use crate::catalog::signal;
@@ -117,26 +117,33 @@ fn grid_row(item: GridItem, codes: &CodeLists) -> GridRow {
     }
 }
 
-fn grid_list(name: &'static str, options: Vec<(String, String)>) -> GridList {
-    GridList { name, options }
+fn grid_list<Id: Copy>(name: &'static str, rows: &[Named<Id>], key: fn(Id) -> i64) -> GridList {
+    GridList {
+        name,
+        options: rows
+            .iter()
+            .map(|row| GridOption {
+                key: key(row.id).to_string(),
+                name: row.name.clone(),
+                branch: None,
+            })
+            .collect(),
+    }
 }
 
-/// The places of every branch, each named with its branch, since two branches may use
-/// the same name.
-fn place_options<Id: Copy>(
-    codes: &CodeLists,
-    places: &[Place<Id>],
-    key: fn(Id) -> i64,
-) -> Vec<(String, String)> {
-    places
-        .iter()
-        .map(|place| {
-            (
-                key(place.id).to_string(),
-                format!("{} · {}", codes.branch(place.branch), place.name),
-            )
-        })
-        .collect()
+/// The places of every branch; the grid offers a row only those of its home branch.
+fn place_list<Id: Copy>(name: &'static str, places: &[Place<Id>], key: fn(Id) -> i64) -> GridList {
+    GridList {
+        name,
+        options: places
+            .iter()
+            .map(|place| GridOption {
+                key: key(place.id).to_string(),
+                name: place.name.clone(),
+                branch: Some(place.branch.0.to_string()),
+            })
+            .collect(),
+    }
 }
 
 /// `GET /equipe/acervo/instancia/{id}/exemplares` (item 12).
@@ -175,30 +182,10 @@ pub(crate) async fn item_grid(
         columns: COLUMNS,
         rows: rows.into_iter().map(|row| grid_row(row, &codes)).collect(),
         lists: vec![
-            grid_list(
-                "branches",
-                codes
-                    .branches
-                    .iter()
-                    .map(|branch| (branch.id.0.to_string(), branch.name.clone()))
-                    .collect(),
-            ),
-            grid_list(
-                "policies",
-                codes
-                    .policies
-                    .iter()
-                    .map(|policy| (policy.id.0.to_string(), policy.name.clone()))
-                    .collect(),
-            ),
-            grid_list(
-                "locations",
-                place_options(&codes, &codes.locations, |id| id.0),
-            ),
-            grid_list(
-                "collections",
-                place_options(&codes, &codes.collections, |id| id.0),
-            ),
+            grid_list("branches", &codes.branches, |id| id.0),
+            grid_list("policies", &codes.policies, |id| id.0),
+            place_list("locations", &codes.locations, |id| id.0),
+            place_list("collections", &codes.collections, |id| id.0),
         ],
     })
 }
