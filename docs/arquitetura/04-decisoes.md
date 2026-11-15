@@ -30,6 +30,7 @@
 | 5 | Modelo de dados | **Relacional, com a ontologia BIBFRAME da LC completa** (diretriz de 2026-11-14, [ADR 0003](../adr/0003-bibframe-completo.md); antes: "inspirado em BIBFRAME 2.0") (Obra, Instância, Item, Agente, Assunto em tabelas tipadas), **com o registro MARC original preservado** para exportação sem perdas. Sem triple store RDF; BIBFRAME em RDF só como formato de exportação. | sim |
 | 6 | Acesso ao SQLite | **`rusqlite` com ator de escrita única**: uma thread dedicada é dona de todas as escritas (fila limitada, transações em lote), e um pool de conexões atende as leituras em paralelo (WAL). | sim |
 | 7 | Idiomas | **Inglês como idioma principal da v1, depois português do Brasil.** Os demais idiomas entram mais tarde. Todo texto de interface passa por Fluent desde o primeiro dia, para que traduzir seja só acrescentar arquivos. | sim |
+| 8 | Norma descritiva | **RDA como padrão**, com troca para AACR2 por biblioteca no `elzevir.toml` (Paulo, 2026-11-15). A norma escolhe as regras de preenchimento que o servidor aplica; o modelo e a exportação são os mesmos nas duas. | não |
 
 Consequência do item 7: chaves de mensagem, textos-padrão de avisos e a documentação de uso nascem em inglês; a tradução pt-BR é uma tarefa explícita logo depois da v1 e entra no CI como verificação de chaves faltantes.
 

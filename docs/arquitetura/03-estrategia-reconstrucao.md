@@ -354,10 +354,32 @@ A tarefa 1.12 adianta um pedaço da Fase 3 de propósito: ela valida, cedo e de 
 | 2.7 | Onda 1c: grade de exemplares `<elz-item-grid>` e `catalog.save_items` em lote | Spec de UI §5 | 50 exemplares bipados seguidos sem perder leitura; recusa por célula |
 | 2.8 | Onda 1d: rascunho por ISBN da própria base | Spec de UI §6.3; 1.10 | ISBN bipado de livro já existente leva à grade dele |
 | 2.9 | Onda 1e: autoridades básicas (`agent_identifiers`, `catalog.update_agent`, coluna de Autoridades, ligação por papel, aviso de alcance ao renomear) | Spec de UI §16 | Renomear um agente sobe o `row_version` das Instâncias ligadas e aparece no OPAC e no MARC exportado |
-| 2.10 | Listas de trabalho e facetas: filtros salvos ("meus recentes", "incompletos", "importados hoje", "em quarentena") e refino por unidade, tipo de exemplar, material, idioma, assunto e ano | Spec de UI §20 item 8 | Cada lista e faceta conta famílias, não registros, e continua com p95 < 50 ms em 1 milhão de registros |
-| 2.11 | Exportação do registro em BIBFRAME 2.0 RDF/XML (vocabulário da Library of Congress), por registro e por seleção | Spec de UI §20 item 11 | O RDF/XML de 200 registros do oráculo valida contra a ontologia BIBFRAME 2.0 e não perde nenhum campo que o MARC exportado tem |
+| 2.10 | Listas de trabalho e facetas: filtros salvos ("meus recentes", "incompletos", "importados hoje", "em quarentena") e refino por unidade, conteúdo e suporte (`bf:content`, `bf:carrier`), gênero, público, idioma, assunto e ano. Sem faceta de tipo de exemplar, que deixa de existir (Paulo, 2026-11-15) | Spec de UI §20 item 8 | Cada lista e faceta conta famílias, não registros, e continua com p95 < 50 ms em 1 milhão de registros |
+| 2.11 | Exportação do registro em BIBFRAME RDF/XML e Turtle (vocabulário da Library of Congress), por registro e por seleção. É a etapa 8 do [BIBFRAME completo](../specs/catalogo/bibframe-completo.md) | Spec de UI §20 item 11 | O RDF/XML de 200 registros do oráculo valida contra a ontologia BIBFRAME 2.0 e não perde nenhum campo que o MARC exportado tem |
 
-Fica para depois da Fase 2: Z39.50/SRU (Fase 4), estação de IA, circulação no muro (Fase 3) e a Onda 2 (mesclagem e quarentena pela tela).
+#### Andamento e acréscimos (2026-11-15)
+
+- **Feitas:** 2.0 a 2.8 (PRs #37 a #53).
+- **Diretriz de BIBFRAME completo** (Paulo, 2026-11-14, [ADR 0003](../adr/0003-bibframe-completo.md)): as etapas 1 a 8 de [`bibframe-completo.md`](../specs/catalogo/bibframe-completo.md) vêm agora, antes da 2.9. Elas refazem os formulários (sem perfil por categoria, sem "expandir") e extinguem o tipo de item, então o que na 2.5 e na 2.7 dependia de perfil ou de tipo de item vale na forma nova.
+- **Funções do Koha aprovadas por Paulo em 2026-11-15.** As tarefas em que a proposta as encaixava (2.5 a 2.7) já estavam entregues; elas entram como tarefas próprias, depois dos formulários completos (etapa 6), para não serem escritas duas vezes:
+
+| # | Tarefa | Base | Pronto quando |
+|---|---|---|---|
+| 2.12 | ISBN no campo: dígito verificador conferido ao sair do campo e conversão 10 ↔ 13, com a mesma regra do servidor (`isbn13`) | Koha: plugin de ISBN; [bipe](../specs/catalogo/bipe.md) | ISBN errado é recusado no campo, antes de salvar; ISBN-10 digitado grava e casa como ISBN-13 |
+| 2.13 | "Nova Instância como esta": no bloco da Instância, cria outra já ligada à mesma Obra, com os campos copiados menos identificadores e exemplares | Koha: duplicar registro; [criação](../specs/catalogo/criacao.md) | A Instância nova exporta MARC válido e não repete ISBN nem exemplar da original |
+| 2.14 | Aba "Histórico" no bloco focado: quem mudou o quê e quando, lido do `audit_log` | Koha: log de modificações | Cada edição de Obra, Instância e exemplar aparece com autor e hora; só quem cataloga vê |
+| 2.15 | Ocultar do OPAC: marca na Instância (na borda, `942 $n`) | Koha: `OpacSuppression` | Instância oculta não aparece na busca nem na página do OPAC, continua na equipe e exporta o `942 $n` |
+| 2.16 | Número de chamada sugerido: CDD + Cutter da tabela da biblioteca. A tabela (PHA em Palotina) é escolhida no `elzevir.toml` | Koha: construtores do 082/090 | O campo sugere o Cutter do autor pela tabela configurada; o catalogador confirma ou troca |
+| 2.17 | Ações em lote: selecionar famílias na listagem e mandar para uma lista de trabalho, exportar MARC ou alterar exemplares num comando só | Koha: carrinho, listas e alteração em lote; 2.10 | Alterar 500 exemplares é uma transação, com recusa por exemplar e registro no `audit_log` |
+
+- **Listas fechadas no exemplar** (unidade, localização, coleção e motivo de não empréstimo): aprovadas, sem "tipo de exemplar" (Paulo, 2026-11-15). Entram nas etapas 4 e 7 do BIBFRAME completo, como caixas de seleção.
+- **Norma descritiva:** RDA é o padrão; cada biblioteca pode trocar para AACR2 no `elzevir.toml` ([doc 04](04-decisoes.md), decisão 8).
+- **Facetas:** ficam na 2.10, depois do foco 80/20 (2.4), como recomendado.
+- **Etiqueta de lombada:** aprovada, para depois da Fase 2.
+
+Ordem daqui em diante: etapas 1 a 8 do BIBFRAME completo (a 2.11 é a etapa 8), com 2.12 a 2.16 logo depois da etapa 6; depois 2.9, 2.10 e 2.17.
+
+Fica para depois da Fase 2: etiqueta de lombada, Z39.50/SRU (Fase 4), estação de IA, circulação no muro (Fase 3) e a Onda 2 (mesclagem e quarentena pela tela).
 
 ### Ordem e trilha crítica
 
