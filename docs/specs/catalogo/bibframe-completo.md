@@ -132,10 +132,11 @@ A etapa 4 mexe em tudo o que o exemplar aponta, então sai em quatro PRs. O crit
 23c. **Parte 4b, política de circulação no lugar do tipo de item.**
     - `circulation_policies`: id gerado e nome. Nesta fase é só o cadastro e a ligação; prazo, renovações e multa entram na Fase 3 (item 22).
     - O exemplar aponta a política (`bf:usageAndAccessPolicy`), obrigatória. `item_types` e a coluna `items.item_type` saem.
-    - A migração cria uma política por tipo de item, com o mesmo nome, e guarda o código do tipo na borda (`952 $y`, `942 $c`). Gênero, público e classe que o nome do tipo dizia vão para a Obra e a Instância pela tabela do item 32, **depois de revisada por Paulo**; onde o registro de origem diz outra coisa, vale o registro.
+    - As políticas são livres: cada biblioteca cadastra as suas, com o nome que quiser. O núcleo não conhece nenhum código de tipo (`BK`, `RO`, `GB`...).
+    - A migração cria uma política por tipo de item que já existe no banco, com o nome que o tipo tinha, e guarda o código do tipo na borda (`952 $y`, `942 $c`). Não deduz classe, gênero nem público do tipo: a descrição vem do registro (itens 10j e 10l).
     - A importação resolve `952 $y` (ou `942 $c`) pela borda; código desconhecido continua recusado.
 23d. **Parte 4c, telas.** Saem `/equipe/admin/codigos` e a tabela de tipos. Entram Unidades (nome e contato), e dentro de cada unidade as listas de Localizações e Coleções, e Políticas de circulação: só nomes, criar, renomear e apagar o que não está em uso. A grade de exemplares mostra caixas de seleção com esses nomes; a de localização e a de coleção mostram só as da unidade escolhida.
-23e. **Parte 4d, `elzevir koha-codes`.** Continua lendo os nomes do Koha, mas grava pelos cadastros novos: acha a linha pelo código na borda e lhe dá o nome; código que não existe aqui cria a linha e a entrada da borda. Tipos de item do Koha viram nomes de políticas.
+23e. **Parte 4d, `elzevir koha-codes` e a tradução dos tipos.** O comando continua lendo os nomes do Koha, mas grava pelos cadastros novos: acha a linha pelo código na borda e lhe dá o nome; código que não existe aqui cria a linha e a entrada da borda. Tipos de item do Koha viram nomes de políticas. A tradução de um tipo local em classe, conteúdo, suporte, gênero ou público (item 32) é **dado da borda de cada biblioteca**, não código do Elzevir: uma tabela de tradução que a importação MARC aplica ao registro que chega e que a exportação usa para devolver o código. Sem linha na tabela, o tipo só escolhe a política.
 23f. Renomear unidade, localização, coleção ou política não muda registro nenhum (o exemplar guarda o id), mas limpa as páginas guardadas do OPAC, como a tela de códigos já faz.
 23g. Apagar unidade, localização, coleção ou política em uso é recusado, com a contagem de exemplares que a usam.
 
@@ -156,10 +157,10 @@ A etapa 4 mexe em tudo o que o exemplar aponta, então sai em quatro PRs. O crit
 
 31. Uma migração do banco converte o que há, sem perda:
     - `material_type` → classe da Obra e da Instância, `bf:content`, `bf:media`, `bf:carrier`;
-    - tipo de item → política de circulação de mesmo nome, mais gênero, público e classe quando o nome do tipo diz (tabela de conversão revisada por Paulo antes de rodar);
+    - tipo de item → política de circulação de mesmo nome, com o código na tabela da borda;
     - unidades, localizações e coleções → os cadastros do item 19 e 20, com o código antigo na tabela da borda;
     - `extra` → declarações.
-32. A conversão proposta para os tipos da biblioteca de Paulo, a confirmar na etapa 4:
+32. (Decisão de Paulo, 2026-11-15.) Os códigos de tipo são locais de cada biblioteca e **não entram no núcleo**: o Elzevir usa só as classes e os vocabulários do BIBFRAME, e as políticas de circulação são cadastro livre. A tabela abaixo é o exemplo da biblioteca de Paulo; ela existe só como tabela de tradução na borda MARC (parte 4d), para converter o acervo legado:
 
     | Tipo | Classe e conteúdo | Suporte | Gênero ou público |
     |---|---|---|---|
