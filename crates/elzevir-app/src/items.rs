@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use elzevir_domain::catalog::{InstanceId, ItemId, Money};
+use elzevir_domain::catalog::{BranchId, CollectionId, InstanceId, ItemId, Money, SublocationId};
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::{CatalogReadError, ItemStatus};
@@ -15,24 +15,24 @@ use crate::marc_mapping::items::cents;
 pub const MAX_ROWS: usize = 500;
 
 /// The columns of one Item that the grid edits (item 1).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ItemFields {
     /// Barcode, unique when present.
     pub barcode: Option<String>,
     /// Inventory number (tombo).
     pub inventory_number: Option<String>,
-    /// Home branch code.
-    pub home_branch: String,
-    /// Holding branch code.
-    pub holding_branch: String,
+    /// Home branch.
+    pub home_branch: BranchId,
+    /// Holding branch.
+    pub holding_branch: BranchId,
     /// Item type code.
     pub item_type: String,
     /// Call number.
     pub call_number: Option<String>,
-    /// Shelving location code.
-    pub location: Option<String>,
-    /// Collection code.
-    pub collection: Option<String>,
+    /// Shelving place, in the home branch.
+    pub location: Option<SublocationId>,
+    /// Collection, of the home branch.
+    pub collection: Option<CollectionId>,
     /// Copy number.
     pub copy_number: Option<String>,
     /// Purchase price.
@@ -73,6 +73,10 @@ pub enum ItemColumn {
     HoldingBranch,
     /// Item type.
     ItemType,
+    /// Shelving place.
+    Location,
+    /// Collection.
+    Collection,
     /// Price.
     Price,
 }
@@ -85,8 +89,10 @@ pub enum RowProblem {
     Required,
     /// The price is not a number of money.
     Price,
-    /// No branch has this code.
+    /// No branch has this id.
     UnknownBranch,
+    /// The home branch has no shelving place or collection with this id.
+    NotInBranch,
     /// No item type has this code.
     UnknownItemType,
     /// Another Item, in the catalog or in the batch, has this barcode.
@@ -105,6 +111,8 @@ impl ItemColumn {
             Self::HomeBranch => "home_branch",
             Self::HoldingBranch => "holding_branch",
             Self::ItemType => "item_type",
+            Self::Location => "location",
+            Self::Collection => "collection",
             Self::Price => "price",
         }
     }
@@ -118,6 +126,7 @@ impl RowProblem {
             Self::Required => "items-error-required",
             Self::Price => "items-error-price",
             Self::UnknownBranch => "items-error-branch",
+            Self::NotInBranch => "items-error-not-in-branch",
             Self::UnknownItemType => "items-error-item-type",
             Self::BarcodeTaken => "items-error-barcode-taken",
             Self::UnknownItem => "items-error-unknown-item",
@@ -149,10 +158,10 @@ pub struct TypedRow {
     /// Inventory number.
     #[serde(default)]
     pub inventory_number: String,
-    /// Home branch code.
+    /// Home branch id.
     #[serde(default)]
     pub home_branch: String,
-    /// Holding branch code; empty takes the home branch.
+    /// Holding branch id; empty takes the home branch.
     #[serde(default)]
     pub holding_branch: String,
     /// Item type code.
@@ -161,10 +170,10 @@ pub struct TypedRow {
     /// Call number.
     #[serde(default)]
     pub call_number: String,
-    /// Location code.
+    /// Shelving place id.
     #[serde(default)]
     pub location: String,
-    /// Collection code.
+    /// Collection id.
     #[serde(default)]
     pub collection: String,
     /// Copy number.
@@ -192,11 +201,18 @@ pub fn item_rows(typed: Vec<TypedRow>) -> Result<Vec<ItemRow>, Vec<RowRefusal>> 
                 problem,
             });
         };
-        let home_branch = row.home_branch.trim().to_owned();
         let item_type = row.item_type.trim().to_owned();
-        if home_branch.is_empty() {
-            refuse(ItemColumn::HomeBranch, RowProblem::Required);
-        }
+        let home_branch = match id_of(&row.home_branch) {
+            Ok(Some(id)) => BranchId(id),
+            Ok(None) => {
+                refuse(ItemColumn::HomeBranch, RowProblem::Required);
+                BranchId(0)
+            }
+            Err(()) => {
+                refuse(ItemColumn::HomeBranch, RowProblem::UnknownBranch);
+                BranchId(0)
+            }
+        };
         if item_type.is_empty() {
             refuse(ItemColumn::ItemType, RowProblem::Required);
         }
@@ -209,18 +225,29 @@ pub fn item_rows(typed: Vec<TypedRow>) -> Result<Vec<ItemRow>, Vec<RowRefusal>> 
                 None
             }
         };
-        let holding_branch = optional(&row.holding_branch).unwrap_or_else(|| home_branch.clone());
+        let holding_branch = id_of(&row.holding_branch).unwrap_or_else(|()| {
+            refuse(ItemColumn::HoldingBranch, RowProblem::UnknownBranch);
+            None
+        });
+        let location = id_of(&row.location).unwrap_or_else(|()| {
+            refuse(ItemColumn::Location, RowProblem::NotInBranch);
+            None
+        });
+        let collection = id_of(&row.collection).unwrap_or_else(|()| {
+            refuse(ItemColumn::Collection, RowProblem::NotInBranch);
+            None
+        });
         rows.push(ItemRow {
             id: row.id.map(ItemId),
             fields: ItemFields {
                 barcode: optional(&row.barcode),
                 inventory_number: optional(&row.inventory_number),
                 home_branch,
-                holding_branch,
+                holding_branch: holding_branch.map_or(home_branch, BranchId),
                 item_type,
                 call_number: optional(&row.call_number),
-                location: optional(&row.location),
-                collection: optional(&row.collection),
+                location: location.map(SublocationId),
+                collection: collection.map(CollectionId),
                 copy_number: optional(&row.copy_number),
                 price,
             },
@@ -281,6 +308,19 @@ pub trait ItemGridSource: Send + Sync {
     fn grid_items(&self, instance: InstanceId) -> Result<Vec<GridItem>, CatalogReadError>;
 }
 
+/// A cell that names a registry row by its id: empty is `None`, anything but a positive
+/// number is refused.
+fn id_of(text: &str) -> Result<Option<i64>, ()> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    match trimmed.parse::<i64>() {
+        Ok(id) if id > 0 => Ok(Some(id)),
+        _ => Err(()),
+    }
+}
+
 fn optional(text: &str) -> Option<String> {
     let trimmed = text.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_owned())
@@ -293,8 +333,8 @@ mod tests {
     fn typed(barcode: &str) -> TypedRow {
         TypedRow {
             barcode: barcode.to_owned(),
-            home_branch: " MAIN ".to_owned(),
-            item_type: "BK".to_owned(),
+            home_branch: " 3 ".to_owned(),
+            item_type: "T1".to_owned(),
             ..TypedRow::default()
         }
     }
@@ -313,8 +353,8 @@ mod tests {
         };
         assert_eq!(row.id, Some(ItemId(7)));
         assert_eq!(row.fields.barcode.as_deref(), Some("0001"));
-        assert_eq!(row.fields.home_branch, "MAIN");
-        assert_eq!(row.fields.holding_branch, "MAIN");
+        assert_eq!(row.fields.home_branch, BranchId(3));
+        assert_eq!(row.fields.holding_branch, BranchId(3));
         assert_eq!(row.fields.location, None);
         assert_eq!(row.fields.price, Some(Money(1250)));
     }
@@ -326,6 +366,7 @@ mod tests {
             TypedRow {
                 home_branch: String::new(),
                 price: "doação".to_owned(),
+                location: "estante".to_owned(),
                 ..typed("0002")
             },
             typed("0001"),
@@ -342,6 +383,7 @@ mod tests {
                 at(0, ItemColumn::Barcode, RowProblem::BarcodeTaken),
                 at(1, ItemColumn::HomeBranch, RowProblem::Required),
                 at(1, ItemColumn::Price, RowProblem::Price),
+                at(1, ItemColumn::Location, RowProblem::NotInBranch),
                 at(2, ItemColumn::Barcode, RowProblem::BarcodeTaken),
             ]
         );

@@ -51,26 +51,24 @@ fn counts(output: CatalogOutput) -> [NamingCount; 4] {
     }
 }
 
-fn count(created: usize, renamed: usize, unchanged: usize) -> NamingCount {
+fn count(created: usize, renamed: usize, unchanged: usize, unused: usize) -> NamingCount {
     NamingCount {
         created,
         renamed,
         unchanged,
+        unused,
     }
 }
 
+/// The edge codes and item types with their names.
 fn names(store: &ElzevirStore) -> Vec<(String, String)> {
     let codes = store.codes().unwrap();
-    [
-        codes.branches,
-        codes.item_types,
-        codes.locations,
-        codes.collections,
-    ]
-    .into_iter()
-    .flatten()
-    .map(|entry| (entry.code, entry.name))
-    .collect()
+    let edge = codes.edge.into_iter().map(|entry| (entry.code, entry.name));
+    let types = codes
+        .item_types
+        .into_iter()
+        .map(|entry| (entry.code, entry.name));
+    edge.chain(types).collect()
 }
 
 #[test]
@@ -79,59 +77,53 @@ fn codes_are_created_renamed_or_kept() {
     let store = store(&dir);
     run(
         &store,
-        CatalogCommand::CreateBranch {
-            code: "MAIN".to_owned(),
-            name: "MAIN".to_owned(),
-        },
+        CatalogCommand::NameCodes(vec![named(CodeTable::Branch, "B1", "B1")]),
     )
     .unwrap();
     let first = run(
         &store,
         CatalogCommand::NameCodes(vec![
-            named(CodeTable::Branch, "MAIN", "Castro Alves"),
-            named(CodeTable::ItemType, "BK", "Livros"),
-            named(CodeTable::Location, " GEN ", " (Estantes gerais) "),
-            named(CodeTable::Collection, "GEN", "Geral"),
+            named(CodeTable::Branch, "B1", "Biblioteca Central"),
+            named(CodeTable::ItemType, "T1", "Livros"),
+            named(CodeTable::Location, " S1 ", " (Estantes gerais) "),
+            named(CodeTable::Collection, "S1", "Geral"),
         ]),
     )
     .unwrap();
+    // A shelving place or collection exists per branch once an Item uses it, so a code
+    // no branch uses yet names nothing.
     assert_eq!(
         counts(first),
         [
-            count(0, 1, 0),
-            count(1, 0, 0),
-            count(1, 0, 0),
-            count(1, 0, 0)
+            count(0, 1, 0, 0),
+            count(1, 0, 0, 0),
+            count(0, 0, 0, 1),
+            count(0, 0, 0, 1)
         ]
     );
-    // The same code in two vocabularies keeps two names.
     assert_eq!(
         names(&store),
         [
-            ("MAIN".to_owned(), "Castro Alves".to_owned()),
-            ("BK".to_owned(), "Livros".to_owned()),
-            ("GEN".to_owned(), "(Estantes gerais)".to_owned()),
-            ("GEN".to_owned(), "Geral".to_owned()),
+            ("B1".to_owned(), "Biblioteca Central".to_owned()),
+            ("T1".to_owned(), "Livros".to_owned()),
         ]
     );
     let again = run(
         &store,
-        CatalogCommand::NameCodes(vec![
-            named(CodeTable::Branch, "MAIN", "Castro Alves"),
-            named(CodeTable::Location, "GEN", "Estantes gerais"),
-        ]),
+        CatalogCommand::NameCodes(vec![named(CodeTable::Branch, "B1", "Biblioteca Central")]),
     )
     .unwrap();
     assert_eq!(
         counts(again),
         [
-            count(0, 0, 1),
-            count(0, 0, 0),
-            count(0, 1, 0),
-            count(0, 0, 0)
+            count(0, 0, 1, 0),
+            count(0, 0, 0, 0),
+            count(0, 0, 0, 0),
+            count(0, 0, 0, 0)
         ]
     );
-    assert_eq!(store.codes().unwrap().location("GEN"), "Estantes gerais");
+    let codes = store.codes().unwrap();
+    assert_eq!(codes.branch(codes.branches[0].id), "Biblioteca Central");
 }
 
 #[test]
@@ -141,8 +133,8 @@ fn one_bad_name_stores_nothing() {
     let refused = run(
         &store,
         CatalogCommand::NameCodes(vec![
-            named(CodeTable::Branch, "MAIN", "Castro Alves"),
-            named(CodeTable::ItemType, "BK", "  "),
+            named(CodeTable::Branch, "B1", "Biblioteca Central"),
+            named(CodeTable::ItemType, "T1", "  "),
         ]),
     )
     .unwrap_err();

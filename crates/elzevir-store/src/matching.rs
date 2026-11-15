@@ -13,7 +13,7 @@ use elzevir_domain::catalog::{InstanceId, ItemId, MaterialType, Vocabulary};
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::catalog::{
-    ItemCodes, add_item, add_work_and_instance, insert_identifiers, insert_notes, item_codes,
+    Places, add_item, add_work_and_instance, insert_identifiers, insert_notes, item_codes,
     link_contributions, link_languages, link_subjects, optional_term, record_changed, reindex,
     store_source_and_keys,
 };
@@ -159,7 +159,7 @@ fn replace_item(
     id: ItemId,
     item: &ItemData,
 ) -> Result<(), CommandFailed<WriteRefusal>> {
-    let ItemCodes {
+    let Places {
         home,
         holding,
         item_type,
@@ -169,8 +169,8 @@ fn replace_item(
     connection
         .execute(
             "UPDATE items SET barcode = ?2, inventory_number = ?3, home_branch = ?4,
-                 holding_branch = ?5, item_type = ?6, call_number = ?7, location = ?8,
-                 collection = ?9, price_cents = ?10, replacement_price_cents = ?11,
+                 holding_branch = ?5, item_type = ?6, call_number = ?7, sublocation_id = ?8,
+                 collection_id = ?9, price_cents = ?10, replacement_price_cents = ?11,
                  copy_number = ?12, not_for_loan = ?13, damaged = ?14, lost = ?15,
                  withdrawn = ?16, restricted = ?17, acquired_on = ?18,
                  row_version = row_version + 1
@@ -197,7 +197,6 @@ fn replace_item(
             ],
         )
         .map_err(StoreError::from)?;
-    crate::places::sync_item(connection, id.0)?;
     Ok(())
 }
 

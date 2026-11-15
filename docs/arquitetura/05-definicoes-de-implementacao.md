@@ -83,9 +83,9 @@ spec: docs/specs/circulacao/vencimento.md
 parity: required
 given:
   patron: { category: B }
-  item: { itemtype: BK, branch: MAIN }
+  item: { policy: emprestimo-padrao, branch: biblioteca-central }
 when:
-  - checkout: { branch: MAIN }
+  - checkout: { branch: biblioteca-central }
 then:
   - loan: { due: recorded }
 ```

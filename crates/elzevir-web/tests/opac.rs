@@ -18,7 +18,9 @@ use elzevir_app::catalog::{InstanceView, ItemStatus, ItemView};
 use elzevir_app::memory::{MemoryProbe, MemoryReport};
 use elzevir_app::search::SearchHit;
 use elzevir_app::staff::{StaffAccount, StaffDirectory, StaffDirectoryError};
-use elzevir_domain::catalog::{InstanceId, ItemId, MaterialType, NoteKind, WorkId};
+use elzevir_domain::catalog::{
+    BranchId, InstanceId, ItemId, MaterialType, NoteKind, SublocationId, WorkId,
+};
 use elzevir_web::{AppState, OpacPorts, StaffPorts, WebConfig, router};
 use elzevir_web_templates::I18n;
 use http_body_util::BodyExt;
@@ -78,10 +80,10 @@ fn item(id: i64, status: ItemStatus) -> ItemView {
         id: ItemId(id),
         barcode: Some(format!("B{id}")),
         inventory_number: None,
-        home_branch: "MAIN".to_owned(),
+        home_branch: BranchId(1),
         item_type: "BK".to_owned(),
         call_number: Some("310.62 P94".to_owned()),
-        location: Some("GEN".to_owned()),
+        location: Some(SublocationId(1)),
         status,
     }
 }
@@ -227,7 +229,7 @@ async fn a_record_shows_its_items_and_is_rendered_once_per_version() {
     // Names in place of codes (docs/specs/catalogo/exemplares.md, item 29).
     assert!(html.contains("<td>Main Library</td>"));
     assert!(html.contains("General stacks"));
-    assert!(!html.contains(">MAIN<"));
+    assert!(!html.contains(">1<"));
     assert!(html.contains("<dt>Contents</dt>\n    <dd>Parte 1 -- Parte 2.</dd>"));
     assert!(html.contains("<dt>Audience</dt><dd>Ensino médio.</dd>"));
     assert!(html.contains("<dt>Notes</dt>\n    <dd>Inclui índice.</dd>"));

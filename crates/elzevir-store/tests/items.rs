@@ -7,13 +7,14 @@
 )]
 
 use elzevir_app::catalog::{CatalogCommand, CatalogOutput, CatalogReader, CatalogRefusal};
+use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::export::{ExportOptions, export_marc21, item_codes};
 use elzevir_app::import::{ImportOptions, import_marc21};
 use elzevir_app::items::{
     ItemColumn, ItemFields, ItemGridSource, ItemRow, ItemsUpdate, RowProblem, RowRefusal,
 };
-use elzevir_domain::catalog::{InstanceId, ItemId, Money};
+use elzevir_domain::catalog::{BranchId, InstanceId, ItemId, Money};
 use elzevir_marc::{Limits, MarcReader};
 use elzevir_store::{CommandFailed, ElzevirHandler, ElzevirStore, StoreConfig};
 
@@ -28,13 +29,13 @@ fn imported(dir: &tempfile::TempDir) -> ElzevirStore {
     )
     .unwrap();
     let codes = item_codes(STAFF_EXPORT, Limits::default()).unwrap();
-    let branches = codes
-        .branches
-        .into_iter()
-        .map(|code| CatalogCommand::CreateBranch {
+    let branches = codes.branches.into_iter().map(|code| {
+        CatalogCommand::NameCodes(vec![NamedCode {
+            table: CodeTable::Branch,
             name: code.clone(),
             code,
-        });
+        }])
+    });
     let types = codes
         .item_types
         .into_iter()
@@ -200,7 +201,7 @@ fn a_batch_with_a_bad_cell_writes_nothing_and_names_every_cell() {
         })
         .unwrap();
     let mut wrong_branch = items[0].1.clone();
-    wrong_branch.home_branch = "NOWHERE".to_owned();
+    wrong_branch.home_branch = BranchId(9999);
     let mut duplicate = items[1].1.clone();
     duplicate.barcode = Some(other);
     let foreign = ItemId(count(
@@ -244,6 +245,8 @@ fn a_batch_with_a_bad_cell_writes_nothing_and_names_every_cell() {
         Err(CommandFailed::Rejected(WriteRefusal::Catalog(
             CatalogRefusal::ItemRows(vec![
                 at(0, ItemColumn::HomeBranch, RowProblem::UnknownBranch),
+                // Its shelving place belongs to the branch it had.
+                at(0, ItemColumn::Location, RowProblem::NotInBranch),
                 at(1, ItemColumn::Barcode, RowProblem::BarcodeTaken),
                 at(2, ItemColumn::Row, RowProblem::UnknownItem),
             ])
@@ -368,6 +371,7 @@ fn a_scanned_barcode_or_isbn_finds_its_instance() {
 
     // A new Item is found at once: the lookup does not wait for the index.
     let version = store.record_version(InstanceId(oldest)).unwrap().unwrap();
+    let codes = store.codes().unwrap();
     run(
         &store,
         CatalogCommand::SaveItems(Box::new(ItemsUpdate {
@@ -377,10 +381,15 @@ fn a_scanned_barcode_or_isbn_finds_its_instance() {
                 id: None,
                 fields: ItemFields {
                     barcode: Some("JUST-SCANNED".to_owned()),
-                    home_branch: "MAIN".to_owned(),
-                    holding_branch: "MAIN".to_owned(),
-                    item_type: "BK".to_owned(),
-                    ..ItemFields::default()
+                    inventory_number: None,
+                    home_branch: codes.branches[0].id,
+                    holding_branch: codes.branches[0].id,
+                    item_type: codes.item_types[0].code.clone(),
+                    call_number: None,
+                    location: None,
+                    collection: None,
+                    copy_number: None,
+                    price: None,
                 },
             }],
         })),

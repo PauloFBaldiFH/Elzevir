@@ -16,6 +16,7 @@
     reason = "benchmark binary: fails loudly and prints its measurements"
 )]
 
+use elzevir_app::codes::{CodeTable, NamedCode};
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -356,9 +357,12 @@ fn create_codes(store: &ElzevirStore, file: &[u8]) {
     }
     let commands = branches
         .into_iter()
-        .map(|code| CatalogCommand::CreateBranch {
-            name: code.clone(),
-            code,
+        .map(|code| {
+            CatalogCommand::NameCodes(vec![NamedCode {
+                table: CodeTable::Branch,
+                name: code.clone(),
+                code,
+            }])
         })
         .chain(
             item_types

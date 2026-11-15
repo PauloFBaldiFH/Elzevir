@@ -6,6 +6,7 @@
     reason = "integration test: helper functions fail the test on error"
 )]
 
+use elzevir_app::codes::{CodeTable, NamedCode};
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
 
@@ -46,10 +47,11 @@ fn imported(dir: &tempfile::TempDir) -> ElzevirStore {
     for code in codes.branches {
         run(
             &store,
-            CatalogCommand::CreateBranch {
+            CatalogCommand::NameCodes(vec![NamedCode {
+                table: CodeTable::Branch,
                 name: code.clone(),
                 code,
-            },
+            }]),
         );
     }
     for code in codes.item_types {
@@ -169,10 +171,11 @@ fn item(inventory: &str, status: ItemStatus) -> ItemData {
 fn setup(store: &ElzevirStore) {
     run(
         store,
-        CatalogCommand::CreateBranch {
+        CatalogCommand::NameCodes(vec![NamedCode {
+            table: CodeTable::Branch,
             code: "MAIN".to_owned(),
             name: "Main".to_owned(),
-        },
+        }]),
     );
     run(
         store,
@@ -327,7 +330,7 @@ fn migration_8_computes_the_keys_of_older_databases() {
     connection
         .execute_batch(
             "DROP INDEX works_in_listing; DROP INDEX hubs_in_listing;
-             ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; ALTER TABLE items DROP COLUMN sublocation_id; ALTER TABLE items DROP COLUMN collection_id; DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes; ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone; ALTER TABLE branches DROP COLUMN email; ALTER TABLE branches DROP COLUMN url; ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names;
+             ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = (SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id; ALTER TABLE items DROP COLUMN collection_id; DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes; ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone; ALTER TABLE branches DROP COLUMN email; ALTER TABLE branches DROP COLUMN url; ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names;
              PRAGMA user_version = 7;",
         )
         .unwrap();

@@ -8,6 +8,7 @@
     reason = "integration test: helper functions fail the test on error"
 )]
 
+use elzevir_app::codes::{CodeTable, NamedCode};
 use std::collections::BTreeSet;
 
 use elzevir_app::catalog::{
@@ -68,7 +69,7 @@ const COLUMNS: &[(EntityKind, &str, &str)] = &[
     (EntityKind::Item, "identifiedBy", "items.barcode"),
     (EntityKind::Item, "shelfMark", "items.call_number"),
     (EntityKind::Item, "heldBy", "items.holding_branch"),
-    (EntityKind::Item, "sublocation", "items.location"),
+    (EntityKind::Item, "sublocation", "items.sublocation_id"),
     (EntityKind::Item, "status", "items.not_for_loan"),
     (EntityKind::Item, "usageAndAccessPolicy", "items.restricted"),
     (
@@ -137,10 +138,11 @@ fn catalog() -> Catalog {
     let store = ElzevirStore::open(&path, &StoreConfig::default(), ElzevirHandler).unwrap();
     run(
         &store,
-        CatalogCommand::CreateBranch {
+        CatalogCommand::NameCodes(vec![NamedCode {
+            table: CodeTable::Branch,
             code: "MAIN".to_owned(),
             name: "Main".to_owned(),
-        },
+        }]),
     )
     .unwrap();
     run(

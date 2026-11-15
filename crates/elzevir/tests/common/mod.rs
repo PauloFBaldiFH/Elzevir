@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Setup shared by the end-to-end tests: the 200 records of the staff export, imported.
 
+use elzevir_app::codes::{CodeTable, NamedCode};
 use std::collections::BTreeSet;
 
 use elzevir_app::catalog::CatalogCommand;
@@ -38,9 +39,12 @@ pub(crate) fn imported() -> (tempfile::TempDir, ElzevirStore) {
     }
     let setup = branches
         .into_iter()
-        .map(|code| CatalogCommand::CreateBranch {
-            name: code.clone(),
-            code,
+        .map(|code| {
+            CatalogCommand::NameCodes(vec![NamedCode {
+                table: CodeTable::Branch,
+                name: code.clone(),
+                code,
+            }])
         })
         .chain(
             item_types

@@ -134,10 +134,10 @@ fn the_names_of_a_koha_are_stored_once() {
     assert!(first.status.success(), "{}", text(&first.stderr));
     assert_eq!(
         text(&first.stdout),
-        "branches: 1 read, 1 created, 0 renamed, 0 unchanged\n\
-         item types: 8 read, 8 created, 0 renamed, 0 unchanged\n\
-         locations: 5 read, 5 created, 0 renamed, 0 unchanged\n\
-         collections: 3 read, 3 created, 0 renamed, 0 unchanged\n"
+        "branches: 1 read, 1 created, 0 renamed, 0 unchanged, 0 not used yet\n\
+         item types: 8 read, 8 created, 0 renamed, 0 unchanged, 0 not used yet\n\
+         locations: 5 read, 0 created, 0 renamed, 0 unchanged, 5 not used yet\n\
+         collections: 3 read, 0 created, 0 renamed, 0 unchanged, 3 not used yet\n"
     );
 
     let again = koha_codes(data, &url, Some("right pass&word"));

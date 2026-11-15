@@ -133,7 +133,13 @@ pub fn document_of(instance: &InstanceView, items: &[ItemView]) -> SearchDocumen
             .map(|(kind, value)| normalized_identifier(*kind, value))
             .collect(),
         call_numbers: distinct(items.iter().filter_map(|item| item.call_number.as_deref())),
-        locations: distinct(items.iter().filter_map(|item| item.location.as_deref())),
+        // The shelving place's id: stage 2.10 turns it into a facet with its name.
+        locations: items
+            .iter()
+            .filter_map(|item| item.location.map(|id| id.0.to_string()))
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect(),
         barcodes: items
             .iter()
             .filter_map(|item| item.barcode.clone())

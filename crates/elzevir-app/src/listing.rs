@@ -7,7 +7,9 @@
 
 use std::num::NonZeroUsize;
 
-use elzevir_domain::catalog::{HubId, InstanceId, ItemId, MaterialType, WorkId, isbn13};
+use elzevir_domain::catalog::{
+    BranchId, HubId, InstanceId, ItemId, MaterialType, SublocationId, WorkId, isbn13,
+};
 use unicode_normalization::UnicodeNormalization;
 use unicode_normalization::char::is_combining_mark;
 
@@ -371,10 +373,10 @@ pub struct InstanceRow {
 pub struct ItemPill {
     /// The Item.
     pub id: ItemId,
-    /// Home branch code.
-    pub home_branch: String,
-    /// Shelving location code.
-    pub location: Option<String>,
+    /// Home branch.
+    pub home_branch: BranchId,
+    /// Shelving place.
+    pub location: Option<SublocationId>,
     /// Call number.
     pub call_number: Option<String>,
     /// Inventory number (tombo).
@@ -625,7 +627,7 @@ mod tests {
             id: ItemId(id),
             barcode: None,
             inventory_number: Some(inventory.to_owned()),
-            home_branch: "MAIN".to_owned(),
+            home_branch: BranchId(1),
             item_type: "BK".to_owned(),
             call_number: None,
             location: None,

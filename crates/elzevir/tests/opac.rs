@@ -104,6 +104,15 @@ fn search_then_record_then_a_new_item_shows_up() {
     assert!(record.contains("310.62 P94"));
     let copies = record.matches("<tr>").count();
 
+    // The edge code of a branch: AddItem carries Items as MARC does.
+    let branch = store
+        .codes()
+        .unwrap()
+        .edge
+        .into_iter()
+        .find(|entry| entry.table == elzevir_app::codes::CodeTable::Branch)
+        .unwrap()
+        .code;
     store
         .submit(WriteCommand::Catalog(CatalogCommand::AddItem(Box::new(
             NewItem {
@@ -111,8 +120,8 @@ fn search_then_record_then_a_new_item_shows_up() {
                 item: ItemData {
                     barcode: Some("OPAC-TEST-1".to_owned()),
                     inventory_number: None,
-                    home_branch: store.items(instance).unwrap()[0].home_branch.clone(),
-                    holding_branch: store.items(instance).unwrap()[0].home_branch.clone(),
+                    home_branch: branch.clone(),
+                    holding_branch: branch,
                     item_type: store.items(instance).unwrap()[0].item_type.clone(),
                     call_number: Some("310.62 P94 ex.9".to_owned()),
                     location: None,

@@ -24,7 +24,7 @@ use elzevir_app::staff::{
     Permission, StaffAccount, StaffDirectory, StaffDirectoryError, StaffId, hash_password,
 };
 use elzevir_domain::catalog::{
-    AgentKind, IdentifierKind, InstanceId, ItemId, MaterialType, NoteKind, WorkId,
+    AgentKind, BranchId, IdentifierKind, InstanceId, ItemId, MaterialType, NoteKind, WorkId,
 };
 use elzevir_web::{AppState, OpacPorts, StaffPorts, WebConfig, router};
 use elzevir_web_templates::I18n;
@@ -81,7 +81,7 @@ fn family(n: i64, title: &str, lost: bool) -> Family {
                     id: ItemId(n),
                     barcode: None,
                     inventory_number: Some(format!("T{n}")),
-                    home_branch: "MAIN".to_owned(),
+                    home_branch: BranchId(1),
                     item_type: "BK".to_owned(),
                     call_number: Some("869.3 A848d".to_owned()),
                     location: None,
@@ -131,8 +131,8 @@ fn stored(instance: i64) -> StoredRecord {
             items: vec![ItemData {
                 barcode: Some("000123".to_owned()),
                 inventory_number: Some("T-77".to_owned()),
-                home_branch: "MAIN".to_owned(),
-                holding_branch: "MAIN".to_owned(),
+                home_branch: "CENTRAL".to_owned(),
+                holding_branch: "CENTRAL".to_owned(),
                 item_type: "BK".to_owned(),
                 call_number: Some("869.3 A848d".to_owned()),
                 location: None,
@@ -850,7 +850,7 @@ async fn the_new_record_forms_start_blank_or_carry_over_the_previous_record() {
 async fn a_batch_of_items_is_refused_cell_by_cell_or_saved_whole() {
     let app = app();
     let uri = "/equipe/acervo/instancia/10/exemplares";
-    let batch = r#"{"version": 1, "rows": [{"id": 3, "barcode": "0001", "home_branch": "MAIN", "item_type": "BK"}, {"barcode": "0002", "home_branch": "MAIN", "item_type": "BK", "price": "12,50"}]}"#;
+    let batch = r#"{"version": 1, "rows": [{"id": 3, "barcode": "0001", "home_branch": "1", "item_type": "BK"}, {"barcode": "0002", "home_branch": "1", "item_type": "BK", "price": "12,50"}]}"#;
     let anonymous = send(&app, post_json(uri, None, None, batch)).await;
     assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
     let bia = signed_in_as(&app, "bia").await;
@@ -864,7 +864,7 @@ async fn a_batch_of_items_is_refused_cell_by_cell_or_saved_whole() {
     assert_eq!(saved.status(), StatusCode::OK);
     assert_eq!(body(saved).await, r#"{"version":2,"ids":[3,501]}"#);
 
-    let bad = r#"{"version": 1, "rows": [{"barcode": "0001", "home_branch": "MAIN", "item_type": "BK"}, {"barcode": "0001", "home_branch": "", "item_type": "BK", "price": "doação"}]}"#;
+    let bad = r#"{"version": 1, "rows": [{"barcode": "0001", "home_branch": "1", "item_type": "BK"}, {"barcode": "0001", "home_branch": "", "item_type": "BK", "price": "doação"}]}"#;
     let refused = send(&app, post_json(uri, Some(&ana), Some(&token), bad)).await;
     assert_eq!(refused.status(), StatusCode::UNPROCESSABLE_ENTITY);
     let refused = body(refused).await;
@@ -923,11 +923,9 @@ async fn a_cataloguer_gets_the_item_grid_with_its_rows_and_lists() {
     assert!(grid.contains(r#"<i data-col="home_branch" data-list="branches" data-inherited></i>"#));
     assert!(grid.contains(r#"<i data-col="barcode"></i>"#));
     // A coded cell shows the name and keeps the code (item 29).
-    assert!(
-        grid.contains(r#"<td role="gridcell" tabindex="-1" data-value="MAIN">Main Library</td>"#)
-    );
+    assert!(grid.contains(r#"<td role="gridcell" tabindex="-1" data-value="1">Main Library</td>"#));
     assert!(grid.contains(r#"<td role="gridcell" tabindex="-1" data-value="BK">Book</td>"#));
-    assert!(grid.contains(r#"<datalist id="grid-list-branches"><option value="Main Library" data-code="MAIN"></option><option value="PAL" data-code="PAL"></option></datalist>"#));
+    assert!(grid.contains(r#"<datalist id="grid-list-branches"><option value="Main Library" data-code="1"></option><option value="East Branch" data-code="2"></option></datalist>"#));
 }
 
 fn post_form(uri: &str, session: Option<&str>, form: &str) -> Request<Body> {
@@ -956,14 +954,14 @@ async fn a_cataloguer_lists_and_renames_the_codes() {
     let token = page_token(&app, &ana).await;
     let page = body(send(&app, get(uri, Some(&ana), None)).await).await;
     assert!(page.contains(r#"<section id="codes-branches">"#));
-    assert!(page.contains(r#"<input type="hidden" name="code" value="MAIN">"#));
+    assert!(page.contains(r#"<input type="hidden" name="code" value="CENTRAL">"#));
     assert!(page.contains(r#"name="name" value="Main Library""#));
     assert!(page.contains(r#"name="name" value="General stacks""#));
     assert!(page.contains("No codes yet."));
     assert!(!page.contains("Saved."));
 
     let rename =
-        |csrf: &str, name: &str| format!("csrf={csrf}&table=locations&code=GEN&name={name}");
+        |csrf: &str, name: &str| format!("csrf={csrf}&table=locations&code=STACKS&name={name}");
     let unsigned = send(&app, post_form(uri, None, &rename(&token, "Estantes"))).await;
     assert_eq!(unsigned.status(), StatusCode::UNAUTHORIZED);
     let wrong_token = send(&app, post_form(uri, Some(&ana), &rename("x", "Estantes"))).await;

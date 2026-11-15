@@ -67,6 +67,8 @@ pub struct NamingCount {
     pub renamed: usize,
     /// Codes that already had this name.
     pub unchanged: usize,
+    /// Shelving location or collection codes no branch uses yet.
+    pub unused: usize,
 }
 
 /// The codes trimmed as the command stores them, or the position of the first one it

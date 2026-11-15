@@ -12,10 +12,11 @@ use elzevir_app::matching::{identifier_key, match_keys};
 use elzevir_app::search::REINDEX_INSTANCE;
 use elzevir_domain::catalog::{
     AgentKind, BranchId, HubId, IdentifierKind, InstanceId, ItemId, ItemTypeId, MaterialType,
-    NoteKind, SourceFormat, SubjectKind, Vocabulary, WorkId, WorkRelationKind,
+    NoteKind, SourceFormat, SubjectKind, SublocationId, Vocabulary, WorkId, WorkRelationKind,
 };
 use rusqlite::{Connection, ErrorCode, OptionalExtension, params};
 
+use crate::places::{self, Coded};
 use crate::statements::store_description;
 use crate::{CommandFailed, ElzevirStore, StoreError, WriteTx};
 use elzevir_domain::statement::{EntityKind, EntityRef};
@@ -26,16 +27,11 @@ type Applied = Result<WriteOutput, CommandFailed<WriteRefusal>>;
 pub(crate) fn apply(tx: &WriteTx<'_>, command: &CatalogCommand) -> Applied {
     let connection = tx.connection();
     let output = match command {
-        CatalogCommand::CreateBranch { code, name } => {
-            insert_coded(
-                connection,
-                "INSERT INTO branches (code, name) VALUES (?1, ?2)",
-                code,
-                name,
-            )?;
-            let branch = BranchId(connection.last_insert_rowid());
-            crate::places::sync_branches(connection)?;
-            CatalogOutput::Branch(branch)
+        CatalogCommand::CreateBranch { name } => {
+            connection
+                .execute("INSERT INTO branches (name) VALUES (?1)", params![name])
+                .map_err(StoreError::from)?;
+            CatalogOutput::Branch(BranchId(connection.last_insert_rowid()))
         }
         CatalogCommand::CreateItemType { code, description } => {
             insert_coded(
@@ -466,8 +462,8 @@ pub(crate) fn insert_notes(
     Ok(())
 }
 
-/// The numeric identities an Item refers to, resolved from its codes.
-pub(crate) struct ItemCodes {
+/// The registry rows an Item points at.
+pub(crate) struct Places {
     pub(crate) home: i64,
     pub(crate) holding: i64,
     pub(crate) item_type: i64,
@@ -475,13 +471,15 @@ pub(crate) struct ItemCodes {
     pub(crate) collection: Option<i64>,
 }
 
-/// Resolves the codes of `item`; an unknown branch or item type refuses it.
+/// Resolves the Koha codes of an imported Item through the edge table (item 23b): an
+/// unknown branch or item type refuses it; a shelving location or collection code not
+/// seen in its home branch creates the row there.
 pub(crate) fn item_codes(
     connection: &Connection,
     item: &ItemData,
-) -> Result<ItemCodes, CommandFailed<WriteRefusal>> {
+) -> Result<Places, CommandFailed<WriteRefusal>> {
     let branch = |code: &str| {
-        lookup(connection, "SELECT id FROM branches WHERE code = ?1", code)?
+        places::by_code(connection, Coded::Branch, code)?
             .ok_or_else(|| refused(CatalogRefusal::UnknownBranch(code.to_owned())))
     };
     let home = branch(&item.home_branch)?;
@@ -492,13 +490,17 @@ pub(crate) fn item_codes(
         &item.item_type,
     )?
     .ok_or_else(|| refused(CatalogRefusal::UnknownItemType(item.item_type.clone())))?;
-    let location = optional_term(connection, Vocabulary::Location, item.location.as_deref())?;
-    let collection = optional_term(
-        connection,
-        Vocabulary::Collection,
-        item.collection.as_deref(),
-    )?;
-    Ok(ItemCodes {
+    let location = item
+        .location
+        .as_deref()
+        .map(|code| places::place(connection, &places::SUBLOCATIONS, home, code, None))
+        .transpose()?;
+    let collection = item
+        .collection
+        .as_deref()
+        .map(|code| places::place(connection, &places::COLLECTIONS, home, code, None))
+        .transpose()?;
+    Ok(Places {
         home,
         holding,
         item_type,
@@ -507,21 +509,26 @@ pub(crate) fn item_codes(
     })
 }
 
+/// Stores an imported Item.
 pub(crate) fn add_item(
     connection: &Connection,
     instance: InstanceId,
     item: &ItemData,
 ) -> Result<ItemId, CommandFailed<WriteRefusal>> {
-    let ItemCodes {
-        home,
-        holding,
-        item_type,
-        location,
-        collection,
-    } = item_codes(connection, item)?;
+    let places = item_codes(connection, item)?;
+    insert_item(connection, instance, item, &places)
+}
+
+/// Stores an Item whose registry rows are known: `item` gives everything but its places.
+pub(crate) fn insert_item(
+    connection: &Connection,
+    instance: InstanceId,
+    item: &ItemData,
+    places: &Places,
+) -> Result<ItemId, CommandFailed<WriteRefusal>> {
     let inserted = connection.execute(
         "INSERT INTO items (instance_id, barcode, inventory_number, home_branch, holding_branch,
-                            item_type, call_number, location, collection, price_cents,
+                            item_type, call_number, sublocation_id, collection_id, price_cents,
                             replacement_price_cents, copy_number, not_for_loan, damaged, lost,
                             withdrawn, restricted, acquired_on)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
@@ -529,12 +536,12 @@ pub(crate) fn add_item(
             instance.0,
             item.barcode,
             item.inventory_number,
-            home,
-            holding,
-            item_type,
+            places.home,
+            places.holding,
+            places.item_type,
             item.call_number,
-            location,
-            collection,
+            places.location,
+            places.collection,
             item.price.map(|m| m.0),
             item.replacement_price.map(|m| m.0),
             item.copy_number,
@@ -547,11 +554,7 @@ pub(crate) fn add_item(
         ],
     );
     match inserted {
-        Ok(_) => {
-            let id = connection.last_insert_rowid();
-            crate::places::sync_item(connection, id)?;
-            Ok(ItemId(id))
-        }
+        Ok(_) => Ok(ItemId(connection.last_insert_rowid())),
         Err(e) if is_constraint(&e) => Err(refused(CatalogRefusal::BarcodeTaken(
             item.barcode.clone().unwrap_or_default(),
         ))),
@@ -614,13 +617,11 @@ impl CatalogReader for ElzevirStore {
         self.readers()
             .read(|c| {
                 let mut statement = c.prepare(
-                    "SELECT items.id, barcode, inventory_number, branches.code, item_types.code,
-                            call_number, terms.code, not_for_loan, damaged, lost, withdrawn,
+                    "SELECT items.id, barcode, inventory_number, home_branch, item_types.code,
+                            call_number, sublocation_id, not_for_loan, damaged, lost, withdrawn,
                             restricted
                      FROM items
-                     JOIN branches ON branches.id = items.home_branch
                      JOIN item_types ON item_types.id = items.item_type
-                     LEFT JOIN terms ON terms.id = items.location
                      WHERE instance_id = ?1 ORDER BY items.id",
                 )?;
                 statement
@@ -629,10 +630,10 @@ impl CatalogReader for ElzevirStore {
                             id: ItemId(row.get(0)?),
                             barcode: row.get(1)?,
                             inventory_number: row.get(2)?,
-                            home_branch: row.get(3)?,
+                            home_branch: BranchId(row.get(3)?),
                             item_type: row.get(4)?,
                             call_number: row.get(5)?,
-                            location: row.get(6)?,
+                            location: row.get::<_, Option<i64>>(6)?.map(SublocationId),
                             status: status_at(row, 7)?,
                         })
                     })?

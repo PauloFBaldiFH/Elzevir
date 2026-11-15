@@ -6,6 +6,7 @@
     reason = "integration test: helper functions fail the test on error"
 )]
 
+use elzevir_app::codes::{CodeTable, NamedCode};
 use std::collections::BTreeSet;
 
 use elzevir_app::catalog::{
@@ -30,13 +31,13 @@ fn imported(dir: &tempfile::TempDir) -> ElzevirStore {
     )
     .unwrap();
     let codes = item_codes(STAFF_EXPORT, Limits::default()).unwrap();
-    let branches = codes
-        .branches
-        .into_iter()
-        .map(|code| CatalogCommand::CreateBranch {
+    let branches = codes.branches.into_iter().map(|code| {
+        CatalogCommand::NameCodes(vec![NamedCode {
+            table: CodeTable::Branch,
             name: code.clone(),
             code,
-        });
+        }])
+    });
     let types = codes
         .item_types
         .into_iter()

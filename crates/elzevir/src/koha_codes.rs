@@ -78,11 +78,12 @@ pub(crate) fn koha_codes(args: &KohaCodesArgs) -> Result<(), String> {
 
 fn print_count(table: CodeTable, read: usize, count: NamingCount) {
     println!(
-        "{}: {read} read, {} created, {} renamed, {} unchanged",
+        "{}: {read} read, {} created, {} renamed, {} unchanged, {} not used yet",
         table.name(),
         count.created,
         count.renamed,
-        count.unchanged
+        count.unchanged,
+        count.unused
     );
 }
 

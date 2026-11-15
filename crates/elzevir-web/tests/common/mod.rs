@@ -8,10 +8,12 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use elzevir_app::catalog::{
     CatalogReadError, CatalogReader, CodeLists, CodeName, InstanceView, ItemStatus, ItemView,
+    Named, Place,
 };
+use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::listing::{CatalogListing, Family, FamilyCursor, FamilyHead};
 use elzevir_app::search::{IndexBatch, SearchError, SearchHit, SearchIndex, SearchResults};
-use elzevir_domain::catalog::{InstanceId, WorkId};
+use elzevir_domain::catalog::{BranchId, InstanceId, SublocationId, WorkId};
 
 /// One record: its version, the Instance and its Items.
 pub(crate) type Record = (i64, InstanceView, Vec<ItemView>);
@@ -71,15 +73,36 @@ impl CatalogReader for Catalog {
     }
 
     fn codes(&self) -> Result<CodeLists, CatalogReadError> {
-        let entry = |code: &str, name: &str| CodeName {
+        let edge = |table, code: &str, name: &str| NamedCode {
+            table,
             code: code.to_owned(),
             name: name.to_owned(),
         };
         Ok(CodeLists {
-            branches: vec![entry("MAIN", "Main Library"), entry("PAL", "PAL")],
-            item_types: vec![entry("BK", "Book")],
-            locations: vec![entry("GEN", "General stacks")],
+            branches: vec![
+                Named {
+                    id: BranchId(1),
+                    name: "Main Library".to_owned(),
+                },
+                Named {
+                    id: BranchId(2),
+                    name: "East Branch".to_owned(),
+                },
+            ],
+            item_types: vec![CodeName {
+                code: "BK".to_owned(),
+                name: "Book".to_owned(),
+            }],
+            locations: vec![Place {
+                id: SublocationId(1),
+                branch: BranchId(1),
+                name: "General stacks".to_owned(),
+            }],
             collections: Vec::new(),
+            edge: vec![
+                edge(CodeTable::Branch, "CENTRAL", "Main Library"),
+                edge(CodeTable::Location, "STACKS", "General stacks"),
+            ],
         })
     }
 }
@@ -294,12 +317,14 @@ impl elzevir_app::items::ItemGridSource for ItemGrid {
             fields: elzevir_app::items::ItemFields {
                 barcode: Some("000123".to_owned()),
                 inventory_number: Some("T-77".to_owned()),
-                home_branch: "MAIN".to_owned(),
-                holding_branch: "MAIN".to_owned(),
+                home_branch: BranchId(1),
+                holding_branch: BranchId(1),
                 item_type: "BK".to_owned(),
                 call_number: Some("869.3 A848d".to_owned()),
+                location: None,
+                collection: None,
+                copy_number: None,
                 price: Some(elzevir_domain::catalog::Money(4590)),
-                ..elzevir_app::items::ItemFields::default()
             },
             status: ItemStatus::default(),
         }])
