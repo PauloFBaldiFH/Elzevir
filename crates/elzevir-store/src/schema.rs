@@ -13,7 +13,7 @@ use elzevir_app::description::{instance_of_material, work_of_material};
 use elzevir_app::listing::sort_key;
 use elzevir_app::marc_mapping::{
     source_audience, source_description, source_notes, source_provision, source_publication,
-    source_titles, source_typed_notes,
+    source_relations, source_titles, source_typed_notes,
 };
 use elzevir_app::matching::{identifier_key, koha_biblionumber_key};
 use elzevir_domain::catalog::IdentifierKind;
@@ -360,6 +360,9 @@ const MIGRATIONS: &[&str] = &[
     // every place and publisher of the publication is kept (item 29, part 5c); the
     // migration only fills them from the stored source records.
     "SELECT 1;",
+    // 21: series and related works become relations of the Work (item 29, part 5d); the
+    // migration only fills them from the stored source records.
+    "SELECT 1;",
 ];
 
 /// The migration that creates `match_keys`.
@@ -385,6 +388,8 @@ const TITLES_VERSION: i64 = 18;
 const TYPED_NOTES_VERSION: i64 = 19;
 /// Migration that fills the other provision activities and every place and publisher.
 const PROVISION_VERSION: i64 = 20;
+/// Migration that fills the series and related works.
+const RELATIONS_VERSION: i64 = 21;
 /// Migration that drops `extra`.
 const DROP_EXTRA_VERSION: i64 = 13;
 /// Migration that adds the classes, and fills them with content, media, carrier and issuance.
@@ -480,6 +485,9 @@ fn apply_migrations(connection: &mut Connection, current: i64) -> Result<(), Sto
             if version == PROVISION_VERSION {
                 backfill_from_source(&tx, source_provision)?;
                 backfill_publication(&tx)?;
+            }
+            if version == RELATIONS_VERSION {
+                backfill_from_source(&tx, source_relations)?;
             }
             if version == NO_CODES_VERSION || version == POLICIES_VERSION {
                 check_foreign_keys(&tx, version)?;
@@ -1022,6 +1030,54 @@ mod catalog_tests {
                 .iter()
                 .any(elzevir_domain::statement::is_other_provision)
         );
+    }
+
+    #[test]
+    fn migration_21_reads_series_and_related_works_from_the_source_record() {
+        use elzevir_marc::{Field, Record, Subfield, Tag};
+        let data = |tag: [u8; 3], indicators: [u8; 2], value: &str| Field::Data {
+            tag: Tag::new(tag),
+            indicators,
+            subfields: vec![Subfield {
+                code: b'a',
+                value: value.as_bytes().to_vec(),
+            }],
+        };
+        let mut source = Vec::new();
+        let record = Record {
+            leader: *b"00000nam a2200000 a 4500",
+            fields: vec![
+                data(*b"245", *b"10", "Dom Casmurro"),
+                data(*b"740", *b"02", "O Alienista"),
+                data(*b"830", *b" 0", "Grandes vultos"),
+            ],
+        };
+        record.write_iso2709(&mut source).unwrap();
+        let (_dir, mut connection) = catalog();
+        connection
+            .execute(
+                "UPDATE source_records SET record = ?1 WHERE instance_id = 1",
+                params![source],
+            )
+            .unwrap();
+        connection
+            .pragma_update(None, "user_version", RELATIONS_VERSION - 1)
+            .unwrap();
+        migrate(&mut connection).unwrap();
+        let work = read_description(
+            &connection,
+            EntityRef {
+                entity: EntityKind::Work,
+                id: 1,
+            },
+        )
+        .unwrap();
+        let relations = work
+            .statements
+            .iter()
+            .filter(|statement| statement.property == "relation")
+            .count();
+        assert_eq!(relations, 2);
     }
 
     fn catalog() -> (tempfile::TempDir, Connection) {

@@ -19,13 +19,14 @@ mod described;
 mod fields;
 mod notes;
 mod provision;
+mod relations;
 mod titles;
 
 use fields::{data_field, first_index, insert_in_tag_order, set_subfield};
 
 /// Writes a model record as MARC21, starting from `original` when there is one.
 ///
-/// Not written in this version: Hub and relations between Works (spec §6).
+/// Hubs as records of their own are not written in this version (spec §6).
 #[must_use]
 pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record {
     let before = original.and_then(|record| marc_to_bibframe(record, None).ok());
@@ -48,7 +49,7 @@ pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record 
             .as_ref()
             .map(|b| (&b.work_description, &b.instance.description)),
     );
-    for group in [&titles::TITLES, &notes::NOTES] {
+    for group in [&titles::TITLES, &notes::NOTES, &relations::RELATIONS] {
         described::write(
             &mut out,
             group,

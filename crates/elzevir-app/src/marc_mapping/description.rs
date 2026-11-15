@@ -11,6 +11,7 @@ use elzevir_marc::Field;
 use super::Marc;
 use super::notes;
 use super::provision;
+use super::relations;
 use super::titles::{self, Owner};
 use crate::description::concept;
 
@@ -28,6 +29,7 @@ pub(super) fn work(marc: &Marc<'_>) -> Description {
     }
     statements.extend(titles::of_owner(marc, Owner::Work));
     statements.extend(notes::of_owner(marc, Owner::Work));
+    statements.extend(relations::of_work(marc));
     Description {
         classes: classes.into_iter().map(str::to_owned).collect(),
         statements,

@@ -10,6 +10,7 @@ mod instance;
 pub(crate) mod items;
 mod notes;
 mod provision;
+mod relations;
 mod text;
 mod titles;
 mod work;
@@ -105,6 +106,15 @@ pub fn source_provision(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>
     let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
     let record = Record::from_ref(&parsed);
     Some((Vec::new(), provision::of_instance(&Marc(&record))))
+}
+
+/// The series and related works of a stored source record, for records stored before the
+/// model had them (bibframe-completo.md, item 29, part 5d). The Instance gets none.
+#[must_use]
+pub fn source_relations(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>)> {
+    let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
+    let record = Record::from_ref(&parsed);
+    Some((relations::of_work(&Marc(&record)), Vec::new()))
 }
 
 /// The place and the publisher of a stored source record as they were mapped before part
