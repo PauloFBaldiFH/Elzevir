@@ -250,7 +250,7 @@ mod tests {
             scheme("relators").unwrap().concept("aut").unwrap().label,
             "author"
         );
-        assert!(scheme("contentTypes").unwrap().concept("BK").is_none());
+        assert!(scheme("contentTypes").unwrap().concept("book").is_none());
     }
 
     #[test]

@@ -33,7 +33,9 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CatalogCommand) -> Applied {
                 code,
                 name,
             )?;
-            CatalogOutput::Branch(BranchId(connection.last_insert_rowid()))
+            let branch = BranchId(connection.last_insert_rowid());
+            crate::places::sync_branches(connection)?;
+            CatalogOutput::Branch(branch)
         }
         CatalogCommand::CreateItemType { code, description } => {
             insert_coded(
@@ -545,7 +547,11 @@ pub(crate) fn add_item(
         ],
     );
     match inserted {
-        Ok(_) => Ok(ItemId(connection.last_insert_rowid())),
+        Ok(_) => {
+            let id = connection.last_insert_rowid();
+            crate::places::sync_item(connection, id)?;
+            Ok(ItemId(id))
+        }
         Err(e) if is_constraint(&e) => Err(refused(CatalogRefusal::BarcodeTaken(
             item.barcode.clone().unwrap_or_default(),
         ))),

@@ -27,6 +27,7 @@ mod import;
 mod items;
 mod listing;
 mod matching;
+mod places;
 mod readers;
 mod schema;
 mod statements;

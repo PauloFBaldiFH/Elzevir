@@ -272,6 +272,35 @@ const MIGRATIONS: &[&str] = &[
      ALTER TABLE works DROP COLUMN extra;
      ALTER TABLE instances DROP COLUMN extra;
      ALTER TABLE items DROP COLUMN extra;",
+    // 14: registries of sublocations and collections per branch, contact data of the
+    // branches, and the edge table of Koha codes (bibframe-completo.md, items 23a, 23b).
+    "ALTER TABLE branches ADD COLUMN address TEXT;
+     ALTER TABLE branches ADD COLUMN phone TEXT;
+     ALTER TABLE branches ADD COLUMN email TEXT;
+     ALTER TABLE branches ADD COLUMN url TEXT;
+     CREATE TABLE sublocations (
+         id          INTEGER PRIMARY KEY,
+         branch_id   INTEGER NOT NULL REFERENCES branches (id),
+         name        TEXT NOT NULL,
+         row_version INTEGER NOT NULL DEFAULT 1,
+         UNIQUE (branch_id, name)
+     ) STRICT;
+     CREATE TABLE collections (
+         id          INTEGER PRIMARY KEY,
+         branch_id   INTEGER NOT NULL REFERENCES branches (id),
+         name        TEXT NOT NULL,
+         row_version INTEGER NOT NULL DEFAULT 1,
+         UNIQUE (branch_id, name)
+     ) STRICT;
+     CREATE TABLE koha_codes (
+         kind      INTEGER NOT NULL CHECK (kind BETWEEN 1 AND 4),
+         local_id  INTEGER NOT NULL,
+         code      TEXT NOT NULL,
+         PRIMARY KEY (kind, local_id)
+     ) STRICT, WITHOUT ROWID;
+     CREATE INDEX koha_codes_by_code ON koha_codes (kind, code);
+     ALTER TABLE items ADD COLUMN sublocation_id INTEGER REFERENCES sublocations (id);
+     ALTER TABLE items ADD COLUMN collection_id INTEGER REFERENCES collections (id);",
 ];
 
 /// The migration that creates `match_keys`.
@@ -285,6 +314,8 @@ const AUDIENCE_VERSION: i64 = 7;
 
 /// The migration that adds the listing `sort_key` of Works and Hubs.
 const SORT_KEY_VERSION: i64 = 8;
+/// Migration that adds the registries of places and the edge table.
+const PLACES_VERSION: i64 = 14;
 /// Migration that drops `extra`.
 const DROP_EXTRA_VERSION: i64 = 13;
 /// Migration that adds the classes, and fills them with content, media, carrier and issuance.
@@ -354,6 +385,9 @@ fn migrate(connection: &mut Connection) -> Result<(), StoreError> {
             }
             if version == CLASSES_VERSION {
                 backfill_descriptions(&tx)?;
+            }
+            if version == PLACES_VERSION {
+                crate::places::backfill(&tx)?;
             }
             tx.pragma_update(None, "user_version", version)?;
         }
@@ -601,7 +635,7 @@ mod catalog_tests {
         connection
             .execute_batch(
                 "DROP TABLE instance_notes; ALTER TABLE works DROP COLUMN audience;
-                 DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; PRAGMA user_version = 5;",
+                 DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; ALTER TABLE items DROP COLUMN sublocation_id; ALTER TABLE items DROP COLUMN collection_id; DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes; ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone; ALTER TABLE branches DROP COLUMN email; ALTER TABLE branches DROP COLUMN url; ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; PRAGMA user_version = 5;",
             )
             .unwrap();
         migrate(&mut connection).unwrap();
@@ -635,8 +669,8 @@ mod catalog_tests {
         let connection = open_writer(&dir.path().join("elzevir.db")).unwrap();
         connection
             .execute_batch(
-                "INSERT INTO branches (id, code, name) VALUES (1, 'MAIN', 'Main');
-                 INSERT INTO item_types (id, code, description) VALUES (1, 'BK', 'Books');
+                "INSERT INTO branches (id, code, name) VALUES (1, 'U1', 'Unit');
+                 INSERT INTO item_types (id, code, description) VALUES (1, 'T1', 'Type');
                  INSERT INTO works (id, title) VALUES (1, 'Dom Casmurro');
                  INSERT INTO instances (id, work_id, title) VALUES (1, 1, 'Dom Casmurro');
                  INSERT INTO instance_identifiers (instance_id, position, kind, value)
@@ -815,7 +849,12 @@ mod catalog_tests {
         assert_eq!(columns(&connection), 0);
         connection
             .execute_batch(
-                "ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}';
+                "ALTER TABLE items DROP COLUMN sublocation_id;
+                 ALTER TABLE items DROP COLUMN collection_id;
+                 DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes;
+                 ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone;
+                 ALTER TABLE branches DROP COLUMN email; ALTER TABLE branches DROP COLUMN url;
+                 ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}';
                  ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}';
                  ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}';
                  ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}';

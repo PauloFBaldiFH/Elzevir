@@ -19,6 +19,11 @@ O Elzevir é um sistema de bibliotecas em Rust que reconstrói o **comportamento
   - **Muro Acervo ↔ Leitores no servidor**: ficha do leitor em rota própria, com permissão de circulação e `audit_log`; nenhum dado de leitor no HTML do acervo. Empréstimo inline usa as regras de circulação do servidor. CPF mascarado, sem perfil de leitura.
   - `Esc` fecha o que é passageiro e depois volta direto à visão geral; edição pendente nunca é descartada em silêncio.
 - **BIBFRAME completo, sem cortes (diretriz obrigatória de Paulo, 2026-11-14):** leia [`docs/specs/catalogo/bibframe-completo.md`](docs/specs/catalogo/bibframe-completo.md) e o [ADR 0003](docs/adr/0003-bibframe-completo.md) antes de mexer em modelo, formulário, exemplares ou exportação. Toda classe e propriedade da ontologia da LC no modelo, no formulário (sem "expandir", sem perfil por categoria) e no RDF; tipo de material só das listas oficiais, em `<select>` com ícone SVG; sem tipo de item nem sigla inventada; códigos do Koha só na borda MARC.
+- **Fronteira arquitetural (obrigatória, Paulo, 2026-11-15):**
+  - O núcleo do Elzevir é 100% BIBFRAME 2.0 puro e agnóstico de instituição.
+  - Nunca inclua códigos locais do Koha de teste no core, em migrações, enums, seeds ou specs de domínio. Vale para tipos de item, para localizações e coleções e para qualquer outra sigla institucional.
+  - Unidades, localizações, coleções e políticas de circulação são cadastros genéricos, criados livremente pelo usuário.
+  - Dados da instância local existem exclusivamente como fixture de teste no adaptador de importação/exportação MARC (borda).
 - `reference/koha/` é **referência de leitura** (GPLv3, submódulo fixado no Koha 26.05.05), não código do Elzevir, e fica fora do workspace Cargo. Baixe com `git submodule update --init --depth 1 reference/koha`.
 
 ## Como trabalhar numa tarefa
