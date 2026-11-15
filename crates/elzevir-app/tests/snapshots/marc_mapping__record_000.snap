@@ -26,8 +26,10 @@ contributions:
   - kind: organization
     heading: PREFEITURA MUNICIPAL DE FOZ DO IGUACU
     role: ~
+    role_term: ~
     primary: true
     name_parts: []
+    identifiers: []
 subjects:
   - kind: topic
     heading: ESTATÍSTICA FOZ DO IGUAÇU

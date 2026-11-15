@@ -42,10 +42,12 @@ contributions:
   - kind: person
     heading: "Gray, Alice, 1939-"
     role: ~
+    role_term: ~
     primary: false
     name_parts:
       - kind: date
         start: 13
+    identifiers: []
 subjects:
   - kind: topic
     heading: Vida cristã

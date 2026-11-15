@@ -114,6 +114,8 @@ fn stored(instance: i64) -> StoredRecord {
                 role: Some("author".to_owned()),
                 primary: true,
                 name_parts: Vec::new(),
+                role_term: None,
+                identifiers: Vec::new(),
             }],
             subjects: Vec::new(),
             instance: NewInstance {

@@ -4,12 +4,13 @@
 use std::num::NonZeroUsize;
 
 use elzevir_app::catalog::{
-    CatalogReadError, ItemData, NewContribution, NewIdentifier, NewInstance, NewNote, NewRecord,
-    NewSubject, NewWorkRelation,
+    AgentIdentifier, CatalogReadError, ItemData, NewContribution, NewIdentifier, NewInstance,
+    NewNote, NewRecord, NewSubject, NewWorkRelation,
 };
 use elzevir_app::export::{RecordSource, StoredRecord};
 use elzevir_domain::catalog::{
-    AgentKind, HubId, IdentifierKind, InstanceId, MaterialType, Money, NoteKind, SubjectKind,
+    AgentIdentifierKind, AgentKind, HubId, IdentifierKind, InstanceId, MaterialType, Money,
+    NoteKind, SubjectKind,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
@@ -187,9 +188,13 @@ fn languages(c: &Connection, work: i64) -> Result<Vec<String>, ReadFailure> {
         .collect::<Result<_, _>>()?)
 }
 
-fn contributions(c: &Connection, work: i64) -> Result<Vec<NewContribution>, ReadFailure> {
+pub(crate) fn contributions(
+    c: &Connection,
+    work: i64,
+) -> Result<Vec<NewContribution>, ReadFailure> {
     let mut statement = c.prepare_cached(
-        "SELECT agents.kind, agents.heading, terms.code, is_primary, agents.name_parts
+        "SELECT agents.kind, agents.heading, terms.code, is_primary, agents.name_parts,
+                role_term, position
          FROM contributions
          JOIN agents ON agents.id = contributions.agent_id
          LEFT JOIN terms ON terms.id = contributions.role
@@ -198,22 +203,51 @@ fn contributions(c: &Connection, work: i64) -> Result<Vec<NewContribution>, Read
     let rows = statement
         .query_map(params![work], |row| {
             Ok((
-                row.get::<_, u8>(0)?,
-                row.get(1)?,
-                row.get(2)?,
-                row.get(3)?,
-                row.get::<_, String>(4)?,
+                (row.get::<_, u8>(0)?, row.get(1)?, row.get(2)?, row.get(3)?),
+                (row.get::<_, String>(4)?, row.get(5)?, row.get::<_, i64>(6)?),
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     rows.into_iter()
-        .map(|(kind, heading, role, primary, name_parts)| {
-            Ok(NewContribution {
-                kind: required(kind, "agent kind", AgentKind::from_code)?,
-                heading,
-                role,
-                primary,
-                name_parts: name_parts_of_column(&name_parts)?,
+        .map(
+            |((kind, heading, role, primary), (name_parts, role_term, position))| {
+                Ok(NewContribution {
+                    kind: required(kind, "agent kind", AgentKind::from_code)?,
+                    heading,
+                    role,
+                    role_term,
+                    primary,
+                    name_parts: name_parts_of_column(&name_parts)?,
+                    identifiers: contribution_identifiers(c, work, position)?,
+                })
+            },
+        )
+        .collect()
+}
+
+fn contribution_identifiers(
+    c: &Connection,
+    work: i64,
+    contribution: i64,
+) -> Result<Vec<AgentIdentifier>, ReadFailure> {
+    let mut statement = c.prepare_cached(
+        "SELECT kind, value FROM contribution_identifiers
+         WHERE work_id = ?1 AND contribution = ?2 ORDER BY position",
+    )?;
+    let rows = statement
+        .query_map(params![work, contribution], |row| {
+            Ok((row.get::<_, u8>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    rows.into_iter()
+        .map(|(kind, value)| {
+            Ok(AgentIdentifier {
+                kind: required(
+                    kind,
+                    "agent identifier kind",
+                    AgentIdentifierKind::from_code,
+                )?,
+                value,
             })
         })
         .collect()

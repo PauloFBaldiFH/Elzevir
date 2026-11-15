@@ -6,8 +6,8 @@
 //! only the fields the model maps, so fields nobody edited go out as they came in.
 
 use elzevir_app::catalog::{
-    CatalogOutput, CatalogRefusal, InstanceChange, InstanceUpdate, NewSubject, WorkChange,
-    WorkUpdate,
+    CatalogOutput, CatalogRefusal, InstanceChange, InstanceUpdate, NewContribution, NewSubject,
+    WorkChange, WorkUpdate,
 };
 use elzevir_app::commands::WriteRefusal;
 use elzevir_app::listing::sort_key;
@@ -187,12 +187,13 @@ fn apply_work_change(
             link_languages(connection, id, languages)?;
         }
         WorkChange::Contributions(contributions) => {
+            let contributions = keep_role_terms(connection, id, contributions)?;
             clear(
                 connection,
                 "DELETE FROM contributions WHERE work_id = ?1",
                 id,
             )?;
-            link_contributions(connection, id, contributions)?;
+            link_contributions(connection, id, &contributions)?;
         }
         WorkChange::Subjects(subjects) => {
             let subjects = keep_subdivisions(connection, id, subjects).map_err(StoreError::from)?;
@@ -205,6 +206,44 @@ fn apply_work_change(
         }
     }
     Ok(())
+}
+
+/// `contributions` with the relator terms and identifiers of the Work's current
+/// contributions: the form edits only the agent and the role, so a contribution that keeps
+/// them keeps the term the record wrote beside the code and the links it gave the agent.
+fn keep_role_terms(
+    connection: &Connection,
+    work: i64,
+    contributions: &[NewContribution],
+) -> Result<Vec<NewContribution>, StoreError> {
+    // A stored code this build cannot read is a corrupt or newer database: report it as
+    // the store error the writer answers with.
+    let mut current =
+        crate::export::contributions(connection, work).map_err(|failure| match failure {
+            crate::catalog::ReadFailure::Store(error) => error,
+            other => StoreError::Sqlite(other.to_string()),
+        })?;
+    Ok(contributions
+        .iter()
+        .map(|contribution| {
+            let mut contribution = contribution.clone();
+            let found = current.iter().position(|present| {
+                present.kind == contribution.kind
+                    && present.heading == contribution.heading
+                    && present.role == contribution.role
+            });
+            if let Some(found) = found {
+                let present = current.remove(found);
+                if contribution.role_term.is_none() {
+                    contribution.role_term = present.role_term;
+                }
+                if contribution.identifiers.is_empty() {
+                    contribution.identifiers = present.identifiers;
+                }
+            }
+            contribution
+        })
+        .collect())
 }
 
 /// `subjects` with the subdivisions of the Work's current subjects: the form edits a heading

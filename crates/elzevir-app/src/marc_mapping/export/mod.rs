@@ -5,8 +5,11 @@
 //! what the original maps to are rewritten, and a rewritten list reuses every original field
 //! whose mapping did not change. An unedited record therefore comes back byte for byte.
 
-use elzevir_domain::catalog::{AgentKind, IdentifierKind, MaterialType, NoteKind, SubjectKind};
+use elzevir_domain::catalog::{
+    AgentIdentifierKind, AgentKind, IdentifierKind, MaterialType, NoteKind, SubjectKind,
+};
 use elzevir_marc::{Field, Record, Subfield, Tag};
+use std::borrow::Cow;
 
 use super::instance::{IDENTIFIER_TAGS, NOTE_TAGS, identifier_of, note_of};
 use super::items::{defaults, item_of};
@@ -482,11 +485,36 @@ fn contribution_field(contribution: &NewContribution) -> Field {
         AgentKind::Meeting => (*b"111", *b"711", b'2'),
     };
     let tag = if contribution.primary { main } else { added };
-    let mut subfields = name_subfields(contribution);
-    if let Some(role) = contribution.role.as_deref() {
-        let code = role.len() == 3 && role.bytes().all(|b| b.is_ascii_lowercase());
-        subfields.push((if code { b'4' } else { b'e' }, role));
+    // `$e` the term, the identifiers, then `$4` the code, as the records write them.
+    let role = contribution.role.as_deref();
+    let term = contribution.role_term.as_deref();
+    let code = role.filter(|role| {
+        role.len() == 3
+            && role.bytes().all(|b| b.is_ascii_lowercase())
+            && term.is_none_or(|term| term.to_lowercase() != *role)
+    });
+    let term = term.or(role.filter(|_| code.is_none()));
+    let mut name: Vec<(u8, Cow<'_, str>)> = name_subfields(contribution)
+        .into_iter()
+        .map(|(code, text)| (code, Cow::Borrowed(text)))
+        .collect();
+    // ISBD puts a comma between the name and the relator term.
+    if term.is_some()
+        && let Some((_, last)) = name.last_mut()
+        && !last.ends_with([',', '-'])
+    {
+        last.to_mut().push(',');
     }
+    let mut subfields: Vec<(u8, &str)> = name.iter().map(|(code, text)| (*code, &**text)).collect();
+    subfields.extend(term.map(|term| (b'e', term)));
+    subfields.extend(contribution.identifiers.iter().map(|identifier| {
+        let code = match identifier.kind {
+            AgentIdentifierKind::AuthorityRecord => b'0',
+            AgentIdentifierKind::RealWorldObject => b'1',
+        };
+        (code, identifier.value.as_str())
+    }));
+    subfields.extend(code.map(|code| (b'4', code)));
     data_field(tag, [first_indicator, b' '], &subfields)
 }
 

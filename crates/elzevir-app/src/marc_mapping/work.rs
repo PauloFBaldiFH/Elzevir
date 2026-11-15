@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The Work: category, titles, classification, languages, contributors, subjects (spec §1.1, §1.2).
 
-use elzevir_domain::catalog::{AgentKind, MaterialType, NamePartKind, SubjectKind};
+use elzevir_domain::catalog::{
+    AgentIdentifierKind, AgentKind, MaterialType, NamePartKind, SubjectKind,
+};
 
 use super::{DataField, MappingError, Marc, text};
-use crate::catalog::{NamePart, NewContribution, NewSubject};
+use crate::catalog::{AgentIdentifier, NamePart, NewContribution, NewSubject};
 
 /// What the record says about the Work.
 pub(super) struct Work {
@@ -130,15 +132,33 @@ fn contribution(tag: [u8; 3], field: DataField<'_>, primary: bool) -> Option<New
     // Join first and clean once, so inner punctuation (`Ginzberg, Eli, 1911-2002`) stays.
     let heading = text::clean(field.raw_joined(codes)?.as_bytes())?;
     let name_parts = name_parts(kind, field, codes, &heading);
+    let term = field.text(b'e');
     let role = field
         .raw(b'4')
-        .or_else(|| field.text(b'e').map(|role| role.to_lowercase()));
+        .or_else(|| term.as_ref().map(|role| role.to_lowercase()));
+    // The term is kept as written: without it a short term such as `org.` would come back
+    // as the code `$4 org`.
+    let role_term = term;
+    let identifiers = field
+        .subfields
+        .iter()
+        .filter_map(|subfield| {
+            let kind = match subfield.code {
+                b'0' => AgentIdentifierKind::AuthorityRecord,
+                b'1' => AgentIdentifierKind::RealWorldObject,
+                _ => return None,
+            };
+            text::trimmed(&subfield.value).map(|value| AgentIdentifier { kind, value })
+        })
+        .collect();
     Some(NewContribution {
         kind,
         heading,
         role,
+        role_term,
         primary,
         name_parts,
+        identifiers,
     })
 }
 

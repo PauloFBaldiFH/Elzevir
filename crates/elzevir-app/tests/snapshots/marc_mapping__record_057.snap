@@ -26,10 +26,12 @@ contributions:
   - kind: person
     heading: "Duarte Júnior, João-Francisco, 1953-"
     role: ~
+    role_term: ~
     primary: true
     name_parts:
       - kind: date
         start: 31
+    identifiers: []
 subjects:
   - kind: topic
     heading: Educação -- Filosofia

@@ -7,8 +7,9 @@
 //! thesauri) are created on first use with the code as their label.
 
 use elzevir_domain::catalog::{
-    AgentKind, BranchId, CollectionId, HubId, IdentifierKind, InstanceId, ItemId, MaterialType,
-    Money, NamePartKind, NoteKind, PolicyId, SubjectKind, SublocationId, WorkId, WorkRelationKind,
+    AgentIdentifierKind, AgentKind, BranchId, CollectionId, HubId, IdentifierKind, InstanceId,
+    ItemId, MaterialType, Money, NamePartKind, NoteKind, PolicyId, SubjectKind, SublocationId,
+    WorkId, WorkRelationKind,
 };
 use serde::{Deserialize, Serialize};
 
@@ -304,12 +305,28 @@ pub struct NewContribution {
     pub heading: String,
     /// Relator code or term, such as `aut`.
     pub role: Option<String>,
+    /// The relator term as the record wrote it, such as `autor`, when it says more than
+    /// `role`: beside a code, or with capitals.
+    #[serde(default)]
+    pub role_term: Option<String>,
     /// Whether this is the main entry (MARC21 1XX).
     pub primary: bool,
     /// Where each part of the heading after the first starts, in order. Empty when the
     /// heading is one part or was typed as text.
     #[serde(default)]
     pub name_parts: Vec<NamePart>,
+    /// The agent's identifiers in other datasets (VIAF, Wikidata, LC names), in order.
+    #[serde(default)]
+    pub identifiers: Vec<AgentIdentifier>,
+}
+
+/// An identifier of an agent in another dataset, as an IRI or a control number.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentIdentifier {
+    /// What it points at.
+    pub kind: AgentIdentifierKind,
+    /// The IRI or number.
+    pub value: String,
 }
 
 /// A part of an agent's heading after the first: its kind and the character where it
