@@ -30,8 +30,12 @@ row_id! {
     AgentId,
     /// A Subject heading.
     SubjectId,
-    /// A library branch (Koha `branches`).
+    /// A library branch: a `bf:Organization` that holds Items (`bf:heldBy`).
     BranchId,
+    /// A shelving place inside a branch (`bf:sublocation`).
+    SublocationId,
+    /// A collection of a branch.
+    CollectionId,
     /// An item type (Koha `itemtypes`).
     ItemTypeId,
     /// A code in one of the [`Vocabulary`] lists.
@@ -152,10 +156,8 @@ stable_enum! {
         Language = 1,
         /// Relator terms and codes for contributions (MARC21 $e and $4).
         Relator = 2,
-        /// Shelving locations (Koha authorised values `LOC`).
-        Location = 3,
-        /// Collections (Koha authorised values `CCODE`).
-        Collection = 4,
+        // 3 and 4 held shelving locations and collections until migration 15 moved them
+        // to the registries of each branch; the numbers are not reused.
         /// Classification schemes (Koha `class_sources`, such as `ddc`).
         ClassificationScheme = 5,
         /// Subject thesauri (MARC21 6XX second indicator and $2).

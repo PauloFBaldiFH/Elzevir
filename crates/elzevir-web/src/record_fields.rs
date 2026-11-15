@@ -8,6 +8,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
 use elzevir_app::catalog::{CodeLists, ItemData, NewRecord};
+use elzevir_app::codes::CodeTable;
 use elzevir_app::export::stored_record;
 use elzevir_app::staff::Permission;
 use elzevir_domain::catalog::{
@@ -288,19 +289,24 @@ fn item_fields(item: &ItemData, codes: &CodeLists) -> ItemFields {
     ItemFields {
         barcode: item.barcode.clone(),
         inventory_number: item.inventory_number.clone(),
-        home_branch: codes.branch(&item.home_branch).to_owned(),
-        holding_branch: (item.holding_branch != item.home_branch)
-            .then(|| codes.branch(&item.holding_branch).to_owned()),
+        home_branch: codes
+            .edge_name(CodeTable::Branch, &item.home_branch)
+            .to_owned(),
+        holding_branch: (item.holding_branch != item.home_branch).then(|| {
+            codes
+                .edge_name(CodeTable::Branch, &item.holding_branch)
+                .to_owned()
+        }),
         item_type: codes.item_type(&item.item_type).to_owned(),
         call_number: item.call_number.clone(),
         location: item
             .location
             .as_deref()
-            .map(|code| codes.location(code).to_owned()),
+            .map(|code| codes.edge_name(CodeTable::Location, code).to_owned()),
         collection: item
             .collection
             .as_deref()
-            .map(|code| codes.collection(code).to_owned()),
+            .map(|code| codes.edge_name(CodeTable::Collection, code).to_owned()),
         copy_number: item.copy_number.clone(),
         acquired_on: item.acquired_on.clone(),
         signal_class,

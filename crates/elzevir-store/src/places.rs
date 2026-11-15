@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Branches, sublocations and collections as registries with generated ids, and the edge
-//! table that keeps their Koha codes (docs/specs/catalogo/bibframe-completo.md, items 23a
-//! and 23b).
-//!
-//! Part 4a-1: the registries are filled and kept in step with the codes the Items still
-//! carry; part 4a-2 makes the Items point at them alone.
+//! The edge table of Koha codes (docs/specs/catalogo/bibframe-completo.md, items 23a
+//! and 23b): the only place where a branch, a shelving place or a collection has a code.
+//! Only the MARC import and export and the naming from Koha read it.
 
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -15,21 +12,22 @@ use crate::StoreError;
 pub(crate) enum Coded {
     /// A branch (`952 $a`, `$b`).
     Branch = 1,
-    /// A sublocation of a branch (`952 $c`).
+    /// A shelving place of a branch (`952 $c`).
     Sublocation = 2,
     /// A collection of a branch (`952 $8`).
     Collection = 3,
 }
 
 /// The constant SQL of one per-branch list.
-struct List {
+pub(crate) struct List {
     coded: Coded,
     find: &'static str,
     named: &'static str,
     insert: &'static str,
 }
 
-const SUBLOCATIONS: List = List {
+/// Shelving places.
+pub(crate) const SUBLOCATIONS: List = List {
     coded: Coded::Sublocation,
     find: "SELECT p.id FROM sublocations p
            JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id
@@ -38,7 +36,8 @@ const SUBLOCATIONS: List = List {
     insert: "INSERT INTO sublocations (branch_id, name) VALUES (?1, ?2)",
 };
 
-const COLLECTIONS: List = List {
+/// Collections.
+pub(crate) const COLLECTIONS: List = List {
     coded: Coded::Collection,
     find: "SELECT p.id FROM collections p
            JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id
@@ -47,78 +46,130 @@ const COLLECTIONS: List = List {
     insert: "INSERT INTO collections (branch_id, name) VALUES (?1, ?2)",
 };
 
-/// Gives every branch its row in the edge table. Called after a branch is created.
-pub(crate) fn sync_branches(connection: &Connection) -> Result<(), StoreError> {
+/// The row that `code` stands for, if any.
+pub(crate) fn by_code(
+    connection: &Connection,
+    coded: Coded,
+    code: &str,
+) -> Result<Option<i64>, StoreError> {
+    Ok(connection
+        .query_row(
+            "SELECT local_id FROM koha_codes WHERE kind = ?1 AND code = ?2 ORDER BY local_id",
+            params![coded as i64, code],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
+/// Gives `id` the code `code`.
+pub(crate) fn set_code(
+    connection: &Connection,
+    coded: Coded,
+    id: i64,
+    code: &str,
+) -> Result<(), StoreError> {
     connection.execute(
-        "INSERT OR IGNORE INTO koha_codes (kind, local_id, code)
-         SELECT ?1, id, code FROM branches",
-        params![Coded::Branch as i64],
+        "INSERT OR REPLACE INTO koha_codes (kind, local_id, code) VALUES (?1, ?2, ?3)",
+        params![coded as i64, id, code],
     )?;
     Ok(())
 }
 
-/// Points `item` at the sublocation and the collection of its home branch that stand for
-/// the codes it carries, creating them on first use. Called after every Item write.
-pub(crate) fn sync_item(connection: &Connection, item: i64) -> Result<(), StoreError> {
-    let (branch, location, collection): (i64, Option<i64>, Option<i64>) = connection.query_row(
-        "SELECT home_branch, location, collection FROM items WHERE id = ?1",
-        params![item],
-        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-    )?;
-    let sublocation = location
-        .map(|term| place(connection, &SUBLOCATIONS, branch, term))
-        .transpose()?;
-    let collection = collection
-        .map(|term| place(connection, &COLLECTIONS, branch, term))
-        .transpose()?;
-    connection.execute(
-        "UPDATE items SET sublocation_id = ?2, collection_id = ?3 WHERE id = ?1",
-        params![item, sublocation, collection],
-    )?;
-    Ok(())
-}
-
-/// Fills the registries for everything already stored (migration 14).
-pub(crate) fn backfill(connection: &Connection) -> Result<(), StoreError> {
-    sync_branches(connection)?;
-    let mut items = connection.prepare("SELECT id FROM items ORDER BY id")?;
-    let ids = items
-        .query_map([], |row| row.get(0))?
-        .collect::<Result<Vec<i64>, _>>()?;
-    for id in ids {
-        sync_item(connection, id)?;
-    }
-    Ok(())
-}
-
-/// The row of `list` in `branch` for the code of `term`, created with the term's name.
-fn place(connection: &Connection, list: &List, branch: i64, term: i64) -> Result<i64, StoreError> {
-    let (code, label): (String, String) = connection.query_row(
-        "SELECT code, label FROM terms WHERE id = ?1",
-        params![term],
-        |row| Ok((row.get(0)?, row.get(1)?)),
-    )?;
+/// The row of `list` in `branch` that `code` stands for, created on first use with the
+/// code as its provisional name (item 23b) or with `name` when one is known.
+pub(crate) fn place(
+    connection: &Connection,
+    list: &List,
+    branch: i64,
+    code: &str,
+    name: Option<&str>,
+) -> Result<i64, StoreError> {
     let found: Option<i64> = connection
         .query_row(list.find, params![branch, code], |row| row.get(0))
         .optional()?;
     if let Some(id) = found {
         return Ok(id);
     }
+    let name = name.unwrap_or(code);
     // Two codes may share a name in Koha; names are unique within a branch here.
     let taken = connection
-        .query_row(list.named, params![branch, label], |_| Ok(()))
+        .query_row(list.named, params![branch, name], |_| Ok(()))
         .optional()?
         .is_some();
     let name = if taken {
-        format!("{label} ({code})")
+        format!("{name} ({code})")
     } else {
-        label
+        name.to_owned()
     };
     connection.execute(list.insert, params![branch, name])?;
     let id = connection.last_insert_rowid();
-    connection.execute(
-        "INSERT INTO koha_codes (kind, local_id, code) VALUES (?1, ?2, ?3)",
-        params![list.coded as i64, id, code],
-    )?;
+    set_code(connection, list.coded, id, code)?;
     Ok(id)
+}
+
+/// An Item as migration 14 found it: id, home branch, location code and label,
+/// collection code and label.
+type OldItem = (
+    i64,
+    i64,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
+/// Fills the registries for what migration 14 found: one row per branch that uses each
+/// shelving location or collection code, named as the code table named it.
+pub(crate) fn backfill(connection: &Connection) -> Result<(), StoreError> {
+    connection.execute(
+        "INSERT OR IGNORE INTO koha_codes (kind, local_id, code) SELECT 1, id, code FROM branches",
+        [],
+    )?;
+    let mut items = connection.prepare(
+        "SELECT i.id, i.home_branch, l.code, l.label, c.code, c.label FROM items i
+         LEFT JOIN terms l ON l.id = i.location
+         LEFT JOIN terms c ON c.id = i.collection
+         ORDER BY i.id",
+    )?;
+    let rows = items
+        .query_map([], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+            ))
+        })?
+        .collect::<Result<Vec<OldItem>, _>>()?;
+    for (item, branch, location, location_name, collection, collection_name) in rows {
+        let sublocation = location
+            .map(|code| {
+                place(
+                    connection,
+                    &SUBLOCATIONS,
+                    branch,
+                    &code,
+                    location_name.as_deref(),
+                )
+            })
+            .transpose()?;
+        let collection = collection
+            .map(|code| {
+                place(
+                    connection,
+                    &COLLECTIONS,
+                    branch,
+                    &code,
+                    collection_name.as_deref(),
+                )
+            })
+            .transpose()?;
+        connection.execute(
+            "UPDATE items SET sublocation_id = ?2, collection_id = ?3 WHERE id = ?1",
+            params![item, sublocation, collection],
+        )?;
+    }
+    Ok(())
 }

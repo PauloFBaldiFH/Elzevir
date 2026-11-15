@@ -43,13 +43,13 @@ fn imported(dir: &tempfile::TempDir) -> ElzevirStore {
     )
     .unwrap();
     let codes = item_codes(STAFF_EXPORT, Limits::default()).unwrap();
-    let branches = codes
-        .branches
-        .into_iter()
-        .map(|code| CatalogCommand::CreateBranch {
+    let branches = codes.branches.into_iter().map(|code| {
+        CatalogCommand::NameCodes(vec![NamedCode {
+            table: CodeTable::Branch,
             name: code.clone(),
             code,
-        });
+        }])
+    });
     let types = codes
         .item_types
         .into_iter()
@@ -71,15 +71,13 @@ fn count(store: &ElzevirStore, sql: &str) -> i64 {
         .unwrap()
 }
 
-/// Items whose registry rows do not stand for the codes they carry.
+/// Items whose places have no edge code or belong to another branch.
 const OUT_OF_STEP: &str = "SELECT count(*) FROM items i
-     LEFT JOIN terms l ON l.id = i.location
-     LEFT JOIN terms c ON c.id = i.collection
      LEFT JOIN sublocations s ON s.id = i.sublocation_id
      LEFT JOIN koha_codes sk ON sk.kind = 2 AND sk.local_id = s.id
      LEFT JOIN collections o ON o.id = i.collection_id
      LEFT JOIN koha_codes ok ON ok.kind = 3 AND ok.local_id = o.id
-     WHERE l.code IS NOT sk.code OR c.code IS NOT ok.code
+     WHERE (s.id IS NOT NULL AND sk.code IS NULL) OR (o.id IS NOT NULL AND ok.code IS NULL)
         OR (s.id IS NOT NULL AND s.branch_id <> i.home_branch)
         OR (o.id IS NOT NULL AND o.branch_id <> i.home_branch)";
 
@@ -111,7 +109,7 @@ fn imported_items_point_at_the_places_of_their_branch() {
     assert!(
         count(
             &store,
-            "SELECT count(*) FROM items WHERE location IS NOT NULL"
+            "SELECT count(*) FROM items WHERE sublocation_id IS NOT NULL"
         ) > 0
     );
     assert_eq!(count(&store, OUT_OF_STEP), 0);
@@ -127,10 +125,11 @@ fn the_same_code_in_two_branches_is_two_places_and_names_stay_unique() {
     let store = imported(&dir);
     run(
         &store,
-        CatalogCommand::CreateBranch {
+        CatalogCommand::NameCodes(vec![NamedCode {
+            table: CodeTable::Branch,
             code: "FILIAL".to_owned(),
             name: "Filial".to_owned(),
-        },
+        }]),
     )
     .unwrap();
     run(
@@ -141,6 +140,13 @@ fn the_same_code_in_two_branches_is_two_places_and_names_stay_unique() {
         },
     )
     .unwrap();
+    for (barcode, location) in [("f-1", "INF"), ("f-2", "KIDS"), ("f-3", "INF")] {
+        run(
+            &store,
+            CatalogCommand::AddItem(Box::new(item("FILIAL", barcode, location))),
+        )
+        .unwrap();
+    }
     // Two codes with one name: the second place of a branch gets its code in the name.
     let named = |code: &str| NamedCode {
         table: CodeTable::Location,
@@ -152,18 +158,12 @@ fn the_same_code_in_two_branches_is_two_places_and_names_stay_unique() {
         CatalogCommand::NameCodes(vec![named("INF"), named("KIDS")]),
     )
     .unwrap();
-    for (barcode, location) in [("f-1", "INF"), ("f-2", "KIDS"), ("f-3", "INF")] {
-        run(
-            &store,
-            CatalogCommand::AddItem(Box::new(item("FILIAL", barcode, location))),
-        )
-        .unwrap();
-    }
     let stored: Vec<String> = store
         .readers()
         .read(|c| {
             c.prepare(
-                "SELECT s.name FROM sublocations s JOIN branches b ON b.id = s.branch_id
+                "SELECT s.name FROM sublocations s
+                 JOIN koha_codes b ON b.kind = 1 AND b.local_id = s.branch_id
                  WHERE b.code = 'FILIAL' ORDER BY s.id",
             )?
             .query_map([], |row| row.get(0))?
@@ -187,7 +187,7 @@ fn migration_14_fills_the_places_of_older_databases() {
     let connection = rusqlite::Connection::open(dir.path().join("elzevir.db")).unwrap();
     connection
         .execute_batch(
-            "ALTER TABLE items DROP COLUMN sublocation_id;
+            "ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = (SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id;
              ALTER TABLE items DROP COLUMN collection_id;
              DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes;
              ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone;

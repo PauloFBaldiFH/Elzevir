@@ -10,6 +10,7 @@
     reason = "benchmark binary: fails loudly and prints its measurements"
 )]
 
+use elzevir_app::codes::{CodeTable, NamedCode};
 use std::alloc::System;
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
@@ -121,9 +122,12 @@ fn throughput(file: &[u8], records: usize, parallelism: Parallelism) {
     let (branches, item_types) = codes(file);
     let commands = branches
         .into_iter()
-        .map(|code| CatalogCommand::CreateBranch {
-            name: code.clone(),
-            code,
+        .map(|code| {
+            CatalogCommand::NameCodes(vec![NamedCode {
+                table: CodeTable::Branch,
+                name: code.clone(),
+                code,
+            }])
         })
         .chain(
             item_types

@@ -11,6 +11,7 @@ use elzevir_app::catalog::{
     CatalogCommand, CatalogOutput, CatalogReader, CatalogRefusal, ItemData, ItemStatus, ItemView,
     NewContribution, NewIdentifier, NewInstance, NewItem, NewRecord, NewSubject, NewWorkRelation,
 };
+use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_domain::catalog::{
     AgentKind, HubId, IdentifierKind, InstanceId, MaterialType, Money, SubjectKind, WorkId,
@@ -50,10 +51,11 @@ fn refusal(refusal: CatalogRefusal) -> Result<CatalogOutput, CommandFailed<Write
 fn setup(store: &ElzevirStore) {
     run(
         store,
-        CatalogCommand::CreateBranch {
+        CatalogCommand::NameCodes(vec![NamedCode {
+            table: CodeTable::Branch,
             code: "MAIN".to_owned(),
             name: "Castro Alves".to_owned(),
-        },
+        }]),
     )
     .unwrap();
     run(
@@ -240,14 +242,19 @@ fn items_are_added_and_listed_in_creation_order() {
     };
 
     let items = store.items(instance).unwrap();
+    // The edge codes became rows of the registries; the Item points at them.
+    let codes = store.codes().unwrap();
+    let home = codes.branches[0].id;
+    let stacks = codes.locations[0].id;
+    assert_eq!(codes.locations[0].branch, home);
     let expected = |id, barcode: &str| ItemView {
         id,
         barcode: Some(barcode.to_owned()),
         inventory_number: Some(format!("2026/{barcode}")),
-        home_branch: "MAIN".to_owned(),
+        home_branch: home,
         item_type: "BK".to_owned(),
         call_number: Some("869.3 A848d".to_owned()),
-        location: Some("GEN".to_owned()),
+        location: Some(stacks),
         status: ItemStatus::default(),
     };
     assert_eq!(items, [expected(first, "0001"), expected(second, "0002")]);
@@ -331,20 +338,10 @@ fn item_refusals_name_the_problem() {
 }
 
 #[test]
-fn branch_and_item_type_codes_are_unique() {
+fn item_type_codes_are_unique() {
     let dir = tempfile::tempdir().unwrap();
     let store = open(&dir);
     setup(&store);
-    assert_eq!(
-        run(
-            &store,
-            CatalogCommand::CreateBranch {
-                code: "MAIN".to_owned(),
-                name: "Other".to_owned(),
-            }
-        ),
-        refusal(CatalogRefusal::CodeTaken("MAIN".to_owned()))
-    );
     assert_eq!(
         run(
             &store,

@@ -8,7 +8,7 @@ use axum::Form;
 use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
-use elzevir_app::catalog::{CatalogOutput, CatalogRefusal, CodeLists, CodeName};
+use elzevir_app::catalog::{CatalogOutput, CatalogRefusal, CodeLists};
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::editing::{Edit, EditFailed};
 use elzevir_app::staff::Permission;
@@ -138,7 +138,7 @@ async fn page(
             .map(|(table, name, heading_key)| CodeTablePart {
                 name,
                 heading_key,
-                rows: rows(table_of(&codes, *table)),
+                rows: rows(&codes, *table),
             })
             .collect(),
         saved,
@@ -148,18 +148,23 @@ async fn page(
     response
 }
 
-fn table_of(codes: &CodeLists, table: CodeTable) -> &[CodeName] {
-    match table {
-        CodeTable::Branch => &codes.branches,
-        CodeTable::ItemType => &codes.item_types,
-        CodeTable::Location => &codes.locations,
-        CodeTable::Collection => &codes.collections,
+/// The codes of one table with their names: item types from their table, the rest from
+/// the edge.
+fn rows(codes: &CodeLists, table: CodeTable) -> Vec<CodeRow> {
+    if table == CodeTable::ItemType {
+        return codes
+            .item_types
+            .iter()
+            .map(|entry| CodeRow {
+                code: entry.code.clone(),
+                name: entry.name.clone(),
+            })
+            .collect();
     }
-}
-
-fn rows(table: &[CodeName]) -> Vec<CodeRow> {
-    table
+    codes
+        .edge
         .iter()
+        .filter(|entry| entry.table == table)
         .map(|entry| CodeRow {
             code: entry.code.clone(),
             name: entry.name.clone(),

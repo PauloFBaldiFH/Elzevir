@@ -240,11 +240,8 @@ fn notes(notes: &[(NoteKind, String)], keep: impl Fn(NoteKind) -> bool) -> Vec<&
 /// One Item, with names in place of codes (exemplares.md, item 29).
 fn item_line(item: &ItemView, codes: &CodeLists) -> ItemLine {
     ItemLine {
-        branch: codes.branch(&item.home_branch).to_owned(),
-        location: item
-            .location
-            .as_deref()
-            .map(|code| codes.location(code).to_owned()),
+        branch: codes.branch(item.home_branch).to_owned(),
+        location: item.location.map(|id| codes.location(id).to_owned()),
         call_number: item.call_number.clone(),
         available: item.status.is_available(),
         status: status_key(item.status),

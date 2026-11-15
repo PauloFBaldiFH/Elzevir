@@ -272,18 +272,31 @@ fn identifiers(c: &Connection, instance: i64) -> Result<Vec<NewIdentifier>, Read
         .collect()
 }
 
+/// The Items of an Instance as the MARC edge writes them: each registry row by its Koha
+/// code (item 23b), or by its name when it has none.
 fn items(c: &Connection, instance: i64) -> Result<Vec<ItemData>, ReadFailure> {
     let mut statement = c.prepare_cached(
-        "SELECT barcode, inventory_number, home.code, holding.code, item_types.code,
-                call_number, location.code, collection.code, price_cents,
+        "SELECT barcode, inventory_number,
+                COALESCE(home_code.code, home.name), COALESCE(holding_code.code, holding.name),
+                item_types.code, call_number,
+                COALESCE(location_code.code, location.name),
+                COALESCE(collection_code.code, collection.name), price_cents,
                 replacement_price_cents, copy_number, acquired_on,
                 not_for_loan, damaged, lost, withdrawn, restricted
          FROM items
          JOIN branches AS home ON home.id = items.home_branch
          JOIN branches AS holding ON holding.id = items.holding_branch
          JOIN item_types ON item_types.id = items.item_type
-         LEFT JOIN terms AS location ON location.id = items.location
-         LEFT JOIN terms AS collection ON collection.id = items.collection
+         LEFT JOIN sublocations AS location ON location.id = items.sublocation_id
+         LEFT JOIN collections AS collection ON collection.id = items.collection_id
+         LEFT JOIN koha_codes AS home_code
+              ON home_code.kind = 1 AND home_code.local_id = home.id
+         LEFT JOIN koha_codes AS holding_code
+              ON holding_code.kind = 1 AND holding_code.local_id = holding.id
+         LEFT JOIN koha_codes AS location_code
+              ON location_code.kind = 2 AND location_code.local_id = location.id
+         LEFT JOIN koha_codes AS collection_code
+              ON collection_code.kind = 3 AND collection_code.local_id = collection.id
          WHERE instance_id = ?1 ORDER BY items.id",
     )?;
     Ok(statement

@@ -11,7 +11,9 @@ use elzevir_app::catalog::{CatalogReadError, ItemView};
 use elzevir_app::listing::{
     CatalogListing, Family, FamilyCursor, FamilyHead, FamilyInstance, FamilyWork, ScanCode, Scanned,
 };
-use elzevir_domain::catalog::{HubId, IdentifierKind, InstanceId, ItemId, MatchRule, WorkId};
+use elzevir_domain::catalog::{
+    BranchId, HubId, IdentifierKind, InstanceId, ItemId, MatchRule, SublocationId, WorkId,
+};
 use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 
 use crate::ElzevirStore;
@@ -383,13 +385,11 @@ fn items_of(
         return Ok(grouped);
     }
     let sql = format!(
-        "SELECT items.instance_id, items.id, barcode, inventory_number, branches.code,
-                item_types.code, call_number, terms.code, not_for_loan, damaged, lost,
+        "SELECT items.instance_id, items.id, barcode, inventory_number, items.home_branch,
+                item_types.code, call_number, items.sublocation_id, not_for_loan, damaged, lost,
                 withdrawn, restricted
          FROM items
-         JOIN branches ON branches.id = items.home_branch
          JOIN item_types ON item_types.id = items.item_type
-         LEFT JOIN terms ON terms.id = items.location
          WHERE items.instance_id IN ({}) ORDER BY items.id",
         placeholders(instances.len())
     );
@@ -400,10 +400,10 @@ fn items_of(
             id: ItemId(row.get(1)?),
             barcode: row.get(2)?,
             inventory_number: row.get(3)?,
-            home_branch: row.get(4)?,
+            home_branch: BranchId(row.get(4)?),
             item_type: row.get(5)?,
             call_number: row.get(6)?,
-            location: row.get(7)?,
+            location: row.get::<_, Option<i64>>(7)?.map(SublocationId),
             status: status_at(row, 8)?,
         });
     }

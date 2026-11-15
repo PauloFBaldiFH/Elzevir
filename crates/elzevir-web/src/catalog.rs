@@ -361,8 +361,8 @@ fn instance_line(instance: &InstanceRow, codes: &CodeLists) -> InstanceLine {
 /// One Item in a line, with names in place of codes (exemplares.md, item 29).
 fn pill_line(pill: &ItemPill, codes: &CodeLists) -> PillLine {
     let parts = [
-        Some(codes.branch(&pill.home_branch)),
-        pill.location.as_deref().map(|code| codes.location(code)),
+        Some(codes.branch(pill.home_branch)),
+        pill.location.map(|id| codes.location(id)),
         pill.call_number.as_deref(),
         pill.inventory_number.as_deref(),
     ];

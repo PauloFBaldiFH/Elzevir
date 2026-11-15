@@ -8,11 +8,11 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
-use elzevir_app::catalog::{CodeLists, CodeName};
+use elzevir_app::catalog::{CodeLists, Place};
 use elzevir_app::editing::Edit;
 use elzevir_app::items::{GridItem, ItemFields, ItemsUpdate, MAX_ROWS, TypedRow, item_rows};
 use elzevir_app::staff::Permission;
-use elzevir_domain::catalog::{InstanceId, Money};
+use elzevir_domain::catalog::{BranchId, CollectionId, InstanceId, Money, SublocationId};
 use elzevir_web_templates::{GridCell, GridColumn, GridList, GridRow, ItemGrid};
 use serde::Deserialize;
 
@@ -70,8 +70,8 @@ const COLUMNS: &[GridColumn] = &[
     column("price", "items-column-price", None, false),
 ];
 
-/// The cells of one Item, in [`COLUMNS`] order: a coded cell shows its name and keeps
-/// its code (item 29).
+/// The cells of one Item, in [`COLUMNS`] order: a cell that chooses from a list shows the
+/// name and keeps the key, an id or an item type code (item 29).
 fn cells(fields: ItemFields, codes: &CodeLists) -> Vec<GridCell> {
     let price = fields
         .price
@@ -80,10 +80,10 @@ fn cells(fields: ItemFields, codes: &CodeLists) -> Vec<GridCell> {
         fields.barcode,
         fields.inventory_number,
         fields.call_number,
-        Some(fields.home_branch),
-        Some(fields.holding_branch),
-        fields.location,
-        fields.collection,
+        Some(fields.home_branch.0.to_string()),
+        Some(fields.holding_branch.0.to_string()),
+        fields.location.map(|id| id.0.to_string()),
+        fields.collection.map(|id| id.0.to_string()),
         Some(fields.item_type),
         fields.copy_number,
         price,
@@ -100,14 +100,15 @@ fn cells(fields: ItemFields, codes: &CodeLists) -> Vec<GridCell> {
     .collect()
 }
 
-/// The name of `code` in the list a column chooses from.
-fn name_in<'a>(codes: &'a CodeLists, list: &str, code: &'a str) -> &'a str {
+/// The name of `key` in the list a column chooses from.
+fn name_in<'a>(codes: &'a CodeLists, list: &str, key: &'a str) -> &'a str {
+    let id = key.parse::<i64>().unwrap_or_default();
     match list {
-        "branches" => codes.branch(code),
-        "item-types" => codes.item_type(code),
-        "locations" => codes.location(code),
-        "collections" => codes.collection(code),
-        _ => code,
+        "branches" => codes.branch(BranchId(id)),
+        "item-types" => codes.item_type(key),
+        "locations" => codes.location(SublocationId(id)),
+        "collections" => codes.collection(CollectionId(id)),
+        _ => key,
     }
 }
 
@@ -121,14 +122,26 @@ fn grid_row(item: GridItem, codes: &CodeLists) -> GridRow {
     }
 }
 
-fn grid_list(name: &'static str, table: &[CodeName]) -> GridList {
-    GridList {
-        name,
-        options: table
-            .iter()
-            .map(|entry| (entry.code.clone(), entry.name.clone()))
-            .collect(),
-    }
+fn grid_list(name: &'static str, options: Vec<(String, String)>) -> GridList {
+    GridList { name, options }
+}
+
+/// The places of every branch, each named with its branch, since two branches may use
+/// the same name.
+fn place_options<Id: Copy>(
+    codes: &CodeLists,
+    places: &[Place<Id>],
+    key: fn(Id) -> i64,
+) -> Vec<(String, String)> {
+    places
+        .iter()
+        .map(|place| {
+            (
+                key(place.id).to_string(),
+                format!("{} · {}", codes.branch(place.branch), place.name),
+            )
+        })
+        .collect()
 }
 
 /// `GET /equipe/acervo/instancia/{id}/exemplares` (item 12).
@@ -167,10 +180,30 @@ pub(crate) async fn item_grid(
         columns: COLUMNS,
         rows: rows.into_iter().map(|row| grid_row(row, &codes)).collect(),
         lists: vec![
-            grid_list("branches", &codes.branches),
-            grid_list("item-types", &codes.item_types),
-            grid_list("locations", &codes.locations),
-            grid_list("collections", &codes.collections),
+            grid_list(
+                "branches",
+                codes
+                    .branches
+                    .iter()
+                    .map(|branch| (branch.id.0.to_string(), branch.name.clone()))
+                    .collect(),
+            ),
+            grid_list(
+                "item-types",
+                codes
+                    .item_types
+                    .iter()
+                    .map(|entry| (entry.code.clone(), entry.name.clone()))
+                    .collect(),
+            ),
+            grid_list(
+                "locations",
+                place_options(&codes, &codes.locations, |id| id.0),
+            ),
+            grid_list(
+                "collections",
+                place_options(&codes, &codes.collections, |id| id.0),
+            ),
         ],
     })
 }

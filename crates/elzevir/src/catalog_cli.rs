@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The `import` and `export` roles (docs/specs/catalogo/linha-de-comando.md).
 
+use elzevir_app::codes::{CodeTable, NamedCode};
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::num::NonZeroUsize;
@@ -142,13 +143,13 @@ pub(crate) fn import(args: &ImportArgs) -> Result<(), String> {
 fn create_codes(store: &ElzevirStore, file: &Path) -> Result<(), String> {
     let codes = item_codes(open_input(file)?, Limits::default())
         .map_err(|e| format!("cannot read {}: {e}", file.display()))?;
-    let branches = codes
-        .branches
-        .into_iter()
-        .map(|code| CatalogCommand::CreateBranch {
+    let branches = codes.branches.into_iter().map(|code| {
+        CatalogCommand::NameCodes(vec![NamedCode {
+            table: CodeTable::Branch,
             name: code.clone(),
             code,
-        });
+        }])
+    });
     let item_types = codes
         .item_types
         .into_iter()

@@ -5,6 +5,7 @@
     reason = "integration test: helper functions fail the test on error"
 )]
 
+use elzevir_app::codes::{CodeTable, NamedCode};
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
 
@@ -49,9 +50,12 @@ fn setup(store: &ElzevirStore) {
     }
     let commands = branches
         .into_iter()
-        .map(|code| CatalogCommand::CreateBranch {
-            name: code.clone(),
-            code,
+        .map(|code| {
+            CatalogCommand::NameCodes(vec![NamedCode {
+                table: CodeTable::Branch,
+                name: code.clone(),
+                code,
+            }])
         })
         .chain(
             item_types

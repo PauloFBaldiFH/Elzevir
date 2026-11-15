@@ -31,7 +31,7 @@
 ### Comandos e leitura
 
 19. Toda escrita passa pela thread escritora como `WriteCommand::Catalog`: criar unidade, criar tipo de item, criar Hub, acrescentar registro (Obra + Instância, com categoria, Hub e relações), acrescentar Item e editar Obra ou Instância ([edição](edicao.md), tarefa 2.2).
-20. Os comandos citam vocabulário pelo **código** (`MAIN`, `BK`, `por`); a escritora troca pelo número.
+20. Os comandos citam vocabulário padronizado pelo **código** (idioma `por`, relator `aut`) e cadastros da biblioteca (unidade, localização, coleção) pelo **id**; códigos do Koha só existem na borda MARC (tabela `koha_codes`, [bibframe-completo](bibframe-completo.md) item 23b).
     - Unidade e tipo de item precisam existir antes. Código desconhecido é recusado.
     - Os outros vocabulários (idioma, relator, localização, coleção, esquema, tesauro) são criados no primeiro uso, com o próprio código como rótulo.
 21. Agente e Assunto já existentes são reaproveitados (itens 5 e 6), nunca duplicados.
@@ -51,7 +51,7 @@ O modelo é do Elzevir, mas cada coluna tem de onde vir numa migração e para o
 | `hubs`, `work_relations`, `material_type` | não existem no Koha: Hub e relações vêm de `130`/`240`/`7XX` e a categoria do líder e do `008`/`007` (tarefa 1.6) |
 | `branches` | `branches` |
 | `item_types` | `itemtypes` |
-| `terms` (localização, coleção) | `authorised_values` (`LOC`, `CCODE`) |
+| `sublocations`, `collections` por unidade, com o código em `koha_codes` (migração 15) | `authorised_values` (`LOC`, `CCODE`) |
 | `terms` (esquema de classificação) | `class_sources` |
 
 O Koha não tem Agente nem Assunto como tabela bibliográfica: guarda `biblio.author` como texto e o resto só no MARC.
