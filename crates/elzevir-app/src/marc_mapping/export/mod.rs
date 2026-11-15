@@ -29,10 +29,12 @@ mod described;
 mod fields;
 mod fixed;
 mod locators;
+mod national;
 mod notes;
 mod physical;
 mod provision;
 mod relations;
+mod temporal;
 mod titles;
 
 use fields::{data_field, first_index, insert_in_tag_order, set_008, set_subfield};
@@ -67,6 +69,7 @@ pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record 
         &notes::NOTES,
         &relations::RELATIONS,
         &locators::LOCATORS,
+        &national::NATIONAL,
     ] {
         described::write(
             &mut out,
@@ -87,6 +90,7 @@ pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record 
     );
     write_lists(&mut out, model, before.as_ref());
     content::write(&mut out, &model.work_description);
+    temporal::write(&mut out, &model.work_description);
     physical::write(&mut out, &model.instance.description);
     admin::write(&mut out, &model.instance.description);
     books::write(

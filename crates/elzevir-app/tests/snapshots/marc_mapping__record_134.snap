@@ -139,6 +139,23 @@ instance:
                           Literal:
                             text: "xx#"
                             language: ~
+      - property: identifiedBy
+        value:
+          Resource:
+            class: Local
+            label: "0000391964"
+            statements:
+              - property: source
+                value:
+                  Resource:
+                    class: Source
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: BR-RjBN
+                            language: ~
       - property: adminMetadata
         value:
           Resource:

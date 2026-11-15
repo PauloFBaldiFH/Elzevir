@@ -14,11 +14,13 @@ mod fixed;
 mod instance;
 pub(crate) mod items;
 mod locators;
+mod national;
 mod notes;
 mod physical;
 mod provision;
 mod relations;
 mod responsibility;
+mod temporal;
 mod text;
 mod titles;
 mod work;
@@ -209,6 +211,17 @@ pub fn source_books(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>)> {
     let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
     let record = Record::from_ref(&parsed);
     Some((books::of_work(&Marc(&record)), Vec::new()))
+}
+
+/// The time periods of the Work (`045`) and the numbers of national bibliographic agencies
+/// of the Instance (`016`) of a stored source record, for records stored before the model
+/// read them (bibframe-completo.md, item 29, part 5f).
+#[must_use]
+pub fn source_periods_and_numbers(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>)> {
+    let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
+    let record = Record::from_ref(&parsed);
+    let marc = Marc(&record);
+    Some((temporal::of_work(&marc), national::of_instance(&marc)))
 }
 
 /// The description conventions Leader/18 of a stored source record names, for records

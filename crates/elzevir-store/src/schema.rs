@@ -14,8 +14,9 @@ use elzevir_app::listing::sort_key;
 use elzevir_app::marc_mapping::{
     source_admin, source_audience, source_books, source_classification, source_content,
     source_contributions, source_description, source_extent, source_fixed,
-    source_leader_conventions, source_notes, source_physical, source_provision, source_publication,
-    source_relations, source_responsibility, source_subjects, source_titles, source_typed_notes,
+    source_leader_conventions, source_notes, source_periods_and_numbers, source_physical,
+    source_provision, source_publication, source_relations, source_responsibility, source_subjects,
+    source_titles, source_typed_notes,
 };
 use elzevir_app::matching::{identifier_key, koha_biblionumber_key};
 use elzevir_domain::catalog::IdentifierKind;
@@ -440,6 +441,10 @@ const MIGRATIONS: &[&str] = &[
     // statements of the Work (item 29, part 5f); the migration only fills them from the
     // stored source records.
     "SELECT 1;",
+    // 34: the time periods of `045` become statements of the Work and the numbers of
+    // national bibliographic agencies of `016` statements of the Instance (item 29, part
+    // 5f); the migration only fills them from the stored source records.
+    "SELECT 1;",
 ];
 
 /// The migration that creates `match_keys`.
@@ -491,6 +496,8 @@ const LEADER_CONVENTIONS_VERSION: i64 = 31;
 const CLASSIFICATIONS_VERSION: i64 = 32;
 /// Migration that reads the positions of a book in `008/18-34`.
 const BOOKS_VERSION: i64 = 33;
+/// Migration that reads the time periods (`045`) and the national numbers (`016`).
+const PERIODS_VERSION: i64 = 34;
 /// Migration that drops `extra`.
 const DROP_EXTRA_VERSION: i64 = 13;
 /// Migration that adds the classes, and fills them with content, media, carrier and issuance.
@@ -625,6 +632,9 @@ fn apply_migrations(connection: &mut Connection, current: i64) -> Result<(), Sto
             }
             if version == BOOKS_VERSION {
                 backfill_from_source(&tx, source_books)?;
+            }
+            if version == PERIODS_VERSION {
+                backfill_from_source(&tx, source_periods_and_numbers)?;
             }
             if version == NO_CODES_VERSION || version == POLICIES_VERSION {
                 check_foreign_keys(&tx, version)?;
@@ -1655,6 +1665,52 @@ mod catalog_tests {
             .filter(|s| s.property == "adminMetadata")
             .collect();
         assert_eq!(admin, wanted);
+    }
+
+    #[test]
+    fn migration_34_reads_the_time_periods_and_national_numbers_from_the_source_record() {
+        use elzevir_marc::{Field, Record, Subfield, Tag};
+        let subfield = |code: u8, value: &str| Subfield {
+            code,
+            value: value.as_bytes().to_vec(),
+        };
+        let mut source = Vec::new();
+        Record {
+            leader: *b"00000nam a2200000   4500",
+            fields: vec![
+                Field::Data {
+                    tag: Tag::new(*b"016"),
+                    indicators: *b"7 ",
+                    subfields: vec![subfield(b'a', "0000391964"), subfield(b'2', "BR-RjBN")],
+                },
+                Field::Data {
+                    tag: Tag::new(*b"045"),
+                    indicators: *b"  ",
+                    subfields: vec![subfield(b'a', "x9x9")],
+                },
+            ],
+        }
+        .write_iso2709(&mut source)
+        .unwrap();
+        let (_dir, mut connection) = catalog();
+        connection
+            .execute(
+                "UPDATE source_records SET record = ?1 WHERE instance_id = 1",
+                params![source],
+            )
+            .unwrap();
+        rewind(&connection, PERIODS_VERSION - 1);
+        migrate(&mut connection).unwrap();
+        let read = |entity| {
+            read_description(&connection, EntityRef { entity, id: 1 })
+                .unwrap()
+                .statements
+        };
+        let (work, instance) = source_periods_and_numbers(&source).unwrap();
+        assert_eq!((work.len(), instance.len()), (1, 1));
+        let (stored_work, stored_instance) = (read(EntityKind::Work), read(EntityKind::Instance));
+        assert!(work.iter().all(|s| stored_work.contains(s)));
+        assert!(instance.iter().all(|s| stored_instance.contains(s)));
     }
 
     #[test]

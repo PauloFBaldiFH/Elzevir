@@ -222,6 +222,7 @@ pub fn check(subject: EntityKind, statements: &[Statement]) -> Result<(), Statem
             && !is_coded_publication(statement)
             && !is_described_classification(statement)
             && !is_coded_audience(statement)
+            && !is_sourced_number(statement)
         {
             return Err(StatementRefusal::Typed(statement.property.clone()));
         }
@@ -284,6 +285,16 @@ pub fn is_described_classification(statement: &Statement) -> bool {
 #[must_use]
 pub fn is_coded_audience(statement: &Statement) -> bool {
     statement.property == "intendedAudience" && matches!(&statement.value, Value::Concept { .. })
+}
+
+/// Whether `statement` is a number that an agency named by its source gives, such as the
+/// number of a national bibliographic agency (bibframe-completo.md, item 29, part 5f): a
+/// `bf:Local` with a `bf:source`. The standard numbers have their own field.
+#[must_use]
+pub fn is_sourced_number(statement: &Statement) -> bool {
+    statement.property == "identifiedBy"
+        && matches!(&statement.value, Value::Resource(local)
+            if local.class == "Local" && local.statements.iter().any(|s| s.property == "source"))
 }
 
 /// Whether `statement` is the coded publication (bibframe-completo.md, item 29, part 5e): a
@@ -445,6 +456,26 @@ mod tests {
             label: None,
             statements,
         })
+    }
+
+    #[test]
+    fn a_number_with_its_agency_is_a_statement_and_a_standard_one_is_not() {
+        let national = [statement(
+            "identifiedBy",
+            resource(
+                "Local",
+                vec![statement(
+                    "source",
+                    resource("Source", vec![statement("code", literal("BR-RjBN"))]),
+                )],
+            ),
+        )];
+        assert_eq!(check(EntityKind::Instance, &national), Ok(()));
+        let isbn = [statement("identifiedBy", resource("Isbn", vec![]))];
+        assert_eq!(
+            check(EntityKind::Instance, &isbn),
+            Err(StatementRefusal::Typed("identifiedBy".to_owned()))
+        );
     }
 
     #[test]
