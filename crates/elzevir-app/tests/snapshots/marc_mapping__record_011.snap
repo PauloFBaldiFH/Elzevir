@@ -133,6 +133,66 @@ instance:
           Literal:
             text: 23 cm
             language: ~
+      - property: adminMetadata
+        value:
+          Resource:
+            class: AdminMetadata
+            label: ~
+            statements:
+              - property: status
+                value:
+                  Concept:
+                    scheme: mstatus
+                    code: c
+              - property: identifiedBy
+                value:
+                  Resource:
+                    class: Local
+                    label: "12"
+                    statements:
+                      - property: assigner
+                        value:
+                          Resource:
+                            class: Agent
+                            label: ~
+                            statements:
+                              - property: code
+                                value:
+                                  Literal:
+                                    text: BR-PrPalBPMCA
+                                    language: ~
+              - property: assigner
+                value:
+                  Resource:
+                    class: Agent
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: BR-PrPalBPMCA
+                            language: ~
+              - property: descriptionLanguage
+                value:
+                  Resource:
+                    class: Language
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: por
+                            language: ~
+              - property: creationDate
+                value:
+                  Literal:
+                    text: 2026-09-18
+                    language: ~
+              - property: changeDate
+                value:
+                  Literal:
+                    text: "2026-09-18T17:11:11"
+                    language: ~
   edition: ~
   place: "Brasília, DF"
   publisher: "Senado Federal, Subsecretaria de Edições Técnicas"

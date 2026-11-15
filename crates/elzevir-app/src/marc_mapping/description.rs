@@ -9,6 +9,7 @@ use elzevir_domain::statement::{Description, Statement};
 use elzevir_marc::Field;
 
 use super::Marc;
+use super::admin;
 use super::content;
 use super::locators;
 use super::notes;
@@ -56,6 +57,7 @@ pub(super) fn instance(marc: &Marc<'_>) -> Description {
     statements.extend(provision::of_instance(marc));
     statements.extend(locators::of_instance(marc));
     statements.extend(physical::of_instance(marc));
+    statements.extend(admin::of_instance(marc));
     Description {
         classes: Vec::new(),
         statements,

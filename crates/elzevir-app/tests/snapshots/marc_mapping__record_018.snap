@@ -103,6 +103,60 @@ instance:
           Concept:
             scheme: carriers
             code: nc
+      - property: adminMetadata
+        value:
+          Resource:
+            class: AdminMetadata
+            label: ~
+            statements:
+              - property: status
+                value:
+                  Concept:
+                    scheme: mstatus
+                    code: n
+              - property: identifiedBy
+                value:
+                  Resource:
+                    class: Local
+                    label: in00000992033
+                    statements: []
+              - property: assigner
+                value:
+                  Resource:
+                    class: Agent
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: BR-BrCD
+                            language: ~
+              - property: descriptionLanguage
+                value:
+                  Resource:
+                    class: Language
+                    label: ~
+                    statements:
+                      - property: code
+                        value:
+                          Literal:
+                            text: por
+                            language: ~
+              - property: descriptionConventions
+                value:
+                  Concept:
+                    scheme: descriptionConventions
+                    code: rda
+              - property: creationDate
+                value:
+                  Literal:
+                    text: 1999-05-08
+                    language: ~
+              - property: changeDate
+                value:
+                  Literal:
+                    text: "2026-09-21T08:59:36"
+                    language: ~
   edition: ~
   place: "Rio de Janeiro,RJ"
   publisher: O Cruzeiro

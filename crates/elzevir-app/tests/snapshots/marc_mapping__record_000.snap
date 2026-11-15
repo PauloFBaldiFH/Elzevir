@@ -45,6 +45,33 @@ instance:
           Concept:
             scheme: issuance
             code: mono
+      - property: adminMetadata
+        value:
+          Resource:
+            class: AdminMetadata
+            label: ~
+            statements:
+              - property: status
+                value:
+                  Concept:
+                    scheme: mstatus
+                    code: n
+              - property: identifiedBy
+                value:
+                  Resource:
+                    class: Local
+                    label: "1"
+                    statements: []
+              - property: creationDate
+                value:
+                  Literal:
+                    text: 2025-03-21
+                    language: ~
+              - property: changeDate
+                value:
+                  Literal:
+                    text: "2026-08-23T19:29:13"
+                    language: ~
   edition: 1. ed
   place: Foz do IGUAÇU
   publisher: Secretaria Municipal da Coordenacao e Planejamento

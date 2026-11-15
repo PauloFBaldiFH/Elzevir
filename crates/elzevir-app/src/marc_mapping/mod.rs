@@ -4,6 +4,7 @@
 //! This is the only place, with the export that will mirror it, that reads MARC tags.
 //! Everything it does not map stays in the preserved source record.
 
+mod admin;
 mod content;
 mod description;
 mod export;
@@ -129,6 +130,15 @@ pub fn source_content(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>)>
     let record = Record::from_ref(&parsed);
     let marc = Marc(&record);
     Some((content::of_work(&marc), locators::of_instance(&marc)))
+}
+
+/// The administrative metadata of a stored source record, for records stored before the
+/// model had it (bibframe-completo.md, item 29, part 5e). The Work gets none.
+#[must_use]
+pub fn source_admin(source: &[u8]) -> Option<(Vec<Statement>, Vec<Statement>)> {
+    let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
+    let record = Record::from_ref(&parsed);
+    Some((Vec::new(), admin::of_instance(&Marc(&record))))
 }
 
 /// The physical details, dimensions and accompanying material of a stored source record,

@@ -14,6 +14,7 @@ use super::work::{CONTRIBUTION_TAGS, SUBJECT_TAGS, contribution_of, subject_of};
 use super::{DataField, Marc, marc_to_bibframe};
 use crate::catalog::{ItemData, NewContribution, NewIdentifier, NewNote, NewRecord, NewSubject};
 
+mod admin;
 mod coded;
 mod content;
 mod described;
@@ -78,6 +79,7 @@ pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record 
     write_lists(&mut out, model, before.as_ref());
     content::write(&mut out, &model.work_description);
     physical::write(&mut out, &model.instance.description);
+    admin::write(&mut out, &model.instance.description);
     out
 }
 
