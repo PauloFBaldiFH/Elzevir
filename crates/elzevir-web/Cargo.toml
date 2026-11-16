@@ -17,6 +17,7 @@ askama.workspace = true
 axum.workspace = true
 getrandom.workspace = true
 serde.workspace = true
+thiserror.workspace = true
 tokio = { workspace = true, features = ["rt"] }
 
 [dev-dependencies]
