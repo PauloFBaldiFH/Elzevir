@@ -21,6 +21,9 @@ pub struct RecordForm<'a> {
     /// Where the block's history is read, for a Work or an Instance
     /// (docs/specs/catalogo/historico.md).
     pub history: Option<String>,
+    /// What saving changes besides this block, such as the records an authority names
+    /// (docs/specs/catalogo/autoridades.md); in the screen's language.
+    pub reach: Option<String>,
 }
 
 /// The history of a Work or an Instance (docs/specs/catalogo/historico.md).

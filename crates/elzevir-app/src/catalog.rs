@@ -7,9 +7,9 @@
 //! thesauri) are created on first use with the code as their label.
 
 use elzevir_domain::catalog::{
-    AgentKind, AuthorityLinkKind, BranchId, CollectionId, HubId, IdentifierKind, InstanceId,
-    ItemId, Money, NamePartKind, NoteKind, PolicyId, SubjectKind, SublocationId, WorkId,
-    WorkRelationKind,
+    AgentId, AgentKind, AuthorityLinkKind, BranchId, CollectionId, HubId, IdentifierKind,
+    InstanceId, ItemId, Money, NamePartKind, NoteKind, PolicyId, SubjectKind, SublocationId,
+    WorkId, WorkRelationKind,
 };
 use serde::{Deserialize, Serialize};
 
@@ -82,6 +82,27 @@ pub enum CatalogCommand {
     /// Replaces the statements of some properties of a Hub, Work, Instance or Item, if it
     /// is still at `row_version` (docs/specs/catalogo/bibframe-completo.md, items 24 to 26).
     EditStatements(Box<PropertyEdit>),
+    /// Changes an agent, and so every record that names it, if the agent is still at
+    /// `row_version` (docs/specs/catalogo/autoridades.md).
+    UpdateAgent(Box<AgentUpdate>),
+}
+
+/// An edit of an agent, read at `row_version`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentUpdate {
+    /// The agent.
+    pub agent: AgentId,
+    /// The agent's version when the editor read it.
+    pub row_version: i64,
+    /// What changes, in order; a later change of the same part wins.
+    pub changes: Vec<AgentChange>,
+}
+
+/// One part of an agent that an edit replaces.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AgentChange {
+    /// The authorized heading, such as `Assis, Machado de, 1839-1908`.
+    Heading(String),
 }
 
 /// The statements of some properties of one entity, each property replaced whole.
@@ -632,6 +653,14 @@ pub enum CatalogOutput {
         /// Its new version.
         row_version: i64,
     },
+    /// An agent was edited; it is now at `row_version`, and its records were given new
+    /// versions.
+    AgentUpdated {
+        /// The agent.
+        agent: AgentId,
+        /// Its new version.
+        row_version: i64,
+    },
     /// An Instance was added to a Work.
     InstanceAdded {
         /// The Work.
@@ -677,6 +706,12 @@ pub enum CatalogRefusal {
     /// Cells of an Item batch that cannot be stored, all of them.
     #[error("{} cells of the item batch were refused", .0.len())]
     ItemRows(Vec<RowRefusal>),
+    /// No agent has this id.
+    #[error("unknown agent {}", .0.0)]
+    UnknownAgent(AgentId),
+    /// Another agent of the same kind has this heading; joining them is a merge.
+    #[error("another agent is already named `{0}`")]
+    AgentHeadingTaken(String),
     /// Someone changed the row after the editor read it.
     #[error("changed by someone else (version {current}, edit read {read}); reload")]
     Stale {

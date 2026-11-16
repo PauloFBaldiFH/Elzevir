@@ -36,7 +36,7 @@
       <div class="track track-auth">
         <div class="col-header">{{ t.get("staff-column-authorities") }}</div>
         {% for authority in family.authorities %}
-        <article class="card card-auth" data-level="auth" tabindex="0" data-node="a{{ authority.key }}">
+        <article class="card card-auth" data-level="auth" tabindex="0" data-node="a{{ authority.key }}"{% if can_catalogue %}{% if let Some(agent) = authority.agent %} data-fields="/equipe/acervo/autoridade/{{ agent }}/campos"{% endif %}{% endif %}>
           <div class="card-top"><span class="entity-pill">{{ t.get("staff-badge-agent") }}</span></div>
           <div class="field-row">
             <span class="field-label">{{ t.get("staff-field-authorized-name") }}</span>

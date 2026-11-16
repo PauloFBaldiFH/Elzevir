@@ -40,8 +40,8 @@ const CSRF_HEADER: &str = "x-elzevir-csrf";
 /// own JSON form.
 #[derive(Deserialize)]
 pub(crate) struct EditBody<C> {
-    version: i64,
-    changes: Vec<C>,
+    pub(crate) version: i64,
+    pub(crate) changes: Vec<C>,
 }
 
 /// One change as the screen sends it: the rows of a BIBFRAME property, or a change in
@@ -378,7 +378,8 @@ pub(crate) async fn apply(state: &AppState, session: &ActiveSession, edit: Edit)
         Ok(Ok(
             CatalogOutput::WorkUpdated { row_version, .. }
             | CatalogOutput::InstanceUpdated { row_version, .. }
-            | CatalogOutput::StatementsSet { row_version, .. },
+            | CatalogOutput::StatementsSet { row_version, .. }
+            | CatalogOutput::AgentUpdated { row_version, .. },
         )) => Json(Accepted {
             version: row_version,
         })
@@ -416,8 +417,17 @@ pub(crate) async fn apply(state: &AppState, session: &ActiveSession, edit: Edit)
         Ok(Err(EditFailed::Refused(
             CatalogRefusal::UnknownWork(_)
             | CatalogRefusal::UnknownInstance(_)
-            | CatalogRefusal::UnknownEntity(_),
+            | CatalogRefusal::UnknownEntity(_)
+            | CatalogRefusal::UnknownAgent(_),
         ))) => StatusCode::NOT_FOUND.into_response(),
+        // Joining two agents is a merge, not a rename (docs/specs/catalogo/autoridades.md).
+        Ok(Err(EditFailed::Refused(CatalogRefusal::AgentHeadingTaken(_)))) => invalid(
+            state,
+            &[FieldError {
+                field: "heading",
+                message_key: "edit-error-heading-taken",
+            }],
+        ),
         Ok(Err(EditFailed::Refused(refusal))) => {
             (StatusCode::UNPROCESSABLE_ENTITY, refusal.to_string()).into_response()
         }

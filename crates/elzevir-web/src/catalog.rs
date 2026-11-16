@@ -2,6 +2,7 @@
 //! The staff catalog listing: browse and search on one screen
 //! (docs/specs/catalogo/listagem.md).
 
+use elzevir_app::authorities::AgentReader;
 use std::sync::Arc;
 
 use elzevir_app::history::HistoryReader;
@@ -54,6 +55,8 @@ pub struct StaffPorts {
     pub statements: Arc<dyn StatementReader + Send + Sync>,
     /// Who changed a Work or an Instance (docs/specs/catalogo/historico.md).
     pub history: Arc<dyn HistoryReader>,
+    /// The agents the authorities column edits (docs/specs/catalogo/autoridades.md).
+    pub agents: Arc<dyn AgentReader>,
 }
 
 /// Query string of `/equipe/acervo`.
@@ -350,6 +353,7 @@ fn family_line(row: &FamilyRow, codes: &CodeLists) -> FamilyLine {
                     let key = authorities.len();
                     authorities.push(AuthorityLine {
                         key,
+                        agent: work.main_agent.map(|agent| agent.0),
                         icon: agent_icon(*kind),
                         name: name.clone(),
                     });

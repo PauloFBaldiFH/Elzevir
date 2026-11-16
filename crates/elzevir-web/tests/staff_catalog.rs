@@ -67,6 +67,7 @@ fn family(n: i64, title: &str, lost: bool) -> Family {
             id: WorkId(n),
             title: title.to_owned(),
             main_contributor: Some((AgentKind::Person, "Assis, Machado de".to_owned())),
+            main_agent: Some(elzevir_domain::catalog::AgentId(1)),
             classification: Some("869.3".to_owned()),
             languages: vec!["por".to_owned()],
             subjects: vec!["Ficção".to_owned()],
@@ -242,6 +243,7 @@ fn app() -> Router {
             items: Arc::new(common::ItemGrid),
             statements: Arc::new(common::Statements),
             history: Arc::new(common::History),
+            agents: Arc::new(common::Agents),
         },
         I18n::english().unwrap(),
         WebConfig {
@@ -356,7 +358,7 @@ async fn the_first_page_shows_families_with_pills_and_a_loader_for_the_next() {
     assert!(html.contains(r#"data-parent="i10" data-cord-label="items""#));
     // The main contributor is an authority block, parent of its Work with a dashed cord.
     assert!(html.contains(
-        r#"<article class="card card-auth" data-level="auth" tabindex="0" data-node="a0">"#
+        r#"<article class="card card-auth" data-level="auth" tabindex="0" data-node="a0" data-fields="/equipe/acervo/autoridade/1/campos">"#
     ));
     assert!(html.contains(r#"data-parent="a0""#));
     assert!(html.contains(r#"data-cord-label="written by""#));
@@ -1414,4 +1416,81 @@ async fn a_scanned_code_opens_its_family_and_tells_the_page_what_to_open() {
     assert!(form.contains("9788535902778"));
     let invalid = page("/equipe/acervo/nova?isbn=9788535902779", ana).await;
     assert!(!invalid.contains("978853590277"));
+}
+
+/// docs/specs/catalogo/autoridades.md.
+#[tokio::test]
+async fn a_cataloguer_renames_an_agent_knowing_how_many_records_change() {
+    let app = app();
+    let ana = signed_in(&app).await;
+    let listing = body(send(&app, get("/equipe/acervo", Some(&ana), None)).await).await;
+    assert!(listing.contains(r#"data-fields="/equipe/acervo/autoridade/1/campos""#));
+    let bia = signed_in_as(&app, "bia").await;
+    let listing = body(send(&app, get("/equipe/acervo", Some(&bia), None)).await).await;
+    assert!(!listing.contains("/equipe/acervo/autoridade/"));
+    let refused = send(
+        &app,
+        get("/equipe/acervo/autoridade/1/campos", Some(&bia), None),
+    )
+    .await;
+    assert_eq!(refused.status(), StatusCode::FORBIDDEN);
+
+    let form = body(
+        send(
+            &app,
+            get("/equipe/acervo/autoridade/1/campos", Some(&ana), None),
+        )
+        .await,
+    )
+    .await;
+    assert!(form.contains(r#"data-endpoint="/equipe/acervo/autoridade/1" data-version="1""#));
+    assert!(form.contains(r#"data-change="Heading""#));
+    assert!(form.contains(r#"value="Assis, Machado de, 1839-1908""#));
+    assert!(form.contains("Saving changes 3 Works and 4 records."));
+    let missing = send(
+        &app,
+        get("/equipe/acervo/autoridade/2/campos", Some(&ana), None),
+    )
+    .await;
+    assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+
+    let token = page_token(&app, &ana).await;
+    let post = |json: &'static str| {
+        post_json(
+            "/equipe/acervo/autoridade/1",
+            Some(&ana),
+            Some(&token),
+            json,
+        )
+    };
+    let empty = body(
+        send(
+            &app,
+            post(r#"{"version": 1, "changes": [{"Heading": " "}]}"#),
+        )
+        .await,
+    )
+    .await;
+    assert!(empty.contains(r#""field":"heading","key":"edit-error-heading-empty""#));
+    let duplicate = body(
+        send(
+            &app,
+            post(r#"{"version": 1, "changes": [{"Heading": "Taken"}]}"#),
+        )
+        .await,
+    )
+    .await;
+    assert!(duplicate.contains(r#""key":"edit-error-heading-taken""#));
+    let stale = send(
+        &app,
+        post(r#"{"version": 7, "changes": [{"Heading": "Assis, M."}]}"#),
+    )
+    .await;
+    assert_eq!(stale.status(), StatusCode::CONFLICT);
+    let saved = send(
+        &app,
+        post(r#"{"version": 1, "changes": [{"Heading": " Assis, M. "}]}"#),
+    )
+    .await;
+    assert_eq!(body(saved).await, r#"{"version":2}"#);
 }

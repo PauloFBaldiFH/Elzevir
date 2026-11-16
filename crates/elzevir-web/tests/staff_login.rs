@@ -74,6 +74,7 @@ fn app() -> Router {
             items: Arc::new(common::ItemGrid),
             statements: Arc::new(common::Statements),
             history: Arc::new(common::History),
+            agents: Arc::new(common::Agents),
         },
         I18n::english().unwrap(),
         config,
