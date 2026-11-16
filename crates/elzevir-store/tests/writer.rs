@@ -129,6 +129,47 @@ fn audit(store: &Store<Counters>) -> Vec<Command> {
 }
 
 #[test]
+fn diagnostic_hooks_can_cancel_reads_without_enabling_writes() {
+    let directory = tempfile::tempdir().unwrap();
+    let config = StoreConfig {
+        readers: NonZeroUsize::new(1).unwrap(),
+        ..StoreConfig::default()
+    };
+    let store = open(&directory.path().join("elzevir.db"), &config);
+    store
+        .readers()
+        .read_with_hooks(|connection| {
+            connection.progress_handler(1, Some(|| true))?;
+            assert!(
+                connection
+                    .query_row("SELECT COUNT(*) FROM sqlite_schema", [], |row| row
+                        .get::<_, i64>(0))
+                    .is_err()
+            );
+            connection.progress_handler(0, None::<fn() -> bool>)?;
+            let error = connection
+                .execute("CREATE TABLE forbidden (id INTEGER)", [])
+                .unwrap_err();
+            assert_eq!(
+                error.sqlite_error_code(),
+                Some(rusqlite::ErrorCode::ReadOnly)
+            );
+            Ok::<_, rusqlite::Error>(())
+        })
+        .unwrap();
+    assert!(
+        store
+            .readers()
+            .read(
+                |c| c.query_row("SELECT COUNT(*) FROM sqlite_schema", [], |row| row
+                    .get::<_, i64>(0))
+            )
+            .unwrap()
+            > 0
+    );
+}
+
+#[test]
 fn fifty_concurrent_writers_never_hit_busy_and_the_audit_log_replays_the_state() {
     let dir = tempfile::tempdir().unwrap();
     let store = Arc::new(open(
