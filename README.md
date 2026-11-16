@@ -19,3 +19,10 @@ Para automação, use `init --password-stdin` com entrada redirecionada ou a
 variável `ELZEVIR_STAFF_PASSWORD`. A [especificação da inicialização](docs/specs/operacao/inicializacao.md)
 descreve as opções e os limites desta etapa. Instaladores e registro como
 serviço serão entregues separadamente.
+
+## Saúde local
+
+`serve` anuncia uma URL de saúde em `127.0.0.1`, numa porta escolhida pelo
+sistema. Ela retorna JSON e HTTP 200 quando banco e indexador estão prontos;
+caso contrário, retorna 503. A rota não é exposta pelo endereço do catálogo.
+Veja o [contrato de saúde local](docs/specs/operacao/saude-local.md).
