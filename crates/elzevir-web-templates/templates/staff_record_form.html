@@ -1,6 +1,7 @@
 <form class="record-form" data-endpoint="{{ endpoint }}" data-version="{{ version }}"
       data-stale="{{ t.get("edit-stale") }}" data-failed="{{ t.get("edit-failed") }}" data-new-entity="{{ t.get("edit-new-entity") }}" novalidate>
   <p class="form-alert" role="alert" hidden></p>
+  {% if let Some(reach) = reach %}<p class="form-reach" role="note">{{ reach }}</p>{% endif %}
   {% for section in sections %}
   <section class="form-section">
     {% if let Some(heading_key) = section.heading_key %}<h3 class="form-section-heading">{{ t.get(heading_key) }}</h3>{% endif %}

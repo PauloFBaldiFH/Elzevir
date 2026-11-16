@@ -13,6 +13,7 @@
 //! - **Effects** that must happen after a commit (reindexing, notices) are written to
 //!   `effect_outbox` inside the same transaction as the change that causes them.
 
+mod authorities;
 mod catalog;
 mod codes;
 mod config;

@@ -131,6 +131,13 @@ staff-column-items = Items
 staff-badge-hub = Hub
 staff-badge-agent = Agent
 staff-field-authorized-name = Authorized name
+authority-reach = Saving changes { $works ->
+    [one] one Work
+   *[other] { $works } Works
+} and { $instances ->
+    [one] one record
+   *[other] { $instances } records
+}.
 staff-cord-written-by = written by
 staff-badge-work = Work
 staff-badge-instance = Instance
@@ -213,6 +220,8 @@ staff-relation-work = Work { $id }
 
 ## Editing refusals
 edit-error-title-empty = The title cannot be empty.
+edit-error-heading-empty = The authorized name cannot be empty.
+edit-error-heading-taken = Another agent already has this name; joining the two is a merge.
 edit-error-language-code = Use three-letter language codes, such as por or eng.
 edit-error-isbn = This ISBN is not valid: check the digits.
 edit-isbn-converted = Converted from the ISBN-10 { $isbn10 }.

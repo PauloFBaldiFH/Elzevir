@@ -434,6 +434,7 @@ a.field-value:hover { text-decoration: underline; }
 .record-form .form-alert, .record-form .form-discard { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--elzevir-color-signal-out); background: var(--elzevir-color-out-bg); color: var(--elzevir-color-out-text); }
 .record-form .form-discard { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
 .record-form .form-discard[hidden], .record-form .form-alert[hidden], .record-form [hidden] { display: none; }
+.record-form .form-reach { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--card-tint); color: var(--text-main); }
 .record-form .form-discard button { font: inherit; border-radius: 6px; padding: 3px 10px; cursor: pointer; border: 1px solid currentColor; background: transparent; color: inherit; }
 .record-form .field-error { margin: 2px 0 0; font-size: 0.8rem; color: var(--elzevir-color-out-text); }
 .record-form .form-field.invalid input, .record-form .form-field.invalid textarea { border-color: var(--elzevir-color-signal-out); }

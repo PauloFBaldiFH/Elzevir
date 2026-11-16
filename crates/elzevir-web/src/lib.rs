@@ -6,6 +6,7 @@
 //! `elzevir-app` ports; it never opens the database.
 
 mod assets;
+mod authorities;
 mod catalog;
 mod creating;
 mod described;
@@ -171,6 +172,14 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/equipe/acervo/instancia/{id}/campos",
             get(record_fields::record_fields),
+        )
+        .route(
+            "/equipe/acervo/autoridade/{id}",
+            post(authorities::edit_agent),
+        )
+        .route(
+            "/equipe/acervo/autoridade/{id}/campos",
+            get(authorities::agent_form),
         )
         .route("/equipe/acervo/matriz/{id}", post(editing::edit_hub))
         .route(

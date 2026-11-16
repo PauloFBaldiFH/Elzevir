@@ -66,6 +66,7 @@ fn app(store: &Arc<ElzevirStore>, index: &Arc<TantivyIndex>) -> Router {
             items: Arc::clone(store) as _,
             statements: Arc::clone(store) as _,
             history: Arc::clone(store) as _,
+            agents: Arc::clone(store) as _,
         },
         I18n::english().unwrap(),
         WebConfig::default(),
@@ -254,4 +255,101 @@ fn an_instance_hidden_from_the_opac_is_found_only_by_the_staff() {
         .find(|field| field.tag().to_string() == "942")
         .unwrap();
     assert!(String::from_utf8_lossy(local.raw()).contains("\x1fn1"));
+}
+
+/// docs/specs/catalogo/autoridades.md: a renamed agent shows in the OPAC, the search and
+/// the exported MARC of every record that names it.
+#[test]
+fn a_renamed_agent_changes_every_record_that_names_it() {
+    use elzevir_app::authorities::AgentReader;
+    use elzevir_app::catalog::{AgentChange, AgentUpdate, CatalogRefusal};
+    use elzevir_app::commands::WriteRefusal;
+    use elzevir_domain::catalog::AgentId;
+    use elzevir_store::CommandFailed;
+
+    let (_dir, store) = imported();
+    let store = Arc::new(store);
+    let index = Arc::new(TantivyIndex::in_memory(Parallelism::Serial).unwrap());
+    index_pending(&*store, &*store, &*index, &options()).unwrap();
+    let app = app(&store, &index);
+    let instance = index
+        .search("anuario estatistico", SearchScope::Staff, 0, 1)
+        .unwrap()
+        .hits[0]
+        .instance;
+    let agent: i64 = store
+        .readers()
+        .read(|c| {
+            c.query_row(
+                "SELECT c.agent_id FROM contributions c JOIN instances i ON i.work_id = c.work_id
+                 WHERE i.id = ?1 AND c.is_primary = 1",
+                [instance.0],
+                |row| row.get(0),
+            )
+        })
+        .unwrap();
+    let view = store.agent(AgentId(agent)).unwrap().unwrap();
+    assert_eq!(view.heading, "PREFEITURA MUNICIPAL DE FOZ DO IGUACU");
+    assert!(view.instances >= 1);
+    let before = store.instance(instance).unwrap().unwrap().version;
+    let rename = |row_version, heading: &str| {
+        store
+            .submit(WriteCommand::Catalog(CatalogCommand::UpdateAgent(
+                Box::new(AgentUpdate {
+                    agent: AgentId(agent),
+                    row_version,
+                    changes: vec![AgentChange::Heading(heading.to_owned())],
+                }),
+            )))
+            .unwrap()
+            .wait()
+    };
+    rename(1, "Foz do Iguaçu (PR). Prefeitura Municipal").unwrap();
+    assert_eq!(store.agent(AgentId(agent)).unwrap().unwrap().version, 2);
+    assert!(store.instance(instance).unwrap().unwrap().version > before);
+    // An edit read before the rename is refused, and so is the heading of another agent.
+    assert!(matches!(
+        rename(1, "Outro"),
+        Err(CommandFailed::Rejected(WriteRefusal::Catalog(
+            CatalogRefusal::Stale { .. }
+        )))
+    ));
+    let other: String = store
+        .readers()
+        .read(|c| {
+            c.query_row(
+                "SELECT heading FROM agents WHERE kind = 2 AND id <> ?1 LIMIT 1",
+                [agent],
+                |row| row.get(0),
+            )
+        })
+        .unwrap();
+    assert!(matches!(
+        rename(2, &other),
+        Err(CommandFailed::Rejected(WriteRefusal::Catalog(
+            CatalogRefusal::AgentHeadingTaken(_)
+        )))
+    ));
+    index_pending(&*store, &*store, &*index, &options()).unwrap();
+
+    let (_, record) = get(&app, &format!("/record/{}", instance.0));
+    assert!(record.contains("Foz do Iguaçu (PR). Prefeitura Municipal"));
+    assert!(!record.contains("PREFEITURA MUNICIPAL DE FOZ DO IGUACU"));
+    let found = index
+        .search("foz iguacu prefeitura", SearchScope::Staff, 0, 50)
+        .unwrap();
+    assert!(found.hits.iter().any(|hit| hit.instance == instance
+        && hit.main_contributor.as_deref() == Some("Foz do Iguaçu (PR). Prefeitura Municipal")));
+    let bytes = export_record(&*store, instance, RecordFormat::Marc21, &Limits::default())
+        .unwrap()
+        .unwrap();
+    let mut reader = MarcReader::new(bytes.as_slice(), Limits::default());
+    let exported = reader.next_record().unwrap().unwrap();
+    let main = exported
+        .fields()
+        .find(|field| field.tag().to_string() == "110")
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(main.raw()).contains("Foz do Iguaçu (PR). Prefeitura Municipal")
+    );
 }

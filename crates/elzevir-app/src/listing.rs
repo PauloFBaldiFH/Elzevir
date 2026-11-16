@@ -8,7 +8,7 @@
 use std::num::NonZeroUsize;
 
 use elzevir_domain::catalog::{
-    AgentKind, BranchId, HubId, InstanceId, ItemId, SublocationId, WorkId, isbn13,
+    AgentId, AgentKind, BranchId, HubId, InstanceId, ItemId, SublocationId, WorkId, isbn13,
 };
 use unicode_normalization::UnicodeNormalization;
 use unicode_normalization::char::is_combining_mark;
@@ -125,6 +125,8 @@ pub struct FamilyWork {
     pub title: String,
     /// The main entry, else the first contributor, with its kind of agent.
     pub main_contributor: Option<(AgentKind, String)>,
+    /// The main contributor's agent, which its authority block edits.
+    pub main_agent: Option<AgentId>,
     /// Classification number.
     pub classification: Option<String>,
     /// Language codes, in order.
@@ -326,6 +328,8 @@ pub struct WorkRow {
     pub title: String,
     /// The main contributor, with its kind of agent.
     pub main_contributor: Option<(AgentKind, String)>,
+    /// The main contributor's agent, which its authority block edits.
+    pub main_agent: Option<AgentId>,
     /// Classification number.
     pub classification: Option<String>,
     /// Language codes.
@@ -526,6 +530,7 @@ fn work_row(work: FamilyWork, found: &[InstanceId]) -> WorkRow {
         id: work.id,
         title: work.title,
         main_contributor: work.main_contributor,
+        main_agent: work.main_agent,
         classification: work.classification,
         languages: work.languages,
         subjects,
@@ -854,6 +859,7 @@ mod tests {
                 id: WorkId(work),
                 title: String::new(),
                 main_contributor: None,
+                main_agent: None,
                 classification: None,
                 languages: Vec::new(),
                 subjects: Vec::new(),

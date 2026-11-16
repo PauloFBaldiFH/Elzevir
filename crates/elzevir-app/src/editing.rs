@@ -7,8 +7,8 @@ use elzevir_domain::catalog::{IdentifierKind, isbn10, isbn13};
 use elzevir_domain::statement::{Description, EntityKind, check_description};
 
 use crate::catalog::{
-    CatalogOutput, CatalogRefusal, ClassChoice, InstanceChange, InstanceUpdate, NewIdentifier,
-    NewInstanceOfWork, NewRecord, PropertyEdit, WorkChange, WorkUpdate,
+    AgentUpdate, CatalogOutput, CatalogRefusal, ClassChoice, InstanceChange, InstanceUpdate,
+    NewIdentifier, NewInstanceOfWork, NewRecord, PropertyEdit, WorkChange, WorkUpdate,
 };
 use crate::items::ItemsUpdate;
 use crate::registries::RegistryChange;
@@ -32,6 +32,8 @@ pub enum Edit {
     /// The statements of some properties of a Hub or an Item (bibframe-completo.md,
     /// items 24 to 26).
     Statements(Box<PropertyEdit>),
+    /// An agent, and so every record that names it (docs/specs/catalogo/autoridades.md).
+    Agent(Box<AgentUpdate>),
 }
 
 /// Why an edit was not stored.

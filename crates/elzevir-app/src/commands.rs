@@ -79,6 +79,7 @@ impl WriteCommand {
             }
             Self::Catalog(CatalogCommand::SetStatements(_)) => "catalog.set_statements",
             Self::Catalog(CatalogCommand::EditStatements(_)) => "catalog.edit_statements",
+            Self::Catalog(CatalogCommand::UpdateAgent(_)) => "catalog.update_agent",
         }
     }
 

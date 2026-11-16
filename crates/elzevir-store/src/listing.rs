@@ -13,7 +13,7 @@ use elzevir_app::listing::{
 };
 use elzevir_app::material::Material;
 use elzevir_domain::catalog::{
-    AgentKind, BranchId, HubId, IdentifierKind, InstanceId, ItemId, MatchRule, PolicyId,
+    AgentId, AgentKind, BranchId, HubId, IdentifierKind, InstanceId, ItemId, MatchRule, PolicyId,
     SublocationId, WorkId,
 };
 use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
@@ -257,7 +257,7 @@ fn works_of(
         // `column` is one of two constants above, never input.
         let sql = format!(
             "SELECT works.id, works.hub_id, works.title, works.classification,
-                    main.kind, main.heading
+                    main.kind, main.heading, main.id
              FROM works
              LEFT JOIN agents main ON main.id =
                     (SELECT agent_id FROM contributions
@@ -278,6 +278,7 @@ fn works_of(
                         title: row.get(2)?,
                         classification: row.get(3)?,
                         main_contributor: main_contributor(row.get(4)?, row.get(5)?)?,
+                        main_agent: row.get::<_, Option<i64>>(6)?.map(AgentId),
                         languages: Vec::new(),
                         subjects: Vec::new(),
                         instances: Vec::new(),

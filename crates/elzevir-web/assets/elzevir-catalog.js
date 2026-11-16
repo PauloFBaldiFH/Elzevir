@@ -622,6 +622,12 @@ async function submitForm(form) {
       const shown = card.querySelector(".title-main");
       if (shown) shown.textContent = title.trim();
     }
+    // An authority shows its new heading at once (autoridades.md).
+    const heading = list.find((change) => "Heading" in change)?.Heading;
+    if (heading !== undefined) {
+      const shown = card.querySelector(".field-value");
+      if (shown) shown.textContent = heading.trim();
+    }
     await reloadFields(card);
     const saved = card.querySelector(".form-saved");
     if (saved) saved.hidden = false;

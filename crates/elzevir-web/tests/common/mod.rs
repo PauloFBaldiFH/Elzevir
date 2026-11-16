@@ -230,6 +230,17 @@ impl elzevir_app::editing::CatalogEditor for Editor {
             Edit::Instance(update) => update.row_version,
             Edit::Items(update) => update.row_version,
             Edit::Statements(edit) => edit.row_version,
+            Edit::Agent(update) => {
+                let taken = update.changes.iter().any(|change| {
+                    matches!(change, elzevir_app::catalog::AgentChange::Heading(h) if h == "Taken")
+                });
+                if taken {
+                    return Err(EditFailed::Refused(CatalogRefusal::AgentHeadingTaken(
+                        "Taken".to_owned(),
+                    )));
+                }
+                update.row_version
+            }
             Edit::NewInstance(new) if new.work.0 == 404 => {
                 return Err(EditFailed::Refused(CatalogRefusal::UnknownWork(new.work)));
             }
@@ -274,6 +285,10 @@ impl elzevir_app::editing::CatalogEditor for Editor {
                 subject: edit.subject,
                 row_version: 2,
             },
+            Edit::Agent(update) => CatalogOutput::AgentUpdated {
+                agent: update.agent,
+                row_version: 2,
+            },
             Edit::NewInstance(new) => CatalogOutput::InstanceAdded {
                 work: new.work,
                 instance: InstanceId(902),
@@ -281,6 +296,25 @@ impl elzevir_app::editing::CatalogEditor for Editor {
         };
         self.0.lock().unwrap().push((actor, edit));
         Ok(output)
+    }
+}
+
+/// One agent, 1, named by three Works with four Instances.
+pub(crate) struct Agents;
+
+impl elzevir_app::authorities::AgentReader for Agents {
+    fn agent(
+        &self,
+        id: elzevir_domain::catalog::AgentId,
+    ) -> Result<Option<elzevir_app::authorities::AgentView>, CatalogReadError> {
+        Ok((id.0 == 1).then(|| elzevir_app::authorities::AgentView {
+            id,
+            kind: elzevir_domain::catalog::AgentKind::Person,
+            heading: "Assis, Machado de, 1839-1908".to_owned(),
+            version: 1,
+            works: 3,
+            instances: 4,
+        }))
     }
 }
 

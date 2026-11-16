@@ -108,6 +108,8 @@ pub struct AuthorityLine {
     pub key: usize,
     /// Heading.
     pub name: String,
+    /// The agent, whose focused block edits it (docs/specs/catalogo/autoridades.md).
+    pub agent: Option<i64>,
     /// Symbol of its kind of agent in `/static/elzevir-icons.svg`.
     pub icon: &'static str,
 }

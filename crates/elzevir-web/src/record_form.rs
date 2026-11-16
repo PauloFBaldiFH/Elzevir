@@ -295,6 +295,7 @@ pub(crate) fn work_form<'a>(
         version,
         sections: work_sections(t, record),
         history: Some(format!("/equipe/acervo/obra/{work}/historico")),
+        reach: None,
     }
 }
 
@@ -311,6 +312,7 @@ pub(crate) fn instance_form<'a>(
         version,
         sections: instance_sections(t, record),
         history: Some(format!("/equipe/acervo/instancia/{instance}/historico")),
+        reach: None,
     }
 }
 

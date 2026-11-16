@@ -86,6 +86,7 @@ fn main() {
             items: Arc::clone(&store) as _,
             statements: Arc::clone(&store) as _,
             history: Arc::clone(&store) as _,
+            agents: Arc::clone(&store) as _,
         },
         I18n::english().unwrap(),
         WebConfig::default(),
