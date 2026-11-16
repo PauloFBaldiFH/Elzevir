@@ -1103,6 +1103,28 @@ async fn the_new_record_forms_start_blank_or_carry_over_the_previous_record() {
     );
     assert!(instance.contains(r#"value="Dom Casmurro""#));
     assert!(!instance.contains("9788535910667"));
+    assert!(!instance.contains("256 p."));
+
+    // "Like this" copies the Instance but its identifiers (item 22).
+    assert!(listing.contains(r#"data-action="copy-instance" data-from="10""#));
+    let copy = body(
+        send(
+            &app,
+            get(
+                "/equipe/acervo/instancia/10/nova?copiar=1",
+                Some(&ana),
+                None,
+            ),
+        )
+        .await,
+    )
+    .await;
+    assert!(
+        copy.contains(r#"data-endpoint="/equipe/acervo/obra/1/instancias" data-create="instance""#)
+    );
+    assert!(copy.contains("New Instance like this one"));
+    assert!(copy.contains(r#"value="Dom Casmurro""#) && copy.contains("256 p."));
+    assert!(!copy.contains("9788535910667"));
 }
 
 #[tokio::test]

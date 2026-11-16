@@ -701,8 +701,8 @@ function newFamily(isbn) {
   });
 }
 
-function newInstance(from) {
-  openNew(`/equipe/acervo/instancia/${encodeURIComponent(from)}/nova`, (panel) => {
+function newInstance(from, copy) {
+  openNew(`/equipe/acervo/instancia/${encodeURIComponent(from)}/nova${copy ? "?copiar=1" : ""}`, (panel) => {
     const grid = document.querySelector(".family-focus[open] > .family-grid");
     if (grid) grid.after(panel);
     else document.getElementById("families")?.before(panel);
@@ -780,7 +780,8 @@ document.addEventListener("click", (event) => {
     if (action.dataset.action === "edit-items" && action.dataset.from) openItemGrid(action);
     if (action.dataset.action === "new-family") newFamily();
     else if (action.dataset.action === "new-instance" && action.dataset.from) newInstance(action.dataset.from);
-    if (action.dataset.action.startsWith("new-") || action.dataset.action === "edit-items") return;
+    else if (action.dataset.action === "copy-instance" && action.dataset.from) newInstance(action.dataset.from, true);
+    if (action.dataset.action.startsWith("new-") || action.dataset.action === "edit-items" || action.dataset.action === "copy-instance") return;
   }
   if (action && form) {
     const fieldset = action.closest("fieldset");
