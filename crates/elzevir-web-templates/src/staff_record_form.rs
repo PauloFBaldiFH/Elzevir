@@ -163,6 +163,8 @@ pub enum ColumnKind {
     Check,
     /// A whole number, sent as a number (`null` when empty).
     Number,
+    /// Several lines: the statements of a nested resource.
+    Details,
     /// Not shown: what the row was drawn from, sent back as it is.
     Hidden,
 }

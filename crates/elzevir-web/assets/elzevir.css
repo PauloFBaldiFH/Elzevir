@@ -416,6 +416,8 @@ a.field-value:hover { text-decoration: underline; }
 .record-form .form-section-heading { margin: 0 0 8px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--pill-text); }
 .record-form .form-row .cell-label, .record-form .form-row .cell-iri { flex: 2; }
 .record-form .form-row .cell-language { flex: 0 0 5em; }
+.record-form .form-row:has(.cell-details) { flex-wrap: wrap; }
+.record-form .form-row .cell-details { flex: 1 1 100%; font-family: ui-monospace, monospace; font-size: 0.8rem; }
 .record-form .form-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
 .record-form .form-actions button[type="submit"] { font: inherit; font-weight: 700; border: 0; border-radius: 8px; padding: 7px 16px; background: var(--pill-text); color: #fff; cursor: pointer; }
 .record-form .form-hint, .record-form .form-saved { font-size: 0.78rem; color: var(--text-muted); }

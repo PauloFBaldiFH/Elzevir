@@ -3,5 +3,6 @@
 {% when ColumnKind::Select(options) %}<select class="cell cell-{{ cell.column.name }}" data-name="{{ cell.column.name }}"{% if cell.column.optional %} data-optional{% endif %} aria-label="{{ t.get(cell.column.label_key) }}">{% for option in options %}<option value="{{ option.value }}"{% if option.value == cell.value.as_str() %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select>
 {% when ColumnKind::Check %}<label class="cell cell-check"><input type="checkbox" data-name="{{ cell.column.name }}" data-type="bool"{% if cell.value == "true" %} checked{% endif %}> {{ t.get(cell.column.label_key) }}</label>
 {% when ColumnKind::Number %}<input type="text" inputmode="numeric" class="cell cell-{{ cell.column.name }}" data-name="{{ cell.column.name }}" data-type="number" value="{{ cell.value }}" aria-label="{{ t.get(cell.column.label_key) }}" placeholder="{{ t.get(cell.column.label_key) }}" maxlength="19">
+{% when ColumnKind::Details %}<textarea class="cell cell-details" data-name="{{ cell.column.name }}" data-optional rows="2" maxlength="20000" aria-label="{{ t.get(cell.column.label_key) }}" placeholder="{{ t.get(cell.column.label_key) }}">{{ cell.value }}</textarea>
 {% when ColumnKind::Hidden %}<input type="hidden" data-name="{{ cell.column.name }}" data-optional value="{{ cell.value }}">
 {% endmatch %}
