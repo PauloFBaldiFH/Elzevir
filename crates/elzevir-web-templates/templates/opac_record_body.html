@@ -10,7 +10,7 @@
     <dt>{{ t.get("opac-record-contributors") }}</dt>
     <dd>{% for contributor in contributors %}<span class="chip">{{ contributor }}</span>{% endfor %}</dd>
     {% endif %}
-    {% if let Some(material) = material %}<dt>{{ t.get("opac-record-material") }}</dt><dd>{{ t.get(material) }}</dd>{% endif %}
+    {% if !material.is_empty() %}<dt>{{ t.get("opac-record-material") }}</dt><dd>{% for badge in material %}<span class="material-badge"><svg class="badge-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ badge.icon }}"></use></svg>{{ t.get(badge.label_key) }}</span>{% endfor %}</dd>{% endif %}
     {% if let Some(publication) = publication %}<dt>{{ t.get("opac-record-publication") }}</dt><dd>{{ publication }}</dd>{% endif %}
     {% if let Some(classification) = classification %}<dt>{{ t.get("opac-record-classification") }}</dt><dd>{{ classification }}</dd>{% endif %}
     {% if !subjects.is_empty() %}

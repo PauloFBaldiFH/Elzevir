@@ -17,6 +17,7 @@ use elzevir_web_templates::{
 };
 use serde::Deserialize;
 
+use crate::icons::material_badges;
 use crate::{AppState, render};
 
 /// Record bodies kept at most; past this the cache starts over. A body is a few kilobytes,
@@ -123,7 +124,7 @@ fn results_page<'a>(state: &'a AppState, results: &'a ResultsPage) -> OpacResult
             title: row.hit.title.clone(),
             contributor: row.hit.main_contributor.clone(),
             date: row.hit.date.clone(),
-            material: row.hit.material_type.map(material_key),
+            material: material_badges(row.hit.material),
             call_number: row.hit.call_number.clone(),
             items: row.items,
             available: row.available,
@@ -204,10 +205,7 @@ fn record_body<'a>(
             .iter()
             .map(|(_, name)| &**name)
             .collect(),
-        material: instance
-            .material_type
-            .or(instance.work_material_type)
-            .map(material_key),
+        material: material_badges(instance.material),
         publication,
         classification: instance.classification.as_deref(),
         subjects: instance.subjects.iter().map(|(_, term)| &**term).collect(),

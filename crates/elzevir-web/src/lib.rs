@@ -11,6 +11,7 @@ mod creating;
 mod described;
 mod editing;
 mod form_sections;
+mod icons;
 mod items;
 mod new_record;
 mod opac;

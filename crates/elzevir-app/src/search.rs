@@ -8,9 +8,10 @@
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
 
-use elzevir_domain::catalog::{HubId, IdentifierKind, InstanceId, MaterialType, WorkId};
+use elzevir_domain::catalog::{HubId, IdentifierKind, InstanceId, WorkId};
 
 use crate::catalog::{CatalogReadError, CatalogReader, InstanceView, ItemView};
+use crate::material::Material;
 use crate::parallelism::Parallelism;
 
 /// Effect kind asking the index to rebuild one Instance's document after commit.
@@ -78,8 +79,8 @@ pub struct SearchDocument {
     pub notes: Vec<String>,
     /// Date of publication, as written.
     pub date: Option<String>,
-    /// Category of material: the Instance's, else the Work's.
-    pub material_type: Option<MaterialType>,
+    /// The content and carrier its description gives.
+    pub material: Material,
     /// Classification number of the Work, such as `869.3`.
     pub classification: Option<String>,
     /// Identifiers, normalized for exact match (ISBN and ISSN without hyphens).
@@ -129,7 +130,7 @@ pub fn document_of(instance: &InstanceView, items: &[ItemView]) -> SearchDocumen
             .chain(instance.typed_notes.iter().cloned())
             .collect(),
         date: instance.date.clone(),
-        material_type: instance.material_type.or(instance.work_material_type),
+        material: instance.material,
         classification: instance.classification.clone(),
         identifiers: instance
             .identifiers
@@ -207,8 +208,8 @@ pub struct SearchHit {
     pub main_contributor: Option<String>,
     /// Date of publication.
     pub date: Option<String>,
-    /// Category of material.
-    pub material_type: Option<MaterialType>,
+    /// The content and carrier its description gives.
+    pub material: Material,
     /// The first call number of its Items.
     pub call_number: Option<String>,
 }
@@ -406,8 +407,7 @@ mod tests {
                 work_version: 1,
                 work_title: format!("Work {}", id.0),
                 hub: None,
-                work_material_type: Some(MaterialType::Book),
-                material_type: None,
+                material: Material::default(),
                 relations: Vec::new(),
                 title: format!("Title {}", id.0),
                 other_titles: Vec::new(),

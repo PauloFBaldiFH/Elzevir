@@ -18,6 +18,7 @@ use elzevir_app::catalog::{
 };
 use elzevir_app::export::StoredRecord;
 use elzevir_app::listing::{Family, FamilyCursor, FamilyHead, FamilyInstance, FamilyWork};
+use elzevir_app::material::{ContentKind, Material};
 use elzevir_app::memory::{MemoryProbe, MemoryReport};
 use elzevir_app::search::SearchHit;
 use elzevir_app::staff::{
@@ -77,7 +78,10 @@ fn family(n: i64, title: &str, lost: bool) -> Family {
                 publisher: Some("Garnier".to_owned()),
                 date: Some("1899".to_owned()),
                 isbn: Some("9788535910667".to_owned()),
-                material_type: Some(MaterialType::Book),
+                material: Material {
+                    content: Some(ContentKind::Text),
+                    carrier: None,
+                },
                 items: vec![ItemView {
                     id: ItemId(n),
                     barcode: None,
@@ -161,7 +165,7 @@ fn hit(n: i64) -> SearchHit {
         title: String::new(),
         main_contributor: None,
         date: None,
-        material_type: None,
+        material: Material::default(),
         call_number: None,
     }
 }
@@ -176,8 +180,7 @@ fn catalog_with_record() -> common::Catalog {
         work_version: 1,
         work_title: "Dom Casmurro".to_owned(),
         hub: None,
-        work_material_type: Some(MaterialType::Book),
-        material_type: Some(MaterialType::Book),
+        material: Material::default(),
         relations: Vec::new(),
         title: "Dom Casmurro".to_owned(),
         other_titles: Vec::new(),
@@ -331,7 +334,7 @@ async fn the_first_page_shows_families_with_pills_and_a_loader_for_the_next() {
     assert!(html.contains(r#"<span class="chip chip-agent">Assis, Machado de</span>"#));
     assert!(!html.contains("<details class=\"family-focus\" open>"));
     assert!(html.contains(
-        r#"<use href="/static/elzevir-icons.svg#book"></use></svg><span class="item-signal">Out of circulation</span> <span class="item-pill-text">Main Library | 869.3 A848d | T1</span></li>"#
+        r#"<use href="/static/elzevir-icons.svg#content-text"></use></svg><span class="item-signal">Out of circulation</span> <span class="item-pill-text">Main Library | 869.3 A848d | T1</span></li>"#
     ));
     assert!(html.contains(r#"hx-get="/equipe/acervo?after=w30.030""#));
     // Blocks name their parent, for the cords drawn by the page's script.
@@ -350,7 +353,7 @@ async fn the_first_page_shows_families_with_pills_and_a_loader_for_the_next() {
     assert!(html.contains(r#"data-toggle="hub" aria-pressed="true" hidden>Hub</button>"#));
     let icons = send(&app, get("/static/elzevir-icons.svg", None, None)).await;
     assert_eq!(icons.status(), StatusCode::OK);
-    assert!(body(icons).await.contains(r#"<symbol id="periodical""#));
+    assert!(body(icons).await.contains(r#"<symbol id="content-serial""#));
     let script = send(&app, get("/static/elzevir-catalog.js", None, None)).await;
     assert_eq!(script.status(), StatusCode::OK);
     assert!(body(script).await.contains("ResizeObserver"));

@@ -120,7 +120,7 @@ fn results_come_in_pages_with_the_total_and_the_list_fields() {
     );
     assert_eq!(first.date.as_deref(), Some("1995"));
     assert_eq!(first.call_number.as_deref(), Some("310.62 P94"));
-    assert!(first.material_type.is_some());
+    assert!(first.material.content.is_some());
     assert_eq!(index.search("medici", 0, 0).unwrap().total, 5);
 }
 

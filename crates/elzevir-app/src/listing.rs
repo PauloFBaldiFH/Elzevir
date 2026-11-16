@@ -7,13 +7,12 @@
 
 use std::num::NonZeroUsize;
 
-use elzevir_domain::catalog::{
-    BranchId, HubId, InstanceId, ItemId, MaterialType, SublocationId, WorkId, isbn13,
-};
+use elzevir_domain::catalog::{BranchId, HubId, InstanceId, ItemId, SublocationId, WorkId, isbn13};
 use unicode_normalization::UnicodeNormalization;
 use unicode_normalization::char::is_combining_mark;
 
 use crate::catalog::{CatalogReadError, ItemView, ShelfSignal};
+use crate::material::Material;
 use crate::opac::MAX_QUERY_CHARS;
 use crate::search::{SearchError, SearchIndex};
 
@@ -151,8 +150,8 @@ pub struct FamilyInstance {
     pub date: Option<String>,
     /// The first ISBN, as written.
     pub isbn: Option<String>,
-    /// Category of material.
-    pub material_type: Option<MaterialType>,
+    /// The content and carrier its description gives.
+    pub material: Material,
     /// Its Items, in creation order.
     pub items: Vec<ItemView>,
 }
@@ -356,8 +355,8 @@ pub struct InstanceRow {
     pub date: Option<String>,
     /// The first ISBN.
     pub isbn: Option<String>,
-    /// Category of material.
-    pub material_type: Option<MaterialType>,
+    /// The content and carrier its description gives.
+    pub material: Material,
     /// Items in all.
     pub items: usize,
     /// Items available.
@@ -571,7 +570,7 @@ fn instance_row(instance: FamilyInstance, matched: Match) -> InstanceRow {
         publisher: instance.publisher,
         date: instance.date,
         isbn: instance.isbn,
-        material_type: instance.material_type,
+        material: instance.material,
         items,
         available,
         more_items: items.saturating_sub(pills.len()),
@@ -651,7 +650,7 @@ mod tests {
             publisher: None,
             date: None,
             isbn: None,
-            material_type: None,
+            material: Material::default(),
             items: vec![
                 item(1, "0005", lost),
                 item(2, "0004", ok),
@@ -836,7 +835,7 @@ mod tests {
             title: String::new(),
             main_contributor: None,
             date: None,
-            material_type: None,
+            material: Material::default(),
             call_number: None,
         }
     }
@@ -865,7 +864,7 @@ mod tests {
                         publisher: None,
                         date: None,
                         isbn: None,
-                        material_type: None,
+                        material: Material::default(),
                         items: Vec::new(),
                     })
                     .collect(),

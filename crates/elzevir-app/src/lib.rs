@@ -14,6 +14,7 @@ pub mod koha_types;
 pub mod listing;
 pub mod marc_mapping;
 pub mod matching;
+pub mod material;
 pub mod memory;
 pub mod opac;
 pub mod parallelism;

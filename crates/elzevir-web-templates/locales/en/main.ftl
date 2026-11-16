@@ -83,6 +83,23 @@ material-digital = Digital resource
 material-visual-material = Visual material
 material-mixed = Mixed materials
 
+## Content and carrier, as their icons say them (bibframe-completo.md, item 15)
+content-text = Text
+content-notated-music = Notated music
+content-audio = Audio
+content-moving-image = Moving image
+content-still-image = Still image
+content-serial = Serial
+content-tactile = Tactile
+content-cartography = Cartography
+content-object = Object
+content-multimedia = Multimedia
+content-mixed = Mixed material
+content-dataset = Dataset
+carrier-print = Print
+carrier-online = Online
+carrier-disc = Disc
+
 # Staff catalog listing
 staff-home-catalog = Catalog
 staff-catalog-title = Catalog
@@ -142,7 +159,8 @@ staff-fields-work = Work
 staff-fields-instance = Instance
 staff-fields-items = Items
 staff-fields-preferred-title = Preferred title
-staff-fields-material = Category of material
+staff-fields-material = Content
+staff-fields-carrier = Carrier
 staff-fields-classification = Classification
 staff-fields-languages = Languages
 staff-fields-contributions = Contributions

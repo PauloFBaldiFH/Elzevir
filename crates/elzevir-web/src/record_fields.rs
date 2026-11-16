@@ -10,6 +10,7 @@ use axum::response::{IntoResponse, Redirect, Response};
 use elzevir_app::catalog::{CodeLists, ItemData, NewRecord};
 use elzevir_app::codes::CodeTable;
 use elzevir_app::export::stored_record;
+use elzevir_app::material::material_of;
 use elzevir_app::staff::Permission;
 use elzevir_domain::catalog::{
     AgentKind, IdentifierKind, InstanceId, NoteKind, SubjectKind, WorkRelationKind,
@@ -18,7 +19,7 @@ use elzevir_web_templates::{FieldEntry, FieldGroup, FieldValue, I18n, ItemFields
 use serde::Deserialize;
 
 use crate::catalog::signal;
-use crate::opac::material_key;
+use crate::icons::{carrier_badge, content_badge};
 use crate::record_form::{instance_form, work_form};
 use crate::staff::current_session;
 use crate::{AppState, render};
@@ -116,10 +117,14 @@ fn work_group(t: &I18n, record: &NewRecord) -> FieldGroup {
         "staff-fields-preferred-title",
         vec![plain(&record.work_title)],
     );
+    let content = material_of(&record.work_description, &record.instance.description).content;
     push(
         &mut fields,
         "staff-fields-material",
-        vec![plain(&t.get(material_key(record.material_type)))],
+        content
+            .map(|kind| plain(&t.get(content_badge(kind).label_key)))
+            .into_iter()
+            .collect(),
     );
     push(
         &mut fields,
@@ -242,11 +247,11 @@ fn instance_group(t: &I18n, record: &NewRecord) -> FieldGroup {
         "staff-fields-series",
         optional(&instance.series),
     );
-    if let Some(material) = instance.material_type {
+    if let Some(carrier) = material_of(&record.work_description, &instance.description).carrier {
         push(
             &mut fields,
-            "staff-fields-material",
-            vec![plain(&t.get(material_key(material)))],
+            "staff-fields-carrier",
+            vec![plain(&t.get(carrier_badge(carrier).label_key))],
         );
     }
     push(

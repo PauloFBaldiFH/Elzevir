@@ -11,13 +11,14 @@ use elzevir_app::catalog::{CatalogReadError, ItemView};
 use elzevir_app::listing::{
     CatalogListing, Family, FamilyCursor, FamilyHead, FamilyInstance, FamilyWork, ScanCode, Scanned,
 };
+use elzevir_app::material::Material;
 use elzevir_domain::catalog::{
     BranchId, HubId, IdentifierKind, InstanceId, ItemId, MatchRule, PolicyId, SublocationId, WorkId,
 };
 use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 
 use crate::ElzevirStore;
-use crate::catalog::{ReadFailure, material_type, status_at};
+use crate::catalog::{ReadFailure, material, status_at};
 
 impl CatalogListing for ElzevirStore {
     fn families_after(
@@ -339,7 +340,7 @@ fn instances_of(
         return Ok(grouped);
     }
     let sql = format!(
-        "SELECT work_id, id, row_version, title, edition, publisher, date, material_type,
+        "SELECT work_id, id, row_version, title, edition, publisher, date,
                 (SELECT value FROM instance_identifiers
                  WHERE instance_id = instances.id AND kind = ?
                  ORDER BY position LIMIT 1)
@@ -361,8 +362,8 @@ fn instances_of(
                 edition: row.get(4)?,
                 publisher: row.get(5)?,
                 date: row.get(6)?,
-                material_type: material_type(row.get(7)?)?,
-                isbn: row.get(8)?,
+                material: Material::default(),
+                isbn: row.get(7)?,
                 items: Vec::new(),
             },
         ));
@@ -370,6 +371,7 @@ fn instances_of(
     let ids: Vec<i64> = found.iter().map(|(_, instance)| instance.id.0).collect();
     let mut items = items_of(c, &ids)?;
     for (work, mut instance) in found {
+        instance.material = material(c, work, instance.id.0)?;
         instance.items = items.remove(&instance.id.0).unwrap_or_default();
         grouped.entry(work).or_default().push(instance);
     }

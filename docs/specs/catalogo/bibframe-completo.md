@@ -101,6 +101,7 @@ A diretriz, em quatro frases:
 
 16. O ícone nunca é a única informação: vem com o rótulo ou com `aria-label` (spec de interação §12).
 17. "Emprestado" é lido da circulação, não é descrição gravada no exemplar.
+17a. Como está feito (etapa 7a): o conteúdo e o suporte saem da descrição, não da categoria de material. O conteúdo é o primeiro que vale: conteúdo tátil (`tc*`) ou Instância `bf:Tactile`, depois Obra `bf:Serial`, depois a primeira classe da Obra da tabela (`MusicAudio` e `NonMusicAudio` contam como `Audio`, `Kit` como `Multimedia`; `MixedMaterial` leva as camadas com o rótulo próprio), depois o primeiro `bf:content` da tabela. O suporte é a classe da Instância (`bf:Print`, `bf:Electronic`), senão o `bf:carrier` (`nc`, `cr`, `sd`, `vd`). Listagem, pílulas, resultados e registro do OPAC mostram ícone e rótulo de cada um; a pílula do exemplar mostra o do suporte, senão o do conteúdo; o índice de busca guarda os dois no lugar da categoria. Registro sem descrição mostra o ícone de conteúdo desconhecido.
 
 ### Exemplar, unidade, localização e coleção
 

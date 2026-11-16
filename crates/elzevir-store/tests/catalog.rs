@@ -13,6 +13,8 @@ use elzevir_app::catalog::{
 };
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
+use elzevir_app::description::{instance_of_material, work_of_material};
+use elzevir_app::material::{CarrierKind, ContentKind, Material};
 use elzevir_domain::catalog::{
     AgentKind, HubId, IdentifierKind, InstanceId, MaterialType, Money, SubjectKind, WorkId,
     WorkRelationKind,
@@ -346,7 +348,7 @@ fn item_refusals_name_the_problem() {
 }
 
 #[test]
-fn hubs_relations_and_material_types_read_back() {
+fn hubs_relations_and_materials_read_back() {
     let dir = tempfile::tempdir().unwrap();
     let store = open(&dir);
     let CatalogOutput::Hub(hub) = run(
@@ -366,6 +368,8 @@ fn hubs_relations_and_material_types_read_back() {
         work: original,
     }];
     translation.instance.material_type = Some(MaterialType::Digital);
+    translation.work_description = work_of_material(MaterialType::Book);
+    translation.instance.description = instance_of_material(Some(MaterialType::Digital));
     let CatalogOutput::Record { work, instance, .. } =
         run(&store, CatalogCommand::AddRecord(Box::new(translation))).unwrap()
     else {
@@ -375,8 +379,14 @@ fn hubs_relations_and_material_types_read_back() {
     let view = store.instance(instance).unwrap().unwrap();
     assert_eq!(view.work, work);
     assert_eq!(view.hub, Some(hub));
-    assert_eq!(view.work_material_type, Some(MaterialType::Book));
-    assert_eq!(view.material_type, Some(MaterialType::Digital));
+    assert_eq!(
+        view.material,
+        Material {
+            content: Some(ContentKind::Text),
+            carrier: Some(CarrierKind::Online),
+        },
+        "the Work's description gives the content, the Instance's the carrier"
+    );
     assert_eq!(
         view.relations,
         [(WorkRelationKind::TranslationOf, original)]
@@ -385,9 +395,9 @@ fn hubs_relations_and_material_types_read_back() {
     let plain = store.instance(original_instance).unwrap().unwrap();
     assert_eq!(plain.hub, None);
     assert_eq!(
-        plain.material_type,
-        Some(MaterialType::Book),
-        "an Instance without its own category takes the Work's"
+        plain.material,
+        Material::default(),
+        "a record without a description has no content nor carrier"
     );
     assert!(plain.relations.is_empty());
 }

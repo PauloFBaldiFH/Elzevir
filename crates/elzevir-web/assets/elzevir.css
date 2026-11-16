@@ -312,9 +312,11 @@ a.field-value:hover { text-decoration: underline; }
 }
 .item-pill:hover { transform: translateX(2px); box-shadow: 0 4px 10px rgba(15, 23, 42, 0.1); }
 .item-pill-text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-/* The icon is the material type of the Instance, in the colour of the item's signal; the
+/* The icon is the carrier (else the content) of the Instance, in the colour of the item's signal; the
    signal is written out beside it, so colour is never the only cue. */
 .item-icon { flex: none; width: 16px; height: 16px; color: var(--signal-border, var(--text-muted)); }
+.material-badge { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; }
+.material-badge .badge-icon { flex: none; width: 16px; height: 16px; color: var(--text-muted); }
 .item-signal { flex: none; font-weight: 800; }
 .item-signal::after { content: " ·"; font-weight: 600; opacity: 0.6; }
 .item-pill.more-items { justify-content: center; border: 1.5px dashed var(--inst-accent); background: var(--hub-bg); font-weight: 700; }
