@@ -924,6 +924,45 @@ async fn suggestions_list_existing_agents_and_subjects_by_prefix() {
 }
 
 #[tokio::test]
+async fn the_isbn_field_is_checked_by_the_server_s_rule() {
+    let app = app();
+    let anonymous = send(&app, get("/equipe/acervo/isbn?q=8560342013", None, None)).await;
+    assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
+    let session = signed_in(&app).await;
+    let check = |typed: &'static str| {
+        let app = app.clone();
+        let session = session.clone();
+        async move {
+            body(
+                send(
+                    &app,
+                    get(
+                        &format!("/equipe/acervo/isbn?q={typed}"),
+                        Some(&session),
+                        None,
+                    ),
+                )
+                .await,
+            )
+            .await
+        }
+    };
+    assert_eq!(check("").await, "{}");
+    assert_eq!(
+        check("85-60342-01-3").await,
+        r#"{"error":"This ISBN is not valid: check the digits."}"#
+    );
+    assert_eq!(
+        check("85-60342-01-x").await,
+        r#"{"value":"9788560342013","note":"Converted from the ISBN-10 856034201X."}"#
+    );
+    assert_eq!(
+        check("978-85-60342-01-3").await,
+        r#"{"value":"9788560342013","note":"ISBN-10: 856034201X"}"#
+    );
+}
+
+#[tokio::test]
 async fn a_cataloguer_creates_a_family_or_an_instance_from_the_screen() {
     let app = app();
     let family = r#"{"work": [{"Title": "Quincas Borba"}, {"Classes": [{"class": "Text"}]}], "instance": []}"#;

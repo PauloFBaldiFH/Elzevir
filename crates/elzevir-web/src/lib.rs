@@ -132,6 +132,7 @@ pub fn router(state: AppState) -> Router {
             "/equipe/acervo/sugestoes/assuntos",
             get(editing::suggest_subjects),
         )
+        .route("/equipe/acervo/isbn", get(editing::check_isbn_field))
         .route(
             "/equipe/acervo/nova",
             get(new_record::new_family).post(creating::create_family),

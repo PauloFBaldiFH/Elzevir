@@ -3,7 +3,7 @@
 //! items 16 to 24, and docs/specs/catalogo/criacao.md): content validation before the command, and the port the store
 //! implements.
 
-use elzevir_domain::catalog::IdentifierKind;
+use elzevir_domain::catalog::{IdentifierKind, isbn10, isbn13};
 use elzevir_domain::statement::{Description, EntityKind, check_description};
 
 use crate::catalog::{
@@ -279,36 +279,61 @@ fn digit_values(value: &str) -> Option<Vec<u32>> {
         .collect()
 }
 
+/// The rule of [`isbn13`], on a value already without separators: digits only, `X` only
+/// as the last character of an ISBN-10.
 fn is_isbn(value: &str) -> bool {
-    match value.len() {
-        10 => digit_values(value).is_some_and(|digits| {
-            // Weights 10 down to 1; the sum is a multiple of 11.
-            digits
-                .iter()
-                .zip((1..=10).rev())
-                .map(|(digit, weight)| digit * weight)
-                .sum::<u32>()
-                % 11
-                == 0
-        }),
-        13 => {
-            let Some(digits) = value
-                .chars()
-                .map(|character| character.to_digit(10))
-                .collect::<Option<Vec<u32>>>()
-            else {
-                return false;
-            };
-            // Weights alternate 1 and 3; the sum is a multiple of 10.
-            digits
-                .iter()
-                .zip([1, 3].into_iter().cycle())
-                .map(|(digit, weight)| digit * weight)
-                .sum::<u32>()
-                % 10
-                == 0
+    let last = value.len().saturating_sub(1);
+    value
+        .chars()
+        .enumerate()
+        .all(|(index, character)| character.is_ascii_digit() || (character == 'X' && index == last))
+        && isbn13(value).is_some()
+}
+
+/// What the ISBN field says when the cataloguer leaves it (docs/specs/catalogo/edicao.md,
+/// item 38).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IsbnCheck {
+    /// Nothing typed: nothing to say.
+    Empty,
+    /// Not an ISBN: wrong length, characters or check digit.
+    Invalid,
+    /// An ISBN, written as the field keeps it: an ISBN-10 becomes its ISBN-13.
+    Valid {
+        /// The ISBN-13 the field holds.
+        isbn13: String,
+        /// The ISBN-10 that was typed, when one was.
+        typed_isbn10: Option<String>,
+        /// The ISBN-10 of a `978` ISBN-13 that was typed.
+        isbn10: Option<String>,
+    },
+}
+
+/// Checks the ISBN typed in a field, by the same rule the edit command uses.
+#[must_use]
+pub fn check_isbn(typed: &str) -> IsbnCheck {
+    let compact = compact(typed);
+    if compact.is_empty() {
+        return IsbnCheck::Empty;
+    }
+    if !is_isbn(&compact) {
+        return IsbnCheck::Invalid;
+    }
+    let Some(thirteen) = isbn13(&compact) else {
+        return IsbnCheck::Invalid;
+    };
+    if compact.len() == 10 {
+        IsbnCheck::Valid {
+            isbn13: thirteen,
+            typed_isbn10: Some(compact),
+            isbn10: None,
         }
-        _ => false,
+    } else {
+        IsbnCheck::Valid {
+            isbn10: isbn10(&thirteen),
+            isbn13: thirteen,
+            typed_isbn10: None,
+        }
     }
 }
 
@@ -339,6 +364,38 @@ mod tests {
             value: value.to_owned(),
             qualifier: Some("  ".to_owned()),
         }
+    }
+
+    #[test]
+    fn the_isbn_field_is_checked_and_an_isbn10_becomes_an_isbn13() {
+        assert_eq!(check_isbn("  "), IsbnCheck::Empty);
+        assert_eq!(check_isbn("85-60342-01-3"), IsbnCheck::Invalid);
+        assert_eq!(check_isbn("9778560342013"), IsbnCheck::Invalid);
+        assert_eq!(check_isbn("85603X2016"), IsbnCheck::Invalid);
+        assert_eq!(
+            check_isbn("85-60342-01-x"),
+            IsbnCheck::Valid {
+                isbn13: "9788560342013".to_owned(),
+                typed_isbn10: Some("856034201X".to_owned()),
+                isbn10: None,
+            }
+        );
+        assert_eq!(
+            check_isbn("978-85-60342-01-3"),
+            IsbnCheck::Valid {
+                isbn13: "9788560342013".to_owned(),
+                typed_isbn10: None,
+                isbn10: Some("856034201X".to_owned()),
+            }
+        );
+        assert_eq!(
+            check_isbn("979 10 90636 07 1"),
+            IsbnCheck::Valid {
+                isbn13: "9791090636071".to_owned(),
+                typed_isbn10: None,
+                isbn10: None,
+            }
+        );
     }
 
     #[test]

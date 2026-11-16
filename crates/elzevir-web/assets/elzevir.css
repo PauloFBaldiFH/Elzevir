@@ -439,6 +439,10 @@ a.field-value:hover { text-decoration: underline; }
 .record-form .suggestions li { padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.88rem; }
 .record-form .suggestions li:hover, .record-form .suggestions li.active { background: color-mix(in srgb, var(--pill-text) 12%, transparent); }
 .record-form .suggestion-detail { font-size: 0.75rem; color: var(--text-muted); }
+.record-form .form-row:has(> .isbn-note) { flex-wrap: wrap; }
+.record-form .isbn-note { flex-basis: 100%; font-size: 0.8rem; color: var(--text-muted); }
+.record-form .isbn-note.error { color: var(--elzevir-color-error); }
+.record-form .cell.invalid { border-color: var(--elzevir-color-error); }
 .record-form .new-mark { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--elzevir-color-out-text); background: var(--elzevir-color-out-bg); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
 .card[data-level] { cursor: pointer; }
 .card[data-level]:focus-visible { outline: 3px solid var(--work-accent); outline-offset: 2px; }

@@ -294,6 +294,30 @@ pub fn isbn13(text: &str) -> Option<String> {
     }
 }
 
+/// The ISBN-10 of `isbn13`, thirteen digits as [`isbn13`] gives them: the nine digits after
+/// a `978` prefix with their own check digit (`X` for 10); `None` for a `979` ISBN, which
+/// has no ISBN-10, or for anything else.
+#[must_use]
+pub fn isbn10(isbn13: &str) -> Option<String> {
+    let rest = isbn13.strip_prefix("978")?;
+    let digits: Vec<u32> = rest
+        .chars()
+        .map(|c| c.to_digit(10))
+        .collect::<Option<_>>()?;
+    let [first9 @ .., _] = digits.as_slice() else {
+        return None;
+    };
+    if digits.len() != 10 {
+        return None;
+    }
+    let mut text = digits_to_string(first9);
+    match isbn10_check(first9) {
+        10 => text.push('X'),
+        check => text.push_str(&check.to_string()),
+    }
+    Some(text)
+}
+
 /// Check digit of an ISBN-10 from its first nine digits; 10 stands for `X`.
 fn isbn10_check(digits: &[u32]) -> u32 {
     let sum: u32 = digits.iter().zip((2..=10).rev()).map(|(d, w)| d * w).sum();
@@ -393,5 +417,22 @@ mod tests {
         assert_eq!(isbn13("978856034201"), None);
         assert_eq!(isbn13("85603X2016"), None);
         assert_eq!(isbn13(""), None);
+    }
+
+    #[test]
+    fn a_978_isbn_has_an_isbn10() {
+        assert_eq!(isbn10("9788560342013").as_deref(), Some("856034201X"));
+        assert_eq!(isbn10("9788535910667").as_deref(), Some("8535910662"));
+        assert_eq!(isbn10("9791090636071"), None);
+        assert_eq!(isbn10("978856034201"), None);
+        assert_eq!(isbn10("97885603420X3"), None);
+        for ten in ["856034201X", "080442957X", "8535910662"] {
+            assert_eq!(
+                isbn13(ten)
+                    .and_then(|thirteen| isbn10(&thirteen))
+                    .as_deref(),
+                Some(ten)
+            );
+        }
     }
 }

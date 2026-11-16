@@ -75,6 +75,13 @@ A tarefa 2.5 tem três partes, cada uma num PR:
 36. `Alt+↑` e `Alt+↓` movem a linha em que está o cursor; a ordem da lista é a ordem gravada (item 3).
 37. Uma migração (10) cria índices `NOCASE` nos nomes de agentes e assuntos, para a sugestão não varrer a tabela.
 
+
+#### ISBN no campo (2.12)
+
+38. Ao sair do campo de valor de um identificador do tipo ISBN, a tela pergunta ao servidor (`GET /equipe/acervo/isbn?q=`, só com sessão da equipe), que confere com a mesma regra do comando de edição: hífens e espaços não contam, só dígitos, `X` só como último caractere de um ISBN-10, dígito verificador certo e, no ISBN-13, prefixo `978` ou `979` (a regra de `isbn13`, a mesma do casamento; antes o comando aceitava um ISBN-13 de outro prefixo). A resposta diz o que o campo guarda e o que mostrar, já no idioma da tela; o JavaScript só aplica.
+39. ISBN errado aparece marcado no campo, com "Este ISBN não é válido", antes de salvar; o comando de edição continua recusando-o (item 19). ISBN-10 certo vira o ISBN-13 no campo, com a nota "Convertido do ISBN-10 …", e assim é gravado e casado. ISBN-13 `978` certo mostra o ISBN-10 correspondente como nota; `979` não tem ISBN-10.
+40. Sem o script, o comando grava o ISBN como foi digitado, sem separadores; o casamento já o compara como ISBN-13. Registros importados guardam o ISBN como veio no MARC; só muda o campo que quem cataloga visitou.
+
 ## 2. Origem no Koha
 
 - Edição: `C4::Biblio::ModBiblio` (chamada pelo editor `cataloguing/addbiblio.pl`), que regrava o registro MARC inteiro a partir do formulário.
