@@ -647,3 +647,30 @@ fn an_authority_lists_its_identifiers_elsewhere_once() {
     let view = store.subject(SubjectId(subject)).unwrap().unwrap();
     assert!(view.identifiers.iter().any(|link| link.value == value));
 }
+
+#[test]
+fn an_lcgft_genre_shows_its_label_on_the_record() {
+    let (_dir, store) = imported();
+    let store = Arc::new(store);
+    let index = Arc::new(TantivyIndex::in_memory(Parallelism::Serial).unwrap());
+    index_pending(&*store, &*store, &*index, &options()).unwrap();
+    let app = app(&store, &index);
+    // A novel: its 008/33 `f` becomes the LCGFT term by IRI, and the OPAC shows the
+    // Library of Congress's label for it.
+    let instance: i64 = store
+        .readers()
+        .read(|c| {
+            c.query_row(
+                "SELECT i.id FROM statements s JOIN instances i ON i.work_id = s.subject_id
+                 WHERE s.subject_kind = 2 AND s.parent IS NULL AND s.iri = ?1
+                 ORDER BY i.id LIMIT 1",
+                ["http://id.loc.gov/authorities/genreForms/gf2015026020"],
+                |row| row.get(0),
+            )
+        })
+        .unwrap();
+    let (status, record) = get(&app, &format!("/record/{instance}"));
+    assert_eq!(status, StatusCode::OK);
+    assert!(record.contains("Novels"));
+    assert!(!record.contains("gf2015026020"));
+}

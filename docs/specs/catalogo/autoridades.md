@@ -40,6 +40,6 @@
 
 ## 3. Paridade
 
-`livre`: interface e modelo. Fica para a próxima parte da 2.9: os rótulos do LCGFT. Lugares como cadastro próprio (hoje o lugar da Instância é texto) ficam para depois da Fase 2.
+`livre`: interface e modelo. Os rótulos do LCGFT (2.9e) estão na spec do BIBFRAME completo, item 12. Lugares como cadastro próprio (hoje o lugar da Instância é texto) ficam para depois da Fase 2.
 
 Testes: `crates/elzevir-app/src/authorities.rs` (validação do renomear e do papel), `crates/elzevir/tests/opac.rs` (renomear agente e assunto e ligar na loja real: versões, posição, recusas, página do OPAC, busca e MARC exportado) e `crates/elzevir-web/tests/staff_catalog.rs` (rotas, permissões, alcance, formulário e recusas).

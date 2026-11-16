@@ -192,6 +192,7 @@ fn module_index() -> String {
          pub(crate) mod vocabularies;\n\
          pub(crate) mod vocabulary_cataloging;\n\
          pub(crate) mod vocabulary_countries;\n\
+         pub(crate) mod vocabulary_genreforms;\n\
          pub(crate) mod vocabulary_languages;\n",
     );
     out

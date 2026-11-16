@@ -78,8 +78,8 @@ pub fn typed_notes(descriptions: &[&Description]) -> Vec<String> {
 }
 
 /// The labels of the Work's genres and forms (`bf:genreForm`), in order, for display
-/// (bibframe-completo.md, item 17b). A genre named only by an `id.loc.gov` IRI has no
-/// label here yet and is left out: the LCGFT labels come with the authorities.
+/// (bibframe-completo.md, item 17b). An LCGFT term named only by its IRI takes the
+/// Library of Congress's label; any other bare IRI has none and is left out.
 #[must_use]
 pub fn genres(work: &Description) -> Vec<String> {
     work.statements
@@ -91,7 +91,10 @@ pub fn genres(work: &Description) -> Vec<String> {
             Value::Concept { scheme, code } => elzevir_data::vocabulary::scheme(scheme)
                 .and_then(|scheme| scheme.concept(code))
                 .map(|concept| concept.label.to_owned()),
-            Value::Entity(_) | Value::Iri(_) => None,
+            Value::Iri(iri) => {
+                elzevir_data::vocabulary::genre_form(iri).map(|term| term.label.to_owned())
+            }
+            Value::Entity(_) => None,
         })
         .collect()
 }
@@ -218,9 +221,10 @@ mod tests {
                     text: "Contos".to_owned(),
                     language: None,
                 }),
+                genre(Value::Iri("https://example.org/genres/1".to_owned())),
             ],
         };
-        assert_eq!(genres(&work), ["Romances", "Contos"]);
+        assert_eq!(genres(&work), ["Romances", "Fiction", "Contos"]);
     }
 
     #[test]
