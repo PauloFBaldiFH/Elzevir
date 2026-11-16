@@ -402,6 +402,7 @@ a.field-value:hover { text-decoration: underline; }
 /* The focused block as a form (edicao.md, items 25 to 32). */
 .record-form { margin-top: 14px; border-top: 1px solid var(--card-border); padding-top: 12px; cursor: auto; }
 .record-form .form-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 12px 20px; }
+.record-form .form-field[data-change="Link"] { grid-column: 1 / -1; }
 .record-form .form-field:has([data-shape="rows"]), .record-form .form-field:has(textarea) { grid-column: 1 / -1; }
 .record-form .form-label { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; border: 0; min-width: 0; }
 .record-form .form-label > span, .record-form legend { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); padding: 0; }
@@ -417,7 +418,7 @@ a.field-value:hover { text-decoration: underline; }
 .record-form .form-row { display: flex; gap: 6px; align-items: center; }
 .record-form .form-row .cell-heading, .record-form .form-row .cell-text, .record-form .form-row .cell-value { flex: 3; }
 .record-form .form-row select.cell, .record-form .form-row .cell-role, .record-form .form-row .cell-thesaurus,
-.record-form .form-row .cell-qualifier, .record-form .form-row .cell-number, .record-form .form-row .cell-scheme { flex: 1; }
+.record-form .form-row .cell-qualifier, .record-form .form-row .cell-relator, .record-form .form-row .cell-number, .record-form .form-row .cell-scheme { flex: 1; }
 .record-form .cell-check { display: flex; align-items: center; gap: 4px; font-size: 0.8rem; white-space: nowrap; }
 .record-form .select-icon { flex: none; width: 18px; height: 18px; align-self: center; color: var(--text-muted); }
 .record-form .row-remove, .record-form .row-add { font: inherit; font-size: 0.8rem; border: 1px solid var(--card-border); background: var(--card-bg); color: var(--text-muted); border-radius: 6px; cursor: pointer; padding: 3px 9px; }
@@ -471,6 +472,11 @@ a.field-value:hover { text-decoration: underline; }
 .card-top .card-add {
   margin-left: auto; padding: 1px 8px; border: 1px dashed var(--card-border); border-radius: 6px;
   background: transparent; color: var(--pill-text); font: inherit; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+}
+.col-header .card-add {
+  margin-left: 6px; padding: 0 6px; border: 1px dashed var(--auth-border); border-radius: 6px;
+  background: transparent; color: var(--auth-accent); font: inherit; font-size: 0.68rem; font-weight: 700;
+  letter-spacing: 0; text-transform: none; cursor: pointer;
 }
 .glance .card-add, .rail .card-add { display: none; }
 .new-record-panel [data-part="instance"] { --card-border: var(--inst-border); --pill-text: var(--inst-accent); }

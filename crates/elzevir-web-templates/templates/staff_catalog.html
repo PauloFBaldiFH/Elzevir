@@ -34,7 +34,7 @@
       </summary>
       <div class="family-grid{% if family.hub.is_none() %} no-hub{% endif %}">
       <div class="track track-auth">
-        <div class="col-header">{{ t.get("staff-column-authorities") }}</div>
+        <div class="col-header">{{ t.get("staff-column-authorities") }}{% if can_catalogue %} <button type="button" class="card-add" data-action="link-authority" title="{{ t.get("link-authority-label") }}">+ {{ t.get("link-authority") }}</button>{% endif %}</div>
         {% for authority in family.authorities %}
         <article class="card card-auth" data-level="auth" tabindex="0" data-node="a{{ authority.key }}"{% if can_catalogue %}{% if let Some(agent) = authority.agent %} data-fields="/equipe/acervo/autoridade/{{ agent }}/campos"{% endif %}{% endif %}>
           <div class="card-top"><span class="entity-pill">{{ t.get("staff-badge-agent") }}</span></div>

@@ -132,6 +132,14 @@ pub fn router(state: AppState) -> Router {
             get(catalog::export_bibframe),
         )
         .route(
+            "/equipe/acervo/obra/{id}/autoridade/nova",
+            get(authorities::link_form),
+        )
+        .route(
+            "/equipe/acervo/obra/{id}/autoridades",
+            post(authorities::link_authority),
+        )
+        .route(
             "/equipe/acervo/sugestoes/agentes",
             get(editing::suggest_agents),
         )

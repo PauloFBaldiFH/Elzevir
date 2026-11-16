@@ -120,6 +120,7 @@ pub(crate) async fn new_instance(
         } else {
             "new-instance-heading"
         },
+        submit_key: "new-create",
         parts: vec![FormPart {
             name: "instance",
             heading_key: "new-instance-part",
@@ -236,6 +237,7 @@ fn family_form<'a>(t: &'a I18n, start: &NewRecord, inherited: bool) -> NewRecord
         endpoint: "/equipe/acervo/nova".to_owned(),
         create: "family",
         heading_key: "new-family-heading",
+        submit_key: "new-create",
         parts: vec![
             FormPart {
                 name: "work",

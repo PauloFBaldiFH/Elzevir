@@ -166,6 +166,43 @@ fn field(
     }
 }
 
+/// The one field of the "+ Authority" form (docs/specs/catalogo/autoridades.md): the
+/// class, the heading the suggestions complete, the role, and the role's details.
+pub(crate) fn link_field(t: &I18n) -> FormField {
+    let roles = [
+        ("contribution", "link-role-contribution"),
+        ("subject", "link-role-subject"),
+    ]
+    .into_iter()
+    .map(|(value, key)| FormOption {
+        value: value.to_owned(),
+        label: t.get(key),
+        icon: None,
+    })
+    .collect();
+    let columns = [
+        column(
+            "kind",
+            "link-column-class",
+            ColumnKind::Select(options(t, SUBJECTS)),
+            false,
+        ),
+        column("heading", "edit-column-heading", ColumnKind::Text, false),
+        column("role", "link-column-role", ColumnKind::Select(roles), false),
+        column("relator", "link-column-relator", ColumnKind::Text, true),
+        column("thesaurus", "edit-column-thesaurus", ColumnKind::Text, true),
+    ];
+    let values = ["person", "", "contribution", "", ""].map(str::to_owned);
+    field(
+        "Link",
+        "link",
+        "link-authority-field",
+        FormInput::Group {
+            cells: cells(&columns, values.to_vec()),
+        },
+    )
+}
+
 pub(crate) fn work_field(t: &I18n, record: &NewRecord, part: WorkField) -> FormField {
     match part {
         WorkField::Title => field(

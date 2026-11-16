@@ -539,7 +539,7 @@ function filled(scope) {
 }
 
 function createBody(form) {
-  if (form.dataset.create === "instance") return { changes: filled(form) };
+  if (form.dataset.create !== "family") return { changes: filled(form) };
   const part = (name) => form.querySelector(`[data-part="${name}"]`);
   return { work: filled(part("work")), instance: filled(part("instance")) };
 }
@@ -717,6 +717,22 @@ function newInstance(from, copy) {
   });
 }
 
+// "+ Authority" links an authority to the Work in focus, or to the family's first Work
+// (autoridades.md); the form names that Work.
+function linkAuthority(button) {
+  const family = button.closest(".family-focus");
+  const focusedCard = family?.querySelector(".card.focused");
+  const work = focusedCard?.dataset.level === "work" ? focusedCard : family?.querySelector(".card-work");
+  const id = work?.dataset.node?.slice(1);
+  if (!id) return;
+  openNew(`/equipe/acervo/obra/${encodeURIComponent(id)}/autoridade/nova`, (panel) => {
+    const heading = panel.querySelector(".new-record-heading");
+    const title = work.querySelector(".title-main")?.textContent;
+    if (heading && title) heading.append(`: ${title}`);
+    family.querySelector(".family-grid")?.after(panel);
+  });
+}
+
 // With a family open, N adds an Instance to the Work in focus (or its first Work);
 // otherwise it starts a new family (item 14).
 function newFromKey() {
@@ -744,7 +760,8 @@ async function submitNew(form) {
     showAlert(form, form.dataset.failed);
     return;
   }
-  if (response.status === 201) {
+  // A link answers with the Work's new version; a creation with 201.
+  if (response.status === 201 || (form.dataset.create === "authority" && response.ok)) {
     const answer = await response.json().catch(() => ({}));
     // Nothing is pending any more: the panel goes before the page moves.
     form.dataset.initial = JSON.stringify(snapshot(form));
@@ -788,6 +805,7 @@ document.addEventListener("click", (event) => {
     if (action.dataset.action === "edit-items" && action.dataset.from) openItemGrid(action);
     if (action.dataset.action === "new-family") newFamily();
     else if (action.dataset.action === "new-instance" && action.dataset.from) newInstance(action.dataset.from);
+    else if (action.dataset.action === "link-authority") linkAuthority(action);
     else if (action.dataset.action === "copy-instance" && action.dataset.from) newInstance(action.dataset.from, true);
     if (action.dataset.action.startsWith("new-") || action.dataset.action === "edit-items" || action.dataset.action === "copy-instance") return;
   }
@@ -862,10 +880,18 @@ const SUGGEST_URL = {
 let suggestTimer = 0;
 let suggestRound = 0;
 
+// The "+ Authority" form looks among agents for a contributor, among subjects otherwise.
+function suggestUrl(input) {
+  const field = input.closest(".form-field");
+  const change = field?.dataset.change;
+  if (change !== "Link") return SUGGEST_URL[change];
+  const role = field.querySelector('[data-name="role"]')?.value;
+  return role === "contribution" ? SUGGEST_URL.Contributions : SUGGEST_URL.Subjects;
+}
+
 function suggestInput(target) {
   if (!(target instanceof HTMLInputElement) || !target.matches('.cell[data-name="heading"]')) return null;
-  const change = target.closest(".form-field")?.dataset.change;
-  return change && SUGGEST_URL[change] ? target : null;
+  return suggestUrl(target) ? target : null;
 }
 
 function closeSuggestions(row) {
@@ -931,7 +957,6 @@ function showSuggestions(input, found) {
 
 async function lookup(input) {
   const round = ++suggestRound;
-  const change = input.closest(".form-field")?.dataset.change;
   const typed = input.value.trim();
   if (typed.length < 2) {
     closeSuggestions(input.closest(".form-row"));
@@ -939,7 +964,7 @@ async function lookup(input) {
     return;
   }
   try {
-    const response = await fetch(`${SUGGEST_URL[change]}?q=${encodeURIComponent(typed)}`, { credentials: "same-origin" });
+    const response = await fetch(`${suggestUrl(input)}?q=${encodeURIComponent(typed)}`, { credentials: "same-origin" });
     if (!response.ok || round !== suggestRound) return;
     showSuggestions(input, await response.json());
   } catch {

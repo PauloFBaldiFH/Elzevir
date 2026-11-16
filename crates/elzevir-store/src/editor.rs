@@ -20,6 +20,7 @@ impl CatalogEditor for ElzevirStore {
             Edit::Registry(change) => CatalogCommand::ChangeRegistry(change),
             Edit::Statements(edit) => CatalogCommand::EditStatements(edit),
             Edit::Agent(update) => CatalogCommand::UpdateAgent(update),
+            Edit::Link(link) => CatalogCommand::LinkAuthority(link),
         };
         let pending = self
             .submit_as(actor.0, WriteCommand::Catalog(command))

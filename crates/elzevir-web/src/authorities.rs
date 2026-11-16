@@ -8,14 +8,18 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
-use elzevir_app::authorities::validate_agent_changes;
+use elzevir_app::authorities::{LinkRequest, link_request, validate_agent_changes};
 use elzevir_app::catalog::{AgentChange, AgentUpdate};
-use elzevir_app::editing::Edit;
+use elzevir_app::editing::{Edit, FieldError};
 use elzevir_app::staff::Permission;
-use elzevir_domain::catalog::AgentId;
-use elzevir_web_templates::{FormField, FormInput, FormSection, RecordForm};
+use elzevir_domain::catalog::{AgentId, WorkId};
+use elzevir_web_templates::{
+    FormField, FormInput, FormPart, FormSection, NewRecordForm, RecordForm,
+};
+use serde::Deserialize;
 
 use crate::editing::{EditBody, apply, authorize, invalid};
+use crate::record_form::link_field;
 use crate::staff::current_session;
 use crate::{AppState, render};
 
@@ -93,4 +97,71 @@ pub(crate) async fn edit_agent(
         changes,
     }));
     apply(&state, &session, edit).await
+}
+
+/// `GET /equipe/acervo/obra/{id}/autoridade/nova`: the "+ Authority" form of a Work.
+pub(crate) async fn link_form(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+) -> Response {
+    let Some(session) = current_session(&state, &headers) else {
+        return Redirect::to("/equipe/login").into_response();
+    };
+    if !session.identity.can(Permission::Cataloguing) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let t = &state.inner.i18n;
+    render(&NewRecordForm {
+        t,
+        endpoint: format!("/equipe/acervo/obra/{id}/autoridades"),
+        create: "authority",
+        heading_key: "link-heading",
+        submit_key: "link-submit",
+        parts: vec![FormPart {
+            name: "authority",
+            heading_key: "link-heading",
+            sections: vec![FormSection {
+                heading_key: None,
+                fields: vec![link_field(t)],
+            }],
+        }],
+    })
+}
+
+/// What the "+ Authority" form sends: its one field, as every form sends its changes.
+#[derive(Deserialize)]
+pub(crate) struct LinkBody {
+    changes: Vec<LinkChange>,
+}
+
+#[derive(Deserialize)]
+enum LinkChange {
+    Link(LinkRequest),
+}
+
+/// `POST /equipe/acervo/obra/{id}/autoridades`: links the authority by its role.
+pub(crate) async fn link_authority(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+    Json(body): Json<LinkBody>,
+) -> Response {
+    let session = match authorize(&state, &headers) {
+        Ok(session) => session,
+        Err(status) => return status.into_response(),
+    };
+    let Some(LinkChange::Link(request)) = body.changes.into_iter().next() else {
+        return invalid(
+            &state,
+            &[FieldError {
+                field: "link",
+                message_key: "edit-error-heading-empty",
+            }],
+        );
+    };
+    match link_request(WorkId(id), request) {
+        Ok(link) => apply(&state, &session, Edit::Link(Box::new(link))).await,
+        Err(errors) => invalid(&state, &errors),
+    }
 }

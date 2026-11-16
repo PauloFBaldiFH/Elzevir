@@ -2,9 +2,10 @@
 //! Authorities: the agents that records share, edited once for all of them
 //! (docs/specs/catalogo/autoridades.md).
 
-use elzevir_domain::catalog::{AgentId, AgentKind};
+use elzevir_domain::catalog::{AgentId, AgentKind, SubjectKind, WorkId};
+use serde::Deserialize;
 
-use crate::catalog::{AgentChange, CatalogReadError};
+use crate::catalog::{AgentChange, AuthorityRole, CatalogReadError, WorkAuthority};
 use crate::editing::FieldError;
 
 /// Most characters of an agent's heading.
@@ -65,9 +66,137 @@ pub fn validate_agent_changes(changes: &mut [AgentChange]) -> Result<(), Vec<Fie
     }
 }
 
+/// What the "+ Authority" form sends: the authority by its class and heading, and the
+/// role it takes in the Work.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct LinkRequest {
+    /// The class of the authority; the agent classes are also subject classes.
+    pub kind: SubjectKind,
+    /// The heading, stored or new.
+    pub heading: String,
+    /// The role in the Work.
+    pub role: LinkRoleName,
+    /// The relator code of a contributor.
+    #[serde(default)]
+    pub relator: Option<String>,
+    /// The thesaurus code of a subject.
+    #[serde(default)]
+    pub thesaurus: Option<String>,
+}
+
+/// The roles the form offers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LinkRoleName {
+    /// Contributor of the Work.
+    Contribution,
+    /// Subject of the Work.
+    Subject,
+}
+
+/// The link of `request` to `work`, validated by role: a contributor must be an agent
+/// (docs/specs/catalogo/autoridades.md). Every error at once.
+///
+/// # Errors
+///
+/// The fields that cannot be stored.
+pub fn link_request(work: WorkId, request: LinkRequest) -> Result<WorkAuthority, Vec<FieldError>> {
+    let mut errors = Vec::new();
+    let heading = request.heading.trim().to_owned();
+    if heading.is_empty() || heading.chars().count() > MAX_HEADING {
+        errors.push(FieldError {
+            field: "link",
+            message_key: "edit-error-heading-empty",
+        });
+    }
+    let code = |value: Option<String>| {
+        value
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty())
+    };
+    let role = match (request.role, request.kind.agent()) {
+        (LinkRoleName::Contribution, Some(kind)) => Some(AuthorityRole::Contribution {
+            kind,
+            heading,
+            relator: code(request.relator),
+        }),
+        (LinkRoleName::Contribution, None) => {
+            errors.push(FieldError {
+                field: "link",
+                message_key: "link-error-not-an-agent",
+            });
+            None
+        }
+        (LinkRoleName::Subject, _) => Some(AuthorityRole::Subject {
+            kind: request.kind,
+            heading,
+            thesaurus: code(request.thesaurus),
+        }),
+    };
+    match role {
+        Some(role) if errors.is_empty() => Ok(WorkAuthority { work, role }),
+        _ => Err(errors),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn request(kind: SubjectKind, heading: &str, role: LinkRoleName) -> LinkRequest {
+        LinkRequest {
+            kind,
+            heading: heading.to_owned(),
+            role,
+            relator: Some(" ill ".to_owned()),
+            thesaurus: Some(String::new()),
+        }
+    }
+
+    #[test]
+    fn a_contributor_must_be_an_agent_and_a_subject_can_be_anything() {
+        let work = WorkId(7);
+        let link = link_request(
+            work,
+            request(
+                SubjectKind::Person,
+                " Portinari, Candido ",
+                LinkRoleName::Contribution,
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            link.role,
+            AuthorityRole::Contribution {
+                kind: AgentKind::Person,
+                heading: "Portinari, Candido".to_owned(),
+                relator: Some("ill".to_owned()),
+            }
+        );
+        let topic = link_request(
+            work,
+            request(SubjectKind::Topic, "Cafe", LinkRoleName::Subject),
+        )
+        .unwrap();
+        assert_eq!(
+            topic.role,
+            AuthorityRole::Subject {
+                kind: SubjectKind::Topic,
+                heading: "Cafe".to_owned(),
+                thesaurus: None,
+            }
+        );
+        let errors = link_request(
+            work,
+            request(SubjectKind::Topic, " ", LinkRoleName::Contribution),
+        )
+        .unwrap_err();
+        let keys: Vec<_> = errors.iter().map(|error| error.message_key).collect();
+        assert_eq!(
+            keys,
+            ["edit-error-heading-empty", "link-error-not-an-agent"]
+        );
+    }
 
     #[test]
     fn a_heading_is_trimmed_and_cannot_be_empty() {

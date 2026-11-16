@@ -420,6 +420,13 @@ pub(crate) async fn apply(state: &AppState, session: &ActiveSession, edit: Edit)
             | CatalogRefusal::UnknownEntity(_)
             | CatalogRefusal::UnknownAgent(_),
         ))) => StatusCode::NOT_FOUND.into_response(),
+        Ok(Err(EditFailed::Refused(CatalogRefusal::AlreadyLinked(_)))) => invalid(
+            state,
+            &[FieldError {
+                field: "link",
+                message_key: "link-error-already-linked",
+            }],
+        ),
         // Joining two agents is a merge, not a rename (docs/specs/catalogo/autoridades.md).
         Ok(Err(EditFailed::Refused(CatalogRefusal::AgentHeadingTaken(_)))) => invalid(
             state,
