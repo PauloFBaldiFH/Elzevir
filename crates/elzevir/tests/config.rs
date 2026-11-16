@@ -167,6 +167,9 @@ fn invalid_configuration_does_not_create_data_or_echo_contents() {
         format!("[server]\n{marker} = true"),
         "[server".to_owned(),
         "[server]\ndata_dir = ''".to_owned(),
+        "[institution]\nname = '   '".to_owned(),
+        "[institution]\nname = \"Library\\n\"".to_owned(),
+        format!("[institution]\nname = '{}'", "é".repeat(201)),
         "#".repeat(65 * 1024),
     ]
     .into_iter()
@@ -229,4 +232,26 @@ fn absent_file_or_directory_is_reported_before_startup() {
         assert!(output.stdout.is_empty());
     }
     assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn initialized_configuration_starts_the_real_catalog() {
+    let root = tempfile::tempdir().unwrap();
+    let result = Command::new(env!("CARGO_BIN_EXE_elzevir"))
+        .args(["init", "--name", "Test library"])
+        .env("ELZEVIR_STAFF_PASSWORD", "fictional-init-password")
+        .current_dir(root.path())
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let (_server, address) = start(
+        root.path(),
+        &["--config", "elzevir.toml", "--listen", "127.0.0.1:0"],
+    );
+    assert!(request(address, "/").contains("Library catalog"));
+    assert!(request(address, "/equipe/login").contains("; Secure"));
 }

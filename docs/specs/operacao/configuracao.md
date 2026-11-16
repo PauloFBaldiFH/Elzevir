@@ -32,6 +32,11 @@
    continuam sendo carregadas pela rotina existente. São arquivos distintos;
    esta etapa não unifica os dois esquemas.
 
+10. A seção opcional `[institution]` aceita `name`: nome com 1 a 200 caracteres
+    após remover espaços nas extremidades, sem caracteres de controle.
+    `init` grava esse nome; arquivos A1 sem a seção continuam válidos.
+    O nome ainda não personaliza o catálogo.
+
 ## 2. Origem no Koha
 
 Não porta comportamento do Koha. Base: doc 04, §5 e §7, doc 06 e etapa A1
@@ -59,6 +64,7 @@ Nenhum: não há área de paridade nesta entrega.
 
 ## 6. Fora do escopo
 
-Inicialização de uma instituição, separação dos endereços da equipe,
+Inicialização de uma instituição é tratada na [A2](inicializacao.md).
+Separação dos endereços da equipe,
 `public_url`, `[backup]`, `[tunnel]`, reload, segredos, HTTPS embutido e serviço
 ficam para etapas próprias. Chaves sem implementação são recusadas.
