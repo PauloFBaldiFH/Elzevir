@@ -192,3 +192,181 @@ fn invalid_hosts_networks_and_oversized_lists_are_refused() {
     }
     assert!(AccessPolicy::staff_only(&vec!["127.0.0.1".to_owned(); 33]).is_err());
 }
+
+#[tokio::test]
+async fn split_navigation_redirects_without_serving_staff_handlers_on_catalog() {
+    let hosts = app(AccessPolicy::hostnames("catalog.example", "staff.example")
+        .unwrap()
+        .with_listener_addresses(
+            "0.0.0.0:8080".parse().unwrap(),
+            "0.0.0.0:8080".parse().unwrap(),
+        ));
+    let ports = app(AccessPolicy::catalog_only().with_listener_addresses(
+        "[::]:8080".parse().unwrap(),
+        "0.0.0.0:8081".parse().unwrap(),
+    ));
+    let staff = app(AccessPolicy::staff_only(&[])
+        .unwrap()
+        .with_listener_addresses(
+            "[::]:8080".parse().unwrap(),
+            "0.0.0.0:8081".parse().unwrap(),
+        ));
+    for (router, host, path, target) in [
+        (
+            hosts.clone(),
+            "catalog.example",
+            "/equipe",
+            "//staff.example:8080/equipe",
+        ),
+        (
+            hosts,
+            "staff.example",
+            "/record/1?format=turtle",
+            "//catalog.example:8080/record/1?format=turtle",
+        ),
+        (
+            ports,
+            "localhost:8080",
+            "/equipe",
+            "//localhost:8081/equipe",
+        ),
+        (staff, "[::1]:8081", "/", "//[::1]:8080/"),
+    ] {
+        let response = router
+            .oneshot(
+                Request::get(path)
+                    .header("host", host)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(response.headers().get("location").unwrap(), target);
+    }
+}
+
+#[tokio::test]
+async fn navigation_keeps_methods_hosts_and_staff_routes_restricted() {
+    let catalog = "0.0.0.0:8080".parse().unwrap();
+    let staff = "0.0.0.0:8081".parse().unwrap();
+    let hosts = AccessPolicy::hostnames("catalog.example", "staff.example")
+        .unwrap()
+        .with_listener_addresses(catalog, staff);
+    let ports = AccessPolicy::catalog_only().with_listener_addresses(catalog, staff);
+    for (policy, method, path, host, expected) in [
+        (
+            hosts.clone(),
+            "POST",
+            "/equipe",
+            "catalog.example",
+            StatusCode::NOT_FOUND,
+        ),
+        (
+            hosts.clone(),
+            "GET",
+            "/equipe/login",
+            "catalog.example",
+            StatusCode::NOT_FOUND,
+        ),
+        (
+            hosts.clone(),
+            "GET",
+            "/equipe",
+            "unknown.example",
+            StatusCode::NOT_FOUND,
+        ),
+        (
+            hosts,
+            "GET",
+            "/equipe",
+            "catalog.example:abc",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            ports.clone(),
+            "POST",
+            "/equipe",
+            "localhost",
+            StatusCode::NOT_FOUND,
+        ),
+        (
+            ports.clone(),
+            "GET",
+            "/equipe/login",
+            "localhost",
+            StatusCode::NOT_FOUND,
+        ),
+        (
+            ports.clone(),
+            "GET",
+            "/equipe",
+            "user@localhost",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            ports.clone(),
+            "GET",
+            "/equipe",
+            "localhost:0",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            ports
+                .clone()
+                .with_listener_addresses(catalog, "127.0.0.1:0".parse().unwrap()),
+            "GET",
+            "/equipe",
+            "localhost",
+            StatusCode::NOT_FOUND,
+        ),
+    ] {
+        let response = app(policy)
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(path)
+                    .header("host", host)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{method} {path} {host}");
+        assert!(!response.headers().contains_key("location"));
+        assert!(response.headers().contains_key("x-content-type-options"));
+    }
+    let duplicate = Request::get("/equipe")
+        .header("host", "localhost")
+        .header("host", "other.example")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app(ports).oneshot(duplicate).await.unwrap().status(),
+        StatusCode::BAD_REQUEST
+    );
+}
+
+#[tokio::test]
+async fn specific_listener_address_wins_over_request_host() {
+    for (destination, expected) in [
+        ("127.0.0.1:8081", "//127.0.0.1:8081/equipe"),
+        ("[::1]:8081", "//[::1]:8081/equipe"),
+    ] {
+        let policy = AccessPolicy::catalog_only().with_listener_addresses(
+            "127.0.0.1:8080".parse().unwrap(),
+            destination.parse().unwrap(),
+        );
+        let response = app(policy)
+            .oneshot(
+                Request::get("/equipe")
+                    .header("host", "other.example")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(response.headers().get("location").unwrap(), expected);
+    }
+}

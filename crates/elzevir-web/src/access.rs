@@ -6,13 +6,13 @@ use axum::{
     extract::{ConnectInfo, Request, State},
     http::{StatusCode, header, uri::Authority},
     middleware::{Next, from_fn_with_state},
-    response::{IntoResponse, Response},
+    response::{IntoResponse, Redirect, Response},
 };
 use std::net::{IpAddr, SocketAddr};
 
 /// Validated request policy for one HTTP listener.
 #[derive(Clone, Default)]
-pub struct AccessPolicy(Policy);
+pub struct AccessPolicy(Policy, Option<(SocketAddr, SocketAddr)>);
 
 #[derive(Clone, Default)]
 enum Policy {
@@ -42,13 +42,13 @@ impl AccessPolicy {
         if catalog == staff {
             return Err(AccessError);
         }
-        Ok(Self(Policy::Hosts { catalog, staff }))
+        Ok(Self(Policy::Hosts { catalog, staff }, None))
     }
 
     /// Catalog listener with no staff handlers reachable.
     #[must_use]
     pub const fn catalog_only() -> Self {
-        Self(Policy::Catalog)
+        Self(Policy::Catalog, None)
     }
 
     /// Staff listener, optionally restricted to TCP peer IPs/CIDRs.
@@ -63,7 +63,18 @@ impl AccessPolicy {
             .iter()
             .map(|s| Network::parse(s))
             .collect::<Result<_, _>>()?;
-        Ok(Self(Policy::Staff(networks)))
+        Ok(Self(Policy::Staff(networks), None))
+    }
+
+    /// Enables navigation redirects after both actual listener addresses are known.
+    #[must_use]
+    pub fn with_listener_addresses(mut self, catalog: SocketAddr, staff: SocketAddr) -> Self {
+        self.1 = if catalog.port() != 0 && staff.port() != 0 {
+            Some((catalog, staff))
+        } else {
+            None
+        };
+        self
     }
 }
 
@@ -185,12 +196,35 @@ async fn enforce(State(policy): State<AccessPolicy>, request: Request, next: Nex
                 false
             };
             if !allowed {
+                if let Some((catalog_address, staff_address)) = policy.1
+                    && request.method() == axum::http::Method::GET
+                {
+                    if host == *catalog && path == "/equipe" {
+                        return redirect(&request, staff_host, staff_address.port());
+                    }
+                    if host == *staff_host && !staff && !asset {
+                        return redirect(&request, catalog, catalog_address.port());
+                    }
+                }
                 return StatusCode::NOT_FOUND.into_response();
             }
         }
-        Policy::Catalog if staff => return StatusCode::NOT_FOUND.into_response(),
+        Policy::Catalog if staff => {
+            if path == "/equipe"
+                && request.method() == axum::http::Method::GET
+                && let Some((_, address)) = policy.1
+            {
+                return same_host_redirect(&request, address);
+            }
+            return StatusCode::NOT_FOUND.into_response();
+        }
         Policy::Staff(networks) => {
             if !staff && !asset {
+                if request.method() == axum::http::Method::GET
+                    && let Some((address, _)) = policy.1
+                {
+                    return same_host_redirect(&request, address);
+                }
                 return StatusCode::NOT_FOUND.into_response();
             }
             if !networks.is_empty() {
@@ -205,6 +239,48 @@ async fn enforce(State(policy): State<AccessPolicy>, request: Request, next: Nex
         Policy::Shared | Policy::Catalog => {}
     }
     next.run(request).await
+}
+
+fn redirect(request: &Request, host: &str, port: u16) -> Response {
+    let path = request
+        .uri()
+        .path_and_query()
+        .map_or("/", axum::http::uri::PathAndQuery::as_str);
+    Redirect::temporary(&format!("//{host}:{port}{path}")).into_response()
+}
+
+fn same_host_redirect(request: &Request, address: SocketAddr) -> Response {
+    if !address.ip().is_unspecified() {
+        let host = match address.ip() {
+            IpAddr::V4(ip) => ip.to_string(),
+            IpAddr::V6(ip) => format!("[{ip}]"),
+        };
+        return redirect(request, &host, address.port());
+    }
+    let mut hosts = request.headers().get_all(header::HOST).iter();
+    let authority = hosts
+        .next()
+        .and_then(|h| h.to_str().ok())
+        .filter(|s| s.len() <= 260 && !s.contains('@'))
+        .and_then(|s| s.parse::<Authority>().ok());
+    let Some(authority) = authority.filter(|_| hosts.next().is_none()) else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    let host = authority.host();
+    if authority.as_str().strip_prefix(host).is_none_or(|suffix| {
+        !suffix.is_empty() && authority.port_u16().is_none_or(|port| port == 0)
+    }) {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    let ip = host
+        .strip_prefix('[')
+        .and_then(|s| s.strip_suffix(']'))
+        .unwrap_or(host)
+        .parse::<IpAddr>();
+    if ip.is_err() && normalize_hostname(host).is_err() {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    redirect(request, host, address.port())
 }
 
 /// Applies listener boundaries and security headers before route handlers.
