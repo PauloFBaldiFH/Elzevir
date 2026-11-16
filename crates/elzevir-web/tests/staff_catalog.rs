@@ -632,7 +632,41 @@ async fn an_invalid_or_stale_edit_is_refused_field_by_field() {
 }
 
 #[tokio::test]
-async fn a_cataloguer_gets_the_focused_block_as_a_form_in_profile_order() {
+async fn the_rows_of_a_property_are_read_into_its_statements_or_refused_at_its_field() {
+    let app = app();
+    let ana = signed_in(&app).await;
+    let token = page_token(&app, &ana).await;
+    let accepted = send(
+        &app,
+        post_json(
+            "/equipe/acervo/obra/1",
+            Some(&ana),
+            Some(&token),
+            r#"{"version": 1, "changes": [{"Statements": {"property": "awards", "rows": [{"text": "Jabuti", "language": null, "kept": null}]}}, {"Summary": "Novo."}]}"#,
+        ),
+    )
+    .await;
+    assert_eq!(accepted.status(), StatusCode::OK);
+    let refused = send(
+        &app,
+        post_json(
+            "/equipe/acervo/obra/1",
+            Some(&ana),
+            Some(&token),
+            r#"{"version": 2, "changes": [{"Statements": {"property": "content", "rows": [{"concept": "contentTypes/xyz"}]}}]}"#,
+        ),
+    )
+    .await;
+    assert_eq!(refused.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(
+        body(refused)
+            .await
+            .contains(r#""field":"content","key":"edit-error-statement""#)
+    );
+}
+
+#[tokio::test]
+async fn a_cataloguer_gets_the_focused_block_as_a_form_of_every_field() {
     let app = app();
     let ana = signed_in(&app).await;
     let work = body(
@@ -650,11 +684,15 @@ async fn a_cataloguer_gets_the_focused_block_as_a_form_in_profile_order() {
     assert!(work.contains(r#"data-endpoint="/equipe/acervo/obra/1" data-version="1""#));
     assert!(work.contains(r#"data-change="Contributions""#));
     assert!(work.contains(r#"value="Assis, Machado de, 1839-1908""#));
-    // Filled fields first, then the empty ones of the profile.
-    let (filled, empty) = work.split_once("form-empty").unwrap();
-    assert!(filled.contains(r#"data-change="Summary""#));
-    assert!(empty.contains(r#"data-change="Audience""#));
-    assert!(empty.contains(r#"data-change="Subjects""#));
+    // Every field, filled or not, in fixed sections, with nothing to expand.
+    assert!(!work.contains("<details"));
+    let (content, rest) = work
+        .split_once(r#"class="form-section-heading">Subjects<"#)
+        .unwrap();
+    assert!(content.contains(r#"data-change="Audience""#));
+    assert!(content.contains(r#"data-property="content""#));
+    assert!(rest.contains(r#"data-change="Subjects""#));
+    assert!(rest.contains(r#"data-property="awards""#));
 
     let instance = body(
         send(

@@ -1,17 +1,14 @@
 <form class="record-form" data-endpoint="{{ endpoint }}" data-version="{{ version }}"
       data-stale="{{ t.get("edit-stale") }}" data-failed="{{ t.get("edit-failed") }}" data-new-entity="{{ t.get("edit-new-entity") }}" novalidate>
   <p class="form-alert" role="alert" hidden></p>
-  <div class="form-fields">
-    {% for field in filled %}{% include "staff_form_field.html" %}{% endfor %}
-  </div>
-  {% if !empty.is_empty() %}
-  <details class="form-empty">
-    <summary>{{ t.get("edit-empty-fields") }}</summary>
+  {% for section in sections %}
+  <section class="form-section">
+    {% if let Some(heading_key) = section.heading_key %}<h3 class="form-section-heading">{{ t.get(heading_key) }}</h3>{% endif %}
     <div class="form-fields">
-      {% for field in empty %}{% include "staff_form_field.html" %}{% endfor %}
+      {% for field in section.fields %}{% include "staff_form_field.html" %}{% endfor %}
     </div>
-  </details>
-  {% endif %}
+  </section>
+  {% endfor %}
   <div class="form-discard" role="alertdialog" hidden>
     <span>{{ t.get("edit-discard-question") }}</span>
     <button type="button" data-action="discard">{{ t.get("edit-discard") }}</button>

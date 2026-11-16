@@ -1,0 +1,286 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! The form of a Work as every property the ontology gives it, always, in fixed sections
+//! (docs/specs/catalogo/bibframe-completo.md, items 24 to 26): no field is hidden behind
+//! "expand" and none depends on the category of material.
+//!
+//! A property with a typed part of the model has that part's field; every other one, and
+//! a typed one that also takes statements (a variant title, a described classification),
+//! has a field of rows that edits its statements.
+
+use elzevir_app::catalog::NewRecord;
+use elzevir_app::profiles::WorkField;
+use elzevir_app::statement_rows::{StatementRow, concept_choices, is_literal, is_relation, row_of};
+use elzevir_data::bibframe::{Entity, Property, properties_of};
+use elzevir_domain::statement::{Statement, Value, is_typed};
+use elzevir_web_templates::{
+    ColumnKind, FormCell, FormColumn, FormField, FormInput, FormOption, FormSection, I18n,
+};
+
+use crate::record_form::work_field;
+
+/// The sections of a Work's form, in order, with the message key of each heading.
+const SECTIONS: [(Section, &str); 8] = [
+    (Section::Title, "edit-section-title"),
+    (Section::Content, "edit-section-content"),
+    (Section::Contributions, "edit-section-contributions"),
+    (Section::Subjects, "edit-section-subjects"),
+    (Section::Classification, "edit-section-classification"),
+    (Section::Relations, "edit-section-relations"),
+    (Section::Notes, "edit-section-notes"),
+    (Section::AdminMetadata, "edit-section-admin-metadata"),
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Section {
+    Title,
+    Content,
+    Contributions,
+    Subjects,
+    Classification,
+    Relations,
+    Notes,
+    AdminMetadata,
+}
+
+/// The typed parts of a Work, by the property they hold.
+const TYPED_FIELDS: [(&str, WorkField); 7] = [
+    ("title", WorkField::Title),
+    ("contribution", WorkField::Contributions),
+    ("classification", WorkField::Classification),
+    ("language", WorkField::Languages),
+    ("subject", WorkField::Subjects),
+    ("summary", WorkField::Summary),
+    ("intendedAudience", WorkField::Audience),
+];
+
+/// Typed properties that also take statements of another shape: variant titles, the
+/// languages of parts, described classifications, coded audiences.
+const TYPED_WITH_STATEMENTS: [&str; 4] =
+    ["title", "language", "classification", "intendedAudience"];
+
+/// What the structure of the catalogue says: the Hub above and the Instances below.
+const STRUCTURE: [&str; 3] = ["expressionOf", "hasExpression", "hasInstance"];
+
+/// Typed relations to other Works, which have no field yet. The list only shrinks.
+const PENDING: [&str; 5] = [
+    "continues",
+    "derivativeOf",
+    "partOf",
+    "supplementTo",
+    "translationOf",
+];
+
+fn section_of(property: &Property) -> Section {
+    match property.name {
+        "title" => Section::Title,
+        "contribution" => Section::Contributions,
+        "subject" | "genreForm" | "geographicCoverage" | "temporalCoverage" => Section::Subjects,
+        "classification" => Section::Classification,
+        "note" | "summary" | "tableOfContents" | "review" | "awards" | "credits"
+        | "preferredCitation" | "custodialHistory" | "historyOfWork" => Section::Notes,
+        "adminMetadata" => Section::AdminMetadata,
+        _ if is_relation(property) => Section::Relations,
+        _ => Section::Content,
+    }
+}
+
+/// Every field of the Work of `record`, by section.
+pub(crate) fn work_sections(t: &I18n, record: &NewRecord) -> Vec<FormSection> {
+    let mut sections: Vec<(Section, FormSection)> = SECTIONS
+        .iter()
+        .map(|(section, key)| {
+            (
+                *section,
+                FormSection {
+                    heading_key: Some(key),
+                    fields: Vec::new(),
+                },
+            )
+        })
+        .collect();
+    let mut push = |section: Section, field: FormField| {
+        if let Some((_, form)) = sections.iter_mut().find(|(s, _)| *s == section) {
+            form.fields.push(field);
+        }
+    };
+    // The category is the Work's classes, not a property: it opens the content.
+    push(
+        Section::Content,
+        work_field(t, record, WorkField::MaterialType).0,
+    );
+    for property in properties_of(Entity::Work) {
+        if STRUCTURE.contains(&property.name) || PENDING.contains(&property.name) {
+            continue;
+        }
+        let section = section_of(property);
+        if let Some((_, part)) = TYPED_FIELDS.iter().find(|(name, _)| *name == property.name) {
+            push(section, work_field(t, record, *part).0);
+        }
+        if !is_typed(Entity::Work, property.name) || TYPED_WITH_STATEMENTS.contains(&property.name)
+        {
+            push(
+                section,
+                statement_field(property, &record.work_description.statements),
+            );
+        }
+    }
+    sections.into_iter().map(|(_, form)| form).collect()
+}
+
+/// The rows of the statements of `property` among `statements`.
+pub(crate) fn statement_field(property: &'static Property, statements: &[Statement]) -> FormField {
+    let stored: Vec<&Value> = statements
+        .iter()
+        .filter(|statement| statement.property == property.name)
+        .map(|statement| &statement.value)
+        .collect();
+    let columns = columns_of(property, &stored);
+    let rows = stored
+        .iter()
+        .map(|value| cells(&columns, &row_of(value)))
+        .collect();
+    FormField {
+        change: "Statements",
+        error: property.name,
+        label_key: "",
+        input: FormInput::Rows {
+            rows,
+            blank: cells(&columns, &StatementRow::default()),
+        },
+        property: property.name,
+        ontology_label: property.label,
+        inherited: false,
+    }
+}
+
+const fn column(name: &'static str, label_key: &'static str, kind: ColumnKind) -> FormColumn {
+    FormColumn {
+        name,
+        label_key,
+        kind,
+        optional: true,
+    }
+}
+
+/// A literal is a text and its language; any other value a concept of the property's
+/// vocabularies (when it has one), a label or an IRI.
+fn columns_of(property: &Property, stored: &[&Value]) -> Vec<FormColumn> {
+    let kept = column("kept", "edit-column-kept", ColumnKind::Hidden);
+    if is_literal(property) {
+        return vec![
+            column("text", "edit-column-text", ColumnKind::Text),
+            column("language", "edit-column-language", ColumnKind::Text),
+            kept,
+        ];
+    }
+    let mut columns = Vec::new();
+    let mut options: Vec<FormOption> = concept_choices(property.name)
+        .map(|(value, label)| FormOption {
+            value,
+            label: label.to_owned(),
+        })
+        .collect();
+    if !options.is_empty() {
+        // A stored concept the Library of Congress has since deprecated stays choosable.
+        for value in stored {
+            if let Value::Concept { scheme, code } = value {
+                let value = format!("{scheme}/{code}");
+                if !options.iter().any(|option| option.value == value) {
+                    options.push(FormOption {
+                        label: value.clone(),
+                        value,
+                    });
+                }
+            }
+        }
+        options.insert(
+            0,
+            FormOption {
+                value: String::new(),
+                label: String::new(),
+            },
+        );
+        columns.push(column(
+            "concept",
+            "edit-column-concept",
+            ColumnKind::Select(options),
+        ));
+    }
+    columns.push(column("text", "edit-column-label", ColumnKind::Text));
+    columns.push(column("iri", "edit-column-iri", ColumnKind::Text));
+    columns.push(kept);
+    columns
+}
+
+fn cells(columns: &[FormColumn], row: &StatementRow) -> Vec<FormCell> {
+    columns
+        .iter()
+        .map(|column| {
+            let value = match column.name {
+                "text" => &row.text,
+                "language" => &row.language,
+                "concept" => &row.concept,
+                "iri" => &row.iri,
+                _ => &row.kept,
+            };
+            FormCell {
+                column: column.clone(),
+                value: value.clone().unwrap_or_default(),
+            }
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use elzevir_domain::catalog::MaterialType;
+
+    use super::*;
+    use crate::new_record::blank;
+
+    /// Form coverage (bibframe-completo.md, step 6): every property of a Work has a field,
+    /// except the structure of the catalogue and the relations still [`PENDING`].
+    #[test]
+    fn every_property_of_a_work_has_a_field() {
+        let t = I18n::english().unwrap();
+        let sections = work_sections(&t, &blank(MaterialType::Book));
+        let fields: Vec<&FormField> = sections.iter().flat_map(|s| &s.fields).collect();
+        let mut missing = Vec::new();
+        for property in properties_of(Entity::Work) {
+            let typed = TYPED_FIELDS.iter().any(|(name, _)| *name == property.name);
+            let rows = fields.iter().any(|field| field.property == property.name);
+            let left = STRUCTURE.contains(&property.name) || PENDING.contains(&property.name);
+            if !(typed || rows || left) {
+                missing.push(property.name);
+            }
+        }
+        assert!(
+            missing.is_empty(),
+            "properties without a field: {missing:?}"
+        );
+        assert!(fields.iter().any(|field| field.change == "MaterialType"));
+        assert_eq!(sections.len(), SECTIONS.len());
+        assert!(sections.iter().all(|section| !section.fields.is_empty()));
+    }
+
+    #[test]
+    fn stored_statements_are_rows_that_keep_their_value() {
+        let property = elzevir_data::bibframe::property("content").unwrap();
+        let statements = [Statement {
+            property: "content".to_owned(),
+            value: Value::Concept {
+                scheme: "contentTypes".to_owned(),
+                code: "txt".to_owned(),
+            },
+        }];
+        let field = statement_field(property, &statements);
+        let FormInput::Rows { rows, blank } = field.input else {
+            panic!("rows")
+        };
+        let names: Vec<_> = blank.iter().map(|cell| cell.column.name).collect();
+        assert_eq!(names, ["concept", "text", "iri", "kept"]);
+        assert_eq!(rows[0][0].value, "contentTypes/txt");
+        assert!(rows[0][3].value.contains("\"txt\""));
+        assert_eq!(field.ontology_label, property.label);
+    }
+}

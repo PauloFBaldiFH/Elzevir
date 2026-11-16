@@ -587,3 +587,71 @@ fn a_subject_list_edit_keeps_the_parts_and_links_of_a_name() {
         "{names:?}"
     );
 }
+
+#[test]
+fn a_property_edit_replaces_its_statements_in_place_and_keeps_the_others() {
+    use elzevir_app::catalog::StatementReader;
+    use elzevir_domain::statement::{EntityKind, EntityRef, Statement, Value};
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = imported(&dir);
+    let read = view(&store, 1);
+    let work = EntityRef {
+        entity: EntityKind::Work,
+        id: read.work.0,
+    };
+    let before = store.statements(work).unwrap();
+    assert!(!before.is_empty());
+    let first = before[0].property.clone();
+    let award = |text: &str| Statement {
+        property: "awards".to_owned(),
+        value: Value::Literal {
+            text: text.to_owned(),
+            language: None,
+        },
+    };
+    let statements = |list: Vec<Statement>| WorkChange::Statements {
+        property: "awards".to_owned(),
+        statements: list,
+    };
+    run(
+        &store,
+        update_work(
+            &read,
+            vec![statements(vec![award("Jabuti"), award("APCA")])],
+        ),
+    )
+    .unwrap();
+    let after = store.statements(work).unwrap();
+    assert_eq!(after[..before.len()], before[..]);
+    assert_eq!(after[before.len()..], [award("Jabuti"), award("APCA")]);
+    // Replaced where they were, and the version moved.
+    let read = view(&store, 1);
+    run(
+        &store,
+        update_work(&read, vec![statements(vec![award("Prêmio")])]),
+    )
+    .unwrap();
+    let after = store.statements(work).unwrap();
+    assert_eq!(after.last(), Some(&award("Prêmio")));
+    assert_eq!(after[0].property, first);
+    // What the store refuses writes nothing.
+    let read = view(&store, 1);
+    let wrong = WorkChange::Statements {
+        property: "awards".to_owned(),
+        statements: vec![Statement {
+            property: "credits".to_owned(),
+            value: Value::Literal {
+                text: "x".to_owned(),
+                language: None,
+            },
+        }],
+    };
+    assert!(matches!(
+        run(&store, update_work(&read, vec![wrong])),
+        Err(CommandFailed::Rejected(WriteRefusal::Catalog(
+            CatalogRefusal::BadStatement(_)
+        )))
+    ));
+    assert_eq!(store.statements(work).unwrap(), after);
+}

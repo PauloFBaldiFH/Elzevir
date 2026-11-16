@@ -19,7 +19,7 @@ use crate::catalog::{
     insert_identifiers, insert_notes, link_contributions, link_languages, link_subjects,
     optional_term, record_changed, refused,
 };
-use crate::statements::recategorize;
+use crate::statements::{recategorize, replace_property};
 use crate::{CommandFailed, StoreError, WriteTx};
 use elzevir_app::description::{instance_of_material, work_of_material};
 use elzevir_domain::statement::{EntityKind, EntityRef};
@@ -204,6 +204,18 @@ fn apply_work_change(
             )?;
             link_subjects(connection, id, &subjects)?;
         }
+        WorkChange::Statements {
+            property,
+            statements,
+        } => replace_property(
+            connection,
+            EntityRef {
+                entity: EntityKind::Work,
+                id,
+            },
+            property,
+            statements,
+        )?,
     }
     Ok(())
 }

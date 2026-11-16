@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! The focused block as a form, in its profile's order (docs/specs/catalogo/edicao.md,
-//! items 25 to 32).
+//! The focused block as a form, every field in its section (docs/specs/catalogo/edicao.md,
+//! items 25 to 32; bibframe-completo.md, items 24 to 26).
 
 use askama::Template;
 
@@ -16,10 +16,17 @@ pub struct RecordForm<'a> {
     pub endpoint: String,
     /// The version the form was read at.
     pub version: i64,
-    /// Filled fields, in the profile's order.
-    pub filled: Vec<FormField>,
-    /// The profile's empty fields, in its order.
-    pub empty: Vec<FormField>,
+    /// Every field, by section, filled or not.
+    pub sections: Vec<FormSection>,
+}
+
+/// One fixed section of a form.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FormSection {
+    /// Message key of its heading; `None` for a form of one section.
+    pub heading_key: Option<&'static str>,
+    /// Its fields, in order.
+    pub fields: Vec<FormField>,
 }
 
 /// One field of the form: one change of the edit.
@@ -33,9 +40,25 @@ pub struct FormField {
     pub label_key: &'static str,
     /// The input.
     pub input: FormInput,
+    /// The BIBFRAME property whose statements the field holds; empty for a typed part.
+    pub property: &'static str,
+    /// The property's label in the ontology, shown in place of `label_key`'s message.
+    pub ontology_label: &'static str,
     /// Whether the value came from the previous record and is not confirmed yet
     /// (docs/specs/catalogo/criacao.md, item 17).
     pub inherited: bool,
+}
+
+impl FormField {
+    /// The label shown: the ontology's for a property, the interface's for a typed part.
+    #[must_use]
+    pub fn label(&self, t: &I18n) -> String {
+        if self.ontology_label.is_empty() {
+            t.get(self.label_key)
+        } else {
+            self.ontology_label.to_owned()
+        }
+    }
 }
 
 /// A form that creates: a new family (Work and Instance) or a new Instance of a Work
@@ -138,13 +161,15 @@ pub enum ColumnKind {
     Select(Vec<FormOption>),
     /// Yes or no.
     Check,
+    /// Not shown: what the row was drawn from, sent back as it is.
+    Hidden,
 }
 
 /// One choice of a select.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormOption {
     /// The value sent.
-    pub value: &'static str,
+    pub value: String,
     /// The label shown, in the interface language.
     pub label: String,
 }

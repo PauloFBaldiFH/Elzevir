@@ -724,6 +724,7 @@ dependencies = [
  "askama",
  "axum",
  "elzevir-app",
+ "elzevir-data",
  "elzevir-domain",
  "elzevir-web-templates",
  "getrandom 0.4.3",

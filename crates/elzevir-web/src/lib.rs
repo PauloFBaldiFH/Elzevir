@@ -9,6 +9,7 @@ mod assets;
 mod catalog;
 mod creating;
 mod editing;
+mod form_sections;
 mod items;
 mod new_record;
 mod opac;
