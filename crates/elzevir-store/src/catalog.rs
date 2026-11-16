@@ -86,6 +86,7 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CatalogCommand) -> Applied {
         CatalogCommand::SetStatements(update) => crate::statements::set_statements(tx, update)?,
         CatalogCommand::EditStatements(edit) => crate::statements::edit_statements(tx, edit)?,
         CatalogCommand::UpdateAgent(update) => crate::authorities::update_agent(tx, update)?,
+        CatalogCommand::LinkAuthority(link) => crate::authorities::link_authority(tx, link)?,
         CatalogCommand::AddItem(new) => {
             if !exists(
                 connection,
@@ -321,7 +322,17 @@ pub(crate) fn link_contributions(
     work: i64,
     contributions: &[NewContribution],
 ) -> Result<(), CommandFailed<WriteRefusal>> {
-    for (contribution, position) in contributions.iter().zip(0_i64..) {
+    link_contributions_at(connection, work, 0, contributions)
+}
+
+/// Links `contributions` to `work` from `start` on.
+pub(crate) fn link_contributions_at(
+    connection: &Connection,
+    work: i64,
+    start: i64,
+    contributions: &[NewContribution],
+) -> Result<(), CommandFailed<WriteRefusal>> {
+    for (contribution, position) in contributions.iter().zip(start..) {
         let agent = upsert(
             connection,
             "INSERT INTO agents (kind, heading) VALUES (?1, ?2) ON CONFLICT DO NOTHING",
@@ -462,7 +473,17 @@ pub(crate) fn link_subjects(
     work: i64,
     subjects: &[NewSubject],
 ) -> Result<(), CommandFailed<WriteRefusal>> {
-    for (subject, position) in subjects.iter().zip(0_i64..) {
+    link_subjects_at(connection, work, 0, subjects)
+}
+
+/// Links `subjects` to `work` from `start` on.
+pub(crate) fn link_subjects_at(
+    connection: &Connection,
+    work: i64,
+    start: i64,
+    subjects: &[NewSubject],
+) -> Result<(), CommandFailed<WriteRefusal>> {
+    for (subject, position) in subjects.iter().zip(start..) {
         let thesaurus = optional_term(
             connection,
             Vocabulary::Thesaurus,

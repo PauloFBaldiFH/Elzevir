@@ -1494,3 +1494,71 @@ async fn a_cataloguer_renames_an_agent_knowing_how_many_records_change() {
     .await;
     assert_eq!(body(saved).await, r#"{"version":2}"#);
 }
+
+#[tokio::test]
+async fn a_cataloguer_links_an_authority_by_its_role() {
+    let app = app();
+    let ana = signed_in(&app).await;
+    let listing = body(send(&app, get("/equipe/acervo", Some(&ana), None)).await).await;
+    assert!(listing.contains(r#"data-action="link-authority""#));
+    let bia = signed_in_as(&app, "bia").await;
+    let listing = body(send(&app, get("/equipe/acervo", Some(&bia), None)).await).await;
+    assert!(!listing.contains(r#"data-action="link-authority""#));
+    let refused = send(
+        &app,
+        get("/equipe/acervo/obra/3/autoridade/nova", Some(&bia), None),
+    )
+    .await;
+    assert_eq!(refused.status(), StatusCode::FORBIDDEN);
+
+    let form = body(
+        send(
+            &app,
+            get("/equipe/acervo/obra/3/autoridade/nova", Some(&ana), None),
+        )
+        .await,
+    )
+    .await;
+    assert!(
+        form.contains(
+            r#"data-endpoint="/equipe/acervo/obra/3/autoridades" data-create="authority""#
+        )
+    );
+    assert!(form.contains(r#"data-change="Link""#));
+    assert!(form.contains(r#"<option value="genre_form">"#));
+    assert!(form.contains(r#"<option value="subject">"#));
+
+    let token = page_token(&app, &ana).await;
+    let post = |json: &'static str| {
+        post_json(
+            "/equipe/acervo/obra/3/autoridades",
+            Some(&ana),
+            Some(&token),
+            json,
+        )
+    };
+    let topic_as_author = body(
+        send(
+            &app,
+            post(r#"{"changes": [{"Link": {"kind": "topic", "heading": "Cafe", "role": "contribution", "relator": null, "thesaurus": null}}]}"#),
+        )
+        .await,
+    )
+    .await;
+    assert!(topic_as_author.contains(r#""key":"link-error-not-an-agent""#));
+    let twice = body(
+        send(
+            &app,
+            post(r#"{"changes": [{"Link": {"kind": "topic", "heading": "Linked", "role": "subject", "relator": null, "thesaurus": "lcsh"}}]}"#),
+        )
+        .await,
+    )
+    .await;
+    assert!(twice.contains(r#""field":"link","key":"link-error-already-linked""#));
+    let linked = send(
+        &app,
+        post(r#"{"changes": [{"Link": {"kind": "person", "heading": " Portinari, Candido ", "role": "contribution", "relator": "ill", "thesaurus": null}}]}"#),
+    )
+    .await;
+    assert_eq!(body(linked).await, r#"{"version":2}"#);
+}

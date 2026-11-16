@@ -138,6 +138,18 @@ authority-reach = Saving changes { $works ->
     [one] one record
    *[other] { $instances } records
 }.
+link-authority = Authority
+link-authority-label = Link an authority, stored or new, to the Work in focus
+link-heading = Link an authority
+link-authority-field = Authority and its role
+link-column-class = Class
+link-column-role = Role in the Work
+link-column-relator = Relator code
+link-submit = Link
+link-role-contribution = contributor
+link-role-subject = subject
+link-error-not-an-agent = Only a person, family, organization or meeting can be a contributor.
+link-error-already-linked = The Work already names this authority in this role.
 staff-cord-written-by = written by
 staff-badge-work = Work
 staff-badge-instance = Instance

@@ -103,6 +103,8 @@ pub struct NewRecordForm<'a> {
     pub create: &'static str,
     /// Message key of the form's heading.
     pub heading_key: &'static str,
+    /// Message key of the button that sends it.
+    pub submit_key: &'static str,
     /// The blocks being created, in order.
     pub parts: Vec<FormPart>,
 }

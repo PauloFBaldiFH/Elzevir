@@ -85,6 +85,43 @@ pub enum CatalogCommand {
     /// Changes an agent, and so every record that names it, if the agent is still at
     /// `row_version` (docs/specs/catalogo/autoridades.md).
     UpdateAgent(Box<AgentUpdate>),
+    /// Links an authority, stored or new, to a Work in one role (docs/specs/catalogo/
+    /// autoridades.md); the Work and its Instances get new versions.
+    LinkAuthority(Box<WorkAuthority>),
+}
+
+/// An authority linked to a Work in one role.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkAuthority {
+    /// The Work.
+    pub work: WorkId,
+    /// The role, which decides what kind of authority it takes.
+    pub role: AuthorityRole,
+}
+
+/// The role an authority takes in a Work, with the authority. A contributor can only be
+/// an agent, so the type has no room for a topic as contributor.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AuthorityRole {
+    /// A contributor (`bf:contribution`), added after the others and never as the main
+    /// one: the main entry is chosen in the Work's form.
+    Contribution {
+        /// The kind of agent.
+        kind: AgentKind,
+        /// Its authorized heading.
+        heading: String,
+        /// The relator code, such as `ill`.
+        relator: Option<String>,
+    },
+    /// A subject (`bf:subject`): any kind of authority.
+    Subject {
+        /// What the heading names.
+        kind: SubjectKind,
+        /// Its heading.
+        heading: String,
+        /// The thesaurus code, such as `lcsh`.
+        thesaurus: Option<String>,
+    },
 }
 
 /// An edit of an agent, read at `row_version`.
@@ -712,6 +749,9 @@ pub enum CatalogRefusal {
     /// Another agent of the same kind has this heading; joining them is a merge.
     #[error("another agent is already named `{0}`")]
     AgentHeadingTaken(String),
+    /// The Work already has this authority in this role.
+    #[error("the work already names `{0}` in this role")]
+    AlreadyLinked(String),
     /// Someone changed the row after the editor read it.
     #[error("changed by someone else (version {current}, edit read {read}); reload")]
     Stale {

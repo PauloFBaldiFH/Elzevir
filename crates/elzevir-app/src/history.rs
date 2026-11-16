@@ -6,7 +6,9 @@
 use elzevir_domain::statement::{EntityKind, EntityRef};
 use serde_json::Value as Json;
 
-use crate::catalog::{CatalogCommand, CatalogOutput, CatalogReadError, ImportOutcome};
+use crate::catalog::{
+    AuthorityRole, CatalogCommand, CatalogOutput, CatalogReadError, ImportOutcome,
+};
 use crate::commands::WriteCommand;
 
 /// Most entries a history shows; older ones are left out.
@@ -146,6 +148,13 @@ fn change_of(command: &WriteCommand) -> Change {
                 .collect(),
         ),
         CatalogCommand::SetStatements(_) => Change::Edited(Vec::new()),
+        CatalogCommand::LinkAuthority(link) => Change::Edited(vec![Part::Field(
+            match link.role {
+                AuthorityRole::Contribution { .. } => "Contributions",
+                AuthorityRole::Subject { .. } => "Subjects",
+            }
+            .to_owned(),
+        )]),
         CatalogCommand::SaveItems(update) => Change::Items(update.rows.len()),
         CatalogCommand::AddItem(_) => Change::Items(1),
         _ => Change::Other,

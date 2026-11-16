@@ -3,13 +3,14 @@
 
 use elzevir_app::authorities::{AgentReader, AgentView};
 use elzevir_app::catalog::{
-    AgentChange, AgentUpdate, CatalogOutput, CatalogReadError, CatalogRefusal,
+    AgentChange, AgentUpdate, AuthorityRole, CatalogOutput, CatalogReadError, CatalogRefusal,
+    NewContribution, NewSubject, WorkAuthority,
 };
 use elzevir_app::commands::WriteRefusal;
 use elzevir_domain::catalog::{AgentId, AgentKind, InstanceId};
-use rusqlite::{OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params};
 
-use crate::catalog::{record_changed, refused};
+use crate::catalog::{exists, link_contributions_at, link_subjects_at, record_changed, refused};
 use crate::editing::{bump, check_version, version};
 use crate::{CommandFailed, ElzevirStore, StoreError, WriteTx};
 
@@ -90,6 +91,119 @@ pub(crate) fn update_agent(
         record_changed(tx, InstanceId(instance))?;
     }
     Ok(CatalogOutput::AgentUpdated { agent, row_version })
+}
+
+/// `catalog.link_authority`: the authority, found by its class and heading or created,
+/// goes after the Work's other contributors or subjects; the Work and its Instances get
+/// new versions, so an open form cannot write the old list back.
+pub(crate) fn link_authority(
+    tx: &WriteTx<'_>,
+    link: &WorkAuthority,
+) -> Result<CatalogOutput, CommandFailed<WriteRefusal>> {
+    let connection = tx.connection();
+    let work = link.work;
+    if !exists(connection, "SELECT 1 FROM works WHERE id = ?1", work.0)? {
+        return Err(refused(CatalogRefusal::UnknownWork(work)));
+    }
+    match &link.role {
+        AuthorityRole::Contribution {
+            kind,
+            heading,
+            relator,
+        } => {
+            let linked = exists_with(
+                connection,
+                "SELECT 1 FROM contributions c JOIN agents a ON a.id = c.agent_id
+                 LEFT JOIN terms t ON t.id = c.role
+                 WHERE c.work_id = ?1 AND a.kind = ?2 AND a.heading = ?3
+                   AND coalesce(t.code, '') = coalesce(?4, '')",
+                params![work.0, kind.code(), heading, relator],
+            )?;
+            if linked {
+                return Err(refused(CatalogRefusal::AlreadyLinked(heading.clone())));
+            }
+            let contribution = NewContribution {
+                kind: *kind,
+                heading: heading.clone(),
+                role: relator.clone(),
+                role_term: None,
+                primary: false,
+                name_parts: Vec::new(),
+                identifiers: Vec::new(),
+            };
+            let next = next_position(
+                connection,
+                "SELECT coalesce(max(position) + 1, 0) FROM contributions WHERE work_id = ?1",
+                work.0,
+            )?;
+            link_contributions_at(connection, work.0, next, &[contribution])?;
+        }
+        AuthorityRole::Subject {
+            kind,
+            heading,
+            thesaurus,
+        } => {
+            let linked = exists_with(
+                connection,
+                "SELECT 1 FROM work_subjects w JOIN subjects s ON s.id = w.subject_id
+                 LEFT JOIN terms t ON t.id = s.thesaurus
+                 WHERE w.work_id = ?1 AND s.kind = ?2 AND s.heading = ?3
+                   AND coalesce(t.code, '') = coalesce(?4, '')",
+                params![work.0, kind.code(), heading, thesaurus],
+            )?;
+            if linked {
+                return Err(refused(CatalogRefusal::AlreadyLinked(heading.clone())));
+            }
+            let subject = NewSubject {
+                kind: *kind,
+                heading: heading.clone(),
+                thesaurus: thesaurus.clone(),
+                subdivisions: Vec::new(),
+                name_parts: Vec::new(),
+                identifiers: Vec::new(),
+            };
+            let next = next_position(
+                connection,
+                "SELECT coalesce(max(position) + 1, 0) FROM work_subjects WHERE work_id = ?1",
+                work.0,
+            )?;
+            link_subjects_at(connection, work.0, next, &[subject])?;
+        }
+    }
+    let row_version = bump(
+        connection,
+        "UPDATE works SET row_version = row_version + 1 WHERE id = ?1 RETURNING row_version",
+        work.0,
+    )?;
+    let instances: Vec<i64> = {
+        let mut statement = connection
+            .prepare_cached("SELECT id FROM instances WHERE work_id = ?1 ORDER BY id")
+            .map_err(StoreError::from)?;
+        statement
+            .query_map(params![work.0], |row| row.get(0))
+            .map_err(StoreError::from)?
+            .collect::<Result<_, _>>()
+            .map_err(StoreError::from)?
+    };
+    for instance in instances {
+        record_changed(tx, InstanceId(instance))?;
+    }
+    Ok(CatalogOutput::WorkUpdated { work, row_version })
+}
+
+fn exists_with(
+    connection: &Connection,
+    sql: &str,
+    values: impl rusqlite::Params,
+) -> Result<bool, StoreError> {
+    Ok(connection
+        .query_row(sql, values, |_| Ok(()))
+        .optional()?
+        .is_some())
+}
+
+fn next_position(connection: &Connection, sql: &str, work: i64) -> Result<i64, StoreError> {
+    Ok(connection.query_row(sql, params![work], |row| row.get(0))?)
 }
 
 impl AgentReader for ElzevirStore {

@@ -353,3 +353,103 @@ fn a_renamed_agent_changes_every_record_that_names_it() {
         String::from_utf8_lossy(main.raw()).contains("Foz do Iguaçu (PR). Prefeitura Municipal")
     );
 }
+
+#[test]
+fn a_linked_authority_joins_the_work_in_its_role() {
+    use elzevir_app::catalog::{AuthorityRole, CatalogRefusal, WorkAuthority};
+    use elzevir_app::commands::WriteRefusal;
+    use elzevir_domain::catalog::{AgentKind, SubjectKind, WorkId};
+    use elzevir_store::CommandFailed;
+
+    let (_dir, store) = imported();
+    let store = Arc::new(store);
+    let index = Arc::new(TantivyIndex::in_memory(Parallelism::Serial).unwrap());
+    index_pending(&*store, &*store, &*index, &options()).unwrap();
+    let app = app(&store, &index);
+    let instance = index
+        .search("anuario estatistico", SearchScope::Staff, 0, 1)
+        .unwrap()
+        .hits[0]
+        .instance;
+    let work: i64 = store
+        .readers()
+        .read(|c| {
+            c.query_row(
+                "SELECT work_id FROM instances WHERE id = ?1",
+                [instance.0],
+                |row| row.get(0),
+            )
+        })
+        .unwrap();
+    let before = store.instance(instance).unwrap().unwrap().version;
+    let link = |work: i64, role: AuthorityRole| {
+        store
+            .submit(WriteCommand::Catalog(CatalogCommand::LinkAuthority(
+                Box::new(WorkAuthority {
+                    work: WorkId(work),
+                    role,
+                }),
+            )))
+            .unwrap()
+            .wait()
+    };
+    let illustrator = || AuthorityRole::Contribution {
+        kind: AgentKind::Person,
+        heading: "Portinari, Candido".to_owned(),
+        relator: Some("ill".to_owned()),
+    };
+    link(work, illustrator()).unwrap();
+    link(
+        work,
+        AuthorityRole::Subject {
+            kind: SubjectKind::Topic,
+            heading: "Estatistica municipal".to_owned(),
+            thesaurus: None,
+        },
+    )
+    .unwrap();
+    assert!(store.instance(instance).unwrap().unwrap().version > before);
+    // The new contributor comes last and is not the main one.
+    let (last, primary): (String, bool) = store
+        .readers()
+        .read(|c| {
+            c.query_row(
+                "SELECT a.heading, c.is_primary FROM contributions c
+                 JOIN agents a ON a.id = c.agent_id
+                 WHERE c.work_id = ?1 ORDER BY c.position DESC LIMIT 1",
+                [work],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+        })
+        .unwrap();
+    assert_eq!((last.as_str(), primary), ("Portinari, Candido", false));
+    assert!(matches!(
+        link(work, illustrator()),
+        Err(CommandFailed::Rejected(WriteRefusal::Catalog(
+            CatalogRefusal::AlreadyLinked(_)
+        )))
+    ));
+    assert!(matches!(
+        link(999_999, illustrator()),
+        Err(CommandFailed::Rejected(WriteRefusal::Catalog(
+            CatalogRefusal::UnknownWork(_)
+        )))
+    ));
+    index_pending(&*store, &*store, &*index, &options()).unwrap();
+
+    let (_, record) = get(&app, &format!("/record/{}", instance.0));
+    assert!(record.contains("Portinari, Candido"));
+    assert!(record.contains("Estatistica municipal"));
+    let bytes = export_record(&*store, instance, RecordFormat::Marc21, &Limits::default())
+        .unwrap()
+        .unwrap();
+    let mut reader = MarcReader::new(bytes.as_slice(), Limits::default());
+    let exported = reader.next_record().unwrap().unwrap();
+    let field = |tag: &str, text: &str| {
+        exported.fields().any(|field| {
+            field.tag().to_string() == tag && String::from_utf8_lossy(field.raw()).contains(text)
+        })
+    };
+    assert!(field("700", "Portinari, Candido"));
+    assert!(field("650", "Estatistica municipal"));
+}

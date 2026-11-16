@@ -211,7 +211,8 @@ impl elzevir_app::export::RecordSource for Records {
 
 /// Records edits from the screen. An edit read at version 1 is accepted and moves to 2;
 /// any other version is stale, as if someone else had edited first. Creations are
-/// accepted, except a new Instance of Work 404, which does not exist.
+/// accepted, except a new Instance of Work 404, which does not exist; a link of an
+/// authority named `Linked` is refused as already there.
 #[derive(Default)]
 pub(crate) struct Editor(
     pub(crate) Mutex<Vec<(elzevir_app::staff::StaffId, elzevir_app::editing::Edit)>>,
@@ -250,6 +251,18 @@ impl elzevir_app::editing::CatalogEditor for Editor {
                 }
                 1
             }
+            Edit::Link(link) => {
+                let heading = match &link.role {
+                    elzevir_app::catalog::AuthorityRole::Contribution { heading, .. }
+                    | elzevir_app::catalog::AuthorityRole::Subject { heading, .. } => heading,
+                };
+                if heading == "Linked" {
+                    return Err(EditFailed::Refused(CatalogRefusal::AlreadyLinked(
+                        heading.clone(),
+                    )));
+                }
+                1
+            }
             Edit::NewRecord(_) | Edit::NewInstance(_) => 1,
         };
         if read != 1 {
@@ -283,6 +296,10 @@ impl elzevir_app::editing::CatalogEditor for Editor {
             Edit::Registry(_) => CatalogOutput::RegistryChanged(None),
             Edit::Statements(edit) => CatalogOutput::StatementsSet {
                 subject: edit.subject,
+                row_version: 2,
+            },
+            Edit::Link(link) => CatalogOutput::WorkUpdated {
+                work: link.work,
                 row_version: 2,
             },
             Edit::Agent(update) => CatalogOutput::AgentUpdated {
