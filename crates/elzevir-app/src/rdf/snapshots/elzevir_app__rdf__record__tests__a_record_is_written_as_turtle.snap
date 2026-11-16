@@ -39,8 +39,18 @@ expression: write_turtle(&graph)
         ]
     ] ;
     bf:subject [
-        a bf:Topic ;
+        a bf:Topic, madsrdf:ComplexSubject ;
         rdfs:label "Ciúme -- Ficção" ;
+        madsrdf:componentList (
+            [
+                a madsrdf:Topic ;
+                madsrdf:authoritativeLabel "Ciúme"
+            ]
+            [
+                a madsrdf:GenreForm ;
+                madsrdf:authoritativeLabel "Ficção"
+            ]
+        ) ;
         bf:source [
             a bf:Source ;
             bf:code "larpcal"
@@ -170,7 +180,17 @@ expression: write_turtle(&graph)
 <http://viaf.org/viaf/2467372>
     a bf:Person ;
     rdfs:label "Assis, Machado de, 1839-1908" ;
-    madsrdf:isIdentifiedByAuthority <http://id.loc.gov/authorities/names/n79029745> .
+    madsrdf:isIdentifiedByAuthority <http://id.loc.gov/authorities/names/n79029745> ;
+    madsrdf:elementList (
+        [
+            a madsrdf:FullNameElement ;
+            madsrdf:elementValue "Assis, Machado de, "
+        ]
+        [
+            a madsrdf:DateNameElement ;
+            madsrdf:elementValue "1839-1908"
+        ]
+    ) .
 
 <https://biblioteca.example/bf/organizations/1>
     a bf:Organization ;

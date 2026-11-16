@@ -49,7 +49,16 @@ expression: "crate::rdf::write_rdf_xml(&graph)"
     </bf:contribution>
     <bf:subject>
       <bf:Topic>
+        <rdf:type rdf:resource="http://www.loc.gov/mads/rdf/v1#ComplexSubject"/>
         <rdfs:label>Ciúme -- Ficção</rdfs:label>
+        <madsrdf:componentList rdf:parseType="Collection">
+          <madsrdf:Topic>
+            <madsrdf:authoritativeLabel>Ciúme</madsrdf:authoritativeLabel>
+          </madsrdf:Topic>
+          <madsrdf:GenreForm>
+            <madsrdf:authoritativeLabel>Ficção</madsrdf:authoritativeLabel>
+          </madsrdf:GenreForm>
+        </madsrdf:componentList>
         <bf:source>
           <bf:Source>
             <bf:code>larpcal</bf:code>
@@ -202,6 +211,14 @@ expression: "crate::rdf::write_rdf_xml(&graph)"
   <bf:Person rdf:about="http://viaf.org/viaf/2467372">
     <rdfs:label>Assis, Machado de, 1839-1908</rdfs:label>
     <madsrdf:isIdentifiedByAuthority rdf:resource="http://id.loc.gov/authorities/names/n79029745"/>
+    <madsrdf:elementList rdf:parseType="Collection">
+      <madsrdf:FullNameElement>
+        <madsrdf:elementValue>Assis, Machado de, </madsrdf:elementValue>
+      </madsrdf:FullNameElement>
+      <madsrdf:DateNameElement>
+        <madsrdf:elementValue>1839-1908</madsrdf:elementValue>
+      </madsrdf:DateNameElement>
+    </madsrdf:elementList>
   </bf:Person>
   <bf:Organization rdf:about="https://biblioteca.example/bf/organizations/1">
     <rdfs:label>Biblioteca Central</rdfs:label>

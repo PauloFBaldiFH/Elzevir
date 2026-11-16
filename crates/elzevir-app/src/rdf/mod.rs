@@ -6,6 +6,7 @@
 //! RDF says is what the catalogue holds.
 
 mod items;
+mod mads;
 mod record;
 mod turtle;
 mod xml;
@@ -16,11 +17,13 @@ pub use turtle::write_turtle;
 pub use xml::write_rdf_xml;
 
 use std::collections::{BTreeSet, VecDeque};
+use std::io::Write;
+use std::num::NonZeroUsize;
 
 use elzevir_domain::catalog::{BranchId, InstanceId};
 
 use crate::catalog::CatalogReadError;
-use crate::export::{RecordSource, stored_record};
+use crate::export::{ExportError, RecordSource, stored_record};
 use elzevir_domain::statement::{EntityKind, EntityRef};
 
 /// The BIBFRAME namespace.
@@ -64,6 +67,63 @@ pub fn export_rdf<S: RecordSource + ?Sized>(
     }))
 }
 
+impl RdfFormat {
+    fn header(self) -> String {
+        match self {
+            Self::Turtle => turtle::turtle_header(),
+            Self::RdfXml => xml::rdf_xml_header(),
+        }
+    }
+
+    fn blocks(self, nodes: &[Node]) -> String {
+        match self {
+            Self::Turtle => turtle::turtle_blocks(nodes),
+            Self::RdfXml => xml::rdf_xml_blocks(nodes),
+        }
+    }
+
+    const fn footer(self) -> &'static str {
+        match self {
+            Self::Turtle => "",
+            Self::RdfXml => xml::RDF_XML_FOOTER,
+        }
+    }
+}
+
+/// Writes every stored record, its Work, Instance and Items, as one document in `format`,
+/// in Instance order, reading `batch` records at a time; returns how many were written.
+///
+/// # Errors
+///
+/// When the catalog cannot be read or the output cannot be written.
+pub fn export_rdf_catalog<W: Write, S: RecordSource + ?Sized>(
+    source: &S,
+    out: &mut W,
+    format: RdfFormat,
+    base: &IriBase,
+    batch: NonZeroUsize,
+) -> Result<usize, ExportError> {
+    out.write_all(format.header().as_bytes())?;
+    let mut written = 0_usize;
+    let mut after = None;
+    loop {
+        let records = source.records_after(after, batch)?;
+        let Some(last) = records.last() else {
+            break;
+        };
+        after = Some(last.instance);
+        for stored in &records {
+            let items = source.held_items(stored.instance)?;
+            let graph = record_graph(stored, &items, base);
+            out.write_all(format.blocks(&graph).as_bytes())?;
+            written = written.saturating_add(1);
+        }
+    }
+    out.write_all(format.footer().as_bytes())?;
+    out.flush()?;
+    Ok(written)
+}
+
 /// The prefixes every document declares, in order.
 const PREFIXES: [(&str, &str); 4] = [
     ("bf", BF),
@@ -76,13 +136,15 @@ const PREFIXES: [(&str, &str); 4] = [
 /// a value, once per IRI (a unit holding many Items is described once).
 fn blocks(nodes: &[Node]) -> Vec<&Node> {
     fn named<'a>(node: &'a Node, queue: &mut VecDeque<&'a Node>) {
-        for (_, object) in &node.properties {
-            if let Object::Node(inner) = object {
-                if inner.iri.is_some() {
-                    queue.push_back(inner);
-                } else {
-                    named(inner, queue);
-                }
+        for inner in node
+            .properties
+            .iter()
+            .flat_map(|(_, object)| object.nodes())
+        {
+            if inner.iri.is_some() {
+                queue.push_back(inner);
+            } else {
+                named(inner, queue);
             }
         }
     }
@@ -124,9 +186,39 @@ pub enum Object {
     },
     /// A resource described here: a blank node, or a named one whose description follows.
     Node(Box<Node>),
+    /// An ordered list of resources (`rdf:List`), such as the elements of a MADS name.
+    List(Vec<Node>),
+}
+
+impl Object {
+    /// The resources described in this value: the node, or the list's members.
+    #[must_use]
+    pub fn nodes(&self) -> &[Node] {
+        match self {
+            Self::Node(node) => std::slice::from_ref(node),
+            Self::List(nodes) => nodes,
+            Self::Iri(_) | Self::Literal { .. } => &[],
+        }
+    }
 }
 
 impl Node {
+    /// A blank node of the MADS/RDF class `class`.
+    #[must_use]
+    pub fn mads(class: &str) -> Self {
+        Self {
+            iri: None,
+            types: vec![format!("{MADSRDF}{class}")],
+            properties: Vec::new(),
+        }
+    }
+
+    /// Adds the MADS/RDF property `property` with `object`.
+    pub fn add_mads(&mut self, property: &str, object: Object) {
+        self.properties
+            .push((format!("{MADSRDF}{property}"), object));
+    }
+
     /// A blank node of the BIBFRAME class `class`.
     #[must_use]
     pub fn blank(class: &str) -> Self {

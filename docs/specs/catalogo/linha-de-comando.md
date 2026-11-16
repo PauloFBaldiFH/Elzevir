@@ -21,12 +21,13 @@
 4. **Relatório**: na saída padrão, duas linhas com lidos, gravados, casados, substituídos, pulados e com falha; exemplares gravados, substituídos e recusados. Na saída de erro, uma linha por registro recusado (posição contada a partir de 1 e deslocamento em bytes) e por exemplar recusado.
 5. A saída é **0** quando a importação chega ao fim, mesmo com registros recusados (eles estão no relatório). É **1** quando não dá para abrir o arquivo ou a base, ou a leitura para no meio.
 
-### `elzevir export --data-dir DIR [--output ARQUIVO]`
+### `elzevir export --data-dir DIR [--output ARQUIVO] [--format marc21|turtle|rdfxml] [--iri-base URL]`
 
 6. Escreve todo o acervo em MARC21 ISO 2709, UTF-8, em ordem de Instância, num arquivo ou na saída padrão. A contagem vai para a saída de erro, para não se misturar ao MARC.
 7. Os registros são lidos do banco **1.024 de cada vez** (`RecordSource::records_after`), então a memória não cresce com o acervo.
 8. **Registro que ninguém mudou sai com os bytes guardados.** Quando o modelo ainda diz o mesmo que o registro de origem mapeado (`marc_to_bibframe`), a exportação escreve o registro de origem como está. Registro mudado passa por `bibframe_to_marc` a partir do de origem ([mapeamento MARC21](mapeamento-marc21.md) §7). Isso cobre registros que os leitores aceitam mas a escrita ISO 2709 recusa: 8 dos 250.000 registros da LC têm um delimitador de subcampo dentro do `001`.
 9. Registro sem origem (catalogado no Elzevir) é escrito só a partir do modelo. Registro que não cabe em ISO 2709 é relatado e pulado.
+9a. Com `--format turtle` ou `--format rdfxml`, escreve o acervo em BIBFRAME, um documento só, com os IRIs sob `--iri-base` (obrigatório nesses formatos): ver [BIBFRAME completo](bibframe-completo.md), item 28.
 
 ### `elzevir koha-codes --data-dir DIR --url URL --user USUÁRIO`
 
