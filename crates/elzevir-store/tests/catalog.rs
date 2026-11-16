@@ -13,11 +13,10 @@ use elzevir_app::catalog::{
 };
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
-use elzevir_app::description::{instance_of_material, work_of_material};
+use elzevir_app::description::printed_book;
 use elzevir_app::material::{CarrierKind, ContentKind, Material};
 use elzevir_domain::catalog::{
-    AgentKind, HubId, IdentifierKind, InstanceId, MaterialType, Money, SubjectKind, WorkId,
-    WorkRelationKind,
+    AgentKind, HubId, IdentifierKind, InstanceId, Money, SubjectKind, WorkId, WorkRelationKind,
 };
 use elzevir_store::{CommandFailed, ElzevirHandler, ElzevirStore, StoreConfig};
 
@@ -97,7 +96,6 @@ fn subject(heading: &str) -> NewSubject {
 fn record(title: &str) -> NewRecord {
     NewRecord {
         work_title: title.to_owned(),
-        material_type: MaterialType::Book,
         work_description: elzevir_domain::statement::Description::default(),
         hub: None,
         relations: Vec::new(),
@@ -367,9 +365,8 @@ fn hubs_relations_and_materials_read_back() {
         kind: WorkRelationKind::TranslationOf,
         work: original,
     }];
-    translation.instance.material_type = Some(MaterialType::Digital);
-    translation.work_description = work_of_material(MaterialType::Book);
-    translation.instance.description = instance_of_material(Some(MaterialType::Digital));
+    translation.work_description = printed_book().0;
+    translation.instance.description.classes = vec!["Electronic".to_owned()];
     let CatalogOutput::Record { work, instance, .. } =
         run(&store, CatalogCommand::AddRecord(Box::new(translation))).unwrap()
     else {

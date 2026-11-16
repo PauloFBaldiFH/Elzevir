@@ -230,31 +230,6 @@ stable_enum! {
 }
 
 stable_enum! {
-    /// The category of material of a Work or an Instance. It picks the icon and the
-    /// cataloguing profile (the 12 to 20 fields the editor shows for that category).
-    MaterialType {
-        /// Books and other printed or manuscript text.
-        Book = 1,
-        /// Periodicals, newspapers and other continuing resources.
-        Periodical = 2,
-        /// Maps, atlases and other cartographic material.
-        Map = 3,
-        /// Notated music.
-        Score = 4,
-        /// Sound recordings, musical or spoken.
-        SoundRecording = 5,
-        /// Films, videos and other moving images.
-        Video = 6,
-        /// Electronic resources: e-books, files, websites, software.
-        Digital = 7,
-        /// Still images, objects and other visual material.
-        VisualMaterial = 8,
-        /// Kits and mixed materials.
-        Mixed = 9,
-    }
-}
-
-stable_enum! {
     /// How one Work relates to another. Stored one way only: the Work that holds the
     /// row is the translation, the adaptation, the part or the continuation.
     WorkRelationKind {
@@ -383,11 +358,6 @@ mod tests {
         );
         round_trips(NoteKind::ALL, NoteKind::code, NoteKind::from_code);
         round_trips(Vocabulary::ALL, Vocabulary::code, Vocabulary::from_code);
-        round_trips(
-            MaterialType::ALL,
-            MaterialType::code,
-            MaterialType::from_code,
-        );
         round_trips(
             WorkRelationKind::ALL,
             WorkRelationKind::code,

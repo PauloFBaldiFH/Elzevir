@@ -3,7 +3,6 @@ source: crates/elzevir-app/tests/marc_mapping.rs
 expression: mapped
 ---
 work_title: Seminário Internacional de Crédito Imobiliário
-material_type: book
 work_description:
   classes:
     - Text
@@ -84,7 +83,6 @@ subjects:
     identifiers: []
 instance:
   title: "Seminário Internacional de Crédito Imobiliário : As contribuições das experiências dos sistemas  imobiliários da Espanha e do México para o aperfeiçoamento do modelo brasileiro"
-  material_type: ~
   description:
     classes: []
     statements:

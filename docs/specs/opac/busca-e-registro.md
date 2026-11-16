@@ -8,7 +8,7 @@
 
 1. O texto é aparado e cortado em **256 caracteres**; o resto é ignorado. Texto vazio mostra a página sem lista.
 2. **20 resultados por página.** `page` vale de 1 a **500**: abaixo de 1 vira 1, acima de 500 vira 500, e o que não é número vira 1. O limite impede que um endereço forjado faça o índice pular milhões de documentos.
-3. Cada resultado mostra título, autor principal, data, categoria de material, número de chamada e disponibilidade. Os quatro primeiros vêm guardados no índice, sem consulta ao SQLite ([busca](../catalogo/busca.md), item 4).
+3. Cada resultado mostra título, autor principal, data, conteúdo e suporte com ícone, número de chamada e disponibilidade. Os quatro primeiros vêm guardados no índice, sem consulta ao SQLite ([busca](../catalogo/busca.md), item 4).
 4. A **disponibilidade da página inteira sai de uma só consulta** ao SQLite: `CatalogReader::item_statuses` lê o estado de todos os exemplares das Instâncias da página. Um exemplar está disponível quando não está indisponível para empréstimo, danificado, perdido, retirado nem restrito (`ItemStatus::is_available`). Empréstimos entram na Fase 3. A linha diz "N de M disponíveis", "Nenhum exemplar disponível" ou "Sem exemplares".
 5. Links "Anterior" e "Próxima" levam o texto codificado para URL. "Próxima" só aparece se há mais resultados e a página seguinte não passa de 500.
 6. **HTMX:** o formulário pede `/search` com `hx-get`. Com o cabeçalho `HX-Request`, a resposta é só a lista (`<section id="results">`), que substitui a anterior. Sem ele, a página inteira. A URL vai para o histórico (`hx-push-url`), então voltar e recarregar funcionam sem JavaScript.
@@ -42,7 +42,7 @@
 - `crates/elzevir-web/tests/opac.rs` (catálogo e índice falsos): disponibilidade e título escapado na lista; HTMX recebe só a lista; páginas com o texto codificado e `page` inválido; texto vazio; registro com exemplares e estados, renderizado uma vez por versão e de novo quando a versão muda; 404 para id inexistente, não numérico ou negativo.
 - `crates/elzevir/tests/opac.rs`, sobre os 200 registros da base de testes, com o SQLite e o Tantivy de verdade: buscar, abrir o registro, acrescentar um exemplar perdido e ver a página do registro mudar.
 - `crates/elzevir-store/tests/catalog.rs`: `AddItem` sobe a versão; `item_statuses` devolve os estados de várias Instâncias numa chamada.
-- `crates/elzevir-web/src/opac.rs`: toda categoria de material e todo estado têm texto no Fluent.
+- `crates/elzevir-web/src/opac.rs`: todo estado tem texto no Fluent (os selos de conteúdo e suporte, em `icons.rs`).
 
 ## 4. Desempenho
 

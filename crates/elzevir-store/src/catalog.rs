@@ -12,9 +12,8 @@ use elzevir_app::matching::{identifier_key, match_keys};
 use elzevir_app::material::{Material, material_of};
 use elzevir_app::search::REINDEX_INSTANCE;
 use elzevir_domain::catalog::{
-    AgentKind, BranchId, HubId, IdentifierKind, InstanceId, ItemId, MaterialType, NamePartKind,
-    NoteKind, PolicyId, SourceFormat, SubjectKind, SublocationId, Vocabulary, WorkId,
-    WorkRelationKind,
+    AgentKind, BranchId, HubId, IdentifierKind, InstanceId, ItemId, NamePartKind, NoteKind,
+    PolicyId, SourceFormat, SubjectKind, SublocationId, Vocabulary, WorkId, WorkRelationKind,
 };
 use rusqlite::{Connection, ErrorCode, OptionalExtension, params};
 
@@ -126,31 +125,18 @@ fn add_instance_of_work(
     new: &NewInstanceOfWork,
 ) -> Result<CatalogOutput, CommandFailed<WriteRefusal>> {
     let connection = tx.connection();
-    let material_type: Option<u8> = connection
+    let exists: Option<i64> = connection
         .query_row(
-            "SELECT material_type FROM works WHERE id = ?1",
+            "SELECT id FROM works WHERE id = ?1",
             params![new.work.0],
             |row| row.get(0),
         )
         .optional()
         .map_err(StoreError::from)?;
-    let Some(material_type) = material_type else {
+    if exists.is_none() {
         return Err(refused(CatalogRefusal::UnknownWork(new.work)));
-    };
-    // The code was written by this store from a `MaterialType`, so an unknown one means
-    // the file was changed by hand; report it instead of guessing a category.
-    let material_type = MaterialType::from_code(material_type).ok_or_else(|| {
-        StoreError::Sqlite(format!(
-            "work {} has unknown material type code {material_type}",
-            new.work.0
-        ))
-    })?;
-    let instance = InstanceId(add_instance(
-        connection,
-        new.work.0,
-        material_type,
-        &new.instance,
-    )?);
+    }
+    let instance = InstanceId(add_instance(connection, new.work.0, &new.instance)?);
     for key in new
         .instance
         .identifiers
@@ -205,12 +191,11 @@ pub(crate) fn add_work_and_instance(
     )?;
     connection
         .execute(
-            "INSERT INTO works (title, material_type, hub_id, classification,
-                                classification_scheme, summary, audience, sort_key)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO works (title, hub_id, classification, classification_scheme, summary,
+                                audience, sort_key)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 record.work_title,
-                record.material_type.code(),
                 record.hub.map(|hub| hub.0),
                 record.classification,
                 scheme,
@@ -233,7 +218,7 @@ pub(crate) fn add_work_and_instance(
         },
         &record.work_description,
     )?;
-    let instance = add_instance(connection, work, record.material_type, &record.instance)?;
+    let instance = add_instance(connection, work, &record.instance)?;
     let instance = InstanceId(instance);
     store_source_and_keys(connection, instance, record)?;
     Ok((WorkId(work), instance))
@@ -551,19 +536,16 @@ pub(crate) fn subdivisions_of_column(column: &str) -> Result<Vec<SubjectKind>, R
 fn add_instance(
     connection: &Connection,
     work: i64,
-    work_material_type: MaterialType,
     instance: &NewInstance,
 ) -> Result<i64, CommandFailed<WriteRefusal>> {
-    let material_type = instance.material_type.unwrap_or(work_material_type);
     connection
         .execute(
-            "INSERT INTO instances (work_id, title, material_type, edition, place, publisher, date,
-                                    extent, series)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO instances (work_id, title, edition, place, publisher, date, extent,
+                                    series)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 work,
                 instance.title,
-                material_type.code(),
                 instance.edition,
                 instance.place,
                 instance.publisher,

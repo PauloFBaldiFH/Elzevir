@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! The Instance: title, publication, extent, series, identifiers, category (spec §1.1, §1.3).
+//! The Instance: title, publication, extent, series, identifiers (spec §1.1, §1.3).
 
-use elzevir_domain::catalog::{IdentifierKind, MaterialType, NoteKind};
+use elzevir_domain::catalog::{IdentifierKind, NoteKind};
 
 use super::{DataField, Marc, text};
 use crate::catalog::{NewIdentifier, NewInstance, NewNote};
 
-pub(super) fn map(marc: &Marc<'_>, work_material_type: MaterialType) -> NewInstance {
+pub(super) fn map(marc: &Marc<'_>) -> NewInstance {
     let publication = publication(marc);
     NewInstance {
         title: marc.first(b"245").map(title).unwrap_or_default(),
-        material_type: electronic(marc, work_material_type).then_some(MaterialType::Digital),
         description: elzevir_domain::statement::Description::default(),
         edition: marc.first_text(b"250", b'a'),
         // Several places and publishers of one publication, joined as ISBD does.
@@ -41,16 +40,16 @@ fn title(field: DataField<'_>) -> String {
     }
 }
 
-/// Whether the record describes an electronic resource while its Work is not `Digital`.
-fn electronic(marc: &Marc<'_>, work: MaterialType) -> bool {
-    if work == MaterialType::Digital {
+/// Whether the record describes an electronic edition of a Work that is not itself a
+/// computer file (Leader/06 `m`): `007/00` `c`, or a form of item (`008/23`) online or
+/// electronic where that position exists (texts, music, mixed material).
+pub(super) fn electronic(marc: &Marc<'_>) -> bool {
+    let record_type = marc.leader_byte(6);
+    if record_type == b'm' {
         return false;
     }
     let physical = marc.control(*b"007").and_then(|value| value.first()) == Some(&b'c');
-    let form_applies = matches!(
-        work,
-        MaterialType::Book | MaterialType::Periodical | MaterialType::Score | MaterialType::Mixed
-    );
+    let form_applies = matches!(record_type, b'a' | b't' | b'c' | b'd' | b'o' | b'p');
     let form = marc
         .control(*b"008")
         .and_then(|value| value.get(23))

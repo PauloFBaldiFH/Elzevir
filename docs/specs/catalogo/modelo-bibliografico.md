@@ -24,7 +24,7 @@
 13. `works`, `instances`, `items`, `branches`, `item_types` e `hubs` têm `row_version` (doc 05, §3).
 14. **Hub** (`hubs`) agrupa Obras de mesma origem (traduções, adaptações, título uniforme). É opcional: a Obra aponta para no máximo um Hub (`works.hub_id`).
 15. **Relações entre Obras** (`work_relations`): tipo (`enum` estável: tradução de, adaptação de, parte de, suplemento de, continuação de) e a Obra relacionada, em ordem. Guardadas num sentido só: a linha fica na Obra que é a tradução, a adaptação, a parte.
-16. **Categoria do material** (`material_type`, `enum` estável: livro, periódico, mapa, partitura, gravação sonora, vídeo, digital, material visual, misto) na Obra e na Instância. A Instância sem categoria própria recebe a da Obra; uma edição digital de um livro impresso é `livro` na Obra e `digital` na Instância. A categoria escolhe o ícone e o perfil de campos da catalogação.
+16. ~~**Categoria do material**~~ (retirada na etapa 7c de [BIBFRAME completo](bibframe-completo.md), item 14b; o que segue é histórico) (`material_type`, `enum` estável: livro, periódico, mapa, partitura, gravação sonora, vídeo, digital, material visual, misto) na Obra e na Instância. A Instância sem categoria própria recebe a da Obra; uma edição digital de um livro impresso é `livro` na Obra e `digital` na Instância. A categoria escolhe o ícone e o perfil de campos da catalogação.
 17. **Tombo** (`items.inventory_number`, `952$i` no Koha): opcional e pode repetir, como o `stocknumber` do Koha.
 18. Identificadores também incluem DOI e ISMN.
 

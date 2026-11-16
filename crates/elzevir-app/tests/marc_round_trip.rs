@@ -94,6 +94,28 @@ fn editing_the_title_touches_only_the_245() {
 }
 
 #[test]
+fn edited_classes_write_the_leader_and_an_electronic_edition_its_007() {
+    let records = records();
+    let (_, record) = records
+        .iter()
+        .find(|(_, record)| tags(record, *b"007").is_empty())
+        .unwrap();
+    let mut edited = model(record);
+    edited.work_description.classes = vec!["NotatedMusic".to_owned(), "Serial".to_owned()];
+    edited.instance.description.classes = vec!["Electronic".to_owned()];
+    let exported = bibframe_to_marc(&edited, Some(record));
+    assert_eq!(&exported.leader[6..8], b"cs");
+    assert_eq!(&exported.leader[..6], &record.leader[..6]);
+    assert!(tags(&exported, *b"007").iter().any(|field| matches!(
+        field,
+        Field::Control { value, .. } if value.as_slice() == b"cr"
+    )));
+    let again = model(&exported);
+    assert_eq!(again.work_description.classes, ["NotatedMusic", "Serial"]);
+    assert_eq!(again.instance.description.classes, ["Electronic"]);
+}
+
+#[test]
 fn editing_one_item_keeps_the_others_and_koha_subfields() {
     let records = records();
     let (position, (_, record)) = records

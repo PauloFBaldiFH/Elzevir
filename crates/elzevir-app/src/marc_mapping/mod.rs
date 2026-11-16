@@ -270,7 +270,7 @@ pub fn source_publication(source: &[u8]) -> Option<[(Option<String>, Option<Stri
     let parsed = RecordRef::parse(source, &Limits::default()).ok()?;
     let record = Record::from_ref(&parsed);
     let marc = Marc(&record);
-    let now = instance::map(&marc, elzevir_domain::catalog::MaterialType::Book);
+    let now = instance::map(&marc);
     let field = instance::publication(&marc)?;
     Some([
         (field.text(b'a'), now.place),
@@ -301,12 +301,11 @@ pub fn marc_to_bibframe(
 ) -> Result<NewRecord, MappingError> {
     let marc = Marc(record);
     let work = work::map(&marc)?;
-    let mut instance = instance::map(&marc, work.material_type);
+    let mut instance = instance::map(&marc);
     instance.description = description::instance(&marc);
     let items = items::map(&marc)?;
     Ok(NewRecord {
         work_title: work.title,
-        material_type: work.material_type,
         work_description: description::work(&marc),
         hub: None,
         relations: Vec::new(),

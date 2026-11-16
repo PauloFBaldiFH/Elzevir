@@ -3,7 +3,6 @@ source: crates/elzevir-app/tests/marc_mapping.rs
 expression: mapped
 ---
 work_title: Os fundamentos da física
-material_type: book
 work_description:
   classes:
     - Text
@@ -1059,7 +1058,6 @@ subjects:
     identifiers: []
 instance:
   title: Os fundamentos da física
-  material_type: ~
   description:
     classes: []
     statements:

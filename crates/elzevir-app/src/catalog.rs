@@ -8,8 +8,8 @@
 
 use elzevir_domain::catalog::{
     AgentKind, AuthorityLinkKind, BranchId, CollectionId, HubId, IdentifierKind, InstanceId,
-    ItemId, MaterialType, Money, NamePartKind, NoteKind, PolicyId, SubjectKind, SublocationId,
-    WorkId, WorkRelationKind,
+    ItemId, Money, NamePartKind, NoteKind, PolicyId, SubjectKind, SublocationId, WorkId,
+    WorkRelationKind,
 };
 use serde::{Deserialize, Serialize};
 
@@ -312,8 +312,6 @@ pub struct RefusedItem {
 pub struct NewRecord {
     /// Preferred title of the Work.
     pub work_title: String,
-    /// Category of material of the Work.
-    pub material_type: MaterialType,
     /// The Work's classes and statements (bibframe-completo.md, item 10h).
     #[serde(default)]
     pub work_description: Description,
@@ -426,9 +424,6 @@ pub struct NewSubject {
 pub struct NewInstance {
     /// Title as on the publication.
     pub title: String,
-    /// Category of material of the Instance; `None` takes the Work's (a digital
-    /// edition of a printed book says `Digital` here).
-    pub material_type: Option<MaterialType>,
     /// The Instance's classes and statements (bibframe-completo.md, item 10h).
     #[serde(default)]
     pub description: Description,

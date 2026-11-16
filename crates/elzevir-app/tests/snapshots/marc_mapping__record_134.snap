@@ -3,7 +3,6 @@ source: crates/elzevir-app/tests/marc_mapping.rs
 expression: mapped
 ---
 work_title: Economia aplicada
-material_type: periodical
 work_description:
   classes:
     - Text
@@ -86,7 +85,6 @@ subjects:
     identifiers: []
 instance:
   title: "Economia aplicada : EA / [Universidade de Sao Paulo, Departamento de Economia; Fundacao Instituto de Pesquisas Economicas]"
-  material_type: ~
   description:
     classes: []
     statements:

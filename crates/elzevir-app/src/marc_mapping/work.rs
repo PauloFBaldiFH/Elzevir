@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! The Work: category, titles, classification, languages, contributors, subjects (spec §1.1, §1.2).
+//! The Work: titles, classification, languages, contributors, subjects (spec §1.1, §1.2).
 
-use elzevir_domain::catalog::{
-    AgentKind, AuthorityLinkKind, MaterialType, NamePartKind, SubjectKind,
-};
+use elzevir_domain::catalog::{AgentKind, AuthorityLinkKind, NamePartKind, SubjectKind};
 
 use super::{DataField, MappingError, Marc, text};
 use crate::catalog::{AuthorityLink, NamePart, NewContribution, NewSubject};
@@ -11,7 +9,6 @@ use crate::catalog::{AuthorityLink, NamePart, NewContribution, NewSubject};
 /// What the record says about the Work.
 pub(super) struct Work {
     pub(super) title: String,
-    pub(super) material_type: MaterialType,
     pub(super) classification: Option<String>,
     pub(super) classification_scheme: Option<String>,
     pub(super) summary: Option<String>,
@@ -30,7 +27,6 @@ pub(super) fn map(marc: &Marc<'_>) -> Result<Work, MappingError> {
     let (classification, classification_scheme) = super::classification::main(marc);
     Ok(Work {
         title,
-        material_type: material_type(marc.leader_byte(6), marc.leader_byte(7)),
         classification,
         classification_scheme,
         summary: marc.first_text(b"520", b'a'),
@@ -39,21 +35,6 @@ pub(super) fn map(marc: &Marc<'_>) -> Result<Work, MappingError> {
         contributions: contributions(marc),
         subjects: subjects(marc),
     })
-}
-
-/// Leader 06 (type of record) and 07 (bibliographic level) to a category.
-pub(super) fn material_type(record_type: u8, level: u8) -> MaterialType {
-    match record_type {
-        b'a' | b't' if matches!(level, b'b' | b'i' | b's') => MaterialType::Periodical,
-        b'e' | b'f' => MaterialType::Map,
-        b'c' | b'd' => MaterialType::Score,
-        b'i' | b'j' => MaterialType::SoundRecording,
-        b'g' => MaterialType::Video,
-        b'm' => MaterialType::Digital,
-        b'k' | b'r' => MaterialType::VisualMaterial,
-        b'o' | b'p' => MaterialType::Mixed,
-        _ => MaterialType::Book,
-    }
 }
 
 fn languages(marc: &Marc<'_>) -> Vec<String> {
@@ -296,21 +277,6 @@ pub(super) const fn subdivision_kind(code: u8) -> Option<SubjectKind> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn leader_picks_the_category() {
-        assert_eq!(material_type(b'a', b'm'), MaterialType::Book);
-        assert_eq!(material_type(b'a', b's'), MaterialType::Periodical);
-        assert_eq!(material_type(b't', b'm'), MaterialType::Book);
-        assert_eq!(material_type(b'e', b'm'), MaterialType::Map);
-        assert_eq!(material_type(b'c', b'm'), MaterialType::Score);
-        assert_eq!(material_type(b'j', b'm'), MaterialType::SoundRecording);
-        assert_eq!(material_type(b'g', b'm'), MaterialType::Video);
-        assert_eq!(material_type(b'm', b'm'), MaterialType::Digital);
-        assert_eq!(material_type(b'k', b'm'), MaterialType::VisualMaterial);
-        assert_eq!(material_type(b'p', b'c'), MaterialType::Mixed);
-        assert_eq!(material_type(b'z', b'm'), MaterialType::Book);
-    }
 
     #[test]
     fn joined_language_codes_split_in_threes() {
