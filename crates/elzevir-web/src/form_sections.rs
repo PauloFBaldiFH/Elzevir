@@ -216,7 +216,7 @@ fn item_section(property: &Property) -> Section {
 /// here (the Hub's title is its card's, the Item's typed parts are the grid's).
 pub(crate) fn described_sections(entity: Entity, statements: &[Statement]) -> Vec<FormSection> {
     let layout = if entity == Entity::Hub { &HUB } else { &ITEM };
-    lay_out(layout, None, statements, |_| None)
+    lay_out(layout, Vec::new(), statements, |_| None)
 }
 
 fn work_section(property: &Property) -> Section {
@@ -309,7 +309,7 @@ pub(crate) fn work_sections(t: &I18n, record: &NewRecord) -> Vec<FormSection> {
     let category = (Section::Content, work_field(t, record, WorkField::Classes));
     lay_out(
         &WORK,
-        Some(category),
+        vec![category],
         &record.work_description.statements,
         |part| Some(work_field(t, record, part)),
     )
@@ -332,9 +332,14 @@ pub(crate) fn instance_sections(t: &I18n, record: &NewRecord) -> Vec<FormSection
         Section::MediaAndCarrier,
         instance_field(t, record, identifier, InstanceField::Classes),
     );
+    // Hiding from the OPAC is no property either: it is how the library shows the record.
+    let hidden = (
+        Section::AdminMetadata,
+        instance_field(t, record, identifier, InstanceField::OpacHidden),
+    );
     lay_out(
         &INSTANCE,
-        Some(category),
+        vec![category, hidden],
         &record.instance.description.statements,
         |part| Some(instance_field(t, record, identifier, part)),
     )
@@ -342,7 +347,7 @@ pub(crate) fn instance_sections(t: &I18n, record: &NewRecord) -> Vec<FormSection
 
 fn lay_out<F: Copy>(
     layout: &Layout<F>,
-    category: Option<(Section, FormField)>,
+    untyped: Vec<(Section, FormField)>,
     statements: &[Statement],
     typed_field: impl Fn(F) -> Option<FormField>,
 ) -> Vec<FormSection> {
@@ -364,7 +369,7 @@ fn lay_out<F: Copy>(
             form.fields.push(field);
         }
     };
-    if let Some((section, field)) = category {
+    for (section, field) in untyped {
         push(section, field);
     }
     for property in properties_of(layout.entity) {

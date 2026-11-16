@@ -14,11 +14,15 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use elzevir_app::catalog::{CatalogCommand, CatalogReader, ItemData, ItemStatus, NewItem};
+use elzevir_app::catalog::{
+    CatalogCommand, CatalogReader, InstanceChange, InstanceUpdate, ItemData, ItemStatus, NewItem,
+};
 use elzevir_app::commands::WriteCommand;
+use elzevir_app::export::{RecordFormat, export_record};
 use elzevir_app::memory::{MemoryProbe, MemoryReport};
 use elzevir_app::parallelism::Parallelism;
-use elzevir_app::search::{IndexOptions, SearchIndex, index_pending};
+use elzevir_app::search::{IndexOptions, SearchIndex, SearchScope, index_pending};
+use elzevir_marc::{Limits, MarcReader};
 use elzevir_search::TantivyIndex;
 use elzevir_store::ElzevirStore;
 use elzevir_web::{AppState, OpacPorts, StaffPorts, WebConfig, router};
@@ -98,7 +102,11 @@ fn search_then_record_then_a_new_item_shows_up() {
     assert_eq!(status, StatusCode::OK);
     assert!(results.contains("Perfil - Anuário Estatístico"));
     assert!(results.contains("available"));
-    let instance = index.search("anuario estatistico", 0, 1).unwrap().hits[0].instance;
+    let instance = index
+        .search("anuario estatistico", SearchScope::Staff, 0, 1)
+        .unwrap()
+        .hits[0]
+        .instance;
 
     let uri = format!("/record/{}", instance.0);
     let (status, record) = get(&app, &uri);
@@ -157,7 +165,11 @@ fn a_record_shows_its_other_titles() {
     let index = Arc::new(TantivyIndex::in_memory(Parallelism::Serial).unwrap());
     index_pending(&*store, &*store, &*index, &options()).unwrap();
     let app = app(&store, &index);
-    let instance = index.search("textos perdidos", 0, 1).unwrap().hits[0].instance;
+    let instance = index
+        .search("textos perdidos", SearchScope::Staff, 0, 1)
+        .unwrap()
+        .hits[0]
+        .instance;
     let (status, record) = get(&app, &format!("/record/{}", instance.0));
     assert_eq!(status, StatusCode::OK);
     assert!(record.contains("Other titles"));
@@ -172,7 +184,11 @@ fn a_record_shows_its_typed_notes() {
     index_pending(&*store, &*store, &*index, &options()).unwrap();
     let app = app(&store, &index);
     // Only the index note (555) of the record says this.
-    let instance = index.search("nao publica indice", 0, 1).unwrap().hits[0].instance;
+    let instance = index
+        .search("nao publica indice", SearchScope::Staff, 0, 1)
+        .unwrap()
+        .hits[0]
+        .instance;
     let (status, record) = get(&app, &format!("/record/{}", instance.0));
     assert_eq!(status, StatusCode::OK);
     assert!(record.contains("<dd>Não publica índice</dd>"));
@@ -185,4 +201,57 @@ fn a_missing_record_is_404() {
     let index = Arc::new(TantivyIndex::in_memory(Parallelism::Serial).unwrap());
     let (status, _) = get(&app(&store, &index), "/record/999999");
     assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[test]
+fn an_instance_hidden_from_the_opac_is_found_only_by_the_staff() {
+    let (_dir, store) = imported();
+    let store = Arc::new(store);
+    let index = Arc::new(TantivyIndex::in_memory(Parallelism::Serial).unwrap());
+    index_pending(&*store, &*store, &*index, &options()).unwrap();
+    let app = app(&store, &index);
+    let instance = index
+        .search("anuario estatistico", SearchScope::Staff, 0, 1)
+        .unwrap()
+        .hits[0]
+        .instance;
+    let version = store.instance(instance).unwrap().unwrap().version;
+    store
+        .submit(WriteCommand::Catalog(CatalogCommand::UpdateInstance(
+            Box::new(InstanceUpdate {
+                instance,
+                row_version: version,
+                changes: vec![InstanceChange::OpacHidden(true)],
+            }),
+        )))
+        .unwrap()
+        .wait()
+        .unwrap();
+    index_pending(&*store, &*store, &*index, &options()).unwrap();
+
+    let (status, results) = get(&app, "/search?q=anuario+estatistico");
+    assert_eq!(status, StatusCode::OK);
+    assert!(!results.contains("Perfil - Anuário Estatístico"));
+    let (status, _) = get(&app, &format!("/record/{}", instance.0));
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let public = index
+        .search("anuario estatistico", SearchScope::Public, 0, 10)
+        .unwrap();
+    assert!(public.hits.iter().all(|hit| hit.instance != instance));
+    let staff = index
+        .search("anuario estatistico", SearchScope::Staff, 0, 10)
+        .unwrap();
+    assert!(staff.hits.iter().any(|hit| hit.instance == instance));
+
+    // The export carries the mark at the edge, as Koha keeps it.
+    let bytes = export_record(&*store, instance, RecordFormat::Marc21, &Limits::default())
+        .unwrap()
+        .unwrap();
+    let mut reader = MarcReader::new(bytes.as_slice(), Limits::default());
+    let record = reader.next_record().unwrap().unwrap();
+    let local = record
+        .fields()
+        .find(|field| field.tag().to_string() == "942")
+        .unwrap();
+    assert!(String::from_utf8_lossy(local.raw()).contains("\x1fn1"));
 }

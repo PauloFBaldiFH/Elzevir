@@ -240,6 +240,7 @@ instance:
       text: "Jan./mar.2000-    titulo tambem em ingles: Brazilian journal of applied economics"
     - kind: general
       text: Formato varia.
+  opac_hidden: false
 items:
   - barcode: "16273"
     inventory_number: ~

@@ -11,7 +11,9 @@ use elzevir_app::catalog::{
 };
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::listing::{CatalogListing, Family, FamilyCursor, FamilyHead};
-use elzevir_app::search::{IndexBatch, SearchError, SearchHit, SearchIndex, SearchResults};
+use elzevir_app::search::{
+    IndexBatch, SearchError, SearchHit, SearchIndex, SearchResults, SearchScope,
+};
 use elzevir_domain::catalog::{BranchId, InstanceId, PolicyId, SublocationId, WorkId};
 
 /// One record: its version, the Instance and its Items.
@@ -121,7 +123,13 @@ impl SearchIndex for Index {
         Ok(())
     }
 
-    fn search(&self, _: &str, offset: usize, limit: usize) -> Result<SearchResults, SearchError> {
+    fn search(
+        &self,
+        _: &str,
+        _: SearchScope,
+        offset: usize,
+        limit: usize,
+    ) -> Result<SearchResults, SearchError> {
         Ok(SearchResults {
             total: self.0.len(),
             hits: self.0.iter().skip(offset).take(limit).cloned().collect(),

@@ -555,8 +555,8 @@ fn add_instance(
     connection
         .execute(
             "INSERT INTO instances (work_id, title, edition, place, publisher, date, extent,
-                                    series)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                                    series, opac_hidden)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 work,
                 instance.title,
@@ -565,7 +565,8 @@ fn add_instance(
                 instance.publisher,
                 instance.date,
                 instance.extent,
-                instance.series
+                instance.series,
+                instance.opac_hidden
             ],
         )
         .map_err(StoreError::from)?;
@@ -870,7 +871,7 @@ fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>,
         .query_row(
             "SELECT works.id, works.title, instances.title, publisher, date, works.hub_id,
                     works.classification, works.summary, works.audience, instances.row_version,
-                    works.row_version
+                    works.row_version, instances.opac_hidden
              FROM instances JOIN works ON works.id = instances.work_id
              WHERE instances.id = ?1",
             params![id.0],
@@ -887,6 +888,7 @@ fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>,
                     audience: row.get(8)?,
                     version: row.get(9)?,
                     work_version: row.get(10)?,
+                    opac_hidden: row.get(11)?,
                 })
             },
         )
@@ -959,6 +961,7 @@ fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>,
         notes,
         typed_notes: described.typed_notes,
         languages,
+        opac_hidden: row.opac_hidden,
     }))
 }
 
@@ -1010,6 +1013,7 @@ struct InstanceRow {
     audience: Option<String>,
     version: i64,
     work_version: i64,
+    opac_hidden: bool,
 }
 
 pub(crate) fn work_relations(

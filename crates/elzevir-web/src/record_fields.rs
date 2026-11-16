@@ -247,6 +247,13 @@ fn instance_group(t: &I18n, record: &NewRecord) -> FieldGroup {
         "staff-fields-series",
         optional(&instance.series),
     );
+    if instance.opac_hidden {
+        push(
+            &mut fields,
+            "staff-fields-opac-hidden",
+            vec![plain(&t.get("staff-fields-opac-hidden-yes"))],
+        );
+    }
     if let Some(carrier) = material_of(&record.work_description, &instance.description).carrier {
         push(
             &mut fields,

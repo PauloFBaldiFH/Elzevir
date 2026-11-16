@@ -238,6 +238,8 @@ pub enum InstanceChange {
     Identifiers(Vec<NewIdentifier>),
     /// Notes.
     Notes(Vec<NewNote>),
+    /// Hidden from the public catalogue, or shown again.
+    OpacHidden(bool),
     /// The statements of one property, replaced whole (docs/specs/catalogo/
     /// bibframe-completo.md, items 24 to 26).
     Statements {
@@ -444,6 +446,11 @@ pub struct NewInstance {
     /// Notes, in order.
     #[serde(default)]
     pub notes: Vec<NewNote>,
+    /// Hidden from the public catalogue (docs/specs/catalogo/ocultar-no-opac.md): a rule of
+    /// this catalogue's display, not part of the description, so it is no BIBFRAME
+    /// property; at the MARC edge it is Koha's `942 $n`.
+    #[serde(default)]
+    pub opac_hidden: bool,
 }
 
 /// One identifier of an Instance.
@@ -729,6 +736,8 @@ pub struct InstanceView {
     pub typed_notes: Vec<String>,
     /// Language codes, in order.
     pub languages: Vec<String>,
+    /// Hidden from the public catalogue.
+    pub opac_hidden: bool,
 }
 
 /// An Item as the catalog shows it.

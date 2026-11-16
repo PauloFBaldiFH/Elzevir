@@ -40,6 +40,8 @@ pub(crate) struct Fields {
     pub(crate) barcode: tantivy::schema::Field,
     pub(crate) inventory_number: tantivy::schema::Field,
     pub(crate) language: tantivy::schema::Field,
+    /// `1` for an Instance hidden from the OPAC, `0` otherwise.
+    pub(crate) opac_hidden: tantivy::schema::Field,
 }
 
 pub(crate) fn build() -> (Schema, Fields) {
@@ -74,6 +76,7 @@ pub(crate) fn build() -> (Schema, Fields) {
         barcode: builder.add_text_field("barcode", code.clone()),
         inventory_number: builder.add_text_field("inventory_number", code.clone()),
         language: builder.add_text_field("language", code),
+        opac_hidden: builder.add_u64_field("opac_hidden", INDEXED),
     };
     (builder.build(), fields)
 }

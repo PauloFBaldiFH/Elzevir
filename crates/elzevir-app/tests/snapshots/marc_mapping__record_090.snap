@@ -231,6 +231,7 @@ instance:
       value: "9788599583159"
       qualifier: ~
   notes: []
+  opac_hidden: false
 items:
   - barcode: "16283"
     inventory_number: ~

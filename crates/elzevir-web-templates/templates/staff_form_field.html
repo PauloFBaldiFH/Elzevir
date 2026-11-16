@@ -26,6 +26,8 @@
     <template><div class="form-row">{% for cell in blank %}{% include "staff_form_cell.html" %}{% endfor %}<button type="button" class="row-remove" data-action="remove-row" aria-label="{{ t.get("edit-remove-row") }}">×</button></div></template>
     <button type="button" class="row-add" data-action="add-row">+ {{ t.get("edit-add-row") }}</button>
   </fieldset>
+  {% when FormInput::Check { checked } %}
+  <label class="form-label form-check" data-shape="check"><input type="checkbox"{% if *checked %} checked{% endif %}> <span>{{ field.label(t) }}</span></label>
   {% when FormInput::Group { cells } %}
   <fieldset class="form-label" data-shape="group"><legend>{{ field.label(t) }}</legend>
     <div class="form-row">{% for cell in cells %}{% include "staff_form_cell.html" %}{% endfor %}</div>

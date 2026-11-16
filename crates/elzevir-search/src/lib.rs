@@ -15,7 +15,7 @@ use std::sync::{Mutex, PoisonError};
 use elzevir_app::material::{CarrierKind, ContentKind, Material};
 use elzevir_app::parallelism::Parallelism;
 use elzevir_app::search::{
-    IndexBatch, SearchDocument, SearchError, SearchHit, SearchIndex, SearchResults,
+    IndexBatch, SearchDocument, SearchError, SearchHit, SearchIndex, SearchResults, SearchScope,
     normalized_identifier,
 };
 use elzevir_domain::catalog::{HubId, IdentifierKind, InstanceId, WorkId};
@@ -134,6 +134,7 @@ impl TantivyIndex {
         if let Some(hub) = source.hub {
             document.add_u64(f.hub, id(hub.0));
         }
+        document.add_u64(f.opac_hidden, u64::from(source.opac_hidden));
         document.add_text(f.title, &source.title);
         document.add_text(f.work_title, &source.work_title);
         if let Some(main) = &source.main_contributor {
@@ -237,6 +238,23 @@ impl TantivyIndex {
         Box::new(BooleanQuery::new(clauses))
     }
 
+    /// The OPAC leaves out the Instances hidden from it; the staff sees them all.
+    fn scoped(&self, query: Box<dyn Query>, scope: SearchScope) -> Box<dyn Query> {
+        match scope {
+            SearchScope::Staff => query,
+            SearchScope::Public => {
+                let hidden = TermQuery::new(
+                    Term::from_field_u64(self.fields.opac_hidden, 1),
+                    IndexRecordOption::Basic,
+                );
+                Box::new(BooleanQuery::new(vec![
+                    (Occur::Must, query),
+                    (Occur::MustNot, Box::new(hidden)),
+                ]))
+            }
+        }
+    }
+
     fn hit(&self, score: f32, document: &TantivyDocument) -> Option<SearchHit> {
         let number = |field| {
             document
@@ -304,11 +322,12 @@ impl SearchIndex for TantivyIndex {
     fn search(
         &self,
         query: &str,
+        scope: SearchScope,
         offset: usize,
         limit: usize,
     ) -> Result<SearchResults, SearchError> {
         let searcher = self.reader.searcher();
-        let query = self.query(query);
+        let query = self.scoped(self.query(query), scope);
         if limit == 0 {
             let total = searcher.search(&*query, &Count).map_err(error)?;
             return Ok(SearchResults {

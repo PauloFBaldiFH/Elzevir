@@ -149,6 +149,7 @@ fn fold_instance(changes: Vec<InstanceChange>) -> (Option<String>, NewInstance) 
             InstanceChange::Series(text) => instance.series = text,
             InstanceChange::Identifiers(identifiers) => instance.identifiers = identifiers,
             InstanceChange::Notes(notes) => instance.notes = notes,
+            InstanceChange::OpacHidden(hidden) => instance.opac_hidden = hidden,
             InstanceChange::Statements {
                 property,
                 statements,

@@ -260,6 +260,7 @@ instance:
       text: Colaboração de Alfred S. Eichner.
     - kind: general
       text: "Título original: The troublesome presence."
+  opac_hidden: false
 items:
   - barcode: "9261"
     inventory_number: ~

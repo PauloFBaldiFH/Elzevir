@@ -243,6 +243,16 @@ pub fn source_leader_conventions(source: &[u8]) -> Option<Statement> {
     admin::leader_conventions(&Marc(&record))
 }
 
+/// Whether a stored source record hides its Instance from the OPAC (`942 $n`), for
+/// records stored before the model kept it (docs/specs/catalogo/ocultar-no-opac.md).
+#[must_use]
+pub fn source_opac_hidden(source: &[u8]) -> bool {
+    RecordRef::parse(source, &Limits::default()).is_ok_and(|parsed| {
+        let record = Record::from_ref(&parsed);
+        instance::map(&Marc(&record)).opac_hidden
+    })
+}
+
 /// The physical details, dimensions and accompanying material of a stored source record,
 /// for records stored before the model had them (bibframe-completo.md, item 29, part 5e).
 /// The Work gets none.

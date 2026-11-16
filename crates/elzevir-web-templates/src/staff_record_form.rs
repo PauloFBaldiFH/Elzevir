@@ -149,6 +149,11 @@ pub enum FormInput {
         /// The stored values.
         values: Vec<String>,
     },
+    /// A yes or no, sent as `true` or `false`.
+    Check {
+        /// The stored value.
+        checked: bool,
+    },
     /// Several values sent together as one object.
     Group {
         /// Its parts, with their stored values.

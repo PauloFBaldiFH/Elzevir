@@ -108,6 +108,7 @@ instance:
   series: Parana
   identifiers: []
   notes: []
+  opac_hidden: false
 items:
   - barcode: "1511"
     inventory_number: ~

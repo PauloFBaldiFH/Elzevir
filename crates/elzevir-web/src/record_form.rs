@@ -145,6 +145,7 @@ pub(crate) fn is_filled(field: &FormField) -> bool {
         FormInput::Rows { rows, .. } => !rows.is_empty(),
         FormInput::Values { values } => !values.is_empty(),
         FormInput::Group { cells } => cells.iter().any(|cell| !cell.value.is_empty()),
+        FormInput::Check { checked } => *checked,
     }
 }
 
@@ -269,6 +270,14 @@ pub(crate) fn instance_field(
             EntityKind::Instance,
             &instance.description.classes,
             "staff-fields-instance-classes",
+        ),
+        InstanceField::OpacHidden => field(
+            "OpacHidden",
+            "opac_hidden",
+            "staff-fields-opac-hidden",
+            FormInput::Check {
+                checked: instance.opac_hidden,
+            },
         ),
     }
 }

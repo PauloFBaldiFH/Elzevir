@@ -485,6 +485,8 @@ function fieldValue(field) {
       return [...part.querySelectorAll(".form-rows > .form-row")].map(rowObject);
     case "group":
       return rowObject(part.querySelector(".form-row"));
+    case "check":
+      return part.querySelector("input").checked;
     default:
       return null;
   }

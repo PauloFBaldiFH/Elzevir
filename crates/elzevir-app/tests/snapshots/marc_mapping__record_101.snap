@@ -204,6 +204,7 @@ instance:
   notes:
     - kind: general
       text: "Tradução de: Stories for the heart."
+  opac_hidden: false
 items:
   - barcode: "16756"
     inventory_number: ~
