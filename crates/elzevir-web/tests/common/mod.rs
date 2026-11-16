@@ -125,7 +125,7 @@ impl SearchIndex for Index {
 
     fn search(
         &self,
-        _: &str,
+        _: &elzevir_app::search::SearchQuery<'_>,
         _: SearchScope,
         offset: usize,
         limit: usize,
@@ -134,6 +134,14 @@ impl SearchIndex for Index {
             total: self.0.len(),
             hits: self.0.iter().skip(offset).take(limit).cloned().collect(),
         })
+    }
+
+    fn facets(
+        &self,
+        _: &elzevir_app::search::SearchQuery<'_>,
+        _: SearchScope,
+    ) -> Result<elzevir_app::search::FacetCounts, SearchError> {
+        Ok(elzevir_app::search::FacetCounts::default())
     }
 }
 

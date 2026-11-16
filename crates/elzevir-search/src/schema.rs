@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The index schema: one document per Instance (docs/specs/catalogo/busca.md, §1).
 
+use elzevir_app::search::Facet;
 use tantivy::Index;
 use tantivy::schema::{
     FAST, INDEXED, IndexRecordOption, STORED, STRING, Schema, TextFieldIndexing, TextOptions,
@@ -42,6 +43,32 @@ pub(crate) struct Fields {
     pub(crate) language: tantivy::schema::Field,
     /// `1` for an Instance hidden from the OPAC, `0` otherwise.
     pub(crate) opac_hidden: tantivy::schema::Field,
+    /// The family: the Hub (with [`HUB_FAMILY`] set) or else the Work.
+    pub(crate) family: tantivy::schema::Field,
+    pub(crate) branch: tantivy::schema::Field,
+    pub(crate) genre: tantivy::schema::Field,
+    pub(crate) audience: tantivy::schema::Field,
+    /// Each subject heading whole, for its facet; `subject` holds its words.
+    pub(crate) subject_heading: tantivy::schema::Field,
+    pub(crate) year: tantivy::schema::Field,
+}
+
+/// Set in [`Fields::family`] for a Hub, so a Hub and a Work with the same number are
+/// different families.
+pub(crate) const HUB_FAMILY: u64 = 1 << 63;
+
+/// The fast field each facet is counted on (docs/specs/catalogo/facetas.md, item 1).
+pub(crate) const fn facet_field(facet: Facet) -> &'static str {
+    match facet {
+        Facet::Branch => "branch",
+        Facet::Content => "content",
+        Facet::Carrier => "carrier",
+        Facet::Genre => "genre",
+        Facet::Audience => "audience",
+        Facet::Language => "language",
+        Facet::Subject => "subject_heading",
+        Facet::Year => "year",
+    }
 }
 
 pub(crate) fn build() -> (Schema, Fields) {
@@ -52,6 +79,8 @@ pub(crate) fn build() -> (Schema, Fields) {
             .set_index_option(IndexRecordOption::WithFreqsAndPositions),
     );
     let code = STRING | STORED;
+    // A facet is a whole value counted from its column.
+    let facet = STRING | FAST;
     let fields = Fields {
         instance: builder.add_u64_field("instance", INDEXED | STORED | FAST),
         work: builder.add_u64_field("work", STORED | FAST),
@@ -66,8 +95,8 @@ pub(crate) fn build() -> (Schema, Fields) {
         summary: builder.add_text_field("summary", words.clone()),
         note: builder.add_text_field("note", words),
         date: builder.add_text_field("date", STORED),
-        content: builder.add_text_field("content", code.clone()),
-        carrier: builder.add_text_field("carrier", code.clone()),
+        content: builder.add_text_field("content", code.clone() | FAST),
+        carrier: builder.add_text_field("carrier", code.clone() | FAST),
         classification: builder.add_text_field("classification", code.clone()),
         identifier: builder.add_text_field("identifier", code.clone()),
         call_number: builder.add_text_field("call_number", STORED),
@@ -75,8 +104,14 @@ pub(crate) fn build() -> (Schema, Fields) {
         location: builder.add_text_field("location", code.clone()),
         barcode: builder.add_text_field("barcode", code.clone()),
         inventory_number: builder.add_text_field("inventory_number", code.clone()),
-        language: builder.add_text_field("language", code),
+        language: builder.add_text_field("language", code | FAST),
         opac_hidden: builder.add_u64_field("opac_hidden", INDEXED),
+        family: builder.add_u64_field("family", FAST),
+        branch: builder.add_text_field("branch", facet.clone()),
+        genre: builder.add_text_field("genre", facet.clone()),
+        audience: builder.add_text_field("audience", facet.clone()),
+        subject_heading: builder.add_text_field("subject_heading", facet.clone()),
+        year: builder.add_text_field("year", facet),
     };
     (builder.build(), fields)
 }

@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use elzevir_domain::catalog::InstanceId;
 
 use crate::catalog::{CatalogReadError, CatalogReader, InstanceView, ItemView};
-use crate::search::{SearchError, SearchHit, SearchIndex, SearchScope};
+use crate::search::{SearchError, SearchHit, SearchIndex, SearchQuery, SearchScope};
 
 /// Results per page.
 pub const PAGE_SIZE: usize = 20;
@@ -97,7 +97,12 @@ where
         });
     }
     let offset = (page - 1).saturating_mul(PAGE_SIZE);
-    let results = index.search(&query, SearchScope::Public, offset, PAGE_SIZE)?;
+    let results = index.search(
+        &SearchQuery::words(&query),
+        SearchScope::Public,
+        offset,
+        PAGE_SIZE,
+    )?;
     let instances: Vec<InstanceId> = results.hits.iter().map(|hit| hit.instance).collect();
     let mut counts: BTreeMap<InstanceId, (u32, u32)> = BTreeMap::new();
     for (instance, status) in catalog.item_statuses(&instances)? {

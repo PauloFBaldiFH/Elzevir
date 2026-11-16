@@ -17,7 +17,7 @@ use unicode_normalization::char::is_combining_mark;
 use crate::catalog::{CatalogReadError, ItemView, ShelfSignal};
 use crate::material::Material;
 use crate::opac::MAX_QUERY_CHARS;
-use crate::search::{SearchError, SearchIndex, SearchScope};
+use crate::search::{Filter, SearchError, SearchIndex, SearchQuery, SearchScope};
 
 /// Families per page.
 pub const PAGE_SIZE: NonZeroUsize = match NonZeroUsize::new(30) {
@@ -461,10 +461,12 @@ pub enum ListingError {
     Catalog(#[from] CatalogReadError),
 }
 
-/// The families of the Instances matching `query`, starting at hit `from`: hits are
-/// grouped by family (Hub, else Work), families ordered by their best hit, and the
-/// Instances found marked. A page ends before the hit that would start a family past
-/// [`PAGE_SIZE`], so no hit is skipped between pages.
+/// The families of the Instances matching `query` and passing `filters`, starting at hit
+/// `from`: hits are grouped by family (Hub, else Work), families ordered by their best
+/// hit, and the Instances found marked. A page ends before the hit that would start a
+/// family past [`PAGE_SIZE`], so no hit is skipped between pages. With filters and no
+/// words, every Instance passing them is a hit (docs/specs/catalogo/facetas.md, item 5);
+/// with neither, the page is empty and the caller browses.
 ///
 /// # Errors
 ///
@@ -473,6 +475,7 @@ pub fn search<I, L>(
     index: &I,
     listing: &L,
     query: &str,
+    filters: &[Filter],
     from: usize,
 ) -> Result<SearchPage, ListingError>
 where
@@ -480,7 +483,7 @@ where
     L: CatalogListing + ?Sized,
 {
     let query: String = query.trim().chars().take(MAX_QUERY_CHARS).collect();
-    if query.is_empty() {
+    if query.is_empty() && filters.is_empty() {
         return Ok(SearchPage {
             query,
             total: 0,
@@ -489,7 +492,11 @@ where
         });
     }
     let from = from.min(MAX_FROM);
-    let results = index.search(&query, SearchScope::Staff, from, HITS_PER_PAGE)?;
+    let asked = SearchQuery {
+        text: &query,
+        filters,
+    };
+    let results = index.search(&asked, SearchScope::Staff, from, HITS_PER_PAGE)?;
     let mut heads: Vec<FamilyHead> = Vec::new();
     let mut found: Vec<InstanceId> = Vec::new();
     let mut used = 0;
@@ -834,7 +841,7 @@ mod tests {
 
         fn search(
             &self,
-            _: &str,
+            _: &SearchQuery<'_>,
             _: SearchScope,
             offset: usize,
             limit: usize,
@@ -843,6 +850,14 @@ mod tests {
                 total: self.0.len(),
                 hits: self.0.iter().skip(offset).take(limit).cloned().collect(),
             })
+        }
+
+        fn facets(
+            &self,
+            _: &SearchQuery<'_>,
+            _: SearchScope,
+        ) -> Result<crate::search::FacetCounts, SearchError> {
+            Ok(crate::search::FacetCounts::default())
         }
     }
 
@@ -897,7 +912,7 @@ mod tests {
     fn hits_are_grouped_by_family_with_the_found_instances_first() {
         let index = Hits(vec![hit(12, 2, None), hit(10, 1, None), hit(13, 2, None)]);
         let listing = Fake(vec![work_family(1, &[10]), work_family(2, &[11, 12, 13])]);
-        let page = search(&index, &listing, "  x  ", 0).unwrap();
+        let page = search(&index, &listing, "  x  ", &[], 0).unwrap();
         assert_eq!(page.query, "x");
         let heads: Vec<FamilyHead> = page.rows.iter().map(|row| row.cursor.head).collect();
         assert_eq!(
@@ -917,14 +932,29 @@ mod tests {
     }
 
     #[test]
+    fn filters_without_words_list_what_passes_them() {
+        let index = Hits(vec![hit(10, 1, None)]);
+        let listing = Fake(vec![work_family(1, &[10])]);
+        assert!(
+            search(&index, &listing, " ", &[], 0)
+                .unwrap()
+                .rows
+                .is_empty()
+        );
+        let filters = Filter::parse([("language", "por")]);
+        let page = search(&index, &listing, " ", &filters, 0).unwrap();
+        assert_eq!((page.query.as_str(), page.rows.len()), ("", 1));
+    }
+
+    #[test]
     fn a_search_page_stops_before_the_family_that_does_not_fit() {
         // 31 families: the 31st hit starts the next page.
         let index = Hits((1..=31).map(|n| hit(n, n, None)).collect());
         let listing = Fake((1..=31).map(|n| work_family(n, &[n])).collect());
-        let first = search(&index, &listing, "x", 0).unwrap();
+        let first = search(&index, &listing, "x", &[], 0).unwrap();
         assert_eq!(first.rows.len(), 30);
         assert_eq!(first.next, Some(30));
-        let second = search(&index, &listing, "x", 30).unwrap();
+        let second = search(&index, &listing, "x", &[], 30).unwrap();
         assert_eq!(second.rows.len(), 1);
         assert_eq!(second.next, None);
     }

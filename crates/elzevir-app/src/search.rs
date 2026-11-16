@@ -95,6 +95,14 @@ pub struct SearchDocument {
     pub inventory_numbers: Vec<String>,
     /// Language codes of the Work.
     pub languages: Vec<String>,
+    /// The home branches of the Items, by number, distinct.
+    pub branches: Vec<String>,
+    /// The labels of the Work's genres and forms.
+    pub genres: Vec<String>,
+    /// The Work's target audience, as written.
+    pub audience: Option<String>,
+    /// The year of publication, read from the date.
+    pub year: Option<String>,
     /// Hidden from the public catalogue: only the staff finds it.
     pub opac_hidden: bool,
 }
@@ -167,8 +175,38 @@ pub fn document_of(instance: &InstanceView, items: &[ItemView]) -> SearchDocumen
                 .filter_map(|item| item.inventory_number.as_deref()),
         ),
         languages: instance.languages.clone(),
+        branches: items
+            .iter()
+            .map(|item| item.home_branch.0.to_string())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect(),
+        genres: instance.genres.clone(),
+        audience: instance.audience.clone(),
+        year: instance.date.as_deref().and_then(year_of),
         opac_hidden: instance.opac_hidden,
     }
+}
+
+/// The first run of four digits in `date` that is a year from 1000 to 2999, so
+/// `c1998`, `[2001?]` and `1987-1990` give `1998`, `2001` and `1987`.
+#[must_use]
+pub fn year_of(date: &str) -> Option<String> {
+    let bytes = date.as_bytes();
+    let mut start = 0;
+    while start < bytes.len() {
+        let run = bytes
+            .get(start..)
+            .unwrap_or_default()
+            .iter()
+            .take_while(|b| b.is_ascii_digit())
+            .count();
+        if run == 4 && matches!(bytes.get(start), Some(b'1' | b'2')) {
+            return date.get(start..start + 4).map(str::to_owned);
+        }
+        start += run.max(1);
+    }
+    None
 }
 
 /// ISBN and ISSN lose hyphens and spaces and get an upper-case `X`, so `85-7232-040-x` and
@@ -202,6 +240,145 @@ pub struct IndexBatch {
     pub removals: Vec<InstanceId>,
     /// The last outbox id this batch covers; saved with the commit.
     pub cursor: i64,
+}
+
+/// A way to narrow the listing (docs/specs/catalogo/facetas.md, item 1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Facet {
+    /// The home branch of an Item.
+    Branch,
+    /// The content (`bf:content`).
+    Content,
+    /// The carrier (`bf:carrier`).
+    Carrier,
+    /// A genre or form of the Work.
+    Genre,
+    /// The Work's target audience.
+    Audience,
+    /// A language of the Work.
+    Language,
+    /// A subject of the Work.
+    Subject,
+    /// The year of publication.
+    Year,
+}
+
+impl Facet {
+    /// Every facet, in the order the listing shows them.
+    pub const ALL: [Self; 8] = [
+        Self::Branch,
+        Self::Content,
+        Self::Carrier,
+        Self::Genre,
+        Self::Audience,
+        Self::Language,
+        Self::Subject,
+        Self::Year,
+    ];
+
+    /// The stable name, used in URLs.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Branch => "branch",
+            Self::Content => "content",
+            Self::Carrier => "carrier",
+            Self::Genre => "genre",
+            Self::Audience => "audience",
+            Self::Language => "language",
+            Self::Subject => "subject",
+            Self::Year => "year",
+        }
+    }
+
+    /// The facet called `name`.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|facet| facet.name() == name)
+    }
+}
+
+/// Values a facet returns at most (item 3).
+pub const FACET_VALUES: usize = 20;
+
+/// Filters a request keeps at most (item 4).
+pub const MAX_FILTERS: usize = 16;
+
+/// Longest filter value kept, in characters (item 4).
+pub const MAX_FILTER_CHARS: usize = 200;
+
+/// One filter: a facet and a value, compared whole.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Filter {
+    /// The facet.
+    pub facet: Facet,
+    /// The value, as the index holds it.
+    pub value: String,
+}
+
+impl Filter {
+    /// The filters of `pairs` (facet name, value) that are known and fit: unknown facets,
+    /// empty or too long values and those past [`MAX_FILTERS`] are left out, and repeats
+    /// are kept once.
+    pub fn parse<'a>(pairs: impl IntoIterator<Item = (&'a str, &'a str)>) -> Vec<Self> {
+        let mut filters: Vec<Self> = Vec::new();
+        for (name, value) in pairs {
+            let value = value.trim();
+            let Some(facet) = Facet::from_name(name) else {
+                continue;
+            };
+            if value.is_empty() || value.chars().count() > MAX_FILTER_CHARS {
+                continue;
+            }
+            let filter = Self {
+                facet,
+                value: value.to_owned(),
+            };
+            if !filters.contains(&filter) {
+                filters.push(filter);
+            }
+            if filters.len() == MAX_FILTERS {
+                break;
+            }
+        }
+        filters
+    }
+}
+
+/// What to look for: words typed and filters; with no words, everything that passes the
+/// filters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SearchQuery<'a> {
+    /// What a person typed.
+    pub text: &'a str,
+    /// Filters, all of which must hold.
+    pub filters: &'a [Filter],
+}
+
+impl<'a> SearchQuery<'a> {
+    /// Words alone, without filters.
+    #[must_use]
+    pub const fn words(text: &'a str) -> Self {
+        Self { text, filters: &[] }
+    }
+}
+
+/// One value of a facet and the families that have it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FacetValue {
+    /// The value, as the index holds it.
+    pub value: String,
+    /// Families with at least one matching Instance that has it.
+    pub families: usize,
+}
+
+/// The facets of what a query matches, counted by family (item 2).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FacetCounts {
+    /// Families matching in all.
+    pub families: usize,
+    /// The values of each facet that has any, in [`Facet::ALL`] order.
+    pub facets: Vec<(Facet, Vec<FacetValue>)>,
 }
 
 /// One search result.
@@ -254,18 +431,31 @@ pub trait SearchIndex: Send + Sync {
     fn apply(&self, batch: IndexBatch) -> Result<(), SearchError>;
 
     /// The Instances matching `query`, best first, skipping `offset` and returning at most
-    /// `limit`, with the total count.
+    /// `limit`, with the total count. With no words, every Instance that passes the
+    /// filters matches, in Instance order.
     ///
     /// # Errors
     ///
     /// When the index cannot be read.
     fn search(
         &self,
-        query: &str,
+        query: &SearchQuery<'_>,
         scope: SearchScope,
         offset: usize,
         limit: usize,
     ) -> Result<SearchResults, SearchError>;
+
+    /// The facets of what `query` matches, counted by family, at most [`FACET_VALUES`]
+    /// values each besides the filters of `query`.
+    ///
+    /// # Errors
+    ///
+    /// When the index cannot be read.
+    fn facets(
+        &self,
+        query: &SearchQuery<'_>,
+        scope: SearchScope,
+    ) -> Result<FacetCounts, SearchError>;
 }
 
 /// The index failed.
@@ -481,7 +671,7 @@ mod tests {
 
         fn search(
             &self,
-            _: &str,
+            _: &SearchQuery<'_>,
             _: SearchScope,
             _: usize,
             _: usize,
@@ -490,6 +680,10 @@ mod tests {
                 total: 0,
                 hits: Vec::new(),
             })
+        }
+
+        fn facets(&self, _: &SearchQuery<'_>, _: SearchScope) -> Result<FacetCounts, SearchError> {
+            Ok(FacetCounts::default())
         }
     }
 
@@ -546,6 +740,49 @@ mod tests {
             .collect();
         // First batch: effects 1-3 (Instance 10 twice, built once); then 4 and 7.
         assert_eq!(summary, [(3, vec![10], vec![]), (7, vec![12], vec![11])]);
+    }
+
+    #[test]
+    fn the_year_is_the_first_four_digits_that_make_one() {
+        assert_eq!(year_of("c1998").as_deref(), Some("1998"));
+        assert_eq!(year_of("[2001?]").as_deref(), Some("2001"));
+        assert_eq!(year_of("1987-1990").as_deref(), Some("1987"));
+        assert_eq!(year_of("19--"), None);
+        assert_eq!(year_of("12345 3021 0999"), None);
+        assert_eq!(year_of("n. 345, 2010").as_deref(), Some("2010"));
+        assert_eq!(year_of(""), None);
+    }
+
+    #[test]
+    fn filters_keep_known_facets_and_fitting_values_once() {
+        let long = "x".repeat(MAX_FILTER_CHARS + 1);
+        let filters = Filter::parse([
+            ("language", " por "),
+            ("itemtype", "BK"),
+            ("language", "por"),
+            ("year", ""),
+            ("subject", long.as_str()),
+            ("year", "1998"),
+        ]);
+        assert_eq!(
+            filters,
+            [
+                Filter {
+                    facet: Facet::Language,
+                    value: "por".to_owned()
+                },
+                Filter {
+                    facet: Facet::Year,
+                    value: "1998".to_owned()
+                },
+            ]
+        );
+        let many: Vec<String> = (0..40).map(|n| n.to_string()).collect();
+        let pairs = many.iter().map(|value| ("year", value.as_str()));
+        assert_eq!(Filter::parse(pairs).len(), MAX_FILTERS);
+        for facet in Facet::ALL {
+            assert_eq!(Facet::from_name(facet.name()), Some(facet));
+        }
     }
 
     #[test]

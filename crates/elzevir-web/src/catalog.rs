@@ -101,7 +101,7 @@ pub(crate) async fn catalog(
         } else if let Some(from) = params.from {
             // A later page of a text search: the scan rule saw the first one.
             let from = from.parse::<usize>().unwrap_or(0);
-            listing::search(&*index, &*listing, &params.q, from)
+            listing::search(&*index, &*listing, &params.q, &[], from)
                 .map(|page| Page::Search(page, Scan::Text))
                 .map_err(drop)
         } else {
@@ -112,7 +112,7 @@ pub(crate) async fn catalog(
                     listing::scanned_page(&*listing, &params.q, owner).map_err(drop)
                 }
                 Scan::NewIsbn(_) | Scan::Text => {
-                    listing::search(&*index, &*listing, &params.q, 0).map_err(drop)
+                    listing::search(&*index, &*listing, &params.q, &[], 0).map_err(drop)
                 }
             }
             .map(|page| Page::Search(page, scan))
