@@ -8,12 +8,14 @@
 
 mod catalog_cli;
 mod config;
+mod health;
 mod init;
 mod koha_codes;
 mod local_disk;
 mod memory;
 mod server_config;
 
+use std::future::IntoFuture;
 use std::io::BufRead;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
@@ -173,6 +175,7 @@ fn spawn_indexer(
     store: Arc<ElzevirStore>,
     index: Arc<TantivyIndex>,
     parallelism: Parallelism,
+    probe: Arc<health::Probe>,
 ) -> Result<(), String> {
     let options = IndexOptions {
         parallelism,
@@ -182,7 +185,9 @@ fn spawn_indexer(
         .name("elzevir-indexer".to_owned())
         .spawn(move || {
             loop {
-                if let Err(e) = index_pending(&*store, &*store, &*index, &options) {
+                let outcome = index_pending(&*store, &*store, &*index, &options);
+                probe.indexed(outcome.is_ok());
+                if let Err(e) = outcome {
                     eprintln!("elzevir: indexing failed, retrying: {e}");
                 }
                 std::thread::sleep(INDEX_INTERVAL);
@@ -206,7 +211,13 @@ fn serve(
     let store = Arc::new(store);
     let (index, parallelism) = open_index(data_dir)?;
     let index = Arc::new(index);
-    spawn_indexer(Arc::clone(&store), Arc::clone(&index), parallelism)?;
+    let probe = Arc::new(health::Probe::new(Arc::clone(&store))?);
+    spawn_indexer(
+        Arc::clone(&store),
+        Arc::clone(&index),
+        parallelism,
+        Arc::clone(&probe),
+    )?;
     let i18n = I18n::english().map_err(|e| e.to_string())?;
     let config = WebConfig {
         secure_cookies: !insecure_cookies,
@@ -242,18 +253,64 @@ fn serve(
             .await
             .map_err(|e| format!("cannot listen on {listen}: {e}"))?;
         let address = listener.local_addr().map_err(|error| error.to_string())?;
-        println!("elzevir: listening on http://{address}");
-        axum::serve(listener, app)
-            .with_graceful_shutdown(async {
-                // If the signal handler cannot be installed, the server simply runs until
-                // the process is killed.
-                if tokio::signal::ctrl_c().await.is_err() {
-                    std::future::pending::<()>().await;
-                }
-            })
+        let health_listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
-            .map_err(|e| e.to_string())
+            .map_err(|error| format!("cannot bind local health listener: {error}"))?;
+        let health_address = health_listener
+            .local_addr()
+            .map_err(|error| error.to_string())?;
+        println!("elzevir: listening on http://{address}");
+        println!("elzevir: health on http://{health_address}/health");
+        serve_http(listener, app, health_listener, probe).await
     })
+}
+
+async fn serve_http(
+    listener: tokio::net::TcpListener,
+    app: axum::Router,
+    health_listener: tokio::net::TcpListener,
+    probe: Arc<health::Probe>,
+) -> Result<(), String> {
+    let health_app = axum::Router::new()
+        .route("/health", axum::routing::get(health::endpoint))
+        .with_state(probe);
+    let (stop, receiver) = tokio::sync::watch::channel(false);
+    let catalog = axum::serve(listener, app)
+        .with_graceful_shutdown(wait_shutdown(receiver.clone()))
+        .into_future();
+    let readiness = axum::serve(health_listener, health_app)
+        .with_graceful_shutdown(wait_shutdown(receiver))
+        .into_future();
+    let servers = async {
+        tokio::try_join!(catalog, readiness)
+            .map(drop)
+            .map_err(|error| error.to_string())
+    };
+    let signal = async {
+        // Preserve serving when the platform cannot install the signal handler.
+        if tokio::signal::ctrl_c().await.is_err() {
+            std::future::pending::<()>().await;
+        }
+    };
+    tokio::pin!(servers);
+    tokio::select! {
+        outcome = &mut servers => outcome,
+        () = signal => {
+            stop.send_replace(true);
+            servers.await
+        }
+    }
+}
+
+async fn wait_shutdown(mut receiver: tokio::sync::watch::Receiver<bool>) {
+    loop {
+        if *receiver.borrow_and_update() {
+            return;
+        }
+        if receiver.changed().await.is_err() {
+            return;
+        }
+    }
 }
 
 fn add_staff(data_dir: &Path, login: &str, admin: bool, cataloguing: bool) -> Result<(), String> {
