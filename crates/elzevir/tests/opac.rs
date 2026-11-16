@@ -21,7 +21,7 @@ use elzevir_app::commands::WriteCommand;
 use elzevir_app::export::{RecordFormat, export_record};
 use elzevir_app::memory::{MemoryProbe, MemoryReport};
 use elzevir_app::parallelism::Parallelism;
-use elzevir_app::search::{IndexOptions, SearchIndex, SearchScope, index_pending};
+use elzevir_app::search::{IndexOptions, SearchIndex, SearchQuery, SearchScope, index_pending};
 use elzevir_marc::{Limits, MarcReader};
 use elzevir_search::TantivyIndex;
 use elzevir_store::ElzevirStore;
@@ -104,7 +104,12 @@ fn search_then_record_then_a_new_item_shows_up() {
     assert!(results.contains("Perfil - Anuário Estatístico"));
     assert!(results.contains("available"));
     let instance = index
-        .search("anuario estatistico", SearchScope::Staff, 0, 1)
+        .search(
+            &SearchQuery::words("anuario estatistico"),
+            SearchScope::Staff,
+            0,
+            1,
+        )
         .unwrap()
         .hits[0]
         .instance;
@@ -167,7 +172,12 @@ fn a_record_shows_its_other_titles() {
     index_pending(&*store, &*store, &*index, &options()).unwrap();
     let app = app(&store, &index);
     let instance = index
-        .search("textos perdidos", SearchScope::Staff, 0, 1)
+        .search(
+            &SearchQuery::words("textos perdidos"),
+            SearchScope::Staff,
+            0,
+            1,
+        )
         .unwrap()
         .hits[0]
         .instance;
@@ -186,7 +196,12 @@ fn a_record_shows_its_typed_notes() {
     let app = app(&store, &index);
     // Only the index note (555) of the record says this.
     let instance = index
-        .search("nao publica indice", SearchScope::Staff, 0, 1)
+        .search(
+            &SearchQuery::words("nao publica indice"),
+            SearchScope::Staff,
+            0,
+            1,
+        )
         .unwrap()
         .hits[0]
         .instance;
@@ -212,7 +227,12 @@ fn an_instance_hidden_from_the_opac_is_found_only_by_the_staff() {
     index_pending(&*store, &*store, &*index, &options()).unwrap();
     let app = app(&store, &index);
     let instance = index
-        .search("anuario estatistico", SearchScope::Staff, 0, 1)
+        .search(
+            &SearchQuery::words("anuario estatistico"),
+            SearchScope::Staff,
+            0,
+            1,
+        )
         .unwrap()
         .hits[0]
         .instance;
@@ -236,11 +256,21 @@ fn an_instance_hidden_from_the_opac_is_found_only_by_the_staff() {
     let (status, _) = get(&app, &format!("/record/{}", instance.0));
     assert_eq!(status, StatusCode::NOT_FOUND);
     let public = index
-        .search("anuario estatistico", SearchScope::Public, 0, 10)
+        .search(
+            &SearchQuery::words("anuario estatistico"),
+            SearchScope::Public,
+            0,
+            10,
+        )
         .unwrap();
     assert!(public.hits.iter().all(|hit| hit.instance != instance));
     let staff = index
-        .search("anuario estatistico", SearchScope::Staff, 0, 10)
+        .search(
+            &SearchQuery::words("anuario estatistico"),
+            SearchScope::Staff,
+            0,
+            10,
+        )
         .unwrap();
     assert!(staff.hits.iter().any(|hit| hit.instance == instance));
 
@@ -273,7 +303,12 @@ fn a_renamed_agent_changes_every_record_that_names_it() {
     index_pending(&*store, &*store, &*index, &options()).unwrap();
     let app = app(&store, &index);
     let instance = index
-        .search("anuario estatistico", SearchScope::Staff, 0, 1)
+        .search(
+            &SearchQuery::words("anuario estatistico"),
+            SearchScope::Staff,
+            0,
+            1,
+        )
         .unwrap()
         .hits[0]
         .instance;
@@ -336,7 +371,12 @@ fn a_renamed_agent_changes_every_record_that_names_it() {
     assert!(record.contains("Foz do Iguaçu (PR). Prefeitura Municipal"));
     assert!(!record.contains("PREFEITURA MUNICIPAL DE FOZ DO IGUACU"));
     let found = index
-        .search("foz iguacu prefeitura", SearchScope::Staff, 0, 50)
+        .search(
+            &SearchQuery::words("foz iguacu prefeitura"),
+            SearchScope::Staff,
+            0,
+            50,
+        )
         .unwrap();
     assert!(found.hits.iter().any(|hit| hit.instance == instance
         && hit.main_contributor.as_deref() == Some("Foz do Iguaçu (PR). Prefeitura Municipal")));
@@ -360,7 +400,12 @@ fn yearbook(
     index: &TantivyIndex,
 ) -> (elzevir_domain::catalog::InstanceId, i64) {
     let instance = index
-        .search("anuario estatistico", SearchScope::Staff, 0, 1)
+        .search(
+            &SearchQuery::words("anuario estatistico"),
+            SearchScope::Staff,
+            0,
+            1,
+        )
         .unwrap()
         .hits
         .first()

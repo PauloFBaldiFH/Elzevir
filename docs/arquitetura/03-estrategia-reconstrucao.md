@@ -359,7 +359,7 @@ A tarefa 1.12 adianta um pedaço da Fase 3 de propósito: ela valida, cedo e de 
 
 #### Andamento e acréscimos (2026-11-15)
 
-- **Feitas:** 2.0 a 2.8 (PRs #37 a #53), 2.11 (etapa 8, PRs #99 a #102), 2.12 (#103), 2.13 (#104), 2.14 (#105), 2.15 (#106), 2.16 (#107) 2.9a (renomear agente, #114), 2.9b (ligar autoridade por papel, #115) 2.9c (assuntos na coluna de Autoridades, #116), 2.9d (local de publicação e identificadores externos, #117) e 2.9e (rótulos dos gêneros LCGFT).
+- **Feitas:** 2.0 a 2.8 (PRs #37 a #53), 2.11 (etapa 8, PRs #99 a #102), 2.12 (#103), 2.13 (#104), 2.14 (#105), 2.15 (#106), 2.16 (#107) 2.9a (renomear agente, #114), 2.9b (ligar autoridade por papel, #115) 2.9c (assuntos na coluna de Autoridades, #116), 2.9d (local de publicação e identificadores externos, #117), 2.9e (rótulos dos gêneros LCGFT, #118) e 2.10a (facetas e filtros no índice, contando famílias).
 - **Diretriz de BIBFRAME completo** (Paulo, 2026-11-14, [ADR 0003](../adr/0003-bibframe-completo.md)): as etapas 1 a 8 de [`bibframe-completo.md`](../specs/catalogo/bibframe-completo.md) vêm agora, antes da 2.9. Elas refazem os formulários (sem perfil por categoria, sem "expandir") e extinguem o tipo de item, então o que na 2.5 e na 2.7 dependia de perfil ou de tipo de item vale na forma nova.
 - **Funções do Koha aprovadas por Paulo em 2026-11-15.** As tarefas em que a proposta as encaixava (2.5 a 2.7) já estavam entregues; elas entram como tarefas próprias, depois dos formulários completos (etapa 6), para não serem escritas duas vezes:
 

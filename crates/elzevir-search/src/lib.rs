@@ -7,6 +7,7 @@
 //! §2.3). Each commit stores the outbox cursor it reaches as the commit payload, so the
 //! documents and the cursor can never disagree after a crash.
 
+mod facets;
 mod schema;
 
 use std::path::Path;
@@ -15,19 +16,23 @@ use std::sync::{Mutex, PoisonError};
 use elzevir_app::material::{CarrierKind, ContentKind, Material};
 use elzevir_app::parallelism::Parallelism;
 use elzevir_app::search::{
-    IndexBatch, SearchDocument, SearchError, SearchHit, SearchIndex, SearchResults, SearchScope,
-    normalized_identifier,
+    Facet, FacetCounts, IndexBatch, SearchDocument, SearchError, SearchHit, SearchIndex,
+    SearchQuery, SearchResults, SearchScope, normalized_identifier,
 };
 use elzevir_domain::catalog::{HubId, IdentifierKind, InstanceId, WorkId};
 use tantivy::collector::{Count, TopDocs};
 use tantivy::directory::MmapDirectory;
-use tantivy::query::{BooleanQuery, BoostQuery, Occur, Query, QueryParser, RegexQuery, TermQuery};
+use tantivy::query::{
+    AllQuery, BooleanQuery, BoostQuery, Occur, Query, QueryParser, RegexQuery, TermQuery,
+};
 use tantivy::schema::{IndexRecordOption, Value};
 use tantivy::{
-    Document, Index, IndexReader, IndexSettings, IndexWriter, ReloadPolicy, TantivyDocument, Term,
+    Document, Index, IndexReader, IndexSettings, IndexWriter, Order, ReloadPolicy, TantivyDocument,
+    Term,
 };
 
-use crate::schema::Fields;
+use crate::facets::FacetCollector;
+use crate::schema::{Fields, HUB_FAMILY};
 
 /// Index writer memory per indexing thread. Tantivy needs at least 15 MB per thread.
 const MEMORY_PER_THREAD: usize = 32 * 1024 * 1024;
@@ -134,6 +139,12 @@ impl TantivyIndex {
         if let Some(hub) = source.hub {
             document.add_u64(f.hub, id(hub.0));
         }
+        document.add_u64(
+            f.family,
+            source
+                .hub
+                .map_or(id(source.work.0), |hub| id(hub.0) | HUB_FAMILY),
+        );
         document.add_u64(f.opac_hidden, u64::from(source.opac_hidden));
         document.add_text(f.title, &source.title);
         document.add_text(f.work_title, &source.work_title);
@@ -150,6 +161,9 @@ impl TantivyIndex {
             (f.inventory_number, &source.inventory_numbers),
             (f.location, &source.locations),
             (f.language, &source.languages),
+            (f.branch, &source.branches),
+            (f.genre, &source.genres),
+            (f.subject_heading, &source.subjects),
         ];
         for (field, values) in texts {
             for value in values {
@@ -165,6 +179,8 @@ impl TantivyIndex {
             (f.summary, &source.summary),
             (f.date, &source.date),
             (f.classification, &source.classification),
+            (f.audience, &source.audience),
+            (f.year, &source.year),
         ];
         for (field, value) in optional {
             if let Some(value) = value {
@@ -236,6 +252,44 @@ impl TantivyIndex {
             clauses.push((Occur::Should, Box::new(regex)));
         }
         Box::new(BooleanQuery::new(clauses))
+    }
+
+    /// The query for `asked`: its words (everything when there are none), and every filter.
+    fn filtered(&self, asked: &SearchQuery<'_>) -> Box<dyn Query> {
+        let words = if asked.text.trim().is_empty() {
+            Box::new(AllQuery)
+        } else {
+            self.query(asked.text)
+        };
+        if asked.filters.is_empty() {
+            return words;
+        }
+        let mut clauses: Vec<(Occur, Box<dyn Query>)> = vec![(Occur::Must, words)];
+        for filter in asked.filters {
+            let field = self.facet(filter.facet);
+            clauses.push((
+                Occur::Must,
+                Box::new(TermQuery::new(
+                    Term::from_field_text(field, &filter.value),
+                    IndexRecordOption::Basic,
+                )),
+            ));
+        }
+        Box::new(BooleanQuery::new(clauses))
+    }
+
+    const fn facet(&self, facet: Facet) -> tantivy::schema::Field {
+        let f = &self.fields;
+        match facet {
+            Facet::Branch => f.branch,
+            Facet::Content => f.content,
+            Facet::Carrier => f.carrier,
+            Facet::Genre => f.genre,
+            Facet::Audience => f.audience,
+            Facet::Language => f.language,
+            Facet::Subject => f.subject_heading,
+            Facet::Year => f.year,
+        }
     }
 
     /// The OPAC leaves out the Instances hidden from it; the staff sees them all.
@@ -321,13 +375,13 @@ impl SearchIndex for TantivyIndex {
 
     fn search(
         &self,
-        query: &str,
+        asked: &SearchQuery<'_>,
         scope: SearchScope,
         offset: usize,
         limit: usize,
     ) -> Result<SearchResults, SearchError> {
         let searcher = self.reader.searcher();
-        let query = self.scoped(self.query(query), scope);
+        let query = self.scoped(self.filtered(asked), scope);
         if limit == 0 {
             let total = searcher.search(&*query, &Count).map_err(error)?;
             return Ok(SearchResults {
@@ -335,17 +389,25 @@ impl SearchIndex for TantivyIndex {
                 hits: Vec::new(),
             });
         }
-        let (found, total) = searcher
-            .search(
-                &*query,
-                &(
-                    TopDocs::with_limit(limit)
-                        .and_offset(offset)
-                        .order_by_score(),
-                    Count,
-                ),
-            )
-            .map_err(error)?;
+        let top = TopDocs::with_limit(limit).and_offset(offset);
+        let (found, total) = if asked.text.trim().is_empty() {
+            // Without words every score is the same: Instance order keeps pages stable.
+            let (found, total) = searcher
+                .search(
+                    &*query,
+                    &(top.order_by_u64_field("instance", Order::Asc), Count),
+                )
+                .map_err(error)?;
+            let found = found
+                .into_iter()
+                .map(|(_, address)| (1.0, address))
+                .collect();
+            (found, total)
+        } else {
+            searcher
+                .search(&*query, &(top.order_by_score(), Count))
+                .map_err(error)?
+        };
         let mut hits = Vec::with_capacity(found.len());
         for (score, address) in found {
             let document: TantivyDocument = searcher.doc(address).map_err(error)?;
@@ -359,6 +421,17 @@ impl SearchIndex for TantivyIndex {
                 .then(a.instance.0.cmp(&b.instance.0))
         });
         Ok(SearchResults { total, hits })
+    }
+
+    fn facets(
+        &self,
+        asked: &SearchQuery<'_>,
+        scope: SearchScope,
+    ) -> Result<FacetCounts, SearchError> {
+        let searcher = self.reader.searcher();
+        let query = self.scoped(self.filtered(asked), scope);
+        let families = searcher.search(&*query, &FacetCollector).map_err(error)?;
+        Ok(facets::counts(families, asked.filters))
     }
 }
 
@@ -380,6 +453,8 @@ fn error(e: impl std::fmt::Display) -> SearchError {
 
 #[cfg(test)]
 mod tests {
+    use elzevir_app::search::{FACET_VALUES, Filter};
+
     use super::*;
 
     #[test]
@@ -389,6 +464,200 @@ mod tests {
         assert_eq!(classification_prefix("82"), None);
         assert_eq!(classification_prefix("*"), None);
         assert_eq!(classification_prefix("dom*"), None);
+    }
+
+    /// An Instance of `work` (in `hub`) in `languages`, with Items at `branches`.
+    fn document(
+        instance: i64,
+        work: i64,
+        hub: Option<i64>,
+        languages: &[&str],
+        branches: &[&str],
+    ) -> SearchDocument {
+        let strings = |values: &[&str]| values.iter().map(|v| (*v).to_owned()).collect();
+        SearchDocument {
+            instance: InstanceId(instance),
+            work: WorkId(work),
+            hub: hub.map(HubId),
+            title: format!("Livro {instance}"),
+            work_title: format!("Livro {instance}"),
+            other_titles: Vec::new(),
+            main_contributor: None,
+            contributors: Vec::new(),
+            subjects: vec!["Estatística".to_owned()],
+            publisher: None,
+            summary: None,
+            notes: Vec::new(),
+            date: Some("c1998".to_owned()),
+            material: Material::default(),
+            classification: None,
+            identifiers: Vec::new(),
+            call_numbers: Vec::new(),
+            locations: Vec::new(),
+            barcodes: Vec::new(),
+            inventory_numbers: Vec::new(),
+            languages: strings(languages),
+            branches: strings(branches),
+            genres: vec!["Novels".to_owned()],
+            audience: None,
+            year: Some("1998".to_owned()),
+            opac_hidden: false,
+        }
+    }
+
+    fn indexed(documents: Vec<SearchDocument>) -> TantivyIndex {
+        let index = TantivyIndex::in_memory(Parallelism::Serial).unwrap();
+        index
+            .apply(IndexBatch {
+                upserts: documents,
+                removals: Vec::new(),
+                cursor: 1,
+            })
+            .unwrap();
+        index
+    }
+
+    fn values(counts: &FacetCounts, facet: Facet) -> Vec<(String, usize)> {
+        counts
+            .facets
+            .iter()
+            .find(|(f, _)| *f == facet)
+            .map(|(_, values)| {
+                values
+                    .iter()
+                    .map(|v| (v.value.clone(), v.families))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn facets_count_families_not_instances() {
+        let index = indexed(vec![
+            // A Hub with two Works, three Instances in Portuguese.
+            document(1, 10, Some(5), &["por"], &["1"]),
+            document(2, 10, Some(5), &["por", "eng"], &["1", "2"]),
+            document(3, 11, Some(5), &["por"], &[]),
+            // A Work alone with the Hub's number: another family.
+            document(4, 5, None, &["por"], &["2"]),
+            document(5, 12, None, &["spa"], &["1"]),
+        ]);
+        let all = SearchQuery::words("");
+        let counts = index.facets(&all, SearchScope::Staff).unwrap();
+        assert_eq!(counts.families, 3);
+        assert_eq!(
+            values(&counts, Facet::Language),
+            [
+                ("por".to_owned(), 2),
+                ("eng".to_owned(), 1),
+                ("spa".to_owned(), 1)
+            ]
+        );
+        assert_eq!(
+            values(&counts, Facet::Branch),
+            [("1".to_owned(), 2), ("2".to_owned(), 2)]
+        );
+        assert_eq!(values(&counts, Facet::Year), [("1998".to_owned(), 3)]);
+        assert_eq!(values(&counts, Facet::Genre), [("Novels".to_owned(), 3)]);
+        assert_eq!(
+            values(&counts, Facet::Subject),
+            [("Estatística".to_owned(), 3)]
+        );
+        assert!(values(&counts, Facet::Audience).is_empty());
+        assert_eq!(
+            index.search(&all, SearchScope::Staff, 0, 10).unwrap().total,
+            5
+        );
+    }
+
+    #[test]
+    fn filters_narrow_both_hits_and_counts() {
+        let index = indexed(vec![
+            document(1, 10, None, &["por"], &["1"]),
+            document(2, 11, None, &["por", "eng"], &["2"]),
+            document(3, 12, None, &["eng"], &["2"]),
+        ]);
+        let one = Filter::parse([("language", "por")]);
+        let asked = SearchQuery {
+            text: "",
+            filters: &one,
+        };
+        let found = index.search(&asked, SearchScope::Staff, 0, 10).unwrap();
+        let ids: Vec<i64> = found.hits.iter().map(|hit| hit.instance.0).collect();
+        assert_eq!((found.total, ids), (2, vec![1, 2]));
+        let counts = index.facets(&asked, SearchScope::Staff).unwrap();
+        assert_eq!(counts.families, 2);
+        assert_eq!(
+            values(&counts, Facet::Branch),
+            [("1".to_owned(), 1), ("2".to_owned(), 1)]
+        );
+        // Two values of one facet: both must hold.
+        let both = Filter::parse([("language", "por"), ("language", "eng")]);
+        let asked = SearchQuery {
+            text: "livro",
+            filters: &both,
+        };
+        let found = index.search(&asked, SearchScope::Staff, 0, 10).unwrap();
+        assert_eq!(
+            found.hits.iter().map(|h| h.instance.0).collect::<Vec<_>>(),
+            [2]
+        );
+        let none = Filter::parse([("branch", "1"), ("language", "eng")]);
+        let asked = SearchQuery {
+            text: "",
+            filters: &none,
+        };
+        assert_eq!(
+            index
+                .search(&asked, SearchScope::Staff, 0, 10)
+                .unwrap()
+                .total,
+            0
+        );
+        assert_eq!(
+            index.facets(&asked, SearchScope::Staff).unwrap(),
+            FacetCounts::default()
+        );
+    }
+
+    #[test]
+    fn a_facet_shows_twenty_values_and_the_active_one() {
+        let documents = (1..=25)
+            .map(|n| {
+                let year = format!("{}", 1900 + n);
+                let mut document = document(n, n, None, &["por"], &[]);
+                document.year = Some(year);
+                document
+            })
+            .collect();
+        let index = indexed(documents);
+        let all = SearchQuery::words("");
+        let counts = index.facets(&all, SearchScope::Staff).unwrap();
+        let years = values(&counts, Facet::Year);
+        assert_eq!(years.len(), FACET_VALUES);
+        // Ties go by value.
+        assert_eq!(years.first().map(|(v, _)| v.as_str()), Some("1901"));
+        let late = vec![Filter {
+            facet: Facet::Year,
+            value: "1925".to_owned(),
+        }];
+        let asked = SearchQuery {
+            text: "",
+            filters: &late,
+        };
+        let counts = index.facets(&asked, SearchScope::Staff).unwrap();
+        assert_eq!(values(&counts, Facet::Year), [("1925".to_owned(), 1)]);
+        let counts = facets::counts(
+            index
+                .reader
+                .searcher()
+                .search(&AllQuery, &FacetCollector)
+                .unwrap(),
+            &late,
+        );
+        let years = values(&counts, Facet::Year);
+        assert_eq!(years.len(), FACET_VALUES + 1);
+        assert_eq!(years.last().map(|(v, _)| v.as_str()), Some("1925"));
     }
 
     #[test]

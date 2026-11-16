@@ -12,7 +12,7 @@ use std::num::NonZeroUsize;
 
 use elzevir_app::catalog::CatalogReader;
 use elzevir_app::parallelism::Parallelism;
-use elzevir_app::search::{IndexOptions, SearchIndex, SearchScope, index_pending};
+use elzevir_app::search::{IndexOptions, SearchIndex, SearchQuery, SearchScope, index_pending};
 use elzevir_domain::catalog::InstanceId;
 use elzevir_search::TantivyIndex;
 use elzevir_store::ElzevirStore;
@@ -42,7 +42,7 @@ fn indexed(store: &ElzevirStore, parallelism: Parallelism, batch: usize) -> Tant
 
 fn titles(store: &ElzevirStore, index: &TantivyIndex, query: &str) -> Vec<String> {
     index
-        .search(query, SearchScope::Staff, 0, 10)
+        .search(&SearchQuery::words(query), SearchScope::Staff, 0, 10)
         .unwrap()
         .hits
         .into_iter()
@@ -107,13 +107,22 @@ fn words_match_without_accents_or_case() {
 fn results_come_in_pages_with_the_total_and_the_list_fields() {
     let (_dir, store) = imported();
     let index = indexed(&store, Parallelism::Serial, 1024);
-    let all = index.search("medici", SearchScope::Staff, 0, 50).unwrap();
+    let all = index
+        .search(&SearchQuery::words("medici"), SearchScope::Staff, 0, 50)
+        .unwrap();
     assert_eq!((all.total, all.hits.len()), (5, 5));
-    let page = index.search("medici", SearchScope::Staff, 2, 2).unwrap();
+    let page = index
+        .search(&SearchQuery::words("medici"), SearchScope::Staff, 2, 2)
+        .unwrap();
     assert_eq!(page.total, 5);
     assert_eq!(page.hits.len(), 2);
     let first = &index
-        .search("anuario estatistico", SearchScope::Staff, 0, 1)
+        .search(
+            &SearchQuery::words("anuario estatistico"),
+            SearchScope::Staff,
+            0,
+            1,
+        )
         .unwrap()
         .hits[0];
     assert_eq!(first.title, "Perfil - Anuário Estatístico");
@@ -126,7 +135,7 @@ fn results_come_in_pages_with_the_total_and_the_list_fields() {
     assert!(first.material.content.is_some());
     assert_eq!(
         index
-            .search("medici", SearchScope::Staff, 0, 0)
+            .search(&SearchQuery::words("medici"), SearchScope::Staff, 0, 0)
             .unwrap()
             .total,
         5
@@ -138,7 +147,11 @@ fn codes_match_exactly_and_come_first() {
     let (_dir, store) = imported();
     let index = indexed(&store, Parallelism::Serial, 1024);
     let first = |query: &str| -> InstanceId {
-        index.search(query, SearchScope::Staff, 0, 5).unwrap().hits[0].instance
+        index
+            .search(&SearchQuery::words(query), SearchScope::Staff, 0, 5)
+            .unwrap()
+            .hits[0]
+            .instance
     };
     let perfil = first("anuario estatistico");
     // Barcode, call number (any case) and classification of the first record.
@@ -173,7 +186,7 @@ fn a_classification_prefix_finds_the_class() {
     let (_dir, store) = imported();
     let index = indexed(&store, Parallelism::Serial, 1024);
     let hits = index
-        .search("310*", SearchScope::Staff, 0, 50)
+        .search(&SearchQuery::words("310*"), SearchScope::Staff, 0, 50)
         .unwrap()
         .hits;
     assert!(!hits.is_empty());
@@ -237,7 +250,7 @@ fn reference_queries_find_what_koha_finds() {
         let koha = ids(koha);
         // Instance ids follow the file, and the file is biblionumbers 1 to 200 in order.
         let ours: BTreeSet<i64> = index
-            .search(query, SearchScope::Public, 0, 200)
+            .search(&SearchQuery::words(query), SearchScope::Public, 0, 200)
             .unwrap()
             .hits
             .into_iter()
@@ -255,4 +268,64 @@ fn reference_queries_find_what_koha_finds() {
             "query {query:?}: (only Koha, only Elzevir)"
         );
     }
+}
+
+/// One number from the database.
+fn count(store: &ElzevirStore, sql: &str) -> usize {
+    let n: i64 = store
+        .readers()
+        .read(|c| c.query_row(sql, [], |row| row.get(0)))
+        .unwrap();
+    usize::try_from(n).unwrap()
+}
+
+#[test]
+fn facets_count_the_families_the_database_has() {
+    use elzevir_app::search::{Facet, Filter};
+
+    let (_dir, store) = imported();
+    let index = indexed(&store, Parallelism::Serial, 1024);
+    let all = SearchQuery::words("");
+    let counts = index.facets(&all, SearchScope::Staff).unwrap();
+    let families = count(
+        &store,
+        "SELECT COUNT(DISTINCT COALESCE('h' || w.hub_id, 'w' || w.id))
+         FROM instances i JOIN works w ON w.id = i.work_id",
+    );
+    assert_eq!(counts.families, families);
+    let languages = &counts
+        .facets
+        .iter()
+        .find(|(facet, _)| *facet == Facet::Language)
+        .unwrap()
+        .1;
+    let portuguese = languages.iter().find(|v| v.value == "por").unwrap();
+    assert_eq!(
+        portuguese.families,
+        count(
+            &store,
+            "SELECT COUNT(DISTINCT COALESCE('h' || w.hub_id, 'w' || w.id))
+             FROM instances i JOIN works w ON w.id = i.work_id
+             JOIN work_languages l ON l.work_id = w.id
+             JOIN terms t ON t.id = l.language WHERE t.code = 'por'",
+        )
+    );
+    // Filtering by a value lists exactly the families the facet counted.
+    let filters = Filter::parse([("language", "por")]);
+    let asked = SearchQuery {
+        text: "",
+        filters: &filters,
+    };
+    let narrowed = index.facets(&asked, SearchScope::Staff).unwrap();
+    assert_eq!(narrowed.families, portuguese.families);
+    let found = index.search(&asked, SearchScope::Staff, 0, 500).unwrap();
+    let mut heads = BTreeSet::new();
+    for hit in &found.hits {
+        heads.insert(hit.hub.map_or((0, hit.work.0), |hub| (1, hub.0)));
+    }
+    assert_eq!(heads.len(), portuguese.families);
+    // Every year counted came from a date.
+    assert!(counts.facets.iter().any(|(facet, values)| {
+        *facet == Facet::Year && values.iter().all(|v| v.value.len() == 4)
+    }));
 }
