@@ -35,7 +35,21 @@ impl ReadPool {
     ///
     /// Returns whatever `read` returns; the pool itself does not fail.
     pub fn read<T, E>(&self, read: impl FnOnce(&Connection) -> Result<T, E>) -> Result<T, E> {
-        let lease = Lease {
+        self.read_with_hooks(|connection| read(connection))
+    }
+
+    /// Borrows a read-only connection with mutable access to connection-local hooks.
+    ///
+    /// SQLite still refuses writes. Install and remove diagnostic progress
+    /// handlers before returning the connection to the pool.
+    ///
+    /// # Errors
+    /// Returns whatever `read` returns; the pool itself does not fail.
+    pub fn read_with_hooks<T, E>(
+        &self,
+        read: impl FnOnce(&mut Connection) -> Result<T, E>,
+    ) -> Result<T, E> {
+        let mut lease = Lease {
             pool: self,
             connection: Some(self.take()),
         };
@@ -78,9 +92,9 @@ impl Lease<'_> {
         clippy::expect_used,
         reason = "`connection` is Some from construction until `drop`, the only place that takes it"
     )]
-    fn connection(&self) -> &Connection {
+    fn connection(&mut self) -> &mut Connection {
         self.connection
-            .as_ref()
+            .as_mut()
             .expect("a lease holds its connection until dropped")
     }
 }
