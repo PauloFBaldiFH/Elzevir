@@ -5,6 +5,9 @@
 /// the batch.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum StoreError {
+    /// An external reader prevented the final truncate checkpoint.
+    #[error("database checkpoint is busy")]
+    CheckpointBusy,
     /// SQLite returned an error.
     #[error("sqlite: {0}")]
     Sqlite(String),

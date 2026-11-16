@@ -306,6 +306,50 @@ fn closing_the_store_finishes_queued_commands() {
     assert_eq!(counters(&reopened)["n"], 55);
 }
 
+#[test]
+fn explicit_shutdown_drains_commands_and_truncates_the_wal() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("elzevir.db");
+    let store = open(&path, &StoreConfig::default());
+    let pending = store
+        .submit(Command::Add {
+            key: "shutdown".to_owned(),
+            by: 42,
+        })
+        .unwrap();
+    store.shutdown().unwrap();
+    assert_eq!(pending.wait(), Ok(42));
+    let wal = root.path().join("elzevir.db-wal");
+    assert!(std::fs::metadata(wal).map_or(true, |m| m.len() == 0));
+    let reopened = open(&path, &StoreConfig::default());
+    assert_eq!(counters(&reopened)["shutdown"], 42);
+}
+
+#[test]
+fn explicit_shutdown_reports_an_external_reader_blocking_checkpoint() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("elzevir.db");
+    let store = open(&path, &StoreConfig::default());
+    let observer =
+        Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+    observer
+        .execute_batch("BEGIN; SELECT * FROM counters;")
+        .unwrap();
+    store
+        .submit(Command::Add {
+            key: "new".to_owned(),
+            by: 1,
+        })
+        .unwrap()
+        .wait()
+        .unwrap();
+    assert_eq!(
+        store.shutdown(),
+        Err(elzevir_store::StoreError::CheckpointBusy)
+    );
+    observer.execute_batch("ROLLBACK").unwrap();
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn outcomes_can_be_awaited_from_async_code() {
     let dir = tempfile::tempdir().unwrap();
