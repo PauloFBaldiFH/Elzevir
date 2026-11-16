@@ -5,7 +5,9 @@
 
 use elzevir_app::catalog::NewRecord;
 use elzevir_app::profiles::{InstanceField, WorkField};
-use elzevir_domain::catalog::{AgentKind, IdentifierKind, MaterialType, NoteKind, SubjectKind};
+use elzevir_domain::catalog::{
+    AgentKind, IdentifierKind, MaterialType, NoteKind, SubjectKind, WorkRelationKind,
+};
 use elzevir_web_templates::{
     ColumnKind, FormCell, FormColumn, FormField, FormInput, FormOption, I18n, RecordForm,
 };
@@ -170,35 +172,36 @@ fn text(value: Option<&str>) -> FormInput {
     }
 }
 
-fn field(
-    change: &'static str,
-    error: &'static str,
-    label_key: &'static str,
-    input: FormInput,
-) -> (FormField, bool) {
-    let filled = match &input {
+/// Whether a field holds a value.
+pub(crate) fn is_filled(field: &FormField) -> bool {
+    match &field.input {
         FormInput::Text { value, .. }
         | FormInput::LongText { value }
         | FormInput::Select { value, .. } => !value.is_empty(),
         FormInput::Rows { rows, .. } => !rows.is_empty(),
         FormInput::Values { values } => !values.is_empty(),
         FormInput::Group { cells } => cells.iter().any(|cell| !cell.value.is_empty()),
-    };
-    (
-        FormField {
-            change,
-            error,
-            label_key,
-            input,
-            property: "",
-            ontology_label: "",
-            inherited: false,
-        },
-        filled,
-    )
+    }
 }
 
-pub(crate) fn work_field(t: &I18n, record: &NewRecord, part: WorkField) -> (FormField, bool) {
+fn field(
+    change: &'static str,
+    error: &'static str,
+    label_key: &'static str,
+    input: FormInput,
+) -> FormField {
+    FormField {
+        change,
+        error,
+        label_key,
+        input,
+        property: "",
+        ontology_label: "",
+        inherited: false,
+    }
+}
+
+pub(crate) fn work_field(t: &I18n, record: &NewRecord, part: WorkField) -> FormField {
     match part {
         WorkField::Title => field(
             "Title",
@@ -229,6 +232,7 @@ pub(crate) fn work_field(t: &I18n, record: &NewRecord, part: WorkField) -> (Form
             },
         ),
         WorkField::Subjects => subjects_field(t, record),
+        WorkField::Relations => relations_field(t, record),
         WorkField::Summary => field(
             "Summary",
             "summary",
@@ -251,7 +255,7 @@ pub(crate) fn instance_field(
     record: &NewRecord,
     new_identifier: IdentifierKind,
     part: InstanceField,
-) -> (FormField, bool) {
+) -> FormField {
     let instance = &record.instance;
     match part {
         InstanceField::Title => field(
@@ -347,7 +351,7 @@ pub(crate) fn instance_form<'a>(
     }
 }
 
-fn contributions_field(t: &I18n, record: &NewRecord) -> (FormField, bool) {
+fn contributions_field(t: &I18n, record: &NewRecord) -> FormField {
     let columns = [
         column("heading", "edit-column-name", ColumnKind::Text, false),
         column(
@@ -385,7 +389,7 @@ fn contributions_field(t: &I18n, record: &NewRecord) -> (FormField, bool) {
     )
 }
 
-fn classification_field(record: &NewRecord) -> (FormField, bool) {
+fn classification_field(record: &NewRecord) -> FormField {
     let columns = [
         column("number", "edit-column-number", ColumnKind::Text, true),
         column("scheme", "edit-column-scheme", ColumnKind::Text, true),
@@ -404,7 +408,7 @@ fn classification_field(record: &NewRecord) -> (FormField, bool) {
     )
 }
 
-fn subjects_field(t: &I18n, record: &NewRecord) -> (FormField, bool) {
+fn subjects_field(t: &I18n, record: &NewRecord) -> FormField {
     let columns = [
         column("heading", "edit-column-heading", ColumnKind::Text, false),
         column(
@@ -435,11 +439,65 @@ fn subjects_field(t: &I18n, record: &NewRecord) -> (FormField, bool) {
     )
 }
 
-fn identifiers_field(
-    t: &I18n,
-    record: &NewRecord,
-    new_identifier: IdentifierKind,
-) -> (FormField, bool) {
+const RELATIONS: &[(WorkRelationKind, &str, &str)] = &[
+    (
+        WorkRelationKind::TranslationOf,
+        "translation_of",
+        "staff-relation-translation-of",
+    ),
+    (
+        WorkRelationKind::AdaptationOf,
+        "adaptation_of",
+        "staff-relation-adaptation-of",
+    ),
+    (
+        WorkRelationKind::PartOf,
+        "part_of",
+        "staff-relation-part-of",
+    ),
+    (
+        WorkRelationKind::SupplementTo,
+        "supplement_to",
+        "staff-relation-supplement-to",
+    ),
+    (
+        WorkRelationKind::ContinuationOf,
+        "continuation_of",
+        "staff-relation-continuation-of",
+    ),
+];
+
+/// The Works this one relates to, each by its number (bibframe-completo.md, step 6d).
+fn relations_field(t: &I18n, record: &NewRecord) -> FormField {
+    let columns = [
+        column(
+            "kind",
+            "edit-column-kind",
+            ColumnKind::Select(options(t, RELATIONS)),
+            false,
+        ),
+        column("work", "edit-column-work", ColumnKind::Number, false),
+    ];
+    let stored = record
+        .relations
+        .iter()
+        .map(|relation| {
+            vec![
+                name_of(RELATIONS, relation.kind).to_owned(),
+                relation.work.0.to_string(),
+            ]
+        })
+        .collect();
+    let blank = vec!["translation_of".to_owned(), String::new()];
+    field(
+        "Relations",
+        "relations",
+        "staff-fields-relations",
+        rows(&columns, stored, blank),
+    )
+}
+
+fn identifiers_field(t: &I18n, record: &NewRecord, new_identifier: IdentifierKind) -> FormField {
     let columns = [
         column(
             "kind",
@@ -475,7 +533,7 @@ fn identifiers_field(
     )
 }
 
-fn notes_field(t: &I18n, record: &NewRecord) -> (FormField, bool) {
+fn notes_field(t: &I18n, record: &NewRecord) -> FormField {
     let columns = [
         column(
             "kind",
@@ -555,6 +613,10 @@ mod tests {
             parses(name, *kind);
         }
         assert_eq!(IDENTIFIERS.len(), IdentifierKind::ALL.len());
+        for (kind, name, _) in RELATIONS {
+            parses(name, *kind);
+        }
+        assert_eq!(RELATIONS.len(), WorkRelationKind::ALL.len());
         for (kind, name, _) in NOTES {
             parses(name, *kind);
         }

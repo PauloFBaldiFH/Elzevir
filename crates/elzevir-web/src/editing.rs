@@ -83,6 +83,36 @@ fn read_rows<M, C>(
     }
 }
 
+/// The changes of a Work as the screen sends them, the rows of each property read.
+pub(crate) fn work_changes(
+    changes: Vec<FormChange<WorkChange>>,
+) -> Result<Vec<WorkChange>, Vec<FieldError>> {
+    read_rows(
+        EntityKind::Work,
+        changes,
+        |change| change,
+        |property, statements| WorkChange::Statements {
+            property,
+            statements,
+        },
+    )
+}
+
+/// The changes of an Instance as the screen sends them, the rows of each property read.
+pub(crate) fn instance_changes(
+    changes: Vec<FormChange<InstanceChange>>,
+) -> Result<Vec<InstanceChange>, Vec<FieldError>> {
+    read_rows(
+        EntityKind::Instance,
+        changes,
+        |change| change,
+        |property, statements| InstanceChange::Statements {
+            property,
+            statements,
+        },
+    )
+}
+
 /// One refused field, with its message in the interface language.
 #[derive(Serialize)]
 struct FieldMessage {
@@ -185,21 +215,25 @@ pub(crate) async fn edit_work(
         Ok(session) => session,
         Err(status) => return status.into_response(),
     };
-    let read = read_rows(
-        EntityKind::Work,
-        body.changes,
-        |change| change,
-        |property, statements| WorkChange::Statements {
-            property,
-            statements,
-        },
-    );
-    let mut changes = match read {
+    let mut changes = match work_changes(body.changes) {
         Ok(changes) => changes,
         Err(errors) => return invalid(&state, &errors),
     };
     if let Err(errors) = validate_work_changes(&mut changes) {
         return invalid(&state, &errors);
+    }
+    let to_itself = changes.iter().any(|change| {
+        matches!(change, WorkChange::Relations(relations)
+            if relations.iter().any(|relation| relation.work == WorkId(id)))
+    });
+    if to_itself {
+        return invalid(
+            &state,
+            &[FieldError {
+                field: "relations",
+                message_key: "edit-error-relation-itself",
+            }],
+        );
     }
     let edit = Edit::Work(WorkUpdate {
         work: WorkId(id),
@@ -220,16 +254,7 @@ pub(crate) async fn edit_instance(
         Ok(session) => session,
         Err(status) => return status.into_response(),
     };
-    let read = read_rows(
-        EntityKind::Instance,
-        body.changes,
-        |change| change,
-        |property, statements| InstanceChange::Statements {
-            property,
-            statements,
-        },
-    );
-    let mut changes = match read {
+    let mut changes = match instance_changes(body.changes) {
         Ok(changes) => changes,
         Err(errors) => return invalid(&state, &errors),
     };

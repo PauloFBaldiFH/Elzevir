@@ -463,6 +463,7 @@ function rowObject(row) {
   const object = {};
   for (const cell of row.querySelectorAll("[data-name]")) {
     if (cell.dataset.type === "bool") object[cell.dataset.name] = cell.checked;
+    else if (cell.dataset.type === "number") object[cell.dataset.name] = cell.value.trim() ? Number(cell.value.trim()) : null;
     else object[cell.dataset.name] = cell.hasAttribute("data-optional") && !cell.value.trim() ? null : cell.value;
   }
   return object;

@@ -747,3 +747,53 @@ fn an_item_property_edit_replaces_its_statements_and_moves_the_version() {
     };
     assert_eq!(store.version(unknown).unwrap(), None);
 }
+
+#[test]
+fn a_relations_edit_replaces_the_related_works() {
+    use elzevir_app::catalog::NewWorkRelation;
+    use elzevir_domain::catalog::WorkRelationKind;
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = imported(&dir);
+    let read = view(&store, 1);
+    let other = view(&store, 2).work;
+    let relation = |kind, work| NewWorkRelation { kind, work };
+    run(
+        &store,
+        update_work(
+            &read,
+            vec![WorkChange::Relations(vec![relation(
+                WorkRelationKind::TranslationOf,
+                other,
+            )])],
+        ),
+    )
+    .unwrap();
+    let sql = format!(
+        "SELECT COUNT(*) FROM work_relations WHERE work_id = {} AND related_work_id = {}",
+        read.work.0, other.0
+    );
+    assert_eq!(count(&store, &sql), 1);
+    let read = view(&store, 1);
+    run(
+        &store,
+        update_work(&read, vec![WorkChange::Relations(Vec::new())]),
+    )
+    .unwrap();
+    assert_eq!(count(&store, &sql), 0);
+    // A Work does not relate to itself, and nothing is written.
+    let read = view(&store, 1);
+    assert!(
+        run(
+            &store,
+            update_work(
+                &read,
+                vec![WorkChange::Relations(vec![relation(
+                    WorkRelationKind::PartOf,
+                    read.work,
+                )])],
+            ),
+        )
+        .is_err()
+    );
+}

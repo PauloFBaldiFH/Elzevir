@@ -76,17 +76,17 @@ const WORK: Layout<WorkField> = Layout {
         ("subject", &[WorkField::Subjects]),
         ("summary", &[WorkField::Summary]),
         ("intendedAudience", &[WorkField::Audience]),
+        // One field holds the five typed relations, each row with its kind.
+        ("translationOf", &[WorkField::Relations]),
+        ("derivativeOf", &[]),
+        ("partOf", &[]),
+        ("supplementTo", &[]),
+        ("continues", &[]),
     ],
     // Variant titles, the languages of parts, described classifications, coded audiences.
     with_statements: &["title", "language", "classification", "intendedAudience"],
     elsewhere: &["expressionOf", "hasExpression", "hasInstance"],
-    pending: &[
-        "continues",
-        "derivativeOf",
-        "partOf",
-        "supplementTo",
-        "translationOf",
-    ],
+    pending: &[],
     section_of: work_section,
 };
 
@@ -306,13 +306,13 @@ pub(crate) fn work_sections(t: &I18n, record: &NewRecord) -> Vec<FormSection> {
     // The category is the Work's classes, not a property: it opens the content.
     let category = (
         Section::Content,
-        work_field(t, record, WorkField::MaterialType).0,
+        work_field(t, record, WorkField::MaterialType),
     );
     lay_out(
         &WORK,
         Some(category),
         &record.work_description.statements,
-        |part| Some(work_field(t, record, part).0),
+        |part| Some(work_field(t, record, part)),
     )
 }
 
@@ -326,13 +326,13 @@ pub(crate) fn instance_sections(t: &I18n, record: &NewRecord) -> Vec<FormSection
     let identifier = profile_for(material).identifier;
     let category = (
         Section::MediaAndCarrier,
-        instance_field(t, record, identifier, InstanceField::MaterialType).0,
+        instance_field(t, record, identifier, InstanceField::MaterialType),
     );
     lay_out(
         &INSTANCE,
         Some(category),
         &record.instance.description.statements,
-        |part| Some(instance_field(t, record, identifier, part).0),
+        |part| Some(instance_field(t, record, identifier, part)),
     )
 }
 
@@ -533,7 +533,7 @@ mod tests {
             let fields = || sections.iter().flat_map(|s| &s.fields);
             assert!(fields().any(|field| field.change == "MaterialType"));
         }
-        assert!(INSTANCE.pending.is_empty());
+        assert!(WORK.pending.is_empty() && INSTANCE.pending.is_empty());
         for (layout, entity) in [(&HUB, Entity::Hub), (&ITEM, Entity::Item)] {
             let sections = described_sections(entity, &[]);
             assert!(uncovered(layout, &sections).is_empty(), "{entity:?}");

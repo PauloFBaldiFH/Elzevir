@@ -7,7 +7,7 @@
 
 use elzevir_app::catalog::{
     CatalogOutput, CatalogRefusal, InstanceChange, InstanceUpdate, NewContribution, NewSubject,
-    WorkChange, WorkUpdate,
+    NewWorkRelation, WorkChange, WorkUpdate,
 };
 use elzevir_app::commands::WriteRefusal;
 use elzevir_app::listing::sort_key;
@@ -16,8 +16,8 @@ use elzevir_domain::catalog::{InstanceId, MatchRule, Vocabulary, WorkId};
 use rusqlite::{Connection, OptionalExtension, ToSql, params};
 
 use crate::catalog::{
-    insert_identifiers, insert_notes, link_contributions, link_languages, link_subjects,
-    optional_term, record_changed, refused,
+    insert_identifiers, insert_notes, link_contributions, link_languages, link_relations,
+    link_subjects, optional_term, record_changed, refused,
 };
 use crate::statements::{recategorize, replace_property};
 use crate::{CommandFailed, StoreError, WriteTx};
@@ -204,6 +204,7 @@ fn apply_work_change(
             )?;
             link_subjects(connection, id, &subjects)?;
         }
+        WorkChange::Relations(relations) => replace_relations(connection, work, relations)?,
         WorkChange::Statements {
             property,
             statements,
@@ -218,6 +219,24 @@ fn apply_work_change(
         )?,
     }
     Ok(())
+}
+
+/// The Work's relations become `relations`; a Work does not relate to itself, which the
+/// table refuses too.
+fn replace_relations(
+    connection: &Connection,
+    work: WorkId,
+    relations: &[NewWorkRelation],
+) -> Result<(), CommandFailed<WriteRefusal>> {
+    if let Some(relation) = relations.iter().find(|relation| relation.work == work) {
+        return Err(refused(CatalogRefusal::UnknownWork(relation.work)));
+    }
+    clear(
+        connection,
+        "DELETE FROM work_relations WHERE work_id = ?1",
+        work.0,
+    )?;
+    link_relations(connection, work.0, relations)
 }
 
 /// `contributions` with the relator terms and identifiers of the Work's current

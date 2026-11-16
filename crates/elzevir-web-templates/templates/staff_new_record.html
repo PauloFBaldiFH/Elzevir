@@ -5,9 +5,14 @@
   {% for part in parts %}
   <section class="form-part" data-part="{{ part.name }}">
     {% if parts.len() > 1 %}<h3 class="form-part-heading">{{ t.get(part.heading_key) }}</h3>{% endif %}
-    <div class="form-fields">
-      {% for field in part.fields %}{% include "staff_form_field.html" %}{% endfor %}
-    </div>
+    {% for section in part.sections %}
+    <section class="form-section">
+      {% if let Some(heading_key) = section.heading_key %}<h4 class="form-section-heading">{{ t.get(heading_key) }}</h4>{% endif %}
+      <div class="form-fields">
+        {% for field in section.fields %}{% include "staff_form_field.html" %}{% endfor %}
+      </div>
+    </section>
+    {% endfor %}
   </section>
   {% endfor %}
   <div class="form-discard" role="alertdialog" hidden>

@@ -274,7 +274,7 @@ pub(crate) fn exists(connection: &Connection, sql: &str, id: i64) -> Result<bool
         .is_some())
 }
 
-fn link_relations(
+pub(crate) fn link_relations(
     connection: &Connection,
     work: i64,
     relations: &[NewWorkRelation],
