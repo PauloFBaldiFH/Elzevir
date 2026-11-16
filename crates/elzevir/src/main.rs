@@ -13,7 +13,9 @@ mod init;
 mod koha_codes;
 mod local_disk;
 mod memory;
+mod runtime_info;
 mod server_config;
+mod status;
 
 use std::future::IntoFuture;
 use std::io::BufRead;
@@ -48,6 +50,8 @@ enum Command {
     Serve(server_config::ServeArgs),
     /// Initializes a new institution and its first administrator.
     Init(init::InitArgs),
+    /// Reports local server status without opening its database.
+    Status(status::StatusArgs),
     /// Manages staff accounts.
     #[command(subcommand)]
     Staff(StaffAction),
@@ -96,6 +100,7 @@ fn main() -> ExitCode {
                 })
         }
         Command::Init(args) => init::run(&args),
+        Command::Status(args) => status::run(args),
         Command::Staff(StaffAction::Add {
             data_dir,
             login,
@@ -259,6 +264,8 @@ fn serve(
         let health_address = health_listener
             .local_addr()
             .map_err(|error| error.to_string())?;
+        let _metadata =
+            runtime_info::RuntimeFile::publish(data_dir, probe.instance(), health_address)?;
         println!("elzevir: listening on http://{address}");
         println!("elzevir: health on http://{health_address}/health");
         serve_http(listener, app, health_listener, probe).await

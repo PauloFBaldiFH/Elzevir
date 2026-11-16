@@ -106,7 +106,10 @@ fn readiness_has_a_local_listener_and_never_appears_on_catalog() {
         std::thread::sleep(Duration::from_millis(20));
     }
     #[cfg(unix)]
-    assert_graceful_stop(server, catalog, health);
+    {
+        assert_graceful_stop(server, catalog, health);
+        assert!(!root.path().join("elzevir-runtime.json").exists());
+    }
 }
 
 #[cfg(unix)]
