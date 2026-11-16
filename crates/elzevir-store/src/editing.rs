@@ -288,7 +288,7 @@ fn apply_instance_change(
     connection: &Connection,
     instance: InstanceId,
     change: &InstanceChange,
-) -> Result<(), StoreError> {
+) -> Result<(), CommandFailed<WriteRefusal>> {
     let id = instance.0;
     let (sql, value): (&str, &dyn ToSql) = match change {
         InstanceChange::Title(title) => ("UPDATE instances SET title = ?2 WHERE id = ?1", title),
@@ -299,7 +299,7 @@ fn apply_instance_change(
                 id,
                 &kind.code(),
             )?;
-            return recategorize(
+            return Ok(recategorize(
                 connection,
                 EntityRef {
                     entity: EntityKind::Instance,
@@ -307,7 +307,7 @@ fn apply_instance_change(
                 },
                 &instance_of_material(Some(*kind)),
                 &[],
-            );
+            )?);
         }
         InstanceChange::Edition(edition) => {
             ("UPDATE instances SET edition = ?2 WHERE id = ?1", edition)
@@ -331,7 +331,7 @@ fn apply_instance_change(
                 id,
             )?;
             insert_identifiers(connection, id, identifiers)?;
-            return refresh_identifier_keys(connection, instance, identifiers);
+            return Ok(refresh_identifier_keys(connection, instance, identifiers)?);
         }
         InstanceChange::Notes(notes) => {
             clear(
@@ -339,10 +339,24 @@ fn apply_instance_change(
                 "DELETE FROM instance_notes WHERE instance_id = ?1",
                 id,
             )?;
-            return insert_notes(connection, id, notes);
+            return Ok(insert_notes(connection, id, notes)?);
+        }
+        InstanceChange::Statements {
+            property,
+            statements,
+        } => {
+            return replace_property(
+                connection,
+                EntityRef {
+                    entity: EntityKind::Instance,
+                    id,
+                },
+                property,
+                statements,
+            );
         }
     };
-    set(connection, sql, id, value)
+    Ok(set(connection, sql, id, value)?)
 }
 
 /// The ISBN and ISSN match keys follow the identifiers; the Koha `biblionumber` key comes

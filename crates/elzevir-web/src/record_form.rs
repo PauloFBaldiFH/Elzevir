@@ -4,14 +4,13 @@
 //! column's `name` are the edit's own JSON names, so the script sends what the route reads.
 
 use elzevir_app::catalog::NewRecord;
-use elzevir_app::profiles::{InstanceField, WorkField, profile_for};
+use elzevir_app::profiles::{InstanceField, WorkField};
 use elzevir_domain::catalog::{AgentKind, IdentifierKind, MaterialType, NoteKind, SubjectKind};
 use elzevir_web_templates::{
-    ColumnKind, FormCell, FormColumn, FormField, FormInput, FormOption, FormSection, I18n,
-    RecordForm,
+    ColumnKind, FormCell, FormColumn, FormField, FormInput, FormOption, I18n, RecordForm,
 };
 
-use crate::form_sections::work_sections;
+use crate::form_sections::{instance_sections, work_sections};
 use crate::opac::material_key;
 
 /// The serde names of the vocabularies, with their labels. A unit test checks each name
@@ -340,25 +339,11 @@ pub(crate) fn instance_form<'a>(
     instance: i64,
     version: i64,
 ) -> RecordForm<'a> {
-    let profile = profile_for(
-        record
-            .instance
-            .material_type
-            .unwrap_or(record.material_type),
-    );
-    let fields = profile
-        .instance
-        .iter()
-        .map(|part| instance_field(t, record, profile.identifier, *part).0)
-        .collect();
     RecordForm {
         t,
         endpoint: format!("/equipe/acervo/instancia/{instance}"),
         version,
-        sections: vec![FormSection {
-            heading_key: None,
-            fields,
-        }],
+        sections: instance_sections(t, record),
     }
 }
 

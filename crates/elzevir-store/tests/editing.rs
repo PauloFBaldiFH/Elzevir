@@ -655,3 +655,48 @@ fn a_property_edit_replaces_its_statements_in_place_and_keeps_the_others() {
     ));
     assert_eq!(store.statements(work).unwrap(), after);
 }
+
+#[test]
+fn an_instance_property_edit_keeps_the_typed_parts_and_the_other_statements() {
+    use elzevir_app::catalog::StatementReader;
+    use elzevir_domain::statement::{EntityKind, EntityRef, Statement, Value};
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = imported(&dir);
+    let read = view(&store, 1);
+    let instance = EntityRef {
+        entity: EntityKind::Instance,
+        id: read.id.0,
+    };
+    let before = store.statements(instance).unwrap();
+    let size = Statement {
+        property: "dimensions".to_owned(),
+        value: Value::Literal {
+            text: "21 cm".to_owned(),
+            language: None,
+        },
+    };
+    run(
+        &store,
+        update_instance(
+            &read,
+            vec![InstanceChange::Statements {
+                property: "dimensions".to_owned(),
+                statements: vec![size.clone()],
+            }],
+        ),
+    )
+    .unwrap();
+    let after = store.statements(instance).unwrap();
+    let others = |list: &[Statement]| {
+        list.iter()
+            .filter(|statement| statement.property != "dimensions")
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(others(&after), others(&before));
+    assert!(after.contains(&size));
+    let again = view(&store, 1);
+    assert_eq!(again.title, read.title);
+    assert!(again.version > read.version);
+}

@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! The form of a Work as every property the ontology gives it, always, in fixed sections
-//! (docs/specs/catalogo/bibframe-completo.md, items 24 to 26): no field is hidden behind
-//! "expand" and none depends on the category of material.
+//! The form of a Work or an Instance as every property the ontology gives it, always, in
+//! fixed sections (docs/specs/catalogo/bibframe-completo.md, items 24 to 26): no field is
+//! hidden behind "expand" and none depends on the category of material.
 //!
-//! A property with a typed part of the model has that part's field; every other one, and
+//! A property with a typed part of the model has that part's fields; every other one, and
 //! a typed one that also takes statements (a variant title, a described classification),
 //! has a field of rows that edits its statements.
 
 use elzevir_app::catalog::NewRecord;
-use elzevir_app::profiles::WorkField;
+use elzevir_app::profiles::{InstanceField, WorkField, profile_for};
 use elzevir_app::statement_rows::{StatementRow, concept_choices, is_literal, is_relation, row_of};
 use elzevir_data::bibframe::{Entity, Property, properties_of};
 use elzevir_domain::statement::{Statement, Value, is_typed};
@@ -16,19 +16,7 @@ use elzevir_web_templates::{
     ColumnKind, FormCell, FormColumn, FormField, FormInput, FormOption, FormSection, I18n,
 };
 
-use crate::record_form::work_field;
-
-/// The sections of a Work's form, in order, with the message key of each heading.
-const SECTIONS: [(Section, &str); 8] = [
-    (Section::Title, "edit-section-title"),
-    (Section::Content, "edit-section-content"),
-    (Section::Contributions, "edit-section-contributions"),
-    (Section::Subjects, "edit-section-subjects"),
-    (Section::Classification, "edit-section-classification"),
-    (Section::Relations, "edit-section-relations"),
-    (Section::Notes, "edit-section-notes"),
-    (Section::AdminMetadata, "edit-section-admin-metadata"),
-];
+use crate::record_form::{instance_field, work_field};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Section {
@@ -37,56 +25,243 @@ enum Section {
     Contributions,
     Subjects,
     Classification,
+    Responsibility,
+    Edition,
+    Provision,
+    PhysicalDescription,
+    MediaAndCarrier,
+    Identifiers,
+    Series,
     Relations,
     Notes,
+    ElectronicLocator,
     AdminMetadata,
 }
 
-/// The typed parts of a Work, by the property they hold.
-const TYPED_FIELDS: [(&str, WorkField); 7] = [
-    ("title", WorkField::Title),
-    ("contribution", WorkField::Contributions),
-    ("classification", WorkField::Classification),
-    ("language", WorkField::Languages),
-    ("subject", WorkField::Subjects),
-    ("summary", WorkField::Summary),
-    ("intendedAudience", WorkField::Audience),
-];
+/// How the form of one entity is laid out.
+struct Layout<F: 'static> {
+    entity: Entity,
+    /// The sections, in order, with the message key of each heading.
+    sections: &'static [(Section, &'static str)],
+    /// The typed parts, by the property they hold.
+    typed: &'static [(&'static str, &'static [F])],
+    /// Typed properties that also take statements of another shape.
+    with_statements: &'static [&'static str],
+    /// What the structure of the catalogue says (the entities above and below).
+    structure: &'static [&'static str],
+    /// Typed properties that have no field yet. The list only shrinks.
+    pending: &'static [&'static str],
+    section_of: fn(&Property) -> Section,
+}
 
-/// Typed properties that also take statements of another shape: variant titles, the
-/// languages of parts, described classifications, coded audiences.
-const TYPED_WITH_STATEMENTS: [&str; 4] =
-    ["title", "language", "classification", "intendedAudience"];
+const WORK: Layout<WorkField> = Layout {
+    entity: Entity::Work,
+    sections: &[
+        (Section::Title, "edit-section-title"),
+        (Section::Content, "edit-section-content"),
+        (Section::Contributions, "edit-section-contributions"),
+        (Section::Subjects, "edit-section-subjects"),
+        (Section::Classification, "edit-section-classification"),
+        (Section::Relations, "edit-section-relations"),
+        (Section::Notes, "edit-section-notes"),
+        (Section::AdminMetadata, "edit-section-admin-metadata"),
+    ],
+    typed: &[
+        ("title", &[WorkField::Title]),
+        ("contribution", &[WorkField::Contributions]),
+        ("classification", &[WorkField::Classification]),
+        ("language", &[WorkField::Languages]),
+        ("subject", &[WorkField::Subjects]),
+        ("summary", &[WorkField::Summary]),
+        ("intendedAudience", &[WorkField::Audience]),
+    ],
+    // Variant titles, the languages of parts, described classifications, coded audiences.
+    with_statements: &["title", "language", "classification", "intendedAudience"],
+    structure: &["expressionOf", "hasExpression", "hasInstance"],
+    pending: &[
+        "continues",
+        "derivativeOf",
+        "partOf",
+        "supplementTo",
+        "translationOf",
+    ],
+    section_of: work_section,
+};
 
-/// What the structure of the catalogue says: the Hub above and the Instances below.
-const STRUCTURE: [&str; 3] = ["expressionOf", "hasExpression", "hasInstance"];
+const INSTANCE: Layout<InstanceField> = Layout {
+    entity: Entity::Instance,
+    sections: &[
+        (Section::Title, "edit-section-title"),
+        (Section::Responsibility, "edit-section-responsibility"),
+        (Section::Edition, "edit-section-edition"),
+        (Section::Provision, "edit-section-provision"),
+        (
+            Section::PhysicalDescription,
+            "edit-section-physical-description",
+        ),
+        (Section::MediaAndCarrier, "edit-section-media-and-carrier"),
+        (Section::Content, "edit-section-content"),
+        (Section::Identifiers, "edit-section-identifiers"),
+        (Section::Series, "edit-section-series"),
+        (Section::Relations, "edit-section-relations"),
+        (Section::Notes, "edit-section-notes"),
+        (
+            Section::ElectronicLocator,
+            "edit-section-electronic-locator",
+        ),
+        (Section::AdminMetadata, "edit-section-admin-metadata"),
+    ],
+    typed: &[
+        ("title", &[InstanceField::Title]),
+        ("editionStatement", &[InstanceField::Edition]),
+        (
+            "provisionActivity",
+            &[
+                InstanceField::Place,
+                InstanceField::Publisher,
+                InstanceField::Date,
+            ],
+        ),
+        ("extent", &[InstanceField::Extent]),
+        ("seriesStatement", &[InstanceField::Series]),
+        ("identifiedBy", &[InstanceField::Identifiers]),
+        ("note", &[InstanceField::Notes]),
+    ],
+    // Variant titles, production, distribution, manufacture and the coded publication,
+    // numbers of a named agency, notes of a type.
+    with_statements: &["title", "provisionActivity", "identifiedBy", "note"],
+    structure: &["instanceOf", "hasItem"],
+    pending: &[],
+    section_of: instance_section,
+};
 
-/// Typed relations to other Works, which have no field yet. The list only shrinks.
-const PENDING: [&str; 5] = [
-    "continues",
-    "derivativeOf",
-    "partOf",
-    "supplementTo",
-    "translationOf",
-];
-
-fn section_of(property: &Property) -> Section {
+fn work_section(property: &Property) -> Section {
     match property.name {
         "title" => Section::Title,
         "contribution" => Section::Contributions,
         "subject" | "genreForm" | "geographicCoverage" | "temporalCoverage" => Section::Subjects,
         "classification" => Section::Classification,
-        "note" | "summary" | "tableOfContents" | "review" | "awards" | "credits"
-        | "preferredCitation" | "custodialHistory" | "historyOfWork" => Section::Notes,
         "adminMetadata" => Section::AdminMetadata,
+        _ if is_note(property) => Section::Notes,
         _ if is_relation(property) => Section::Relations,
         _ => Section::Content,
     }
 }
 
+fn instance_section(property: &Property) -> Section {
+    match property.name {
+        "title" => Section::Title,
+        "responsibilityStatement" | "contribution" => Section::Responsibility,
+        "editionStatement" | "editionEnumeration" => Section::Edition,
+        "provisionActivity"
+        | "provisionActivityStatement"
+        | "publicationStatement"
+        | "productionStatement"
+        | "distributionStatement"
+        | "manufactureStatement"
+        | "copyrightDate"
+        | "phonogramDate"
+        | "copyrightRegistration" => Section::Provision,
+        "media" | "carrier" | "issuance" => Section::MediaAndCarrier,
+        "identifiedBy" => Section::Identifiers,
+        "seriesStatement"
+        | "seriesEnumeration"
+        | "subseriesStatement"
+        | "subseriesEnumeration"
+        | "hasSeries"
+        | "hasSubseries"
+        | "seriesOf"
+        | "subseriesOf" => Section::Series,
+        "subject"
+        | "genreForm"
+        | "classification"
+        | "intendedAudience"
+        | "illustrativeContent"
+        | "supplementaryContent"
+        | "natureOfContent"
+        | "contentAccessibility"
+        | "colorContent"
+        | "soundContent"
+        | "notation"
+        | "musicFormat"
+        | "cartographicAttributes"
+        | "scale"
+        | "aspectRatio"
+        | "duration"
+        | "dissertation"
+        | "frequency"
+        | "pubFrequency"
+        | "firstIssue"
+        | "lastIssue"
+        | "status" => Section::Content,
+        "electronicLocator" => Section::ElectronicLocator,
+        "adminMetadata" => Section::AdminMetadata,
+        _ if is_note(property) => Section::Notes,
+        _ if is_relation(property) => Section::Relations,
+        _ => Section::PhysicalDescription,
+    }
+}
+
+fn is_note(property: &Property) -> bool {
+    matches!(
+        property.name,
+        "note"
+            | "summary"
+            | "tableOfContents"
+            | "review"
+            | "awards"
+            | "credits"
+            | "preferredCitation"
+            | "custodialHistory"
+            | "historyOfWork"
+            | "acquisitionSource"
+            | "acquisitionTerms"
+    )
+}
+
 /// Every field of the Work of `record`, by section.
 pub(crate) fn work_sections(t: &I18n, record: &NewRecord) -> Vec<FormSection> {
-    let mut sections: Vec<(Section, FormSection)> = SECTIONS
+    // The category is the Work's classes, not a property: it opens the content.
+    let category = (
+        Section::Content,
+        work_field(t, record, WorkField::MaterialType).0,
+    );
+    lay_out(
+        &WORK,
+        category,
+        &record.work_description.statements,
+        |part| work_field(t, record, part).0,
+    )
+}
+
+/// Every field of the Instance of `record`, by section.
+pub(crate) fn instance_sections(t: &I18n, record: &NewRecord) -> Vec<FormSection> {
+    let material = record
+        .instance
+        .material_type
+        .unwrap_or(record.material_type);
+    // A new identifier starts as the category's usual one (an ISBN, an ISSN).
+    let identifier = profile_for(material).identifier;
+    let category = (
+        Section::MediaAndCarrier,
+        instance_field(t, record, identifier, InstanceField::MaterialType).0,
+    );
+    lay_out(
+        &INSTANCE,
+        category,
+        &record.instance.description.statements,
+        |part| instance_field(t, record, identifier, part).0,
+    )
+}
+
+fn lay_out<F: Copy>(
+    layout: &Layout<F>,
+    category: (Section, FormField),
+    statements: &[Statement],
+    typed_field: impl Fn(F) -> FormField,
+) -> Vec<FormSection> {
+    let mut sections: Vec<(Section, FormSection)> = layout
+        .sections
         .iter()
         .map(|(section, key)| {
             (
@@ -103,25 +278,21 @@ pub(crate) fn work_sections(t: &I18n, record: &NewRecord) -> Vec<FormSection> {
             form.fields.push(field);
         }
     };
-    // The category is the Work's classes, not a property: it opens the content.
-    push(
-        Section::Content,
-        work_field(t, record, WorkField::MaterialType).0,
-    );
-    for property in properties_of(Entity::Work) {
-        if STRUCTURE.contains(&property.name) || PENDING.contains(&property.name) {
+    push(category.0, category.1);
+    for property in properties_of(layout.entity) {
+        if layout.structure.contains(&property.name) || layout.pending.contains(&property.name) {
             continue;
         }
-        let section = section_of(property);
-        if let Some((_, part)) = TYPED_FIELDS.iter().find(|(name, _)| *name == property.name) {
-            push(section, work_field(t, record, *part).0);
+        let section = (layout.section_of)(property);
+        if let Some((_, parts)) = layout.typed.iter().find(|(name, _)| *name == property.name) {
+            for part in *parts {
+                push(section, typed_field(*part));
+            }
         }
-        if !is_typed(Entity::Work, property.name) || TYPED_WITH_STATEMENTS.contains(&property.name)
+        if !is_typed(layout.entity, property.name)
+            || layout.with_statements.contains(&property.name)
         {
-            push(
-                section,
-                statement_field(property, &record.work_description.statements),
-            );
+            push(section, statement_field(property, statements));
         }
     }
     sections.into_iter().map(|(_, form)| form).collect()
@@ -238,29 +409,47 @@ mod tests {
     use super::*;
     use crate::new_record::blank;
 
-    /// Form coverage (bibframe-completo.md, step 6): every property of a Work has a field,
-    /// except the structure of the catalogue and the relations still [`PENDING`].
-    #[test]
-    fn every_property_of_a_work_has_a_field() {
-        let t = I18n::english().unwrap();
-        let sections = work_sections(&t, &blank(MaterialType::Book));
+    fn uncovered<F>(layout: &Layout<F>, sections: &[FormSection]) -> Vec<&'static str> {
         let fields: Vec<&FormField> = sections.iter().flat_map(|s| &s.fields).collect();
-        let mut missing = Vec::new();
-        for property in properties_of(Entity::Work) {
-            let typed = TYPED_FIELDS.iter().any(|(name, _)| *name == property.name);
-            let rows = fields.iter().any(|field| field.property == property.name);
-            let left = STRUCTURE.contains(&property.name) || PENDING.contains(&property.name);
-            if !(typed || rows || left) {
-                missing.push(property.name);
-            }
+        properties_of(layout.entity)
+            .map(|property| property.name)
+            .filter(|name| {
+                let typed = layout.typed.iter().any(|(typed, _)| typed == name);
+                let rows = fields.iter().any(|field| field.property == *name);
+                let left = layout.structure.contains(name) || layout.pending.contains(name);
+                !(typed || rows || left)
+            })
+            .collect()
+    }
+
+    /// Form coverage (bibframe-completo.md, step 6): every property of a Work and of an
+    /// Instance has a field, except the structure of the catalogue and what is pending.
+    #[test]
+    fn every_property_of_a_work_and_an_instance_has_a_field() {
+        let t = I18n::english().unwrap();
+        let record = blank(MaterialType::Book);
+        for (sections, missing, count) in [
+            (
+                work_sections(&t, &record),
+                uncovered(&WORK, &work_sections(&t, &record)),
+                WORK.sections.len(),
+            ),
+            (
+                instance_sections(&t, &record),
+                uncovered(&INSTANCE, &instance_sections(&t, &record)),
+                INSTANCE.sections.len(),
+            ),
+        ] {
+            assert!(
+                missing.is_empty(),
+                "properties without a field: {missing:?}"
+            );
+            assert_eq!(sections.len(), count);
+            assert!(sections.iter().all(|section| !section.fields.is_empty()));
+            let fields = || sections.iter().flat_map(|s| &s.fields);
+            assert!(fields().any(|field| field.change == "MaterialType"));
         }
-        assert!(
-            missing.is_empty(),
-            "properties without a field: {missing:?}"
-        );
-        assert!(fields.iter().any(|field| field.change == "MaterialType"));
-        assert_eq!(sections.len(), SECTIONS.len());
-        assert!(sections.iter().all(|section| !section.fields.is_empty()));
+        assert!(INSTANCE.pending.is_empty());
     }
 
     #[test]

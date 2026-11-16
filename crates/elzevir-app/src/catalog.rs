@@ -197,6 +197,14 @@ pub enum InstanceChange {
     Identifiers(Vec<NewIdentifier>),
     /// Notes.
     Notes(Vec<NewNote>),
+    /// The statements of one property, replaced whole (docs/specs/catalogo/
+    /// bibframe-completo.md, items 24 to 26).
+    Statements {
+        /// The property's local name.
+        property: String,
+        /// Its statements, in order.
+        statements: Vec<Statement>,
+    },
 }
 
 /// A record to import with a matching rule.
