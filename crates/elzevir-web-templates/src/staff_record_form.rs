@@ -21,9 +21,29 @@ pub struct RecordForm<'a> {
     /// Where the block's history is read, for a Work or an Instance
     /// (docs/specs/catalogo/historico.md).
     pub history: Option<String>,
-    /// What saving changes besides this block, such as the records an authority names
-    /// (docs/specs/catalogo/autoridades.md); in the screen's language.
-    pub reach: Option<String>,
+    /// For an authority's block, what saving changes and where else it is identified
+    /// (docs/specs/catalogo/autoridades.md).
+    pub authority: Option<AuthorityNote>,
+}
+
+/// What an authority's block says before its field.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthorityNote {
+    /// How many Works and records saving changes, in the screen's language.
+    pub reach: String,
+    /// Its identifiers in other datasets.
+    pub identifiers: Vec<IdentifierChip>,
+}
+
+/// An identifier of an authority in another dataset, shown as a chip.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdentifierChip {
+    /// The dataset, such as `VIAF`, or the identifier itself when no dataset is known.
+    pub label: String,
+    /// The identifier as stored.
+    pub value: String,
+    /// Where it opens, for an identifier that is a web address.
+    pub href: Option<String>,
 }
 
 /// The history of a Work or an Instance (docs/specs/catalogo/historico.md).

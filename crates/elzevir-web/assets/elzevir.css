@@ -322,6 +322,10 @@ a.field-value:hover { text-decoration: underline; }
    never rests on colour alone. */
 .signal-icon { flex: none; width: 14px; height: 14px; margin-right: 3px; vertical-align: -2px; color: var(--signal-border, var(--text-muted)); }
 .chip .badge-icon { width: 14px; height: 14px; margin-right: 4px; vertical-align: -2px; color: var(--text-muted); }
+.form-identifiers { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; }
+.form-identifiers .field-label { margin-right: 4px; }
+.chip-identifier { text-decoration: none; color: var(--auth-accent); border-color: var(--auth-border); }
+a.chip-identifier:hover { text-decoration: underline; }
 .entity-pill .badge-icon { width: 12px; height: 12px; margin-right: 4px; vertical-align: -2px; }
 .item-signal::after { content: " ·"; font-weight: 600; opacity: 0.6; }
 .item-pill.more-items { justify-content: center; border: 1.5px dashed var(--inst-accent); background: var(--hub-bg); font-weight: 700; }

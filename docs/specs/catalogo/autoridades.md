@@ -1,6 +1,6 @@
 # Autoridades (v0)
 
-> Status: v0, tarefa 2.9: renomear um agente (2.9a), ligar uma autoridade por papel (2.9b) e renomear um assunto (2.9c). Base: [spec de interação](../../UI_BIBFRAME_INTERACTION_SPEC.md), §16.3, e [edição](edicao.md). Critério da tarefa: **renomear um agente sobe o `row_version` das Instâncias ligadas e aparece no OPAC e no MARC exportado**.
+> Status: v0, tarefa 2.9: renomear um agente (2.9a), ligar uma autoridade por papel (2.9b) renomear um assunto (2.9c) e local de publicação e identificadores externos (2.9d). Base: [spec de interação](../../UI_BIBFRAME_INTERACTION_SPEC.md), §16.3, e [edição](edicao.md). Critério da tarefa: **renomear um agente sobe o `row_version` das Instâncias ligadas e aparece no OPAC e no MARC exportado**.
 
 ## 1. Comportamento
 
@@ -29,12 +29,17 @@
 13. Salvar manda `catalog.update_subject` (`POST /equipe/acervo/assunto/{id}`), que segue as regras do item 3 com duas diferenças: o cabeçalho tomado é o de outro assunto da mesma classe, do mesmo tesauro e com as mesmas subdivisões (juntar é mesclagem); e um assunto com subdivisões tipadas (`madsrdf:ComplexSubject`) só aceita um cabeçalho com o mesmo número de partes depois de ` -- `, porque o tipo de cada subdivisão vale pela posição. Mudar as subdivisões é no formulário da Obra. A versão do assunto vem da migração 40.
 14. O MARC exportado escreve o cabeçalho novo no `6XX` dos registros ligados; o OPAC e a busca o mostram depois do indexador.
 
+### Local de publicação e identificadores externos (2.9d)
+
+15. O painel "+ Autoridade" tem um terceiro papel, **local de publicação** (`bf:place` da `bf:provisionActivity`), que só aceita a classe lugar e vai para **uma Instância** da Obra: a primeira, ou a escolhida numa lista do painel quando a Obra tem mais de uma, pelo título, pela publicação e pelo ISBN do cartão (`?instancia=` no painel e no envio). Sem Instância, ou com outra classe, o pedido é recusado no campo; Instância de outra Obra, 404; o mesmo lugar que a Instância já tem, "já ligada". Grava o lugar da Instância, sobe a versão e reindexa só o registro dela; o histórico da Instância lista "Lugar". O MARC exportado escreve o lugar no `260`/`264 $a`. A página do OPAC ainda não mostra o lugar (só editora e data), como antes.
+16. O bloco de um agente ou de um assunto mostra, abaixo do alcance, os **identificadores em outras bases** (`bf:identifiedBy`, `$0` e `$1` do MARC) que as Obras que o nomeiam trazem, cada um uma vez e até 50, como chips: um endereço web abre numa aba nova com o nome da base (LC, VIAF, Wikidata, ISNI, ORCID, GND, WorldCat) ou com o domínio; um número de controle aparece como está. Os identificadores continuam por contribuição e por assunto de cada Obra, como o MARC os traz; editá-los é no formulário da Obra.
+
 ## 2. Origem no Koha
 
 - `C4::AuthoritiesMarc::merge` propaga a mudança de uma autoridade para os registros bibliográficos ligados pelo `$9`, em lote (`AuthorityMergeLimit`; acima dele, pelo cron `merge_authorities.pl`). Aqui o agente é a própria linha que os registros referenciam: renomear é uma linha, e o que se propaga é só a versão e a reindexação.
 
 ## 3. Paridade
 
-`livre`: interface e modelo. Ficam para as próximas partes da 2.9: o papel "local de publicação" (Lugar ligado à Instância), identificadores externos como chips e os rótulos do LCGFT.
+`livre`: interface e modelo. Fica para a próxima parte da 2.9: os rótulos do LCGFT. Lugares como cadastro próprio (hoje o lugar da Instância é texto) ficam para depois da Fase 2.
 
 Testes: `crates/elzevir-app/src/authorities.rs` (validação do renomear e do papel), `crates/elzevir/tests/opac.rs` (renomear agente e assunto e ligar na loja real: versões, posição, recusas, página do OPAC, busca e MARC exportado) e `crates/elzevir-web/tests/staff_catalog.rs` (rotas, permissões, alcance, formulário e recusas).

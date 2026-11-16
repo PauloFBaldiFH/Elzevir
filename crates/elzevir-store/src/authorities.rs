@@ -2,13 +2,15 @@
 //! Editing an agent or a subject once for every record that names it, and linking one
 //! to a Work (docs/specs/catalogo/autoridades.md).
 
-use elzevir_app::authorities::{AgentView, AuthorityReader, SubjectView};
+use elzevir_app::authorities::{AgentView, AuthorityReader, MAX_IDENTIFIERS, SubjectView};
 use elzevir_app::catalog::{
-    AgentChange, AgentUpdate, AuthorityRole, CatalogOutput, CatalogReadError, CatalogRefusal,
-    NewContribution, NewSubject, SubjectUpdate, WorkAuthority,
+    AgentChange, AgentUpdate, AuthorityLink, AuthorityRole, CatalogOutput, CatalogReadError,
+    CatalogRefusal, NewContribution, NewSubject, SubjectUpdate, WorkAuthority,
 };
 use elzevir_app::commands::WriteRefusal;
-use elzevir_domain::catalog::{AgentId, AgentKind, InstanceId, SubjectId, SubjectKind};
+use elzevir_domain::catalog::{
+    AgentId, AgentKind, AuthorityLinkKind, InstanceId, SubjectId, SubjectKind, WorkId,
+};
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::catalog::{exists, link_contributions_at, link_subjects_at, record_changed, refused};
@@ -264,6 +266,9 @@ pub(crate) fn link_authority(
             )?;
             link_subjects_at(connection, work.0, next, &[subject])?;
         }
+        AuthorityRole::PublicationPlace { instance, heading } => {
+            return publication_place(tx, link.work, *instance, heading);
+        }
     }
     let row_version = bump(
         connection,
@@ -286,6 +291,48 @@ pub(crate) fn link_authority(
     Ok(CatalogOutput::WorkUpdated { work, row_version })
 }
 
+/// The place of publication of `instance`, which must be of `work`; only the Instance's
+/// record changes.
+fn publication_place(
+    tx: &WriteTx<'_>,
+    work: WorkId,
+    instance: InstanceId,
+    heading: &str,
+) -> Result<CatalogOutput, CommandFailed<WriteRefusal>> {
+    let connection = tx.connection();
+    let place: Option<Option<String>> = connection
+        .query_row(
+            "SELECT place FROM instances WHERE id = ?1 AND work_id = ?2",
+            params![instance.0, work.0],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(StoreError::from)?;
+    let Some(place) = place else {
+        return Err(refused(CatalogRefusal::UnknownInstance(instance)));
+    };
+    if place.as_deref() == Some(heading) {
+        return Err(refused(CatalogRefusal::AlreadyLinked(heading.to_owned())));
+    }
+    connection
+        .execute(
+            "UPDATE instances SET place = ?2 WHERE id = ?1",
+            params![instance.0, heading],
+        )
+        .map_err(StoreError::from)?;
+    record_changed(tx, instance)?;
+    let row_version = version(
+        connection,
+        "SELECT row_version FROM instances WHERE id = ?1",
+        instance.0,
+    )?
+    .unwrap_or_default();
+    Ok(CatalogOutput::InstanceUpdated {
+        instance,
+        row_version,
+    })
+}
+
 fn exists_with(
     connection: &Connection,
     sql: &str,
@@ -299,6 +346,35 @@ fn exists_with(
 
 fn next_position(connection: &Connection, sql: &str, work: i64) -> Result<i64, StoreError> {
     Ok(connection.query_row(sql, params![work], |row| row.get(0))?)
+}
+
+impl ElzevirStore {
+    /// The distinct identifiers `sql` (a constant taking the authority as `?1` and the
+    /// limit as `?2`) selects, up to [`MAX_IDENTIFIERS`].
+    fn identifiers(
+        &self,
+        sql: &'static str,
+        id: i64,
+    ) -> Result<Vec<AuthorityLink>, CatalogReadError> {
+        let limit = i64::try_from(MAX_IDENTIFIERS).unwrap_or(i64::MAX);
+        let rows: Vec<(u8, String)> = self
+            .readers()
+            .read(|c| {
+                let mut statement = c.prepare_cached(sql)?;
+                statement
+                    .query_map(params![id, limit], |row| Ok((row.get(0)?, row.get(1)?)))?
+                    .collect::<Result<_, _>>()
+            })
+            .map_err(|e: rusqlite::Error| CatalogReadError(e.to_string()))?;
+        rows.into_iter()
+            .map(|(code, value)| {
+                let kind = AuthorityLinkKind::from_code(code).ok_or_else(|| {
+                    CatalogReadError(format!("unknown identifier kind {code} (newer schema?)"))
+                })?;
+                Ok(AuthorityLink { kind, value })
+            })
+            .collect()
+    }
 }
 
 impl AuthorityReader for ElzevirStore {
@@ -340,6 +416,13 @@ impl AuthorityReader for ElzevirStore {
                     version,
                     works: usize::try_from(works).unwrap_or_default(),
                     instances: usize::try_from(instances).unwrap_or_default(),
+                    identifiers: self.identifiers(
+                        "SELECT DISTINCT i.kind, i.value FROM contribution_identifiers i
+                         JOIN contributions c ON c.work_id = i.work_id
+                                             AND c.position = i.contribution
+                         WHERE c.agent_id = ?1 ORDER BY i.kind, i.value LIMIT ?2",
+                        id.0,
+                    )?,
                 })
             })
             .transpose()
@@ -386,6 +469,13 @@ impl AuthorityReader for ElzevirStore {
                     version,
                     works: usize::try_from(works).unwrap_or_default(),
                     instances: usize::try_from(instances).unwrap_or_default(),
+                    identifiers: self.identifiers(
+                        "SELECT DISTINCT i.kind, i.value FROM subject_identifiers i
+                         JOIN work_subjects w ON w.work_id = i.work_id
+                                             AND w.position = i.subject
+                         WHERE w.subject_id = ?1 ORDER BY i.kind, i.value LIMIT ?2",
+                        id.0,
+                    )?,
                 })
             })
             .transpose()
