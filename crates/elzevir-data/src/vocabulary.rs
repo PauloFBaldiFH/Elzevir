@@ -4,9 +4,12 @@
 //!
 //! The concepts are generated from the pinned bulk downloads of `id.loc.gov`; codes,
 //! IRIs and English labels are the Library of Congress's. Which property takes which
-//! vocabulary is the one table written by hand here, [`PROPERTY_SCHEMES`].
+//! vocabulary is the one table written by hand here, [`PROPERTY_SCHEMES`]. The LCGFT
+//! genre/form terms that `bf:genreForm` names by IRI (item 12) come from the same kind of
+//! download but are not a scheme: no property offers them as a closed list.
 
 use crate::generated::vocabularies::{SCHEMES, SOURCES};
+use crate::generated::vocabulary_genreforms::{GENRE_FORMS, GENRE_FORMS_SOURCE};
 
 /// One downloaded file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -196,6 +199,25 @@ pub fn scheme(name: &str) -> Option<&'static Scheme> {
     SCHEMES.get(at).copied()
 }
 
+/// The LCGFT terms (`id.loc.gov/authorities/genreForms`), sorted by identifier.
+#[must_use]
+pub fn genre_forms() -> &'static Scheme {
+    &GENRE_FORMS
+}
+
+/// The downloaded LCGFT file.
+#[must_use]
+pub fn genre_forms_source() -> &'static VocabularySource {
+    &GENRE_FORMS_SOURCE
+}
+
+/// The LCGFT term an `id.loc.gov` IRI names, for its label.
+#[must_use]
+pub fn genre_form(iri: &str) -> Option<&'static Concept> {
+    let code = iri.strip_prefix(GENRE_FORMS.iri)?.strip_prefix('/')?;
+    GENRE_FORMS.concept(code)
+}
+
 /// The vocabularies the values of `property` come from, empty for a property that takes
 /// free text or another resource.
 pub fn schemes_of(property: &str) -> impl Iterator<Item = &'static Scheme> {
@@ -228,6 +250,26 @@ mod tests {
                 scheme.name
             );
         }
+    }
+
+    #[test]
+    fn the_genre_forms_are_the_pinned_lcgft_apart_from_the_schemes() {
+        assert_eq!(genre_forms().concepts.len(), 2681);
+        assert!(genre_forms().concepts.is_sorted_by(|a, b| a.code < b.code));
+        assert!(
+            genre_forms_source()
+                .url
+                .ends_with("/genreForms.skosrdf.nt.gz")
+        );
+        assert!(scheme("genreForms").is_none());
+        let fiction = "http://id.loc.gov/authorities/genreForms/gf2014026339";
+        assert_eq!(genre_form(fiction).unwrap().label, "Fiction");
+        assert_eq!(
+            genre_forms().concept_iri("gf2015026020"),
+            "http://id.loc.gov/authorities/genreForms/gf2015026020"
+        );
+        assert!(genre_form("http://id.loc.gov/authorities/genreForms/gf0").is_none());
+        assert!(genre_form("http://id.loc.gov/vocabulary/contentTypes/txt").is_none());
     }
 
     #[test]

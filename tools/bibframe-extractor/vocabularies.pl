@@ -4,7 +4,9 @@
 # LC vocabulary extractor: reads the pinned bulk downloads of id.loc.gov
 # (reference/loc-vocabularies/*.skosrdf.nt.gz) and writes
 # data/loc/vocabularies.json, the concepts that `cargo xtask codegen` turns into
-# Rust (docs/specs/catalogo/bibframe-completo.md, item 11).
+# Rust (docs/specs/catalogo/bibframe-completo.md, items 11 and 12): the vocabularies
+# of id.loc.gov/vocabulary and the genre/form terms of the LCGFT
+# (id.loc.gov/authorities/genreForms), which bf:genreForm names by IRI.
 #
 # Usage (from the repository root):
 #   perl tools/bibframe-extractor/vocabularies.pl           # write
@@ -25,13 +27,14 @@ use constant OUT_PATH  => 'data/loc/vocabularies.json';
 use constant NAMESPACE => 'http://id.loc.gov/vocabulary/';
 use constant SKOS      => 'http://www.w3.org/2004/02/skos/core#';
 use constant CHANGESET => 'http://purl.org/vocab/changeset/schema#';
+use constant GENRE_FORMS => 'http://id.loc.gov/authorities/genreForms';
 
 # The bulk files of https://id.loc.gov/download/, as fetched.
 my @SOURCES = qw(cataloging languages countries);
 
 my $check = grep { $_ eq '--check' } @ARGV;
 
-my ( @sources, %concepts );
+my ( @sources, %concepts, $genre_forms );
 for my $name (@SOURCES) {
     my $path = "reference/loc-vocabularies/$name.skosrdf.nt.gz";
     my $gz   = slurp($path);
@@ -44,6 +47,37 @@ for my $name (@SOURCES) {
         sha256 => sha256_hex($gz),
     };
     read_triples( $path, $text, \%concepts );
+}
+
+# The LCGFT is an authority file, not a vocabulary: its terms stay apart from the
+# schemes, so that no property offers them as a closed list.
+my %genre_concepts;
+{
+    my $path = 'reference/loc-vocabularies/genreForms.skosrdf.nt.gz';
+    my $gz   = slurp($path);
+    gunzip( \$gz => \my $bytes ) or die "$path: $GunzipError\n";
+    my $text = $bytes;
+    utf8::decode($text) or die "$path is not UTF-8\n";
+    read_triples( $path, $text, \%genre_concepts );
+    my @terms;
+    for my $iri ( sort keys %genre_concepts ) {
+        my $concept = $genre_concepts{$iri};
+        next unless $concept->{concept} && @{ $concept->{in_scheme} };
+        grep { $_ eq GENRE_FORMS } @{ $concept->{in_scheme} } or die "$iri is not an LCGFT term\n";
+        $iri =~ m{^\Q@{[GENRE_FORMS]}\E/(gf[0-9]+)$} or die "$iri is not an LCGFT identifier\n";
+        push @terms, {
+            code       => $1,
+            label      => label( $iri, $concept ),
+            deprecated => $concept->{deprecated} ? JSON::PP::true : JSON::PP::false,
+        };
+    }
+    $genre_forms = {
+        file     => $path,
+        url      => 'https://id.loc.gov/download/authorities/genreForms.skosrdf.nt.gz',
+        sha256   => sha256_hex($gz),
+        iri      => GENRE_FORMS,
+        concepts => \@terms,
+    };
 }
 
 my %schemes;
@@ -68,6 +102,7 @@ for my $iri ( sort keys %concepts ) {
 }
 
 my $data = {
+    genre_forms => $genre_forms,
     sources => \@sources,
     schemes => [
         map { { name => $_, iri => NAMESPACE . $_, concepts => [ sort { $a->{code} cmp $b->{code} } @{ $schemes{$_} } ] } }
@@ -88,7 +123,7 @@ make_path('data/loc');
 spew( OUT_PATH, $json );
 my $count = 0;
 $count += @{ $_->{concepts} } for @{ $data->{schemes} };
-print "wrote @{[OUT_PATH]}: @{[scalar keys %schemes]} schemes, $count concepts\n";
+print "wrote @{[OUT_PATH]}: @{[scalar keys %schemes]} schemes, $count concepts, @{[scalar @{ $genre_forms->{concepts} }]} LCGFT terms\n";
 
 # Collects, per subject, what the extractor needs: whether it is a skos:Concept,
 # its scheme, its labels by language, and whether a change set deprecates it.

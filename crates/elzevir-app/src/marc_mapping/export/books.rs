@@ -206,6 +206,25 @@ mod tests {
     use super::super::super::{Marc, books};
     use super::*;
 
+    /// Every term the way in writes or the way back reads is a current LCGFT term, so
+    /// the OPAC shows its label (bibframe-completo.md, item 12).
+    #[test]
+    fn every_genre_of_the_book_positions_is_a_current_lcgft_term() {
+        let ways_in = CONTENTS.iter().filter_map(|(_, content)| match content {
+            Content::Genre(id) => Some(*id),
+            Content::Supplement(_) => None,
+        });
+        let ways_back = MORE_CONTENTS
+            .iter()
+            .chain(&LITERARY_FORMS)
+            .chain(&BIOGRAPHIES)
+            .map(|(id, _)| *id);
+        for id in ways_in.chain(ways_back).chain([CONFERENCE, FESTSCHRIFT]) {
+            let term = elzevir_data::vocabulary::genre_form(&format!("{GENRE_FORMS}{id}"));
+            assert!(term.is_some_and(|term| !term.deprecated), "{id}");
+        }
+    }
+
     fn fixed(record: &Record) -> String {
         match record.fields.first() {
             Some(Field::Control { value, .. }) => String::from_utf8_lossy(value).into_owned(),

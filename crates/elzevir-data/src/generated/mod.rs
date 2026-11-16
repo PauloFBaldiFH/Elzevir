@@ -24,4 +24,5 @@ pub(crate) mod search_fields;
 pub(crate) mod vocabularies;
 pub(crate) mod vocabulary_cataloging;
 pub(crate) mod vocabulary_countries;
+pub(crate) mod vocabulary_genreforms;
 pub(crate) mod vocabulary_languages;

@@ -2,7 +2,8 @@
 //! Generates the Library of Congress vocabularies in `elzevir-data` from
 //! `data/loc/vocabularies.json`, which `tools/bibframe-extractor/vocabularies.pl` writes
 //! from the pinned bulk downloads (docs/specs/catalogo/bibframe-completo.md, item 11).
-//! One file per downloaded file, so no generated file grows past the size limit.
+//! One file per downloaded file, so no generated file grows past the size limit; the
+//! LCGFT terms (item 12) have their own file and stay out of the schemes.
 
 use std::fmt::Write as _;
 
@@ -76,26 +77,7 @@ pub(crate) fn files(
         for scheme in &mine {
             let name = text(scheme, "/name")?;
             let constant = name.to_ascii_uppercase().replace('-', "_");
-            writeln!(
-                out,
-                "/// `{name}`.\n#[rustfmt::skip]\npub(crate) static {constant}: Scheme = Scheme {{ name: {name:?}, iri: {:?}, concepts: &[",
-                text(scheme, "/iri")?,
-            )
-            .map_err(fmt_error)?;
-            for concept in list(scheme, "/concepts")? {
-                writeln!(
-                    out,
-                    "    Concept {{ code: {:?}, label: {:?}, deprecated: {} }},",
-                    text(concept, "/code")?,
-                    text(concept, "/label")?,
-                    concept
-                        .pointer("/deprecated")
-                        .and_then(Value::as_bool)
-                        .ok_or("vocabularies.json: `deprecated` is not a boolean")?,
-                )
-                .map_err(fmt_error)?;
-            }
-            out.push_str("] };\n\n");
+            write_scheme(&mut out, &constant, name, scheme)?;
             all.push((name, format!("&super::{module}::{constant}")));
         }
         files.push(File {
@@ -122,7 +104,69 @@ pub(crate) fn files(
         name: "vocabularies.rs".to_owned(),
         source: index,
     });
+    files.push(genre_forms(json, from, header)?);
     Ok(files)
+}
+
+/// `vocabulary_genreforms.rs`: the LCGFT terms, apart from the schemes, so that no
+/// property offers them as a closed list (bibframe-completo.md, item 12).
+fn genre_forms(json: &Value, from: &str, header: &dyn Fn(&str) -> String) -> Result<File, String> {
+    let genre_forms = json
+        .pointer("/genre_forms")
+        .ok_or("vocabularies.json: no `genre_forms`")?;
+    let mut out = header(from);
+    writeln!(
+        out,
+        "//! The LCGFT terms, from `{}`.\n\n\
+         use crate::vocabulary::{{Concept, Scheme, VocabularySource}};\n\n\
+         /// The downloaded file.\n\
+         pub(crate) static GENRE_FORMS_SOURCE: VocabularySource = VocabularySource {{ file: {:?}, url: {:?}, sha256: {:?} }};\n",
+        text(genre_forms, "/file")?,
+        text(genre_forms, "/file")?,
+        text(genre_forms, "/url")?,
+        text(genre_forms, "/sha256")?,
+    )
+    .map_err(fmt_error)?;
+    let name = "genreForms";
+    let scheme = serde_json::json!({
+        "iri": text(genre_forms, "/iri")?,
+        "concepts": list(genre_forms, "/concepts")?,
+    });
+    write_scheme(&mut out, "GENRE_FORMS", name, &scheme)?;
+    Ok(File {
+        name: "vocabulary_genreforms.rs".to_owned(),
+        source: out,
+    })
+}
+
+/// Writes `scheme` (its `iri` and `concepts`) as the static `constant` called `name`.
+fn write_scheme(
+    out: &mut String,
+    constant: &str,
+    name: &str,
+    scheme: &Value,
+) -> Result<(), String> {
+    writeln!(
+        out,
+        "/// `{name}`.\n#[rustfmt::skip]\npub(crate) static {constant}: Scheme = Scheme {{ name: {name:?}, iri: {:?}, concepts: &[",
+        text(scheme, "/iri")?,
+    )
+    .map_err(fmt_error)?;
+    for concept in list(scheme, "/concepts")? {
+        writeln!(
+            out,
+            "    Concept {{ code: {:?}, label: {:?}, deprecated: {} }},",
+            text(concept, "/code")?,
+            text(concept, "/label")?,
+            concept
+                .pointer("/deprecated")
+                .and_then(Value::as_bool)
+                .ok_or("vocabularies.json: `deprecated` is not a boolean")?,
+        )
+        .map_err(fmt_error)?;
+    }
+    out.push_str("] };\n\n");
+    Ok(())
 }
 
 fn text<'a>(json: &'a Value, pointer: &str) -> Result<&'a str, String> {
@@ -147,6 +191,9 @@ mod tests {
     use super::*;
 
     const JSON: &str = r#"{
+        "genre_forms": {"file": "reference/loc-vocabularies/genreForms.skosrdf.nt.gz",
+            "url": "u", "sha256": "s", "iri": "http://id.loc.gov/authorities/genreForms",
+            "concepts": [{"code": "gf2014026339", "label": "Fiction", "deprecated": false}]},
         "sources": [
             {"file": "reference/loc-vocabularies/cataloging.skosrdf.nt.gz", "url": "u", "sha256": "s"},
             {"file": "reference/loc-vocabularies/languages.skosrdf.nt.gz", "url": "u", "sha256": "s"}
@@ -168,7 +215,8 @@ mod tests {
             [
                 "vocabulary_cataloging.rs",
                 "vocabulary_languages.rs",
-                "vocabularies.rs"
+                "vocabularies.rs",
+                "vocabulary_genreforms.rs"
             ]
         );
         assert!(files[0].source.contains("static CONTENTTYPES: Scheme"));
@@ -182,6 +230,13 @@ mod tests {
             files[2]
                 .source
                 .contains("&super::vocabulary_languages::LANGUAGES")
+        );
+        assert!(!files[2].source.contains("GENRE_FORMS"));
+        assert!(files[3].source.contains("static GENRE_FORMS: Scheme"));
+        assert!(
+            files[3]
+                .source
+                .contains(r#"code: "gf2014026339", label: "Fiction""#)
         );
     }
 }
