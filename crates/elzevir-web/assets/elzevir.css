@@ -515,6 +515,8 @@ a.field-value:hover { text-decoration: underline; }
 .item-grid tr.invalid td { background: var(--elzevir-color-out-bg); }
 .item-grid tr.row-new td:first-child, .item-grid tr.row-changed td:first-child { box-shadow: inset 3px 0 0 var(--elzevir-color-work); }
 .item-grid tr.row-new { background: color-mix(in srgb, var(--elzevir-color-work-bg) 60%, transparent); }
+.item-grid td.cell-suggested { font-style: italic; color: var(--text-muted); }
+.grid-suggestion { margin: 0 0 8px; }
 .item-grid .grid-signal { min-width: 0; width: 1.2rem; }
 .item-grid .grid-signal .signal-icon { margin-right: 0; }
 .item-grid .grid-signal-head { width: 1.2rem; }

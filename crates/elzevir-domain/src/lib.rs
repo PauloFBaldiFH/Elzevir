@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 
 pub mod calendar;
+pub mod call_number;
 pub mod catalog;
 pub mod circulation;
 pub mod due_date;

@@ -23,6 +23,7 @@ mod security;
 mod session;
 mod staff;
 
+use elzevir_domain::call_number::AuthorTable;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -50,6 +51,9 @@ pub struct WebConfig {
     /// Where the IRIs of the BIBFRAME export start; the requested host's `/bibframe` when
     /// `None` (bibframe-completo.md, item 28b).
     pub iri_base: Option<String>,
+    /// The library's author table, which the item grid's suggested call number reads
+    /// (docs/specs/catalogo/numero-de-chamada.md); no suggestion without one.
+    pub author_table: Option<Arc<AuthorTable>>,
 }
 
 impl Default for WebConfig {
@@ -58,6 +62,7 @@ impl Default for WebConfig {
             secure_cookies: true,
             session_idle: Duration::from_hours(8),
             iri_base: None,
+            author_table: None,
         }
     }
 }

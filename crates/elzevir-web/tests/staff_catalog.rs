@@ -24,6 +24,7 @@ use elzevir_app::search::SearchHit;
 use elzevir_app::staff::{
     Permission, StaffAccount, StaffDirectory, StaffDirectoryError, StaffId, hash_password,
 };
+use elzevir_domain::call_number::AuthorTable;
 use elzevir_domain::catalog::{
     AgentKind, BranchId, IdentifierKind, InstanceId, ItemId, NoteKind, PolicyId, WorkId,
 };
@@ -245,6 +246,12 @@ fn app() -> Router {
         I18n::english().unwrap(),
         WebConfig {
             secure_cookies: false,
+            // A made-up author table; the real ones are copyrighted.
+            author_table: Some(Arc::new(
+                AuthorTable::parse("Ass 847\nAssi 848\nAst 849\n")
+                    .unwrap()
+                    .0,
+            )),
             ..WebConfig::default()
         },
     ))
@@ -1258,6 +1265,12 @@ async fn a_cataloguer_gets_the_item_grid_with_its_rows_and_lists() {
     assert!(grid.contains(r#"<td role="gridcell" tabindex="-1" data-value="1">Main Library</td>"#));
     assert!(grid.contains(r#"<td role="gridcell" tabindex="-1" data-value="1">Normal loan</td>"#));
     assert!(grid.contains(r#"<datalist id="grid-list-branches"><option value="Main Library" data-code="1"></option><option value="East Branch" data-code="2"></option></datalist>"#));
+    // A new Item starts with the call number of the class and the author table
+    // (docs/specs/catalogo/numero-de-chamada.md).
+    assert!(grid.contains(r#" data-suggested="869.3 A848d">"#));
+    assert!(
+        grid.contains("Suggested call number: <strong>869.3 A848d</strong> (table entry Assi)")
+    );
 }
 
 fn post_form(uri: &str, session: Option<&str>, form: &str) -> Request<Body> {

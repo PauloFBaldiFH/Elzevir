@@ -22,6 +22,18 @@ pub struct ItemGrid<'a> {
     pub rows: Vec<GridRow>,
     /// The codes the cells with a list choose from.
     pub lists: Vec<GridList>,
+    /// The call number a new Item starts with, from the library's author table
+    /// (docs/specs/catalogo/numero-de-chamada.md).
+    pub suggestion: Option<SuggestedCallNumber>,
+}
+
+/// A call number suggested from the classification and the author table.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SuggestedCallNumber {
+    /// The whole call number.
+    pub call_number: String,
+    /// The table entry the author notation comes from, to check in the book.
+    pub entry: String,
 }
 
 /// One editable column.
