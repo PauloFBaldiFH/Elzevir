@@ -10,7 +10,8 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use elzevir_app::catalog::CatalogReadError;
 use elzevir_app::catalog::{
-    CatalogOutput, CatalogRefusal, InstanceChange, InstanceUpdate, WorkChange, WorkUpdate,
+    CatalogOutput, CatalogRefusal, InstanceChange, InstanceUpdate, PropertyEdit,
+    PropertyStatements, WorkChange, WorkUpdate,
 };
 use elzevir_app::editing::{
     Edit, EditFailed, FieldError, validate_instance_changes, validate_work_changes,
@@ -21,7 +22,7 @@ use elzevir_app::staff::Permission;
 use elzevir_app::statement_rows::{StatementRows, statements_of};
 use elzevir_app::suggestions::{AuthoritySuggestions, SUGGESTION_LIMIT, lookup_prefix};
 use elzevir_domain::catalog::{InstanceId, WorkId};
-use elzevir_domain::statement::{EntityKind, Statement};
+use elzevir_domain::statement::{EntityKind, EntityRef, Statement};
 use elzevir_web_templates::url_encode;
 use serde::{Deserialize, Serialize};
 
@@ -58,16 +59,17 @@ pub(crate) enum FormChange<C> {
 
 /// The changes of a Work or an Instance, with the rows of each property read into its
 /// statements (bibframe-completo.md, items 24 to 26).
-fn read_rows<C>(
+fn read_rows<M, C>(
     kind: EntityKind,
-    changes: Vec<FormChange<C>>,
+    changes: Vec<FormChange<M>>,
+    model: fn(M) -> C,
     statements: fn(String, Vec<Statement>) -> C,
 ) -> Result<Vec<C>, Vec<FieldError>> {
     let mut errors = Vec::new();
     let mut read = Vec::new();
     for change in changes {
         match change {
-            FormChange::Model(change) => read.push(change),
+            FormChange::Model(change) => read.push(model(change)),
             FormChange::Statements { rows } => match statements_of(kind, &rows) {
                 Ok((property, list)) => read.push(statements(property.to_owned(), list)),
                 Err(error) => errors.push(error),
@@ -183,12 +185,15 @@ pub(crate) async fn edit_work(
         Ok(session) => session,
         Err(status) => return status.into_response(),
     };
-    let read = read_rows(EntityKind::Work, body.changes, |property, statements| {
-        WorkChange::Statements {
+    let read = read_rows(
+        EntityKind::Work,
+        body.changes,
+        |change| change,
+        |property, statements| WorkChange::Statements {
             property,
             statements,
-        }
-    });
+        },
+    );
     let mut changes = match read {
         Ok(changes) => changes,
         Err(errors) => return invalid(&state, &errors),
@@ -218,6 +223,7 @@ pub(crate) async fn edit_instance(
     let read = read_rows(
         EntityKind::Instance,
         body.changes,
+        |change| change,
         |property, statements| InstanceChange::Statements {
             property,
             statements,
@@ -236,6 +242,71 @@ pub(crate) async fn edit_instance(
         changes,
     });
     apply(&state, &session, edit).await
+}
+
+/// No change but the rows of a property: what a Hub or an Item form sends.
+#[derive(Deserialize)]
+pub(crate) enum NoTypedPart {}
+
+/// `POST /equipe/acervo/matriz/{id}` and `POST /equipe/acervo/exemplar/{id}`: the
+/// statements of a Hub or an Item, by property (bibframe-completo.md, items 24 to 26).
+pub(crate) async fn edit_described(
+    state: &AppState,
+    headers: &HeaderMap,
+    subject: EntityRef,
+    body: EditBody<FormChange<NoTypedPart>>,
+) -> Response {
+    let session = match authorize(state, headers) {
+        Ok(session) => session,
+        Err(status) => return status.into_response(),
+    };
+    let read = read_rows(
+        subject.entity,
+        body.changes,
+        |never| match never {},
+        |property, statements| PropertyStatements {
+            property,
+            statements,
+        },
+    );
+    let changes = match read {
+        Ok(changes) => changes,
+        Err(errors) => return invalid(state, &errors),
+    };
+    let edit = Edit::Statements(Box::new(PropertyEdit {
+        subject,
+        row_version: body.version,
+        changes,
+    }));
+    apply(state, &session, edit).await
+}
+
+/// `POST /equipe/acervo/matriz/{id}`.
+pub(crate) async fn edit_hub(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+    Json(body): Json<EditBody<FormChange<NoTypedPart>>>,
+) -> Response {
+    let subject = EntityRef {
+        entity: EntityKind::Hub,
+        id,
+    };
+    edit_described(&state, &headers, subject, body).await
+}
+
+/// `POST /equipe/acervo/exemplar/{id}`.
+pub(crate) async fn edit_item(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+    Json(body): Json<EditBody<FormChange<NoTypedPart>>>,
+) -> Response {
+    let subject = EntityRef {
+        entity: EntityKind::Item,
+        id,
+    };
+    edit_described(&state, &headers, subject, body).await
 }
 
 /// Item 17: a session, its CSRF token, and the cataloguing permission.
@@ -280,7 +351,8 @@ pub(crate) async fn apply(state: &AppState, session: &ActiveSession, edit: Edit)
     match outcome {
         Ok(Ok(
             CatalogOutput::WorkUpdated { row_version, .. }
-            | CatalogOutput::InstanceUpdated { row_version, .. },
+            | CatalogOutput::InstanceUpdated { row_version, .. }
+            | CatalogOutput::StatementsSet { row_version, .. },
         )) => Json(Accepted {
             version: row_version,
         })
@@ -316,7 +388,9 @@ pub(crate) async fn apply(state: &AppState, session: &ActiveSession, edit: Edit)
             invalid_cells(state, &refusals)
         }
         Ok(Err(EditFailed::Refused(
-            CatalogRefusal::UnknownWork(_) | CatalogRefusal::UnknownInstance(_),
+            CatalogRefusal::UnknownWork(_)
+            | CatalogRefusal::UnknownInstance(_)
+            | CatalogRefusal::UnknownEntity(_),
         ))) => StatusCode::NOT_FOUND.into_response(),
         Ok(Err(EditFailed::Refused(refusal))) => {
             (StatusCode::UNPROCESSABLE_ENTITY, refusal.to_string()).into_response()

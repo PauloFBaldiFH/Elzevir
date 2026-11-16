@@ -78,6 +78,29 @@ pub enum CatalogCommand {
     /// Replaces every BIBFRAME statement of a Hub, Work, Instance or Item, if it is still
     /// at `row_version` (docs/specs/catalogo/bibframe-completo.md, items 10a to 10g).
     SetStatements(Box<StatementsUpdate>),
+    /// Replaces the statements of some properties of a Hub, Work, Instance or Item, if it
+    /// is still at `row_version` (docs/specs/catalogo/bibframe-completo.md, items 24 to 26).
+    EditStatements(Box<PropertyEdit>),
+}
+
+/// The statements of some properties of one entity, each property replaced whole.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PropertyEdit {
+    /// The entity described.
+    pub subject: EntityRef,
+    /// The version the editor read: the entity's own, or, for an Instance, its record's.
+    pub row_version: i64,
+    /// Each property with its new statements, in order.
+    pub changes: Vec<PropertyStatements>,
+}
+
+/// One property and every statement it now has.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PropertyStatements {
+    /// The property's local name.
+    pub property: String,
+    /// Its statements, in order.
+    pub statements: Vec<Statement>,
 }
 
 /// The statements of one entity, as `catalog.set_statements` stores them.
@@ -106,6 +129,14 @@ pub trait StatementReader {
     ///
     /// When the store cannot be read.
     fn description(&self, subject: EntityRef) -> Result<Description, CatalogReadError>;
+
+    /// The version an edit of `subject` names (its own, or for an Instance its record's);
+    /// `None` for an unknown entity.
+    ///
+    /// # Errors
+    ///
+    /// When the store cannot be read.
+    fn version(&self, subject: EntityRef) -> Result<Option<i64>, CatalogReadError>;
 }
 
 /// A new Instance of a stored Work.

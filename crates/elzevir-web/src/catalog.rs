@@ -8,7 +8,7 @@ use askama::Template;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{Html, IntoResponse, Redirect, Response};
-use elzevir_app::catalog::{CodeLists, ShelfSignal};
+use elzevir_app::catalog::{CodeLists, ShelfSignal, StatementReader};
 use elzevir_app::editing::CatalogEditor;
 use elzevir_app::export::{
     ExportOptions, RecordExportError, RecordFormat, RecordSource, export_record,
@@ -44,6 +44,9 @@ pub struct StaffPorts {
     pub suggestions: Arc<dyn AuthoritySuggestions + Send + Sync>,
     /// The Items of an Instance as the grid edits them (docs/specs/catalogo/exemplares.md).
     pub items: Arc<dyn ItemGridSource>,
+    /// The statements of any entity, for the forms of a Hub and an Item
+    /// (docs/specs/catalogo/bibframe-completo.md, step 6c).
+    pub statements: Arc<dyn StatementReader + Send + Sync>,
 }
 
 /// Query string of `/equipe/acervo`.

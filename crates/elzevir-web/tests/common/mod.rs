@@ -214,6 +214,7 @@ impl elzevir_app::editing::CatalogEditor for Editor {
             Edit::Work(update) => update.row_version,
             Edit::Instance(update) => update.row_version,
             Edit::Items(update) => update.row_version,
+            Edit::Statements(edit) => edit.row_version,
             Edit::NewInstance(new) if new.work.0 == 404 => {
                 return Err(EditFailed::Refused(CatalogRefusal::UnknownWork(new.work)));
             }
@@ -254,6 +255,10 @@ impl elzevir_app::editing::CatalogEditor for Editor {
                     .collect(),
             },
             Edit::Registry(_) => CatalogOutput::RegistryChanged(None),
+            Edit::Statements(edit) => CatalogOutput::StatementsSet {
+                subject: edit.subject,
+                row_version: 2,
+            },
             Edit::NewInstance(new) => CatalogOutput::InstanceAdded {
                 work: new.work,
                 instance: InstanceId(902),
@@ -329,5 +334,45 @@ impl elzevir_app::items::ItemGridSource for ItemGrid {
             },
             status: ItemStatus::default(),
         }])
+    }
+}
+
+/// Item 3 with one note of custodial history; every other entity unknown.
+pub(crate) struct Statements;
+
+impl elzevir_app::catalog::StatementReader for Statements {
+    fn statements(
+        &self,
+        subject: elzevir_domain::statement::EntityRef,
+    ) -> Result<Vec<elzevir_domain::statement::Statement>, CatalogReadError> {
+        Ok(self.description(subject)?.statements)
+    }
+
+    fn description(
+        &self,
+        subject: elzevir_domain::statement::EntityRef,
+    ) -> Result<elzevir_domain::statement::Description, CatalogReadError> {
+        use elzevir_domain::statement::{Description, EntityKind, Statement, Value};
+        if subject.entity != EntityKind::Item || subject.id != 3 {
+            return Ok(Description::default());
+        }
+        Ok(Description {
+            classes: Vec::new(),
+            statements: vec![Statement {
+                property: "custodialHistory".to_owned(),
+                value: Value::Literal {
+                    text: "Doação da família Baldi".to_owned(),
+                    language: None,
+                },
+            }],
+        })
+    }
+
+    fn version(
+        &self,
+        subject: elzevir_domain::statement::EntityRef,
+    ) -> Result<Option<i64>, CatalogReadError> {
+        use elzevir_domain::statement::EntityKind;
+        Ok((subject.entity == EntityKind::Item && subject.id == 3).then_some(4))
     }
 }

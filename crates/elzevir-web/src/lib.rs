@@ -8,6 +8,7 @@
 mod assets;
 mod catalog;
 mod creating;
+mod described;
 mod editing;
 mod form_sections;
 mod items;
@@ -146,6 +147,16 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/equipe/acervo/instancia/{id}/campos",
             get(record_fields::record_fields),
+        )
+        .route("/equipe/acervo/matriz/{id}", post(editing::edit_hub))
+        .route(
+            "/equipe/acervo/matriz/{id}/campos",
+            get(described::hub_form),
+        )
+        .route("/equipe/acervo/exemplar/{id}", post(editing::edit_item))
+        .route(
+            "/equipe/acervo/exemplar/{id}/campos",
+            get(described::item_form),
         )
         .route("/equipe/login", get(staff::login_form).post(staff::log_in))
         .route("/equipe/logout", post(staff::log_out))

@@ -78,6 +78,7 @@ impl WriteCommand {
                 "catalog.set_type_translations"
             }
             Self::Catalog(CatalogCommand::SetStatements(_)) => "catalog.set_statements",
+            Self::Catalog(CatalogCommand::EditStatements(_)) => "catalog.edit_statements",
         }
     }
 
