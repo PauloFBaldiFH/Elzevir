@@ -134,6 +134,7 @@ fn app(catalog: Arc<Catalog>, hits: Vec<SearchHit>) -> Router {
             suggestions: Arc::new(common::Suggestions),
             items: Arc::new(common::ItemGrid),
             statements: Arc::new(common::Statements),
+            history: Arc::new(common::History),
         },
         I18n::english().unwrap(),
         WebConfig::default(),

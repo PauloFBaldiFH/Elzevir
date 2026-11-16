@@ -11,6 +11,7 @@ mod creating;
 mod described;
 mod editing;
 mod form_sections;
+mod history;
 mod icons;
 mod items;
 mod new_record;
@@ -146,6 +147,14 @@ pub fn router(state: AppState) -> Router {
             get(new_record::new_instance),
         )
         .route("/equipe/acervo/obra/{id}", post(editing::edit_work))
+        .route(
+            "/equipe/acervo/obra/{id}/historico",
+            get(history::work_history),
+        )
+        .route(
+            "/equipe/acervo/instancia/{id}/historico",
+            get(history::instance_history),
+        )
         .route(
             "/equipe/acervo/obra/{id}/instancias",
             post(creating::create_instance),

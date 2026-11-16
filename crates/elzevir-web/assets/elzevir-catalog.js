@@ -996,6 +996,33 @@ document.addEventListener("keydown", (event) => {
   }
 }, true);
 
+// The History of the focused block (historico.md): read from the server the first time
+// it is shown; the times the server wrote in UTC are shown in the viewer's own time.
+document.addEventListener("click", async (event) => {
+  const toggle = event.target instanceof Element ? event.target.closest(".history-toggle") : null;
+  const box = toggle?.closest(".history-box");
+  const target = box?.querySelector(".history-body");
+  if (!toggle || !box || !target) return;
+  event.preventDefault();
+  const open = toggle.getAttribute("aria-expanded") !== "true";
+  toggle.setAttribute("aria-expanded", String(open));
+  target.hidden = !open;
+  if (!open || box.dataset.loaded) return;
+  try {
+    const response = await fetch(box.dataset.history, { credentials: "same-origin", headers: { Accept: "text/html" } });
+    if (!response.ok) return;
+    // Server-rendered by Askama, which escapes every value.
+    target.innerHTML = await response.text();
+    box.dataset.loaded = "1";
+  } catch {
+    return; // showing it again tries again
+  }
+  for (const time of target.querySelectorAll("time[datetime]")) {
+    const at = new Date(time.getAttribute("datetime"));
+    if (!Number.isNaN(at.getTime())) time.textContent = at.toLocaleString(document.documentElement.lang || undefined, { dateStyle: "short", timeStyle: "short" });
+  }
+});
+
 // The ISBN field is checked when the cataloguer leaves it (edicao.md, item 38). The server
 // says what the field holds and what to show; nothing is decided here.
 let isbnRound = 0;

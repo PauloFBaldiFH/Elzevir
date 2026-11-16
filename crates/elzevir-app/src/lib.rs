@@ -8,6 +8,7 @@ pub mod creating;
 pub mod description;
 pub mod editing;
 pub mod export;
+pub mod history;
 pub mod import;
 pub mod items;
 pub mod koha_types;

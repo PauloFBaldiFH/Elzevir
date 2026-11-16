@@ -443,6 +443,12 @@ a.field-value:hover { text-decoration: underline; }
 .record-form .isbn-note { flex-basis: 100%; font-size: 0.8rem; color: var(--text-muted); }
 .record-form .isbn-note.error { color: var(--elzevir-color-error); }
 .record-form .cell.invalid { border-color: var(--elzevir-color-error); }
+.record-form .history-box { margin-top: 12px; border-top: 1px solid var(--elzevir-color-border); padding-top: 8px; }
+.record-form .history-toggle { font-weight: 600; }
+.record-form .history-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: 0.85rem; }
+.record-form .history-when { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.record-form .history-who { font-weight: 600; }
+.record-form .history-empty { margin: 8px 0 0; font-size: 0.85rem; color: var(--text-muted); }
 .record-form .new-mark { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--elzevir-color-out-text); background: var(--elzevir-color-out-bg); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
 .card[data-level] { cursor: pointer; }
 .card[data-level]:focus-visible { outline: 3px solid var(--work-accent); outline-offset: 2px; }

@@ -18,7 +18,7 @@ use crate::editing::{bump, check_version, instances_of, version};
 use crate::{CommandFailed, ElzevirStore, StoreError, WriteTx};
 
 /// The number a subject or an entity value is stored with.
-const fn kind_number(kind: EntityKind) -> i64 {
+pub(crate) const fn kind_number(kind: EntityKind) -> i64 {
     match kind {
         EntityKind::Hub => 1,
         EntityKind::Work => 2,

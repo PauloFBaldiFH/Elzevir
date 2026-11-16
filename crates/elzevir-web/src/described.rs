@@ -86,5 +86,6 @@ async fn form(
         endpoint,
         version,
         sections: described_sections(subject.entity.bibframe(), &statements),
+        history: None,
     })
 }

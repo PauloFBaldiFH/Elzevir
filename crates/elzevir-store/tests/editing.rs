@@ -816,3 +816,90 @@ fn a_relations_edit_replaces_the_related_works() {
         .is_err()
     );
 }
+
+#[test]
+fn the_history_of_a_work_and_an_instance_says_who_changed_what_and_when() {
+    use elzevir_app::commands::StaffCommand;
+    use elzevir_app::editing::{CatalogEditor, Edit};
+    use elzevir_app::history::{Change, HistoryReader, Part, entry};
+    use elzevir_domain::statement::{EntityKind, EntityRef};
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = imported(&dir);
+    let WriteOutput::StaffCreated(ana) = store
+        .submit(WriteCommand::Staff(StaffCommand::Create {
+            login: "ana".to_owned(),
+            password_hash: "x".to_owned(),
+            permissions: BTreeSet::new(),
+        }))
+        .unwrap()
+        .wait()
+        .unwrap()
+    else {
+        panic!("no account");
+    };
+    let first = view(&store, 1);
+    store
+        .apply(
+            ana,
+            Edit::Work(WorkUpdate {
+                work: first.work,
+                row_version: first.work_version,
+                changes: vec![
+                    WorkChange::Summary(Some("Resumo novo.".to_owned())),
+                    WorkChange::Languages(vec!["por".to_owned()]),
+                ],
+            }),
+        )
+        .unwrap();
+    let first = view(&store, 1);
+    store
+        .apply(
+            ana,
+            Edit::Instance(InstanceUpdate {
+                instance: first.id,
+                row_version: first.version,
+                changes: vec![InstanceChange::Edition(Some("2. ed.".to_owned()))],
+            }),
+        )
+        .unwrap();
+    let history = |entity, id| -> Vec<_> {
+        store
+            .history(EntityRef { entity, id }, 10)
+            .unwrap()
+            .into_iter()
+            .map(entry)
+            .collect()
+    };
+    let work = history(EntityKind::Work, first.work.0);
+    assert_eq!(work.len(), 2, "{work:?}");
+    assert_eq!(work[1].change, Change::Imported);
+    assert_eq!(work[0].actor.as_deref(), Some("ana"));
+    assert_eq!(
+        work[0].change,
+        Change::Edited(vec![
+            Part::Field("Summary".to_owned()),
+            Part::Field("Languages".to_owned())
+        ])
+    );
+    let at = work[0].at.clone().unwrap();
+    assert_eq!(
+        (at.len(), at.get(10..11), at.get(19..)),
+        (20, Some("T"), Some("Z"))
+    );
+    // Newest first: the edit, then the import, which has no account.
+    let instance = history(EntityKind::Instance, 1);
+    assert_eq!(
+        instance
+            .iter()
+            .map(|line| line.change.clone())
+            .collect::<Vec<_>>(),
+        [
+            Change::Edited(vec![Part::Field("Edition".to_owned())]),
+            Change::Imported
+        ]
+    );
+    assert_eq!(instance[1].actor, None);
+    assert_eq!(history(EntityKind::Instance, 2).len(), 1);
+    assert_eq!(history(EntityKind::Instance, 9999), []);
+}

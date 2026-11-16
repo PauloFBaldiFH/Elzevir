@@ -18,6 +18,32 @@ pub struct RecordForm<'a> {
     pub version: i64,
     /// Every field, by section, filled or not.
     pub sections: Vec<FormSection>,
+    /// Where the block's history is read, for a Work or an Instance
+    /// (docs/specs/catalogo/historico.md).
+    pub history: Option<String>,
+}
+
+/// The history of a Work or an Instance (docs/specs/catalogo/historico.md).
+#[derive(Template)]
+#[template(path = "staff_history.html")]
+pub struct History<'a> {
+    /// Interface texts.
+    pub t: &'a I18n,
+    /// Its lines, newest first.
+    pub lines: Vec<HistoryLine>,
+}
+
+/// One line of a history, its texts already in the screen's language.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HistoryLine {
+    /// When, as stored (`YYYY-MM-DDTHH:MM:SSZ`); empty when not kept.
+    pub at: String,
+    /// When, as shown.
+    pub when: String,
+    /// Who.
+    pub who: String,
+    /// What.
+    pub what: String,
 }
 
 /// One fixed section of a form.

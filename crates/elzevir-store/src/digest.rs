@@ -34,18 +34,23 @@ pub(crate) fn database(connection: &Connection) -> Result<String, crate::StoreEr
     let mut hash = Fnv(FNV_OFFSET);
     for table in tables(connection)? {
         hash.sized(b'T', table.as_bytes());
-        let columns = column_count(connection, &table)?;
-        let order = (1..=columns)
-            .map(|n| n.to_string())
+        let columns: Vec<String> = column_names(connection, &table)?
+            .into_iter()
+            // When a command ran is not content: two runs of the same import differ in it.
+            .filter(|column| !(table == "audit_log" && column == "at"))
+            .collect();
+        let list = columns
+            .iter()
+            .map(|column| format!("\"{column}\""))
             .collect::<Vec<_>>()
             .join(", ");
-        // Table names come from sqlite_master of our own schema, never from input; quoting
+        // Table and column names come from our own schema, never from input; quoting
         // them is all an identifier needs (parameters cannot name tables).
-        let sql = format!("SELECT * FROM \"{table}\" ORDER BY {order}");
+        let sql = format!("SELECT {list} FROM \"{table}\" ORDER BY {list}");
         let mut statement = connection.prepare(&sql)?;
         let mut rows = statement.query([])?;
         while let Some(row) = rows.next()? {
-            for column in 0..columns {
+            for column in 0..columns.len() {
                 value(&mut hash, row.get_ref(column)?);
             }
         }
@@ -63,15 +68,12 @@ fn tables(connection: &Connection) -> Result<Vec<String>, rusqlite::Error> {
         .collect::<Result<_, _>>()
 }
 
-fn column_count(connection: &Connection, table: &str) -> Result<usize, rusqlite::Error> {
-    // SQLite allows at most 32767 columns, so a `u16` always fits.
-    connection
-        .query_row(
-            "SELECT count(*) FROM pragma_table_info(?1)",
-            [table],
-            |row| row.get::<_, u16>(0),
-        )
-        .map(usize::from)
+fn column_names(connection: &Connection, table: &str) -> Result<Vec<String>, rusqlite::Error> {
+    let mut statement =
+        connection.prepare("SELECT name FROM pragma_table_info(?1) ORDER BY cid")?;
+    statement
+        .query_map([table], |row| row.get(0))?
+        .collect::<Result<_, _>>()
 }
 
 fn value(hash: &mut Fnv, value: ValueRef<'_>) {
