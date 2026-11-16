@@ -251,3 +251,42 @@ fn every_imported_record_exports_as_bibframe_with_the_ontology_s_terms() {
             .is_none()
     );
 }
+
+#[test]
+fn every_imported_record_reads_back_from_its_turtle_as_stored() {
+    use elzevir_app::export::{RecordSource, stored_record};
+    use elzevir_app::rdf::{
+        IriBase, RdfFormat, ReadRecord, export_rdf_catalog, read_turtle, record_graph,
+        records_from, write_turtle,
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = imported(&dir);
+    let base = IriBase::new("https://biblioteca.example/bibframe");
+    let mut all = Vec::new();
+    for id in 1..=200 {
+        let instance = InstanceId(id);
+        let stored = stored_record(&store, instance).unwrap().unwrap();
+        let held = store.held_items(instance).unwrap();
+        let text = write_turtle(&record_graph(&stored, &held, &base));
+        let read = records_from(&read_turtle(&text).unwrap(), &base);
+        // The Items come back as the export sees them, and the source record stays out.
+        let mut record = stored.record;
+        record.items = Vec::new();
+        record.source = None;
+        let expected = ReadRecord {
+            work: stored.work,
+            instance,
+            record,
+            items: held,
+        };
+        assert_eq!(read, std::slice::from_ref(&expected), "record {id}");
+        all.push(expected);
+    }
+    // The whole catalogue, one document, reads back as the same records in order.
+    let mut text = Vec::new();
+    let batch = NonZeroUsize::new(7).unwrap();
+    export_rdf_catalog(&store, &mut text, RdfFormat::Turtle, &base, batch).unwrap();
+    let nodes = read_turtle(std::str::from_utf8(&text).unwrap()).unwrap();
+    assert_eq!(records_from(&nodes, &base), all);
+}

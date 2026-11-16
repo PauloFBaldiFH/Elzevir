@@ -31,6 +31,10 @@ clap = { version = "4", features = ["derive"] }
 fluent-bundle = "0.16"
 getrandom = "0.4"
 mimalloc = { version = "0.1", default-features = false }
+# Reader of the BIBFRAME Turtle the export writes, from Oxigraph: a W3C-conformant
+# parser, so the round trip is checked by a reader that is not ours.
+oxrdf = "0.3"
+oxttl = { version = "0.2", default-features = false }
 stats_alloc = "0.1"
 tantivy = { version = "0.27", default-features = false, features = ["mmap", "stemmer"] }
 http-body-util = "0.1"

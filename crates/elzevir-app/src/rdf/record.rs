@@ -11,7 +11,7 @@ use elzevir_domain::statement::{Description, EntityKind, EntityRef, Statement, V
 
 use super::items::{HeldItem, item_node};
 use super::mads::{describe_subject, name_elements};
-use super::{BF, IriBase, MADSRDF, Node, Object};
+use super::{BF, IriBase, MADSRDF, Node, Object, RDF};
 use crate::catalog::{AuthorityLink, NewContribution, NewInstance, NewRecord, NewSubject};
 use crate::export::StoredRecord;
 
@@ -227,6 +227,15 @@ fn linked(class: &str, label: &str, links: &[AuthorityLink]) -> Node {
                 format!("{MADSRDF}isIdentifiedByAuthority"),
                 Object::Iri(link.value.clone()),
             )),
+            // Another IRI of the thing itself is the value of an identifier as an IRI,
+            // so it reads back as a link to the thing and not to an authority record.
+            AuthorityLinkKind::RealWorldObject if is_iri => {
+                let mut identifier = Node::blank("Identifier");
+                identifier
+                    .properties
+                    .push((format!("{RDF}value"), Object::Iri(link.value.clone())));
+                node.node("identifiedBy", identifier);
+            }
             AuthorityLinkKind::AuthorityRecord | AuthorityLinkKind::RealWorldObject => {
                 let mut identifier = Node::blank("Identifier");
                 identifier.value(&link.value);
@@ -366,7 +375,7 @@ pub fn foreign_terms(nodes: &[Node]) -> Vec<String> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use elzevir_domain::catalog::{BranchId, HubId, InstanceId, ItemId, WorkId};
     use elzevir_domain::statement::Resource;
 
@@ -394,12 +403,16 @@ mod tests {
                 }],
                 identifiers: vec![
                     link(
-                        AuthorityLinkKind::AuthorityRecord,
-                        "http://id.loc.gov/authorities/names/n79029745",
+                        AuthorityLinkKind::RealWorldObject,
+                        "http://viaf.org/viaf/2467372",
                     ),
                     link(
                         AuthorityLinkKind::RealWorldObject,
-                        "http://viaf.org/viaf/2467372",
+                        "http://www.wikidata.org/entity/Q311145",
+                    ),
+                    link(
+                        AuthorityLinkKind::AuthorityRecord,
+                        "http://id.loc.gov/authorities/names/n79029745",
                     ),
                 ],
             },
@@ -415,7 +428,7 @@ mod tests {
         ]
     }
 
-    fn items() -> Vec<HeldItem> {
+    pub(in crate::rdf) fn items() -> Vec<HeldItem> {
         let shelved = HeldItem {
             id: ItemId(11),
             barcode: Some("000123".to_owned()),
@@ -450,7 +463,7 @@ mod tests {
         vec![shelved, lost]
     }
 
-    fn record() -> StoredRecord {
+    pub(in crate::rdf) fn record() -> StoredRecord {
         let (mut work, mut instance) = printed_book();
         work.statements.push(Statement {
             property: "genreForm".to_owned(),

@@ -7,11 +7,15 @@
 
 mod items;
 mod mads;
+mod parse;
+mod read;
 mod record;
 mod turtle;
 mod xml;
 
 pub use items::HeldItem;
+pub use parse::{RdfReadError, read_turtle};
+pub use read::{ReadRecord, records_from};
 pub use record::{foreign_terms, record_graph};
 pub use turtle::write_turtle;
 pub use xml::write_rdf_xml;
@@ -295,6 +299,35 @@ impl IriBase {
             EntityKind::Item => "items",
         };
         format!("{}/{kind}/{}", self.0, entity.id)
+    }
+
+    /// The Hub, Work, Instance or Item `iri` names, when it is one of the catalogue's.
+    #[must_use]
+    pub fn entity_of(&self, iri: &str) -> Option<EntityRef> {
+        let (kind, id) = iri
+            .strip_prefix(&self.0)?
+            .strip_prefix('/')?
+            .split_once('/')?;
+        let entity = match kind {
+            "hubs" => EntityKind::Hub,
+            "works" => EntityKind::Work,
+            "instances" => EntityKind::Instance,
+            "items" => EntityKind::Item,
+            _ => return None,
+        };
+        let id = id.parse().ok()?;
+        (self.entity(EntityRef { entity, id }) == iri).then_some(EntityRef { entity, id })
+    }
+
+    /// The unit `iri` names, when it is one of the catalogue's.
+    #[must_use]
+    pub fn organization_of(&self, iri: &str) -> Option<BranchId> {
+        let id = iri
+            .strip_prefix(&self.0)?
+            .strip_prefix("/organizations/")?
+            .parse()
+            .ok()?;
+        (self.organization(BranchId(id)) == iri).then_some(BranchId(id))
     }
 
     /// The IRI of a unit of the library, a `bf:Organization`.
