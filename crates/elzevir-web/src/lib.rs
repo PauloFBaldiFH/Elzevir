@@ -5,6 +5,7 @@
 //! (docs/arquitetura/04-decisoes.md, §5). The web layer reaches data only through
 //! `elzevir-app` ports; it never opens the database.
 
+mod access;
 mod assets;
 mod authorities;
 mod catalog;
@@ -38,6 +39,7 @@ use elzevir_app::memory::MemoryProbe;
 use elzevir_app::staff::StaffDirectory;
 use elzevir_web_templates::{I18n, OpacHome};
 
+pub use access::{AccessError, AccessPolicy, normalize_hostname, restrict_access};
 pub use catalog::StaffPorts;
 pub use opac::OpacPorts;
 pub use session::Sessions;
