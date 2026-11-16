@@ -379,7 +379,8 @@ pub(crate) async fn apply(state: &AppState, session: &ActiveSession, edit: Edit)
             CatalogOutput::WorkUpdated { row_version, .. }
             | CatalogOutput::InstanceUpdated { row_version, .. }
             | CatalogOutput::StatementsSet { row_version, .. }
-            | CatalogOutput::AgentUpdated { row_version, .. },
+            | CatalogOutput::AgentUpdated { row_version, .. }
+            | CatalogOutput::SubjectUpdated { row_version, .. },
         )) => Json(Accepted {
             version: row_version,
         })
@@ -418,8 +419,23 @@ pub(crate) async fn apply(state: &AppState, session: &ActiveSession, edit: Edit)
             CatalogRefusal::UnknownWork(_)
             | CatalogRefusal::UnknownInstance(_)
             | CatalogRefusal::UnknownEntity(_)
-            | CatalogRefusal::UnknownAgent(_),
+            | CatalogRefusal::UnknownAgent(_)
+            | CatalogRefusal::UnknownSubject(_),
         ))) => StatusCode::NOT_FOUND.into_response(),
+        Ok(Err(EditFailed::Refused(CatalogRefusal::SubjectHeadingTaken(_)))) => invalid(
+            state,
+            &[FieldError {
+                field: "heading",
+                message_key: "edit-error-subject-taken",
+            }],
+        ),
+        Ok(Err(EditFailed::Refused(CatalogRefusal::SubdivisionsChanged(_)))) => invalid(
+            state,
+            &[FieldError {
+                field: "heading",
+                message_key: "edit-error-subdivisions",
+            }],
+        ),
         Ok(Err(EditFailed::Refused(CatalogRefusal::AlreadyLinked(_)))) => invalid(
             state,
             &[FieldError {

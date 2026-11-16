@@ -2,7 +2,7 @@
 //! Authorities: the agents that records share, edited once for all of them
 //! (docs/specs/catalogo/autoridades.md).
 
-use elzevir_domain::catalog::{AgentId, AgentKind, SubjectKind, WorkId};
+use elzevir_domain::catalog::{AgentId, AgentKind, SubjectId, SubjectKind, WorkId};
 use serde::Deserialize;
 
 use crate::catalog::{AgentChange, AuthorityRole, CatalogReadError, WorkAuthority};
@@ -28,14 +28,40 @@ pub struct AgentView {
     pub instances: usize,
 }
 
-/// Port: reads an agent. The store implements it.
-pub trait AgentReader: Send + Sync {
+/// A subject as its focused block shows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubjectView {
+    /// The subject.
+    pub id: SubjectId,
+    /// What it names.
+    pub kind: SubjectKind,
+    /// Its heading, its subdivisions after ` -- `.
+    pub heading: String,
+    /// Its thesaurus code, such as `lcsh`.
+    pub thesaurus: Option<String>,
+    /// Its version, which an edit names.
+    pub version: i64,
+    /// How many Works have it as subject.
+    pub works: usize,
+    /// How many Instances those Works have: the records an edit changes.
+    pub instances: usize,
+}
+
+/// Port: reads the authorities records share. The store implements it.
+pub trait AuthorityReader: Send + Sync {
     /// The agent, or `None` when no agent has this id.
     ///
     /// # Errors
     ///
     /// When storage fails.
     fn agent(&self, id: AgentId) -> Result<Option<AgentView>, CatalogReadError>;
+
+    /// The subject, or `None` when no subject has this id.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn subject(&self, id: SubjectId) -> Result<Option<SubjectView>, CatalogReadError>;
 }
 
 /// Validates and normalizes the changes of an agent edit; every error at once.

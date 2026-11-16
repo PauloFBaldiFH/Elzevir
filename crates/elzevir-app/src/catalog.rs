@@ -8,8 +8,8 @@
 
 use elzevir_domain::catalog::{
     AgentId, AgentKind, AuthorityLinkKind, BranchId, CollectionId, HubId, IdentifierKind,
-    InstanceId, ItemId, Money, NamePartKind, NoteKind, PolicyId, SubjectKind, SublocationId,
-    WorkId, WorkRelationKind,
+    InstanceId, ItemId, Money, NamePartKind, NoteKind, PolicyId, SubjectId, SubjectKind,
+    SublocationId, WorkId, WorkRelationKind,
 };
 use serde::{Deserialize, Serialize};
 
@@ -88,6 +88,21 @@ pub enum CatalogCommand {
     /// Links an authority, stored or new, to a Work in one role (docs/specs/catalogo/
     /// autoridades.md); the Work and its Instances get new versions.
     LinkAuthority(Box<WorkAuthority>),
+    /// Changes a subject, and so every record that names it, if the subject is still at
+    /// `row_version` (docs/specs/catalogo/autoridades.md).
+    UpdateSubject(Box<SubjectUpdate>),
+}
+
+/// An edit of a subject heading, read at `row_version`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubjectUpdate {
+    /// The subject.
+    pub subject: SubjectId,
+    /// The subject's version when the editor read it.
+    pub row_version: i64,
+    /// What changes, in order; a later change of the same part wins. A subject's parts
+    /// are an agent's, so [`AgentChange`] names them.
+    pub changes: Vec<AgentChange>,
 }
 
 /// An authority linked to a Work in one role.
@@ -698,6 +713,14 @@ pub enum CatalogOutput {
         /// Its new version.
         row_version: i64,
     },
+    /// A subject was edited; it is now at `row_version`, and its records were given new
+    /// versions.
+    SubjectUpdated {
+        /// The subject.
+        subject: SubjectId,
+        /// Its new version.
+        row_version: i64,
+    },
     /// An Instance was added to a Work.
     InstanceAdded {
         /// The Work.
@@ -749,6 +772,17 @@ pub enum CatalogRefusal {
     /// Another agent of the same kind has this heading; joining them is a merge.
     #[error("another agent is already named `{0}`")]
     AgentHeadingTaken(String),
+    /// No subject has this id.
+    #[error("unknown subject {}", .0.0)]
+    UnknownSubject(SubjectId),
+    /// Another subject of the same kind and thesaurus has this heading; joining them is a
+    /// merge.
+    #[error("another subject is already headed `{0}`")]
+    SubjectHeadingTaken(String),
+    /// The new heading has a different number of subdivisions than the typed ones the
+    /// subject keeps; they are changed in the Work's form.
+    #[error("the heading `{0}` does not keep the subject's subdivisions")]
+    SubdivisionsChanged(String),
     /// The Work already has this authority in this role.
     #[error("the work already names `{0}` in this role")]
     AlreadyLinked(String),

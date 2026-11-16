@@ -66,7 +66,7 @@ fn app(store: &Arc<ElzevirStore>, index: &Arc<TantivyIndex>) -> Router {
             items: Arc::clone(store) as _,
             statements: Arc::clone(store) as _,
             history: Arc::clone(store) as _,
-            agents: Arc::clone(store) as _,
+            authorities: Arc::clone(store) as _,
         },
         I18n::english().unwrap(),
         WebConfig::default(),
@@ -261,7 +261,7 @@ fn an_instance_hidden_from_the_opac_is_found_only_by_the_staff() {
 /// the exported MARC of every record that names it.
 #[test]
 fn a_renamed_agent_changes_every_record_that_names_it() {
-    use elzevir_app::authorities::AgentReader;
+    use elzevir_app::authorities::AuthorityReader;
     use elzevir_app::catalog::{AgentChange, AgentUpdate, CatalogRefusal};
     use elzevir_app::commands::WriteRefusal;
     use elzevir_domain::catalog::AgentId;
@@ -452,4 +452,92 @@ fn a_linked_authority_joins_the_work_in_its_role() {
     };
     assert!(field("700", "Portinari, Candido"));
     assert!(field("650", "Estatistica municipal"));
+}
+
+#[test]
+fn a_renamed_subject_changes_every_record_that_has_it() {
+    use elzevir_app::authorities::AuthorityReader;
+    use elzevir_app::catalog::{AgentChange, CatalogRefusal, SubjectUpdate};
+    use elzevir_app::commands::WriteRefusal;
+    use elzevir_domain::catalog::SubjectId;
+    use elzevir_store::CommandFailed;
+
+    let (_dir, store) = imported();
+    let store = Arc::new(store);
+    let index = Arc::new(TantivyIndex::in_memory(Parallelism::Serial).unwrap());
+    index_pending(&*store, &*store, &*index, &options()).unwrap();
+    let app = app(&store, &index);
+    // A topical subject without typed subdivisions, and one with them.
+    let (subject, instance, heading): (i64, i64, String) = store
+        .readers()
+        .read(|c| {
+            c.query_row(
+                "SELECT s.id, i.id, s.heading FROM subjects s
+                 JOIN work_subjects w ON w.subject_id = s.id
+                 JOIN instances i ON i.work_id = w.work_id
+                 WHERE s.kind = 1 AND s.subdivisions = '' ORDER BY s.id, i.id LIMIT 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+        })
+        .unwrap();
+    let divided: i64 = store
+        .readers()
+        .read(|c| {
+            c.query_row(
+                "SELECT id FROM subjects WHERE subdivisions <> '' LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+        })
+        .unwrap();
+    let view = store.subject(SubjectId(subject)).unwrap().unwrap();
+    assert_eq!(view.heading, heading);
+    assert!(view.instances >= 1);
+    let instance = elzevir_domain::catalog::InstanceId(instance);
+    let before = store.instance(instance).unwrap().unwrap().version;
+    let rename = |subject: i64, row_version, heading: &str| {
+        store
+            .submit(WriteCommand::Catalog(CatalogCommand::UpdateSubject(
+                Box::new(SubjectUpdate {
+                    subject: SubjectId(subject),
+                    row_version,
+                    changes: vec![AgentChange::Heading(heading.to_owned())],
+                }),
+            )))
+            .unwrap()
+            .wait()
+    };
+    rename(subject, 1, "Assunto renomeado no Elzevir").unwrap();
+    assert_eq!(
+        store.subject(SubjectId(subject)).unwrap().unwrap().version,
+        2
+    );
+    assert!(store.instance(instance).unwrap().unwrap().version > before);
+    assert!(matches!(
+        rename(subject, 1, "Outro"),
+        Err(CommandFailed::Rejected(WriteRefusal::Catalog(
+            CatalogRefusal::Stale { .. }
+        )))
+    ));
+    // A subject with typed subdivisions keeps as many parts after ` -- `.
+    assert!(matches!(
+        rename(divided, 1, "Sem subdivisoes"),
+        Err(CommandFailed::Rejected(WriteRefusal::Catalog(
+            CatalogRefusal::SubdivisionsChanged(_)
+        )))
+    ));
+    index_pending(&*store, &*store, &*index, &options()).unwrap();
+
+    let (_, record) = get(&app, &format!("/record/{}", instance.0));
+    assert!(record.contains("Assunto renomeado no Elzevir"));
+    let bytes = export_record(&*store, instance, RecordFormat::Marc21, &Limits::default())
+        .unwrap()
+        .unwrap();
+    let mut reader = MarcReader::new(bytes.as_slice(), Limits::default());
+    let exported = reader.next_record().unwrap().unwrap();
+    assert!(exported.fields().any(|field| {
+        field.tag().to_string() == "650"
+            && String::from_utf8_lossy(field.raw()).contains("Assunto renomeado no Elzevir")
+    }));
 }

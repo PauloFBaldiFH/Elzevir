@@ -4,7 +4,7 @@
 
 use elzevir_app::catalog::ShelfSignal;
 use elzevir_app::material::{CarrierKind, ContentKind, Material};
-use elzevir_domain::catalog::AgentKind;
+use elzevir_domain::catalog::{AgentKind, SubjectKind};
 use elzevir_web_templates::Badge;
 
 /// The icon of a family or Instance whose description names no content.
@@ -90,6 +90,19 @@ pub(crate) const fn agent_icon(kind: AgentKind) -> &'static str {
     }
 }
 
+/// The icon of a kind of subject, beside its heading: an agent's for an agent as subject.
+pub(crate) const fn subject_icon(kind: SubjectKind) -> &'static str {
+    match kind.agent() {
+        Some(agent) => agent_icon(agent),
+        None => match kind {
+            SubjectKind::Place => "subject-place",
+            SubjectKind::Temporal => "subject-period",
+            SubjectKind::GenreForm => "genre",
+            _ => "subject-topic",
+        },
+    }
+}
+
 /// The icon of an Item's place on the shelf: a padlock when it is only for use there.
 pub(crate) const fn signal_icon(signal: ShelfSignal) -> &'static str {
     match signal {
@@ -136,6 +149,10 @@ mod tests {
             );
         }
         assert!(ICONS.contains(&format!("id=\"{NO_CONTENT}\"")));
+        for kind in SubjectKind::ALL {
+            let icon = subject_icon(*kind);
+            assert!(ICONS.contains(&format!("id=\"{icon}\"")), "{icon}");
+        }
     }
 
     #[test]

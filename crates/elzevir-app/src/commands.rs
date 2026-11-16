@@ -81,6 +81,7 @@ impl WriteCommand {
             Self::Catalog(CatalogCommand::EditStatements(_)) => "catalog.edit_statements",
             Self::Catalog(CatalogCommand::UpdateAgent(_)) => "catalog.update_agent",
             Self::Catalog(CatalogCommand::LinkAuthority(_)) => "catalog.link_authority",
+            Self::Catalog(CatalogCommand::UpdateSubject(_)) => "catalog.update_subject",
         }
     }
 

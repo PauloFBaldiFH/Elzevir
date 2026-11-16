@@ -8,7 +8,8 @@
 use std::num::NonZeroUsize;
 
 use elzevir_domain::catalog::{
-    AgentId, AgentKind, BranchId, HubId, InstanceId, ItemId, SublocationId, WorkId, isbn13,
+    AgentId, AgentKind, BranchId, HubId, InstanceId, ItemId, SubjectId, SubjectKind, SublocationId,
+    WorkId, isbn13,
 };
 use unicode_normalization::UnicodeNormalization;
 use unicode_normalization::char::is_combining_mark;
@@ -131,10 +132,21 @@ pub struct FamilyWork {
     pub classification: Option<String>,
     /// Language codes, in order.
     pub languages: Vec<String>,
-    /// Subject headings, in order.
-    pub subjects: Vec<String>,
+    /// Subjects, in order.
+    pub subjects: Vec<ShownSubject>,
     /// Its Instances, in id order.
     pub instances: Vec<FamilyInstance>,
+}
+
+/// A subject of a Work as the listing shows it, and as the authorities column edits it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShownSubject {
+    /// The subject.
+    pub id: SubjectId,
+    /// What it names.
+    pub kind: SubjectKind,
+    /// Its heading.
+    pub heading: String,
 }
 
 /// One Instance of a family as stored.
@@ -335,7 +347,7 @@ pub struct WorkRow {
     /// Language codes.
     pub languages: Vec<String>,
     /// The first [`SUBJECTS_PER_WORK`] subjects.
-    pub subjects: Vec<String>,
+    pub subjects: Vec<ShownSubject>,
     /// How many subjects are not shown.
     pub more_subjects: usize,
     /// Its Instances.

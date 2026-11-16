@@ -8,8 +8,8 @@ use elzevir_domain::statement::{Description, EntityKind, check_description};
 
 use crate::catalog::{
     AgentUpdate, CatalogOutput, CatalogRefusal, ClassChoice, InstanceChange, InstanceUpdate,
-    NewIdentifier, NewInstanceOfWork, NewRecord, PropertyEdit, WorkAuthority, WorkChange,
-    WorkUpdate,
+    NewIdentifier, NewInstanceOfWork, NewRecord, PropertyEdit, SubjectUpdate, WorkAuthority,
+    WorkChange, WorkUpdate,
 };
 use crate::items::ItemsUpdate;
 use crate::registries::RegistryChange;
@@ -37,6 +37,8 @@ pub enum Edit {
     Agent(Box<AgentUpdate>),
     /// An authority linked to a Work (docs/specs/catalogo/autoridades.md).
     Link(Box<WorkAuthority>),
+    /// A subject, and so every record that names it (docs/specs/catalogo/autoridades.md).
+    Subject(Box<SubjectUpdate>),
 }
 
 /// Why an edit was not stored.

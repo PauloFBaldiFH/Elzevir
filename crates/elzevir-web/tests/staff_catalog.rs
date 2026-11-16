@@ -70,7 +70,11 @@ fn family(n: i64, title: &str, lost: bool) -> Family {
             main_agent: Some(elzevir_domain::catalog::AgentId(1)),
             classification: Some("869.3".to_owned()),
             languages: vec!["por".to_owned()],
-            subjects: vec!["Ficção".to_owned()],
+            subjects: vec![elzevir_app::listing::ShownSubject {
+                id: elzevir_domain::catalog::SubjectId(1),
+                kind: elzevir_domain::catalog::SubjectKind::Topic,
+                heading: "Ficção".to_owned(),
+            }],
             instances: vec![FamilyInstance {
                 id: InstanceId(n * 10),
                 version: 1,
@@ -243,7 +247,7 @@ fn app() -> Router {
             items: Arc::new(common::ItemGrid),
             statements: Arc::new(common::Statements),
             history: Arc::new(common::History),
-            agents: Arc::new(common::Agents),
+            authorities: Arc::new(common::Authorities),
         },
         I18n::english().unwrap(),
         WebConfig {
@@ -360,8 +364,9 @@ async fn the_first_page_shows_families_with_pills_and_a_loader_for_the_next() {
     assert!(html.contains(
         r#"<article class="card card-auth" data-level="auth" tabindex="0" data-node="a0" data-fields="/equipe/acervo/autoridade/1/campos">"#
     ));
-    assert!(html.contains(r#"data-parent="a0""#));
-    assert!(html.contains(r#"data-cord-label="written by""#));
+    // Its subject is one too, with a cord labelled "about".
+    assert!(html.contains(r#"data-parent="a0 a1""#));
+    assert!(html.contains(r#"data-cord-label="written by|about""#));
     // Toggles for the Hub and Authorities columns stay hidden until the script runs.
     assert!(html.contains(r#"data-toggle="auth" aria-pressed="true" hidden>Authorities</button>"#));
     assert!(html.contains(r#"data-toggle="hub" aria-pressed="true" hidden>Hub</button>"#));
@@ -1561,4 +1566,57 @@ async fn a_cataloguer_links_an_authority_by_its_role() {
     )
     .await;
     assert_eq!(body(linked).await, r#"{"version":2}"#);
+}
+
+#[tokio::test]
+async fn a_cataloguer_renames_a_subject_from_the_authorities_column() {
+    let app = app();
+    let ana = signed_in(&app).await;
+    let listing = body(send(&app, get("/equipe/acervo", Some(&ana), None)).await).await;
+    assert!(listing.contains(r#"data-fields="/equipe/acervo/assunto/1/campos""#));
+    assert!(listing.contains("elzevir-icons.svg#subject-topic"));
+    let bia = signed_in_as(&app, "bia").await;
+    let refused = send(
+        &app,
+        get("/equipe/acervo/assunto/1/campos", Some(&bia), None),
+    )
+    .await;
+    assert_eq!(refused.status(), StatusCode::FORBIDDEN);
+
+    let form = body(
+        send(
+            &app,
+            get("/equipe/acervo/assunto/1/campos", Some(&ana), None),
+        )
+        .await,
+    )
+    .await;
+    assert!(form.contains(r#"data-endpoint="/equipe/acervo/assunto/1" data-version="1""#));
+    assert!(form.contains(r#"value="Romance brasileiro""#));
+    assert!(form.contains("Saving changes 2 Works and 2 records."));
+    let missing = send(
+        &app,
+        get("/equipe/acervo/assunto/2/campos", Some(&ana), None),
+    )
+    .await;
+    assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+
+    let token = page_token(&app, &ana).await;
+    let post =
+        |json: &'static str| post_json("/equipe/acervo/assunto/1", Some(&ana), Some(&token), json);
+    let duplicate = body(
+        send(
+            &app,
+            post(r#"{"version": 1, "changes": [{"Heading": "Taken"}]}"#),
+        )
+        .await,
+    )
+    .await;
+    assert!(duplicate.contains(r#""key":"edit-error-subject-taken""#));
+    let saved = send(
+        &app,
+        post(r#"{"version": 1, "changes": [{"Heading": "Ficcao brasileira"}]}"#),
+    )
+    .await;
+    assert_eq!(body(saved).await, r#"{"version":2}"#);
 }

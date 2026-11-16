@@ -101,17 +101,31 @@ impl FamilyLine {
     }
 }
 
-/// An agent in the authorities column, linked to the Works it contributes to.
+/// An agent or a subject in the authorities column, linked to the Works that name it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthorityLine {
     /// Position in the row, to link the cords.
     pub key: usize,
     /// Heading.
     pub name: String,
-    /// The agent, whose focused block edits it (docs/specs/catalogo/autoridades.md).
-    pub agent: Option<i64>,
-    /// Symbol of its kind of agent in `/static/elzevir-icons.svg`.
+    /// Where its focused block is read (docs/specs/catalogo/autoridades.md).
+    pub fields: Option<String>,
+    /// Message key of its pill: agent or subject.
+    pub pill_key: &'static str,
+    /// Whether it is a subject: the row's summary lists only the agents.
+    pub subject: bool,
+    /// Symbol of its kind in `/static/elzevir-icons.svg`.
     pub icon: &'static str,
+}
+
+/// A cord from a block of the row to a Work: the node it starts at and the message key
+/// of its label.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Cord {
+    /// The `data-node` of the block it starts at.
+    pub node: String,
+    /// Message key of its label.
+    pub label_key: &'static str,
 }
 
 /// The Hub block of a row.
@@ -132,8 +146,8 @@ pub struct WorkLine {
     pub title: String,
     /// Main contributor.
     pub contributor: Option<String>,
-    /// The [`AuthorityLine::key`] of the main contributor.
-    pub authority: Option<usize>,
+    /// The cords to it: from the Hub, the main contributor and the subjects shown.
+    pub cords: Vec<Cord>,
     /// Classification number.
     pub classification: Option<String>,
     /// Language codes.

@@ -28,7 +28,7 @@
       <summary class="family-row">
         <svg class="row-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ family.icon }}"></use></svg>
         <span class="row-title"><strong>{{ family.title }}</strong>{% if family.hub.is_some() %} <span class="row-hub">{{ t.get("staff-badge-hub") }}</span>{% endif %} <span class="row-shape">{{ family.shape_text(t) }}</span></span>
-        <span class="row-agents">{% for authority in family.authorities %}<span class="chip chip-agent"><svg class="badge-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ authority.icon }}"></use></svg>{{ authority.name }}</span>{% endfor %}</span>
+        <span class="row-agents">{% for authority in family.authorities %}{% if !authority.subject %}<span class="chip chip-agent"><svg class="badge-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ authority.icon }}"></use></svg>{{ authority.name }}</span>{% endif %}{% endfor %}</span>
         <span class="row-class call-number">{% if let Some(classification) = family.classification %}{{ classification }}{% endif %}</span>
         {% if family.items == 0 %}<span class="row-avail">{{ t.get("opac-availability-no-items") }}</span>{% else %}<span class="row-avail{% if family.available > 0 %} signal-available{% endif %}">{{ family.availability_text(t) }}</span>{% endif %}
       </summary>
@@ -36,8 +36,8 @@
       <div class="track track-auth">
         <div class="col-header">{{ t.get("staff-column-authorities") }}{% if can_catalogue %} <button type="button" class="card-add" data-action="link-authority" title="{{ t.get("link-authority-label") }}">+ {{ t.get("link-authority") }}</button>{% endif %}</div>
         {% for authority in family.authorities %}
-        <article class="card card-auth" data-level="auth" tabindex="0" data-node="a{{ authority.key }}"{% if can_catalogue %}{% if let Some(agent) = authority.agent %} data-fields="/equipe/acervo/autoridade/{{ agent }}/campos"{% endif %}{% endif %}>
-          <div class="card-top"><span class="entity-pill">{{ t.get("staff-badge-agent") }}</span></div>
+        <article class="card card-auth" data-level="auth" tabindex="0" data-node="a{{ authority.key }}"{% if can_catalogue %}{% if let Some(fields) = authority.fields %} data-fields="{{ fields }}"{% endif %}{% endif %}>
+          <div class="card-top"><span class="entity-pill"><svg class="badge-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ authority.icon }}"></use></svg>{{ t.get(authority.pill_key) }}</span></div>
           <div class="field-row">
             <span class="field-label">{{ t.get("staff-field-authorized-name") }}</span>
             <span class="field-value">{{ authority.name }}</span>
@@ -61,8 +61,8 @@
         <div class="col-header">{{ t.get("staff-column-work") }}</div>
         {% for work in family.works %}
         <article class="card card-work" data-level="work" tabindex="0" data-node="w{{ work.id }}"{% if let Some(first) = work.instances.first() %} data-fields="/equipe/acervo/instancia/{{ first.id }}/campos?level=work"{% endif %}
-                 data-parent="{% if let Some(hub) = family.hub %}h{{ hub.id }} {% endif %}{% if let Some(key) = work.authority %}a{{ key }}{% endif %}"
-                 data-cord-label="{% if family.hub.is_some() %}{{ t.get("staff-cord-work") }}|{% endif %}{% if work.authority.is_some() %}{{ t.get("staff-cord-written-by") }}{% endif %}">
+                 data-parent="{% for cord in work.cords %}{% if !loop.first %} {% endif %}{{ cord.node }}{% endfor %}"
+                 data-cord-label="{% for cord in work.cords %}{% if !loop.first %}|{% endif %}{{ t.get(cord.label_key) }}{% endfor %}">
           <div class="card-top"><span class="entity-pill">{{ t.get("staff-badge-work") }}{% for language in work.languages %} • {{ language }}{% endfor %}</span>
             {% if can_catalogue %}{% if let Some(first) = work.instances.first() %}<button type="button" class="card-add" data-action="new-instance" data-from="{{ first.id }}" title="{{ t.get("new-instance-label") }}">+ {{ t.get("new-instance") }}</button>{% endif %}{% endif %}</div>
           <div class="field-row">

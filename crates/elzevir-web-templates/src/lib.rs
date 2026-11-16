@@ -11,7 +11,8 @@ mod staff_record_form;
 mod staff_registries;
 
 pub use staff_catalog::{
-    AuthorityLine, FamilyLine, HubLine, InstanceLine, PillLine, ScanLine, StaffCatalog, WorkLine,
+    AuthorityLine, Cord, FamilyLine, HubLine, InstanceLine, PillLine, ScanLine, StaffCatalog,
+    WorkLine,
 };
 pub use staff_item_grid::{
     GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid, SuggestedCallNumber,

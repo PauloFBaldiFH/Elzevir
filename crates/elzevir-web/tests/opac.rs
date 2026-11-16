@@ -136,7 +136,7 @@ fn app(catalog: Arc<Catalog>, hits: Vec<SearchHit>) -> Router {
             items: Arc::new(common::ItemGrid),
             statements: Arc::new(common::Statements),
             history: Arc::new(common::History),
-            agents: Arc::new(common::Agents),
+            authorities: Arc::new(common::Authorities),
         },
         I18n::english().unwrap(),
         WebConfig::default(),
