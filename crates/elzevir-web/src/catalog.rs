@@ -4,6 +4,8 @@
 
 use std::sync::Arc;
 
+use elzevir_app::history::HistoryReader;
+
 use askama::Template;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
@@ -50,6 +52,8 @@ pub struct StaffPorts {
     /// The statements of any entity, for the forms of a Hub and an Item
     /// (docs/specs/catalogo/bibframe-completo.md, step 6c).
     pub statements: Arc<dyn StatementReader + Send + Sync>,
+    /// Who changed a Work or an Instance (docs/specs/catalogo/historico.md).
+    pub history: Arc<dyn HistoryReader>,
 }
 
 /// Query string of `/equipe/acervo`.

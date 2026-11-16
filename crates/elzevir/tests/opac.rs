@@ -61,6 +61,7 @@ fn app(store: &Arc<ElzevirStore>, index: &Arc<TantivyIndex>) -> Router {
             suggestions: Arc::clone(store) as _,
             items: Arc::clone(store) as _,
             statements: Arc::clone(store) as _,
+            history: Arc::clone(store) as _,
         },
         I18n::english().unwrap(),
         WebConfig::default(),

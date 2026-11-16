@@ -19,4 +19,5 @@
     <span class="form-hint">{{ t.get("edit-done-hint") }}</span>
     <span class="form-saved" role="status" hidden>{{ t.get("edit-saved") }}</span>
   </div>
+  {% if let Some(history) = history %}<section class="history-box" data-history="{{ history }}"><button type="button" class="history-toggle" aria-expanded="false">{{ t.get("history-heading") }}</button><div class="history-body" hidden></div></section>{% endif %}
 </form>

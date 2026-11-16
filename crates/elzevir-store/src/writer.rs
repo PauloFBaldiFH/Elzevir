@@ -252,7 +252,9 @@ fn apply_one<H: CommandHandler>(
     let json = serde_json::to_string(command).map_err(StoreError::from)?;
     savepoint
         .execute(
-            "INSERT INTO audit_log (kind, command, actor) VALUES (?1, ?2, ?3)",
+            // The time is the database's, in UTC: the history shows when (migration 37).
+            "INSERT INTO audit_log (kind, command, actor, at)
+             VALUES (?1, ?2, ?3, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))",
             params![H::kind(command), json, actor],
         )
         .map_err(StoreError::from)?;

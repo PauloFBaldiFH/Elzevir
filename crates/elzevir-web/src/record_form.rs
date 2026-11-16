@@ -285,6 +285,7 @@ pub(crate) fn work_form<'a>(
         endpoint: format!("/equipe/acervo/obra/{work}"),
         version,
         sections: work_sections(t, record),
+        history: Some(format!("/equipe/acervo/obra/{work}/historico")),
     }
 }
 
@@ -300,6 +301,7 @@ pub(crate) fn instance_form<'a>(
         endpoint: format!("/equipe/acervo/instancia/{instance}"),
         version,
         sections: instance_sections(t, record),
+        history: Some(format!("/equipe/acervo/instancia/{instance}/historico")),
     }
 }
 

@@ -383,3 +383,48 @@ impl elzevir_app::catalog::StatementReader for Statements {
         Ok((subject.entity == EntityKind::Item && subject.id == 3).then_some(4))
     }
 }
+
+/// Instance 10 was imported before the log kept times, then edited by ana; nothing else
+/// has a history.
+pub(crate) struct History;
+
+impl elzevir_app::history::HistoryReader for History {
+    fn history(
+        &self,
+        entity: elzevir_domain::statement::EntityRef,
+        _limit: usize,
+    ) -> Result<Vec<elzevir_app::history::LoggedCommand>, CatalogReadError> {
+        use elzevir_app::catalog::{CatalogCommand, InstanceChange, InstanceUpdate};
+        use elzevir_app::commands::WriteCommand;
+        use elzevir_app::history::LoggedCommand;
+        use elzevir_domain::statement::EntityKind;
+
+        if entity.entity != EntityKind::Instance || entity.id != 10 {
+            return Ok(Vec::new());
+        }
+        let edit =
+            WriteCommand::Catalog(CatalogCommand::UpdateInstance(Box::new(InstanceUpdate {
+                instance: InstanceId(10),
+                row_version: 1,
+                changes: vec![
+                    InstanceChange::Edition(Some("2. ed.".to_owned())),
+                    InstanceChange::Statements {
+                        property: "dimensions".to_owned(),
+                        statements: Vec::new(),
+                    },
+                ],
+            })));
+        Ok(vec![
+            LoggedCommand {
+                at: Some("2026-11-16T15:32:22Z".to_owned()),
+                actor: Some("ana".to_owned()),
+                command: serde_json::to_string(&edit).unwrap_or_default(),
+            },
+            LoggedCommand {
+                at: None,
+                actor: None,
+                command: r#"{"Catalog":{"ImportRecord":{}}}"#.to_owned(),
+            },
+        ])
+    }
+}

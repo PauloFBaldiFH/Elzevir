@@ -221,6 +221,7 @@ fn serve(
         suggestions: Arc::clone(&store) as _,
         items: Arc::clone(&store) as _,
         statements: Arc::clone(&store) as _,
+        history: Arc::clone(&store) as _,
     };
     let app = elzevir_web::router(AppState::new(
         store,

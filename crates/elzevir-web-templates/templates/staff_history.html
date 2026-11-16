@@ -1,0 +1,3 @@
+{% if lines.is_empty() %}<p class="history-empty">{{ t.get("history-empty") }}</p>{% else %}<ol class="history-list">
+  {% for line in lines %}<li>{% if line.at.is_empty() %}<span class="history-when">{{ line.when }}</span>{% else %}<time class="history-when" datetime="{{ line.at }}">{{ line.when }}</time>{% endif %} <span class="history-who">{{ line.who }}</span> <span class="history-what">{{ line.what }}</span></li>
+  {% endfor %}</ol>{% endif %}

@@ -239,6 +239,7 @@ fn app() -> Router {
             suggestions: Arc::new(common::Suggestions),
             items: Arc::new(common::ItemGrid),
             statements: Arc::new(common::Statements),
+            history: Arc::new(common::History),
         },
         I18n::english().unwrap(),
         WebConfig {
@@ -960,6 +961,49 @@ async fn the_isbn_field_is_checked_by_the_server_s_rule() {
         check("978-85-60342-01-3").await,
         r#"{"value":"9788560342013","note":"ISBN-10: 856034201X"}"#
     );
+}
+
+#[tokio::test]
+async fn the_history_of_a_block_is_shown_to_cataloguers_only() {
+    let app = app();
+    let uri = "/equipe/acervo/instancia/10/historico";
+    assert_eq!(
+        send(&app, get(uri, None, None)).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let bia = signed_in_as(&app, "bia").await;
+    assert_eq!(
+        send(&app, get(uri, Some(&bia), None)).await.status(),
+        StatusCode::FORBIDDEN
+    );
+
+    let ana = signed_in(&app).await;
+    let history = body(send(&app, get(uri, Some(&ana), None)).await).await;
+    assert!(history.contains(r#"<time class="history-when" datetime="2026-11-16T15:32:22Z">2026-11-16 15:32 UTC</time> <span class="history-who">ana</span> <span class="history-what">Changed: Edition, Dimensions</span>"#), "{history}");
+    assert!(history.contains(r#"<span class="history-when">before the history</span> <span class="history-who">import or command line</span> <span class="history-what">Other change</span>"#));
+    let work = body(
+        send(
+            &app,
+            get("/equipe/acervo/obra/1/historico", Some(&ana), None),
+        )
+        .await,
+    )
+    .await;
+    assert!(work.contains("No change recorded yet."));
+    // The form of the block says where its history is.
+    let form = body(
+        send(
+            &app,
+            get(
+                "/equipe/acervo/instancia/10/campos?level=instance",
+                Some(&ana),
+                None,
+            ),
+        )
+        .await,
+    )
+    .await;
+    assert!(form.contains(r#"data-history="/equipe/acervo/instancia/10/historico""#));
 }
 
 #[tokio::test]

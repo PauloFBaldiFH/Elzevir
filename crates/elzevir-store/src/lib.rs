@@ -23,6 +23,7 @@ mod effects;
 mod elzevir;
 mod error;
 mod export;
+mod history;
 mod import;
 mod items;
 mod koha_types;

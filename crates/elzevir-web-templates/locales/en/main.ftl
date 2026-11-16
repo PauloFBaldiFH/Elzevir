@@ -220,6 +220,19 @@ edit-error-class = Choose classes of this entity from the list.
 
 ## Editing in the focused block
 edit-done = Done
+history-heading = History
+history-empty = No change recorded yet.
+history-unknown-time = before the history
+history-system = import or command line
+history-created = Created
+history-imported = Imported from a file
+history-edited = Changed: { $parts }
+history-edited-whole = Description replaced
+history-items = { $count ->
+    [one] One Item saved
+   *[other] { $count } Items saved
+}
+history-other = Other change
 edit-done-hint = Ctrl+Enter
 edit-saved = Saved
 edit-add-row = Add

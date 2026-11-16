@@ -7,6 +7,7 @@ use elzevir_app::catalog::{
     NewIdentifier, NewInstance, NewInstanceOfWork, NewNote, NewRecord, NewSubject, NewWorkRelation,
 };
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
+use elzevir_app::history::touched;
 use elzevir_app::listing::sort_key;
 use elzevir_app::matching::{identifier_key, match_keys};
 use elzevir_app::material::{Material, material_of};
@@ -97,6 +98,19 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CatalogCommand) -> Applied {
             CatalogOutput::Item(item)
         }
     };
+    for entity in touched(command, &output) {
+        tx.connection()
+            .execute(
+                "INSERT OR IGNORE INTO audit_entities (entity_kind, entity_id, audit_seq)
+                 VALUES (?1, ?2, ?3)",
+                params![
+                    crate::statements::kind_number(entity.entity),
+                    entity.id,
+                    tx.audit_seq()
+                ],
+            )
+            .map_err(StoreError::from)?;
+    }
     Ok(WriteOutput::Catalog(output))
 }
 
