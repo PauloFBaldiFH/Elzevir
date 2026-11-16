@@ -664,6 +664,40 @@ async fn the_rows_of_a_property_are_read_into_its_statements_or_refused_at_its_f
             .await
             .contains(r#""field":"content","key":"edit-error-statement""#)
     );
+    let instance = send(
+        &app,
+        post_json(
+            "/equipe/acervo/instancia/10",
+            Some(&ana),
+            Some(&token),
+            r#"{"version": 1, "changes": [{"Statements": {"property": "dimensions", "rows": [{"text": "21 cm"}]}}]}"#,
+        ),
+    )
+    .await;
+    assert_eq!(instance.status(), StatusCode::OK);
+    let itself = send(
+        &app,
+        post_json(
+            "/equipe/acervo/obra/1",
+            Some(&ana),
+            Some(&token),
+            r#"{"version": 1, "changes": [{"Relations": [{"kind": "part_of", "work": 1}]}]}"#,
+        ),
+    )
+    .await;
+    assert_eq!(itself.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(body(itself).await.contains("edit-error-relation-itself"));
+    let related = send(
+        &app,
+        post_json(
+            "/equipe/acervo/obra/1",
+            Some(&ana),
+            Some(&token),
+            r#"{"version": 1, "changes": [{"Relations": [{"kind": "part_of", "work": 7}]}]}"#,
+        ),
+    )
+    .await;
+    assert_eq!(related.status(), StatusCode::OK);
 }
 
 #[tokio::test]
@@ -851,6 +885,21 @@ async fn a_cataloguer_creates_a_family_or_an_instance_from_the_screen() {
         r#"{"instance":901,"family":"/equipe/acervo?after=w899.quincas%20borba#f-w900"}"#
     );
 
+    // The rows of the properties go into the new record, or are refused at their field.
+    let described = r#"{"work": [{"Title": "Quincas Borba"}, {"MaterialType": "book"}, {"Statements": {"property": "awards", "rows": [{"text": "Jabuti"}]}}], "instance": [{"Statements": {"property": "dimensions", "rows": [{"text": "21 cm"}]}}]}"#;
+    let created = send(
+        &app,
+        post_json("/equipe/acervo/nova", Some(&ana), Some(&token), described),
+    )
+    .await;
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let wrong = r#"{"work": [{"Title": "Quincas Borba"}, {"MaterialType": "book"}], "instance": [{"Statements": {"property": "historyOfWork", "rows": [{"text": "x"}]}}]}"#;
+    let refused = send(
+        &app,
+        post_json("/equipe/acervo/nova", Some(&ana), Some(&token), wrong),
+    )
+    .await;
+    assert_eq!(refused.status(), StatusCode::UNPROCESSABLE_ENTITY);
     let empty = send(
         &app,
         post_json("/equipe/acervo/nova", Some(&ana), Some(&token), "{}"),

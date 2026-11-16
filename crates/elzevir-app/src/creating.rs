@@ -63,7 +63,7 @@ pub fn new_record(
         material_type,
         work_description,
         hub: None,
-        relations: Vec::new(),
+        relations: record_parts.relations,
         classification: record_parts.classification,
         classification_scheme: record_parts.classification_scheme,
         summary: record_parts.summary,
@@ -115,6 +115,7 @@ struct RecordParts {
     languages: Vec<String>,
     contributions: Vec<crate::catalog::NewContribution>,
     subjects: Vec<crate::catalog::NewSubject>,
+    relations: Vec<crate::catalog::NewWorkRelation>,
     statements: Vec<(String, Vec<Statement>)>,
 }
 
@@ -130,6 +131,7 @@ impl RecordParts {
             WorkChange::Languages(codes) => self.languages = codes,
             WorkChange::Contributions(contributions) => self.contributions = contributions,
             WorkChange::Subjects(subjects) => self.subjects = subjects,
+            WorkChange::Relations(relations) => self.relations = relations,
             WorkChange::Statements {
                 property,
                 statements,

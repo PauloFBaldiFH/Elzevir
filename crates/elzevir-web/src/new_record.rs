@@ -10,13 +10,13 @@ use axum::response::{IntoResponse, Redirect, Response};
 use elzevir_app::catalog::{NewIdentifier, NewInstance, NewRecord};
 use elzevir_app::export::stored_record;
 use elzevir_app::listing::scanned_isbn;
-use elzevir_app::profiles::profile_for;
 use elzevir_app::staff::Permission;
 use elzevir_domain::catalog::{IdentifierKind, InstanceId, MaterialType};
-use elzevir_web_templates::{FormField, FormPart, I18n, NewRecordForm};
+use elzevir_web_templates::{FormPart, FormSection, I18n, NewRecordForm};
 use serde::Deserialize;
 
-use crate::record_form::{instance_field, material_named, work_field};
+use crate::form_sections::{instance_sections, work_sections};
+use crate::record_form::{is_filled, material_named};
 use crate::staff::current_session;
 use crate::{AppState, render};
 
@@ -99,12 +99,6 @@ pub(crate) async fn new_instance(
     start.instance.title.clone_from(&source.instance.title);
     start.instance.material_type = source.instance.material_type;
     let t = &state.inner.i18n;
-    let profile = profile_for(start.instance.material_type.unwrap_or(start.material_type));
-    let fields = profile
-        .instance
-        .iter()
-        .map(|part| instance_field(t, &start, profile.identifier, *part).0)
-        .collect();
     render(&NewRecordForm {
         t,
         endpoint: format!("/equipe/acervo/obra/{}/instancias", view.work.0),
@@ -113,7 +107,7 @@ pub(crate) async fn new_instance(
         parts: vec![FormPart {
             name: "instance",
             heading_key: "new-instance-part",
-            fields,
+            sections: instance_sections(t, &start),
         }],
     })
 }
@@ -172,31 +166,18 @@ fn carried_over(previous: &NewRecord) -> NewRecord {
     start
 }
 
-/// Marks a filled field that carried over, until the cataloguer confirms it.
-fn mark(carried: &[&str], (mut field, filled): (FormField, bool), inherited: bool) -> FormField {
-    field.inherited = inherited && filled && carried.contains(&field.change);
-    field
+/// Marks the filled fields that carried over, until the cataloguer confirms them.
+fn mark(carried: &[&str], mut sections: Vec<FormSection>, inherited: bool) -> Vec<FormSection> {
+    for field in sections.iter_mut().flat_map(|section| &mut section.fields) {
+        field.inherited = inherited && is_filled(field) && carried.contains(&field.change);
+    }
+    sections
 }
 
 fn family_form<'a>(t: &'a I18n, start: &NewRecord, inherited: bool) -> NewRecordForm<'a> {
-    let profile = profile_for(start.instance.material_type.unwrap_or(start.material_type));
-    let work = profile
-        .work
-        .iter()
-        .map(|part| mark(CARRIED_WORK, work_field(t, start, *part), inherited))
-        .collect();
+    let work = mark(CARRIED_WORK, work_sections(t, start), inherited);
     // The Instance's title is left empty: it takes the Work's (item 9).
-    let instance = profile
-        .instance
-        .iter()
-        .map(|part| {
-            mark(
-                CARRIED_INSTANCE,
-                instance_field(t, start, profile.identifier, *part),
-                inherited,
-            )
-        })
-        .collect();
+    let instance = mark(CARRIED_INSTANCE, instance_sections(t, start), inherited);
     NewRecordForm {
         t,
         endpoint: "/equipe/acervo/nova".to_owned(),
@@ -206,12 +187,12 @@ fn family_form<'a>(t: &'a I18n, start: &NewRecord, inherited: bool) -> NewRecord
             FormPart {
                 name: "work",
                 heading_key: "new-work-part",
-                fields: work,
+                sections: work,
             },
             FormPart {
                 name: "instance",
                 heading_key: "new-instance-part",
-                fields: instance,
+                sections: instance,
             },
         ],
     }
@@ -232,8 +213,9 @@ mod tests {
                 .iter()
                 .find(|part| part.name == name)
                 .unwrap()
-                .fields
+                .sections
                 .iter()
+                .flat_map(|section| &section.fields)
                 .map(|field| field.change)
                 .collect()
         };

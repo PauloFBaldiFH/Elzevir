@@ -78,15 +78,15 @@ pub struct NewRecordForm<'a> {
     pub parts: Vec<FormPart>,
 }
 
-/// The fields of one block of a new record, every field of its profile in order.
+/// The fields of one block of a new record: every field of the entity, by section.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormPart {
     /// `work` or `instance`: the key of the block in the body.
     pub name: &'static str,
     /// Message key of the block's heading.
     pub heading_key: &'static str,
-    /// The fields.
-    pub fields: Vec<FormField>,
+    /// The fields, by section.
+    pub sections: Vec<FormSection>,
 }
 
 /// How a field is entered, and how the script turns it into JSON.
@@ -161,6 +161,8 @@ pub enum ColumnKind {
     Select(Vec<FormOption>),
     /// Yes or no.
     Check,
+    /// A whole number, sent as a number (`null` when empty).
+    Number,
     /// Not shown: what the row was drawn from, sent back as it is.
     Hidden,
 }

@@ -24,6 +24,8 @@ pub enum WorkField {
     Summary,
     /// Target audience.
     Audience,
+    /// Relations to other Works: translation, adaptation, part, supplement, continuation.
+    Relations,
 }
 
 /// A part of an Instance that a profile shows.

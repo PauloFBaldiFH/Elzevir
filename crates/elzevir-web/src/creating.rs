@@ -14,21 +14,21 @@ use elzevir_domain::catalog::WorkId;
 use serde::Deserialize;
 
 use crate::AppState;
-use crate::editing::{apply, authorize, invalid};
+use crate::editing::{FormChange, apply, authorize, instance_changes, invalid, work_changes};
 
 /// A new family as the screen sends it.
 #[derive(Deserialize)]
 pub(crate) struct NewFamilyBody {
     #[serde(default)]
-    work: Vec<WorkChange>,
+    work: Vec<FormChange<WorkChange>>,
     #[serde(default)]
-    instance: Vec<InstanceChange>,
+    instance: Vec<FormChange<InstanceChange>>,
 }
 
 /// A new Instance as the screen sends it.
 #[derive(Deserialize)]
 pub(crate) struct NewInstanceBody {
-    changes: Vec<InstanceChange>,
+    changes: Vec<FormChange<InstanceChange>>,
 }
 
 /// `POST /equipe/acervo/nova` (item 5).
@@ -41,7 +41,19 @@ pub(crate) async fn create_family(
         Ok(session) => session,
         Err(status) => return status.into_response(),
     };
-    match new_record(body.work, body.instance) {
+    let (work, instance) = match (work_changes(body.work), instance_changes(body.instance)) {
+        (Ok(work), Ok(instance)) => (work, instance),
+        (work, instance) => {
+            let errors: Vec<_> = work
+                .err()
+                .into_iter()
+                .chain(instance.err())
+                .flatten()
+                .collect();
+            return invalid(&state, &errors);
+        }
+    };
+    match new_record(work, instance) {
         Ok(record) => apply(&state, &session, Edit::NewRecord(Box::new(record))).await,
         Err(errors) => invalid(&state, &errors),
     }
@@ -58,7 +70,11 @@ pub(crate) async fn create_instance(
         Ok(session) => session,
         Err(status) => return status.into_response(),
     };
-    match new_instance(body.changes) {
+    let changes = match instance_changes(body.changes) {
+        Ok(changes) => changes,
+        Err(errors) => return invalid(&state, &errors),
+    };
+    match new_instance(changes) {
         Ok(instance) => {
             let new = NewInstanceOfWork {
                 work: WorkId(id),

@@ -183,6 +183,8 @@ pub enum WorkChange {
     Contributions(Vec<NewContribution>),
     /// Subjects.
     Subjects(Vec<NewSubject>),
+    /// Relations to other Works, replaced whole, in order.
+    Relations(Vec<NewWorkRelation>),
     /// The statements of one property, replaced whole (docs/specs/catalogo/
     /// bibframe-completo.md, items 24 to 26).
     Statements {

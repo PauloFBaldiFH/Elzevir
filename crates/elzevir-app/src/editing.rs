@@ -113,7 +113,9 @@ pub fn validate_work_changes(changes: &mut [WorkChange]) -> Result<(), Vec<Field
             }
             // The form's rows were read and checked by `statement_rows`; the store checks
             // the whole description again.
-            WorkChange::MaterialType(_) | WorkChange::Statements { .. } => {}
+            WorkChange::MaterialType(_)
+            | WorkChange::Relations(_)
+            | WorkChange::Statements { .. } => {}
         }
     }
     if errors.is_empty() {
