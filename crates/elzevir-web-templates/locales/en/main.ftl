@@ -213,6 +213,8 @@ staff-relation-work = Work { $id }
 edit-error-title-empty = The title cannot be empty.
 edit-error-language-code = Use three-letter language codes, such as por or eng.
 edit-error-isbn = This ISBN is not valid: check the digits.
+edit-isbn-converted = Converted from the ISBN-10 { $isbn10 }.
+edit-isbn-ten = ISBN-10: { $isbn10 }
 edit-error-issn = This ISSN is not valid: check the digits.
 edit-error-class = Choose classes of this entity from the list.
 

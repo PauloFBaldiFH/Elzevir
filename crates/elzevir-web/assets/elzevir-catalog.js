@@ -995,6 +995,49 @@ document.addEventListener("keydown", (event) => {
   }
 }, true);
 
+// The ISBN field is checked when the cataloguer leaves it (edicao.md, item 38). The server
+// says what the field holds and what to show; nothing is decided here.
+let isbnRound = 0;
+
+function isbnInput(target) {
+  if (!(target instanceof HTMLInputElement) || !target.matches('.cell[data-name="value"]')) return null;
+  if (target.closest(".form-field")?.dataset.change !== "Identifiers") return null;
+  const kind = target.closest(".form-row")?.querySelector('[data-name="kind"]');
+  return kind?.value === "isbn" ? target : null;
+}
+
+function showIsbn(input, answer) {
+  const row = input.closest(".form-row");
+  row?.querySelector(":scope > .isbn-note")?.remove();
+  input.classList.toggle("invalid", Boolean(answer.error));
+  if (answer.error) input.setAttribute("aria-invalid", "true");
+  else input.removeAttribute("aria-invalid");
+  if (answer.value !== undefined && input.value !== answer.value) input.value = answer.value;
+  const text = answer.error ?? answer.note;
+  if (!text || !row) return;
+  const note = document.createElement("span");
+  note.className = answer.error ? "isbn-note error" : "isbn-note";
+  note.setAttribute("role", answer.error ? "alert" : "status");
+  note.textContent = text;
+  row.append(note);
+}
+
+async function checkIsbn(input) {
+  const round = ++isbnRound;
+  try {
+    const response = await fetch(`/equipe/acervo/isbn?q=${encodeURIComponent(input.value)}`, { credentials: "same-origin" });
+    if (!response.ok || round !== isbnRound) return;
+    showIsbn(input, await response.json());
+  } catch {
+    // No check this time; the edit command checks the ISBN again when the form is sent.
+  }
+}
+
+document.addEventListener("focusout", (event) => {
+  const input = isbnInput(event.target);
+  if (input) checkIsbn(input);
+});
+
 // The grid of an Instance's Items (exemplares.md, items 17 to 28): a spreadsheet in the
 // Items column, saved as one batch. The server writes the rows; this element edits them
 // and sends the new and changed ones.

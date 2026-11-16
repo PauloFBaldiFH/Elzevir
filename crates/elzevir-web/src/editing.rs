@@ -14,7 +14,8 @@ use elzevir_app::catalog::{
     PropertyStatements, WorkChange, WorkUpdate,
 };
 use elzevir_app::editing::{
-    Edit, EditFailed, FieldError, validate_instance_changes, validate_work_changes,
+    Edit, EditFailed, FieldError, IsbnCheck, check_isbn, validate_instance_changes,
+    validate_work_changes,
 };
 use elzevir_app::items::RowRefusal;
 use elzevir_app::listing::{FamilyCursor, FamilyHead, sort_key};
@@ -487,6 +488,52 @@ pub(crate) async fn suggest_subjects(
         })
     })
     .await
+}
+
+/// What the ISBN field shows when the cataloguer leaves it: the value it holds, and a
+/// note or a refusal, already in the screen's language.
+#[derive(Serialize, Default)]
+struct IsbnAnswer {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    note: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+/// `GET /equipe/acervo/isbn?q=` (docs/specs/catalogo/edicao.md, item 38): the check the
+/// field runs when the cataloguer leaves it, by the rule of the edit command.
+pub(crate) async fn check_isbn_field(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(params): Query<SuggestParams>,
+) -> Response {
+    if current_session(&state, &headers).is_none() {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let t = &state.inner.i18n;
+    let answer = match check_isbn(&params.q) {
+        IsbnCheck::Empty => IsbnAnswer::default(),
+        IsbnCheck::Invalid => IsbnAnswer {
+            error: Some(t.get("edit-error-isbn")),
+            ..IsbnAnswer::default()
+        },
+        IsbnCheck::Valid {
+            isbn13,
+            typed_isbn10,
+            isbn10,
+        } => IsbnAnswer {
+            note: match (typed_isbn10, isbn10) {
+                (Some(typed), _) => Some(t.get_with("edit-isbn-converted", "isbn10", &typed)),
+                (None, Some(ten)) => Some(t.get_with("edit-isbn-ten", "isbn10", &ten)),
+                (None, None) => None,
+            },
+            value: Some(isbn13),
+            error: None,
+        },
+    };
+    Json(answer).into_response()
 }
 
 type Lookup = fn(&dyn AuthoritySuggestions, &str) -> Result<Vec<Suggestion>, CatalogReadError>;
