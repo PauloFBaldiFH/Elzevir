@@ -3,7 +3,7 @@
 //! the screen sends the same changes as an edit, applied to an empty Work and Instance.
 
 use crate::catalog::{InstanceChange, NewInstance, NewRecord, WorkChange};
-use crate::description::{instance_of_material, work_of_material};
+use crate::description::{category_of, instance_category};
 use crate::editing::{FieldError, validate_instance_changes, validate_work_changes};
 use elzevir_domain::statement::{Description, Statement};
 
@@ -12,8 +12,8 @@ use elzevir_domain::statement::{Description, Statement};
 ///
 /// # Errors
 ///
-/// Every field that cannot be stored as written, and the parts a record cannot exist
-/// without: the Work's title and category of material (item 8).
+/// Every field that cannot be stored as written, and the part a record cannot exist
+/// without: the Work's title (item 8).
 pub fn new_record(
     mut work: Vec<WorkChange>,
     mut instance: Vec<InstanceChange>,
@@ -23,12 +23,10 @@ pub fn new_record(
     collect(&mut errors, validate_instance_changes(&mut instance));
 
     let mut work_title = None;
-    let mut material_type = None;
     let mut record_parts = RecordParts::default();
     for change in work {
         match change {
             WorkChange::Title(title) => work_title = Some(title),
-            WorkChange::MaterialType(material) => material_type = Some(material),
             other => record_parts.apply(other),
         }
     }
@@ -38,29 +36,23 @@ pub fn new_record(
     if work_title.is_none() && !errors.iter().any(|error| error.field == "title") {
         errors.push(required("title", "edit-error-title-empty"));
     }
-    if material_type.is_none() {
-        errors.push(required("material_type", "edit-error-material-required"));
-    }
-    let (Some(work_title), Some(material_type), true) =
-        (work_title, material_type, errors.is_empty())
-    else {
+    let (Some(work_title), true) = (work_title, errors.is_empty()) else {
         return Err(errors);
     };
-    let mut instance = NewInstance {
+    let instance = NewInstance {
         title: instance_title.unwrap_or_else(|| work_title.clone()),
         ..new_instance
     };
-    instance.description = with_category(
-        instance_of_material(instance.material_type),
-        instance.description,
-    );
-    let mut work_description = work_of_material(material_type);
+    let mut work_description = Description {
+        classes: record_parts.classes,
+        statements: Vec::new(),
+    };
     for (property, statements) in record_parts.statements {
         replace(&mut work_description, &property, statements);
     }
     Ok(NewRecord {
         work_title,
-        material_type,
+        material_type: category_of(&work_description),
         work_description,
         hub: None,
         relations: record_parts.relations,
@@ -87,14 +79,7 @@ pub fn new_instance(mut changes: Vec<InstanceChange>) -> Result<NewInstance, Vec
     collect(&mut errors, validate_instance_changes(&mut changes));
     let (title, instance) = fold_instance(changes);
     match title {
-        Some(title) if errors.is_empty() => Ok(NewInstance {
-            title,
-            description: with_category(
-                instance_of_material(instance.material_type),
-                instance.description,
-            ),
-            ..instance
-        }),
+        Some(title) if errors.is_empty() => Ok(NewInstance { title, ..instance }),
         Some(_) => Err(errors),
         None => {
             if !errors.iter().any(|error| error.field == "title") {
@@ -105,9 +90,10 @@ pub fn new_instance(mut changes: Vec<InstanceChange>) -> Result<NewInstance, Vec
     }
 }
 
-/// The Work's parts other than title and category, as a new record holds them.
+/// The Work's parts other than its title, as a new record holds them.
 #[derive(Default)]
 struct RecordParts {
+    classes: Vec<String>,
     classification: Option<String>,
     classification_scheme: Option<String>,
     summary: Option<String>,
@@ -122,6 +108,9 @@ struct RecordParts {
 impl RecordParts {
     fn apply(&mut self, change: WorkChange) {
         match change {
+            WorkChange::Classes(classes) => {
+                self.classes = classes.into_iter().map(|choice| choice.class).collect();
+            }
             WorkChange::Classification { number, scheme } => {
                 self.classification = number;
                 self.classification_scheme = scheme;
@@ -136,8 +125,8 @@ impl RecordParts {
                 property,
                 statements,
             } => self.statements.push((property, statements)),
-            // Title and category are read by the caller before the rest.
-            WorkChange::Title(_) | WorkChange::MaterialType(_) => {}
+            // The title is read by the caller before the rest.
+            WorkChange::Title(_) => {}
         }
     }
 }
@@ -150,7 +139,10 @@ fn fold_instance(changes: Vec<InstanceChange>) -> (Option<String>, NewInstance) 
     for change in changes {
         match change {
             InstanceChange::Title(text) => title = Some(text),
-            InstanceChange::MaterialType(material) => instance.material_type = Some(material),
+            InstanceChange::Classes(classes) => {
+                instance.description.classes =
+                    classes.into_iter().map(|choice| choice.class).collect();
+            }
             InstanceChange::Edition(text) => instance.edition = text,
             InstanceChange::Place(text) => instance.place = text,
             InstanceChange::Publisher(text) => instance.publisher = text,
@@ -165,6 +157,7 @@ fn fold_instance(changes: Vec<InstanceChange>) -> (Option<String>, NewInstance) 
             } => replace(&mut instance.description, &property, statements),
         }
     }
+    instance.material_type = instance_category(&instance.description);
     (title.filter(|title| !title.is_empty()), instance)
 }
 
@@ -174,18 +167,6 @@ fn replace(description: &mut Description, property: &str, statements: Vec<Statem
         .statements
         .retain(|statement| statement.property != property);
     description.statements.extend(statements);
-}
-
-/// The classes and statements a category gives, with the properties the form filled in
-/// `typed` replacing those of the category.
-fn with_category(mut category: Description, typed: Description) -> Description {
-    for statement in &typed.statements {
-        category
-            .statements
-            .retain(|kept| kept.property != statement.property);
-    }
-    category.statements.extend(typed.statements);
-    category
 }
 
 fn collect(errors: &mut Vec<FieldError>, result: Result<(), Vec<FieldError>>) {
@@ -203,28 +184,54 @@ mod tests {
     use elzevir_domain::catalog::{IdentifierKind, MaterialType};
 
     use super::*;
-    use crate::catalog::NewIdentifier;
+    use crate::catalog::{ClassChoice, NewIdentifier};
+
+    fn classes(names: &[&str]) -> Vec<ClassChoice> {
+        names
+            .iter()
+            .map(|name| ClassChoice {
+                class: (*name).to_owned(),
+            })
+            .collect()
+    }
 
     #[test]
-    fn a_new_family_needs_a_title_and_a_category() {
+    fn a_new_family_needs_a_title_and_classes_of_its_own_entity() {
         let errors = new_record(Vec::new(), Vec::new()).unwrap_err();
-        assert_eq!(
-            errors,
-            [
-                required("title", "edit-error-title-empty"),
-                required("material_type", "edit-error-material-required"),
-            ]
-        );
+        assert_eq!(errors, [required("title", "edit-error-title-empty")]);
         // A blank title is reported once, by the edit's own validation.
         let errors = new_record(
             vec![
                 WorkChange::Title("  ".to_owned()),
-                WorkChange::MaterialType(MaterialType::Book),
+                WorkChange::Classes(classes(&["Text", "Print"])),
             ],
-            Vec::new(),
+            vec![InstanceChange::Classes(classes(&["Text"]))],
         )
         .unwrap_err();
-        assert_eq!(errors, [required("title", "edit-error-title-empty")]);
+        assert_eq!(
+            errors,
+            [
+                required("title", "edit-error-title-empty"),
+                required("classes", "edit-error-class"),
+                required("classes", "edit-error-class"),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_chosen_classes_are_the_description_and_give_the_old_category() {
+        let record = new_record(
+            vec![
+                WorkChange::Title("Revista".to_owned()),
+                WorkChange::Classes(classes(&[" Text ", "", "Serial", "Text"])),
+            ],
+            vec![InstanceChange::Classes(classes(&["Electronic"]))],
+        )
+        .unwrap();
+        assert_eq!(record.work_description.classes, ["Text", "Serial"]);
+        assert_eq!(record.material_type, MaterialType::Periodical);
+        assert_eq!(record.instance.description.classes, ["Electronic"]);
+        assert_eq!(record.instance.material_type, Some(MaterialType::Digital));
     }
 
     #[test]
@@ -232,7 +239,7 @@ mod tests {
         let record = new_record(
             vec![
                 WorkChange::Title(" Dom Casmurro ".to_owned()),
-                WorkChange::MaterialType(MaterialType::Book),
+                WorkChange::Classes(classes(&["Text", "Monograph"])),
                 WorkChange::Languages(vec!["por".to_owned()]),
                 WorkChange::Summary(Some(String::new())),
             ],

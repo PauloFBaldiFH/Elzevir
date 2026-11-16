@@ -8,14 +8,16 @@
 //! has a field of rows that edits its statements.
 
 use elzevir_app::catalog::NewRecord;
-use elzevir_app::profiles::{InstanceField, WorkField, profile_for};
+use elzevir_app::profiles::{InstanceField, WorkField};
 use elzevir_app::statement_rows::{StatementRow, concept_choices, is_literal, is_relation, row_of};
 use elzevir_data::bibframe::{Entity, Property, properties_of};
+use elzevir_domain::catalog::IdentifierKind;
 use elzevir_domain::statement::{Statement, Value, is_typed};
 use elzevir_web_templates::{
     ColumnKind, FormCell, FormColumn, FormField, FormInput, FormOption, FormSection, I18n,
 };
 
+use crate::icons::concept_icon;
 use crate::record_form::{instance_field, work_field};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -303,11 +305,8 @@ fn is_note(property: &Property) -> bool {
 
 /// Every field of the Work of `record`, by section.
 pub(crate) fn work_sections(t: &I18n, record: &NewRecord) -> Vec<FormSection> {
-    // The category is the Work's classes, not a property: it opens the content.
-    let category = (
-        Section::Content,
-        work_field(t, record, WorkField::MaterialType),
-    );
+    // The classes are not a property: they open the content.
+    let category = (Section::Content, work_field(t, record, WorkField::Classes));
     lay_out(
         &WORK,
         Some(category),
@@ -318,15 +317,20 @@ pub(crate) fn work_sections(t: &I18n, record: &NewRecord) -> Vec<FormSection> {
 
 /// Every field of the Instance of `record`, by section.
 pub(crate) fn instance_sections(t: &I18n, record: &NewRecord) -> Vec<FormSection> {
-    let material = record
-        .instance
-        .material_type
-        .unwrap_or(record.material_type);
-    // A new identifier starts as the category's usual one (an ISBN, an ISSN).
-    let identifier = profile_for(material).identifier;
+    // A new identifier starts as the usual one: an ISSN for a serial, else an ISBN.
+    let serial = record
+        .work_description
+        .classes
+        .iter()
+        .any(|class| class == "Serial");
+    let identifier = if serial {
+        IdentifierKind::Issn
+    } else {
+        IdentifierKind::Isbn
+    };
     let category = (
         Section::MediaAndCarrier,
-        instance_field(t, record, identifier, InstanceField::MaterialType),
+        instance_field(t, record, identifier, InstanceField::Classes),
     );
     lay_out(
         &INSTANCE,
@@ -431,6 +435,7 @@ fn columns_of(property: &Property, stored: &[&Value]) -> Vec<FormColumn> {
     let mut columns = Vec::new();
     let mut options: Vec<FormOption> = concept_choices(property.name)
         .map(|(value, label)| FormOption {
+            icon: concept_icon(&value),
             value,
             label: label.to_owned(),
         })
@@ -444,6 +449,7 @@ fn columns_of(property: &Property, stored: &[&Value]) -> Vec<FormColumn> {
                     options.push(FormOption {
                         label: value.clone(),
                         value,
+                        icon: None,
                     });
                 }
             }
@@ -453,6 +459,7 @@ fn columns_of(property: &Property, stored: &[&Value]) -> Vec<FormColumn> {
             FormOption {
                 value: String::new(),
                 label: String::new(),
+                icon: None,
             },
         );
         columns.push(column(
@@ -495,7 +502,6 @@ fn cells(columns: &[FormColumn], row: &StatementRow) -> Vec<FormCell> {
 
 #[cfg(test)]
 mod tests {
-    use elzevir_domain::catalog::MaterialType;
 
     use super::*;
     use crate::new_record::blank;
@@ -518,7 +524,7 @@ mod tests {
     #[test]
     fn every_property_of_a_work_and_an_instance_has_a_field() {
         let t = I18n::english().unwrap();
-        let record = blank(MaterialType::Book);
+        let record = blank();
         for (sections, missing, count) in [
             (
                 work_sections(&t, &record),
@@ -538,7 +544,7 @@ mod tests {
             assert_eq!(sections.len(), count);
             assert!(sections.iter().all(|section| !section.fields.is_empty()));
             let fields = || sections.iter().flat_map(|s| &s.fields);
-            assert!(fields().any(|field| field.change == "MaterialType"));
+            assert!(fields().any(|field| field.change == "Classes"));
         }
         assert!(WORK.pending.is_empty() && INSTANCE.pending.is_empty());
         for (layout, entity) in [(&HUB, Entity::Hub), (&ITEM, Entity::Item)] {

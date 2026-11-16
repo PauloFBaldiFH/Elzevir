@@ -43,6 +43,42 @@ pub fn instance_of_material(material: Option<MaterialType>) -> Description {
     }
 }
 
+/// The category of material that the Work's classes stand for, the reverse of
+/// [`work_of_material`]: what the `material_type` column keeps until stage 7c drops it
+/// (bibframe-completo.md, item 14). Classes with no category, or none, give a book.
+#[must_use]
+pub fn category_of(work: &Description) -> MaterialType {
+    let has = |class: &str| work.classes.iter().any(|name| name == class);
+    if has("Serial") {
+        return MaterialType::Periodical;
+    }
+    work.classes
+        .iter()
+        .find_map(|class| match class.as_str() {
+            "Text" => Some(MaterialType::Book),
+            "Cartography" => Some(MaterialType::Map),
+            "NotatedMusic" => Some(MaterialType::Score),
+            "Audio" | "MusicAudio" | "NonMusicAudio" => Some(MaterialType::SoundRecording),
+            "MovingImage" => Some(MaterialType::Video),
+            "Multimedia" | "Kit" => Some(MaterialType::Digital),
+            "StillImage" => Some(MaterialType::VisualMaterial),
+            "MixedMaterial" => Some(MaterialType::Mixed),
+            _ => None,
+        })
+        .unwrap_or(MaterialType::Book)
+}
+
+/// The Instance's own category, the reverse of [`instance_of_material`]: only an
+/// electronic edition has one.
+#[must_use]
+pub fn instance_category(instance: &Description) -> Option<MaterialType> {
+    instance
+        .classes
+        .iter()
+        .any(|class| class == "Electronic")
+        .then_some(MaterialType::Digital)
+}
+
 /// A statement whose value is a Library of Congress concept.
 #[must_use]
 pub fn concept(property: &str, scheme: &str, code: &str) -> Statement {

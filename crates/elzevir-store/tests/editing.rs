@@ -379,11 +379,18 @@ fn suggestions_find_existing_agents_and_subjects_by_the_start_of_their_name() {
 }
 
 #[test]
-fn changing_the_category_changes_the_classes_and_keeps_other_statements() {
-    use elzevir_app::catalog::StatementReader;
-    use elzevir_app::description::concept;
-    use elzevir_domain::catalog::MaterialType;
+fn a_classes_edit_replaces_the_classes_keeps_the_statements_and_refuses_others() {
+    use elzevir_app::catalog::{CatalogRefusal, ClassChoice, StatementReader};
     use elzevir_domain::statement::{EntityKind, EntityRef};
+
+    let choose = |names: &[&str]| {
+        names
+            .iter()
+            .map(|name| ClassChoice {
+                class: (*name).to_owned(),
+            })
+            .collect::<Vec<_>>()
+    };
 
     let dir = tempfile::tempdir().unwrap();
     let store = imported(&dir);
@@ -396,14 +403,26 @@ fn changing_the_category_changes_the_classes_and_keeps_other_statements() {
     assert_eq!(before.classes, ["Text", "Monograph"]);
     run(
         &store,
-        update_work(&read, vec![WorkChange::MaterialType(MaterialType::Score)]),
+        update_work(&read, vec![WorkChange::Classes(choose(&["NotatedMusic"]))]),
     )
     .unwrap();
     let after = store.description(work).unwrap();
     assert_eq!(after.classes, ["NotatedMusic"]);
-    assert_eq!(
-        after.statements,
-        [concept("content", "contentTypes", "ntm")]
+    assert_eq!(after.statements, before.statements);
+    let refused = run(
+        &store,
+        update_work(
+            &view(&store, 1),
+            vec![WorkChange::Classes(choose(&["Print"]))],
+        ),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(
+            refused,
+            CommandFailed::Rejected(WriteRefusal::Catalog(CatalogRefusal::BadStatement(_)))
+        ),
+        "{refused:?}"
     );
 }
 

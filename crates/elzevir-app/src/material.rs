@@ -104,8 +104,11 @@ impl ContentKind {
         CONTENT_KINDS.into_iter().find(|kind| kind.name() == name)
     }
 
-    fn of_class(class: &str) -> Option<Self> {
+    /// The kind a subclass of `bf:Work` stands for, if any.
+    #[must_use]
+    pub fn of_class(class: &str) -> Option<Self> {
         Some(match class {
+            "Serial" => Self::Serial,
             "Text" => Self::Text,
             "NotatedMusic" => Self::NotatedMusic,
             "Audio" | "MusicAudio" | "NonMusicAudio" => Self::Audio,
@@ -120,8 +123,11 @@ impl ContentKind {
         })
     }
 
-    fn of_content(code: &str) -> Option<Self> {
+    /// The kind a `contentTypes` code stands for, if any.
+    #[must_use]
+    pub fn of_content(code: &str) -> Option<Self> {
         Some(match code {
+            "tct" | "tci" | "tcm" | "tcn" | "tcf" => Self::Tactile,
             "txt" => Self::Text,
             "ntm" => Self::NotatedMusic,
             "spw" | "prm" | "snd" => Self::Audio,
@@ -157,6 +163,27 @@ impl CarrierKind {
     #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
         CARRIER_KINDS.into_iter().find(|kind| kind.name() == name)
+    }
+
+    /// The kind a subclass of `bf:Instance` stands for, if any.
+    #[must_use]
+    pub fn of_class(class: &str) -> Option<Self> {
+        match class {
+            "Print" => Some(Self::Print),
+            "Electronic" => Some(Self::Online),
+            _ => None,
+        }
+    }
+
+    /// The kind a `carriers` code stands for, if any.
+    #[must_use]
+    pub fn of_carrier(code: &str) -> Option<Self> {
+        match code {
+            "nc" => Some(Self::Print),
+            "cr" => Some(Self::Online),
+            "sd" | "vd" => Some(Self::Disc),
+            _ => None,
+        }
     }
 }
 

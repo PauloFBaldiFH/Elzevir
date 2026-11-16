@@ -412,6 +412,7 @@ a.field-value:hover { text-decoration: underline; }
 .record-form .form-row select.cell, .record-form .form-row .cell-role, .record-form .form-row .cell-thesaurus,
 .record-form .form-row .cell-qualifier, .record-form .form-row .cell-number, .record-form .form-row .cell-scheme { flex: 1; }
 .record-form .cell-check { display: flex; align-items: center; gap: 4px; font-size: 0.8rem; white-space: nowrap; }
+.record-form .select-icon { flex: none; width: 18px; height: 18px; align-self: center; color: var(--text-muted); }
 .record-form .row-remove, .record-form .row-add { font: inherit; font-size: 0.8rem; border: 1px solid var(--card-border); background: var(--card-bg); color: var(--text-muted); border-radius: 6px; cursor: pointer; padding: 3px 9px; }
 .record-form .row-add { align-self: flex-start; margin-top: 4px; }
 .record-form .form-section + .form-section { margin-top: 16px; }

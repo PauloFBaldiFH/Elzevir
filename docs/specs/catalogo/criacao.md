@@ -24,24 +24,24 @@ Ficam para depois: Obra nova no mesmo Hub e a sugestão "Agrupar num Hub" (§20 
 6. `POST /equipe/acervo/obra/{id}/instancias` cria uma Instância nova da Obra `{id}`. Corpo: `{"changes": [...]}`, mudanças de Instância.
 7. As duas rotas pedem o mesmo que a edição: sessão (401), cabeçalho CSRF e permissão `cataloguing` (403) ([edição](edicao.md), item 17). O `audit_log` guarda quem criou.
 8. A validação é a da edição ([edição](edicao.md), item 19), mais o mínimo para existir (spec de UI §20, item 9), recusado de uma vez com 422 e uma mensagem por campo:
-   - título da Obra (família nova) e título da Instância;
-   - categoria do material da Obra (família nova). A categoria nunca é adivinhada: a tela manda a da sessão.
-9. Na família nova, se o título da Instância não vem, ela herda o título da Obra (spec de UI §6.1: a Instância herda título, categoria e idioma; o idioma é da Obra).
+   - título da Obra (família nova) e título da Instância.
+   As classes escolhidas (`Classes`) são subclasses de `bf:Work` na Obra e de `bf:Instance` na Instância; linha vazia ou repetida cai, e outra classe é recusada no campo `classes` ([BIBFRAME completo](bibframe-completo.md), item 14).
+9. Na família nova, se o título da Instância não vem, ela herda o título da Obra (spec de UI §6.1: a Instância herda título e idioma; o idioma é da Obra).
 10. Criação aceita responde 201 com `{"instance": id}`, para a tela focar a família nova. Obra inexistente responde 404.
 11. A conversão das mudanças num registro novo é uma função pura da camada app (`creating.rs`), testada sozinha; a rota só a chama.
 12. Campo opcional vazio nunca impede criar (§20, item 9).
 
 ### Tela (2.6b)
 
-13. Para quem cataloga, cada bloco de Obra tem **"+ Instância"**, que abre o formulário de uma Instância nova daquela Obra, com o título e a categoria da primeira Instância dela (spec de UI §6.1) e o cursor no primeiro campo vazio. O botão fica na Obra, e não no cabeçalho da coluna Instância, porque uma família com Hub tem várias Obras. O formulário abre logo abaixo dos blocos da família.
-14. A barra tem **"+ Nova família"**, e a tecla `N` (fora de um campo) faz o mesmo: sem família aberta, abre uma família nova vazia, com blocos de Obra e Instância já em edição e a categoria da sessão (a última usada; livro na primeira vez); com família aberta, abre uma Instância nova da Obra em foco (ou da primeira Obra). `Ctrl+N` faz o mesmo onde o navegador deixa a página usá-lo; o Chrome o reserva para nova janela e não o entrega à página, por isso `N` é o atalho garantido.
+13. Para quem cataloga, cada bloco de Obra tem **"+ Instância"**, que abre o formulário de uma Instância nova daquela Obra, com o título da Instância de onde partiu e as classes da Obra e dessa Instância (spec de UI §6.1) e o cursor no primeiro campo vazio. O botão fica na Obra, e não no cabeçalho da coluna Instância, porque uma família com Hub tem várias Obras. O formulário abre logo abaixo dos blocos da família.
+14. A barra tem **"+ Nova família"**, e a tecla `N` (fora de um campo) faz o mesmo: sem família aberta, abre uma família nova vazia, com blocos de Obra e Instância já em edição, começando como livro impresso (Obra `Text` e `Monograph` com conteúdo `txt`, Instância `Print`), que quem cataloga troca; com família aberta, abre uma Instância nova da Obra em foco (ou da primeira Obra). `Ctrl+N` faz o mesmo onde o navegador deixa a página usá-lo; o Chrome o reserva para nova janela e não o entrega à página, por isso `N` é o atalho garantido.
 15. O bloco novo usa o mesmo formulário da edição, com todas as propriedades em seções (bibframe-completo.md, etapa 6d); **Criar** (`Ctrl+Enter`) grava; **Cancelar** e `Esc` fecham o formulário.
 16. Bloco novo com algo digitado segue a regra da edição pendente ([edição](edicao.md), item 32): nada some sem "Descartar".
-17. **Catalogação contínua** (§6.2, §20 item 7): depois de criar, `N` (ou "+ Nova família") abre outra família nova com editora, local, data, idiomas, assuntos e categoria do registro anterior, cada campo herdado marcado **"herdado"** até ser confirmado ou trocado.
+17. **Catalogação contínua** (§6.2, §20 item 7): depois de criar, `N` (ou "+ Nova família") abre outra família nova com editora, local, data, idiomas, assuntos, classes e conteúdo do registro anterior, cada campo herdado marcado **"herdado"** até ser confirmado ou trocado.
 18. Confirmar um campo herdado é editá-lo ou passar por ele com `Tab`; a marca some. Um campo herdado é enviado como qualquer outro.
-19. A herança fica no `sessionStorage` da aba (a última Instância criada e a categoria): vale enquanto a aba estiver aberta, mesmo depois que a tela vai para a família criada, e some ao fechar a aba. O formulário pede ao servidor `GET /equipe/acervo/nova?from={instância}`, e o servidor monta os valores herdados a partir do registro gravado.
+19. A herança fica no `sessionStorage` da aba (a última Instância criada): vale enquanto a aba estiver aberta, mesmo depois que a tela vai para a família criada, e some ao fechar a aba. O formulário pede ao servidor `GET /equipe/acervo/nova?from={instância}`, e o servidor monta os valores herdados a partir do registro gravado.
 20. Criar uma família leva a tela para a página da listagem que começa nela, já aberta (`/equipe/acervo?after=...#f-w{id}`); criar uma Instância recarrega a família aberta.
-21. Os formulários vêm do servidor: `GET /equipe/acervo/nova?material=&from=` (família) e `GET /equipe/acervo/instancia/{id}/nova` (Instância da Obra de `{id}`), só para quem tem a permissão `cataloguing` (sem ela: 403).
+21. Os formulários vêm do servidor: `GET /equipe/acervo/nova?from=&isbn=` (família) e `GET /equipe/acervo/instancia/{id}/nova` (Instância da Obra de `{id}`), só para quem tem a permissão `cataloguing` (sem ela: 403).
 
 ## 2. Origem no Koha
 

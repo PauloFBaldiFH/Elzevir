@@ -72,17 +72,6 @@ item-status-lost = Lost
 item-status-withdrawn = Withdrawn
 item-status-restricted = Restricted
 
-## Categories of material
-material-book = Book
-material-periodical = Periodical
-material-map = Map
-material-score = Score
-material-sound-recording = Sound recording
-material-video = Video
-material-digital = Digital resource
-material-visual-material = Visual material
-material-mixed = Mixed materials
-
 ## Content and carrier, as their icons say them (bibframe-completo.md, item 15)
 content-text = Text
 content-notated-music = Notated music
@@ -161,6 +150,8 @@ staff-fields-items = Items
 staff-fields-preferred-title = Preferred title
 staff-fields-material = Content
 staff-fields-carrier = Carrier
+staff-fields-work-classes = Classes of the Work
+staff-fields-instance-classes = Classes of the Instance
 staff-fields-classification = Classification
 staff-fields-languages = Languages
 staff-fields-contributions = Contributions
@@ -222,7 +213,7 @@ edit-error-title-empty = The title cannot be empty.
 edit-error-language-code = Use three-letter language codes, such as por or eng.
 edit-error-isbn = This ISBN is not valid: check the digits.
 edit-error-issn = This ISSN is not valid: check the digits.
-edit-error-material-required = Choose the category of material.
+edit-error-class = Choose classes of this entity from the list.
 
 ## Editing in the focused block
 edit-done = Done
@@ -248,6 +239,7 @@ edit-column-qualifier = Qualifier
 edit-column-text = Text
 edit-column-language = Language
 edit-column-concept = Term
+edit-column-class = Class
 edit-column-label = Name
 edit-column-iri = IRI
 edit-column-details = Its own statements, one per line (property: value)

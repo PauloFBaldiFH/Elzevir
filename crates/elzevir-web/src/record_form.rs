@@ -5,30 +5,18 @@
 
 use elzevir_app::catalog::NewRecord;
 use elzevir_app::profiles::{InstanceField, WorkField};
-use elzevir_domain::catalog::{
-    AgentKind, IdentifierKind, MaterialType, NoteKind, SubjectKind, WorkRelationKind,
-};
+use elzevir_data::bibframe;
+use elzevir_domain::catalog::{AgentKind, IdentifierKind, NoteKind, SubjectKind, WorkRelationKind};
+use elzevir_domain::statement::EntityKind;
 use elzevir_web_templates::{
     ColumnKind, FormCell, FormColumn, FormField, FormInput, FormOption, I18n, RecordForm,
 };
 
 use crate::form_sections::{instance_sections, work_sections};
-use crate::opac::material_key;
+use crate::icons::class_icon;
 
 /// The serde names of the vocabularies, with their labels. A unit test checks each name
 /// against the type's own serde form.
-const MATERIALS: &[(MaterialType, &str)] = &[
-    (MaterialType::Book, "book"),
-    (MaterialType::Periodical, "periodical"),
-    (MaterialType::Map, "map"),
-    (MaterialType::Score, "score"),
-    (MaterialType::SoundRecording, "sound_recording"),
-    (MaterialType::Video, "video"),
-    (MaterialType::Digital, "digital"),
-    (MaterialType::VisualMaterial, "visual_material"),
-    (MaterialType::Mixed, "mixed"),
-];
-
 const AGENTS: &[(AgentKind, &str, &str)] = &[
     (AgentKind::Person, "person", "staff-agent-person"),
     (
@@ -106,33 +94,9 @@ fn options<T>(t: &I18n, table: &[(T, &'static str, &'static str)]) -> Vec<FormOp
         .map(|(_, value, key)| FormOption {
             value: (*value).to_owned(),
             label: t.get(key),
+            icon: None,
         })
         .collect()
-}
-
-fn material_options(t: &I18n) -> Vec<FormOption> {
-    MATERIALS
-        .iter()
-        .map(|(material, value)| FormOption {
-            value: (*value).to_owned(),
-            label: t.get(material_key(*material)),
-        })
-        .collect()
-}
-
-/// The category of material with this serde name.
-pub(crate) fn material_named(name: &str) -> Option<MaterialType> {
-    MATERIALS
-        .iter()
-        .find(|(_, serde_name)| *serde_name == name)
-        .map(|(material, _)| *material)
-}
-
-fn material_name(material: MaterialType) -> &'static str {
-    MATERIALS
-        .iter()
-        .find(|(variant, _)| *variant == material)
-        .map_or("", |(_, name)| name)
 }
 
 const fn column(
@@ -212,14 +176,10 @@ pub(crate) fn work_field(t: &I18n, record: &NewRecord, part: WorkField) -> FormF
                 required: true,
             },
         ),
-        WorkField::MaterialType => field(
-            "MaterialType",
-            "material_type",
-            "staff-fields-material",
-            FormInput::Select {
-                value: material_name(record.material_type).to_owned(),
-                options: material_options(t),
-            },
+        WorkField::Classes => classes_field(
+            EntityKind::Work,
+            &record.work_description.classes,
+            "staff-fields-work-classes",
         ),
         WorkField::Contributions => contributions_field(t, record),
         WorkField::Classification => classification_field(record),
@@ -305,18 +265,10 @@ pub(crate) fn instance_field(
         ),
         InstanceField::Identifiers => identifiers_field(t, record, new_identifier),
         InstanceField::Notes => notes_field(t, record),
-        InstanceField::MaterialType => field(
-            "MaterialType",
-            "material_type",
-            "staff-fields-material",
-            FormInput::Select {
-                value: instance
-                    .material_type
-                    .map(material_name)
-                    .unwrap_or_default()
-                    .to_owned(),
-                options: material_options(t),
-            },
+        InstanceField::Classes => classes_field(
+            EntityKind::Instance,
+            &instance.description.classes,
+            "staff-fields-instance-classes",
         ),
     }
 }
@@ -468,6 +420,42 @@ const RELATIONS: &[(WorkRelationKind, &str, &str)] = &[
 ];
 
 /// The Works this one relates to, each by its number (bibframe-completo.md, step 6d).
+/// The subclasses of the entity's class, one select per row, with the ontology's labels
+/// and the icon of the kind each stands for (bibframe-completo.md, item 14).
+fn classes_field(entity: EntityKind, classes: &[String], label_key: &'static str) -> FormField {
+    let parent = entity.bibframe().class_name();
+    let mut options: Vec<FormOption> = bibframe::subclasses(parent)
+        .map(|class| FormOption {
+            value: class.name.to_owned(),
+            label: class.label.to_owned(),
+            icon: class_icon(class.name),
+        })
+        .collect();
+    options.sort_by(|a, b| a.label.cmp(&b.label));
+    // A new row starts with no class; an empty one is dropped when the form is sent.
+    options.insert(
+        0,
+        FormOption {
+            value: String::new(),
+            label: String::new(),
+            icon: None,
+        },
+    );
+    let columns = [column(
+        "class",
+        "edit-column-class",
+        ColumnKind::Select(options),
+        false,
+    )];
+    let stored = classes.iter().map(|class| vec![class.clone()]).collect();
+    field(
+        "Classes",
+        "classes",
+        label_key,
+        rows(&columns, stored, vec![String::new()]),
+    )
+}
+
 fn relations_field(t: &I18n, record: &NewRecord) -> FormField {
     let columns = [
         column(
@@ -579,11 +567,12 @@ mod tests {
             include_str!("record_fields.rs"),
             include_str!("form_sections.rs"),
             include_str!("../../elzevir-app/src/editing.rs"),
+            include_str!("../../elzevir-app/src/creating.rs"),
         ];
         let mut missing = Vec::new();
         for source in sources {
             for chunk in source.split('"').skip(1).step_by(2) {
-                let is_key = ["staff-", "edit-", "material-"]
+                let is_key = ["staff-", "edit-", "content-", "carrier-"]
                     .iter()
                     .any(|prefix| chunk.starts_with(prefix))
                     && !chunk.contains(' ');
@@ -597,10 +586,6 @@ mod tests {
 
     #[test]
     fn every_name_is_the_serde_name_of_its_variant() {
-        for (material, name) in MATERIALS {
-            parses(name, *material);
-        }
-        assert_eq!(MATERIALS.len(), MaterialType::ALL.len());
         for (kind, name, _) in AGENTS {
             parses(name, *kind);
         }

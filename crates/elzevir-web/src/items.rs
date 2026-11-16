@@ -261,6 +261,6 @@ mod tests {
         ] {
             assert!(t.has(problem.message_key()), "{problem:?}");
         }
-        assert!(t.has("edit-error-material-required"));
+        assert!(t.has("edit-error-class"));
     }
 }

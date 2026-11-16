@@ -38,6 +38,27 @@ pub(crate) const fn carrier_badge(kind: CarrierKind) -> Badge {
     Badge { icon, label_key }
 }
 
+/// The icon of a subclass of `bf:Work` or `bf:Instance` in a select, if it has one.
+pub(crate) fn class_icon(class: &str) -> Option<&'static str> {
+    if class == "Tactile" {
+        return Some(content_badge(ContentKind::Tactile).icon);
+    }
+    ContentKind::of_class(class)
+        .map(|kind| content_badge(kind).icon)
+        .or_else(|| CarrierKind::of_class(class).map(|kind| carrier_badge(kind).icon))
+}
+
+/// The icon of a concept in a select, written `scheme/code`, if it has one.
+pub(crate) fn concept_icon(value: &str) -> Option<&'static str> {
+    match value.split_once('/')? {
+        ("contentTypes", code) => {
+            ContentKind::of_content(code).map(|kind| content_badge(kind).icon)
+        }
+        ("carriers", code) => CarrierKind::of_carrier(code).map(|kind| carrier_badge(kind).icon),
+        _ => None,
+    }
+}
+
 /// The badges of a record's content and carrier, in that order.
 pub(crate) fn material_badges(material: Material) -> Vec<Badge> {
     material
@@ -60,6 +81,17 @@ pub(crate) fn item_icon(material: Material) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn classes_and_concepts_in_selects_have_the_icon_of_their_kind() {
+        assert_eq!(class_icon("NotatedMusic"), Some("content-notated-music"));
+        assert_eq!(class_icon("Electronic"), Some("carrier-online"));
+        assert_eq!(class_icon("Tactile"), Some("content-tactile"));
+        assert_eq!(class_icon("Monograph"), None);
+        assert_eq!(concept_icon("contentTypes/spw"), Some("content-audio"));
+        assert_eq!(concept_icon("carriers/vd"), Some("carrier-disc"));
+        assert_eq!(concept_icon("mediaTypes/n"), None);
+    }
 
     const ICONS: &str = include_str!("../assets/elzevir-icons.svg");
 
