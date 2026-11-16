@@ -1,5 +1,5 @@
 <elz-item-grid class="item-grid" data-endpoint="{{ endpoint }}" data-version="{{ version }}"
-     data-failed="{{ t.get("edit-failed") }}" data-stale="{{ t.get("edit-stale") }}" data-refused="{{ t.get("items-refused") }}" data-saved="{{ t.get("edit-saved") }}">
+     data-failed="{{ t.get("edit-failed") }}" data-stale="{{ t.get("edit-stale") }}" data-refused="{{ t.get("items-refused") }}" data-saved="{{ t.get("edit-saved") }}"{% if let Some(suggestion) = suggestion %} data-suggested="{{ suggestion.call_number }}"{% endif %}>
   <div class="grid-tools">
     <strong class="grid-title">{{ t.get("items-grid-title") }}</strong>
     <label>{{ t.get("items-add-count") }} <input type="number" class="grid-add-count" min="1" max="500" value="1"></label>
@@ -12,6 +12,7 @@
     <span class="form-hint">{{ t.get("edit-done-hint") }}</span>
     <button type="button" data-grid="close">{{ t.get("items-close") }}</button>
   </div>
+  {% if let Some(suggestion) = suggestion %}<p class="form-hint grid-suggestion">{{ t.get("items-suggested-call-number") }} <strong>{{ suggestion.call_number }}</strong> ({{ t.get("items-suggested-entry") }} {{ suggestion.entry }})</p>{% endif %}
   <p class="grid-alert" role="alert" hidden></p>
   <div class="form-discard" role="alertdialog" hidden>
     <span>{{ t.get("edit-discard-question") }}</span>

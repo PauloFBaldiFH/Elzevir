@@ -1126,6 +1126,7 @@ class ItemGridElement extends HTMLElement {
   }
 
   setValue(cell, value) {
+    cell.classList.remove("cell-suggested");
     const list = this.lists[this.columns[this.cells(cell.parentElement).indexOf(cell)]?.list ?? ""];
     if (list) {
       cell.dataset.value = value;
@@ -1256,6 +1257,12 @@ class ItemGridElement extends HTMLElement {
       cell.tabIndex = -1;
       row.append(cell);
       this.setValue(cell, column.inherited && above[index] ? this.value(above[index]) : "");
+      // The first call number starts as the suggested one, marked until it is confirmed
+      // by saving or typed over (numero-de-chamada.md).
+      if (column.name === "call_number" && !this.value(cell) && this.dataset.suggested) {
+        this.setValue(cell, this.dataset.suggested);
+        cell.classList.add("cell-suggested");
+      }
     });
     this.body.append(row);
     return row;

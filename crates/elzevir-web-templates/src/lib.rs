@@ -13,7 +13,9 @@ mod staff_registries;
 pub use staff_catalog::{
     AuthorityLine, FamilyLine, HubLine, InstanceLine, PillLine, ScanLine, StaffCatalog, WorkLine,
 };
-pub use staff_item_grid::{GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid};
+pub use staff_item_grid::{
+    GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid, SuggestedCallNumber,
+};
 pub use staff_record_fields::{FieldEntry, FieldGroup, FieldValue, ItemFields, RecordFields};
 pub use staff_record_form::{
     ColumnKind, FormCell, FormColumn, FormField, FormInput, FormOption, FormPart, FormSection,

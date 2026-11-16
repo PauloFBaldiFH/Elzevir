@@ -7,6 +7,7 @@
 )]
 
 mod catalog_cli;
+mod config;
 mod koha_codes;
 mod memory;
 
@@ -199,6 +200,10 @@ fn serve(
     insecure_cookies: bool,
     iri_base: Option<String>,
 ) -> Result<(), String> {
+    let loaded = config::load(data_dir)?;
+    if let Some((path, report)) = &loaded.table_report {
+        println!("{}", config::summary(path, report));
+    }
     let DataDir { store, _lock } = open_store(data_dir)?;
     let store = Arc::new(store);
     let (index, parallelism) = open_index(data_dir)?;
@@ -208,6 +213,7 @@ fn serve(
     let config = WebConfig {
         secure_cookies: !insecure_cookies,
         iri_base,
+        author_table: loaded.author_table,
         ..WebConfig::default()
     };
     let opac = OpacPorts {

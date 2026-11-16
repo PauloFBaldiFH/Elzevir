@@ -8,12 +8,16 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
+use elzevir_app::call_number::suggest;
 use elzevir_app::catalog::{CodeLists, Named, Place};
 use elzevir_app::editing::Edit;
+use elzevir_app::export::stored_record;
 use elzevir_app::items::{GridItem, ItemFields, ItemsUpdate, MAX_ROWS, TypedRow, item_rows};
 use elzevir_app::staff::Permission;
 use elzevir_domain::catalog::{BranchId, CollectionId, InstanceId, Money, PolicyId, SublocationId};
-use elzevir_web_templates::{GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid};
+use elzevir_web_templates::{
+    GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid, SuggestedCallNumber,
+};
 use serde::Deserialize;
 
 use crate::catalog::signal;
@@ -162,17 +166,25 @@ pub(crate) async fn item_grid(
     }
     let items = Arc::clone(&state.inner.staff_ports.items);
     let catalog = Arc::clone(&state.inner.opac.catalog);
+    let records = Arc::clone(&state.inner.staff_ports.records);
+    let table = state.inner.config.author_table.clone();
     let instance = InstanceId(id);
     let read = tokio::task::spawn_blocking(move || {
         let view = catalog.instance(instance).map_err(drop)?;
         let rows = items.grid_items(instance).map_err(drop)?;
         let codes = catalog.codes().map_err(drop)?;
-        Ok::<_, ()>((view, rows, codes))
+        let suggestion = match table {
+            Some(table) => stored_record(&*records, instance)
+                .map_err(drop)?
+                .and_then(|stored| suggest(&stored.record, &table).ok()),
+            None => None,
+        };
+        Ok::<_, ()>((view, rows, codes, suggestion))
     })
     .await;
-    let (view, rows, codes) = match read {
-        Ok(Ok((Some(view), rows, codes))) => (view, rows, codes),
-        Ok(Ok((None, _, _))) => return (StatusCode::NOT_FOUND, "no such record").into_response(),
+    let (view, rows, codes, suggestion) = match read {
+        Ok(Ok((Some(view), rows, codes, suggestion))) => (view, rows, codes, suggestion),
+        Ok(Ok((None, ..))) => return (StatusCode::NOT_FOUND, "no such record").into_response(),
         Ok(Err(())) | Err(_) => {
             return (StatusCode::SERVICE_UNAVAILABLE, "catalog unavailable").into_response();
         }
@@ -189,6 +201,10 @@ pub(crate) async fn item_grid(
             place_list("locations", &codes.locations, |id| id.0),
             place_list("collections", &codes.collections, |id| id.0),
         ],
+        suggestion: suggestion.map(|suggestion| SuggestedCallNumber {
+            call_number: suggestion.call_number,
+            entry: suggestion.entry,
+        }),
     })
 }
 
