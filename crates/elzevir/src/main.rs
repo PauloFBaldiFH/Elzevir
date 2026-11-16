@@ -8,7 +8,9 @@
 
 mod catalog_cli;
 mod config;
+mod init;
 mod koha_codes;
+mod local_disk;
 mod memory;
 mod server_config;
 
@@ -42,6 +44,8 @@ struct Cli {
 enum Command {
     /// Serves the OPAC and the staff interface.
     Serve(server_config::ServeArgs),
+    /// Initializes a new institution and its first administrator.
+    Init(init::InitArgs),
     /// Manages staff accounts.
     #[command(subcommand)]
     Staff(StaffAction),
@@ -89,6 +93,7 @@ fn main() -> ExitCode {
                     )
                 })
         }
+        Command::Init(args) => init::run(&args),
         Command::Staff(StaffAction::Add {
             data_dir,
             login,

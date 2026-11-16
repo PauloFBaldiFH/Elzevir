@@ -5,7 +5,7 @@ use std::io::Read;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 const MAX_BYTES: usize = 64 * 1024;
 
@@ -37,13 +37,21 @@ pub(crate) struct Settings {
     pub(crate) iri_base: Option<String>,
 }
 
-#[derive(Default, Deserialize)]
+#[derive(Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 struct FileConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    institution: Option<Institution>,
     server: Server,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct Institution {
+    name: String,
+}
+
+#[derive(Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 struct Server {
     data_dir: Option<PathBuf>,
@@ -82,6 +90,10 @@ pub(crate) enum ConfigError {
     MissingDataDir,
     #[error("data directory must not be empty")]
     EmptyDataDir,
+    #[error("institution name must contain 1 to 200 characters and no control characters")]
+    InvalidName,
+    #[error("cannot serialize initialization configuration")]
+    Serialize,
 }
 
 impl ServeArgs {
@@ -144,15 +156,62 @@ fn load(path: &Path) -> Result<FileConfig, ConfigError> {
                 .map_or(1, |line| line.chars().count() + 1),
         }
     })?;
-    if config
-        .server
-        .data_dir
-        .as_ref()
-        .is_some_and(|dir| dir.as_os_str().is_empty())
-    {
-        return Err(ConfigError::EmptyDataDir);
-    }
+    config.validate()?;
     Ok(config)
+}
+
+impl FileConfig {
+    fn validate(&self) -> Result<(), ConfigError> {
+        if let Some(institution) = &self.institution {
+            validate_name(&institution.name)?;
+        }
+        if self
+            .server
+            .data_dir
+            .as_ref()
+            .is_some_and(|dir| dir.as_os_str().is_empty())
+        {
+            return Err(ConfigError::EmptyDataDir);
+        }
+        Ok(())
+    }
+}
+
+fn validate_name(name: &str) -> Result<(), ConfigError> {
+    if name.trim().is_empty()
+        || name.trim().chars().count() > 200
+        || name.chars().any(char::is_control)
+    {
+        return Err(ConfigError::InvalidName);
+    }
+    Ok(())
+}
+
+/// Serializes the same schema that `serve --config` validates.
+pub(crate) fn render_init(
+    name: &str,
+    data_dir: &Path,
+    listen: SocketAddr,
+    insecure_cookies: bool,
+) -> Result<String, ConfigError> {
+    validate_name(name)?;
+    let config = FileConfig {
+        institution: Some(Institution {
+            name: name.trim().to_owned(),
+        }),
+        server: Server {
+            data_dir: Some(data_dir.to_owned()),
+            listen,
+            insecure_cookies,
+            iri_base: None,
+        },
+    };
+    config.validate()?;
+    let source = toml::to_string_pretty(&config).map_err(|_| ConfigError::Serialize)?;
+    if source.len() > MAX_BYTES {
+        return Err(ConfigError::Serialize);
+    }
+    Ok(source)
 }
 
 #[cfg(test)]

@@ -4,3 +4,6 @@
 /data-local/
 *.sql.gz
 *.mrc.local
+
+# Generated institution configuration.
+/elzevir.toml
