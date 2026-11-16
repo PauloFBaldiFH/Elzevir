@@ -1,82 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! The classes and the content, media and carrier that stand for a category of material
-//! (docs/specs/catalogo/bibframe-completo.md, item 31): what a record that only has a
-//! `material_type` becomes, until the forms choose classes and lists directly.
+//! Helpers over descriptions (docs/specs/catalogo/bibframe-completo.md): the description a
+//! new family starts with, and the texts that search and display read from statements.
 
-use elzevir_domain::catalog::MaterialType;
 use elzevir_domain::statement::{Description, Statement, Value};
 
-/// The Work's classes and `bf:content` for `material`, after the Library of Congress
-/// conversion of Leader/06 and /07 (`marc2bibframe2`, `conf/codeMaps.xml`, `contentTypes`).
+/// The Work and Instance a new family starts with, as most do: a printed book, that is a
+/// monographic text Work with `txt` content and a `bf:Print` Instance. The cataloguer
+/// changes what differs (bibframe-completo.md, item 14a).
 #[must_use]
-pub fn work_of_material(material: MaterialType) -> Description {
-    let (classes, content): (&[&str], Option<&str>) = match material {
-        MaterialType::Book => (&["Text", "Monograph"], Some("txt")),
-        MaterialType::Periodical => (&["Text", "Serial"], Some("txt")),
-        MaterialType::Map => (&["Cartography"], Some("cri")),
-        MaterialType::Score => (&["NotatedMusic"], Some("ntm")),
-        // Leader/06 `i` and `j` tell spoken word from music; the category does not.
-        MaterialType::SoundRecording => (&["Audio"], None),
-        MaterialType::Video => (&["MovingImage"], Some("tdi")),
-        MaterialType::Digital => (&["Multimedia"], Some("cop")),
-        MaterialType::VisualMaterial => (&["StillImage"], Some("sti")),
-        MaterialType::Mixed => (&["MixedMaterial"], None),
-    };
-    Description {
-        classes: classes.iter().map(|class| (*class).to_owned()).collect(),
-        statements: content
-            .map(|code| concept("content", "contentTypes", code))
-            .into_iter()
-            .collect(),
-    }
-}
-
-/// The Instance's classes for its own category: only an electronic edition says one.
-#[must_use]
-pub fn instance_of_material(material: Option<MaterialType>) -> Description {
-    Description {
-        classes: match material {
-            Some(MaterialType::Digital) => vec!["Electronic".to_owned()],
-            _ => Vec::new(),
+pub fn printed_book() -> (Description, Description) {
+    (
+        Description {
+            classes: vec!["Text".to_owned(), "Monograph".to_owned()],
+            statements: vec![concept("content", "contentTypes", "txt")],
         },
-        statements: Vec::new(),
-    }
-}
-
-/// The category of material that the Work's classes stand for, the reverse of
-/// [`work_of_material`]: what the `material_type` column keeps until stage 7c drops it
-/// (bibframe-completo.md, item 14). Classes with no category, or none, give a book.
-#[must_use]
-pub fn category_of(work: &Description) -> MaterialType {
-    let has = |class: &str| work.classes.iter().any(|name| name == class);
-    if has("Serial") {
-        return MaterialType::Periodical;
-    }
-    work.classes
-        .iter()
-        .find_map(|class| match class.as_str() {
-            "Text" => Some(MaterialType::Book),
-            "Cartography" => Some(MaterialType::Map),
-            "NotatedMusic" => Some(MaterialType::Score),
-            "Audio" | "MusicAudio" | "NonMusicAudio" => Some(MaterialType::SoundRecording),
-            "MovingImage" => Some(MaterialType::Video),
-            "Multimedia" | "Kit" => Some(MaterialType::Digital),
-            "StillImage" => Some(MaterialType::VisualMaterial),
-            "MixedMaterial" => Some(MaterialType::Mixed),
-            _ => None,
-        })
-        .unwrap_or(MaterialType::Book)
-}
-
-/// The Instance's own category, the reverse of [`instance_of_material`]: only an
-/// electronic edition has one.
-#[must_use]
-pub fn instance_category(instance: &Description) -> Option<MaterialType> {
-    instance
-        .classes
-        .iter()
-        .any(|class| class == "Electronic")
-        .then_some(MaterialType::Digital)
+        Description {
+            classes: vec!["Print".to_owned()],
+            statements: Vec::new(),
+        },
+    )
 }
 
 /// A statement whose value is a Library of Congress concept.
@@ -237,19 +179,9 @@ mod tests {
     }
 
     #[test]
-    fn every_category_becomes_a_valid_description() {
-        for &material in MaterialType::ALL {
-            let work = work_of_material(material);
-            assert!(!work.classes.is_empty(), "{material:?}");
-            check_description(EntityKind::Work, &work).unwrap();
-            check_description(EntityKind::Instance, &instance_of_material(Some(material))).unwrap();
-        }
-        assert_eq!(
-            work_of_material(MaterialType::Book),
-            Description {
-                classes: vec!["Text".to_owned(), "Monograph".to_owned()],
-                statements: vec![concept("content", "contentTypes", "txt")],
-            }
-        );
+    fn a_new_family_starts_as_a_valid_printed_book() {
+        let (work, instance) = printed_book();
+        check_description(EntityKind::Work, &work).unwrap();
+        check_description(EntityKind::Instance, &instance).unwrap();
     }
 }

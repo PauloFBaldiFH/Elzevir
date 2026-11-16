@@ -3,7 +3,6 @@ source: crates/elzevir-app/tests/marc_mapping.rs
 expression: mapped
 ---
 work_title: As aventuras de Karl Marx contra o Barão de Munchhausen
-material_type: book
 work_description:
   classes:
     - Text
@@ -65,7 +64,6 @@ subjects:
     identifiers: []
 instance:
   title: "As aventuras de Karl Marx contra o Barão de Munchhausen : marxismo e positivismo na sociologia do conhecimento"
-  material_type: ~
   description:
     classes: []
     statements:

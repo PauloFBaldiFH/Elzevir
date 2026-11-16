@@ -21,9 +21,7 @@ use crate::catalog::{
 };
 use crate::statements::{replace_classes, replace_property};
 use crate::{CommandFailed, StoreError, WriteTx};
-use elzevir_app::description::{category_of, instance_category};
-use elzevir_domain::catalog::MaterialType;
-use elzevir_domain::statement::{Description, EntityKind, EntityRef};
+use elzevir_domain::statement::{EntityKind, EntityRef};
 
 type Edited = Result<CatalogOutput, CommandFailed<WriteRefusal>>;
 
@@ -141,18 +139,7 @@ fn apply_work_change(
                 entity: EntityKind::Work,
                 id,
             };
-            let classes = replace_classes(connection, subject, classes)?;
-            // The old column follows the classes until stage 7c drops it.
-            let category = category_of(&Description {
-                classes,
-                statements: Vec::new(),
-            });
-            set(
-                connection,
-                "UPDATE works SET material_type = ?2 WHERE id = ?1",
-                id,
-                &category.code(),
-            )?;
+            replace_classes(connection, subject, classes)?;
         }
         WorkChange::Classification { number, scheme } => {
             let scheme = optional_term(
@@ -318,17 +305,7 @@ fn apply_instance_change(
                 entity: EntityKind::Instance,
                 id,
             };
-            let classes = replace_classes(connection, subject, classes)?;
-            let category = instance_category(&Description {
-                classes,
-                statements: Vec::new(),
-            });
-            set(
-                connection,
-                "UPDATE instances SET material_type = ?2 WHERE id = ?1",
-                id,
-                &category.map(MaterialType::code),
-            )?;
+            replace_classes(connection, subject, classes)?;
             return Ok(());
         }
         InstanceChange::Edition(edition) => {

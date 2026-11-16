@@ -6,7 +6,7 @@
 //! whose mapping did not change. An unedited record therefore comes back byte for byte.
 
 use elzevir_domain::catalog::{
-    AgentKind, AuthorityLinkKind, IdentifierKind, MaterialType, NoteKind, SubjectKind,
+    AgentKind, AuthorityLinkKind, IdentifierKind, NoteKind, SubjectKind,
 };
 use elzevir_marc::{Field, Record, Subfield, Tag};
 use std::borrow::Cow;
@@ -51,11 +51,11 @@ pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record 
         fields: Vec::new(),
     });
     let changed = |part: &dyn Fn(&NewRecord) -> bool| before.as_ref().is_none_or(|b| !part(b));
-    if changed(&|b| b.material_type == model.material_type) {
-        set_material_type(&mut out, model.material_type);
+    if changed(&|b| b.work_description.classes == model.work_description.classes) {
+        set_leader_type(&mut out, &model.work_description.classes);
     }
-    if changed(&|b| b.instance.material_type == model.instance.material_type) {
-        set_instance_material_type(&mut out, model.instance.material_type);
+    if changed(&|b| b.instance.description.classes == model.instance.description.classes) {
+        set_electronic(&mut out, &model.instance.description.classes);
     }
     coded::write(
         &mut out,
@@ -111,32 +111,45 @@ pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record 
     out
 }
 
-fn set_material_type(out: &mut Record, material_type: MaterialType) {
-    let (record_type, level) = match material_type {
-        MaterialType::Book => (b'a', b'm'),
-        MaterialType::Periodical => (b'a', b's'),
-        MaterialType::Map => (b'e', b'm'),
-        MaterialType::Score => (b'c', b'm'),
-        MaterialType::SoundRecording => (b'j', b'm'),
-        MaterialType::Video => (b'g', b'm'),
-        MaterialType::Digital => (b'm', b'm'),
-        MaterialType::VisualMaterial => (b'k', b'm'),
-        MaterialType::Mixed => (b'p', b'c'),
-    };
-    if let Some([six, seven]) = out
-        .leader
-        .get_mut(6..8)
-        .and_then(|s| <&mut [u8; 2]>::try_from(s).ok())
-    {
-        *six = record_type;
-        *seven = level;
+/// Leader/06 and /07 from the Work's classes, the reverse of the import (bibframe-
+/// completo.md, item 10j). A position no class speaks for keeps its byte.
+fn set_leader_type(out: &mut Record, classes: &[String]) {
+    let has = |class: &str| classes.iter().any(|name| name == class);
+    let manuscript = has("Manuscript");
+    let record_type = classes.iter().find_map(|class| match class.as_str() {
+        "Text" if manuscript => Some(b't'),
+        "Text" => Some(b'a'),
+        "NotatedMusic" if manuscript => Some(b'd'),
+        "NotatedMusic" => Some(b'c'),
+        "Cartography" if manuscript => Some(b'f'),
+        "Cartography" => Some(b'e'),
+        "MovingImage" => Some(b'g'),
+        "NonMusicAudio" => Some(b'i'),
+        "MusicAudio" | "Audio" => Some(b'j'),
+        "StillImage" => Some(b'k'),
+        "Multimedia" | "Kit" => Some(b'm'),
+        "MixedMaterial" => Some(b'p'),
+        "Object" => Some(b'r'),
+        _ => None,
+    });
+    let level = classes.iter().find_map(|class| match class.as_str() {
+        "Monograph" => Some(b'm'),
+        "Serial" => Some(b's'),
+        "Collection" => Some(b'c'),
+        "Integrating" => Some(b'i'),
+        _ => None,
+    });
+    for (position, byte) in [(6, record_type), (7, level)] {
+        if let (Some(slot), Some(byte)) = (out.leader.get_mut(position), byte) {
+            *slot = byte;
+        }
     }
 }
 
 /// An electronic Instance gets a `007` for a remote electronic resource when it has none.
-fn set_instance_material_type(out: &mut Record, material_type: Option<MaterialType>) {
+fn set_electronic(out: &mut Record, classes: &[String]) {
     let has_007 = out.fields.iter().any(|f| f.tag().as_bytes() == b"007");
-    if material_type == Some(MaterialType::Digital) && !has_007 {
+    if classes.iter().any(|class| class == "Electronic") && !has_007 {
         insert_in_tag_order(
             out,
             vec![Field::Control {

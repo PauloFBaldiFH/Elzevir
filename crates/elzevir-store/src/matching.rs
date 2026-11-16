@@ -9,7 +9,7 @@ use elzevir_app::catalog::{
 };
 use elzevir_app::commands::WriteRefusal;
 use elzevir_app::matching::{ItemsDecision, RecordAction, decide, match_keys};
-use elzevir_domain::catalog::{InstanceId, ItemId, MaterialType, Vocabulary};
+use elzevir_domain::catalog::{InstanceId, ItemId, Vocabulary};
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::catalog::{
@@ -222,14 +222,12 @@ pub(crate) fn replace_description(
     )?;
     connection
         .execute(
-            "UPDATE works SET title = ?2, material_type = ?3, classification = ?4,
-                 classification_scheme = ?5, summary = ?6, audience = ?7, sort_key = ?8,
-                 row_version = row_version + 1
+            "UPDATE works SET title = ?2, classification = ?3, classification_scheme = ?4,
+                 summary = ?5, audience = ?6, sort_key = ?7, row_version = row_version + 1
              WHERE id = ?1",
             params![
                 work,
                 record.work_title,
-                record.material_type.code(),
                 record.classification,
                 scheme,
                 record.summary,
@@ -264,16 +262,14 @@ pub(crate) fn replace_description(
     link_contributions(connection, work, &record.contributions)?;
     link_subjects(connection, work, &record.subjects)?;
     let description = &record.instance;
-    let material: MaterialType = description.material_type.unwrap_or(record.material_type);
     connection
         .execute(
-            "UPDATE instances SET title = ?2, material_type = ?3, edition = ?4, place = ?5,
-                 publisher = ?6, date = ?7, extent = ?8, series = ?9
+            "UPDATE instances SET title = ?2, edition = ?3, place = ?4, publisher = ?5, date = ?6,
+                 extent = ?7, series = ?8
              WHERE id = ?1",
             params![
                 instance.0,
                 description.title,
-                material.code(),
                 description.edition,
                 description.place,
                 description.publisher,

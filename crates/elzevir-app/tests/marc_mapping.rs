@@ -7,7 +7,6 @@
 )]
 
 use elzevir_app::marc_mapping::marc_to_bibframe;
-use elzevir_domain::catalog::MaterialType;
 use elzevir_marc::{Limits, Record, RecordRef};
 
 /// The first 200 records of the test base, exported by `tools/export.pl` (ISO 2709, with
@@ -56,12 +55,16 @@ fn items_follow_koha_952_conventions() {
 }
 
 #[test]
-fn categories_come_from_the_leader() {
+fn classes_come_from_the_leader() {
     let records = records();
     let periodicals = records
         .iter()
         .filter(|(_, record)| {
-            marc_to_bibframe(record, None).unwrap().material_type == MaterialType::Periodical
+            let classes = marc_to_bibframe(record, None)
+                .unwrap()
+                .work_description
+                .classes;
+            classes.iter().any(|class| class == "Serial")
         })
         .count();
     assert_eq!(periodicals, 1, "the corpus has one `as` record");

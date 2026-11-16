@@ -12,24 +12,13 @@ Regras gerais:
 2. **Primeira ocorrência**: campo não repetível no modelo usa a primeira ocorrência no MARC.
 3. Campo ou subcampo que não está nas tabelas abaixo não vira coluna; continua no registro original, que é guardado inteiro (B.2 item 1).
 
-### 1.1 Categoria do material (Obra)
+### 1.1 Classes da Obra e da Instância
 
-Do líder, posições 06 e 07:
+As classes da Obra vêm do líder, posições 06 e 07, como na conversão da LC ([BIBFRAME completo](bibframe-completo.md), item 10j). Não há mais categoria de material.
 
-| Líder 06 | Líder 07 | `MaterialType` |
-|---|---|---|
-| `a`, `t` | `b`, `i`, `s` | Periódico |
-| `a`, `t` | outros | Livro |
-| `e`, `f` | | Mapa |
-| `c`, `d` | | Partitura |
-| `i`, `j` | | Gravação sonora |
-| `g` | | Vídeo |
-| `m` | | Digital |
-| `k`, `r` | | Material visual |
-| `o`, `p` | | Misto |
-| outro | | Livro |
+A **Instância** recebe a classe `bf:Electronic` quando o líder 06 não é `m` e o registro descreve um recurso eletrônico: `007/00` = `c`, ou `008/23` (forma do item; vale para líder 06 `a`, `t`, `c`, `d`, `o` e `p`) é `o`, `q` ou `s`.
 
-A **Instância** recebe `Digital` quando a Obra não é `Digital` e o registro descreve um recurso eletrônico: `007/00` = `c`, ou `008/23` (forma do item, para livros, periódicos, partituras e misto) é `o`, `q` ou `s`. Senão, fica com a categoria da Obra.
+Na exportação, quando as classes mudaram, o líder 06 e 07 voltam pela tabela inversa (`Text` `a`, ou `t` com `Manuscript`; `NotatedMusic` `c`/`d`; `Cartography` `e`/`f`; `MovingImage` `g`; `NonMusicAudio` `i`; `MusicAudio` e `Audio` `j`; `StillImage` `k`; `Multimedia` e `Kit` `m`; `MixedMaterial` `p`; `Object` `r`; `Monograph` `m`, `Serial` `s`, `Collection` `c`, `Integrating` `i`). Posição que nenhuma classe responde fica como estava. Uma Instância que passou a ser `bf:Electronic` e não tem `007` ganha `007` `cr`.
 
 ### 1.2 Obra
 

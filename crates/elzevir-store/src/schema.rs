@@ -9,7 +9,7 @@
 use std::path::Path;
 use std::time::Duration;
 
-use elzevir_app::description::{instance_of_material, work_of_material};
+use elzevir_app::description::concept;
 use elzevir_app::listing::sort_key;
 use elzevir_app::marc_mapping::{
     source_admin, source_audience, source_books, source_classification, source_content,
@@ -20,7 +20,7 @@ use elzevir_app::marc_mapping::{
 };
 use elzevir_app::matching::{identifier_key, koha_biblionumber_key};
 use elzevir_domain::catalog::IdentifierKind;
-use elzevir_domain::catalog::{MaterialType, SubjectKind};
+use elzevir_domain::catalog::SubjectKind;
 use elzevir_domain::statement::{Description, EntityKind, EntityRef, Statement, Value};
 use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
 
@@ -448,6 +448,19 @@ const MIGRATIONS: &[&str] = &[
     // 35: the forms of the Work of `380` become `bf:genreForm` statements (item 29, part
     // 5f); the migration only fills them from the stored source records.
     "SELECT 1;",
+    // 36: the category of material leaves (bibframe-completo.md, item 14b). An Instance
+    // whose own category was digital (7) under a Work that was not keeps it as the class
+    // `Electronic`, as the import now gives it; then the columns go.
+    "INSERT OR IGNORE INTO ontology_names (name) VALUES ('Electronic');
+     INSERT OR IGNORE INTO entity_classes (subject_kind, subject_id, position, class)
+         SELECT 3, i.id,
+                COALESCE((SELECT MAX(position) + 1 FROM entity_classes
+                          WHERE subject_kind = 3 AND subject_id = i.id), 0),
+                (SELECT id FROM ontology_names WHERE name = 'Electronic')
+         FROM instances i JOIN works w ON w.id = i.work_id
+         WHERE i.material_type = 7 AND w.material_type IS NOT 7;
+     ALTER TABLE works DROP COLUMN material_type;
+     ALTER TABLE instances DROP COLUMN material_type;",
 ];
 
 /// The migration that creates `match_keys`.
@@ -503,6 +516,9 @@ const BOOKS_VERSION: i64 = 33;
 const PERIODS_VERSION: i64 = 34;
 /// Migration that reads the forms of the Work (`380`).
 const FORMS_VERSION: i64 = 35;
+/// Migration that drops the category of material (bibframe-completo.md, item 14b).
+#[cfg(test)]
+const NO_CATEGORY_VERSION: i64 = 36;
 /// Migration that drops `extra`.
 const DROP_EXTRA_VERSION: i64 = 13;
 /// Migration that adds the classes, and fills them with content, media, carrier and issuance.
@@ -759,17 +775,12 @@ fn backfill_descriptions(connection: &Connection) -> Result<(), StoreError> {
     let mut described_work = None;
     while let Some(row) = rows.next()? {
         let work: i64 = row.get(0)?;
-        // Rows written before categories of material existed read as books, as the export does.
-        let work_material = material(row.get(1)?)?.unwrap_or(MaterialType::Book);
         let instance: Option<i64> = row.get(2)?;
         let source: Option<Vec<u8>> = row.get(4)?;
         let from_source = source.as_deref().and_then(source_description);
         let (work_description, instance_description) = match from_source {
             Some(both) => both,
-            None => (
-                work_of_material(work_material),
-                instance_of_material(material(row.get(3)?)?),
-            ),
+            None => legacy_description(row.get(1)?, row.get(3)?)?,
         };
         // The first row of a Work is the one with a source record, when it has one.
         if described_work != Some(work) {
@@ -1089,12 +1100,48 @@ fn add_missing(
     describe(connection, entity, id, &description)
 }
 
-fn material(code: Option<u8>) -> Result<Option<MaterialType>, StoreError> {
-    code.map(|code| {
-        MaterialType::from_code(code)
-            .ok_or_else(|| StoreError::Sqlite(format!("material type code {code} is unknown")))
-    })
-    .transpose()
+/// What a stored category of material (the codes of migration 4) stood for, as migration
+/// 12 described records without a source record (bibframe-completo.md, item 10l). Rows
+/// written before categories existed read as books; only a digital Instance under a Work
+/// of another category is `Electronic`.
+fn legacy_description(
+    work: Option<u8>,
+    instance: Option<u8>,
+) -> Result<(Description, Description), StoreError> {
+    let work = work.unwrap_or(1);
+    let (classes, content): (&[&str], Option<&str>) = match work {
+        1 => (&["Text", "Monograph"], Some("txt")),
+        2 => (&["Text", "Serial"], Some("txt")),
+        3 => (&["Cartography"], Some("cri")),
+        4 => (&["NotatedMusic"], Some("ntm")),
+        // The category did not tell spoken word from music.
+        5 => (&["Audio"], None),
+        6 => (&["MovingImage"], Some("tdi")),
+        7 => (&["Multimedia"], Some("cop")),
+        8 => (&["StillImage"], Some("sti")),
+        9 => (&["MixedMaterial"], None),
+        code => {
+            return Err(StoreError::Sqlite(format!(
+                "material type code {code} is unknown"
+            )));
+        }
+    };
+    let work_description = Description {
+        classes: classes.iter().map(|class| (*class).to_owned()).collect(),
+        statements: content
+            .map(|code| concept("content", "contentTypes", code))
+            .into_iter()
+            .collect(),
+    };
+    let instance_description = Description {
+        classes: if instance == Some(7) {
+            vec!["Electronic".to_owned()]
+        } else {
+            Vec::new()
+        },
+        statements: Vec::new(),
+    };
+    Ok((work_description, instance_description))
 }
 
 fn describe(
@@ -1208,7 +1255,7 @@ mod catalog_tests {
         connection
             .execute_batch(
                 "DROP TABLE instance_notes; ALTER TABLE works DROP COLUMN audience;
-                 DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; DROP TABLE koha_type_statements; ALTER TABLE circulation_policies ADD COLUMN code TEXT; UPDATE circulation_policies SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 4 AND local_id = circulation_policies.id), 'P' || id); ALTER TABLE circulation_policies RENAME COLUMN name TO description; ALTER TABLE circulation_policies RENAME TO item_types; ALTER TABLE items RENAME COLUMN policy_id TO item_type; DELETE FROM koha_codes WHERE kind = 4; ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id), 'B' || id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id; ALTER TABLE items DROP COLUMN collection_id; DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes; ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone; ALTER TABLE branches DROP COLUMN email; ALTER TABLE branches DROP COLUMN url; ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; DROP TABLE subject_identifiers; ALTER TABLE subjects DROP COLUMN name_parts; DROP TABLE contribution_identifiers; ALTER TABLE contributions DROP COLUMN role_term; ALTER TABLE agents DROP COLUMN name_parts; DROP INDEX subjects_identity; ALTER TABLE subjects DROP COLUMN subdivisions; CREATE UNIQUE INDEX subjects_identity ON subjects (kind, heading, coalesce(thesaurus, 0)); PRAGMA user_version = 5;",
+                 DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; DROP TABLE koha_type_statements; ALTER TABLE circulation_policies ADD COLUMN code TEXT; UPDATE circulation_policies SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 4 AND local_id = circulation_policies.id), 'P' || id); ALTER TABLE circulation_policies RENAME COLUMN name TO description; ALTER TABLE circulation_policies RENAME TO item_types; ALTER TABLE items RENAME COLUMN policy_id TO item_type; DELETE FROM koha_codes WHERE kind = 4; ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id), 'B' || id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id; ALTER TABLE items DROP COLUMN collection_id; DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes; ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone; ALTER TABLE branches DROP COLUMN email; ALTER TABLE branches DROP COLUMN url; ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; DROP TABLE subject_identifiers; ALTER TABLE subjects DROP COLUMN name_parts; DROP TABLE contribution_identifiers; ALTER TABLE contributions DROP COLUMN role_term; ALTER TABLE agents DROP COLUMN name_parts; DROP INDEX subjects_identity; ALTER TABLE subjects DROP COLUMN subdivisions; CREATE UNIQUE INDEX subjects_identity ON subjects (kind, heading, coalesce(thesaurus, 0)); ALTER TABLE works ADD COLUMN material_type INTEGER; ALTER TABLE instances ADD COLUMN material_type INTEGER; PRAGMA user_version = 5;",
             )
             .unwrap();
         migrate(&mut connection).unwrap();
@@ -1220,19 +1267,10 @@ mod catalog_tests {
             |entity, id| read_description(&connection, EntityRef { entity, id }).unwrap();
         let work = description(EntityKind::Work, 1);
         assert_eq!(work.classes, ["Text", "Monograph"]);
-        assert_eq!(
-            work.statements,
-            [elzevir_app::description::concept(
-                "content",
-                "contentTypes",
-                "txt"
-            )]
-        );
+        assert_eq!(work.statements, [concept("content", "contentTypes", "txt")]);
         assert_eq!(
             description(EntityKind::Instance, 1).statements,
-            [elzevir_app::description::concept(
-                "issuance", "issuance", "mono"
-            )]
+            [concept("issuance", "issuance", "mono")]
         );
     }
 
@@ -2173,7 +2211,46 @@ mod catalog_tests {
 
     /// Takes a catalog back to schema `version`, undoing the migrations after it that change
     /// tables, so they can run again as on a database stored before them.
+    #[test]
+    fn migration_36_keeps_a_digital_edition_as_electronic_and_drops_the_category() {
+        let (_dir, mut connection) = catalog();
+        rewind(&connection, NO_CATEGORY_VERSION - 1);
+        connection
+            .execute_batch(
+                "UPDATE works SET material_type = 1; UPDATE instances SET material_type = 7;",
+            )
+            .unwrap();
+        migrate(&mut connection).unwrap();
+        let instance = EntityRef {
+            entity: EntityKind::Instance,
+            id: 1,
+        };
+        let classes = read_description(&connection, instance).unwrap().classes;
+        assert!(classes.contains(&"Electronic".to_owned()), "{classes:?}");
+        for table in ["works", "instances"] {
+            let category: i64 = connection
+                .query_row(
+                    &format!(
+                        "SELECT COUNT(*) FROM pragma_table_info('{table}')
+                         WHERE name = 'material_type'"
+                    ),
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(category, 0, "{table}");
+        }
+    }
+
     fn rewind(connection: &Connection, version: i64) {
+        if version < NO_CATEGORY_VERSION {
+            connection
+                .execute_batch(
+                    "ALTER TABLE works ADD COLUMN material_type INTEGER;
+                     ALTER TABLE instances ADD COLUMN material_type INTEGER;",
+                )
+                .unwrap();
+        }
         if version < SUBJECT_AGENTS_VERSION {
             connection
                 .execute_batch(

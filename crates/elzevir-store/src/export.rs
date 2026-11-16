@@ -9,8 +9,7 @@ use elzevir_app::catalog::{
 };
 use elzevir_app::export::{RecordSource, StoredRecord};
 use elzevir_domain::catalog::{
-    AgentKind, AuthorityLinkKind, HubId, IdentifierKind, InstanceId, MaterialType, Money, NoteKind,
-    SubjectKind,
+    AgentKind, AuthorityLinkKind, HubId, IdentifierKind, InstanceId, Money, NoteKind, SubjectKind,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
@@ -38,7 +37,6 @@ struct Head {
     instance: i64,
     work: i64,
     title: String,
-    material_type: Option<u8>,
     edition: Option<String>,
     place: Option<String>,
     publisher: Option<String>,
@@ -46,7 +44,6 @@ struct Head {
     extent: Option<String>,
     series: Option<String>,
     work_title: String,
-    work_material_type: Option<u8>,
     hub: Option<i64>,
     classification: Option<String>,
     classification_scheme: Option<String>,
@@ -60,20 +57,18 @@ impl Head {
             instance: row.get(0)?,
             work: row.get(1)?,
             title: row.get(2)?,
-            material_type: row.get(3)?,
-            edition: row.get(4)?,
-            place: row.get(5)?,
-            publisher: row.get(6)?,
-            date: row.get(7)?,
-            extent: row.get(8)?,
-            series: row.get(9)?,
-            work_title: row.get(10)?,
-            work_material_type: row.get(11)?,
-            hub: row.get(12)?,
-            classification: row.get(13)?,
-            classification_scheme: row.get(14)?,
-            summary: row.get(15)?,
-            audience: row.get(16)?,
+            edition: row.get(3)?,
+            place: row.get(4)?,
+            publisher: row.get(5)?,
+            date: row.get(6)?,
+            extent: row.get(7)?,
+            series: row.get(8)?,
+            work_title: row.get(9)?,
+            hub: row.get(10)?,
+            classification: row.get(11)?,
+            classification_scheme: row.get(12)?,
+            summary: row.get(13)?,
+            audience: row.get(14)?,
         })
     }
 }
@@ -84,9 +79,8 @@ fn records_after(
     limit: NonZeroUsize,
 ) -> Result<Vec<StoredRecord>, ReadFailure> {
     let mut statement = c.prepare_cached(
-        "SELECT instances.id, works.id, instances.title, instances.material_type, edition,
-                place, publisher, date, extent, series, works.title, works.material_type,
-                works.hub_id, works.classification, terms.code, works.summary, works.audience
+        "SELECT instances.id, works.id, instances.title, edition, place, publisher, date,
+                extent, series, works.title, works.hub_id, works.classification, terms.code, works.summary, works.audience
          FROM instances
          JOIN works ON works.id = instances.work_id
          LEFT JOIN terms ON terms.id = works.classification_scheme
@@ -106,22 +100,12 @@ const fn subject(entity: EntityKind, id: i64) -> EntityRef {
 }
 
 fn stored(c: &Connection, head: Head) -> Result<StoredRecord, ReadFailure> {
-    // Rows written before categories of material existed read as books, the mapping's
-    // own default.
-    let work_material = decode(
-        head.work_material_type,
-        "material type",
-        MaterialType::from_code,
-    )?
-    .unwrap_or(MaterialType::Book);
-    let material = decode(head.material_type, "material type", MaterialType::from_code)?;
     let relations = work_relations(c, head.work)?
         .into_iter()
         .map(|(kind, work)| NewWorkRelation { kind, work })
         .collect();
     let record = NewRecord {
         work_title: head.work_title,
-        material_type: work_material,
         work_description: read_description(c, subject(EntityKind::Work, head.work))?,
         hub: head.hub.map(HubId),
         relations,
@@ -134,8 +118,6 @@ fn stored(c: &Connection, head: Head) -> Result<StoredRecord, ReadFailure> {
         subjects: subjects(c, head.work)?,
         instance: NewInstance {
             title: head.title,
-            // The model keeps the Instance's category only where it differs from the Work's.
-            material_type: material.filter(|material| *material != work_material),
             description: read_description(c, subject(EntityKind::Instance, head.instance))?,
             edition: head.edition,
             place: head.place,
@@ -159,15 +141,6 @@ fn stored(c: &Connection, head: Head) -> Result<StoredRecord, ReadFailure> {
         instance: InstanceId(head.instance),
         record,
     })
-}
-
-fn decode<T>(
-    code: Option<u8>,
-    what: &'static str,
-    from_code: fn(u8) -> Option<T>,
-) -> Result<Option<T>, ReadFailure> {
-    code.map(|code| from_code(code).ok_or(ReadFailure::UnknownCode { what, code }))
-        .transpose()
 }
 
 fn required<T>(

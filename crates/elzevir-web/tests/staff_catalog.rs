@@ -25,8 +25,7 @@ use elzevir_app::staff::{
     Permission, StaffAccount, StaffDirectory, StaffDirectoryError, StaffId, hash_password,
 };
 use elzevir_domain::catalog::{
-    AgentKind, BranchId, IdentifierKind, InstanceId, ItemId, MaterialType, NoteKind, PolicyId,
-    WorkId,
+    AgentKind, BranchId, IdentifierKind, InstanceId, ItemId, NoteKind, PolicyId, WorkId,
 };
 use elzevir_web::{AppState, OpacPorts, StaffPorts, WebConfig, router};
 use elzevir_web_templates::I18n;
@@ -103,8 +102,7 @@ fn stored(instance: i64) -> StoredRecord {
         instance: InstanceId(instance),
         record: NewRecord {
             work_title: "Dom Casmurro".to_owned(),
-            material_type: MaterialType::Book,
-            work_description: elzevir_app::description::work_of_material(MaterialType::Book),
+            work_description: elzevir_app::description::printed_book().0,
             hub: None,
             relations: Vec::new(),
             classification: Some("869.3".to_owned()),

@@ -3,7 +3,6 @@ source: crates/elzevir-app/tests/marc_mapping.rs
 expression: mapped
 ---
 work_title: Análise de investimentos & demonstrativos financeiros
-material_type: book
 work_description:
   classes:
     - Text
@@ -94,7 +93,6 @@ subjects:
     identifiers: []
 instance:
   title: Análise de investimentos & demonstrativos financeiros
-  material_type: ~
   description:
     classes: []
     statements:

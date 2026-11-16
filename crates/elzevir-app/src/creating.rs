@@ -3,7 +3,6 @@
 //! the screen sends the same changes as an edit, applied to an empty Work and Instance.
 
 use crate::catalog::{InstanceChange, NewInstance, NewRecord, WorkChange};
-use crate::description::{category_of, instance_category};
 use crate::editing::{FieldError, validate_instance_changes, validate_work_changes};
 use elzevir_domain::statement::{Description, Statement};
 
@@ -52,7 +51,6 @@ pub fn new_record(
     }
     Ok(NewRecord {
         work_title,
-        material_type: category_of(&work_description),
         work_description,
         hub: None,
         relations: record_parts.relations,
@@ -157,7 +155,6 @@ fn fold_instance(changes: Vec<InstanceChange>) -> (Option<String>, NewInstance) 
             } => replace(&mut instance.description, &property, statements),
         }
     }
-    instance.material_type = instance_category(&instance.description);
     (title.filter(|title| !title.is_empty()), instance)
 }
 
@@ -181,7 +178,7 @@ const fn required(field: &'static str, message_key: &'static str) -> FieldError 
 
 #[cfg(test)]
 mod tests {
-    use elzevir_domain::catalog::{IdentifierKind, MaterialType};
+    use elzevir_domain::catalog::IdentifierKind;
 
     use super::*;
     use crate::catalog::{ClassChoice, NewIdentifier};
@@ -219,7 +216,7 @@ mod tests {
     }
 
     #[test]
-    fn the_chosen_classes_are_the_description_and_give_the_old_category() {
+    fn the_chosen_classes_are_the_description() {
         let record = new_record(
             vec![
                 WorkChange::Title("Revista".to_owned()),
@@ -229,9 +226,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(record.work_description.classes, ["Text", "Serial"]);
-        assert_eq!(record.material_type, MaterialType::Periodical);
         assert_eq!(record.instance.description.classes, ["Electronic"]);
-        assert_eq!(record.instance.material_type, Some(MaterialType::Digital));
     }
 
     #[test]

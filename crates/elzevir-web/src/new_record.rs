@@ -8,11 +8,11 @@ use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
 use elzevir_app::catalog::{NewIdentifier, NewInstance, NewRecord};
-use elzevir_app::description::work_of_material;
+use elzevir_app::description::printed_book;
 use elzevir_app::export::stored_record;
 use elzevir_app::listing::scanned_isbn;
 use elzevir_app::staff::Permission;
-use elzevir_domain::catalog::{IdentifierKind, InstanceId, MaterialType};
+use elzevir_domain::catalog::{IdentifierKind, InstanceId};
 use elzevir_domain::statement::Description;
 use elzevir_web_templates::{FormPart, FormSection, I18n, NewRecordForm};
 use serde::Deserialize;
@@ -127,13 +127,12 @@ async fn read(state: &AppState, instance: InstanceId) -> Result<Option<NewRecord
     }
 }
 
-/// An empty family. It starts as most do, a printed book: a monographic text Work
-/// with `txt` content and a `bf:Print` Instance; the cataloguer changes what differs.
+/// An empty family, starting as a printed book ([`printed_book`]).
 pub(crate) fn blank() -> NewRecord {
+    let (work_description, instance_description) = printed_book();
     NewRecord {
         work_title: String::new(),
-        material_type: MaterialType::Book,
-        work_description: work_of_material(MaterialType::Book),
+        work_description,
         hub: None,
         relations: Vec::new(),
         classification: None,
@@ -144,10 +143,7 @@ pub(crate) fn blank() -> NewRecord {
         contributions: Vec::new(),
         subjects: Vec::new(),
         instance: NewInstance {
-            description: Description {
-                classes: vec!["Print".to_owned()],
-                statements: Vec::new(),
-            },
+            description: instance_description,
             ..NewInstance::default()
         },
         items: Vec::new(),

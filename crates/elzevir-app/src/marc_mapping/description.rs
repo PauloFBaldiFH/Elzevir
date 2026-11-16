@@ -54,7 +54,8 @@ pub(super) fn work(marc: &Marc<'_>) -> Description {
 }
 
 /// The Instance: issuance from `334 $b` or else Leader/07, media `337 $b`, carrier `338 $b`.
-/// The conversion gives an Instance no class of its own.
+/// The conversion gives an Instance no class of its own; an electronic edition gets
+/// `bf:Electronic` here (bibframe-completo.md, item 10j).
 pub(super) fn instance(marc: &Marc<'_>) -> Description {
     let mut statements = coded(marc, *b"334", "issuance", "issuance");
     if marc.first(b"334").is_none()
@@ -79,7 +80,11 @@ pub(super) fn instance(marc: &Marc<'_>) -> Description {
     statements.extend(physical::of_instance(marc));
     statements.extend(admin::of_instance(marc));
     Description {
-        classes: Vec::new(),
+        classes: if super::instance::electronic(marc) {
+            vec!["Electronic".to_owned()]
+        } else {
+            Vec::new()
+        },
         statements,
     }
 }

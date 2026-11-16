@@ -174,12 +174,12 @@ pub(crate) fn replace_property(
 }
 
 /// Replaces the classes of `subject` with the chosen ones, checked as a description is
-/// (bibframe-completo.md, item 14); the statements stay. Returns the classes stored.
+/// (bibframe-completo.md, item 14); the statements stay.
 pub(crate) fn replace_classes(
     connection: &Connection,
     subject: EntityRef,
     chosen: &[ClassChoice],
-) -> Result<Vec<String>, CommandFailed<WriteRefusal>> {
+) -> Result<(), CommandFailed<WriteRefusal>> {
     let classes: Vec<String> = chosen.iter().map(|choice| choice.class.clone()).collect();
     statement::check_description(
         subject.entity,
@@ -196,7 +196,7 @@ pub(crate) fn replace_classes(
         )
         .map_err(StoreError::from)?;
     insert_classes(connection, subject, &classes)?;
-    Ok(classes)
+    Ok(())
 }
 
 fn insert_classes(

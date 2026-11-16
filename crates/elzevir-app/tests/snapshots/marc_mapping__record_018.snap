@@ -3,7 +3,6 @@ source: crates/elzevir-app/tests/marc_mapping.rs
 expression: mapped
 ---
 work_title: A Presença inquietante
-material_type: book
 work_description:
   classes:
     - Text
@@ -148,7 +147,6 @@ subjects:
     identifiers: []
 instance:
   title: "A Presença inquietante : a democracia norte-americana e o negro"
-  material_type: ~
   description:
     classes: []
     statements:

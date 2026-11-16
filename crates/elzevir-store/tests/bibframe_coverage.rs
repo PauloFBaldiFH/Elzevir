@@ -16,10 +16,10 @@ use elzevir_app::catalog::{
     NewRecord, StatementReader, StatementsUpdate,
 };
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
-use elzevir_app::description::{concept, work_of_material};
+use elzevir_app::description::{concept, printed_book};
 use elzevir_data::bibframe::{self, PropertyKind, properties_of};
 use elzevir_data::vocabulary;
-use elzevir_domain::catalog::{HubId, MaterialType};
+use elzevir_domain::catalog::HubId;
 use elzevir_domain::statement::{
     Description, EntityKind, EntityRef, Resource, Statement, StatementRefusal, TYPED, Value,
     is_typed,
@@ -111,7 +111,6 @@ fn record(
 ) -> NewRecord {
     NewRecord {
         work_title: title.to_owned(),
-        material_type: MaterialType::Book,
         work_description,
         hub,
         relations: Vec::new(),
@@ -166,7 +165,7 @@ fn catalog() -> Catalog {
     let record = record(
         "Dom Casmurro",
         Some(hub),
-        work_of_material(MaterialType::Book),
+        printed_book().0,
         Description {
             classes: vec!["Electronic".to_owned()],
             statements: vec![concept("carrier", "carriers", "cr")],
@@ -510,10 +509,7 @@ fn the_version_moves_and_stale_or_bad_edits_are_refused() {
 fn a_record_keeps_its_classes_and_its_coded_values() {
     let catalog = catalog();
     let [_, work, instance, _] = catalog.subjects;
-    assert_eq!(
-        catalog.store.description(work).unwrap(),
-        work_of_material(MaterialType::Book)
-    );
+    assert_eq!(catalog.store.description(work).unwrap(), printed_book().0);
     let stored = catalog.store.description(instance).unwrap();
     assert_eq!(stored.classes, ["Electronic"]);
     assert_eq!(stored.statements, [concept("carrier", "carriers", "cr")]);

@@ -15,12 +15,12 @@ use elzevir_app::catalog::{
     NewIdentifier, NewInstance, NewRecord, ShelfSignal, WorkChange, WorkUpdate,
 };
 use elzevir_app::commands::{WriteCommand, WriteOutput};
-use elzevir_app::description::work_of_material;
+use elzevir_app::description::printed_book;
 use elzevir_app::export::item_codes;
 use elzevir_app::import::{ImportOptions, import_marc21};
 use elzevir_app::listing::{CatalogListing, FamilyCursor, FamilyHead, browse, sort_key};
 use elzevir_app::material::ContentKind;
-use elzevir_domain::catalog::{AgentKind, HubId, IdentifierKind, InstanceId, MaterialType, WorkId};
+use elzevir_domain::catalog::{AgentKind, HubId, IdentifierKind, InstanceId, WorkId};
 use elzevir_marc::Limits;
 use elzevir_store::{ElzevirHandler, ElzevirStore, StoreConfig};
 
@@ -115,7 +115,6 @@ fn the_listing_pages_through_every_record_in_title_order() {
 fn record(title: &str, hub: Option<HubId>) -> NewRecord {
     NewRecord {
         work_title: title.to_owned(),
-        material_type: MaterialType::Book,
         work_description: elzevir_domain::statement::Description::default(),
         hub,
         relations: Vec::new(),
@@ -285,7 +284,7 @@ fn pills_carry_the_signal_of_each_item() {
     let store = open(&dir);
     setup(&store);
     let mut with_items = record("Memórias póstumas", None);
-    with_items.work_description = work_of_material(MaterialType::Book);
+    with_items.work_description = printed_book().0;
     let lost = ItemStatus {
         lost: 1,
         ..ItemStatus::default()
@@ -347,7 +346,7 @@ fn migration_8_computes_the_keys_of_older_databases() {
         .execute_batch(
             "DROP INDEX works_in_listing; DROP INDEX hubs_in_listing;
              ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; DROP TABLE koha_type_statements; ALTER TABLE circulation_policies ADD COLUMN code TEXT; UPDATE circulation_policies SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 4 AND local_id = circulation_policies.id), 'P' || id); ALTER TABLE circulation_policies RENAME COLUMN name TO description; ALTER TABLE circulation_policies RENAME TO item_types; ALTER TABLE items RENAME COLUMN policy_id TO item_type; DELETE FROM koha_codes WHERE kind = 4; ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id), 'B' || id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id; ALTER TABLE items DROP COLUMN collection_id; DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes; ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone; ALTER TABLE branches DROP COLUMN email; ALTER TABLE branches DROP COLUMN url; ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names;
-             DROP TABLE subject_identifiers; ALTER TABLE subjects DROP COLUMN name_parts; DROP TABLE contribution_identifiers; ALTER TABLE contributions DROP COLUMN role_term; ALTER TABLE agents DROP COLUMN name_parts; DROP INDEX subjects_identity; ALTER TABLE subjects DROP COLUMN subdivisions; CREATE UNIQUE INDEX subjects_identity ON subjects (kind, heading, coalesce(thesaurus, 0)); PRAGMA user_version = 7;",
+             DROP TABLE subject_identifiers; ALTER TABLE subjects DROP COLUMN name_parts; DROP TABLE contribution_identifiers; ALTER TABLE contributions DROP COLUMN role_term; ALTER TABLE agents DROP COLUMN name_parts; DROP INDEX subjects_identity; ALTER TABLE subjects DROP COLUMN subdivisions; CREATE UNIQUE INDEX subjects_identity ON subjects (kind, heading, coalesce(thesaurus, 0)); ALTER TABLE works ADD COLUMN material_type INTEGER; ALTER TABLE instances ADD COLUMN material_type INTEGER; PRAGMA user_version = 7;",
         )
         .unwrap();
     drop(connection);
