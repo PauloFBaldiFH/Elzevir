@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! OPAC and staff listing latency over a large catalog (task 1.9 criteria: p95 under 50 ms
 //! for a search and under 30 ms for a record; task 2.3: p95 under 50 ms for a page of the
-//! staff listing, browsing or searching; all over one million records). Run with
+//! staff listing, browsing or searching; task 2.10: the same with the facets strip and a
+//! filter; all over one million records). Run with
 //! `cargo bench -p elzevir --bench opac`; `ELZEVIR_BENCH_RECORDS` sets the catalog size
 //! (default 1 000 000). Prints numbers; it asserts nothing, because speed depends on the
 //! machine.
@@ -195,6 +196,18 @@ async fn measure_listing(app: &Router, session: &str, records: usize) {
         );
     }
     report("staff listing, search page", search);
+    // Facets (docs/specs/catalogo/facetas.md): a filter alone, and words with a filter.
+    let mut filtered = Vec::with_capacity(REQUESTS);
+    for n in 0..REQUESTS {
+        let uri = if n % 2 == 0 {
+            "/equipe/acervo?q=&f=language%3Apor".to_owned()
+        } else {
+            let query = url_encode(queries.get(n % queries.len()).unwrap());
+            format!("/equipe/acervo?q={query}&f=language%3Apor")
+        };
+        filtered.push(time_as(app, &uri, session).await);
+    }
+    report("staff listing, filtered page", filtered);
 }
 
 /// The Work titles (`245 $a`) of the export.

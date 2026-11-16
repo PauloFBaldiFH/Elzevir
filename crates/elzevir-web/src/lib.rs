@@ -11,6 +11,7 @@ mod catalog;
 mod creating;
 mod described;
 mod editing;
+mod facets;
 mod form_sections;
 mod history;
 mod icons;

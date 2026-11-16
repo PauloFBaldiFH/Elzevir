@@ -98,6 +98,21 @@ staff-catalog-search-placeholder = Title, author, subject, ISBN, call number, ba
 staff-catalog-search-button = Search
 staff-catalog-next = More records
 staff-catalog-empty = Nothing to show.
+facet-strip-label = Narrow the listing
+facet-families = { $count ->
+    [one] One family
+   *[other] { $count } families
+}
+facet-remove = Remove this filter
+facet-clear = Clear filters
+facet-branch = Branch
+facet-content = Content
+facet-carrier = Carrier
+facet-genre = Genre
+facet-audience = Audience
+facet-language = Language
+facet-subject = Subject
+facet-year = Year
 staff-catalog-count = { $count ->
     [one] One record found
    *[other] { $count } records found

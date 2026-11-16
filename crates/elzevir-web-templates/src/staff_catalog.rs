@@ -26,6 +26,68 @@ pub struct StaffCatalog<'a> {
     pub rows: Vec<FamilyLine>,
     /// Where the next page is, when there is one.
     pub next_url: Option<String>,
+    /// The facets and filters strip (docs/specs/catalogo/facetas.md, part b), absent on a
+    /// scanned code's page.
+    pub strip: Option<FacetStrip>,
+}
+
+/// The strip under the search: active filters as removable chips and a menu per facet.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FacetStrip {
+    /// Families matching in all.
+    pub families: usize,
+    /// The filters in force, each with the address that drops it.
+    pub active: Vec<ActiveFilter>,
+    /// The filters as `facet:value`, carried by the search form so a new query keeps them.
+    pub kept: Vec<String>,
+    /// The address without any filter, when there is one.
+    pub clear_url: Option<String>,
+    /// One menu per facet that has values.
+    pub menus: Vec<FacetMenu>,
+}
+
+impl FacetStrip {
+    /// How many families match, as a sentence.
+    #[must_use]
+    pub fn families_text(&self, t: &I18n) -> String {
+        t.get_numbers(
+            "facet-families",
+            &[("count", u64::try_from(self.families).unwrap_or(u64::MAX))],
+        )
+    }
+}
+
+/// One filter in force.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActiveFilter {
+    /// Message key of its facet.
+    pub facet_key: &'static str,
+    /// The value, named.
+    pub label: String,
+    /// The listing without it.
+    pub remove_url: String,
+}
+
+/// The values of one facet.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FacetMenu {
+    /// Its name in URLs.
+    pub name: &'static str,
+    /// Message key of its title.
+    pub title_key: &'static str,
+    /// Its values, most families first.
+    pub options: Vec<FacetOption>,
+}
+
+/// One value of a facet.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FacetOption {
+    /// The value, named.
+    pub label: String,
+    /// Families that have it.
+    pub families: usize,
+    /// The listing with it as a filter; `None` when it is already one.
+    pub add_url: Option<String>,
 }
 
 impl StaffCatalog<'_> {

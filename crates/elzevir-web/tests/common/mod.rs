@@ -141,7 +141,24 @@ impl SearchIndex for Index {
         _: &elzevir_app::search::SearchQuery<'_>,
         _: SearchScope,
     ) -> Result<elzevir_app::search::FacetCounts, SearchError> {
-        Ok(elzevir_app::search::FacetCounts::default())
+        use elzevir_app::search::{Facet, FacetCounts, FacetValue};
+        // Every hit is in Portuguese; a third of them also in English.
+        let value = |value: &str, families| FacetValue {
+            value: value.to_owned(),
+            families,
+        };
+        let n = self.0.len();
+        Ok(FacetCounts {
+            families: n,
+            facets: if n == 0 {
+                Vec::new()
+            } else {
+                vec![(
+                    Facet::Language,
+                    vec![value("por", n), value("eng", n / 3 + 1)],
+                )]
+            },
+        })
     }
 }
 
