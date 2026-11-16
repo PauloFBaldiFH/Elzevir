@@ -20,7 +20,7 @@ use elzevir_app::memory::{MemoryProbe, MemoryReport};
 use elzevir_app::search::SearchHit;
 use elzevir_app::staff::{StaffAccount, StaffDirectory, StaffDirectoryError};
 use elzevir_domain::catalog::{
-    BranchId, InstanceId, ItemId, NoteKind, PolicyId, SublocationId, WorkId,
+    AgentKind, BranchId, InstanceId, ItemId, NoteKind, PolicyId, SublocationId, WorkId,
 };
 use elzevir_web::{AppState, OpacPorts, StaffPorts, WebConfig, router};
 use elzevir_web_templates::I18n;
@@ -69,7 +69,8 @@ fn view(id: i64, title: &str) -> InstanceView {
         classification: Some("310.62".to_owned()),
         summary: None,
         audience: Some("Ensino médio.".to_owned()),
-        contributors: Vec::new(),
+        genres: vec!["Romances".to_owned()],
+        contributors: vec![(AgentKind::Person, "Silva, Ana".to_owned())],
         subjects: Vec::new(),
         identifiers: Vec::new(),
         notes: vec![
@@ -245,7 +246,16 @@ async fn a_record_shows_its_items_and_is_rendered_once_per_version() {
     assert!(html.contains("General stacks"));
     assert!(!html.contains(">1<"));
     assert!(html.contains("<dt>Contents</dt>\n    <dd>Parte 1 -- Parte 2.</dd>"));
-    assert!(html.contains("<dt>Audience</dt><dd>Ensino médio.</dd>"));
+    // Audience, genre, agents and item status each carry their icon (bibframe-completo.md,
+    // item 17b).
+    assert!(html.contains(
+        r#"<dt>Audience</dt><dd><span class="chip"><svg class="badge-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#audience"></use></svg>Ensino médio.</span></dd>"#
+    ));
+    assert!(html.contains("<dt>Genre and form</dt>"));
+    assert!(html.contains(r#"elzevir-icons.svg#genre"></use></svg>Romances</span>"#));
+    assert!(html.contains("elzevir-icons.svg#agent-person"));
+    assert!(html.contains("elzevir-icons.svg#status-available"));
+    assert!(html.contains("elzevir-icons.svg#status-unavailable"));
     assert!(html.contains("<dt>Notes</dt>\n    <dd>Inclui índice.</dd>"));
     assert!(!html.contains("<Anuário>"));
     assert_eq!(catalog.reads.load(Ordering::SeqCst), 1);

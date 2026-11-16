@@ -8,7 +8,7 @@
     {% endif %}
     {% if !contributors.is_empty() %}
     <dt>{{ t.get("opac-record-contributors") }}</dt>
-    <dd>{% for contributor in contributors %}<span class="chip">{{ contributor }}</span>{% endfor %}</dd>
+    <dd>{% for contributor in contributors %}<span class="chip"><svg class="badge-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ contributor.icon }}"></use></svg>{{ contributor.text }}</span>{% endfor %}</dd>
     {% endif %}
     {% if !material.is_empty() %}<dt>{{ t.get("opac-record-material") }}</dt><dd>{% for badge in material %}<span class="material-badge"><svg class="badge-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ badge.icon }}"></use></svg>{{ t.get(badge.label_key) }}</span>{% endfor %}</dd>{% endif %}
     {% if let Some(publication) = publication %}<dt>{{ t.get("opac-record-publication") }}</dt><dd>{{ publication }}</dd>{% endif %}
@@ -23,7 +23,11 @@
     {% endif %}
     {% if !languages.is_empty() %}<dt>{{ t.get("opac-record-languages") }}</dt><dd>{{ languages.join(", ") }}</dd>{% endif %}
     {% if let Some(summary) = summary %}<dt>{{ t.get("opac-record-summary") }}</dt><dd>{{ summary }}</dd>{% endif %}
-    {% if let Some(audience) = audience %}<dt>{{ t.get("opac-record-audience") }}</dt><dd>{{ audience }}</dd>{% endif %}
+    {% if !genres.is_empty() %}
+    <dt>{{ t.get("opac-record-genres") }}</dt>
+    <dd>{% for genre in genres %}<span class="chip"><svg class="badge-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#genre"></use></svg>{{ genre }}</span>{% endfor %}</dd>
+    {% endif %}
+    {% if let Some(audience) = audience %}<dt>{{ t.get("opac-record-audience") }}</dt><dd><span class="chip"><svg class="badge-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#audience"></use></svg>{{ audience }}</span></dd>{% endif %}
     {% if !contents.is_empty() %}
     <dt>{{ t.get("opac-record-contents") }}</dt>
     {% for note in contents %}<dd>{{ note }}</dd>{% endfor %}
@@ -50,7 +54,7 @@
         <td>{{ item.branch }}</td>
         <td>{% if let Some(location) = item.location %}{{ location }}{% endif %}</td>
         <td>{% if let Some(call_number) = item.call_number %}{{ call_number }}{% endif %}</td>
-        <td class="{% if item.available %}available{% else %}unavailable{% endif %}">{{ t.get(item.status) }}</td>
+        <td class="{% if item.available %}available{% else %}unavailable{% endif %}"><svg class="badge-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ item.icon }}"></use></svg>{{ t.get(item.status) }}</td>
       </tr>
       {% endfor %}
     </tbody>

@@ -65,7 +65,7 @@ fn family(n: i64, title: &str, lost: bool) -> Family {
         works: vec![FamilyWork {
             id: WorkId(n),
             title: title.to_owned(),
-            main_contributor: Some("Assis, Machado de".to_owned()),
+            main_contributor: Some((AgentKind::Person, "Assis, Machado de".to_owned())),
             classification: Some("869.3".to_owned()),
             languages: vec!["por".to_owned()],
             subjects: vec!["Ficção".to_owned()],
@@ -188,6 +188,7 @@ fn catalog_with_record() -> common::Catalog {
         classification: None,
         summary: None,
         audience: None,
+        genres: Vec::new(),
         contributors: Vec::new(),
         subjects: Vec::new(),
         identifiers: Vec::new(),
@@ -329,10 +330,13 @@ async fn the_first_page_shows_families_with_pills_and_a_loader_for_the_next() {
     assert!(html.contains("One work, one instance"));
     assert!(html.contains("0 of 1 available"));
     assert!(html.contains("1 of 1 available"));
-    assert!(html.contains(r#"<span class="chip chip-agent">Assis, Machado de</span>"#));
+    // The agent's kind, and each Item's signal, carry their icon (bibframe-completo.md, 17b).
+    assert!(html.contains(
+        r#"<span class="chip chip-agent"><svg class="badge-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#agent-person"></use></svg>Assis, Machado de</span>"#
+    ));
     assert!(!html.contains("<details class=\"family-focus\" open>"));
     assert!(html.contains(
-        r#"<use href="/static/elzevir-icons.svg#content-text"></use></svg><span class="item-signal">Out of circulation</span> <span class="item-pill-text">Main Library | 869.3 A848d | T1</span></li>"#
+        r#"<use href="/static/elzevir-icons.svg#content-text"></use></svg><svg class="signal-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#status-unavailable"></use></svg><span class="item-signal">Out of circulation</span> <span class="item-pill-text">Main Library | 869.3 A848d | T1</span></li>"#
     ));
     assert!(html.contains(r#"hx-get="/equipe/acervo?after=w30.030""#));
     // Blocks name their parent, for the cords drawn by the page's script.

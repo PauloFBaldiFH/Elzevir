@@ -27,7 +27,9 @@ use elzevir_web_templates::{
 };
 use serde::Deserialize;
 
-use crate::icons::{NO_CONTENT, content_badge, item_icon, material_badges};
+use crate::icons::{
+    NO_CONTENT, agent_icon, content_badge, item_icon, material_badges, signal_icon,
+};
 use crate::staff::current_session;
 use crate::{AppState, render};
 
@@ -271,13 +273,14 @@ fn family_line(row: &FamilyRow, codes: &CodeLists) -> FamilyLine {
         .works
         .iter()
         .map(|work| {
-            let authority = work.main_contributor.as_ref().map(|name| {
+            let authority = work.main_contributor.as_ref().map(|(kind, name)| {
                 if let Some(known) = authorities.iter().find(|a| &a.name == name) {
                     known.key
                 } else {
                     let key = authorities.len();
                     authorities.push(AuthorityLine {
                         key,
+                        icon: agent_icon(*kind),
                         name: name.clone(),
                     });
                     key
@@ -320,7 +323,7 @@ fn work_line(work: &WorkRow, authority: Option<usize>, codes: &CodeLists) -> Wor
         authority,
         id: work.id.0,
         title: work.title.clone(),
-        contributor: work.main_contributor.clone(),
+        contributor: work.main_contributor.as_ref().map(|(_, name)| name.clone()),
         classification: work.classification.clone(),
         languages: work.languages.clone(),
         subjects: work.subjects.clone(),
@@ -374,6 +377,7 @@ fn pill_line(pill: &ItemPill, codes: &CodeLists) -> PillLine {
         text: parts.into_iter().flatten().collect::<Vec<_>>().join(" | "),
         signal_class,
         signal_key,
+        signal_icon: signal_icon(pill.signal),
     }
 }
 

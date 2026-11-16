@@ -108,6 +108,8 @@ pub struct AuthorityLine {
     pub key: usize,
     /// Heading.
     pub name: String,
+    /// Symbol of its kind of agent in `/static/elzevir-icons.svg`.
+    pub icon: &'static str,
 }
 
 /// The Hub block of a row.
@@ -192,6 +194,9 @@ pub struct PillLine {
     pub signal_class: &'static str,
     /// Message key of its signal.
     pub signal_key: &'static str,
+    /// Symbol of its signal's icon in `/static/elzevir-icons.svg` (bibframe-completo.md,
+    /// item 15): an indicator, or the padlock of local use.
+    pub signal_icon: &'static str,
 }
 
 /// What the server found for a scanned code.

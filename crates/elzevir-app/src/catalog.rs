@@ -715,6 +715,8 @@ pub struct InstanceView {
     pub summary: Option<String>,
     /// The Work's target audience.
     pub audience: Option<String>,
+    /// The labels of the Work's genres and forms, in order.
+    pub genres: Vec<String>,
     /// Contributor headings with their kind, in order.
     pub contributors: Vec<(AgentKind, String)>,
     /// Subject headings with their kind, in order.

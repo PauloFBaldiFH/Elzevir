@@ -72,4 +72,7 @@ pub struct ItemFields {
     pub signal_class: &'static str,
     /// Message key of its signal.
     pub signal_key: &'static str,
+    /// Symbol of its signal's icon in `/static/elzevir-icons.svg` (bibframe-completo.md,
+    /// item 15): an indicator, or the padlock of local use.
+    pub signal_icon: &'static str,
 }

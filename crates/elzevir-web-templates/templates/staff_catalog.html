@@ -28,7 +28,7 @@
       <summary class="family-row">
         <svg class="row-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ family.icon }}"></use></svg>
         <span class="row-title"><strong>{{ family.title }}</strong>{% if family.hub.is_some() %} <span class="row-hub">{{ t.get("staff-badge-hub") }}</span>{% endif %} <span class="row-shape">{{ family.shape_text(t) }}</span></span>
-        <span class="row-agents">{% for authority in family.authorities %}<span class="chip chip-agent">{{ authority.name }}</span>{% endfor %}</span>
+        <span class="row-agents">{% for authority in family.authorities %}<span class="chip chip-agent"><svg class="badge-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ authority.icon }}"></use></svg>{{ authority.name }}</span>{% endfor %}</span>
         <span class="row-class call-number">{% if let Some(classification) = family.classification %}{{ classification }}{% endif %}</span>
         {% if family.items == 0 %}<span class="row-avail">{{ t.get("opac-availability-no-items") }}</span>{% else %}<span class="row-avail{% if family.available > 0 %} signal-available{% endif %}">{{ family.availability_text(t) }}</span>{% endif %}
       </summary>
@@ -142,7 +142,7 @@
         </article>
         <ul class="items-stack">
           {% for pill in instance.pills %}
-          <li class="item-pill {{ pill.signal_class }}" data-parent="i{{ instance.id }}"{% if loop.first %} data-cord-label="{{ t.get("staff-cord-items") }}"{% endif %}><svg class="item-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ instance.icon }}"></use></svg><span class="item-signal">{{ t.get(pill.signal_key) }}</span> <span class="item-pill-text">{{ pill.text }}</span></li>
+          <li class="item-pill {{ pill.signal_class }}" data-parent="i{{ instance.id }}"{% if loop.first %} data-cord-label="{{ t.get("staff-cord-items") }}"{% endif %}><svg class="item-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ instance.icon }}"></use></svg><svg class="signal-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ pill.signal_icon }}"></use></svg><span class="item-signal">{{ t.get(pill.signal_key) }}</span> <span class="item-pill-text">{{ pill.text }}</span></li>
           {% endfor %}
           {% if instance.more_items > 0 %}
           <li class="item-pill more-items" data-parent="i{{ instance.id }}"><a href="/record/{{ instance.id }}">{{ instance.more_items_text(t) }}</a></li>

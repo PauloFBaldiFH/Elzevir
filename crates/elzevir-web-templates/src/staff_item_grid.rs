@@ -46,6 +46,8 @@ pub struct GridRow {
     pub signal_class: &'static str,
     /// Message key of its circulation signal.
     pub signal_key: &'static str,
+    /// Symbol of its signal's icon in `/static/elzevir-icons.svg`.
+    pub signal_icon: &'static str,
     /// The cells, in column order.
     pub cells: Vec<GridCell>,
 }

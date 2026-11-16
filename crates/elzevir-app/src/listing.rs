@@ -7,7 +7,9 @@
 
 use std::num::NonZeroUsize;
 
-use elzevir_domain::catalog::{BranchId, HubId, InstanceId, ItemId, SublocationId, WorkId, isbn13};
+use elzevir_domain::catalog::{
+    AgentKind, BranchId, HubId, InstanceId, ItemId, SublocationId, WorkId, isbn13,
+};
 use unicode_normalization::UnicodeNormalization;
 use unicode_normalization::char::is_combining_mark;
 
@@ -121,8 +123,8 @@ pub struct FamilyWork {
     pub id: WorkId,
     /// Preferred title.
     pub title: String,
-    /// The main entry, else the first contributor.
-    pub main_contributor: Option<String>,
+    /// The main entry, else the first contributor, with its kind of agent.
+    pub main_contributor: Option<(AgentKind, String)>,
     /// Classification number.
     pub classification: Option<String>,
     /// Language codes, in order.
@@ -322,8 +324,8 @@ pub struct WorkRow {
     pub id: WorkId,
     /// Preferred title.
     pub title: String,
-    /// The main contributor.
-    pub main_contributor: Option<String>,
+    /// The main contributor, with its kind of agent.
+    pub main_contributor: Option<(AgentKind, String)>,
     /// Classification number.
     pub classification: Option<String>,
     /// Language codes.

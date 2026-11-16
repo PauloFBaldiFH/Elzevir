@@ -13,7 +13,8 @@ use elzevir_app::listing::{
 };
 use elzevir_app::material::Material;
 use elzevir_domain::catalog::{
-    BranchId, HubId, IdentifierKind, InstanceId, ItemId, MatchRule, PolicyId, SublocationId, WorkId,
+    AgentKind, BranchId, HubId, IdentifierKind, InstanceId, ItemId, MatchRule, PolicyId,
+    SublocationId, WorkId,
 };
 use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 
@@ -255,12 +256,14 @@ fn works_of(
         }
         // `column` is one of two constants above, never input.
         let sql = format!(
-            "SELECT id, hub_id, title, classification,
-                    (SELECT agents.heading FROM contributions
-                     JOIN agents ON agents.id = contributions.agent_id
+            "SELECT works.id, works.hub_id, works.title, works.classification,
+                    main.kind, main.heading
+             FROM works
+             LEFT JOIN agents main ON main.id =
+                    (SELECT agent_id FROM contributions
                      WHERE contributions.work_id = works.id
                      ORDER BY is_primary DESC, position LIMIT 1)
-             FROM works WHERE {column} IN ({}) ORDER BY id",
+             WHERE works.{column} IN ({}) ORDER BY works.id",
             placeholders(ids.len())
         );
         let mut statement = c.prepare(&sql)?;
@@ -274,7 +277,7 @@ fn works_of(
                         id: WorkId(id),
                         title: row.get(2)?,
                         classification: row.get(3)?,
-                        main_contributor: row.get(4)?,
+                        main_contributor: main_contributor(row.get(4)?, row.get(5)?)?,
                         languages: Vec::new(),
                         subjects: Vec::new(),
                         instances: Vec::new(),
@@ -376,6 +379,25 @@ fn instances_of(
         grouped.entry(work).or_default().push(instance);
     }
     Ok(grouped)
+}
+
+/// The main contributor of a row, with its kind of agent.
+fn main_contributor(
+    kind: Option<u8>,
+    heading: Option<String>,
+) -> Result<Option<(AgentKind, String)>, rusqlite::Error> {
+    let (Some(code), Some(heading)) = (kind, heading) else {
+        return Ok(None);
+    };
+    // Written by this store from an `AgentKind`; another number is a newer schema.
+    let kind = AgentKind::from_code(code).ok_or_else(|| {
+        rusqlite::Error::FromSqlConversionFailure(
+            4,
+            rusqlite::types::Type::Integer,
+            format!("unknown agent kind {code}").into(),
+        )
+    })?;
+    Ok(Some((kind, heading)))
 }
 
 fn items_of(

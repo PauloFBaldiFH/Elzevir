@@ -18,6 +18,7 @@ use serde::Deserialize;
 
 use crate::catalog::signal;
 use crate::editing::{apply, authorize, invalid_cells};
+use crate::icons::signal_icon;
 use crate::staff::current_session;
 use crate::{AppState, render};
 
@@ -113,6 +114,7 @@ fn grid_row(item: GridItem, codes: &CodeLists) -> GridRow {
         id: item.id.0,
         signal_class,
         signal_key,
+        signal_icon: signal_icon(item.status.signal()),
         cells: cells(item.fields, codes),
     }
 }

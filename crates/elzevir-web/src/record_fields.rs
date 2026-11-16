@@ -19,7 +19,7 @@ use elzevir_web_templates::{FieldEntry, FieldGroup, FieldValue, I18n, ItemFields
 use serde::Deserialize;
 
 use crate::catalog::signal;
-use crate::icons::{carrier_badge, content_badge};
+use crate::icons::{carrier_badge, content_badge, signal_icon};
 use crate::record_form::{instance_form, work_form};
 use crate::staff::current_session;
 use crate::{AppState, render};
@@ -321,6 +321,7 @@ fn item_fields(item: &ItemData, codes: &CodeLists) -> ItemFields {
         acquired_on: item.acquired_on.clone(),
         signal_class,
         signal_key,
+        signal_icon: signal_icon(item.status.signal()),
     }
 }
 

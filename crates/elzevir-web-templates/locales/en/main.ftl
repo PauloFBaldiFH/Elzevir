@@ -52,6 +52,7 @@ opac-record-identifiers = Identifiers
 opac-record-languages = Languages
 opac-record-summary = Summary
 opac-record-audience = Audience
+opac-record-genres = Genre and form
 opac-record-other-titles = Other titles
 opac-record-contents = Contents
 opac-record-notes = Notes

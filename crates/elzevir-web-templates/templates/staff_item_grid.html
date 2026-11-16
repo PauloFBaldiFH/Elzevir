@@ -22,7 +22,7 @@
   <table role="grid" aria-label="{{ t.get("items-grid-title") }}">
     <thead><tr><th scope="col" class="grid-signal-head">{{ t.get("items-column-status") }}</th>{% for column in columns %}<th scope="col" data-col="{{ column.name }}">{{ t.get(column.label_key) }}</th>{% endfor %}</tr></thead>
     <tbody>
-      {% for row in rows %}<tr data-id="{{ row.id }}"><td class="grid-signal {{ row.signal_class }}" title="{{ t.get(row.signal_key) }}"><span class="visually-hidden">{{ t.get(row.signal_key) }}</span></td>{% for cell in row.cells %}{% if let Some(name) = cell.name %}<td role="gridcell" tabindex="-1" data-value="{{ cell.value }}">{{ name }}</td>{% else %}<td role="gridcell" tabindex="-1">{{ cell.value }}</td>{% endif %}{% endfor %}</tr>
+      {% for row in rows %}<tr data-id="{{ row.id }}"><td class="grid-signal {{ row.signal_class }}" title="{{ t.get(row.signal_key) }}"><svg class="signal-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ row.signal_icon }}"></use></svg><span class="visually-hidden">{{ t.get(row.signal_key) }}</span></td>{% for cell in row.cells %}{% if let Some(name) = cell.name %}<td role="gridcell" tabindex="-1" data-value="{{ cell.value }}">{{ name }}</td>{% else %}<td role="gridcell" tabindex="-1">{{ cell.value }}</td>{% endif %}{% endfor %}</tr>
       {% endfor %}
     </tbody>
   </table>

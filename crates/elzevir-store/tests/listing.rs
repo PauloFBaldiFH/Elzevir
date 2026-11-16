@@ -239,8 +239,11 @@ fn a_hub_is_one_family_with_all_its_works_before_a_work_of_the_same_title() {
     assert_eq!(works, [portuguese, english]);
     // The main entry is shown even when it is not the first contributor.
     assert_eq!(
-        family.works[0].main_contributor.as_deref(),
-        Some("Assis, Machado de")
+        family.works[0]
+            .main_contributor
+            .as_ref()
+            .map(|(kind, name)| (*kind, name.as_str())),
+        Some((AgentKind::Person, "Assis, Machado de"))
     );
     assert_eq!(
         family.works[0].instances[0].isbn.as_deref(),
