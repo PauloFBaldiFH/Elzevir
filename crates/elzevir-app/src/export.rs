@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 use std::io::{BufRead, Write};
 use std::num::NonZeroUsize;
 
-use elzevir_domain::catalog::InstanceId;
+use elzevir_domain::catalog::{InstanceId, WorkId};
 use elzevir_marc::{Limits, MarcReader, Record, RecordRef};
 
 use crate::catalog::{CatalogReadError, NewRecord};
@@ -20,6 +20,8 @@ use crate::marc_mapping::{bibframe_to_marc, marc_to_bibframe};
 pub struct StoredRecord {
     /// The Instance.
     pub instance: InstanceId,
+    /// Its Work.
+    pub work: WorkId,
     /// Its Work, Instance and Items; `source` is the stored source record.
     pub record: NewRecord,
 }

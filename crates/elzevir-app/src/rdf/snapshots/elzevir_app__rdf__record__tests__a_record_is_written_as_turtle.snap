@@ -1,0 +1,115 @@
+---
+source: crates/elzevir-app/src/rdf/record.rs
+expression: write_turtle(&graph)
+---
+@prefix bf: <http://id.loc.gov/ontologies/bibframe/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix madsrdf: <http://www.loc.gov/mads/rdf/v1#> .
+
+<https://biblioteca.example/bf/works/3>
+    a bf:Work, bf:Text, bf:Monograph ;
+    bf:title [
+        a bf:Title ;
+        bf:mainTitle "Dom Casmurro"
+    ] ;
+    bf:expressionOf <https://biblioteca.example/bf/hubs/2> ;
+    bf:contribution [
+        a bf:PrimaryContribution ;
+        bf:agent <http://viaf.org/viaf/2467372> ;
+        bf:role <http://id.loc.gov/vocabulary/relators/aut> ;
+        bf:role [
+            a bf:Role ;
+            rdfs:label "autor"
+        ]
+    ] ;
+    bf:contribution [
+        a bf:Contribution ;
+        bf:agent [
+            a bf:Organization ;
+            rdfs:label "Editora \"Garnier\"" ;
+            bf:identifiedBy [
+                a bf:Identifier ;
+                rdf:value "(BR)123"
+            ]
+        ] ;
+        bf:role [
+            a bf:Role ;
+            rdfs:label "ilustrador"
+        ]
+    ] ;
+    bf:subject [
+        a bf:Topic ;
+        rdfs:label "Ciúme -- Ficção" ;
+        bf:source [
+            a bf:Source ;
+            bf:code "larpcal"
+        ]
+    ] ;
+    bf:language <http://id.loc.gov/vocabulary/languages/por> ;
+    bf:classification [
+        a bf:ClassificationDdc ;
+        bf:classificationPortion "869.3"
+    ] ;
+    bf:summary [
+        a bf:Summary ;
+        rdfs:label "Bentinho recorda Capitu."
+    ] ;
+    bf:intendedAudience [
+        a bf:IntendedAudience ;
+        rdfs:label "Ensino médio."
+    ] ;
+    bf:derivativeOf <https://biblioteca.example/bf/works/1> ;
+    bf:content <http://id.loc.gov/vocabulary/contentTypes/txt> ;
+    bf:genreForm [
+        a bf:GenreForm ;
+        rdfs:label "Romances"
+    ] ;
+    bf:genreForm <http://id.loc.gov/authorities/genreForms/gf2015026020> ;
+    bf:hasInstance <https://biblioteca.example/bf/instances/7> .
+
+<https://biblioteca.example/bf/instances/7>
+    a bf:Instance, bf:Print ;
+    bf:title [
+        a bf:Title ;
+        bf:mainTitle "Dom Casmurro"
+    ] ;
+    bf:editionStatement "2. ed." ;
+    bf:provisionActivity [
+        a bf:Publication ;
+        bf:place [
+            a bf:Place ;
+            rdfs:label "Rio de Janeiro"
+        ] ;
+        bf:agent [
+            a bf:Agent ;
+            rdfs:label "Garnier"
+        ] ;
+        bf:date "1899"
+    ] ;
+    bf:extent [
+        a bf:Extent ;
+        rdfs:label "195 p."
+    ] ;
+    bf:seriesStatement "Clássicos" ;
+    bf:identifiedBy [
+        a bf:Isbn ;
+        rdf:value "9788535910667" ;
+        bf:qualifier "(broch.)"
+    ] ;
+    bf:tableOfContents [
+        a bf:TableOfContents ;
+        rdfs:label "Cap. 1 -- Cap. 2."
+    ] ;
+    bf:note [
+        a bf:Note ;
+        rdfs:label "Doação." ;
+        bf:noteType "local"
+    ] ;
+    bf:dimensions "21 cm" ;
+    bf:instanceOf <https://biblioteca.example/bf/works/3> .
+
+<http://viaf.org/viaf/2467372>
+    a bf:Person ;
+    rdfs:label "Assis, Machado de, 1839-1908" ;
+    madsrdf:isIdentifiedByAuthority <http://id.loc.gov/authorities/names/n79029745> .

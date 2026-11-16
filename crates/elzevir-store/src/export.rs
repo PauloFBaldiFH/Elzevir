@@ -10,6 +10,7 @@ use elzevir_app::catalog::{
 use elzevir_app::export::{RecordSource, StoredRecord};
 use elzevir_domain::catalog::{
     AgentKind, AuthorityLinkKind, HubId, IdentifierKind, InstanceId, Money, NoteKind, SubjectKind,
+    WorkId,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
@@ -139,6 +140,7 @@ fn stored(c: &Connection, head: Head) -> Result<StoredRecord, ReadFailure> {
     };
     Ok(StoredRecord {
         instance: InstanceId(head.instance),
+        work: WorkId(head.work),
         record,
     })
 }
