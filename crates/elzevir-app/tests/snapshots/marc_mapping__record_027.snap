@@ -194,6 +194,7 @@ instance:
       value: (BIBLIODATA)SC000016285
       qualifier: ~
   notes: []
+  opac_hidden: false
 items:
   - barcode: "4148"
     inventory_number: ~

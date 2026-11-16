@@ -174,7 +174,7 @@ pub fn validate_instance_changes(changes: &mut [InstanceChange]) -> Result<(), V
                 notes.retain(|note| !note.text.is_empty());
             }
             // Read and checked by `statement_rows`; the store checks them again.
-            InstanceChange::Statements { .. } => {}
+            InstanceChange::Statements { .. } | InstanceChange::OpacHidden(_) => {}
         }
     }
     if errors.is_empty() {

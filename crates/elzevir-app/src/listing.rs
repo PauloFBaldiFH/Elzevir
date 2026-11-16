@@ -16,7 +16,7 @@ use unicode_normalization::char::is_combining_mark;
 use crate::catalog::{CatalogReadError, ItemView, ShelfSignal};
 use crate::material::Material;
 use crate::opac::MAX_QUERY_CHARS;
-use crate::search::{SearchError, SearchIndex};
+use crate::search::{SearchError, SearchIndex, SearchScope};
 
 /// Families per page.
 pub const PAGE_SIZE: NonZeroUsize = match NonZeroUsize::new(30) {
@@ -473,7 +473,7 @@ where
         });
     }
     let from = from.min(MAX_FROM);
-    let results = index.search(&query, from, HITS_PER_PAGE)?;
+    let results = index.search(&query, SearchScope::Staff, from, HITS_PER_PAGE)?;
     let mut heads: Vec<FamilyHead> = Vec::new();
     let mut found: Vec<InstanceId> = Vec::new();
     let mut used = 0;
@@ -818,6 +818,7 @@ mod tests {
         fn search(
             &self,
             _: &str,
+            _: SearchScope,
             offset: usize,
             limit: usize,
         ) -> Result<crate::search::SearchResults, SearchError> {

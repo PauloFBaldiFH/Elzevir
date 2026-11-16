@@ -9,7 +9,7 @@
 1. `catalog.update_work` (`CatalogCommand::UpdateWork`) muda partes de uma Obra; `catalog.update_instance` (`CatalogCommand::UpdateInstance`) muda partes de uma Instância. Os dois passam pela thread escritora como qualquer `WriteCommand::Catalog` e ficam no `audit_log` com essa `kind`.
 2. Cada edição traz a lista de mudanças, uma por parte, como `enum` com dados:
    - Obra (`WorkChange`): título preferido, classes, classificação (número e esquema juntos), resumo, público-alvo, idiomas, contribuições e assuntos.
-   - Instância (`InstanceChange`): título, classes, edição, local, editora, data, descrição física, série, identificadores e notas.
+   - Instância (`InstanceChange`): título, classes, edição, local, editora, data, descrição física, série, identificadores, notas e a marca de oculta do OPAC ([ocultar-no-opac](ocultar-no-opac.md)).
 3. Listas (idiomas, contribuições, assuntos, identificadores, notas) são trocadas inteiras, na nova ordem. Agente, Assunto e termo de vocabulário existentes são reaproveitados, como na inclusão.
 4. Se a mesma parte aparece duas vezes na lista, vale a última.
 5. O que a edição não cita fica como está: Hub, relações entre Obras, Itens e o registro de origem.

@@ -934,3 +934,33 @@ fn one_language_goes_to_the_008_and_more_than_one_to_the_041_too() {
     assert_eq!(fixed(&written), b"eng");
     assert_eq!(model(&written).languages, ["eng", "por"]);
 }
+
+#[test]
+fn hiding_from_the_opac_writes_the_942_n_and_showing_again_its_zero() {
+    let (_, record) = &records()[0];
+    let shown = model(record);
+    assert!(!shown.instance.opac_hidden);
+    let mut hidden = shown.clone();
+    hidden.instance.opac_hidden = true;
+    let exported = bibframe_to_marc(&hidden, Some(record));
+    let n = |record: &Record| -> Vec<String> {
+        tags(record, *b"942")
+            .iter()
+            .flat_map(|field| match field {
+                Field::Data { subfields, .. } => subfields
+                    .iter()
+                    .filter(|subfield| subfield.code == b'n')
+                    .map(|subfield| String::from_utf8_lossy(&subfield.value).into_owned())
+                    .collect(),
+                Field::Control { .. } => Vec::new(),
+            })
+            .collect()
+    };
+    assert_eq!(n(&exported), ["1"]);
+    assert!(model(&exported).instance.opac_hidden);
+    // Only the 942 changed.
+    assert_eq!(without(&exported, *b"942"), without(record, *b"942"));
+    let again = bibframe_to_marc(&shown, Some(&exported));
+    assert_eq!(n(&again), ["0"]);
+    assert!(!model(&again).instance.opac_hidden);
+}

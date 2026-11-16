@@ -95,6 +95,18 @@ pub struct SearchDocument {
     pub inventory_numbers: Vec<String>,
     /// Language codes of the Work.
     pub languages: Vec<String>,
+    /// Hidden from the public catalogue: only the staff finds it.
+    pub opac_hidden: bool,
+}
+
+/// Who searches: the public catalogue leaves out hidden Instances, the staff finds them
+/// all (docs/specs/catalogo/ocultar-no-opac.md).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SearchScope {
+    /// The OPAC.
+    Public,
+    /// The staff screens.
+    Staff,
 }
 
 /// Builds the document of one Instance. Pure.
@@ -155,6 +167,7 @@ pub fn document_of(instance: &InstanceView, items: &[ItemView]) -> SearchDocumen
                 .filter_map(|item| item.inventory_number.as_deref()),
         ),
         languages: instance.languages.clone(),
+        opac_hidden: instance.opac_hidden,
     }
 }
 
@@ -249,6 +262,7 @@ pub trait SearchIndex: Send + Sync {
     fn search(
         &self,
         query: &str,
+        scope: SearchScope,
         offset: usize,
         limit: usize,
     ) -> Result<SearchResults, SearchError>;
@@ -423,6 +437,7 @@ mod tests {
                 identifiers: Vec::new(),
                 notes: Vec::new(),
                 languages: Vec::new(),
+                opac_hidden: false,
             }))
         }
 
@@ -464,7 +479,13 @@ mod tests {
             Ok(())
         }
 
-        fn search(&self, _: &str, _: usize, _: usize) -> Result<SearchResults, SearchError> {
+        fn search(
+            &self,
+            _: &str,
+            _: SearchScope,
+            _: usize,
+            _: usize,
+        ) -> Result<SearchResults, SearchError> {
             Ok(SearchResults {
                 total: 0,
                 hits: Vec::new(),

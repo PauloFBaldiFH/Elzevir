@@ -20,7 +20,18 @@ pub(super) fn map(marc: &Marc<'_>) -> NewInstance {
         series: series(marc),
         identifiers: identifiers(marc),
         notes: notes(marc),
+        opac_hidden: opac_hidden(marc),
     }
+}
+
+/// Koha's `942 $n` (`biblio.opac_suppressed`, a yes/no value): `1` hides the record from
+/// the OPAC; `0` or nothing shows it.
+///
+/// Koha: `C4::Biblio::TransformMarcToKoha` (`biblio.opac_suppressed` from `942 $n`).
+fn opac_hidden(marc: &Marc<'_>) -> bool {
+    marc.first(b"942")
+        .and_then(|field| field.raw(b'n'))
+        .is_some_and(|value| value.trim() == "1")
 }
 
 /// The field of the publication: the first `264` with second indicator `1`, else `260`.

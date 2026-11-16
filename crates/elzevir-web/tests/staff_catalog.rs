@@ -195,6 +195,7 @@ fn catalog_with_record() -> common::Catalog {
         identifiers: Vec::new(),
         notes: Vec::new(),
         languages: Vec::new(),
+        opac_hidden: false,
     };
     catalog
         .records
@@ -868,6 +869,12 @@ async fn a_cataloguer_gets_the_focused_block_as_a_form_of_every_field() {
     let blank = identifiers.split("<template>").nth(1).unwrap();
     let blank = blank.split("</template>").next().unwrap();
     assert!(blank.contains(r#"<option value="isbn" selected>"#));
+    // Hiding from the OPAC is a check of the administrative metadata, off by default.
+    let (_, admin) = instance
+        .split_once(r#"class="form-section-heading">Administrative metadata<"#)
+        .unwrap();
+    let hidden = admin.split(r#"data-change="OpacHidden""#).nth(1).unwrap();
+    assert!(hidden.contains(r#"data-shape="check"><input type="checkbox">"#));
 }
 
 #[tokio::test]

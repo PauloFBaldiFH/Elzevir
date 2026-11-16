@@ -57,6 +57,9 @@ pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record 
     if changed(&|b| b.instance.description.classes == model.instance.description.classes) {
         set_electronic(&mut out, &model.instance.description.classes);
     }
+    if changed(&|b| b.instance.opac_hidden == model.instance.opac_hidden) {
+        set_opac_hidden(&mut out, model.instance.opac_hidden);
+    }
     coded::write(
         &mut out,
         &model.work_description,
@@ -109,6 +112,26 @@ pub fn bibframe_to_marc(model: &NewRecord, original: Option<&Record>) -> Record 
             .map(|b| (&b.work_description, &b.instance.description)),
     );
     out
+}
+
+/// Koha's `942 $n`, the reverse of the import: `1` when hidden; when shown, `0` only where
+/// the record already has the subfield, so that a record that never had it gains none.
+fn set_opac_hidden(out: &mut Record, hidden: bool) {
+    let has_subfield = first_index(out, *b"942")
+        .and_then(|index| out.fields.get(index))
+        .is_some_and(|field| match field {
+            Field::Data { subfields, .. } => subfields.iter().any(|subfield| subfield.code == b'n'),
+            Field::Control { .. } => false,
+        });
+    if hidden || has_subfield {
+        set_subfield(
+            out,
+            *b"942",
+            *b"  ",
+            b'n',
+            Some(if hidden { "1" } else { "0" }),
+        );
+    }
 }
 
 /// Leader/06 and /07 from the Work's classes, the reverse of the import (bibframe-

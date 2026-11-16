@@ -323,6 +323,10 @@ fn apply_instance_change(
         InstanceChange::Series(series) => {
             ("UPDATE instances SET series = ?2 WHERE id = ?1", series)
         }
+        InstanceChange::OpacHidden(hidden) => (
+            "UPDATE instances SET opac_hidden = ?2 WHERE id = ?1",
+            hidden,
+        ),
         InstanceChange::Identifiers(identifiers) => {
             clear(
                 connection,

@@ -149,6 +149,7 @@ instance:
   series: ~
   identifiers: []
   notes: []
+  opac_hidden: false
 items:
   - barcode: "6908"
     inventory_number: ~

@@ -12,7 +12,7 @@ use std::num::NonZeroUsize;
 
 use elzevir_app::catalog::CatalogReader;
 use elzevir_app::parallelism::Parallelism;
-use elzevir_app::search::{IndexOptions, SearchIndex, index_pending};
+use elzevir_app::search::{IndexOptions, SearchIndex, SearchScope, index_pending};
 use elzevir_domain::catalog::InstanceId;
 use elzevir_search::TantivyIndex;
 use elzevir_store::ElzevirStore;
@@ -42,7 +42,7 @@ fn indexed(store: &ElzevirStore, parallelism: Parallelism, batch: usize) -> Tant
 
 fn titles(store: &ElzevirStore, index: &TantivyIndex, query: &str) -> Vec<String> {
     index
-        .search(query, 0, 10)
+        .search(query, SearchScope::Staff, 0, 10)
         .unwrap()
         .hits
         .into_iter()
@@ -107,12 +107,15 @@ fn words_match_without_accents_or_case() {
 fn results_come_in_pages_with_the_total_and_the_list_fields() {
     let (_dir, store) = imported();
     let index = indexed(&store, Parallelism::Serial, 1024);
-    let all = index.search("medici", 0, 50).unwrap();
+    let all = index.search("medici", SearchScope::Staff, 0, 50).unwrap();
     assert_eq!((all.total, all.hits.len()), (5, 5));
-    let page = index.search("medici", 2, 2).unwrap();
+    let page = index.search("medici", SearchScope::Staff, 2, 2).unwrap();
     assert_eq!(page.total, 5);
     assert_eq!(page.hits.len(), 2);
-    let first = &index.search("anuario estatistico", 0, 1).unwrap().hits[0];
+    let first = &index
+        .search("anuario estatistico", SearchScope::Staff, 0, 1)
+        .unwrap()
+        .hits[0];
     assert_eq!(first.title, "Perfil - Anuário Estatístico");
     assert_eq!(
         first.main_contributor.as_deref(),
@@ -121,14 +124,22 @@ fn results_come_in_pages_with_the_total_and_the_list_fields() {
     assert_eq!(first.date.as_deref(), Some("1995"));
     assert_eq!(first.call_number.as_deref(), Some("310.62 P94"));
     assert!(first.material.content.is_some());
-    assert_eq!(index.search("medici", 0, 0).unwrap().total, 5);
+    assert_eq!(
+        index
+            .search("medici", SearchScope::Staff, 0, 0)
+            .unwrap()
+            .total,
+        5
+    );
 }
 
 #[test]
 fn codes_match_exactly_and_come_first() {
     let (_dir, store) = imported();
     let index = indexed(&store, Parallelism::Serial, 1024);
-    let first = |query: &str| -> InstanceId { index.search(query, 0, 5).unwrap().hits[0].instance };
+    let first = |query: &str| -> InstanceId {
+        index.search(query, SearchScope::Staff, 0, 5).unwrap().hits[0].instance
+    };
     let perfil = first("anuario estatistico");
     // Barcode, call number (any case) and classification of the first record.
     assert_eq!(first("1511"), perfil);
@@ -161,7 +172,10 @@ fn a_variant_title_finds_its_record() {
 fn a_classification_prefix_finds_the_class() {
     let (_dir, store) = imported();
     let index = indexed(&store, Parallelism::Serial, 1024);
-    let hits = index.search("310*", 0, 50).unwrap().hits;
+    let hits = index
+        .search("310*", SearchScope::Staff, 0, 50)
+        .unwrap()
+        .hits;
     assert!(!hits.is_empty());
     for hit in hits {
         let classification = store
@@ -223,7 +237,7 @@ fn reference_queries_find_what_koha_finds() {
         let koha = ids(koha);
         // Instance ids follow the file, and the file is biblionumbers 1 to 200 in order.
         let ours: BTreeSet<i64> = index
-            .search(query, 0, 200)
+            .search(query, SearchScope::Public, 0, 200)
             .unwrap()
             .hits
             .into_iter()

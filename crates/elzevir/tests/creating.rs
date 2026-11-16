@@ -18,7 +18,7 @@ use elzevir_app::creating::{new_instance, new_record};
 use elzevir_app::editing::{CatalogEditor, Edit, EditFailed};
 use elzevir_app::export::{RecordFormat, export_record};
 use elzevir_app::parallelism::Parallelism;
-use elzevir_app::search::{IndexOptions, SearchIndex, index_pending};
+use elzevir_app::search::{IndexOptions, SearchIndex, SearchScope, index_pending};
 use elzevir_app::staff::StaffId;
 use elzevir_domain::catalog::{AgentKind, IdentifierKind, InstanceId, WorkId};
 use elzevir_marc::{Limits, MarcReader};
@@ -155,7 +155,7 @@ fn a_family_and_an_instance_created_on_screen_export_and_are_found() {
     };
     index_pending(&store, &store, &index, &options).unwrap();
     let found: Vec<InstanceId> = index
-        .search("esau jaco", 0, 10)
+        .search("esau jaco", SearchScope::Staff, 0, 10)
         .unwrap()
         .hits
         .into_iter()

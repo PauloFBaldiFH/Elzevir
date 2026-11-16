@@ -405,6 +405,9 @@ a.field-value:hover { text-decoration: underline; }
 .record-form .form-field:has([data-shape="rows"]), .record-form .form-field:has(textarea) { grid-column: 1 / -1; }
 .record-form .form-label { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; border: 0; min-width: 0; }
 .record-form .form-label > span, .record-form legend { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); padding: 0; }
+.record-form .form-check { flex-direction: row; align-items: center; gap: 8px; }
+.record-form .form-check > input { width: auto; margin: 0; }
+.record-form .form-check > span { text-transform: none; letter-spacing: 0; font-size: 0.85rem; color: var(--text-main); }
 .record-form input[type="text"], .record-form textarea, .record-form select {
   font: inherit; font-size: 0.9rem; color: var(--text-main); background: var(--card-bg);
   border: 1px solid var(--card-border); border-radius: 8px; padding: 6px 9px; min-width: 0; width: 100%; box-sizing: border-box;

@@ -78,6 +78,7 @@ fn view(id: i64, title: &str) -> InstanceView {
             (NoteKind::Contents, "Parte 1 -- Parte 2.".to_owned()),
         ],
         languages: vec!["por".to_owned()],
+        opac_hidden: false,
     }
 }
 

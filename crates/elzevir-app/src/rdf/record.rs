@@ -533,6 +533,7 @@ pub(super) mod tests {
                             text: "Doação.".to_owned(),
                         },
                     ],
+                    opac_hidden: false,
                 },
                 items: Vec::new(),
                 source: None,

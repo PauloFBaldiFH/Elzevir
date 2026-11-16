@@ -98,6 +98,7 @@ struct Head {
     classification_scheme: Option<String>,
     summary: Option<String>,
     audience: Option<String>,
+    opac_hidden: bool,
 }
 
 impl Head {
@@ -118,6 +119,7 @@ impl Head {
             classification_scheme: row.get(12)?,
             summary: row.get(13)?,
             audience: row.get(14)?,
+            opac_hidden: row.get(15)?,
         })
     }
 }
@@ -129,7 +131,8 @@ fn records_after(
 ) -> Result<Vec<StoredRecord>, ReadFailure> {
     let mut statement = c.prepare_cached(
         "SELECT instances.id, works.id, instances.title, edition, place, publisher, date,
-                extent, series, works.title, works.hub_id, works.classification, terms.code, works.summary, works.audience
+                extent, series, works.title, works.hub_id, works.classification, terms.code, works.summary, works.audience,
+                instances.opac_hidden
          FROM instances
          JOIN works ON works.id = instances.work_id
          LEFT JOIN terms ON terms.id = works.classification_scheme
@@ -176,6 +179,7 @@ fn stored(c: &Connection, head: Head) -> Result<StoredRecord, ReadFailure> {
             series: head.series,
             identifiers: identifiers(c, head.instance)?,
             notes: notes(c, head.instance)?,
+            opac_hidden: head.opac_hidden,
         },
         items: items(c, head.instance)?,
         source: c

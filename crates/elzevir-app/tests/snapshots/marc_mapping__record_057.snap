@@ -215,6 +215,7 @@ instance:
       value: "8530800044"
       qualifier: ~
   notes: []
+  opac_hidden: false
 items:
   - barcode: "1519"
     inventory_number: ~

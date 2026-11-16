@@ -49,4 +49,6 @@ pub enum InstanceField {
     Notes,
     /// The subclasses of the entity (bibframe-completo.md, item 14).
     Classes,
+    /// Whether the OPAC leaves it out (docs/specs/catalogo/ocultar-no-opac.md).
+    OpacHidden,
 }
