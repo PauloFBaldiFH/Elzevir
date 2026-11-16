@@ -1,0 +1,9 @@
+//! Ícone minimalista para a bandeja do sistema.
+//! SVG original incorporado como geometrias vetoriais, sem arquivos externos.
+
+/// Gera o SVG vetorial usado em PNGs e no ICO multirresolução.
+pub fn svg() -> String {
+    SVG.to_owned()
+}
+
+const SVG: &str = r###"<svg height="64px" viewBox="0 0 64 64" width="64px" xmlns="http://www.w3.org/2000/svg"><path d="M7 38 L3 33 L9 29 L5 23 L13 21 L12 15 L21 17 L23 9 L31 14 L38 5 L44 13 L53 11 L54 21 L61 25 L57 34 L61 39 L51 46 L16 47Z" fill="#F45B00" stroke="#23242A" stroke-width="2.4" stroke-linejoin="round"/><circle cx="25" cy="30" r="10" fill="#FFA16D" stroke="#23242A" stroke-width="2.4"/><circle cx="43" cy="30" r="10" fill="#FFA16D" stroke="#23242A" stroke-width="2.4"/><ellipse cx="25" cy="31" rx="4" ry="6" fill="#151515"/><ellipse cx="43" cy="31" rx="4" ry="6" fill="#151515"/><path d="M12 42 Q24 39 33 49 Q43 39 55 42 L54 59 L34 62 L13 59Z" fill="#235F5A" stroke="#23242A" stroke-width="2.6" stroke-linejoin="round"/><path d="M12 42 Q24 39 33 49 Q43 39 55 42" fill="none" stroke="#FFF1D4" stroke-width="3.5"/></svg>"###;
