@@ -235,6 +235,7 @@ fn app() -> Router {
             editor: Arc::new(common::Editor::default()),
             suggestions: Arc::new(common::Suggestions),
             items: Arc::new(common::ItemGrid),
+            statements: Arc::new(common::Statements),
         },
         I18n::english().unwrap(),
         WebConfig {
@@ -663,6 +664,54 @@ async fn the_rows_of_a_property_are_read_into_its_statements_or_refused_at_its_f
             .await
             .contains(r#""field":"content","key":"edit-error-statement""#)
     );
+}
+
+#[tokio::test]
+async fn an_item_has_a_form_of_its_statements_that_saves_by_property() {
+    let app = app();
+    let ana = signed_in(&app).await;
+    let form = body(
+        send(
+            &app,
+            get("/equipe/acervo/exemplar/3/campos", Some(&ana), None),
+        )
+        .await,
+    )
+    .await;
+    assert!(form.contains(r#"data-endpoint="/equipe/acervo/exemplar/3" data-version="4""#));
+    assert!(form.contains(r#"data-property="custodialHistory""#));
+    assert!(form.contains("Doação da família Baldi"));
+    // The typed parts are the grid's.
+    assert!(!form.contains(r#"data-property="shelfMark""#));
+    let missing = send(
+        &app,
+        get("/equipe/acervo/matriz/9/campos", Some(&ana), None),
+    )
+    .await;
+    assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+    let token = page_token(&app, &ana).await;
+    let saved = send(
+        &app,
+        post_json(
+            "/equipe/acervo/exemplar/3",
+            Some(&ana),
+            Some(&token),
+            r#"{"version": 1, "changes": [{"Statements": {"property": "physicalLocation", "rows": [{"text": "Estante 4"}]}}]}"#,
+        ),
+    )
+    .await;
+    assert_eq!(saved.status(), StatusCode::OK);
+    let typed = send(
+        &app,
+        post_json(
+            "/equipe/acervo/exemplar/3",
+            Some(&ana),
+            Some(&token),
+            r#"{"version": 1, "changes": [{"Summary": "x"}]}"#,
+        ),
+    )
+    .await;
+    assert!(typed.status().is_client_error());
 }
 
 #[tokio::test]

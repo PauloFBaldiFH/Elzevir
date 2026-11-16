@@ -1343,6 +1343,8 @@ class ItemGridElement extends HTMLElement {
       const start = this.querySelector(".grid-add-inventory")?.value.trim() ?? "";
       const step = Math.max(Number(this.querySelector(".grid-add-step")?.value) || 1, 1);
       this.addRows(count, start, step);
+    } else if (action === "describe") {
+      this.describe();
     } else if (action === "close") {
       this.close();
     } else if (action === "discard") {
@@ -1370,6 +1372,19 @@ class ItemGridElement extends HTMLElement {
 
   finish() {
     this.dispatchEvent(new CustomEvent("grid-close", { bubbles: true }));
+  }
+
+  // The other properties of the current row's Item, as a form under the grid, outside it so
+  // the grid's keys do not reach its fields (bibframe-completo.md, step 6c).
+  describe() {
+    const id = this.active?.parentElement?.dataset.id;
+    if (!id) return;
+    this.parentElement?.querySelector(".item-describe")?.remove();
+    const box = document.createElement("div");
+    box.className = "card item-describe";
+    box.dataset.fields = `/equipe/acervo/exemplar/${id}/campos`;
+    this.after(box);
+    loadFields(box).then(() => box.querySelector("input, select, textarea")?.focus());
   }
 
   alert(text) {

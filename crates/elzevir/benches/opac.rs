@@ -84,6 +84,7 @@ fn main() {
             editor: Arc::clone(&store) as _,
             suggestions: Arc::clone(&store) as _,
             items: Arc::clone(&store) as _,
+            statements: Arc::clone(&store) as _,
         },
         I18n::english().unwrap(),
         WebConfig::default(),

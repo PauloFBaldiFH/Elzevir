@@ -35,6 +35,7 @@ enum Section {
     Relations,
     Notes,
     ElectronicLocator,
+    Location,
     AdminMetadata,
 }
 
@@ -47,8 +48,9 @@ struct Layout<F: 'static> {
     typed: &'static [(&'static str, &'static [F])],
     /// Typed properties that also take statements of another shape.
     with_statements: &'static [&'static str],
-    /// What the structure of the catalogue says (the entities above and below).
-    structure: &'static [&'static str],
+    /// What is edited elsewhere: the structure of the catalogue (the entities above and
+    /// below) and the typed parts of an Item, which the item grid edits.
+    elsewhere: &'static [&'static str],
     /// Typed properties that have no field yet. The list only shrinks.
     pending: &'static [&'static str],
     section_of: fn(&Property) -> Section,
@@ -77,7 +79,7 @@ const WORK: Layout<WorkField> = Layout {
     ],
     // Variant titles, the languages of parts, described classifications, coded audiences.
     with_statements: &["title", "language", "classification", "intendedAudience"],
-    structure: &["expressionOf", "hasExpression", "hasInstance"],
+    elsewhere: &["expressionOf", "hasExpression", "hasInstance"],
     pending: &[
         "continues",
         "derivativeOf",
@@ -130,10 +132,90 @@ const INSTANCE: Layout<InstanceField> = Layout {
     // Variant titles, production, distribution, manufacture and the coded publication,
     // numbers of a named agency, notes of a type.
     with_statements: &["title", "provisionActivity", "identifiedBy", "note"],
-    structure: &["instanceOf", "hasItem"],
+    elsewhere: &["instanceOf", "hasItem"],
     pending: &[],
     section_of: instance_section,
 };
+
+const HUB: Layout<WorkField> = Layout {
+    entity: Entity::Hub,
+    sections: &[
+        (Section::Title, "edit-section-title"),
+        (Section::Contributions, "edit-section-contributions"),
+        (Section::Content, "edit-section-content"),
+        (Section::Identifiers, "edit-section-identifiers"),
+        (Section::Relations, "edit-section-relations"),
+        (Section::AdminMetadata, "edit-section-admin-metadata"),
+    ],
+    typed: &[],
+    // The main title is the Hub's own column; other titles are variant ones.
+    with_statements: &["title"],
+    elsewhere: &["hasExpression"],
+    pending: &[],
+    section_of: hub_section,
+};
+
+const ITEM: Layout<WorkField> = Layout {
+    entity: Entity::Item,
+    sections: &[
+        (Section::Title, "edit-section-title"),
+        (Section::Content, "edit-section-content"),
+        (
+            Section::PhysicalDescription,
+            "edit-section-physical-description",
+        ),
+        (Section::Location, "edit-section-location"),
+        (Section::Relations, "edit-section-relations"),
+        (Section::Notes, "edit-section-notes"),
+        (Section::AdminMetadata, "edit-section-admin-metadata"),
+    ],
+    typed: &[],
+    // A number given by a named agency, beside the barcode of the grid.
+    with_statements: &["identifiedBy"],
+    elsewhere: &[
+        "itemOf",
+        "shelfMark",
+        "heldBy",
+        "sublocation",
+        "status",
+        "usageAndAccessPolicy",
+        "immediateAcquisition",
+    ],
+    pending: &[],
+    section_of: item_section,
+};
+
+fn hub_section(property: &Property) -> Section {
+    match property.name {
+        "title" => Section::Title,
+        "contribution" => Section::Contributions,
+        "identifiedBy" => Section::Identifiers,
+        "adminMetadata" => Section::AdminMetadata,
+        _ if is_relation(property) => Section::Relations,
+        _ => Section::Content,
+    }
+}
+
+fn item_section(property: &Property) -> Section {
+    match property.name {
+        "title" => Section::Title,
+        "contribution" | "subject" | "genreForm" | "classification" | "identifiedBy" => {
+            Section::Content
+        }
+        "physicalLocation" | "electronicLocator" | "enumerationAndChronology" => Section::Location,
+        "adminMetadata" => Section::AdminMetadata,
+        _ if is_note(property) => Section::Notes,
+        _ if is_relation(property) => Section::Relations,
+        _ => Section::PhysicalDescription,
+    }
+}
+
+/// Every field of a Hub or an Item described by `statements`: neither has a typed part
+/// here (the Hub's title is its card's, the Item's typed parts are the grid's).
+pub(crate) fn described_sections(entity: Entity, statements: &[Statement]) -> Vec<FormSection> {
+    let layout = if entity == Entity::Hub { &HUB } else { &ITEM };
+    lay_out(layout, None, statements, |_| None)
+}
 
 fn work_section(property: &Property) -> Section {
     match property.name {
@@ -228,9 +310,9 @@ pub(crate) fn work_sections(t: &I18n, record: &NewRecord) -> Vec<FormSection> {
     );
     lay_out(
         &WORK,
-        category,
+        Some(category),
         &record.work_description.statements,
-        |part| work_field(t, record, part).0,
+        |part| Some(work_field(t, record, part).0),
     )
 }
 
@@ -248,17 +330,17 @@ pub(crate) fn instance_sections(t: &I18n, record: &NewRecord) -> Vec<FormSection
     );
     lay_out(
         &INSTANCE,
-        category,
+        Some(category),
         &record.instance.description.statements,
-        |part| instance_field(t, record, identifier, part).0,
+        |part| Some(instance_field(t, record, identifier, part).0),
     )
 }
 
 fn lay_out<F: Copy>(
     layout: &Layout<F>,
-    category: (Section, FormField),
+    category: Option<(Section, FormField)>,
     statements: &[Statement],
-    typed_field: impl Fn(F) -> FormField,
+    typed_field: impl Fn(F) -> Option<FormField>,
 ) -> Vec<FormSection> {
     let mut sections: Vec<(Section, FormSection)> = layout
         .sections
@@ -278,15 +360,17 @@ fn lay_out<F: Copy>(
             form.fields.push(field);
         }
     };
-    push(category.0, category.1);
+    if let Some((section, field)) = category {
+        push(section, field);
+    }
     for property in properties_of(layout.entity) {
-        if layout.structure.contains(&property.name) || layout.pending.contains(&property.name) {
+        if layout.elsewhere.contains(&property.name) || layout.pending.contains(&property.name) {
             continue;
         }
         let section = (layout.section_of)(property);
         if let Some((_, parts)) = layout.typed.iter().find(|(name, _)| *name == property.name) {
-            for part in *parts {
-                push(section, typed_field(*part));
+            for field in parts.iter().filter_map(|part| typed_field(*part)) {
+                push(section, field);
             }
         }
         if !is_typed(layout.entity, property.name)
@@ -416,7 +500,7 @@ mod tests {
             .filter(|name| {
                 let typed = layout.typed.iter().any(|(typed, _)| typed == name);
                 let rows = fields.iter().any(|field| field.property == *name);
-                let left = layout.structure.contains(name) || layout.pending.contains(name);
+                let left = layout.elsewhere.contains(name) || layout.pending.contains(name);
                 !(typed || rows || left)
             })
             .collect()
@@ -450,6 +534,12 @@ mod tests {
             assert!(fields().any(|field| field.change == "MaterialType"));
         }
         assert!(INSTANCE.pending.is_empty());
+        for (layout, entity) in [(&HUB, Entity::Hub), (&ITEM, Entity::Item)] {
+            let sections = described_sections(entity, &[]);
+            assert!(uncovered(layout, &sections).is_empty(), "{entity:?}");
+            assert!(sections.iter().all(|section| !section.fields.is_empty()));
+            assert!(layout.pending.is_empty());
+        }
     }
 
     #[test]

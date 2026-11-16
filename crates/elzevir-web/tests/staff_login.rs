@@ -72,6 +72,7 @@ fn app() -> Router {
             editor: Arc::new(common::Editor::default()),
             suggestions: Arc::new(common::Suggestions),
             items: Arc::new(common::ItemGrid),
+            statements: Arc::new(common::Statements),
         },
         I18n::english().unwrap(),
         config,

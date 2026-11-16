@@ -7,7 +7,7 @@ use elzevir_domain::catalog::IdentifierKind;
 
 use crate::catalog::{
     CatalogOutput, CatalogRefusal, InstanceChange, InstanceUpdate, NewIdentifier,
-    NewInstanceOfWork, NewRecord, WorkChange, WorkUpdate,
+    NewInstanceOfWork, NewRecord, PropertyEdit, WorkChange, WorkUpdate,
 };
 use crate::items::ItemsUpdate;
 use crate::registries::RegistryChange;
@@ -28,6 +28,9 @@ pub enum Edit {
     Items(Box<ItemsUpdate>),
     /// A change to the registries (docs/specs/catalogo/bibframe-completo.md, item 23d).
     Registry(RegistryChange),
+    /// The statements of some properties of a Hub or an Item (bibframe-completo.md,
+    /// items 24 to 26).
+    Statements(Box<PropertyEdit>),
 }
 
 /// Why an edit was not stored.

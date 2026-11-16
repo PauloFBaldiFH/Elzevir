@@ -3,7 +3,8 @@
 //! (docs/specs/catalogo/bibframe-completo.md, items 10a to 10g).
 
 use elzevir_app::catalog::{
-    CatalogOutput, CatalogReadError, CatalogRefusal, StatementReader, StatementsUpdate,
+    CatalogOutput, CatalogReadError, CatalogRefusal, PropertyEdit, StatementReader,
+    StatementsUpdate,
 };
 use elzevir_app::commands::WriteRefusal;
 use elzevir_domain::catalog::{InstanceId, WorkId};
@@ -69,6 +70,30 @@ pub(crate) fn set_statements(tx: &WriteTx<'_>, update: &StatementsUpdate) -> Set
         )
         .map_err(StoreError::from)?;
     insert_level(connection, Owner::Subject(subject), &update.statements)?;
+    let row_version = changed(tx, subject)?;
+    Ok(CatalogOutput::StatementsSet {
+        subject,
+        row_version,
+    })
+}
+
+/// `CatalogCommand::EditStatements`: each property's statements replaced in place, then
+/// the version raised as `catalog.set_statements` raises it.
+pub(crate) fn edit_statements(tx: &WriteTx<'_>, edit: &PropertyEdit) -> Set {
+    let connection = tx.connection();
+    let subject = edit.subject;
+    let current = current_version(connection, subject)?
+        .ok_or_else(|| refused(CatalogRefusal::UnknownEntity(subject)))?;
+    check_version(edit.row_version, current)?;
+    if edit.changes.is_empty() {
+        return Ok(CatalogOutput::StatementsSet {
+            subject,
+            row_version: current,
+        });
+    }
+    for change in &edit.changes {
+        replace_property(connection, subject, &change.property, &change.statements)?;
+    }
     let row_version = changed(tx, subject)?;
     Ok(CatalogOutput::StatementsSet {
         subject,
@@ -508,6 +533,12 @@ impl StatementReader for ElzevirStore {
     fn description(&self, subject: EntityRef) -> Result<Description, CatalogReadError> {
         self.readers()
             .read(|c| read_description(c, subject))
+            .map_err(|e| CatalogReadError(e.to_string()))
+    }
+
+    fn version(&self, subject: EntityRef) -> Result<Option<i64>, CatalogReadError> {
+        self.readers()
+            .read(|c| current_version(c, subject))
             .map_err(|e| CatalogReadError(e.to_string()))
     }
 }

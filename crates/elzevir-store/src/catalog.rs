@@ -83,6 +83,7 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CatalogCommand) -> Applied {
             crate::koha_types::set(tx, translations)?
         }
         CatalogCommand::SetStatements(update) => crate::statements::set_statements(tx, update)?,
+        CatalogCommand::EditStatements(edit) => crate::statements::edit_statements(tx, edit)?,
         CatalogCommand::AddItem(new) => {
             if !exists(
                 connection,

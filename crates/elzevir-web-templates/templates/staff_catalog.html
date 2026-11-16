@@ -48,7 +48,7 @@
       <div class="track track-hub">
         <div class="col-header">{{ t.get("staff-column-hub") }}</div>
         {% if let Some(hub) = family.hub %}
-        <article class="card card-hub" data-level="hub" tabindex="0" data-node="h{{ hub.id }}">
+        <article class="card card-hub" data-level="hub" tabindex="0" data-node="h{{ hub.id }}"{% if can_catalogue %} data-fields="/equipe/acervo/matriz/{{ hub.id }}/campos"{% endif %}>
           <div class="card-top"><span class="entity-pill">{{ t.get("staff-badge-hub") }}</span></div>
           <div class="field-row">
             <span class="field-label">{{ t.get("staff-field-uniform-title") }}</span>

@@ -700,3 +700,50 @@ fn an_instance_property_edit_keeps_the_typed_parts_and_the_other_statements() {
     assert_eq!(again.title, read.title);
     assert!(again.version > read.version);
 }
+
+#[test]
+fn an_item_property_edit_replaces_its_statements_and_moves_the_version() {
+    use elzevir_app::catalog::{PropertyEdit, PropertyStatements, StatementReader};
+    use elzevir_domain::statement::{EntityKind, EntityRef, Statement, Value};
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = imported(&dir);
+    let id: i64 = count(&store, "SELECT MIN(id) FROM items");
+    let item = EntityRef {
+        entity: EntityKind::Item,
+        id,
+    };
+    let version = store.version(item).unwrap().unwrap();
+    let place = Statement {
+        property: "physicalLocation".to_owned(),
+        value: Value::Literal {
+            text: "Estante 4".to_owned(),
+            language: None,
+        },
+    };
+    let edit = |row_version| {
+        CatalogCommand::EditStatements(Box::new(PropertyEdit {
+            subject: item,
+            row_version,
+            changes: vec![PropertyStatements {
+                property: "physicalLocation".to_owned(),
+                statements: vec![place.clone()],
+            }],
+        }))
+    };
+    let output = run(&store, edit(version)).unwrap();
+    assert!(matches!(output,
+        CatalogOutput::StatementsSet { row_version, .. } if row_version == version + 1));
+    assert!(store.statements(item).unwrap().contains(&place));
+    assert!(matches!(
+        run(&store, edit(version)),
+        Err(CommandFailed::Rejected(WriteRefusal::Catalog(
+            CatalogRefusal::Stale { .. }
+        )))
+    ));
+    let unknown = EntityRef {
+        entity: EntityKind::Hub,
+        id: 9999,
+    };
+    assert_eq!(store.version(unknown).unwrap(), None);
+}
