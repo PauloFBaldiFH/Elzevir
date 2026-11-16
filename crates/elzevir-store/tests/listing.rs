@@ -15,9 +15,11 @@ use elzevir_app::catalog::{
     NewIdentifier, NewInstance, NewRecord, ShelfSignal, WorkChange, WorkUpdate,
 };
 use elzevir_app::commands::{WriteCommand, WriteOutput};
+use elzevir_app::description::work_of_material;
 use elzevir_app::export::item_codes;
 use elzevir_app::import::{ImportOptions, import_marc21};
 use elzevir_app::listing::{CatalogListing, FamilyCursor, FamilyHead, browse, sort_key};
+use elzevir_app::material::ContentKind;
 use elzevir_domain::catalog::{AgentKind, HubId, IdentifierKind, InstanceId, MaterialType, WorkId};
 use elzevir_marc::Limits;
 use elzevir_store::{ElzevirHandler, ElzevirStore, StoreConfig};
@@ -283,6 +285,7 @@ fn pills_carry_the_signal_of_each_item() {
     let store = open(&dir);
     setup(&store);
     let mut with_items = record("Memórias póstumas", None);
+    with_items.work_description = work_of_material(MaterialType::Book);
     let lost = ItemStatus {
         lost: 1,
         ..ItemStatus::default()
@@ -304,6 +307,11 @@ fn pills_carry_the_signal_of_each_item() {
         ]
     );
     assert_eq!((instance.items, instance.available), (2, 1));
+    assert_eq!(
+        instance.material.content,
+        Some(ContentKind::Text),
+        "the line reads its content from the Work's description"
+    );
 }
 
 #[test]

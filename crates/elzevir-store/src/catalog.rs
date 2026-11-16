@@ -9,6 +9,7 @@ use elzevir_app::catalog::{
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
 use elzevir_app::listing::sort_key;
 use elzevir_app::matching::{identifier_key, match_keys};
+use elzevir_app::material::{Material, material_of};
 use elzevir_app::search::REINDEX_INSTANCE;
 use elzevir_domain::catalog::{
     AgentKind, BranchId, HubId, IdentifierKind, InstanceId, ItemId, MaterialType, NamePartKind,
@@ -872,8 +873,8 @@ fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>,
     let Some(row) = c
         .query_row(
             "SELECT works.id, works.title, instances.title, publisher, date, works.hub_id,
-                    works.material_type, instances.material_type, works.classification,
-                    works.summary, works.audience, instances.row_version, works.row_version
+                    works.classification, works.summary, works.audience, instances.row_version,
+                    works.row_version
              FROM instances JOIN works ON works.id = instances.work_id
              WHERE instances.id = ?1",
             params![id.0],
@@ -885,13 +886,11 @@ fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>,
                     publisher: row.get(3)?,
                     date: row.get(4)?,
                     hub: row.get(5)?,
-                    work_material_type: row.get(6)?,
-                    material_type: row.get(7)?,
-                    classification: row.get(8)?,
-                    summary: row.get(9)?,
-                    audience: row.get(10)?,
-                    version: row.get(11)?,
-                    work_version: row.get(12)?,
+                    classification: row.get(6)?,
+                    summary: row.get(7)?,
+                    audience: row.get(8)?,
+                    version: row.get(9)?,
+                    work_version: row.get(10)?,
                 })
             },
         )
@@ -940,7 +939,7 @@ fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>,
     let languages = statement
         .query_map(params![work], |row| row.get(0))?
         .collect::<Result<Vec<String>, _>>()?;
-    let (other_titles, typed_notes) = described_texts(c, work, id.0)?;
+    let (other_titles, typed_notes, material) = described_texts(c, work, id.0)?;
     Ok(Some(InstanceView {
         id,
         version: row.version,
@@ -948,8 +947,7 @@ fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>,
         work_version: row.work_version,
         work_title: row.work_title,
         hub: row.hub.map(HubId),
-        work_material_type: material_type(row.work_material_type)?,
-        material_type: material_type(row.material_type)?,
+        material,
         relations,
         title: row.title,
         other_titles,
@@ -968,12 +966,12 @@ fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>,
 }
 
 /// The other titles and the typed notes of a Work and of its Instance (bibframe-completo.md,
-/// item 29, parts 5a and 5b).
+/// item 29, parts 5a and 5b), and the content and carrier they describe (item 15).
 fn described_texts(
     c: &Connection,
     work: i64,
     instance: i64,
-) -> Result<(Vec<String>, Vec<String>), ReadFailure> {
+) -> Result<(Vec<String>, Vec<String>, Material), ReadFailure> {
     let described = |entity, id| crate::statements::read_description(c, EntityRef { entity, id });
     let both = [
         &described(EntityKind::Work, work)?,
@@ -982,6 +980,16 @@ fn described_texts(
     Ok((
         elzevir_app::description::other_titles(&both),
         elzevir_app::description::typed_notes(&both),
+        material_of(both[0], both[1]),
+    ))
+}
+
+/// The content and carrier that a Work and its Instance describe (item 15).
+pub(crate) fn material(c: &Connection, work: i64, instance: i64) -> Result<Material, StoreError> {
+    let described = |entity, id| crate::statements::read_description(c, EntityRef { entity, id });
+    Ok(material_of(
+        &described(EntityKind::Work, work)?,
+        &described(EntityKind::Instance, instance)?,
     ))
 }
 
@@ -993,23 +1001,11 @@ struct InstanceRow {
     publisher: Option<String>,
     date: Option<String>,
     hub: Option<i64>,
-    work_material_type: Option<u8>,
-    material_type: Option<u8>,
     classification: Option<String>,
     summary: Option<String>,
     audience: Option<String>,
     version: i64,
     work_version: i64,
-}
-
-pub(crate) fn material_type(code: Option<u8>) -> Result<Option<MaterialType>, ReadFailure> {
-    code.map(|code| {
-        MaterialType::from_code(code).ok_or(ReadFailure::UnknownCode {
-            what: "material type",
-            code,
-        })
-    })
-    .transpose()
 }
 
 pub(crate) fn work_relations(

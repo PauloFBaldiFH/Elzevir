@@ -3,7 +3,7 @@
 
 use askama::Template;
 
-use crate::I18n;
+use crate::{Badge, I18n};
 
 /// The listing page, or only its rows for the next page.
 #[derive(Template)]
@@ -49,7 +49,7 @@ pub struct FamilyLine {
     pub head: String,
     /// The Hub's title, or the Work's.
     pub title: String,
-    /// Icon of the material of its first Instance.
+    /// Icon of the content of its first Instance that has one.
     pub icon: &'static str,
     /// Classification of its first Work.
     pub classification: Option<String>,
@@ -155,9 +155,10 @@ pub struct InstanceLine {
     pub imprint: Option<String>,
     /// First ISBN.
     pub isbn: Option<String>,
-    /// Message key of the category of material.
-    pub material: Option<&'static str>,
-    /// Icon of its material type in `/static/elzevir-icons.svg`, shown on each item.
+    /// Its content and carrier, each with its icon.
+    pub material: Vec<Badge>,
+    /// Icon of its carrier, else of its content, in `/static/elzevir-icons.svg`, shown on
+    /// each item.
     pub icon: &'static str,
     /// Whether the search found it.
     pub found: bool,

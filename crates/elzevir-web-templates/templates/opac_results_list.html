@@ -11,7 +11,7 @@
       <div class="result-meta">
         {% if let Some(contributor) = row.contributor %}<span>{{ contributor }}</span>{% endif %}
         {% if let Some(date) = row.date %}<span>{{ date }}</span>{% endif %}
-        {% if let Some(material) = row.material %}<span>{{ t.get(material) }}</span>{% endif %}
+        {% for badge in row.material %}<span class="material-badge"><svg class="badge-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ badge.icon }}"></use></svg>{{ t.get(badge.label_key) }}</span>{% endfor %}
         {% if let Some(call_number) = row.call_number %}<span class="call-number">{{ call_number }}</span>{% endif %}
       </div>
       <div class="availability {{ row.availability_class() }}">{{ row.availability_text(t) }}</div>

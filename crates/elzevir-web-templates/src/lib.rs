@@ -127,6 +127,16 @@ pub struct OpacHome<'a> {
     pub query: &'a str,
 }
 
+/// A categorical value with its icon (docs/specs/catalogo/bibframe-completo.md, items 15
+/// and 16): the icon never stands alone, the label goes with it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Badge {
+    /// Symbol id in `/static/elzevir-icons.svg`.
+    pub icon: &'static str,
+    /// Message key of its label.
+    pub label_key: &'static str,
+}
+
 /// One search result as the list shows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResultLine {
@@ -138,8 +148,8 @@ pub struct ResultLine {
     pub contributor: Option<String>,
     /// Date of publication.
     pub date: Option<String>,
-    /// Message key of the category of material.
-    pub material: Option<&'static str>,
+    /// Its content and carrier, each with its icon.
+    pub material: Vec<Badge>,
     /// Call number of the first Item.
     pub call_number: Option<String>,
     /// Items of the Instance.
@@ -244,8 +254,8 @@ pub struct OpacRecordBody<'a> {
     pub other_titles: Vec<&'a str>,
     /// Contributor headings.
     pub contributors: Vec<&'a str>,
-    /// Message key of the category of material.
-    pub material: Option<&'static str>,
+    /// Its content and carrier, each with its icon.
+    pub material: Vec<Badge>,
     /// Publisher and date.
     pub publication: Option<String>,
     /// Classification number.

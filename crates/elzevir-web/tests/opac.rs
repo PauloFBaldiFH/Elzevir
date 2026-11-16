@@ -15,11 +15,12 @@ use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use elzevir_app::catalog::{InstanceView, ItemStatus, ItemView};
+use elzevir_app::material::{CarrierKind, ContentKind, Material};
 use elzevir_app::memory::{MemoryProbe, MemoryReport};
 use elzevir_app::search::SearchHit;
 use elzevir_app::staff::{StaffAccount, StaffDirectory, StaffDirectoryError};
 use elzevir_domain::catalog::{
-    BranchId, InstanceId, ItemId, MaterialType, NoteKind, PolicyId, SublocationId, WorkId,
+    BranchId, InstanceId, ItemId, NoteKind, PolicyId, SublocationId, WorkId,
 };
 use elzevir_web::{AppState, OpacPorts, StaffPorts, WebConfig, router};
 use elzevir_web_templates::I18n;
@@ -55,8 +56,10 @@ fn view(id: i64, title: &str) -> InstanceView {
         work_version: 1,
         work_title: title.to_owned(),
         hub: None,
-        work_material_type: Some(MaterialType::Book),
-        material_type: Some(MaterialType::Book),
+        material: Material {
+            content: Some(ContentKind::Text),
+            carrier: Some(CarrierKind::Print),
+        },
         relations: Vec::new(),
         title: title.to_owned(),
         other_titles: Vec::new(),
@@ -99,7 +102,10 @@ fn hit(id: i64, title: &str) -> SearchHit {
         title: title.to_owned(),
         main_contributor: Some("Prefeitura".to_owned()),
         date: Some("1995".to_owned()),
-        material_type: Some(MaterialType::Book),
+        material: Material {
+            content: Some(ContentKind::Text),
+            carrier: Some(CarrierKind::Print),
+        },
         call_number: Some("310.62 P94".to_owned()),
     }
 }
@@ -178,7 +184,12 @@ async fn results_show_availability_and_escape_titles() {
     assert!(html.contains("Perfil &#60;Anuário&#62;") || html.contains("Perfil &lt;Anuário&gt;"));
     assert!(html.contains("1 of 2 available"));
     assert!(html.contains("No copies"));
-    assert!(html.contains("Book"));
+    assert!(
+        html.contains(
+            r#"<use href="/static/elzevir-icons.svg#content-text"></use></svg>Text</span>"#
+        )
+    );
+    assert!(html.contains("#carrier-print"));
 }
 
 #[tokio::test]

@@ -12,12 +12,13 @@ mod schema;
 use std::path::Path;
 use std::sync::{Mutex, PoisonError};
 
+use elzevir_app::material::{CarrierKind, ContentKind, Material};
 use elzevir_app::parallelism::Parallelism;
 use elzevir_app::search::{
     IndexBatch, SearchDocument, SearchError, SearchHit, SearchIndex, SearchResults,
     normalized_identifier,
 };
-use elzevir_domain::catalog::{HubId, IdentifierKind, InstanceId, MaterialType, WorkId};
+use elzevir_domain::catalog::{HubId, IdentifierKind, InstanceId, WorkId};
 use tantivy::collector::{Count, TopDocs};
 use tantivy::directory::MmapDirectory;
 use tantivy::query::{BooleanQuery, BoostQuery, Occur, Query, QueryParser, RegexQuery, TermQuery};
@@ -169,8 +170,11 @@ impl TantivyIndex {
                 document.add_text(field, value);
             }
         }
-        if let Some(material_type) = source.material_type {
-            document.add_u64(f.material_type, u64::from(material_type.code()));
+        if let Some(content) = source.material.content {
+            document.add_text(f.content, content.name());
+        }
+        if let Some(carrier) = source.material.carrier {
+            document.add_text(f.carrier, carrier.name());
         }
         document
     }
@@ -254,9 +258,10 @@ impl TantivyIndex {
             title: text(self.fields.title).unwrap_or_default(),
             main_contributor: text(self.fields.main_contributor),
             date: text(self.fields.date),
-            material_type: number(self.fields.material_type)
-                .and_then(|code| u8::try_from(code).ok())
-                .and_then(MaterialType::from_code),
+            material: Material {
+                content: text(self.fields.content).and_then(|name| ContentKind::from_name(&name)),
+                carrier: text(self.fields.carrier).and_then(|name| CarrierKind::from_name(&name)),
+            },
             call_number: text(self.fields.call_number),
         })
     }

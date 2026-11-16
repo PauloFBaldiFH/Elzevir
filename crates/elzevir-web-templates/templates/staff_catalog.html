@@ -131,10 +131,10 @@
                 <span class="field-value isbn">{{ isbn }}</span>
               </div>
               {% endif %}
-              {% if let Some(material) = instance.material %}
+              {% if !instance.material.is_empty() %}
               <div class="field-row">
                 <span class="field-label">{{ t.get("staff-field-material") }}</span>
-                <span class="field-value">{{ t.get(material) }}</span>
+                <span class="field-value">{% for badge in instance.material %}<span class="material-badge"><svg class="badge-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ badge.icon }}"></use></svg>{{ t.get(badge.label_key) }}</span>{% endfor %}</span>
               </div>
               {% endif %}
             </div>

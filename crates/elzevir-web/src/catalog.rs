@@ -20,14 +20,14 @@ use elzevir_app::listing::{
 };
 use elzevir_app::staff::Permission;
 use elzevir_app::suggestions::AuthoritySuggestions;
-use elzevir_domain::catalog::{InstanceId, MaterialType};
+use elzevir_domain::catalog::InstanceId;
 use elzevir_web_templates::{
     AuthorityLine, FamilyLine, HubLine, InstanceLine, PillLine, ScanLine, StaffCatalog, WorkLine,
     url_encode,
 };
 use serde::Deserialize;
 
-use crate::opac::material_key;
+use crate::icons::{NO_CONTENT, content_badge, item_icon, material_badges};
 use crate::staff::current_session;
 use crate::{AppState, render};
 
@@ -302,8 +302,8 @@ fn family_line(row: &FamilyRow, codes: &CodeLists) -> FamilyLine {
             |hub| hub.title.clone(),
         ),
         icon: instances()
-            .find_map(|instance| instance.material_type)
-            .map_or("book", material_icon),
+            .find_map(|instance| instance.material.content)
+            .map_or(NO_CONTENT, |kind| content_badge(kind).icon),
         classification: first_work.and_then(|work| work.classification.clone()),
         instances: instances().count(),
         items: instances().map(|instance| instance.items).sum(),
@@ -345,8 +345,8 @@ fn instance_line(instance: &InstanceRow, codes: &CodeLists) -> InstanceLine {
         edition: instance.edition.clone(),
         imprint,
         isbn: instance.isbn.clone(),
-        material: instance.material_type.map(material_key),
-        icon: instance.material_type.map_or("book", material_icon),
+        material: material_badges(instance.material),
+        icon: item_icon(instance.material),
         found: instance.matched == Match::Found,
         // Neighbouring editions get different colours; the cover itself is a placeholder
         // until real covers arrive (UI spec §6.4).
@@ -374,21 +374,6 @@ fn pill_line(pill: &ItemPill, codes: &CodeLists) -> PillLine {
         text: parts.into_iter().flatten().collect::<Vec<_>>().join(" | "),
         signal_class,
         signal_key,
-    }
-}
-
-/// The icon of a material type in `elzevir-icons.svg`; a record without one gets the book.
-const fn material_icon(material: MaterialType) -> &'static str {
-    match material {
-        MaterialType::Book => "book",
-        MaterialType::Periodical => "periodical",
-        MaterialType::Map => "map",
-        MaterialType::Score => "score",
-        MaterialType::SoundRecording => "sound-recording",
-        MaterialType::Video => "video",
-        MaterialType::Digital => "digital",
-        MaterialType::VisualMaterial => "visual-material",
-        MaterialType::Mixed => "mixed",
     }
 }
 

@@ -17,6 +17,7 @@ use crate::codes::{CodeTable, NamedCode, NamingCount};
 use crate::items::{ItemsUpdate, RowRefusal};
 use crate::koha_types::TypeTranslations;
 use crate::matching::Matching;
+use crate::material::Material;
 use crate::registries::{BranchContact, RegistryChange, RegistryEntry, RegistryRefusal};
 use elzevir_domain::statement::{Description, EntityRef, Statement, StatementRefusal};
 
@@ -693,10 +694,8 @@ pub struct InstanceView {
     pub work_title: String,
     /// The Work's Hub, if any.
     pub hub: Option<HubId>,
-    /// The Work's category of material; `None` only for rows written before it existed.
-    pub work_material_type: Option<MaterialType>,
-    /// The Instance's category of material; `None` as for the Work.
-    pub material_type: Option<MaterialType>,
+    /// The content and carrier its description gives.
+    pub material: Material,
     /// Relations from the Work to other Works, in order.
     pub relations: Vec<(WorkRelationKind, WorkId)>,
     /// The Instance's title.
