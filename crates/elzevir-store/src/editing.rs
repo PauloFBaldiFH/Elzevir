@@ -19,10 +19,11 @@ use crate::catalog::{
     insert_identifiers, insert_notes, link_contributions, link_languages, link_relations,
     link_subjects, optional_term, record_changed, refused,
 };
-use crate::statements::{recategorize, replace_property};
+use crate::statements::{replace_classes, replace_property};
 use crate::{CommandFailed, StoreError, WriteTx};
-use elzevir_app::description::{instance_of_material, work_of_material};
-use elzevir_domain::statement::{EntityKind, EntityRef};
+use elzevir_app::description::{category_of, instance_category};
+use elzevir_domain::catalog::MaterialType;
+use elzevir_domain::statement::{Description, EntityKind, EntityRef};
 
 type Edited = Result<CatalogOutput, CommandFailed<WriteRefusal>>;
 
@@ -135,21 +136,22 @@ fn apply_work_change(
                 )
                 .map_err(StoreError::from)?;
         }
-        WorkChange::MaterialType(kind) => {
+        WorkChange::Classes(classes) => {
+            let subject = EntityRef {
+                entity: EntityKind::Work,
+                id,
+            };
+            let classes = replace_classes(connection, subject, classes)?;
+            // The old column follows the classes until stage 7c drops it.
+            let category = category_of(&Description {
+                classes,
+                statements: Vec::new(),
+            });
             set(
                 connection,
                 "UPDATE works SET material_type = ?2 WHERE id = ?1",
                 id,
-                &kind.code(),
-            )?;
-            recategorize(
-                connection,
-                EntityRef {
-                    entity: EntityKind::Work,
-                    id,
-                },
-                &work_of_material(*kind),
-                &["content"],
+                &category.code(),
             )?;
         }
         WorkChange::Classification { number, scheme } => {
@@ -311,22 +313,23 @@ fn apply_instance_change(
     let id = instance.0;
     let (sql, value): (&str, &dyn ToSql) = match change {
         InstanceChange::Title(title) => ("UPDATE instances SET title = ?2 WHERE id = ?1", title),
-        InstanceChange::MaterialType(kind) => {
+        InstanceChange::Classes(classes) => {
+            let subject = EntityRef {
+                entity: EntityKind::Instance,
+                id,
+            };
+            let classes = replace_classes(connection, subject, classes)?;
+            let category = instance_category(&Description {
+                classes,
+                statements: Vec::new(),
+            });
             set(
                 connection,
                 "UPDATE instances SET material_type = ?2 WHERE id = ?1",
                 id,
-                &kind.code(),
+                &category.map(MaterialType::code),
             )?;
-            return Ok(recategorize(
-                connection,
-                EntityRef {
-                    entity: EntityKind::Instance,
-                    id,
-                },
-                &instance_of_material(Some(*kind)),
-                &[],
-            )?);
+            return Ok(());
         }
         InstanceChange::Edition(edition) => {
             ("UPDATE instances SET edition = ?2 WHERE id = ?1", edition)

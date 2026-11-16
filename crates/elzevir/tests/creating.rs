@@ -11,7 +11,7 @@ mod common;
 use std::num::NonZeroUsize;
 
 use elzevir_app::catalog::{
-    CatalogOutput, CatalogRefusal, InstanceChange, NewContribution, NewIdentifier,
+    CatalogOutput, CatalogRefusal, ClassChoice, InstanceChange, NewContribution, NewIdentifier,
     NewInstanceOfWork, WorkChange,
 };
 use elzevir_app::creating::{new_instance, new_record};
@@ -20,7 +20,7 @@ use elzevir_app::export::{RecordFormat, export_record};
 use elzevir_app::parallelism::Parallelism;
 use elzevir_app::search::{IndexOptions, SearchIndex, index_pending};
 use elzevir_app::staff::StaffId;
-use elzevir_domain::catalog::{AgentKind, IdentifierKind, InstanceId, MaterialType, WorkId};
+use elzevir_domain::catalog::{AgentKind, IdentifierKind, InstanceId, WorkId};
 use elzevir_marc::{Limits, MarcReader};
 use elzevir_search::TantivyIndex;
 use elzevir_store::ElzevirStore;
@@ -67,7 +67,13 @@ fn a_family_and_an_instance_created_on_screen_export_and_are_found() {
     let record = new_record(
         vec![
             WorkChange::Title("Esaú e Jacó".to_owned()),
-            WorkChange::MaterialType(MaterialType::Book),
+            WorkChange::Classes(
+                ["Text", "Monograph"]
+                    .map(|class| ClassChoice {
+                        class: class.to_owned(),
+                    })
+                    .to_vec(),
+            ),
             WorkChange::Languages(vec!["por".to_owned()]),
             WorkChange::Contributions(vec![NewContribution {
                 kind: AgentKind::Person,

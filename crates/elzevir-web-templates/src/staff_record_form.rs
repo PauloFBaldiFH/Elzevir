@@ -152,6 +152,28 @@ pub struct FormCell {
     pub value: String,
 }
 
+impl FormCell {
+    /// Whether its column is a select whose options have icons.
+    #[must_use]
+    pub fn has_icons(&self) -> bool {
+        matches!(&self.column.kind, ColumnKind::Select(options)
+            if options.iter().any(|option| option.icon.is_some()))
+    }
+
+    /// The icon of the chosen option, empty when it has none.
+    #[must_use]
+    pub fn icon(&self) -> &'static str {
+        match &self.column.kind {
+            ColumnKind::Select(options) => options
+                .iter()
+                .find(|option| option.value == self.value)
+                .and_then(|option| option.icon)
+                .unwrap_or_default(),
+            _ => "",
+        }
+    }
+}
+
 /// How a column is entered.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ColumnKind {
@@ -176,4 +198,7 @@ pub struct FormOption {
     pub value: String,
     /// The label shown, in the interface language.
     pub label: String,
+    /// The symbol of its icon in `/static/elzevir-icons.svg`, shown beside the select
+    /// while it is chosen (docs/specs/catalogo/bibframe-completo.md, item 14).
+    pub icon: Option<&'static str>,
 }

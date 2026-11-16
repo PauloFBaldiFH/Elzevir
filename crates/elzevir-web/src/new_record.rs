@@ -8,35 +8,35 @@ use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
 use elzevir_app::catalog::{NewIdentifier, NewInstance, NewRecord};
+use elzevir_app::description::work_of_material;
 use elzevir_app::export::stored_record;
 use elzevir_app::listing::scanned_isbn;
 use elzevir_app::staff::Permission;
 use elzevir_domain::catalog::{IdentifierKind, InstanceId, MaterialType};
+use elzevir_domain::statement::Description;
 use elzevir_web_templates::{FormPart, FormSection, I18n, NewRecordForm};
 use serde::Deserialize;
 
 use crate::form_sections::{instance_sections, work_sections};
-use crate::record_form::{is_filled, material_named};
+use crate::record_form::is_filled;
 use crate::staff::current_session;
 use crate::{AppState, render};
 
 /// The parts of a Work that carry over to the next new family (item 17).
-const CARRIED_WORK: &[&str] = &["MaterialType", "Languages", "Subjects"];
+const CARRIED_WORK: &[&str] = &["Classes", "Languages", "Subjects"];
 /// The parts of an Instance that carry over to the next new family (item 17).
-const CARRIED_INSTANCE: &[&str] = &["Publisher", "Place", "Date"];
+const CARRIED_INSTANCE: &[&str] = &["Classes", "Publisher", "Place", "Date"];
 
 /// Query string of a new family's form.
 #[derive(Deserialize)]
 pub(crate) struct NewFamilyParams {
-    /// The category of material of the session, by its serde name.
-    material: Option<String>,
     /// The Instance created before, whose values carry over.
     from: Option<i64>,
     /// A scanned ISBN the new family starts with (docs/specs/catalogo/bipe.md, item 10).
     isbn: Option<String>,
 }
 
-/// `GET /equipe/acervo/nova?material=&from=`: the form of a new family (items 14 and 17).
+/// `GET /equipe/acervo/nova?from=&isbn=`: the form of a new family (items 14 and 17).
 pub(crate) async fn new_family(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -56,12 +56,7 @@ pub(crate) async fn new_family(
     let (mut start, inherited) = if let Some(previous) = &previous {
         (carried_over(previous), true)
     } else {
-        let material = params
-            .material
-            .as_deref()
-            .and_then(material_named)
-            .unwrap_or(MaterialType::Book);
-        (blank(material), false)
+        (blank(), false)
     };
     // Checked again here: only a valid ISBN is taken, as its 13 digits.
     if let Some(isbn) = params.isbn.as_deref().and_then(scanned_isbn) {
@@ -95,9 +90,10 @@ pub(crate) async fn new_instance(
     else {
         return (StatusCode::SERVICE_UNAVAILABLE, "catalog unavailable").into_response();
     };
-    let mut start = blank(source.material_type);
+    let mut start = blank();
+    start.work_description.classes = source.work_description.classes;
     start.instance.title.clone_from(&source.instance.title);
-    start.instance.material_type = source.instance.material_type;
+    start.instance.description.classes = source.instance.description.classes;
     let t = &state.inner.i18n;
     render(&NewRecordForm {
         t,
@@ -131,11 +127,13 @@ async fn read(state: &AppState, instance: InstanceId) -> Result<Option<NewRecord
     }
 }
 
-pub(crate) fn blank(material_type: MaterialType) -> NewRecord {
+/// An empty family. It starts as most do, a printed book: a monographic text Work
+/// with `txt` content and a `bf:Print` Instance; the cataloguer changes what differs.
+pub(crate) fn blank() -> NewRecord {
     NewRecord {
         work_title: String::new(),
-        material_type,
-        work_description: elzevir_domain::statement::Description::default(),
+        material_type: MaterialType::Book,
+        work_description: work_of_material(MaterialType::Book),
         hub: None,
         relations: Vec::new(),
         classification: None,
@@ -145,7 +143,13 @@ pub(crate) fn blank(material_type: MaterialType) -> NewRecord {
         languages: Vec::new(),
         contributions: Vec::new(),
         subjects: Vec::new(),
-        instance: NewInstance::default(),
+        instance: NewInstance {
+            description: Description {
+                classes: vec!["Print".to_owned()],
+                statements: Vec::new(),
+            },
+            ..NewInstance::default()
+        },
         items: Vec::new(),
         source: None,
     }
@@ -153,10 +157,24 @@ pub(crate) fn blank(material_type: MaterialType) -> NewRecord {
 
 /// What the next family starts with after `previous` (item 17).
 fn carried_over(previous: &NewRecord) -> NewRecord {
-    let mut start = blank(previous.material_type);
+    let mut start = blank();
+    start.work_description = Description {
+        classes: previous.work_description.classes.clone(),
+        statements: previous
+            .work_description
+            .statements
+            .iter()
+            .filter(|statement| statement.property == "content")
+            .cloned()
+            .collect(),
+    };
     start.languages.clone_from(&previous.languages);
     start.subjects.clone_from(&previous.subjects);
-    start.instance.material_type = previous.instance.material_type;
+    start
+        .instance
+        .description
+        .classes
+        .clone_from(&previous.instance.description.classes);
     start
         .instance
         .publisher
@@ -206,7 +224,7 @@ mod tests {
     fn the_carried_over_parts_are_the_ones_the_form_names() {
         // Each name is a field change of the profile, or the mark would never show.
         let t = I18n::english().unwrap();
-        let start = blank(MaterialType::Book);
+        let start = blank();
         let form = family_form(&t, &start, false);
         let changes = |name: &str| -> Vec<&str> {
             form.parts

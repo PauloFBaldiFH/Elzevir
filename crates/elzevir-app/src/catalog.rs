@@ -165,8 +165,8 @@ pub struct WorkUpdate {
 pub enum WorkChange {
     /// Preferred title.
     Title(String),
-    /// Category of material.
-    MaterialType(MaterialType),
+    /// The Work's subclasses, replaced whole, in order (bibframe-completo.md, item 14).
+    Classes(Vec<ClassChoice>),
     /// Classification number and its scheme code.
     Classification {
         /// The number, such as a DDC number.
@@ -196,6 +196,13 @@ pub enum WorkChange {
     },
 }
 
+/// One class chosen in a form: a row of its classes field.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClassChoice {
+    /// The class's local name, such as `Text`.
+    pub class: String,
+}
+
 /// An edit of an Instance, read at `row_version`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InstanceUpdate {
@@ -213,8 +220,8 @@ pub struct InstanceUpdate {
 pub enum InstanceChange {
     /// Title as on the publication.
     Title(String),
-    /// Category of material.
-    MaterialType(MaterialType),
+    /// The Instance's subclasses, replaced whole, in order (item 14).
+    Classes(Vec<ClassChoice>),
     /// Edition statement.
     Edition(Option<String>),
     /// Place of publication.

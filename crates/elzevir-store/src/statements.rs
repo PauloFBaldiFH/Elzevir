@@ -3,7 +3,7 @@
 //! (docs/specs/catalogo/bibframe-completo.md, items 10a to 10g).
 
 use elzevir_app::catalog::{
-    CatalogOutput, CatalogReadError, CatalogRefusal, PropertyEdit, StatementReader,
+    CatalogOutput, CatalogReadError, CatalogRefusal, ClassChoice, PropertyEdit, StatementReader,
     StatementsUpdate,
 };
 use elzevir_app::commands::WriteRefusal;
@@ -173,32 +173,30 @@ pub(crate) fn replace_property(
     Ok(())
 }
 
-/// Follows a change of category of material (bibframe-completo.md, item 10l): the classes
-/// become those of `description`, and so do the statements of the `replaced` properties;
-/// every other statement stays where it was.
-pub(crate) fn recategorize(
+/// Replaces the classes of `subject` with the chosen ones, checked as a description is
+/// (bibframe-completo.md, item 14); the statements stay. Returns the classes stored.
+pub(crate) fn replace_classes(
     connection: &Connection,
     subject: EntityRef,
-    description: &Description,
-    replaced: &[&str],
-) -> Result<(), StoreError> {
-    let (kind, id) = (kind_number(subject.entity), subject.id);
-    connection.execute(
-        "DELETE FROM entity_classes WHERE subject_kind = ?1 AND subject_id = ?2",
-        params![kind, id],
-    )?;
-    insert_classes(connection, subject, &description.classes)?;
-    let kept: Vec<Statement> = read_statements(connection, subject)?
-        .into_iter()
-        .filter(|statement| !replaced.contains(&statement.property.as_str()))
-        .collect();
-    connection.execute(
-        "DELETE FROM statements WHERE subject_kind = ?1 AND subject_id = ?2",
-        params![kind, id],
-    )?;
-    let mut statements = kept;
-    statements.extend(description.statements.iter().cloned());
-    insert_level(connection, Owner::Subject(subject), &statements)
+    chosen: &[ClassChoice],
+) -> Result<Vec<String>, CommandFailed<WriteRefusal>> {
+    let classes: Vec<String> = chosen.iter().map(|choice| choice.class.clone()).collect();
+    statement::check_description(
+        subject.entity,
+        &Description {
+            classes: classes.clone(),
+            statements: Vec::new(),
+        },
+    )
+    .map_err(|refusal| refused(CatalogRefusal::BadStatement(refusal)))?;
+    connection
+        .execute(
+            "DELETE FROM entity_classes WHERE subject_kind = ?1 AND subject_id = ?2",
+            params![kind_number(subject.entity), subject.id],
+        )
+        .map_err(StoreError::from)?;
+    insert_classes(connection, subject, &classes)?;
+    Ok(classes)
 }
 
 fn insert_classes(

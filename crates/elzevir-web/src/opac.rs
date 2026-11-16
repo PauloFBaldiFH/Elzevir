@@ -11,7 +11,7 @@ use axum::response::{Html, IntoResponse, Response};
 use elzevir_app::catalog::{CatalogReader, CodeLists, ItemStatus, ItemView};
 use elzevir_app::opac::{self, RecordPage, ResultsPage};
 use elzevir_app::search::SearchIndex;
-use elzevir_domain::catalog::{InstanceId, MaterialType, NoteKind};
+use elzevir_domain::catalog::{InstanceId, NoteKind};
 use elzevir_web_templates::{
     ItemLine, OpacNotFound, OpacRecord, OpacRecordBody, OpacResults, ResultLine,
 };
@@ -250,21 +250,6 @@ fn item_line(item: &ItemView, codes: &CodeLists) -> ItemLine {
     }
 }
 
-/// The message key of a category of material.
-pub(crate) const fn material_key(material: MaterialType) -> &'static str {
-    match material {
-        MaterialType::Book => "material-book",
-        MaterialType::Periodical => "material-periodical",
-        MaterialType::Map => "material-map",
-        MaterialType::Score => "material-score",
-        MaterialType::SoundRecording => "material-sound-recording",
-        MaterialType::Video => "material-video",
-        MaterialType::Digital => "material-digital",
-        MaterialType::VisualMaterial => "material-visual-material",
-        MaterialType::Mixed => "material-mixed",
-    }
-}
-
 /// The message key of an Item's status: the gravest one set, or available.
 pub(crate) const fn status_key(status: ItemStatus) -> &'static str {
     if status.lost != 0 {
@@ -302,11 +287,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_material_and_status_has_a_message() {
+    fn every_status_has_a_message() {
         let t = elzevir_web_templates::I18n::english().unwrap();
-        for material in MaterialType::ALL {
-            assert!(t.has(material_key(*material)), "{material:?}");
-        }
         let statuses = [
             ItemStatus::default(),
             ItemStatus {

@@ -10,8 +10,8 @@ use elzevir_domain::catalog::{IdentifierKind, MaterialType};
 pub enum WorkField {
     /// Preferred title.
     Title,
-    /// Category of material.
-    MaterialType,
+    /// The subclasses of the entity (bibframe-completo.md, item 14).
+    Classes,
     /// Contributors with their roles.
     Contributions,
     /// Classification number and scheme.
@@ -49,8 +49,8 @@ pub enum InstanceField {
     Identifiers,
     /// Notes.
     Notes,
-    /// Category of material.
-    MaterialType,
+    /// The subclasses of the entity (bibframe-completo.md, item 14).
+    Classes,
 }
 
 /// One profile.
@@ -68,7 +68,7 @@ pub struct Profile {
 
 const WORK: &[WorkField] = &[
     WorkField::Title,
-    WorkField::MaterialType,
+    WorkField::Classes,
     WorkField::Contributions,
     WorkField::Classification,
     WorkField::Languages,
@@ -87,7 +87,7 @@ const INSTANCE: &[InstanceField] = &[
     InstanceField::Series,
     InstanceField::Identifiers,
     InstanceField::Notes,
-    InstanceField::MaterialType,
+    InstanceField::Classes,
 ];
 
 /// Books (item 26).

@@ -104,7 +104,7 @@ fn stored(instance: i64) -> StoredRecord {
         record: NewRecord {
             work_title: "Dom Casmurro".to_owned(),
             material_type: MaterialType::Book,
-            work_description: elzevir_domain::statement::Description::default(),
+            work_description: elzevir_app::description::work_of_material(MaterialType::Book),
             hub: None,
             relations: Vec::new(),
             classification: Some("869.3".to_owned()),
@@ -861,8 +861,7 @@ async fn suggestions_list_existing_agents_and_subjects_by_prefix() {
 #[tokio::test]
 async fn a_cataloguer_creates_a_family_or_an_instance_from_the_screen() {
     let app = app();
-    let family =
-        r#"{"work": [{"Title": "Quincas Borba"}, {"MaterialType": "book"}], "instance": []}"#;
+    let family = r#"{"work": [{"Title": "Quincas Borba"}, {"Classes": [{"class": "Text"}]}], "instance": []}"#;
     let anonymous = send(&app, post_json("/equipe/acervo/nova", None, None, family)).await;
     assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
     let bia = signed_in_as(&app, "bia").await;
@@ -889,14 +888,14 @@ async fn a_cataloguer_creates_a_family_or_an_instance_from_the_screen() {
     );
 
     // The rows of the properties go into the new record, or are refused at their field.
-    let described = r#"{"work": [{"Title": "Quincas Borba"}, {"MaterialType": "book"}, {"Statements": {"property": "awards", "rows": [{"text": "Jabuti"}]}}], "instance": [{"Statements": {"property": "dimensions", "rows": [{"text": "21 cm"}]}}]}"#;
+    let described = r#"{"work": [{"Title": "Quincas Borba"}, {"Classes": [{"class": "Text"}]}, {"Statements": {"property": "awards", "rows": [{"text": "Jabuti"}]}}], "instance": [{"Statements": {"property": "dimensions", "rows": [{"text": "21 cm"}]}}]}"#;
     let created = send(
         &app,
         post_json("/equipe/acervo/nova", Some(&ana), Some(&token), described),
     )
     .await;
     assert_eq!(created.status(), StatusCode::CREATED);
-    let wrong = r#"{"work": [{"Title": "Quincas Borba"}, {"MaterialType": "book"}], "instance": [{"Statements": {"property": "historyOfWork", "rows": [{"text": "x"}]}}]}"#;
+    let wrong = r#"{"work": [{"Title": "Quincas Borba"}, {"Classes": [{"class": "Text"}]}], "instance": [{"Statements": {"property": "historyOfWork", "rows": [{"text": "x"}]}}]}"#;
     let refused = send(
         &app,
         post_json("/equipe/acervo/nova", Some(&ana), Some(&token), wrong),
@@ -911,7 +910,18 @@ async fn a_cataloguer_creates_a_family_or_an_instance_from_the_screen() {
     assert_eq!(empty.status(), StatusCode::UNPROCESSABLE_ENTITY);
     let empty = body(empty).await;
     assert!(empty.contains(r#""field":"title","key":"edit-error-title-empty""#));
-    assert!(empty.contains(r#""field":"material_type","key":"edit-error-material-required""#));
+    let print = r#"{"work": [{"Title": "Quincas Borba"}, {"Classes": [{"class": "Print"}]}], "instance": []}"#;
+    let print = send(
+        &app,
+        post_json("/equipe/acervo/nova", Some(&ana), Some(&token), print),
+    )
+    .await;
+    assert_eq!(print.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(
+        body(print)
+            .await
+            .contains(r#""field":"classes","key":"edit-error-class""#)
+    );
 
     let instance = r#"{"changes": [{"Title": "Quincas Borba"}, {"Edition": "2. ed."}]}"#;
     let added = send(
@@ -953,25 +963,25 @@ async fn the_new_record_forms_start_blank_or_carry_over_the_previous_record() {
     assert!(listing.contains(r#"data-action="new-family""#));
     assert!(listing.contains(r#"data-action="new-instance" data-from="10""#));
 
-    let blank = body(
-        send(
-            &app,
-            get("/equipe/acervo/nova?material=periodical", Some(&ana), None),
-        )
-        .await,
-    )
-    .await;
+    let blank = body(send(&app, get("/equipe/acervo/nova", Some(&ana), None)).await).await;
     assert!(blank.contains(r#"data-endpoint="/equipe/acervo/nova" data-create="family""#));
     assert!(blank.contains(r#"data-part="work""#) && blank.contains(r#"data-part="instance""#));
-    assert!(blank.contains(r#"<option value="periodical" selected>"#));
+    // A blank family starts as a printed book, each class with its icon.
+    assert!(
+        blank.contains(r#"<option value="Text" data-icon="content-text" selected>Text</option>"#)
+    );
+    assert!(
+        blank.contains(
+            r#"<option value="Print" data-icon="carrier-print" selected>Printed</option>"#
+        )
+    );
+    assert!(blank.contains(r#"<svg class="select-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#content-text"></use></svg>"#));
     assert!(!blank.contains("data-inherited"));
 
     let next = body(send(&app, get("/equipe/acervo/nova?from=10", Some(&ana), None)).await).await;
-    // Language and category carry over, marked; title and contributors do not.
+    // Language and classes carry over, marked; title and contributors do not.
     assert!(next.contains(r#"data-change="Languages" data-error="languages" data-inherited"#));
-    assert!(
-        next.contains(r#"data-change="MaterialType" data-error="material_type" data-inherited"#)
-    );
+    assert!(next.contains(r#"data-change="Classes" data-error="classes" data-inherited"#));
     assert!(next.contains("from the previous record"));
     assert!(!next.contains("Dom Casmurro") && !next.contains("Assis, Machado de"));
 

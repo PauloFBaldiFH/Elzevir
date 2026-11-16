@@ -4,9 +4,10 @@
 //! implements.
 
 use elzevir_domain::catalog::IdentifierKind;
+use elzevir_domain::statement::{Description, EntityKind, check_description};
 
 use crate::catalog::{
-    CatalogOutput, CatalogRefusal, InstanceChange, InstanceUpdate, NewIdentifier,
+    CatalogOutput, CatalogRefusal, ClassChoice, InstanceChange, InstanceUpdate, NewIdentifier,
     NewInstanceOfWork, NewRecord, PropertyEdit, WorkChange, WorkUpdate,
 };
 use crate::items::ItemsUpdate;
@@ -83,6 +84,11 @@ pub fn validate_work_changes(changes: &mut [WorkChange]) -> Result<(), Vec<Field
                     errors.push(error("title", "edit-error-title-empty"));
                 }
             }
+            WorkChange::Classes(classes) => {
+                if !normalize_classes(EntityKind::Work, classes) {
+                    errors.push(error("classes", "edit-error-class"));
+                }
+            }
             WorkChange::Classification { number, scheme } => {
                 optional(number);
                 optional(scheme);
@@ -113,9 +119,7 @@ pub fn validate_work_changes(changes: &mut [WorkChange]) -> Result<(), Vec<Field
             }
             // The form's rows were read and checked by `statement_rows`; the store checks
             // the whole description again.
-            WorkChange::MaterialType(_)
-            | WorkChange::Relations(_)
-            | WorkChange::Statements { .. } => {}
+            WorkChange::Relations(_) | WorkChange::Statements { .. } => {}
         }
     }
     if errors.is_empty() {
@@ -138,6 +142,11 @@ pub fn validate_instance_changes(changes: &mut [InstanceChange]) -> Result<(), V
                 trim(title);
                 if title.is_empty() {
                     errors.push(error("title", "edit-error-title-empty"));
+                }
+            }
+            InstanceChange::Classes(classes) => {
+                if !normalize_classes(EntityKind::Instance, classes) {
+                    errors.push(error("classes", "edit-error-class"));
                 }
             }
             InstanceChange::Edition(text)
@@ -165,7 +174,7 @@ pub fn validate_instance_changes(changes: &mut [InstanceChange]) -> Result<(), V
                 notes.retain(|note| !note.text.is_empty());
             }
             // Read and checked by `statement_rows`; the store checks them again.
-            InstanceChange::MaterialType(_) | InstanceChange::Statements { .. } => {}
+            InstanceChange::Statements { .. } => {}
         }
     }
     if errors.is_empty() {
@@ -173,6 +182,30 @@ pub fn validate_instance_changes(changes: &mut [InstanceChange]) -> Result<(), V
     } else {
         Err(errors)
     }
+}
+
+/// Trims the chosen classes and drops the empty rows and repeats; whether every one left
+/// is a subclass of the entity's class, as the store will check again.
+fn normalize_classes(entity: EntityKind, classes: &mut Vec<ClassChoice>) -> bool {
+    for choice in classes.iter_mut() {
+        trim(&mut choice.class);
+    }
+    let mut seen = Vec::new();
+    classes.retain(|choice| {
+        let keep = !choice.class.is_empty() && !seen.contains(&choice.class);
+        if keep {
+            seen.push(choice.class.clone());
+        }
+        keep
+    });
+    check_description(
+        entity,
+        &Description {
+            classes: seen,
+            statements: Vec::new(),
+        },
+    )
+    .is_ok()
 }
 
 const fn error(field: &'static str, message_key: &'static str) -> FieldError {

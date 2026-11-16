@@ -636,7 +636,6 @@ async function submitForm(form) {
 // Creating (criacao.md, items 13 to 20). The blank form comes from the server, with what
 // carries over from the record created before in this tab.
 const PREVIOUS = "elzevir.catalog.previous";
-const MATERIAL = "elzevir.catalog.material";
 
 function remember(key, value) {
   try {
@@ -691,9 +690,7 @@ async function openNew(url, place) {
 function newFamily(isbn) {
   const params = new URLSearchParams();
   const previous = recalled(PREVIOUS);
-  const material = recalled(MATERIAL);
   if (previous) params.set("from", previous);
-  else if (material) params.set("material", material);
   // A scanned ISBN the catalog does not have (bipe.md, item 10).
   if (isbn) params.set("isbn", isbn);
   const query = params.toString();
@@ -745,8 +742,6 @@ async function submitNew(form) {
     form.dataset.initial = JSON.stringify(snapshot(form));
     if (form.dataset.create === "family") {
       remember(PREVIOUS, String(answer.instance));
-      const material = form.querySelector('[data-part="work"] [data-change="MaterialType"] select')?.value;
-      if (material) remember(MATERIAL, material);
       if (answer.family) location.assign(answer.family);
       else location.reload();
     } else {
@@ -1562,4 +1557,15 @@ document.addEventListener("grid-close", (event) => {
   clearLevel(grid);
   follow(grid);
   if (instance instanceof HTMLElement) instance.focus();
+});
+
+// A select whose options have icons shows the chosen one's icon beside it
+// (bibframe-completo.md, item 14).
+document.addEventListener("change", (event) => {
+  const select = event.target instanceof HTMLSelectElement ? event.target : null;
+  const icon = select?.previousElementSibling;
+  if (!icon?.classList.contains("select-icon")) return;
+  const symbol = select.selectedOptions[0]?.dataset.icon ?? "";
+  icon.hidden = !symbol;
+  icon.querySelector("use")?.setAttribute("href", `/static/elzevir-icons.svg#${symbol}`);
 });

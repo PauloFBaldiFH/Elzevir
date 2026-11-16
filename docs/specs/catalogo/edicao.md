@@ -8,8 +8,8 @@
 
 1. `catalog.update_work` (`CatalogCommand::UpdateWork`) muda partes de uma Obra; `catalog.update_instance` (`CatalogCommand::UpdateInstance`) muda partes de uma Instância. Os dois passam pela thread escritora como qualquer `WriteCommand::Catalog` e ficam no `audit_log` com essa `kind`.
 2. Cada edição traz a lista de mudanças, uma por parte, como `enum` com dados:
-   - Obra (`WorkChange`): título preferido, categoria do material, classificação (número e esquema juntos), resumo, público-alvo, idiomas, contribuições e assuntos.
-   - Instância (`InstanceChange`): título, categoria do material, edição, local, editora, data, descrição física, série, identificadores e notas.
+   - Obra (`WorkChange`): título preferido, classes, classificação (número e esquema juntos), resumo, público-alvo, idiomas, contribuições e assuntos.
+   - Instância (`InstanceChange`): título, classes, edição, local, editora, data, descrição física, série, identificadores e notas.
 3. Listas (idiomas, contribuições, assuntos, identificadores, notas) são trocadas inteiras, na nova ordem. Agente, Assunto e termo de vocabulário existentes são reaproveitados, como na inclusão.
 4. Se a mesma parte aparece duas vezes na lista, vale a última.
 5. O que a edição não cita fica como está: Hub, relações entre Obras, Itens e o registro de origem.
@@ -59,10 +59,7 @@ A tarefa 2.5 tem três partes, cada uma num PR:
 #### Formulário no bloco focado (2.5b)
 
 25. Para quem tem a permissão `cataloguing`, o bloco de Obra ou de Instância focado mostra os campos já como **formulário no lugar**, na ordem do perfil. Para quem não tem, continua a leitura só dos campos preenchidos (listagem, item 42).
-26. O perfil vem da categoria de material: a da Instância, ou a da Obra quando a Instância não diz. Nesta parte há dois perfis, **livro** e **periódico**, que são dados tipados da camada app (`profiles.rs`): cada campo aponta para uma parte do modelo (`WorkField`, `InstanceField`), nunca para uma etiqueta MARC. As outras categorias usam o perfil livro até ganharem o seu.
-    - Obra, nos dois perfis: título, categoria, contribuições, classificação com esquema, idiomas, assuntos, resumo e público-alvo.
-    - Instância, livro: título, edição, local, editora, data, descrição física, série, identificadores (novo identificador começa como ISBN), notas e categoria.
-    - Instância, periódico: o mesmo, com o novo identificador começando como ISSN. Periodicidade (310) e numeração (362) ainda não existem no modelo e por isso não entram no perfil (spec de UI §4.2).
+26. Não há perfil por categoria ([BIBFRAME completo](bibframe-completo.md), itens 24 e 25). Um identificador novo começa como ISSN quando a Obra tem a classe `bf:Serial`, e como ISBN nos outros casos.
 27. Todos os campos aparecem sempre, preenchidos ou não, sem seção recolhível (bibframe-completo.md, itens 24 e 25). A Obra e a Instância mostram cada propriedade da ontologia em seções fixas (etapas 6a e 6b).
 28. Listas (contribuições, assuntos, identificadores, notas, idiomas) são linhas com "+" para acrescentar e "×" para tirar. Os *chips* com autocompletar são a parte 2.5c.
 29. **Concluir** (botão ou `Ctrl+Enter`) envia só as partes que mudaram, numa edição, com a versão lida quando o formulário abriu. Sem mudança, nada é enviado.
