@@ -3,7 +3,7 @@
 
 use elzevir_app::codes::{CodeTable, NamedCode};
 use std::fs::File;
-use std::io::{BufReader, BufWriter};
+use std::io::{BufReader, BufWriter, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
@@ -14,6 +14,7 @@ use elzevir_app::export::{ExportOptions, export_marc21, item_codes};
 use elzevir_app::import::{ImportOptions, ImportReport, Parallelism, import_marc21};
 use elzevir_app::koha_types::{self, TypeTranslationSource};
 use elzevir_app::matching::{self, Matching, OnMatch, OnNoMatch};
+use elzevir_app::rdf::{IriBase, RdfFormat, export_rdf_catalog};
 use elzevir_domain::catalog::MatchRule;
 use elzevir_marc::Limits;
 use elzevir_store::ElzevirStore;
@@ -53,9 +54,23 @@ pub(crate) struct ExportArgs {
     /// Institution data directory.
     #[arg(long)]
     data_dir: PathBuf,
-    /// Where to write the MARC21 file; standard output when absent.
+    /// Where to write the file; standard output when absent.
     #[arg(long)]
     output: Option<PathBuf>,
+    /// What to write: MARC21 (ISO 2709), or BIBFRAME as Turtle or RDF/XML.
+    #[arg(long, value_enum, default_value_t = ExportFormat::Marc21)]
+    format: ExportFormat,
+    /// Where the IRIs of the BIBFRAME export start, such as
+    /// `https://biblioteca.example/bibframe`; needed for `turtle` and `rdfxml`.
+    #[arg(long)]
+    iri_base: Option<String>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum ExportFormat {
+    Marc21,
+    Turtle,
+    Rdfxml,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -249,21 +264,32 @@ fn print_import(report: &ImportReport) {
 }
 
 pub(crate) fn export(args: &ExportArgs) -> Result<(), String> {
+    let rdf = match args.format {
+        ExportFormat::Marc21 => None,
+        ExportFormat::Turtle => Some(RdfFormat::Turtle),
+        ExportFormat::Rdfxml => Some(RdfFormat::RdfXml),
+    };
+    let base = match (rdf, &args.iri_base) {
+        (Some(_), None) => return Err("--iri-base is needed for a BIBFRAME export".to_owned()),
+        (_, base) => base.as_deref().map(IriBase::new),
+    };
     let data = open_store(&args.data_dir)?;
-    let options = ExportOptions::default();
-    // `export_marc21` flushes what it wrote, so nothing is left in the buffers.
-    let report = if let Some(path) = &args.output {
-        let file =
-            File::create(path).map_err(|e| format!("cannot create {}: {e}", path.display()))?;
-        export_marc21(&data.store, &mut BufWriter::new(file), &options)
-    } else {
-        export_marc21(
-            &data.store,
-            &mut BufWriter::new(std::io::stdout().lock()),
-            &options,
-        )
+    let mut out: BufWriter<Box<dyn Write>> = BufWriter::new(match &args.output {
+        Some(path) => Box::new(
+            File::create(path).map_err(|e| format!("cannot create {}: {e}", path.display()))?,
+        ),
+        None => Box::new(std::io::stdout().lock()),
+    });
+    // Both exports flush what they wrote, so nothing is left in the buffers.
+    if let (Some(format), Some(base)) = (rdf, base) {
+        let options = ExportOptions::default();
+        let written = export_rdf_catalog(&data.store, &mut out, format, &base, options.batch)
+            .map_err(|e| e.to_string())?;
+        eprintln!("elzevir: {written} records exported");
+        return Ok(());
     }
-    .map_err(|e| e.to_string())?;
+    let report = export_marc21(&data.store, &mut out, &ExportOptions::default())
+        .map_err(|e| e.to_string())?;
     for failed in &report.failures {
         eprintln!(
             "elzevir: record {} not exported: {}",

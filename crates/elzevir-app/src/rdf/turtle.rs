@@ -11,12 +11,25 @@ const INDENT: &str = "    ";
 /// the others.
 #[must_use]
 pub fn write_turtle(nodes: &[Node]) -> String {
+    let mut out = turtle_header();
+    out.push_str(&turtle_blocks(nodes));
+    out
+}
+
+/// The prefixes a Turtle document starts with.
+pub(super) fn turtle_header() -> String {
     let mut out = String::new();
     for (prefix, namespace) in PREFIXES {
         for part in ["@prefix ", prefix, ": <", namespace, "> .\n"] {
             out.push_str(part);
         }
     }
+    out
+}
+
+/// The blocks of `nodes`, each after a blank line.
+pub(super) fn turtle_blocks(nodes: &[Node]) -> String {
+    let mut out = String::new();
     for node in blocks(nodes) {
         out.push('\n');
         out.push_str(&node.iri.as_deref().map_or_else(|| "[]".to_owned(), term));
@@ -54,19 +67,34 @@ fn body(node: &Node, depth: usize, out: &mut String) {
                     out.push_str(language);
                 }
             }
-            Object::Node(inner) => match &inner.iri {
-                Some(iri) => out.push_str(&term(iri)),
-                None if inner.types.is_empty() && inner.properties.is_empty() => {
-                    out.push_str("[]");
-                }
-                None => {
-                    out.push('[');
-                    body(inner, depth + 1, out);
+            Object::Node(inner) => node_object(inner, depth, out),
+            Object::List(members) => {
+                out.push('(');
+                let inner = INDENT.repeat(depth + 1);
+                for member in members {
                     out.push('\n');
-                    out.push_str(&indent);
-                    out.push(']');
+                    out.push_str(&inner);
+                    node_object(member, depth + 1, out);
                 }
-            },
+                out.push('\n');
+                out.push_str(&indent);
+                out.push(')');
+            }
+        }
+    }
+}
+
+/// A resource as a value at `depth`: its IRI, or the blank node in `[ ]`.
+fn node_object(node: &Node, depth: usize, out: &mut String) {
+    match &node.iri {
+        Some(iri) => out.push_str(&term(iri)),
+        None if node.types.is_empty() && node.properties.is_empty() => out.push_str("[]"),
+        None => {
+            out.push('[');
+            body(node, depth + 1, out);
+            out.push('\n');
+            out.push_str(&INDENT.repeat(depth));
+            out.push(']');
         }
     }
 }

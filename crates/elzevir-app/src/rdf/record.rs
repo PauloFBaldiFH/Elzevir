@@ -10,6 +10,7 @@ use elzevir_domain::catalog::{
 use elzevir_domain::statement::{Description, EntityKind, EntityRef, Statement, Value};
 
 use super::items::{HeldItem, item_node};
+use super::mads::{describe_subject, name_elements};
 use super::{BF, IriBase, MADSRDF, Node, Object};
 use crate::catalog::{AuthorityLink, NewContribution, NewInstance, NewRecord, NewSubject};
 use crate::export::StoredRecord;
@@ -164,11 +165,18 @@ fn contribution_node(contribution: &NewContribution) -> Node {
     } else {
         "Contribution"
     });
-    let agent = linked(
+    let mut agent = linked(
         agent_class(contribution.kind),
         &contribution.heading,
         &contribution.identifiers,
     );
+    if let Some(elements) = name_elements(
+        contribution.kind,
+        &contribution.heading,
+        &contribution.name_parts,
+    ) {
+        agent.add_mads("elementList", elements);
+    }
     node.add("agent", Object::Node(Box::new(agent)));
     if let Some(role) = &contribution.role {
         node.add("role", role_object(role));
@@ -195,6 +203,7 @@ fn subject_node(subject: &NewSubject) -> Node {
         &subject.heading,
         &subject.identifiers,
     );
+    describe_subject(subject, &mut node);
     if let Some(thesaurus) = &subject.thesaurus {
         let mut source = Node::blank("Source");
         source.text("code", thesaurus);
@@ -344,7 +353,7 @@ pub fn foreign_terms(nodes: &[Node]) -> Vec<String> {
             {
                 found.push(name);
             }
-            if let Object::Node(inner) = object {
+            for inner in object.nodes() {
                 walk(inner, found);
             }
         }
@@ -362,9 +371,10 @@ mod tests {
     use elzevir_domain::statement::Resource;
 
     use super::*;
-    use crate::catalog::{ItemStatus, NewIdentifier, NewNote, NewWorkRelation};
+    use crate::catalog::{ItemStatus, NamePart, NewIdentifier, NewNote, NewWorkRelation};
     use crate::description::printed_book;
     use crate::rdf::write_turtle;
+    use elzevir_domain::catalog::NamePartKind;
 
     fn contributions() -> Vec<NewContribution> {
         let link = |kind, value: &str| AuthorityLink {
@@ -378,7 +388,10 @@ mod tests {
                 role: Some("aut".to_owned()),
                 role_term: Some("autor".to_owned()),
                 primary: true,
-                name_parts: Vec::new(),
+                name_parts: vec![NamePart {
+                    kind: NamePartKind::Date,
+                    start: 19,
+                }],
                 identifiers: vec![
                     link(
                         AuthorityLinkKind::AuthorityRecord,
@@ -479,7 +492,7 @@ mod tests {
                     kind: SubjectKind::Topic,
                     heading: "Ciúme -- Ficção".to_owned(),
                     thesaurus: Some("larpcal".to_owned()),
-                    subdivisions: Vec::new(),
+                    subdivisions: vec![SubjectKind::GenreForm],
                     name_parts: Vec::new(),
                     identifiers: Vec::new(),
                 }],

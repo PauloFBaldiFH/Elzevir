@@ -9,6 +9,17 @@ const INDENT: &str = "  ";
 /// The RDF/XML document of `nodes`, with the same blocks as the Turtle one.
 #[must_use]
 pub fn write_rdf_xml(nodes: &[Node]) -> String {
+    let mut out = rdf_xml_header();
+    out.push_str(&rdf_xml_blocks(nodes));
+    out.push_str(RDF_XML_FOOTER);
+    out
+}
+
+/// What closes an RDF/XML document.
+pub(super) const RDF_XML_FOOTER: &str = "</rdf:RDF>\n";
+
+/// The XML declaration and the opening `rdf:RDF` element with the namespaces.
+pub(super) fn rdf_xml_header() -> String {
     let mut out = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<rdf:RDF");
     for (prefix, namespace) in PREFIXES {
         for part in [
@@ -18,10 +29,15 @@ pub fn write_rdf_xml(nodes: &[Node]) -> String {
         }
     }
     out.push_str(">\n");
+    out
+}
+
+/// The node elements of `nodes`, inside `rdf:RDF`.
+pub(super) fn rdf_xml_blocks(nodes: &[Node]) -> String {
+    let mut out = String::new();
     for node in blocks(nodes) {
         node_element(node, 1, &mut out);
     }
-    out.push_str("</rdf:RDF>\n");
     out
 }
 
@@ -76,6 +92,24 @@ fn node_element(node: &Node, depth: usize, out: &mut String) {
                 open_property(&inner, &name, namespace, out);
                 out.push_str(">\n");
                 node_element(value, depth + 2, out);
+                out.push_str(&inner);
+                close_property(&name, out);
+            }
+            Object::List(members) => {
+                open_property(&inner, &name, namespace, out);
+                out.push_str(" rdf:parseType=\"Collection\">\n");
+                for member in members {
+                    match &member.iri {
+                        // A named member is described in its own block.
+                        Some(iri) => {
+                            out.push_str(&INDENT.repeat(depth + 2));
+                            out.push_str("<rdf:Description rdf:about=\"");
+                            out.push_str(&escaped(iri));
+                            out.push_str("\"/>\n");
+                        }
+                        None => node_element(member, depth + 2, out),
+                    }
+                }
                 out.push_str(&inner);
                 close_property(&name, out);
             }

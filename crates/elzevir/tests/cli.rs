@@ -94,6 +94,57 @@ fn unknown_codes_are_refused_without_create_codes() {
 }
 
 #[test]
+fn the_catalog_exports_as_bibframe_turtle_and_rdf_xml() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = path(dir.path(), "data");
+    let imported = elzevir(&[
+        "import",
+        "--data-dir",
+        &data,
+        "--create-codes",
+        STAFF_EXPORT,
+    ]);
+    assert!(imported.status.success(), "{}", text(&imported.stderr));
+
+    // The IRIs need a base.
+    let refused = elzevir(&["export", "--data-dir", &data, "--format", "turtle"]);
+    assert!(!refused.status.success());
+    assert!(text(&refused.stderr).contains("--iri-base"));
+
+    let base = "https://biblioteca.example/bibframe";
+    let turtle = elzevir(&[
+        "export",
+        "--data-dir",
+        &data,
+        "--format",
+        "turtle",
+        "--iri-base",
+        base,
+    ]);
+    assert!(turtle.status.success(), "{}", text(&turtle.stderr));
+    assert!(text(&turtle.stderr).contains("200 records exported"));
+    let turtle = text(&turtle.stdout);
+    assert_eq!(turtle.matches("@prefix bf:").count(), 1);
+    assert_eq!(turtle.matches("\n    a bf:Instance").count(), 200);
+
+    let xml = elzevir(&[
+        "export",
+        "--data-dir",
+        &data,
+        "--format",
+        "rdfxml",
+        "--iri-base",
+        base,
+    ]);
+    assert!(xml.status.success(), "{}", text(&xml.stderr));
+    let xml = text(&xml.stdout);
+    assert!(xml.starts_with("<?xml"));
+    assert_eq!(xml.matches("<rdf:RDF").count(), 1);
+    assert!(xml.ends_with("</rdf:RDF>\n"));
+    assert_eq!(xml.matches("\n  <bf:Instance rdf:about=").count(), 200);
+}
+
+#[test]
 fn matching_options_need_a_rule() {
     let dir = tempfile::tempdir().unwrap();
     let data = path(dir.path(), "data");
