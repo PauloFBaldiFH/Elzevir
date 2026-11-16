@@ -210,6 +210,11 @@ expression: "crate::rdf::write_rdf_xml(&graph)"
   </bf:Item>
   <bf:Person rdf:about="http://viaf.org/viaf/2467372">
     <rdfs:label>Assis, Machado de, 1839-1908</rdfs:label>
+    <bf:identifiedBy>
+      <bf:Identifier>
+        <rdf:value rdf:resource="http://www.wikidata.org/entity/Q311145"/>
+      </bf:Identifier>
+    </bf:identifiedBy>
     <madsrdf:isIdentifiedByAuthority rdf:resource="http://id.loc.gov/authorities/names/n79029745"/>
     <madsrdf:elementList rdf:parseType="Collection">
       <madsrdf:FullNameElement>

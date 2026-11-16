@@ -180,6 +180,10 @@ expression: write_turtle(&graph)
 <http://viaf.org/viaf/2467372>
     a bf:Person ;
     rdfs:label "Assis, Machado de, 1839-1908" ;
+    bf:identifiedBy [
+        a bf:Identifier ;
+        rdf:value <http://www.wikidata.org/entity/Q311145>
+    ] ;
     madsrdf:isIdentifiedByAuthority <http://id.loc.gov/authorities/names/n79029745> ;
     madsrdf:elementList (
         [
