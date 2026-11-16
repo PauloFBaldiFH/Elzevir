@@ -132,14 +132,6 @@ pub fn router(state: AppState) -> Router {
             get(catalog::export_bibframe),
         )
         .route(
-            "/equipe/acervo/obra/{id}/autoridade/nova",
-            get(authorities::link_form),
-        )
-        .route(
-            "/equipe/acervo/obra/{id}/autoridades",
-            post(authorities::link_authority),
-        )
-        .route(
             "/equipe/acervo/sugestoes/agentes",
             get(editing::suggest_agents),
         )
@@ -181,14 +173,6 @@ pub fn router(state: AppState) -> Router {
             "/equipe/acervo/instancia/{id}/campos",
             get(record_fields::record_fields),
         )
-        .route(
-            "/equipe/acervo/autoridade/{id}",
-            post(authorities::edit_agent),
-        )
-        .route(
-            "/equipe/acervo/autoridade/{id}/campos",
-            get(authorities::agent_form),
-        )
         .route("/equipe/acervo/matriz/{id}", post(editing::edit_hub))
         .route(
             "/equipe/acervo/matriz/{id}/campos",
@@ -206,8 +190,39 @@ pub fn router(state: AppState) -> Router {
             "/equipe/admin/cadastros",
             get(registries::registries).post(registries::change_registry),
         )
+        .merge(authority_routes())
         .layer(axum::middleware::map_response(security::headers))
         .with_state(state)
+}
+
+/// The authorities column: agents and subjects edited once for every record, and linked
+/// to Works by role (docs/specs/catalogo/autoridades.md).
+fn authority_routes() -> Router<AppState> {
+    Router::new()
+        .route(
+            "/equipe/acervo/assunto/{id}/campos",
+            get(authorities::subject_form),
+        )
+        .route(
+            "/equipe/acervo/assunto/{id}",
+            post(authorities::edit_subject),
+        )
+        .route(
+            "/equipe/acervo/obra/{id}/autoridade/nova",
+            get(authorities::link_form),
+        )
+        .route(
+            "/equipe/acervo/obra/{id}/autoridades",
+            post(authorities::link_authority),
+        )
+        .route(
+            "/equipe/acervo/autoridade/{id}",
+            post(authorities::edit_agent),
+        )
+        .route(
+            "/equipe/acervo/autoridade/{id}/campos",
+            get(authorities::agent_form),
+        )
 }
 
 async fn opac_home(State(state): State<AppState>) -> Response {

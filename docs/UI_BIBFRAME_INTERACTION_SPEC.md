@@ -424,7 +424,7 @@ Especificada agora para ser ligada assim que a porta de fontes de rascunho exist
 6. **Configuração** no `elzevir.toml`, por instituição:
    - provedor e modelo como **texto livre** (sem lista fixa no código, que envelhece);
    - chave de API só no servidor (variável de ambiente ou arquivo de segredo referenciado), nunca enviada ao navegador nem gravada no banco;
-   - suporte a modelo local (Ollama) para quem não quer mandar fotos para fora;
+   - só provedores por API: sem modelo local, que é pesado demais para o servidor da biblioteca (Paulo, 2026-11-16);
    - padrão descritivo e de classificação (RDA ou AACR2, CDD com a edição, tabela Cutter da biblioteca, como PHA) e a instrução permanente da biblioteca.
 7. **Fotos**: usadas na chamada e descartadas, a não ser a capa, que pode virar a capa da Instância (§6.4) se o catalogador aprovar.
 
@@ -470,7 +470,7 @@ Aprovadas por Paulo em 2026-11-13, a partir da análise do esboço `elzevir-esbo
 4. **Identificador externo de autoridade** em `agent_identifiers`, junto das formas variantes (§10).
 5. **Renomear autoridade** avisa o alcance e sobe a versão de todas as Instâncias ligadas, por causa do cache por versão do OPAC (§16.3).
 6. **Estações de captura dentro do bloco** (Z39.50/SRU e IA), no servidor, atrás da porta de fontes de rascunho, com tempo-limite por fonte e aprovação pelo matching da 1.10 (§17.1).
-7. **IA** com pipeline híbrido (CIP, ISBN validado, fontes, só depois lacunas), esquema fixo, marca "lido da foto" / "da fonte" / "sugerido", sem gravação sem aprovação, chave e modelo em texto livre no `elzevir.toml`, Ollama local. A estação fica especificada junto da captura derivada para ser ligada quando a porta existir (§17.2).
+7. **IA** com pipeline híbrido (CIP, ISBN validado, fontes, só depois lacunas), esquema fixo, marca "lido da foto" / "da fonte" / "sugerido", sem gravação sem aprovação, chave e modelo em texto livre no `elzevir.toml`, só por API. A estação fica especificada junto da captura derivada para ser ligada quando a porta existir (§17.2).
 8. **Muro no servidor**: rota própria do leitor, permissão de circulação, `audit_log` de cada acesso, nada de leitor no DOM do acervo (§18.1).
 9. **Empréstimo inline** pelas regras de circulação do servidor, com recusas na minicaixinha e seta → só com permissão (§18.2).
 10. **Ficha do leitor**: CPF mascarado, sem perfil de leitura, histórico só com consentimento (§18.4).

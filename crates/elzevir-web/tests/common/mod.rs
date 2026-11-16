@@ -232,10 +232,7 @@ impl elzevir_app::editing::CatalogEditor for Editor {
             Edit::Items(update) => update.row_version,
             Edit::Statements(edit) => edit.row_version,
             Edit::Agent(update) => {
-                let taken = update.changes.iter().any(|change| {
-                    matches!(change, elzevir_app::catalog::AgentChange::Heading(h) if h == "Taken")
-                });
-                if taken {
+                if renamed_to_taken(&update.changes) {
                     return Err(EditFailed::Refused(CatalogRefusal::AgentHeadingTaken(
                         "Taken".to_owned(),
                     )));
@@ -250,6 +247,14 @@ impl elzevir_app::editing::CatalogEditor for Editor {
                     return Err(EditFailed::Refused(CatalogRefusal::Registry(refusal)));
                 }
                 1
+            }
+            Edit::Subject(update) => {
+                if renamed_to_taken(&update.changes) {
+                    return Err(EditFailed::Refused(CatalogRefusal::SubjectHeadingTaken(
+                        "Taken".to_owned(),
+                    )));
+                }
+                update.row_version
             }
             Edit::Link(link) => {
                 let heading = match &link.role {
@@ -298,6 +303,10 @@ impl elzevir_app::editing::CatalogEditor for Editor {
                 subject: edit.subject,
                 row_version: 2,
             },
+            Edit::Subject(update) => CatalogOutput::SubjectUpdated {
+                subject: update.subject,
+                row_version: 2,
+            },
             Edit::Link(link) => CatalogOutput::WorkUpdated {
                 work: link.work,
                 row_version: 2,
@@ -316,10 +325,18 @@ impl elzevir_app::editing::CatalogEditor for Editor {
     }
 }
 
-/// One agent, 1, named by three Works with four Instances.
-pub(crate) struct Agents;
+/// Whether an authority edit renames it to `Taken`, the heading of another one.
+fn renamed_to_taken(changes: &[elzevir_app::catalog::AgentChange]) -> bool {
+    changes.iter().any(
+        |change| matches!(change, elzevir_app::catalog::AgentChange::Heading(h) if h == "Taken"),
+    )
+}
 
-impl elzevir_app::authorities::AgentReader for Agents {
+/// One agent, 1, named by three Works with four Instances; one subject, 1, of two Works
+/// with two Instances.
+pub(crate) struct Authorities;
+
+impl elzevir_app::authorities::AuthorityReader for Authorities {
     fn agent(
         &self,
         id: elzevir_domain::catalog::AgentId,
@@ -331,6 +348,21 @@ impl elzevir_app::authorities::AgentReader for Agents {
             version: 1,
             works: 3,
             instances: 4,
+        }))
+    }
+
+    fn subject(
+        &self,
+        id: elzevir_domain::catalog::SubjectId,
+    ) -> Result<Option<elzevir_app::authorities::SubjectView>, CatalogReadError> {
+        Ok((id.0 == 1).then(|| elzevir_app::authorities::SubjectView {
+            id,
+            kind: elzevir_domain::catalog::SubjectKind::Topic,
+            heading: "Romance brasileiro".to_owned(),
+            thesaurus: Some("lcsh".to_owned()),
+            version: 1,
+            works: 2,
+            instances: 2,
         }))
     }
 }

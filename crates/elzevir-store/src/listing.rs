@@ -9,12 +9,13 @@ use std::num::NonZeroUsize;
 
 use elzevir_app::catalog::{CatalogReadError, ItemView};
 use elzevir_app::listing::{
-    CatalogListing, Family, FamilyCursor, FamilyHead, FamilyInstance, FamilyWork, ScanCode, Scanned,
+    CatalogListing, Family, FamilyCursor, FamilyHead, FamilyInstance, FamilyWork, ScanCode,
+    Scanned, ShownSubject,
 };
 use elzevir_app::material::Material;
 use elzevir_domain::catalog::{
     AgentId, AgentKind, BranchId, HubId, IdentifierKind, InstanceId, ItemId, MatchRule, PolicyId,
-    SublocationId, WorkId,
+    SubjectId, SubjectKind, SublocationId, WorkId,
 };
 use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 
@@ -296,13 +297,7 @@ fn works_of(
          WHERE work_id IN ({}) ORDER BY work_id, position",
         &ids,
     )?;
-    let mut subjects = by_owner(
-        c,
-        "SELECT work_id, subjects.heading FROM work_subjects
-         JOIN subjects ON subjects.id = work_subjects.subject_id
-         WHERE work_id IN ({}) ORDER BY work_id, position",
-        &ids,
-    )?;
+    let mut subjects = subjects_of(c, &ids)?;
     let mut instances = instances_of(c, &ids)?;
     let mut families: BTreeMap<Owner, Vec<FamilyWork>> = BTreeMap::new();
     for (owner, mut work) in rows {
@@ -330,6 +325,38 @@ fn by_owner(
     let mut rows = statement.query(params_from_iter(ids))?;
     while let Some(row) = rows.next()? {
         grouped.entry(row.get(0)?).or_default().push(row.get(1)?);
+    }
+    Ok(grouped)
+}
+
+/// The subjects of these Works, by Work, in order.
+fn subjects_of(
+    c: &Connection,
+    works: &[i64],
+) -> Result<BTreeMap<i64, Vec<ShownSubject>>, ReadFailure> {
+    let mut grouped: BTreeMap<i64, Vec<ShownSubject>> = BTreeMap::new();
+    if works.is_empty() {
+        return Ok(grouped);
+    }
+    let sql = format!(
+        "SELECT work_id, subjects.id, subjects.kind, subjects.heading FROM work_subjects
+         JOIN subjects ON subjects.id = work_subjects.subject_id
+         WHERE work_id IN ({}) ORDER BY work_id, position",
+        placeholders(works.len())
+    );
+    let mut statement = c.prepare(&sql)?;
+    let mut rows = statement.query(params_from_iter(works))?;
+    while let Some(row) = rows.next()? {
+        let code: u8 = row.get(2)?;
+        let kind = SubjectKind::from_code(code).ok_or(ReadFailure::UnknownCode {
+            what: "subject kind",
+            code,
+        })?;
+        grouped.entry(row.get(0)?).or_default().push(ShownSubject {
+            id: SubjectId(row.get(1)?),
+            kind,
+            heading: row.get(3)?,
+        });
     }
     Ok(grouped)
 }

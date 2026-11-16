@@ -1,6 +1,6 @@
 # Autoridades (v0)
 
-> Status: v0, tarefa 2.9: renomear um agente (2.9a) e ligar uma autoridade por papel (2.9b). Base: [spec de interação](../../UI_BIBFRAME_INTERACTION_SPEC.md), §16.3, e [edição](edicao.md). Critério da tarefa: **renomear um agente sobe o `row_version` das Instâncias ligadas e aparece no OPAC e no MARC exportado**.
+> Status: v0, tarefa 2.9: renomear um agente (2.9a), ligar uma autoridade por papel (2.9b) e renomear um assunto (2.9c). Base: [spec de interação](../../UI_BIBFRAME_INTERACTION_SPEC.md), §16.3, e [edição](edicao.md). Critério da tarefa: **renomear um agente sobe o `row_version` das Instâncias ligadas e aparece no OPAC e no MARC exportado**.
 
 ## 1. Comportamento
 
@@ -22,12 +22,19 @@
 9. A autoridade é achada pela classe e pelo nome (e tesauro, no assunto) ou criada, e entra **depois** das outras contribuições ou assuntos da Obra. Um contribuidor ligado assim nunca é a entrada principal: ela se escolhe no formulário da Obra, porque muda o número de chamada e o `1XX` do MARC.
 10. Na mesma transação, sobem a versão da Obra (um formulário aberto antes não grava a lista antiga de volta) e a de cada Instância dela, com o efeito de reindexação. A página do OPAC e o MARC exportado (`700`/`710`/`711`, `600`/`610`/`611`/`630`/`648`/`650`/`651`/`655`) mostram a ligação. O histórico da Obra lista a mudança como "Contribuições" ou "Assuntos". Depois de ligar, a tela recarrega.
 
+### Assuntos na coluna (2.9c)
+
+11. A coluna de Autoridades mostra também os assuntos que as Obras da família exibem (os três primeiros de cada Obra, como o cartão da Obra), uma vez cada, com o ícone da classe (tópico, lugar, período, gênero/forma; agente como assunto leva o ícone do agente) e a pílula "Assunto". Cada um liga à Obra por uma cordinha "sobre"; a do contribuidor principal continua "escrito por". O resumo da linha da família continua listando só os agentes.
+12. O cartão de um assunto abre, para quem cataloga, o bloco do assunto (`GET /equipe/acervo/assunto/{id}/campos`), com o cabeçalho e o alcance (quantas Obras e registros a mudança alcança), como o do agente.
+13. Salvar manda `catalog.update_subject` (`POST /equipe/acervo/assunto/{id}`), que segue as regras do item 3 com duas diferenças: o cabeçalho tomado é o de outro assunto da mesma classe, do mesmo tesauro e com as mesmas subdivisões (juntar é mesclagem); e um assunto com subdivisões tipadas (`madsrdf:ComplexSubject`) só aceita um cabeçalho com o mesmo número de partes depois de ` -- `, porque o tipo de cada subdivisão vale pela posição. Mudar as subdivisões é no formulário da Obra. A versão do assunto vem da migração 40.
+14. O MARC exportado escreve o cabeçalho novo no `6XX` dos registros ligados; o OPAC e a busca o mostram depois do indexador.
+
 ## 2. Origem no Koha
 
 - `C4::AuthoritiesMarc::merge` propaga a mudança de uma autoridade para os registros bibliográficos ligados pelo `$9`, em lote (`AuthorityMergeLimit`; acima dele, pelo cron `merge_authorities.pl`). Aqui o agente é a própria linha que os registros referenciam: renomear é uma linha, e o que se propaga é só a versão e a reindexação.
 
 ## 3. Paridade
 
-`livre`: interface e modelo. Ficam para as próximas partes da 2.9: o papel "local de publicação" (Lugar ligado à Instância), editar assuntos e lugares (`catalog.update_subject`), identificadores externos como chips e os rótulos do LCGFT.
+`livre`: interface e modelo. Ficam para as próximas partes da 2.9: o papel "local de publicação" (Lugar ligado à Instância), identificadores externos como chips e os rótulos do LCGFT.
 
-Testes: `crates/elzevir-app/src/authorities.rs` (validação do renomear e do papel), `crates/elzevir/tests/opac.rs` (renomear e ligar na loja real: versões, posição, recusas, página do OPAC, busca e MARC exportado) e `crates/elzevir-web/tests/staff_catalog.rs` (rotas, permissões, alcance, formulário e recusas).
+Testes: `crates/elzevir-app/src/authorities.rs` (validação do renomear e do papel), `crates/elzevir/tests/opac.rs` (renomear agente e assunto e ligar na loja real: versões, posição, recusas, página do OPAC, busca e MARC exportado) e `crates/elzevir-web/tests/staff_catalog.rs` (rotas, permissões, alcance, formulário e recusas).

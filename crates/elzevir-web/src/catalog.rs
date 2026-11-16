@@ -2,7 +2,7 @@
 //! The staff catalog listing: browse and search on one screen
 //! (docs/specs/catalogo/listagem.md).
 
-use elzevir_app::authorities::AgentReader;
+use elzevir_app::authorities::AuthorityReader;
 use std::sync::Arc;
 
 use elzevir_app::history::HistoryReader;
@@ -26,13 +26,13 @@ use elzevir_app::staff::Permission;
 use elzevir_app::suggestions::AuthoritySuggestions;
 use elzevir_domain::catalog::InstanceId;
 use elzevir_web_templates::{
-    AuthorityLine, FamilyLine, HubLine, InstanceLine, PillLine, ScanLine, StaffCatalog, WorkLine,
-    url_encode,
+    AuthorityLine, Cord, FamilyLine, HubLine, InstanceLine, PillLine, ScanLine, StaffCatalog,
+    WorkLine, url_encode,
 };
 use serde::Deserialize;
 
 use crate::icons::{
-    NO_CONTENT, agent_icon, content_badge, item_icon, material_badges, signal_icon,
+    NO_CONTENT, agent_icon, content_badge, item_icon, material_badges, signal_icon, subject_icon,
 };
 use crate::staff::current_session;
 use crate::{AppState, render};
@@ -55,8 +55,8 @@ pub struct StaffPorts {
     pub statements: Arc<dyn StatementReader + Send + Sync>,
     /// Who changed a Work or an Instance (docs/specs/catalogo/historico.md).
     pub history: Arc<dyn HistoryReader>,
-    /// The agents the authorities column edits (docs/specs/catalogo/autoridades.md).
-    pub agents: Arc<dyn AgentReader>,
+    /// The agents and subjects the authorities column edits (docs/specs/catalogo/autoridades.md).
+    pub authorities: Arc<dyn AuthorityReader>,
 }
 
 /// Query string of `/equipe/acervo`.
@@ -342,25 +342,70 @@ fn family_line(row: &FamilyRow, codes: &CodeLists) -> FamilyLine {
         _ => None,
     };
     let mut authorities: Vec<AuthorityLine> = Vec::new();
+    // Each agent and subject once in the column, whichever Works name it.
+    let mut key_of = |fields: Option<String>, line: AuthorityLine| {
+        let known = authorities
+            .iter()
+            .find(|a| a.subject == line.subject && a.name == line.name && a.fields == fields);
+        if let Some(known) = known {
+            known.key
+        } else {
+            let key = authorities.len();
+            authorities.push(AuthorityLine {
+                key,
+                fields,
+                ..line
+            });
+            key
+        }
+    };
     let works = row
         .works
         .iter()
         .map(|work| {
-            let authority = work.main_contributor.as_ref().map(|(kind, name)| {
-                if let Some(known) = authorities.iter().find(|a| &a.name == name) {
-                    known.key
-                } else {
-                    let key = authorities.len();
-                    authorities.push(AuthorityLine {
-                        key,
-                        agent: work.main_agent.map(|agent| agent.0),
-                        icon: agent_icon(*kind),
+            let mut cords = Vec::new();
+            if let (FamilyHead::Hub(id), Some(_)) = (row.cursor.head, &row.hub_title) {
+                cords.push(Cord {
+                    node: format!("h{}", id.0),
+                    label_key: "staff-cord-work",
+                });
+            }
+            if let Some((kind, name)) = &work.main_contributor {
+                let key = key_of(
+                    work.main_agent
+                        .map(|agent| format!("/equipe/acervo/autoridade/{}/campos", agent.0)),
+                    AuthorityLine {
+                        key: 0,
                         name: name.clone(),
-                    });
-                    key
-                }
-            });
-            work_line(work, authority, codes)
+                        fields: None,
+                        pill_key: "staff-badge-agent",
+                        subject: false,
+                        icon: agent_icon(*kind),
+                    },
+                );
+                cords.push(Cord {
+                    node: format!("a{key}"),
+                    label_key: "staff-cord-written-by",
+                });
+            }
+            for subject in &work.subjects {
+                let key = key_of(
+                    Some(format!("/equipe/acervo/assunto/{}/campos", subject.id.0)),
+                    AuthorityLine {
+                        key: 0,
+                        name: subject.heading.clone(),
+                        fields: None,
+                        pill_key: "staff-badge-subject",
+                        subject: true,
+                        icon: subject_icon(subject.kind),
+                    },
+                );
+                cords.push(Cord {
+                    node: format!("a{key}"),
+                    label_key: "staff-cord-about",
+                });
+            }
+            work_line(work, cords, codes)
         })
         .collect();
     let instances = || row.works.iter().flat_map(|work| work.instances.iter());
@@ -392,15 +437,19 @@ fn family_line(row: &FamilyRow, codes: &CodeLists) -> FamilyLine {
     }
 }
 
-fn work_line(work: &WorkRow, authority: Option<usize>, codes: &CodeLists) -> WorkLine {
+fn work_line(work: &WorkRow, cords: Vec<Cord>, codes: &CodeLists) -> WorkLine {
     WorkLine {
-        authority,
+        cords,
         id: work.id.0,
         title: work.title.clone(),
         contributor: work.main_contributor.as_ref().map(|(_, name)| name.clone()),
         classification: work.classification.clone(),
         languages: work.languages.clone(),
-        subjects: work.subjects.clone(),
+        subjects: work
+            .subjects
+            .iter()
+            .map(|subject| subject.heading.clone())
+            .collect(),
         more_subjects: work.more_subjects,
         instances: work
             .instances

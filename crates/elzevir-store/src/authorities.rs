@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Editing an agent once for every record that names it (docs/specs/catalogo/autoridades.md).
+//! Editing an agent or a subject once for every record that names it, and linking one
+//! to a Work (docs/specs/catalogo/autoridades.md).
 
-use elzevir_app::authorities::{AgentReader, AgentView};
+use elzevir_app::authorities::{AgentView, AuthorityReader, SubjectView};
 use elzevir_app::catalog::{
     AgentChange, AgentUpdate, AuthorityRole, CatalogOutput, CatalogReadError, CatalogRefusal,
-    NewContribution, NewSubject, WorkAuthority,
+    NewContribution, NewSubject, SubjectUpdate, WorkAuthority,
 };
 use elzevir_app::commands::WriteRefusal;
-use elzevir_domain::catalog::{AgentId, AgentKind, InstanceId};
+use elzevir_domain::catalog::{AgentId, AgentKind, InstanceId, SubjectId, SubjectKind};
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::catalog::{exists, link_contributions_at, link_subjects_at, record_changed, refused};
@@ -66,23 +67,117 @@ pub(crate) fn update_agent(
         "UPDATE agents SET row_version = row_version + 1 WHERE id = ?1 RETURNING row_version",
         agent.0,
     )?;
+    records_changed(
+        tx,
+        "SELECT work_id FROM contributions WHERE agent_id = ?1",
+        agent.0,
+    )?;
+    Ok(CatalogOutput::AgentUpdated { agent, row_version })
+}
+
+/// `catalog.update_subject`: as [`update_agent`], for a subject heading. A heading keeps
+/// the typed subdivisions of the subject, so it has as many ` -- ` parts after the first.
+pub(crate) fn update_subject(
+    tx: &WriteTx<'_>,
+    update: &SubjectUpdate,
+) -> Result<CatalogOutput, CommandFailed<WriteRefusal>> {
+    let connection = tx.connection();
+    let subject = update.subject;
+    let current = version(
+        connection,
+        "SELECT row_version FROM subjects WHERE id = ?1",
+        subject.0,
+    )?
+    .ok_or_else(|| refused(CatalogRefusal::UnknownSubject(subject)))?;
+    check_version(update.row_version, current)?;
+    if update.changes.is_empty() {
+        return Ok(CatalogOutput::SubjectUpdated {
+            subject,
+            row_version: current,
+        });
+    }
+    for change in &update.changes {
+        match change {
+            AgentChange::Heading(heading) => {
+                let subdivisions: String = connection
+                    .query_row(
+                        "SELECT subdivisions FROM subjects WHERE id = ?1",
+                        params![subject.0],
+                        |row| row.get(0),
+                    )
+                    .map_err(StoreError::from)?;
+                let typed = subdivisions
+                    .split(',')
+                    .filter(|code| !code.is_empty())
+                    .count();
+                let parts = heading.split(" -- ").count().saturating_sub(1);
+                if typed > 0 && parts != typed {
+                    return Err(refused(CatalogRefusal::SubdivisionsChanged(
+                        heading.clone(),
+                    )));
+                }
+                let taken = exists_with(
+                    connection,
+                    "SELECT 1 FROM subjects other JOIN subjects this ON this.id = ?1
+                     WHERE other.kind = this.kind AND other.heading = ?2
+                       AND coalesce(other.thesaurus, 0) = coalesce(this.thesaurus, 0)
+                       AND other.subdivisions = this.subdivisions AND other.id <> this.id",
+                    params![subject.0, heading],
+                )?;
+                if taken {
+                    return Err(refused(CatalogRefusal::SubjectHeadingTaken(
+                        heading.clone(),
+                    )));
+                }
+                connection
+                    .execute(
+                        "UPDATE subjects SET heading = ?2 WHERE id = ?1",
+                        params![subject.0, heading],
+                    )
+                    .map_err(StoreError::from)?;
+            }
+        }
+    }
+    let row_version = bump(
+        connection,
+        "UPDATE subjects SET row_version = row_version + 1 WHERE id = ?1 RETURNING row_version",
+        subject.0,
+    )?;
+    records_changed(
+        tx,
+        "SELECT work_id FROM work_subjects WHERE subject_id = ?1",
+        subject.0,
+    )?;
+    Ok(CatalogOutput::SubjectUpdated {
+        subject,
+        row_version,
+    })
+}
+
+/// Every Work `works` (a constant selecting Work ids by `?1`) names and every Instance of
+/// them get a new version, and the Instances are reindexed: open forms are refused
+/// instead of writing the old heading back, and the OPAC cache by version renders again.
+fn records_changed(
+    tx: &WriteTx<'_>,
+    works: &'static str,
+    id: i64,
+) -> Result<(), CommandFailed<WriteRefusal>> {
+    let connection = tx.connection();
+    // `works` is one of the constants above, never input.
     connection
         .execute(
-            "UPDATE works SET row_version = row_version + 1
-             WHERE id IN (SELECT work_id FROM contributions WHERE agent_id = ?1)",
-            params![agent.0],
+            &format!("UPDATE works SET row_version = row_version + 1 WHERE id IN ({works})"),
+            params![id],
         )
         .map_err(StoreError::from)?;
     let instances: Vec<i64> = {
         let mut statement = connection
-            .prepare_cached(
-                "SELECT id FROM instances WHERE work_id IN
-                     (SELECT work_id FROM contributions WHERE agent_id = ?1)
-                 ORDER BY id",
-            )
+            .prepare_cached(&format!(
+                "SELECT id FROM instances WHERE work_id IN ({works}) ORDER BY id"
+            ))
             .map_err(StoreError::from)?;
         statement
-            .query_map(params![agent.0], |row| row.get(0))
+            .query_map(params![id], |row| row.get(0))
             .map_err(StoreError::from)?
             .collect::<Result<_, _>>()
             .map_err(StoreError::from)?
@@ -90,7 +185,7 @@ pub(crate) fn update_agent(
     for instance in instances {
         record_changed(tx, InstanceId(instance))?;
     }
-    Ok(CatalogOutput::AgentUpdated { agent, row_version })
+    Ok(())
 }
 
 /// `catalog.link_authority`: the authority, found by its class and heading or created,
@@ -206,7 +301,7 @@ fn next_position(connection: &Connection, sql: &str, work: i64) -> Result<i64, S
     Ok(connection.query_row(sql, params![work], |row| row.get(0))?)
 }
 
-impl AgentReader for ElzevirStore {
+impl AuthorityReader for ElzevirStore {
     fn agent(&self, id: AgentId) -> Result<Option<AgentView>, CatalogReadError> {
         self.readers()
             .read(|c| {
@@ -242,6 +337,52 @@ impl AgentReader for ElzevirStore {
                     id,
                     kind,
                     heading,
+                    version,
+                    works: usize::try_from(works).unwrap_or_default(),
+                    instances: usize::try_from(instances).unwrap_or_default(),
+                })
+            })
+            .transpose()
+    }
+
+    fn subject(&self, id: SubjectId) -> Result<Option<SubjectView>, CatalogReadError> {
+        self.readers()
+            .read(|c| {
+                c.query_row(
+                    "SELECT s.kind, s.heading, t.code, s.row_version,
+                            (SELECT count(DISTINCT work_id) FROM work_subjects
+                             WHERE subject_id = s.id),
+                            (SELECT count(*) FROM instances WHERE work_id IN
+                                (SELECT work_id FROM work_subjects WHERE subject_id = s.id))
+                     FROM subjects s LEFT JOIN terms t ON t.id = s.thesaurus
+                     WHERE s.id = ?1",
+                    params![id.0],
+                    |row| {
+                        let code: u8 = row.get(0)?;
+                        let works: i64 = row.get(4)?;
+                        let instances: i64 = row.get(5)?;
+                        Ok((
+                            code,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, Option<String>>(2)?,
+                            row.get(3)?,
+                            works,
+                            instances,
+                        ))
+                    },
+                )
+                .optional()
+            })
+            .map_err(|e| CatalogReadError(e.to_string()))?
+            .map(|(code, heading, thesaurus, version, works, instances)| {
+                let kind = SubjectKind::from_code(code).ok_or_else(|| {
+                    CatalogReadError(format!("unknown subject kind {code} (newer schema?)"))
+                })?;
+                Ok(SubjectView {
+                    id,
+                    kind,
+                    heading,
+                    thesaurus,
                     version,
                     works: usize::try_from(works).unwrap_or_default(),
                     instances: usize::try_from(instances).unwrap_or_default(),
