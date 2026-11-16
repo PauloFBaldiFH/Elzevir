@@ -93,10 +93,10 @@ A diretriz, em quatro frases:
     | Suporte | `bf:Print`, volume (`nc`) | livro impresso |
     | | `bf:Electronic`, recurso online (`cr`) | tela e nuvem |
     | | disco de áudio (`sd`), videodisco (`vd`) | disco |
-    | Agente | `bf:Person`, `bf:Organization`, `bf:Meeting` | pessoa, prédio, evento |
-    | Público | infantil, juvenil, adulto | selo com ícone |
-    | Gênero | HQ/Gibi, Poesia, Teatro, Biografia e os demais em uso | selo com ícone |
-    | Exemplar | `bf:status`: disponível, emprestado, danificado, extraviado | indicador |
+    | Agente | `bf:Person`, `bf:Organization`, `bf:Meeting`, `bf:Family` | pessoa, prédio, evento, família |
+    | Público | o texto do público-alvo | selo com ícone |
+    | Gênero | os gêneros e formas da Obra (`bf:genreForm`) | selo com ícone |
+    | Exemplar | `bf:status`: disponível; retirado, danificado, extraviado | indicador |
     | | `bf:usageAndAccessPolicy`: consulta local | cadeado |
 
 16. O ícone nunca é a única informação: vem com o rótulo ou com `aria-label` (spec de interação §12).
@@ -104,6 +104,7 @@ A diretriz, em quatro frases:
 14a. Como está feito (etapa 7b): a categoria sai do formulário. A Obra e a Instância têm o campo de classes, uma caixa por linha com as subclasses de `bf:Work` ou de `bf:Instance` e o rótulo da ontologia; trocar as classes não mexe nas declarações. `bf:content`, `bf:media`, `bf:carrier` e `bf:issuance` já eram caixas sobre as listas da LC (etapa 6). Toda caixa cujas opções têm ícone mostra, ao lado, o da opção escolhida: classes da tabela do item 15, `contentTypes` e `carriers`.
 14b. Como está feito (etapa 7c): a categoria de material deixa de existir. Saem o `enum` `MaterialType`, as colunas `material_type` (migração 36), os perfis e a tabela de categorias. A família nova começa como livro impresso (`Text` + `Monograph` com conteúdo `txt`, Instância `Print`). A importação dá `bf:Electronic` à Instância de uma edição eletrônica (`007/00` `c` ou `008/23` `o`, `q`, `s`, fora do líder 06 `m`); a migração 36 dá essa classe às Instâncias que tinham a categoria digital sob uma Obra de outra categoria. A exportação MARC escreve o líder 06 e 07 a partir das classes da Obra, e o `007` `cr` a partir de `bf:Electronic` ([mapeamento MARC21](mapeamento-marc21.md), item 1.1).
 17a. Como está feito (etapa 7a): o conteúdo e o suporte saem da descrição, não da categoria de material. O conteúdo é o primeiro que vale: conteúdo tátil (`tc*`) ou Instância `bf:Tactile`, depois Obra `bf:Serial`, depois a primeira classe da Obra da tabela (`MusicAudio` e `NonMusicAudio` contam como `Audio`, `Kit` como `Multimedia`; `MixedMaterial` leva as camadas com o rótulo próprio), depois o primeiro `bf:content` da tabela. O suporte é a classe da Instância (`bf:Print`, `bf:Electronic`), senão o `bf:carrier` (`nc`, `cr`, `sd`, `vd`). Listagem, pílulas, resultados e registro do OPAC mostram ícone e rótulo de cada um; a pílula do exemplar mostra o do suporte, senão o do conteúdo; o índice de busca guarda os dois no lugar da categoria. Registro sem descrição mostra o ícone de conteúdo desconhecido.
+17b. Como está feito (etapa 7d, que fecha a etapa 7): o agente leva o ícone do seu tipo (`bf:Person` pessoa, `bf:Organization` prédio, `bf:Meeting` evento, `bf:Family` família) no bloco de autoridade da listagem e nos contribuidores do OPAC; a listagem lê o tipo junto com o nome do autor principal. O público e cada gênero do OPAC são selos com um ícone único por categoria, ao lado do texto gravado: o público é texto livre (`521`), sem lista fechada de faixas. Os gêneros são os `bf:genreForm` da Obra com rótulo (recurso rotulado, texto ou conceito de lista da LC); um gênero só com IRI do LCGFT fica de fora até as autoridades (2.9) trazerem os rótulos. A situação do exemplar leva o ícone do sinal ao lado do rótulo, na pílula, na grade, na ficha e no OPAC: disponível, cadeado para consulta local (não emprestável ou restrito) e indisponível (retirado, extraviado ou danificado). "Emprestado" segue o item 17 e entra com a circulação.
 
 ### Exemplar, unidade, localização e coleção
 

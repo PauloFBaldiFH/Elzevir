@@ -137,6 +137,15 @@ pub struct Badge {
     pub label_key: &'static str,
 }
 
+/// A text with the icon of what it is, such as a contributor with its kind of agent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IconText<'a> {
+    /// Symbol id in `/static/elzevir-icons.svg`.
+    pub icon: &'static str,
+    /// The text.
+    pub text: &'a str,
+}
+
 /// One search result as the list shows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResultLine {
@@ -237,6 +246,8 @@ pub struct ItemLine {
     pub available: bool,
     /// Message key of its status.
     pub status: &'static str,
+    /// Symbol of its status's icon in `/static/elzevir-icons.svg`.
+    pub icon: &'static str,
 }
 
 /// The body of a record page. It depends only on the record, so it is rendered once per
@@ -252,8 +263,10 @@ pub struct OpacRecordBody<'a> {
     pub work_title: Option<&'a str>,
     /// Variant, parallel and abbreviated titles.
     pub other_titles: Vec<&'a str>,
-    /// Contributor headings.
-    pub contributors: Vec<&'a str>,
+    /// Contributor headings, each with the icon of its kind of agent.
+    pub contributors: Vec<IconText<'a>>,
+    /// The Work's genres and forms.
+    pub genres: Vec<&'a str>,
     /// Its content and carrier, each with its icon.
     pub material: Vec<Badge>,
     /// Publisher and date.

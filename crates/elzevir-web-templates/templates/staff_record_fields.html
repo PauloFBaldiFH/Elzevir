@@ -33,7 +33,7 @@
       <tbody>
         {% for item in items %}
         <tr>
-          <td><span class="item-status {{ item.signal_class }}">{{ t.get(item.signal_key) }}</span></td>
+          <td><span class="item-status {{ item.signal_class }}"><svg class="signal-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ item.signal_icon }}"></use></svg>{{ t.get(item.signal_key) }}</span></td>
           <td>{% if let Some(barcode) = item.barcode %}{{ barcode }}{% endif %}</td>
           <td>{% if let Some(inventory) = item.inventory_number %}{{ inventory }}{% endif %}</td>
           <td class="call-number">{% if let Some(call_number) = item.call_number %}{{ call_number }}{% endif %}</td>

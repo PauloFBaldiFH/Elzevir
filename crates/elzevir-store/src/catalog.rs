@@ -921,7 +921,7 @@ fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>,
     let languages = statement
         .query_map(params![work], |row| row.get(0))?
         .collect::<Result<Vec<String>, _>>()?;
-    let (other_titles, typed_notes, material) = described_texts(c, work, id.0)?;
+    let described = described_texts(c, work, id.0)?;
     Ok(Some(InstanceView {
         id,
         version: row.version,
@@ -929,41 +929,49 @@ fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>,
         work_version: row.work_version,
         work_title: row.work_title,
         hub: row.hub.map(HubId),
-        material,
+        material: described.material,
         relations,
         title: row.title,
-        other_titles,
+        other_titles: described.other_titles,
         publisher: row.publisher,
         date: row.date,
         classification: row.classification,
         summary: row.summary,
         audience: row.audience,
+        genres: described.genres,
         contributors,
         subjects,
         identifiers,
         notes,
-        typed_notes,
+        typed_notes: described.typed_notes,
         languages,
     }))
 }
 
-/// The other titles and the typed notes of a Work and of its Instance (bibframe-completo.md,
-/// item 29, parts 5a and 5b), and the content and carrier they describe (item 15).
-fn described_texts(
-    c: &Connection,
-    work: i64,
-    instance: i64,
-) -> Result<(Vec<String>, Vec<String>, Material), ReadFailure> {
+/// What a record page reads from the statements of a Work and of its Instance.
+struct Described {
+    /// The other titles (bibframe-completo.md, item 29, part 5a).
+    other_titles: Vec<String>,
+    /// The typed notes (item 29, part 5b).
+    typed_notes: Vec<String>,
+    /// The content and carrier (item 15).
+    material: Material,
+    /// The Work's genres and forms (item 17b).
+    genres: Vec<String>,
+}
+
+fn described_texts(c: &Connection, work: i64, instance: i64) -> Result<Described, ReadFailure> {
     let described = |entity, id| crate::statements::read_description(c, EntityRef { entity, id });
     let both = [
         &described(EntityKind::Work, work)?,
         &described(EntityKind::Instance, instance)?,
     ];
-    Ok((
-        elzevir_app::description::other_titles(&both),
-        elzevir_app::description::typed_notes(&both),
-        material_of(both[0], both[1]),
-    ))
+    Ok(Described {
+        other_titles: elzevir_app::description::other_titles(&both),
+        typed_notes: elzevir_app::description::typed_notes(&both),
+        material: material_of(both[0], both[1]),
+        genres: elzevir_app::description::genres(both[0]),
+    })
 }
 
 /// The content and carrier that a Work and its Instance describe (item 15).

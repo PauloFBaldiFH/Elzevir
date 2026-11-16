@@ -77,6 +77,25 @@ pub fn typed_notes(descriptions: &[&Description]) -> Vec<String> {
         .collect()
 }
 
+/// The labels of the Work's genres and forms (`bf:genreForm`), in order, for display
+/// (bibframe-completo.md, item 17b). A genre named only by an `id.loc.gov` IRI has no
+/// label here yet and is left out: the LCGFT labels come with the authorities.
+#[must_use]
+pub fn genres(work: &Description) -> Vec<String> {
+    work.statements
+        .iter()
+        .filter(|statement| statement.property == "genreForm")
+        .filter_map(|statement| match &statement.value {
+            Value::Literal { text, .. } => Some(text.clone()),
+            Value::Resource(genre) => genre.label.clone(),
+            Value::Concept { scheme, code } => elzevir_data::vocabulary::scheme(scheme)
+                .and_then(|scheme| scheme.concept(code))
+                .map(|concept| concept.label.to_owned()),
+            Value::Entity(_) | Value::Iri(_) => None,
+        })
+        .collect()
+}
+
 /// Whether `note` is part of the physical description (physical details or accompanying
 /// material), which is shown with the extent, not with the notes.
 fn is_physical(note: &elzevir_domain::statement::Resource) -> bool {
@@ -176,6 +195,32 @@ mod tests {
         );
         assert_eq!(typed_notes(&[&instance]), ["Inclui bibliografia."]);
         assert_eq!(physical_description(None, &Description::default()), None);
+    }
+
+    #[test]
+    fn the_genres_are_their_labels_and_an_unlabelled_iri_is_left_out() {
+        let genre = |value: Value| Statement {
+            property: "genreForm".to_owned(),
+            value,
+        };
+        let work = Description {
+            classes: Vec::new(),
+            statements: vec![
+                genre(Value::Resource(elzevir_domain::statement::Resource {
+                    class: "GenreForm".to_owned(),
+                    label: Some("Romances".to_owned()),
+                    statements: Vec::new(),
+                })),
+                genre(Value::Iri(
+                    "http://id.loc.gov/authorities/genreForms/gf2014026339".to_owned(),
+                )),
+                genre(Value::Literal {
+                    text: "Contos".to_owned(),
+                    language: None,
+                }),
+            ],
+        };
+        assert_eq!(genres(&work), ["Romances", "Contos"]);
     }
 
     #[test]

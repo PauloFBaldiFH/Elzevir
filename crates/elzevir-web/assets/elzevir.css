@@ -318,6 +318,10 @@ a.field-value:hover { text-decoration: underline; }
 .material-badge { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; }
 .material-badge .badge-icon { flex: none; width: 16px; height: 16px; color: var(--text-muted); }
 .item-signal { flex: none; font-weight: 800; }
+/* The signal's own icon (bibframe-completo.md, item 17b): a padlock for local use, so the state
+   never rests on colour alone. */
+.signal-icon { flex: none; width: 14px; height: 14px; margin-right: 3px; vertical-align: -2px; color: var(--signal-border, var(--text-muted)); }
+.chip .badge-icon { width: 14px; height: 14px; margin-right: 4px; vertical-align: -2px; color: var(--text-muted); }
 .item-signal::after { content: " ·"; font-weight: 600; opacity: 0.6; }
 .item-pill.more-items { justify-content: center; border: 1.5px dashed var(--inst-accent); background: var(--hub-bg); font-weight: 700; }
 .item-pill.more-items a { color: inherit; text-decoration: none; }
@@ -499,7 +503,7 @@ a.field-value:hover { text-decoration: underline; }
 .item-grid tr.row-new td:first-child, .item-grid tr.row-changed td:first-child { box-shadow: inset 3px 0 0 var(--elzevir-color-work); }
 .item-grid tr.row-new { background: color-mix(in srgb, var(--elzevir-color-work-bg) 60%, transparent); }
 .item-grid .grid-signal { min-width: 0; width: 1.2rem; }
-.item-grid .grid-signal::before { content: ""; display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--signal-border, var(--elzevir-color-border)); }
+.item-grid .grid-signal .signal-icon { margin-right: 0; }
 .item-grid .grid-signal-head { width: 1.2rem; }
 .item-grid .grid-keys { margin: 6px 0 0; font-size: 0.72rem; color: var(--text-muted); }
 /* Code tables (tabelas-de-codigos.md, items 14 to 19). */

@@ -2,7 +2,9 @@
 //! The icon and label of each categorical value (docs/specs/catalogo/bibframe-completo.md,
 //! item 15): symbols of `assets/elzevir-icons.svg`, message keys of the Fluent files.
 
+use elzevir_app::catalog::ShelfSignal;
 use elzevir_app::material::{CarrierKind, ContentKind, Material};
+use elzevir_domain::catalog::AgentKind;
 use elzevir_web_templates::Badge;
 
 /// The icon of a family or Instance whose description names no content.
@@ -78,6 +80,25 @@ pub(crate) fn item_icon(material: Material) -> &'static str {
         .unwrap_or(NO_CONTENT)
 }
 
+/// The icon of a kind of agent, beside its name.
+pub(crate) const fn agent_icon(kind: AgentKind) -> &'static str {
+    match kind {
+        AgentKind::Person => "agent-person",
+        AgentKind::Organization => "agent-organization",
+        AgentKind::Meeting => "agent-meeting",
+        AgentKind::Family => "agent-family",
+    }
+}
+
+/// The icon of an Item's place on the shelf: a padlock when it is only for use there.
+pub(crate) const fn signal_icon(signal: ShelfSignal) -> &'static str {
+    match signal {
+        ShelfSignal::Available => "status-available",
+        ShelfSignal::NotForLoan => "status-local-use",
+        ShelfSignal::OutOfCirculation => "status-unavailable",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -115,5 +136,30 @@ mod tests {
             );
         }
         assert!(ICONS.contains(&format!("id=\"{NO_CONTENT}\"")));
+    }
+
+    #[test]
+    // The record page names `audience` and `genre` itself, beside their labels.
+    fn agents_signals_audiences_and_genres_have_their_symbol() {
+        let agents = [
+            AgentKind::Person,
+            AgentKind::Organization,
+            AgentKind::Meeting,
+            AgentKind::Family,
+        ]
+        .map(agent_icon);
+        let signals = [
+            ShelfSignal::Available,
+            ShelfSignal::NotForLoan,
+            ShelfSignal::OutOfCirculation,
+        ]
+        .map(signal_icon);
+        for icon in agents
+            .into_iter()
+            .chain(signals)
+            .chain(["audience", "genre"])
+        {
+            assert!(ICONS.contains(&format!("id=\"{icon}\"")), "{icon}");
+        }
     }
 }

@@ -13,11 +13,11 @@ use elzevir_app::opac::{self, RecordPage, ResultsPage};
 use elzevir_app::search::SearchIndex;
 use elzevir_domain::catalog::{InstanceId, NoteKind};
 use elzevir_web_templates::{
-    ItemLine, OpacNotFound, OpacRecord, OpacRecordBody, OpacResults, ResultLine,
+    IconText, ItemLine, OpacNotFound, OpacRecord, OpacRecordBody, OpacResults, ResultLine,
 };
 use serde::Deserialize;
 
-use crate::icons::material_badges;
+use crate::icons::{agent_icon, material_badges, signal_icon};
 use crate::{AppState, render};
 
 /// Record bodies kept at most; past this the cache starts over. A body is a few kilobytes,
@@ -203,8 +203,12 @@ fn record_body<'a>(
         contributors: instance
             .contributors
             .iter()
-            .map(|(_, name)| &**name)
+            .map(|(kind, name)| IconText {
+                icon: agent_icon(*kind),
+                text: name,
+            })
             .collect(),
+        genres: instance.genres.iter().map(String::as_str).collect(),
         material: material_badges(instance.material),
         publication,
         classification: instance.classification.as_deref(),
@@ -247,6 +251,7 @@ fn item_line(item: &ItemView, codes: &CodeLists) -> ItemLine {
         call_number: item.call_number.clone(),
         available: item.status.is_available(),
         status: status_key(item.status),
+        icon: signal_icon(item.status.signal()),
     }
 }
 

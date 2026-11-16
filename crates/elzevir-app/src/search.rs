@@ -417,6 +417,7 @@ mod tests {
                 classification: None,
                 summary: None,
                 audience: None,
+                genres: Vec::new(),
                 contributors: Vec::new(),
                 subjects: Vec::new(),
                 identifiers: Vec::new(),
