@@ -43,6 +43,11 @@ Ficam para depois: Obra nova no mesmo Hub e a sugestão "Agrupar num Hub" (§20 
 20. Criar uma família leva a tela para a página da listagem que começa nela, já aberta (`/equipe/acervo?after=...#f-w{id}`); criar uma Instância recarrega a família aberta.
 21. Os formulários vêm do servidor: `GET /equipe/acervo/nova?from=&isbn=` (família) e `GET /equipe/acervo/instancia/{id}/nova` (Instância da Obra de `{id}`), só para quem tem a permissão `cataloguing` (sem ela: 403).
 
+
+### Nova Instância como esta (2.13)
+
+22. Para quem cataloga, cada bloco de Instância tem **"+ Como esta"**, que abre o formulário de uma Instância nova da mesma Obra já preenchido com tudo da Instância de origem (título, edição, publicação, extensão, série, notas, classes e declarações), menos os identificadores (a coluna e as declarações `bf:identifiedBy`), que nomeiam só aquela Instância, os metadados administrativos (`bf:adminMetadata`: número de controle e datas), que descrevem o registro de origem, e os exemplares, que o formulário não tem. O formulário vem de `GET /equipe/acervo/instancia/{id}/nova?copiar=1`, com as mesmas permissões do item 21, e cria pela rota do item 6: a Instância nova não repete ISBN nem exemplar e exporta MARC gerado do modelo, sem os campos que só o registro de origem tinha (como `012`, `092`, `595`, `852` e `942`). Conferido num registro do oráculo.
+
 ## 2. Origem no Koha
 
 - Inclusão: `C4::Biblio::AddBiblio` (chamada por `cataloguing/addbiblio.pl`).

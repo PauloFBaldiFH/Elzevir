@@ -69,12 +69,22 @@ pub(crate) async fn new_family(
     render(&family_form(t, &start, inherited))
 }
 
+/// Query string of a new Instance's form.
+#[derive(Deserialize)]
+pub(crate) struct NewInstanceParams {
+    /// `1`: the form starts as a copy of Instance `{id}` (item 22).
+    #[serde(default)]
+    copiar: Option<u8>,
+}
+
 /// `GET /equipe/acervo/instancia/{id}/nova`: the form of a new Instance of the Work of
-/// Instance `{id}`, with its title and category (item 13).
+/// Instance `{id}`, with its title and category (item 13), or with everything of it but
+/// its identifiers when `copiar=1` (item 22).
 pub(crate) async fn new_instance(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<i64>,
+    Query(params): Query<NewInstanceParams>,
 ) -> Response {
     if let Some(refused) = refused(&state, &headers) {
         return refused;
@@ -90,16 +100,26 @@ pub(crate) async fn new_instance(
     else {
         return (StatusCode::SERVICE_UNAVAILABLE, "catalog unavailable").into_response();
     };
-    let mut start = blank();
-    start.work_description.classes = source.work_description.classes;
-    start.instance.title.clone_from(&source.instance.title);
-    start.instance.description.classes = source.instance.description.classes;
+    let copy = params.copiar == Some(1);
+    let start = if copy {
+        copied(source)
+    } else {
+        let mut start = blank();
+        start.work_description.classes = source.work_description.classes;
+        start.instance.title.clone_from(&source.instance.title);
+        start.instance.description.classes = source.instance.description.classes;
+        start
+    };
     let t = &state.inner.i18n;
     render(&NewRecordForm {
         t,
         endpoint: format!("/equipe/acervo/obra/{}/instancias", view.work.0),
         create: "instance",
-        heading_key: "new-instance-heading",
+        heading_key: if copy {
+            "new-instance-copy-heading"
+        } else {
+            "new-instance-heading"
+        },
         parts: vec![FormPart {
             name: "instance",
             heading_key: "new-instance-part",
@@ -149,6 +169,25 @@ pub(crate) fn blank() -> NewRecord {
         items: Vec::new(),
         source: None,
     }
+}
+
+/// The Instance properties a copy leaves out (item 22): its identifiers name that
+/// Instance alone, and its administrative metadata (control number, dates) describes the
+/// record it came from.
+const NOT_COPIED: &[&str] = &["identifiedBy", "adminMetadata"];
+
+/// A new Instance like the one of `source` (item 22): every field but [`NOT_COPIED`] and
+/// its identifiers, and without Items, which a form never holds.
+fn copied(mut source: NewRecord) -> NewRecord {
+    source.instance.identifiers.clear();
+    source
+        .instance
+        .description
+        .statements
+        .retain(|statement| !NOT_COPIED.contains(&statement.property.as_str()));
+    source.items.clear();
+    source.source = None;
+    source
 }
 
 /// What the next family starts with after `previous` (item 17).
@@ -214,7 +253,50 @@ fn family_form<'a>(t: &'a I18n, start: &NewRecord, inherited: bool) -> NewRecord
 
 #[cfg(test)]
 mod tests {
+    use elzevir_app::catalog::NewNote;
+    use elzevir_domain::catalog::NoteKind;
+    use elzevir_domain::statement::{Statement, Value};
+
     use super::*;
+
+    #[test]
+    fn a_copied_instance_keeps_everything_but_its_identifiers() {
+        let mut source = blank();
+        source.instance.title = "Dom Casmurro".to_owned();
+        source.instance.edition = Some("2. ed.".to_owned());
+        source.instance.identifiers.push(NewIdentifier {
+            kind: IdentifierKind::Isbn,
+            value: "9788535910667".to_owned(),
+            qualifier: None,
+        });
+        source.instance.notes.push(NewNote {
+            kind: NoteKind::General,
+            text: "Inclui índice.".to_owned(),
+        });
+        let literal = |text: &str| Value::Literal {
+            text: text.to_owned(),
+            language: None,
+        };
+        for (property, text) in [
+            ("identifiedBy", "T1"),
+            ("dimensions", "21 cm"),
+            ("adminMetadata", "000465738"),
+        ] {
+            source.instance.description.statements.push(Statement {
+                property: property.to_owned(),
+                value: literal(text),
+            });
+        }
+        let copy = copied(source.clone());
+        assert!(copy.instance.identifiers.is_empty());
+        let mut expected = source.instance;
+        expected.identifiers.clear();
+        expected
+            .description
+            .statements
+            .retain(|statement| statement.property == "dimensions");
+        assert_eq!(copy.instance, expected);
+    }
 
     #[test]
     fn the_carried_over_parts_are_the_ones_the_form_names() {
