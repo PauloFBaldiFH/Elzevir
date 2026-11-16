@@ -100,6 +100,7 @@ fn family(n: i64, title: &str, lost: bool) -> Family {
 fn stored(instance: i64) -> StoredRecord {
     StoredRecord {
         instance: InstanceId(instance),
+        work: WorkId(instance),
         record: NewRecord {
             work_title: "Dom Casmurro".to_owned(),
             work_description: elzevir_app::description::printed_book().0,

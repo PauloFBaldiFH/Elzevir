@@ -19,6 +19,7 @@ pub mod memory;
 pub mod opac;
 pub mod parallelism;
 pub mod profiles;
+pub mod rdf;
 pub mod registries;
 pub mod search;
 pub mod staff;
