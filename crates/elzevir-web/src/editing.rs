@@ -21,7 +21,7 @@ use elzevir_app::staff::Permission;
 use elzevir_app::statement_rows::{StatementRows, statements_of};
 use elzevir_app::suggestions::{AuthoritySuggestions, SUGGESTION_LIMIT, lookup_prefix};
 use elzevir_domain::catalog::{InstanceId, WorkId};
-use elzevir_domain::statement::EntityKind;
+use elzevir_domain::statement::{EntityKind, Statement};
 use elzevir_web_templates::url_encode;
 use serde::{Deserialize, Serialize};
 
@@ -56,19 +56,20 @@ pub(crate) enum FormChange<C> {
     Model(C),
 }
 
-/// The changes of a Work, with the rows of each property read into its statements
-/// (bibframe-completo.md, items 24 to 26).
-fn work_changes(changes: Vec<FormChange<WorkChange>>) -> Result<Vec<WorkChange>, Vec<FieldError>> {
+/// The changes of a Work or an Instance, with the rows of each property read into its
+/// statements (bibframe-completo.md, items 24 to 26).
+fn read_rows<C>(
+    kind: EntityKind,
+    changes: Vec<FormChange<C>>,
+    statements: fn(String, Vec<Statement>) -> C,
+) -> Result<Vec<C>, Vec<FieldError>> {
     let mut errors = Vec::new();
     let mut read = Vec::new();
     for change in changes {
         match change {
             FormChange::Model(change) => read.push(change),
-            FormChange::Statements { rows } => match statements_of(EntityKind::Work, &rows) {
-                Ok((property, statements)) => read.push(WorkChange::Statements {
-                    property: property.to_owned(),
-                    statements,
-                }),
+            FormChange::Statements { rows } => match statements_of(kind, &rows) {
+                Ok((property, list)) => read.push(statements(property.to_owned(), list)),
                 Err(error) => errors.push(error),
             },
         }
@@ -182,7 +183,13 @@ pub(crate) async fn edit_work(
         Ok(session) => session,
         Err(status) => return status.into_response(),
     };
-    let mut changes = match work_changes(body.changes) {
+    let read = read_rows(EntityKind::Work, body.changes, |property, statements| {
+        WorkChange::Statements {
+            property,
+            statements,
+        }
+    });
+    let mut changes = match read {
         Ok(changes) => changes,
         Err(errors) => return invalid(&state, &errors),
     };
@@ -202,13 +209,24 @@ pub(crate) async fn edit_instance(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<i64>,
-    Json(body): Json<EditBody<InstanceChange>>,
+    Json(body): Json<EditBody<FormChange<InstanceChange>>>,
 ) -> Response {
     let session = match authorize(&state, &headers) {
         Ok(session) => session,
         Err(status) => return status.into_response(),
     };
-    let mut changes = body.changes;
+    let read = read_rows(
+        EntityKind::Instance,
+        body.changes,
+        |property, statements| InstanceChange::Statements {
+            property,
+            statements,
+        },
+    );
+    let mut changes = match read {
+        Ok(changes) => changes,
+        Err(errors) => return invalid(&state, &errors),
+    };
     if let Err(errors) = validate_instance_changes(&mut changes) {
         return invalid(&state, &errors);
     }

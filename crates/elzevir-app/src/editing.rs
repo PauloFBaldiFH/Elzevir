@@ -159,7 +159,8 @@ pub fn validate_instance_changes(changes: &mut [InstanceChange]) -> Result<(), V
                 }
                 notes.retain(|note| !note.text.is_empty());
             }
-            InstanceChange::MaterialType(_) => {}
+            // Read and checked by `statement_rows`; the store checks them again.
+            InstanceChange::MaterialType(_) | InstanceChange::Statements { .. } => {}
         }
     }
     if errors.is_empty() {

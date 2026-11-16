@@ -5,6 +5,7 @@
 use crate::catalog::{InstanceChange, NewInstance, NewRecord, WorkChange};
 use crate::description::{instance_of_material, work_of_material};
 use crate::editing::{FieldError, validate_instance_changes, validate_work_changes};
+use elzevir_domain::statement::{Description, Statement};
 
 /// Builds a new family (a Work and its first Instance) from the screen's changes. The
 /// Instance takes the Work's title when it has none (item 9).
@@ -49,13 +50,13 @@ pub fn new_record(
         title: instance_title.unwrap_or_else(|| work_title.clone()),
         ..new_instance
     };
-    instance.description = instance_of_material(instance.material_type);
+    instance.description = with_category(
+        instance_of_material(instance.material_type),
+        instance.description,
+    );
     let mut work_description = work_of_material(material_type);
     for (property, statements) in record_parts.statements {
-        work_description
-            .statements
-            .retain(|statement| statement.property != property);
-        work_description.statements.extend(statements);
+        replace(&mut work_description, &property, statements);
     }
     Ok(NewRecord {
         work_title,
@@ -88,7 +89,10 @@ pub fn new_instance(mut changes: Vec<InstanceChange>) -> Result<NewInstance, Vec
     match title {
         Some(title) if errors.is_empty() => Ok(NewInstance {
             title,
-            description: instance_of_material(instance.material_type),
+            description: with_category(
+                instance_of_material(instance.material_type),
+                instance.description,
+            ),
             ..instance
         }),
         Some(_) => Err(errors),
@@ -111,7 +115,7 @@ struct RecordParts {
     languages: Vec<String>,
     contributions: Vec<crate::catalog::NewContribution>,
     subjects: Vec<crate::catalog::NewSubject>,
-    statements: Vec<(String, Vec<elzevir_domain::statement::Statement>)>,
+    statements: Vec<(String, Vec<Statement>)>,
 }
 
 impl RecordParts {
@@ -153,9 +157,33 @@ fn fold_instance(changes: Vec<InstanceChange>) -> (Option<String>, NewInstance) 
             InstanceChange::Series(text) => instance.series = text,
             InstanceChange::Identifiers(identifiers) => instance.identifiers = identifiers,
             InstanceChange::Notes(notes) => instance.notes = notes,
+            InstanceChange::Statements {
+                property,
+                statements,
+            } => replace(&mut instance.description, &property, statements),
         }
     }
     (title.filter(|title| !title.is_empty()), instance)
+}
+
+/// The statements of `property` in `description` become `statements`.
+fn replace(description: &mut Description, property: &str, statements: Vec<Statement>) {
+    description
+        .statements
+        .retain(|statement| statement.property != property);
+    description.statements.extend(statements);
+}
+
+/// The classes and statements a category gives, with the properties the form filled in
+/// `typed` replacing those of the category.
+fn with_category(mut category: Description, typed: Description) -> Description {
+    for statement in &typed.statements {
+        category
+            .statements
+            .retain(|kept| kept.property != statement.property);
+    }
+    category.statements.extend(typed.statements);
+    category
 }
 
 fn collect(errors: &mut Vec<FieldError>, result: Result<(), Vec<FieldError>>) {
