@@ -463,6 +463,12 @@ fn columns_of(property: &Property, stored: &[&Value]) -> Vec<FormColumn> {
     }
     columns.push(column("text", "edit-column-label", ColumnKind::Text));
     columns.push(column("iri", "edit-column-iri", ColumnKind::Text));
+    // A nested resource is a group: its own statements, one per line (item 26).
+    columns.push(column(
+        "details",
+        "edit-column-details",
+        ColumnKind::Details,
+    ));
     columns.push(kept);
     columns
 }
@@ -476,6 +482,7 @@ fn cells(columns: &[FormColumn], row: &StatementRow) -> Vec<FormCell> {
                 "language" => &row.language,
                 "concept" => &row.concept,
                 "iri" => &row.iri,
+                "details" => &row.details,
                 _ => &row.kept,
             };
             FormCell {
@@ -557,9 +564,9 @@ mod tests {
             panic!("rows")
         };
         let names: Vec<_> = blank.iter().map(|cell| cell.column.name).collect();
-        assert_eq!(names, ["concept", "text", "iri", "kept"]);
+        assert_eq!(names, ["concept", "text", "iri", "details", "kept"]);
         assert_eq!(rows[0][0].value, "contentTypes/txt");
-        assert!(rows[0][3].value.contains("\"txt\""));
+        assert!(rows[0][4].value.contains("\"txt\""));
         assert_eq!(field.ontology_label, property.label);
     }
 }

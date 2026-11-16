@@ -232,6 +232,7 @@ edit-column-language = Language
 edit-column-concept = Term
 edit-column-label = Name
 edit-column-iri = IRI
+edit-column-details = Its own statements, one per line (property: value)
 edit-column-work = Work number
 edit-column-kept = Stored value
 edit-section-title = Title
