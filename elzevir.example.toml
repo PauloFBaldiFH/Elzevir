@@ -1,0 +1,8 @@
+# Configuração operacional explícita: elzevir serve --config elzevir.toml
+# Caminhos relativos usam a pasta deste arquivo.
+# Configurações de domínio continuam em DATA_DIR/elzevir.toml.
+[server]
+data_dir = "data-local"
+listen = "127.0.0.1:8080"
+insecure_cookies = false
+# iri_base = "https://catalog.example/bibframe"

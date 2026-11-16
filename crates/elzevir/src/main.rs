@@ -10,6 +10,7 @@ mod catalog_cli;
 mod config;
 mod koha_codes;
 mod memory;
+mod server_config;
 
 use std::io::BufRead;
 use std::net::SocketAddr;
@@ -40,21 +41,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Serves the OPAC and the staff interface.
-    Serve {
-        /// Institution data directory (created if missing).
-        #[arg(long)]
-        data_dir: PathBuf,
-        /// Address to listen on.
-        #[arg(long, default_value = "127.0.0.1:8080")]
-        listen: SocketAddr,
-        /// Send cookies without `Secure`, for plain-HTTP development only.
-        #[arg(long)]
-        insecure_cookies: bool,
-        /// Where the IRIs of the BIBFRAME export start, such as
-        /// `https://biblioteca.example/bibframe`; the requested host's `/bibframe` when absent.
-        #[arg(long)]
-        iri_base: Option<String>,
-    },
+    Serve(server_config::ServeArgs),
     /// Manages staff accounts.
     #[command(subcommand)]
     Staff(StaffAction),
@@ -90,12 +77,18 @@ enum StaffAction {
 
 fn main() -> ExitCode {
     let result = match Cli::parse().command {
-        Command::Serve {
-            data_dir,
-            listen,
-            insecure_cookies,
-            iri_base,
-        } => serve(&data_dir, listen, insecure_cookies, iri_base),
+        Command::Serve(args) => {
+            args.resolve()
+                .map_err(|error| error.to_string())
+                .and_then(|settings| {
+                    serve(
+                        &settings.data_dir,
+                        settings.listen,
+                        settings.insecure_cookies,
+                        settings.iri_base,
+                    )
+                })
+        }
         Command::Staff(StaffAction::Add {
             data_dir,
             login,
@@ -243,7 +236,8 @@ fn serve(
         let listener = tokio::net::TcpListener::bind(listen)
             .await
             .map_err(|e| format!("cannot listen on {listen}: {e}"))?;
-        println!("elzevir: listening on http://{listen}");
+        let address = listener.local_addr().map_err(|error| error.to_string())?;
+        println!("elzevir: listening on http://{address}");
         axum::serve(listener, app)
             .with_graceful_shutdown(async {
                 // If the signal handler cannot be installed, the server simply runs until

@@ -1,0 +1,243 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Explicit, bounded server configuration. CLI overrides never rewrite the file.
+
+use std::io::Read;
+use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
+
+use serde::Deserialize;
+
+const MAX_BYTES: usize = 64 * 1024;
+
+/// The existing server flags plus an optional configuration file.
+#[derive(clap::Args)]
+pub(crate) struct ServeArgs {
+    /// TOML configuration file (paths inside it are relative to its directory).
+    #[arg(long)]
+    config: Option<PathBuf>,
+    /// Institution data directory (overrides the configuration file).
+    #[arg(long, required_unless_present = "config")]
+    data_dir: Option<PathBuf>,
+    /// Address to listen on (default: 127.0.0.1:8080).
+    #[arg(long)]
+    listen: Option<SocketAddr>,
+    /// Allow plain-HTTP cookies; use =false to override a true configuration value.
+    #[arg(long, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    insecure_cookies: Option<bool>,
+    /// Base of the BIBFRAME export IRIs; defaults to the requested host's /bibframe.
+    #[arg(long)]
+    iri_base: Option<String>,
+}
+
+/// Validated options used to start one institution's server.
+pub(crate) struct Settings {
+    pub(crate) data_dir: PathBuf,
+    pub(crate) listen: SocketAddr,
+    pub(crate) insecure_cookies: bool,
+    pub(crate) iri_base: Option<String>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct FileConfig {
+    server: Server,
+}
+
+#[derive(Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct Server {
+    data_dir: Option<PathBuf>,
+    listen: SocketAddr,
+    insecure_cookies: bool,
+    iri_base: Option<String>,
+}
+
+impl Default for Server {
+    fn default() -> Self {
+        Self {
+            data_dir: None,
+            listen: SocketAddr::from(([127, 0, 0, 1], 8080)),
+            insecure_cookies: false,
+            iri_base: None,
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum ConfigError {
+    #[error("cannot read configuration {}: {source}", path.display())]
+    Read {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    #[error("configuration {} exceeds 64 KiB", .0.display())]
+    TooLarge(PathBuf),
+    #[error("invalid configuration {} at line {line}, column {column}; check supported keys and value types", path.display())]
+    Invalid {
+        path: PathBuf,
+        line: usize,
+        column: usize,
+    },
+    #[error("set server.data_dir in the configuration or pass --data-dir")]
+    MissingDataDir,
+    #[error("data directory must not be empty")]
+    EmptyDataDir,
+}
+
+impl ServeArgs {
+    pub(crate) fn resolve(self) -> Result<Settings, ConfigError> {
+        let file = match &self.config {
+            Some(path) => load(path)?,
+            None => FileConfig::default(),
+        };
+        let server = file.server;
+        let from_file = server.data_dir.map(|directory| {
+            if directory.is_absolute() {
+                directory
+            } else {
+                self.config
+                    .as_deref()
+                    .and_then(Path::parent)
+                    .unwrap_or_else(|| Path::new("."))
+                    .join(directory)
+            }
+        });
+        let data_dir = self
+            .data_dir
+            .or(from_file)
+            .ok_or(ConfigError::MissingDataDir)?;
+        if data_dir.as_os_str().is_empty() {
+            return Err(ConfigError::EmptyDataDir);
+        }
+        Ok(Settings {
+            data_dir,
+            listen: self.listen.unwrap_or(server.listen),
+            insecure_cookies: self.insecure_cookies.unwrap_or(server.insecure_cookies),
+            iri_base: self.iri_base.or(server.iri_base),
+        })
+    }
+}
+
+fn load(path: &Path) -> Result<FileConfig, ConfigError> {
+    let read_error = |source| ConfigError::Read {
+        path: path.to_owned(),
+        source,
+    };
+    let file = std::fs::File::open(path).map_err(read_error)?;
+    let mut source = String::new();
+    file.take(u64::try_from(MAX_BYTES + 1).unwrap_or(u64::MAX))
+        .read_to_string(&mut source)
+        .map_err(read_error)?;
+    if source.len() > MAX_BYTES {
+        return Err(ConfigError::TooLarge(path.to_owned()));
+    }
+    let config: FileConfig = toml::from_str(&source).map_err(|error: toml::de::Error| {
+        // TOML's Display includes source excerpts and values. Only report location.
+        let offset = error.span().map_or(0, |span| span.start);
+        let prefix = source.get(..offset).unwrap_or_default();
+        ConfigError::Invalid {
+            path: path.to_owned(),
+            line: prefix.bytes().filter(|byte| *byte == b'\n').count() + 1,
+            column: prefix
+                .rsplit('\n')
+                .next()
+                .map_or(1, |line| line.chars().count() + 1),
+        }
+    })?;
+    if config
+        .server
+        .data_dir
+        .as_ref()
+        .is_some_and(|dir| dir.as_os_str().is_empty())
+    {
+        return Err(ConfigError::EmptyDataDir);
+    }
+    Ok(config)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args() -> ServeArgs {
+        ServeArgs {
+            config: None,
+            data_dir: Some("local-data".into()),
+            listen: None,
+            insecure_cookies: None,
+            iri_base: None,
+        }
+    }
+
+    #[test]
+    fn absent_options_keep_loopback_and_secure_defaults() {
+        let settings = args().resolve().unwrap();
+        assert_eq!(settings.listen, "127.0.0.1:8080".parse().unwrap());
+        assert!(!settings.insecure_cookies);
+        assert_eq!(settings.data_dir, Path::new("local-data"));
+    }
+
+    #[test]
+    fn ipv6_and_partial_files_are_typed() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("elzevir.toml");
+        std::fs::write(&path, "[server]\nlisten = '[::1]:8081'").unwrap();
+        let settings = ServeArgs {
+            config: Some(path.clone()),
+            ..args()
+        }
+        .resolve()
+        .unwrap();
+        assert_eq!(settings.listen, "[::1]:8081".parse().unwrap());
+        assert_eq!(settings.data_dir, Path::new("local-data"));
+        assert!(!settings.insecure_cookies);
+        assert!(matches!(
+            ServeArgs {
+                config: Some(path),
+                data_dir: None,
+                ..args()
+            }
+            .resolve(),
+            Err(ConfigError::MissingDataDir)
+        ));
+    }
+
+    #[test]
+    fn empty_cli_directory_is_rejected() {
+        assert!(matches!(
+            ServeArgs {
+                data_dir: Some(PathBuf::new()),
+                ..args()
+            }
+            .resolve(),
+            Err(ConfigError::EmptyDataDir)
+        ));
+    }
+    #[test]
+    fn iri_base_uses_explicit_cli_then_file_then_request_default() {
+        assert!(args().resolve().unwrap().iri_base.is_none());
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("server.toml");
+        std::fs::write(
+            &path,
+            "[server]\niri_base = 'https://catalog.example/bibframe'",
+        )
+        .unwrap();
+        for (override_base, expected) in [
+            (None, "https://catalog.example/bibframe"),
+            (
+                Some("https://other.example/bibframe"),
+                "https://other.example/bibframe",
+            ),
+        ] {
+            let settings = ServeArgs {
+                config: Some(path.clone()),
+                iri_base: override_base.map(str::to_owned),
+                ..args()
+            }
+            .resolve()
+            .unwrap();
+            assert_eq!(settings.iri_base.as_deref(), Some(expected));
+        }
+    }
+}
