@@ -725,12 +725,39 @@ function linkAuthority(button) {
   const work = focusedCard?.dataset.level === "work" ? focusedCard : family?.querySelector(".card-work");
   const id = work?.dataset.node?.slice(1);
   if (!id) return;
-  openNew(`/equipe/acervo/obra/${encodeURIComponent(id)}/autoridade/nova`, (panel) => {
+  // A place of publication goes to one Instance of the Work: the first, or the one chosen.
+  const instances = [...family.querySelectorAll(`.card-instance[data-parent~="w${id}"]`)];
+  const first = instances[0]?.dataset.node.slice(1);
+  const query = first ? `?instancia=${encodeURIComponent(first)}` : "";
+  openNew(`/equipe/acervo/obra/${encodeURIComponent(id)}/autoridade/nova${query}`, (panel) => {
     const heading = panel.querySelector(".new-record-heading");
     const title = work.querySelector(".title-main")?.textContent;
     if (heading && title) heading.append(`: ${title}`);
+    const form = panel.querySelector(".record-form");
+    if (form && instances.length > 1) form.querySelector(".form-fields")?.append(instanceChoice(form, instances, button.dataset.instanceLabel));
     family.querySelector(".family-grid")?.after(panel);
   });
+}
+
+// The Instance a place of publication goes to, named by the first values on its card.
+// It changes the address the form is sent to, not the form's values.
+function instanceChoice(form, instances, caption) {
+  const label = document.createElement("label");
+  label.className = "form-label link-instance";
+  const text = document.createElement("span");
+  text.textContent = caption ?? "";
+  const select = document.createElement("select");
+  for (const card of instances) {
+    const option = document.createElement("option");
+    option.value = card.dataset.node.slice(1);
+    option.textContent = [...card.querySelectorAll(".field-value")].slice(0, 3).map((value) => value.textContent.trim()).join(" · ");
+    select.append(option);
+  }
+  select.addEventListener("change", () => {
+    form.dataset.endpoint = form.dataset.endpoint.replace(/instancia=\d+/, `instancia=${encodeURIComponent(select.value)}`);
+  });
+  label.append(text, select);
+  return label;
 }
 
 // With a family open, N adds an Instance to the Work in focus (or its first Work);

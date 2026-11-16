@@ -172,6 +172,7 @@ pub(crate) fn link_field(t: &I18n) -> FormField {
     let roles = [
         ("contribution", "link-role-contribution"),
         ("subject", "link-role-subject"),
+        ("place", "link-role-place"),
     ]
     .into_iter()
     .map(|(value, key)| FormOption {
@@ -332,7 +333,7 @@ pub(crate) fn work_form<'a>(
         version,
         sections: work_sections(t, record),
         history: Some(format!("/equipe/acervo/obra/{work}/historico")),
-        reach: None,
+        authority: None,
     }
 }
 
@@ -349,7 +350,7 @@ pub(crate) fn instance_form<'a>(
         version,
         sections: instance_sections(t, record),
         history: Some(format!("/equipe/acervo/instancia/{instance}/historico")),
-        reach: None,
+        authority: None,
     }
 }
 

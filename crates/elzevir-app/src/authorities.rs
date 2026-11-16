@@ -2,14 +2,17 @@
 //! Authorities: the agents that records share, edited once for all of them
 //! (docs/specs/catalogo/autoridades.md).
 
-use elzevir_domain::catalog::{AgentId, AgentKind, SubjectId, SubjectKind, WorkId};
+use elzevir_domain::catalog::{AgentId, AgentKind, InstanceId, SubjectId, SubjectKind, WorkId};
 use serde::Deserialize;
 
-use crate::catalog::{AgentChange, AuthorityRole, CatalogReadError, WorkAuthority};
+use crate::catalog::{AgentChange, AuthorityLink, AuthorityRole, CatalogReadError, WorkAuthority};
 use crate::editing::FieldError;
 
 /// Most characters of an agent's heading.
 pub const MAX_HEADING: usize = 2000;
+
+/// Most identifiers an authority's block shows.
+pub const MAX_IDENTIFIERS: usize = 50;
 
 /// An agent as its focused block shows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,6 +29,9 @@ pub struct AgentView {
     pub works: usize,
     /// How many Instances those Works have: the records an edit changes.
     pub instances: usize,
+    /// Its identifiers in other datasets (LC, VIAF, Wikidata), each once, as the Works
+    /// that name it carry them.
+    pub identifiers: Vec<AuthorityLink>,
 }
 
 /// A subject as its focused block shows it.
@@ -45,6 +51,9 @@ pub struct SubjectView {
     pub works: usize,
     /// How many Instances those Works have: the records an edit changes.
     pub instances: usize,
+    /// Its identifiers in other datasets (LC, VIAF, Wikidata), each once, as the Works
+    /// that name it carry them.
+    pub identifiers: Vec<AuthorityLink>,
 }
 
 /// Port: reads the authorities records share. The store implements it.
@@ -118,15 +127,22 @@ pub enum LinkRoleName {
     Contribution,
     /// Subject of the Work.
     Subject,
+    /// Place of publication of one of its Instances.
+    Place,
 }
 
-/// The link of `request` to `work`, validated by role: a contributor must be an agent
-/// (docs/specs/catalogo/autoridades.md). Every error at once.
+/// The link of `request` to `work`, validated by role: a contributor must be an agent,
+/// and a place of publication a place, of `instance` (docs/specs/catalogo/autoridades.md).
+/// Every error at once.
 ///
 /// # Errors
 ///
 /// The fields that cannot be stored.
-pub fn link_request(work: WorkId, request: LinkRequest) -> Result<WorkAuthority, Vec<FieldError>> {
+pub fn link_request(
+    work: WorkId,
+    instance: Option<InstanceId>,
+    request: LinkRequest,
+) -> Result<WorkAuthority, Vec<FieldError>> {
     let mut errors = Vec::new();
     let heading = request.heading.trim().to_owned();
     if heading.is_empty() || heading.chars().count() > MAX_HEADING {
@@ -153,6 +169,25 @@ pub fn link_request(work: WorkId, request: LinkRequest) -> Result<WorkAuthority,
             });
             None
         }
+        (LinkRoleName::Place, _) => match (request.kind, instance) {
+            (SubjectKind::Place, Some(instance)) => {
+                Some(AuthorityRole::PublicationPlace { instance, heading })
+            }
+            (SubjectKind::Place, None) => {
+                errors.push(FieldError {
+                    field: "link",
+                    message_key: "link-error-no-instance",
+                });
+                None
+            }
+            _ => {
+                errors.push(FieldError {
+                    field: "link",
+                    message_key: "link-error-not-a-place",
+                });
+                None
+            }
+        },
         (LinkRoleName::Subject, _) => Some(AuthorityRole::Subject {
             kind: request.kind,
             heading,
@@ -184,6 +219,7 @@ mod tests {
         let work = WorkId(7);
         let link = link_request(
             work,
+            None,
             request(
                 SubjectKind::Person,
                 " Portinari, Candido ",
@@ -201,6 +237,7 @@ mod tests {
         );
         let topic = link_request(
             work,
+            None,
             request(SubjectKind::Topic, "Cafe", LinkRoleName::Subject),
         )
         .unwrap();
@@ -214,6 +251,7 @@ mod tests {
         );
         let errors = link_request(
             work,
+            None,
             request(SubjectKind::Topic, " ", LinkRoleName::Contribution),
         )
         .unwrap_err();

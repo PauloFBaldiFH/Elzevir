@@ -34,7 +34,7 @@
       </summary>
       <div class="family-grid{% if family.hub.is_none() %} no-hub{% endif %}">
       <div class="track track-auth">
-        <div class="col-header">{{ t.get("staff-column-authorities") }}{% if can_catalogue %} <button type="button" class="card-add" data-action="link-authority" title="{{ t.get("link-authority-label") }}">+ {{ t.get("link-authority") }}</button>{% endif %}</div>
+        <div class="col-header">{{ t.get("staff-column-authorities") }}{% if can_catalogue %} <button type="button" class="card-add" data-action="link-authority" data-instance-label="{{ t.get("link-instance") }}" title="{{ t.get("link-authority-label") }}">+ {{ t.get("link-authority") }}</button>{% endif %}</div>
         {% for authority in family.authorities %}
         <article class="card card-auth" data-level="auth" tabindex="0" data-node="a{{ authority.key }}"{% if can_catalogue %}{% if let Some(fields) = authority.fields %} data-fields="{{ fields }}"{% endif %}{% endif %}>
           <div class="card-top"><span class="entity-pill"><svg class="badge-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ authority.icon }}"></use></svg>{{ t.get(authority.pill_key) }}</span></div>

@@ -137,6 +137,14 @@ pub enum AuthorityRole {
         /// The thesaurus code, such as `lcsh`.
         thesaurus: Option<String>,
     },
+    /// The place of publication of one Instance of the Work (`bf:place` of its
+    /// `bf:provisionActivity`): only a place.
+    PublicationPlace {
+        /// The Instance, which must be of the Work.
+        instance: InstanceId,
+        /// The place's name, as the publication gives it.
+        heading: String,
+    },
 }
 
 /// An edit of an agent, read at `row_version`.

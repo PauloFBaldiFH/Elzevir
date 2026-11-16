@@ -139,6 +139,7 @@ authority-reach = Saving changes { $works ->
     [one] one record
    *[other] { $instances } records
 }.
+authority-identifiers = Also identified in
 link-authority = Authority
 link-authority-label = Link an authority, stored or new, to the Work in focus
 link-heading = Link an authority
@@ -149,7 +150,11 @@ link-column-relator = Relator code
 link-submit = Link
 link-role-contribution = contributor
 link-role-subject = subject
+link-role-place = place of publication
+link-instance = Instance of a place of publication
 link-error-not-an-agent = Only a person, family, organization or meeting can be a contributor.
+link-error-not-a-place = Only a place can be a place of publication.
+link-error-no-instance = The Work has no Instance to give a place of publication.
 link-error-already-linked = The Work already names this authority in this role.
 staff-cord-written-by = written by
 staff-cord-about = about

@@ -1452,6 +1452,11 @@ async fn a_cataloguer_renames_an_agent_knowing_how_many_records_change() {
     assert!(form.contains(r#"data-change="Heading""#));
     assert!(form.contains(r#"value="Assis, Machado de, 1839-1908""#));
     assert!(form.contains("Saving changes 3 Works and 4 records."));
+    // Its identifiers elsewhere are chips: a web address opens under its dataset's name.
+    assert!(form.contains(r#"<a class="chip chip-identifier" href="http://viaf.org/viaf/27068555" target="_blank" rel="noopener noreferrer" title="http://viaf.org/viaf/27068555">VIAF</a>"#));
+    assert!(form.contains(
+        r#"<span class="chip chip-identifier" title="(DLC)n  79021164">(DLC)n  79021164</span>"#
+    ));
     let missing = send(
         &app,
         get("/equipe/acervo/autoridade/2/campos", Some(&ana), None),
@@ -1566,6 +1571,35 @@ async fn a_cataloguer_links_an_authority_by_its_role() {
     )
     .await;
     assert_eq!(body(linked).await, r#"{"version":2}"#);
+
+    // A place of publication needs the Instance in focus, named in the address.
+    let form = body(
+        send(
+            &app,
+            get(
+                "/equipe/acervo/obra/3/autoridade/nova?instancia=30",
+                Some(&ana),
+                None,
+            ),
+        )
+        .await,
+    )
+    .await;
+    assert!(form.contains(r#"data-endpoint="/equipe/acervo/obra/3/autoridades?instancia=30""#));
+    let place = r#"{"changes": [{"Link": {"kind": "place", "heading": "Rio de Janeiro", "role": "place", "relator": null, "thesaurus": null}}]}"#;
+    let without = body(send(&app, post(place)).await).await;
+    assert!(without.contains(r#""key":"link-error-no-instance""#));
+    let placed = send(
+        &app,
+        post_json(
+            "/equipe/acervo/obra/3/autoridades?instancia=30",
+            Some(&ana),
+            Some(&token),
+            place,
+        ),
+    )
+    .await;
+    assert_eq!(body(placed).await, r#"{"version":2}"#);
 }
 
 #[tokio::test]
@@ -1594,6 +1628,7 @@ async fn a_cataloguer_renames_a_subject_from_the_authorities_column() {
     assert!(form.contains(r#"data-endpoint="/equipe/acervo/assunto/1" data-version="1""#));
     assert!(form.contains(r#"value="Romance brasileiro""#));
     assert!(form.contains("Saving changes 2 Works and 2 records."));
+    assert!(!form.contains("form-identifiers"));
     let missing = send(
         &app,
         get("/equipe/acervo/assunto/2/campos", Some(&ana), None),

@@ -19,8 +19,8 @@ pub use staff_item_grid::{
 };
 pub use staff_record_fields::{FieldEntry, FieldGroup, FieldValue, ItemFields, RecordFields};
 pub use staff_record_form::{
-    ColumnKind, FormCell, FormColumn, FormField, FormInput, FormOption, FormPart, FormSection,
-    History, HistoryLine, NewRecordForm, RecordForm,
+    AuthorityNote, ColumnKind, FormCell, FormColumn, FormField, FormInput, FormOption, FormPart,
+    FormSection, History, HistoryLine, IdentifierChip, NewRecordForm, RecordForm,
 };
 pub use staff_registries::{BranchPart, RegistryRow, StaffRegistries};
 

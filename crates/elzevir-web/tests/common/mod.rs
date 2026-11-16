@@ -257,10 +257,10 @@ impl elzevir_app::editing::CatalogEditor for Editor {
                 update.row_version
             }
             Edit::Link(link) => {
-                let heading = match &link.role {
-                    elzevir_app::catalog::AuthorityRole::Contribution { heading, .. }
-                    | elzevir_app::catalog::AuthorityRole::Subject { heading, .. } => heading,
-                };
+                use elzevir_app::catalog::AuthorityRole as Role;
+                let (Role::Contribution { heading, .. }
+                | Role::Subject { heading, .. }
+                | Role::PublicationPlace { heading, .. }) = &link.role;
                 if heading == "Linked" {
                     return Err(EditFailed::Refused(CatalogRefusal::AlreadyLinked(
                         heading.clone(),
@@ -348,6 +348,16 @@ impl elzevir_app::authorities::AuthorityReader for Authorities {
             version: 1,
             works: 3,
             instances: 4,
+            identifiers: vec![
+                elzevir_app::catalog::AuthorityLink {
+                    kind: elzevir_domain::catalog::AuthorityLinkKind::RealWorldObject,
+                    value: "http://viaf.org/viaf/27068555".to_owned(),
+                },
+                elzevir_app::catalog::AuthorityLink {
+                    kind: elzevir_domain::catalog::AuthorityLinkKind::AuthorityRecord,
+                    value: "(DLC)n  79021164".to_owned(),
+                },
+            ],
         }))
     }
 
@@ -363,6 +373,7 @@ impl elzevir_app::authorities::AuthorityReader for Authorities {
             version: 1,
             works: 2,
             instances: 2,
+            identifiers: Vec::new(),
         }))
     }
 }

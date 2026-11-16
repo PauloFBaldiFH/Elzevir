@@ -152,6 +152,7 @@ fn change_of(command: &WriteCommand) -> Change {
             match link.role {
                 AuthorityRole::Contribution { .. } => "Contributions",
                 AuthorityRole::Subject { .. } => "Subjects",
+                AuthorityRole::PublicationPlace { .. } => "Place",
             }
             .to_owned(),
         )]),

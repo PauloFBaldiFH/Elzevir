@@ -354,24 +354,19 @@ fn a_renamed_agent_changes_every_record_that_names_it() {
     );
 }
 
-#[test]
-fn a_linked_authority_joins_the_work_in_its_role() {
-    use elzevir_app::catalog::{AuthorityRole, CatalogRefusal, WorkAuthority};
-    use elzevir_app::commands::WriteRefusal;
-    use elzevir_domain::catalog::{AgentKind, SubjectKind, WorkId};
-    use elzevir_store::CommandFailed;
-
-    let (_dir, store) = imported();
-    let store = Arc::new(store);
-    let index = Arc::new(TantivyIndex::in_memory(Parallelism::Serial).unwrap());
-    index_pending(&*store, &*store, &*index, &options()).unwrap();
-    let app = app(&store, &index);
+/// The Instance of the statistical yearbook and its Work.
+fn yearbook(
+    store: &ElzevirStore,
+    index: &TantivyIndex,
+) -> (elzevir_domain::catalog::InstanceId, i64) {
     let instance = index
         .search("anuario estatistico", SearchScope::Staff, 0, 1)
         .unwrap()
-        .hits[0]
+        .hits
+        .first()
+        .unwrap()
         .instance;
-    let work: i64 = store
+    let work = store
         .readers()
         .read(|c| {
             c.query_row(
@@ -381,18 +376,44 @@ fn a_linked_authority_joins_the_work_in_its_role() {
             )
         })
         .unwrap();
+    (instance, work)
+}
+
+/// Links `role` to `work` through the writer.
+fn link(
+    store: &ElzevirStore,
+    work: i64,
+    role: elzevir_app::catalog::AuthorityRole,
+) -> Result<
+    elzevir_app::commands::WriteOutput,
+    elzevir_store::CommandFailed<elzevir_app::commands::WriteRefusal>,
+> {
+    store
+        .submit(WriteCommand::Catalog(CatalogCommand::LinkAuthority(
+            Box::new(elzevir_app::catalog::WorkAuthority {
+                work: elzevir_domain::catalog::WorkId(work),
+                role,
+            }),
+        )))
+        .unwrap()
+        .wait()
+}
+
+#[test]
+fn a_linked_authority_joins_the_work_in_its_role() {
+    use elzevir_app::catalog::{AuthorityRole, CatalogRefusal};
+    use elzevir_app::commands::WriteRefusal;
+    use elzevir_domain::catalog::{AgentKind, SubjectKind};
+    use elzevir_store::CommandFailed;
+
+    let (_dir, store) = imported();
+    let store = Arc::new(store);
+    let index = Arc::new(TantivyIndex::in_memory(Parallelism::Serial).unwrap());
+    index_pending(&*store, &*store, &*index, &options()).unwrap();
+    let app = app(&store, &index);
+    let (instance, work) = yearbook(&store, &index);
     let before = store.instance(instance).unwrap().unwrap().version;
-    let link = |work: i64, role: AuthorityRole| {
-        store
-            .submit(WriteCommand::Catalog(CatalogCommand::LinkAuthority(
-                Box::new(WorkAuthority {
-                    work: WorkId(work),
-                    role,
-                }),
-            )))
-            .unwrap()
-            .wait()
-    };
+    let link = |work, role| link(&store, work, role);
     let illustrator = || AuthorityRole::Contribution {
         kind: AgentKind::Person,
         heading: "Portinari, Candido".to_owned(),
@@ -452,6 +473,49 @@ fn a_linked_authority_joins_the_work_in_its_role() {
     };
     assert!(field("700", "Portinari, Candido"));
     assert!(field("650", "Estatistica municipal"));
+}
+
+#[test]
+fn a_place_of_publication_goes_to_one_instance_of_the_work() {
+    use elzevir_app::catalog::{AuthorityRole, CatalogRefusal};
+    use elzevir_app::commands::WriteRefusal;
+    use elzevir_store::CommandFailed;
+
+    let (_dir, store) = imported();
+    let index = TantivyIndex::in_memory(Parallelism::Serial).unwrap();
+    index_pending(&store, &store, &index, &options()).unwrap();
+    let (instance, work) = yearbook(&store, &index);
+    let link = |work, role| link(&store, work, role);
+
+    let place = |instance| AuthorityRole::PublicationPlace {
+        instance,
+        heading: "Foz do Iguaçu, PR".to_owned(),
+    };
+    let before = store.instance(instance).unwrap().unwrap().version;
+    link(work, place(instance)).unwrap();
+    assert!(store.instance(instance).unwrap().unwrap().version > before);
+    assert!(matches!(
+        link(work, place(instance)),
+        Err(CommandFailed::Rejected(WriteRefusal::Catalog(
+            CatalogRefusal::AlreadyLinked(_)
+        )))
+    ));
+    assert!(matches!(
+        link(work + 1, place(instance)),
+        Err(CommandFailed::Rejected(WriteRefusal::Catalog(
+            CatalogRefusal::UnknownInstance(_)
+        )))
+    ));
+    // The OPAC page does not show the place yet; the MARC export writes it.
+    let bytes = export_record(&store, instance, RecordFormat::Marc21, &Limits::default())
+        .unwrap()
+        .unwrap();
+    let mut reader = MarcReader::new(bytes.as_slice(), Limits::default());
+    let exported = reader.next_record().unwrap().unwrap();
+    assert!(exported.fields().any(|field| {
+        ["260", "264"].contains(&field.tag().to_string().as_str())
+            && String::from_utf8_lossy(field.raw()).contains("Foz do Iguaçu, PR")
+    }));
 }
 
 #[test]
@@ -540,4 +604,46 @@ fn a_renamed_subject_changes_every_record_that_has_it() {
         field.tag().to_string() == "650"
             && String::from_utf8_lossy(field.raw()).contains("Assunto renomeado no Elzevir")
     }));
+}
+
+#[test]
+fn an_authority_lists_its_identifiers_elsewhere_once() {
+    use elzevir_app::authorities::AuthorityReader;
+    use elzevir_domain::catalog::{AgentId, SubjectId};
+
+    let (_dir, store) = imported();
+    let (agent, value): (i64, String) = store
+        .readers()
+        .read(|c| {
+            c.query_row(
+                "SELECT c.agent_id, i.value FROM contribution_identifiers i
+                 JOIN contributions c ON c.work_id = i.work_id AND c.position = i.contribution
+                 ORDER BY c.agent_id LIMIT 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+        })
+        .unwrap();
+    let view = store.agent(AgentId(agent)).unwrap().unwrap();
+    assert_eq!(
+        view.identifiers
+            .iter()
+            .filter(|link| link.value == value)
+            .count(),
+        1
+    );
+    let (subject, value): (i64, String) = store
+        .readers()
+        .read(|c| {
+            c.query_row(
+                "SELECT w.subject_id, i.value FROM subject_identifiers i
+                 JOIN work_subjects w ON w.work_id = i.work_id AND w.position = i.subject
+                 ORDER BY w.subject_id LIMIT 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+        })
+        .unwrap();
+    let view = store.subject(SubjectId(subject)).unwrap().unwrap();
+    assert!(view.identifiers.iter().any(|link| link.value == value));
 }
