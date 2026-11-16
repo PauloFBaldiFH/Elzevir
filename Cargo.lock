@@ -624,6 +624,7 @@ dependencies = [
  "serde",
  "stats_alloc",
  "tempfile",
+ "thiserror",
  "tokio",
  "toml",
  "tower",
