@@ -2,15 +2,7 @@
 //! Turtle (W3C RDF 1.1 Turtle) of a graph (bibframe-completo.md, item 28a): one block per
 //! named resource, its blank nodes nested in `[ ]`.
 
-use super::{BF, MADSRDF, Node, Object, RDF, RDFS};
-
-/// The prefixes every document declares, in order.
-const PREFIXES: [(&str, &str); 4] = [
-    ("bf", BF),
-    ("rdf", RDF),
-    ("rdfs", RDFS),
-    ("madsrdf", MADSRDF),
-];
+use super::{Node, Object, PREFIXES, blocks};
 
 const INDENT: &str = "    ";
 
@@ -25,22 +17,17 @@ pub fn write_turtle(nodes: &[Node]) -> String {
             out.push_str(part);
         }
     }
-    let mut queue: Vec<&Node> = nodes.iter().collect();
-    let mut next = 0;
-    while let Some(node) = queue.get(next).copied() {
-        next += 1;
+    for node in blocks(nodes) {
         out.push('\n');
-        let mut named = Vec::new();
         out.push_str(&node.iri.as_deref().map_or_else(|| "[]".to_owned(), term));
-        body(node, 1, &mut out, &mut named);
+        body(node, 1, &mut out);
         out.push_str(" .\n");
-        queue.extend(named);
     }
     out
 }
 
 /// The types and properties of `node`, each on its own line at `depth`.
-fn body<'a>(node: &'a Node, depth: usize, out: &mut String, named: &mut Vec<&'a Node>) {
+fn body(node: &Node, depth: usize, out: &mut String) {
     let indent = INDENT.repeat(depth);
     let mut first = true;
     let mut separator = |out: &mut String| {
@@ -68,16 +55,13 @@ fn body<'a>(node: &'a Node, depth: usize, out: &mut String, named: &mut Vec<&'a 
                 }
             }
             Object::Node(inner) => match &inner.iri {
-                Some(iri) => {
-                    out.push_str(&term(iri));
-                    named.push(inner);
-                }
+                Some(iri) => out.push_str(&term(iri)),
                 None if inner.types.is_empty() && inner.properties.is_empty() => {
                     out.push_str("[]");
                 }
                 None => {
                     out.push('[');
-                    body(inner, depth + 1, out, named);
+                    body(inner, depth + 1, out);
                     out.push('\n');
                     out.push_str(&indent);
                     out.push(']');
@@ -158,7 +142,7 @@ fn quoted(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rdf::literal;
+    use crate::rdf::{BF, literal};
 
     #[test]
     fn literals_and_iris_are_escaped() {

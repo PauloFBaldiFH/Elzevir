@@ -49,6 +49,10 @@ enum Command {
         /// Send cookies without `Secure`, for plain-HTTP development only.
         #[arg(long)]
         insecure_cookies: bool,
+        /// Where the IRIs of the BIBFRAME export start, such as
+        /// `https://biblioteca.example/bibframe`; the requested host's `/bibframe` when absent.
+        #[arg(long)]
+        iri_base: Option<String>,
     },
     /// Manages staff accounts.
     #[command(subcommand)]
@@ -89,7 +93,8 @@ fn main() -> ExitCode {
             data_dir,
             listen,
             insecure_cookies,
-        } => serve(&data_dir, listen, insecure_cookies),
+            iri_base,
+        } => serve(&data_dir, listen, insecure_cookies, iri_base),
         Command::Staff(StaffAction::Add {
             data_dir,
             login,
@@ -188,7 +193,12 @@ fn spawn_indexer(
         .map_err(|e| format!("cannot start the indexer: {e}"))
 }
 
-fn serve(data_dir: &Path, listen: SocketAddr, insecure_cookies: bool) -> Result<(), String> {
+fn serve(
+    data_dir: &Path,
+    listen: SocketAddr,
+    insecure_cookies: bool,
+    iri_base: Option<String>,
+) -> Result<(), String> {
     let DataDir { store, _lock } = open_store(data_dir)?;
     let store = Arc::new(store);
     let (index, parallelism) = open_index(data_dir)?;
@@ -197,6 +207,7 @@ fn serve(data_dir: &Path, listen: SocketAddr, insecure_cookies: bool) -> Result<
     let i18n = I18n::english().map_err(|e| e.to_string())?;
     let config = WebConfig {
         secure_cookies: !insecure_cookies,
+        iri_base,
         ..WebConfig::default()
     };
     let opac = OpacPorts {

@@ -9,23 +9,35 @@ use elzevir_domain::catalog::{
 };
 use elzevir_domain::statement::{Description, EntityKind, EntityRef, Statement, Value};
 
+use super::items::{HeldItem, item_node};
 use super::{BF, IriBase, MADSRDF, Node, Object};
 use crate::catalog::{AuthorityLink, NewContribution, NewInstance, NewRecord, NewSubject};
 use crate::export::StoredRecord;
 
-/// The Work and the Instance of `stored`, in that order. The Items come with their own
-/// reader (item 28b).
+/// The Work, the Instance and the Items of `stored`, in that order. The Items are `items`,
+/// read by name (item 28b), not the edge-coded ones of `stored`.
 #[must_use]
-pub fn record_graph(stored: &StoredRecord, base: &IriBase) -> Vec<Node> {
+pub fn record_graph(stored: &StoredRecord, items: &[HeldItem], base: &IriBase) -> Vec<Node> {
     let work_iri = base.entity(entity(EntityKind::Work, stored.work.0));
     let instance_iri = base.entity(entity(EntityKind::Instance, stored.instance.0));
     let mut work = work_node(&stored.record, base);
     work.iri = Some(work_iri.clone());
     work.add("hasInstance", Object::Iri(instance_iri.clone()));
     let mut instance = instance_node(&stored.record.instance, base);
-    instance.iri = Some(instance_iri);
     instance.add("instanceOf", Object::Iri(work_iri));
-    vec![work, instance]
+    let items = items
+        .iter()
+        .map(|item| item_node(item, &instance_iri, base))
+        .collect::<Vec<_>>();
+    for item in &items {
+        if let Some(iri) = &item.iri {
+            instance.add("hasItem", Object::Iri(iri.clone()));
+        }
+    }
+    instance.iri = Some(instance_iri);
+    let mut nodes = vec![work, instance];
+    nodes.extend(items);
+    nodes
 }
 
 const fn entity(entity: EntityKind, id: i64) -> EntityRef {
@@ -243,7 +255,7 @@ fn concept(scheme: &str, code: &str) -> Object {
 }
 
 /// The stored statements of a resource, after what its columns gave.
-fn statements(node: &mut Node, statements: &[Statement], base: &IriBase) {
+pub(super) fn statements(node: &mut Node, statements: &[Statement], base: &IriBase) {
     for statement in statements {
         let object = value_object(&statement.value, base);
         node.add(&statement.property, object);
@@ -315,9 +327,10 @@ const fn relation_property(kind: WorkRelationKind) -> &'static str {
     }
 }
 
-/// Checks that every class and property a graph names is the ontology's.
-#[cfg(test)]
-pub(super) fn foreign_terms(nodes: &[Node]) -> Vec<String> {
+/// The `bf:` classes and properties of `nodes` that the ontology does not have, in the
+/// order met; empty when the graph uses only the ontology's terms.
+#[must_use]
+pub fn foreign_terms(nodes: &[Node]) -> Vec<String> {
     fn walk(node: &Node, found: &mut Vec<String>) {
         let local = |iri: &str| iri.strip_prefix(BF).map(str::to_owned);
         for class in node.types.iter().filter_map(|iri| local(iri)) {
@@ -345,11 +358,11 @@ pub(super) fn foreign_terms(nodes: &[Node]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use elzevir_domain::catalog::{HubId, InstanceId, WorkId};
+    use elzevir_domain::catalog::{BranchId, HubId, InstanceId, ItemId, WorkId};
     use elzevir_domain::statement::Resource;
 
     use super::*;
-    use crate::catalog::{NewIdentifier, NewNote, NewWorkRelation};
+    use crate::catalog::{ItemStatus, NewIdentifier, NewNote, NewWorkRelation};
     use crate::description::printed_book;
     use crate::rdf::write_turtle;
 
@@ -387,6 +400,41 @@ mod tests {
                 identifiers: vec![link(AuthorityLinkKind::AuthorityRecord, "(BR)123")],
             },
         ]
+    }
+
+    fn items() -> Vec<HeldItem> {
+        let shelved = HeldItem {
+            id: ItemId(11),
+            barcode: Some("000123".to_owned()),
+            inventory_number: Some("T1".to_owned()),
+            branch: BranchId(1),
+            branch_name: "Biblioteca Central".to_owned(),
+            policy: "Empréstimo normal".to_owned(),
+            call_number: Some("869.3 A848d".to_owned()),
+            sublocation: Some("Estantes gerais".to_owned()),
+            collection: Some("Literatura".to_owned()),
+            copy_number: Some("ex. 1".to_owned()),
+            acquired_on: Some("2020-03-01".to_owned()),
+            status: ItemStatus::default(),
+            description: Description::default(),
+        };
+        let lost = HeldItem {
+            id: ItemId(12),
+            barcode: None,
+            inventory_number: None,
+            call_number: None,
+            sublocation: None,
+            collection: None,
+            copy_number: None,
+            acquired_on: None,
+            status: ItemStatus {
+                lost: 1,
+                restricted: 2,
+                ..ItemStatus::default()
+            },
+            ..shelved.clone()
+        };
+        vec![shelved, lost]
     }
 
     fn record() -> StoredRecord {
@@ -468,13 +516,31 @@ mod tests {
 
     #[test]
     fn a_record_uses_only_the_ontology_s_classes_and_properties() {
-        let graph = record_graph(&record(), &IriBase::new("https://biblioteca.example/bf/"));
+        let graph = record_graph(
+            &record(),
+            &items(),
+            &IriBase::new("https://biblioteca.example/bf/"),
+        );
         assert_eq!(foreign_terms(&graph), Vec::<String>::new());
     }
 
     #[test]
     fn a_record_is_written_as_turtle() {
-        let graph = record_graph(&record(), &IriBase::new("https://biblioteca.example/bf/"));
+        let graph = record_graph(
+            &record(),
+            &items(),
+            &IriBase::new("https://biblioteca.example/bf/"),
+        );
         insta::assert_snapshot!(write_turtle(&graph));
+    }
+
+    #[test]
+    fn a_record_is_written_as_rdf_xml() {
+        let graph = record_graph(
+            &record(),
+            &items(),
+            &IriBase::new("https://biblioteca.example/bf/"),
+        );
+        insta::assert_snapshot!(crate::rdf::write_rdf_xml(&graph));
     }
 }

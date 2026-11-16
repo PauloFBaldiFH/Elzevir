@@ -40,12 +40,15 @@ pub use opac::OpacPorts;
 pub use session::Sessions;
 
 /// Web settings.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WebConfig {
     /// Mark cookies `Secure`. Off only for plain-HTTP development and tests.
     pub secure_cookies: bool,
     /// How long a staff session lasts without use.
     pub session_idle: Duration,
+    /// Where the IRIs of the BIBFRAME export start; the requested host's `/bibframe` when
+    /// `None` (bibframe-completo.md, item 28b).
+    pub iri_base: Option<String>,
 }
 
 impl Default for WebConfig {
@@ -53,6 +56,7 @@ impl Default for WebConfig {
         Self {
             secure_cookies: true,
             session_idle: Duration::from_hours(8),
+            iri_base: None,
         }
     }
 }
@@ -115,6 +119,10 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/equipe/acervo/instancia/{id}/marc",
             get(catalog::export_marc),
+        )
+        .route(
+            "/equipe/acervo/instancia/{id}/bibframe",
+            get(catalog::export_bibframe),
         )
         .route(
             "/equipe/acervo/sugestoes/agentes",

@@ -107,9 +107,71 @@ expression: write_turtle(&graph)
         bf:noteType "local"
     ] ;
     bf:dimensions "21 cm" ;
-    bf:instanceOf <https://biblioteca.example/bf/works/3> .
+    bf:instanceOf <https://biblioteca.example/bf/works/3> ;
+    bf:hasItem <https://biblioteca.example/bf/items/11> ;
+    bf:hasItem <https://biblioteca.example/bf/items/12> .
+
+<https://biblioteca.example/bf/items/11>
+    a bf:Item ;
+    bf:itemOf <https://biblioteca.example/bf/instances/7> ;
+    bf:identifiedBy [
+        a bf:Barcode ;
+        rdf:value "000123"
+    ] ;
+    bf:identifiedBy [
+        a bf:Local ;
+        rdf:value "T1"
+    ] ;
+    bf:shelfMark [
+        a bf:ShelfMark ;
+        rdfs:label "869.3 A848d"
+    ] ;
+    bf:heldBy <https://biblioteca.example/bf/organizations/1> ;
+    bf:sublocation [
+        a bf:Sublocation ;
+        rdfs:label "Estantes gerais"
+    ] ;
+    bf:sublocation [
+        a bf:Sublocation ;
+        rdfs:label "Literatura"
+    ] ;
+    bf:enumerationAndChronology [
+        a bf:Enumeration ;
+        rdfs:label "ex. 1"
+    ] ;
+    bf:immediateAcquisition [
+        a bf:ImmediateAcquisition ;
+        bf:date "2020-03-01"
+    ] ;
+    bf:usageAndAccessPolicy [
+        a bf:UsePolicy ;
+        rdfs:label "Empréstimo normal"
+    ] .
+
+<https://biblioteca.example/bf/items/12>
+    a bf:Item ;
+    bf:itemOf <https://biblioteca.example/bf/instances/7> ;
+    bf:heldBy <https://biblioteca.example/bf/organizations/1> ;
+    bf:usageAndAccessPolicy [
+        a bf:UsePolicy ;
+        rdfs:label "Empréstimo normal"
+    ] ;
+    bf:usageAndAccessPolicy [
+        a bf:AccessPolicy ;
+        rdfs:label "restricted" ;
+        bf:code "2"
+    ] ;
+    bf:status [
+        a bf:Status ;
+        rdfs:label "lost" ;
+        bf:code "1"
+    ] .
 
 <http://viaf.org/viaf/2467372>
     a bf:Person ;
     rdfs:label "Assis, Machado de, 1839-1908" ;
     madsrdf:isIdentifiedByAuthority <http://id.loc.gov/authorities/names/n79029745> .
+
+<https://biblioteca.example/bf/organizations/1>
+    a bf:Organization ;
+    rdfs:label "Biblioteca Central" .

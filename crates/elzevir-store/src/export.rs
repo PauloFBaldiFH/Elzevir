@@ -8,9 +8,10 @@ use elzevir_app::catalog::{
     NewNote, NewRecord, NewSubject, NewWorkRelation,
 };
 use elzevir_app::export::{RecordSource, StoredRecord};
+use elzevir_app::rdf::HeldItem;
 use elzevir_domain::catalog::{
-    AgentKind, AuthorityLinkKind, HubId, IdentifierKind, InstanceId, Money, NoteKind, SubjectKind,
-    WorkId,
+    AgentKind, AuthorityLinkKind, BranchId, HubId, IdentifierKind, InstanceId, ItemId, Money,
+    NoteKind, SubjectKind, WorkId,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
@@ -19,7 +20,7 @@ use crate::catalog::{
     ReadFailure, name_parts_of_column, status_at, subdivisions_of_column, work_relations,
 };
 use crate::statements::read_description;
-use elzevir_domain::statement::{EntityKind, EntityRef};
+use elzevir_domain::statement::{Description, EntityKind, EntityRef};
 
 impl RecordSource for ElzevirStore {
     fn records_after(
@@ -31,6 +32,53 @@ impl RecordSource for ElzevirStore {
             .read(|c| records_after(c, after, limit))
             .map_err(|e| CatalogReadError(e.to_string()))
     }
+
+    fn held_items(&self, instance: InstanceId) -> Result<Vec<HeldItem>, CatalogReadError> {
+        self.readers()
+            .read(|c| held_items(c, instance.0))
+            .map_err(|e| CatalogReadError(e.to_string()))
+    }
+}
+
+/// The Items of an Instance by the names of the registries, for the RDF export
+/// (bibframe-completo.md, item 28b).
+fn held_items(c: &Connection, instance: i64) -> Result<Vec<HeldItem>, ReadFailure> {
+    let mut statement = c.prepare_cached(
+        "SELECT items.id, barcode, inventory_number, home.id, home.name, policy.name,
+                call_number, location.name, collection.name, copy_number, acquired_on,
+                not_for_loan, damaged, lost, withdrawn, restricted
+         FROM items
+         JOIN branches AS home ON home.id = items.home_branch
+         JOIN circulation_policies AS policy ON policy.id = items.policy_id
+         LEFT JOIN sublocations AS location ON location.id = items.sublocation_id
+         LEFT JOIN collections AS collection ON collection.id = items.collection_id
+         WHERE instance_id = ?1 ORDER BY items.id",
+    )?;
+    let rows = statement
+        .query_map(params![instance], |row| {
+            Ok(HeldItem {
+                id: ItemId(row.get(0)?),
+                barcode: row.get(1)?,
+                inventory_number: row.get(2)?,
+                branch: BranchId(row.get(3)?),
+                branch_name: row.get(4)?,
+                policy: row.get(5)?,
+                call_number: row.get(6)?,
+                sublocation: row.get(7)?,
+                collection: row.get(8)?,
+                copy_number: row.get(9)?,
+                acquired_on: row.get(10)?,
+                status: status_at(row, 11)?,
+                description: Description::default(),
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    rows.into_iter()
+        .map(|mut item| {
+            item.description = read_description(c, subject(EntityKind::Item, item.id.0))?;
+            Ok(item)
+        })
+        .collect()
 }
 
 /// The columns of one Instance and its Work.
