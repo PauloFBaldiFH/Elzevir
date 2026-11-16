@@ -114,10 +114,20 @@ struct Request<H: CommandHandler> {
 /// Owns the queue sender and the writer thread.
 pub(crate) struct WriterHandle<H: CommandHandler> {
     queue: Option<SyncSender<Request<H>>>,
-    thread: Option<JoinHandle<()>>,
+    thread: Option<JoinHandle<Result<(), StoreError>>>,
 }
 
 impl<H: CommandHandler> WriterHandle<H> {
+    pub(crate) fn shutdown(&mut self) -> Result<(), StoreError> {
+        self.queue = None;
+        match self.thread.take() {
+            Some(thread) => thread
+                .join()
+                .map_err(|_| StoreError::Thread("writer panicked during shutdown".to_owned()))?,
+            None => Ok(()),
+        }
+    }
+
     pub(crate) fn start(
         connection: Connection,
         config: &StoreConfig,
@@ -171,17 +181,8 @@ impl<H: CommandHandler> WriterHandle<H> {
 
 impl<H: CommandHandler> Drop for WriterHandle<H> {
     fn drop(&mut self) {
-        // Closing the queue ends the writer loop after it drains what is already queued.
-        self.queue = None;
-        if let Some(thread) = self.thread.take() {
-            // A writer that panicked has already lost its in-flight batch (rolled back by
-            // SQLite); there is nothing left to recover here.
-            #[expect(
-                clippy::let_underscore_must_use,
-                reason = "join result only says whether the writer panicked; see comment"
-            )]
-            let _ = thread.join();
-        }
+        // Destructors cannot return maintenance errors. Explicit Store::shutdown does.
+        drop(self.shutdown());
     }
 }
 
@@ -192,7 +193,7 @@ fn run<H: CommandHandler>(
     mut handler: H,
     requests: &Receiver<Request<H>>,
     max_batch: usize,
-) {
+) -> Result<(), StoreError> {
     while let Ok(first) = requests.recv() {
         let mut batch = Vec::with_capacity(max_batch);
         batch.push(first);
@@ -204,13 +205,15 @@ fn run<H: CommandHandler>(
         }
         commit_batch(&mut connection, &mut handler, batch);
     }
-    // Best effort: the database is consistent without these; they only shrink the WAL and
-    // refresh planner statistics before the file is closed.
-    #[expect(
-        clippy::let_underscore_must_use,
-        reason = "optional maintenance on close; see comment"
-    )]
-    let _ = connection.execute_batch("PRAGMA optimize; PRAGMA wal_checkpoint(TRUNCATE);");
+    connection.execute_batch("PRAGMA optimize;")?;
+    let busy = connection.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| {
+        row.get::<_, i32>(0)
+    })?;
+    if busy == 0 {
+        Ok(())
+    } else {
+        Err(StoreError::CheckpointBusy)
+    }
 }
 
 fn commit_batch<H: CommandHandler>(

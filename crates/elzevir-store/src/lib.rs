@@ -57,6 +57,19 @@ pub struct Store<H: CommandHandler> {
 }
 
 impl<H: CommandHandler> Store<H> {
+    /// Drains queued commands, closes readers and checkpoints on the writer thread.
+    ///
+    /// # Errors
+    /// Reports a writer panic, SQLite maintenance error or busy checkpoint.
+    pub fn shutdown(self) -> Result<(), StoreError> {
+        let Self {
+            mut writer,
+            readers,
+        } = self;
+        drop(readers);
+        writer.shutdown()
+    }
+
     /// Opens (creating if needed) the database at `path`, applies pending migrations and
     /// starts the writer thread with `handler`.
     ///
