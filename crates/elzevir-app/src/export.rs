@@ -14,6 +14,7 @@ use elzevir_marc::{Limits, MarcReader, Record, RecordRef};
 
 use crate::catalog::{CatalogReadError, NewRecord};
 use crate::marc_mapping::{bibframe_to_marc, marc_to_bibframe};
+use crate::rdf::HeldItem;
 
 /// One stored record, as the model holds it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,6 +40,14 @@ pub trait RecordSource {
         after: Option<InstanceId>,
         limit: NonZeroUsize,
     ) -> Result<Vec<StoredRecord>, CatalogReadError>;
+
+    /// The Items of `instance` as the RDF export describes them, by the names of the
+    /// registries (bibframe-completo.md, item 28b), in Item order.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails or holds a value this build does not understand.
+    fn held_items(&self, instance: InstanceId) -> Result<Vec<HeldItem>, CatalogReadError>;
 }
 
 /// Settings of one export.

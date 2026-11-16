@@ -192,6 +192,13 @@ impl elzevir_app::export::RecordSource for Records {
             .cloned()
             .collect())
     }
+
+    fn held_items(
+        &self,
+        _instance: InstanceId,
+    ) -> Result<Vec<elzevir_app::rdf::HeldItem>, CatalogReadError> {
+        Ok(Vec::new())
+    }
 }
 
 /// Records edits from the screen. An edit read at version 1 is accepted and moves to 2;

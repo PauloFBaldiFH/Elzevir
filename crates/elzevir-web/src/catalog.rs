@@ -18,6 +18,7 @@ use elzevir_app::listing::{
     self, CatalogListing, FamilyCursor, FamilyHead, FamilyRow, InstanceRow, ItemPill, Match, Scan,
     WorkRow,
 };
+use elzevir_app::rdf::{IriBase, RdfFormat, export_rdf};
 use elzevir_app::staff::Permission;
 use elzevir_app::suggestions::AuthoritySuggestions;
 use elzevir_domain::catalog::InstanceId;
@@ -258,6 +259,71 @@ pub(crate) async fn export_marc(
             (StatusCode::SERVICE_UNAVAILABLE, "catalog unavailable").into_response()
         }
     }
+}
+
+/// `GET /equipe/acervo/instancia/{id}/bibframe?format=turtle|rdfxml`: one record, its Work,
+/// Instance and Items, as BIBFRAME (bibframe-completo.md, item 28b).
+pub(crate) async fn export_bibframe(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+    Query(params): Query<ExportParams>,
+) -> Response {
+    if current_session(&state, &headers).is_none() {
+        return Redirect::to("/equipe/login").into_response();
+    }
+    let (format, content_type, extension) = match params.format.as_deref() {
+        None | Some("turtle") => (RdfFormat::Turtle, "text/turtle; charset=utf-8", "ttl"),
+        Some("rdfxml") => (
+            RdfFormat::RdfXml,
+            "application/rdf+xml; charset=utf-8",
+            "rdf",
+        ),
+        Some(_) => return (StatusCode::BAD_REQUEST, "unknown format").into_response(),
+    };
+    let Some(base) = iri_base(&state, &headers) else {
+        return (StatusCode::BAD_REQUEST, "no host to name the IRIs after").into_response();
+    };
+    let records = Arc::clone(&state.inner.staff_ports.records);
+    let written =
+        tokio::task::spawn_blocking(move || export_rdf(&*records, InstanceId(id), format, &base))
+            .await;
+    match written {
+        Ok(Ok(Some(text))) => (
+            [
+                (header::CONTENT_TYPE, content_type.to_owned()),
+                (
+                    header::CONTENT_DISPOSITION,
+                    format!("attachment; filename=\"elzevir-{id}.{extension}\""),
+                ),
+            ],
+            text,
+        )
+            .into_response(),
+        Ok(Ok(None)) => (StatusCode::NOT_FOUND, "no such record").into_response(),
+        Ok(Err(_)) | Err(_) => {
+            (StatusCode::SERVICE_UNAVAILABLE, "catalog unavailable").into_response()
+        }
+    }
+}
+
+/// The configured base of the BIBFRAME IRIs, else the requested host's `/bibframe`. A host
+/// with characters no host name has is refused, so it never reaches an IRI.
+fn iri_base(state: &AppState, headers: &HeaderMap) -> Option<IriBase> {
+    if let Some(base) = &state.inner.config.iri_base {
+        return Some(IriBase::new(base));
+    }
+    let host = headers.get(header::HOST)?.to_str().ok()?;
+    let valid = !host.is_empty()
+        && host
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || ".-:[]".contains(c));
+    let scheme = if state.inner.config.secure_cookies {
+        "https"
+    } else {
+        "http"
+    };
+    valid.then(|| IriBase::new(&format!("{scheme}://{host}/bibframe")))
 }
 
 fn family_line(row: &FamilyRow, codes: &CodeLists) -> FamilyLine {

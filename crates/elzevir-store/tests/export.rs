@@ -205,3 +205,49 @@ fn one_record_exports_as_the_batch_does_in_marc21_and_marcxml() {
         .is_none()
     );
 }
+
+#[test]
+fn every_imported_record_exports_as_bibframe_with_the_ontology_s_terms() {
+    use elzevir_app::export::{RecordSource, stored_record};
+    use elzevir_app::rdf::{IriBase, RdfFormat, export_rdf, foreign_terms, record_graph};
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = imported(&dir);
+    let base = IriBase::new("https://biblioteca.example/bibframe");
+    let ids: Vec<i64> = store
+        .readers()
+        .read(|c| {
+            let mut statement = c.prepare("SELECT id FROM instances ORDER BY id")?;
+            statement
+                .query_map([], |row| row.get(0))?
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .unwrap();
+    assert_eq!(ids.len(), 200);
+    let mut items = 0;
+    for id in ids {
+        let instance = InstanceId(id);
+        let stored = stored_record(&store, instance).unwrap().unwrap();
+        let held = store.held_items(instance).unwrap();
+        // The Items are read by the names of the registries, one for each stored Item.
+        assert_eq!(held.len(), stored.record.items.len());
+        items += held.len();
+        let graph = record_graph(&stored, &held, &base);
+        assert_eq!(foreign_terms(&graph), Vec::<String>::new(), "record {id}");
+        for format in [RdfFormat::Turtle, RdfFormat::RdfXml] {
+            let text = export_rdf(&store, instance, format, &base)
+                .unwrap()
+                .unwrap();
+            assert!(text.contains(&format!(
+                "{}/instances/{id}",
+                "https://biblioteca.example/bibframe"
+            )));
+        }
+    }
+    assert!(items > 0);
+    assert!(
+        export_rdf(&store, InstanceId(i64::MAX), RdfFormat::Turtle, &base)
+            .unwrap()
+            .is_none()
+    );
+}

@@ -470,6 +470,68 @@ async fn one_record_is_exported_as_marc21_or_marcxml() {
 }
 
 #[tokio::test]
+async fn one_record_is_exported_as_bibframe_turtle_or_rdf_xml() {
+    let app = app();
+    let refused = send(
+        &app,
+        get("/equipe/acervo/instancia/10/bibframe", None, None),
+    )
+    .await;
+    assert_eq!(refused.status(), StatusCode::SEE_OTHER);
+
+    let session = signed_in(&app).await;
+    let page = body(send(&app, get("/equipe/acervo", Some(&session), None)).await).await;
+    assert!(page.contains(r#"href="/equipe/acervo/instancia/10/bibframe?format=rdfxml""#));
+
+    // Without a configured base, the IRIs are named after the requested host.
+    let mut request = get("/equipe/acervo/instancia/10/bibframe", Some(&session), None);
+    request
+        .headers_mut()
+        .insert(header::HOST, "biblioteca.example".parse().unwrap());
+    let turtle = send(&app, request).await;
+    assert_eq!(turtle.status(), StatusCode::OK);
+    assert_eq!(
+        turtle.headers()[header::CONTENT_TYPE],
+        "text/turtle; charset=utf-8"
+    );
+    assert_eq!(
+        turtle.headers()[header::CONTENT_DISPOSITION],
+        r#"attachment; filename="elzevir-10.ttl""#
+    );
+    let turtle = body(turtle).await;
+    assert!(turtle.contains("<http://biblioteca.example/bibframe/instances/10>"));
+    assert!(turtle.contains(r#"bf:mainTitle "Dom Casmurro""#));
+
+    let mut request = get(
+        "/equipe/acervo/instancia/10/bibframe?format=rdfxml",
+        Some(&session),
+        None,
+    );
+    request
+        .headers_mut()
+        .insert(header::HOST, "biblioteca.example".parse().unwrap());
+    let xml = body(send(&app, request).await).await;
+    assert!(xml.starts_with("<?xml"));
+    assert!(
+        xml.contains(
+            r#"<bf:Instance rdf:about="http://biblioteca.example/bibframe/instances/10">"#
+        )
+    );
+
+    let mut request = get("/equipe/acervo/instancia/10/bibframe", Some(&session), None);
+    request
+        .headers_mut()
+        .insert(header::HOST, "bad\"host".parse().unwrap());
+    assert_eq!(send(&app, request).await.status(), StatusCode::BAD_REQUEST);
+    let missing = send(
+        &app,
+        get("/equipe/acervo/instancia/20/bibframe", Some(&session), None),
+    )
+    .await;
+    assert_ne!(missing.status(), StatusCode::OK);
+}
+
+#[tokio::test]
 async fn a_focused_block_loads_every_filled_field() {
     let app = app();
     let refused = send(&app, get("/equipe/acervo/instancia/10/campos", None, None)).await;
