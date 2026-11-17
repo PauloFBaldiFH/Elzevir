@@ -21,6 +21,7 @@ axum.workspace = true
 clap.workspace = true
 getrandom.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 toml = { workspace = true, features = ["display"] }
 rpassword = "7.5"
 tempfile.workspace = true
@@ -33,7 +34,6 @@ stats_alloc = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "net", "signal", "macros", "sync"] }
 
 [dev-dependencies]
-serde_json.workspace = true
 http-body-util.workspace = true
 tower.workspace = true
 

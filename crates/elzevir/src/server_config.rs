@@ -97,6 +97,16 @@ pub(crate) enum ConfigError {
 }
 
 impl ServeArgs {
+    pub(crate) fn for_status(config: Option<PathBuf>, data_dir: Option<PathBuf>) -> Self {
+        Self {
+            config,
+            data_dir,
+            listen: None,
+            insecure_cookies: None,
+            iri_base: None,
+        }
+    }
+
     pub(crate) fn resolve(self) -> Result<Settings, ConfigError> {
         let file = match &self.config {
             Some(path) => load(path)?,

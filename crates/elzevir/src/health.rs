@@ -3,12 +3,12 @@
 
 use axum::{Json, extract::State, http::StatusCode};
 use elzevir_store::ElzevirStore;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 /// A component's last observed state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum Check {
     Starting,
@@ -17,7 +17,8 @@ pub(crate) enum Check {
 }
 
 /// Versioned, bounded health response; never includes paths or user data.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Report {
     pub(crate) schema: u8,
     pub(crate) instance: String,
@@ -54,6 +55,10 @@ impl Probe {
             indexer: Mutex::new(None),
             inspections: Arc::new(tokio::sync::Semaphore::new(4)),
         })
+    }
+
+    pub(crate) fn instance(&self) -> &str {
+        &self.instance
     }
 
     pub(crate) fn indexed(&self, success: bool) {

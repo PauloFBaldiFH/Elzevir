@@ -26,3 +26,14 @@ serviço serão entregues separadamente.
 sistema. Ela retorna JSON e HTTP 200 quando banco e indexador estão prontos;
 caso contrário, retorna 503. A rota não é exposta pelo endereço do catálogo.
 Veja o [contrato de saúde local](docs/specs/operacao/saude-local.md).
+
+## Consultar o estado
+
+```sh
+elzevir status --config elzevir.toml
+elzevir status --config elzevir.toml --json
+```
+
+A consulta informa `running`, `degraded`, `stopped` ou `unavailable`, sem abrir
+SQLite nem criar arquivos. Retorna código zero somente quando o servidor está
+pronto. Veja o [contrato do status local](docs/specs/operacao/status-local.md).
