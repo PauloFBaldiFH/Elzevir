@@ -128,6 +128,9 @@ fn fake_response(root: &Path, code: u16, body: &str, headers: &str) -> Output {
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
             if let Ok((mut stream, _)) = listener.accept() {
+                // On Windows an accepted socket inherits the listener's non-blocking
+                // mode, and the read below would fail with `WouldBlock`.
+                stream.set_nonblocking(false).unwrap();
                 stream
                     .set_read_timeout(Some(Duration::from_secs(2)))
                     .unwrap();
