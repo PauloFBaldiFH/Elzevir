@@ -60,6 +60,10 @@ pub(crate) struct Receipt {
     pub state: String,
     #[serde(default)]
     pub authorization_uri: Option<String>,
+    #[serde(default)]
+    pub created: i64,
+    #[serde(default)]
+    pub lease: bool,
 }
 
 #[derive(clap::Args)]
@@ -91,8 +95,77 @@ fn action(task: &Task) -> &'static str {
         Task::RecoverUpdate { .. } => "recover_update",
     }
 }
+fn history_lock(directory: &Path) -> Result<std::fs::File, String> {
+    let path = directory.join("host-history.lock");
+    if path.exists() {
+        archive::regular(&path)?;
+    }
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)
+        .map_err(|_| "host history lock unavailable")?;
+    file.lock().map_err(|_| "cannot serialize host history")?;
+    Ok(file)
+}
+fn job_lock(directory: &Path, id: &str) -> Result<std::fs::File, String> {
+    result_path(directory, id)?;
+    let path = directory.join("host-jobs").join(format!("{id}.lock"));
+    if path.exists() {
+        archive::regular(&path)?;
+    }
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)
+        .map_err(|_| "host job lease unavailable")?;
+    file.try_lock().map_err(|_| "host job already executing")?;
+    Ok(file)
+}
+fn active(directory: &Path, id: &str) -> Result<bool, String> {
+    let path = directory.join("host-jobs").join(format!("{id}.lock"));
+    if !path.exists() {
+        return Ok(false);
+    }
+    archive::regular(&path)?;
+    let file = std::fs::File::open(path).map_err(|_| "host job lease unavailable")?;
+    match fs4::fs_std::FileExt::try_lock_shared(&file) {
+        Ok(acquired) => Ok(!acquired),
+        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => Ok(true),
+        Err(_) => Err("host job lease observation unavailable".to_owned()),
+    }
+}
 fn save(directory: &Path, receipt: &Receipt) -> Result<(), String> {
     let path = result_path(directory, &receipt.id)?;
+    let _history = history_lock(directory)?;
+    let mut history = receipts_all(directory)?;
+    history.sort_by_key(|entry| (entry.created, entry.id.clone()));
+    let limit = if path.exists() { 256 } else { 255 };
+    let mut count = history.len();
+    for old in history
+        .iter()
+        .filter(|old| old.id != receipt.id && !matches!(old.state.as_str(), "queued" | "running"))
+    {
+        if count <= limit {
+            break;
+        }
+        if active(directory, &old.id)? {
+            continue;
+        }
+        std::fs::remove_file(result_path(directory, &old.id)?)
+            .map_err(|_| "cannot retain bounded host history")?;
+        let lease = directory.join("host-jobs").join(format!("{}.lock", old.id));
+        if lease.exists() && archive::regular(&lease)? == 0 {
+            std::fs::remove_file(lease).map_err(|_| "cannot remove ended host job lease")?;
+        }
+        count -= 1;
+    }
+    let remaining = receipts_all(directory)?.len();
+    if remaining > limit {
+        return Err("host history contains too many active operations".to_owned());
+    }
     let bytes = serde_json::to_vec(receipt).map_err(|_| "cannot encode host job receipt")?;
     let mut file =
         tempfile::NamedTempFile::new_in(path.parent().ok_or("host receipt needs parent")?)
@@ -135,6 +208,8 @@ pub(crate) fn launch(directory: &Path, task: Task) -> Result<String, String> {
         action: action(&ticket.task).to_owned(),
         state: "queued".to_owned(),
         authorization_uri: None,
+        created: jiff::Timestamp::now().as_second(),
+        lease: false,
     };
     save(directory, &receipt)?;
     let executable = std::env::current_exe().map_err(|_| "cannot locate host executable")?;
@@ -230,11 +305,14 @@ pub(crate) fn run(args: &Args) -> Result<(), String> {
     {
         return Err("cannot close host operation ticket".to_owned());
     }
+    let _job = job_lock(&ticket.directory, &ticket.id)?;
     let mut receipt = Receipt {
         id: ticket.id,
         action: action(&ticket.task).to_owned(),
         state: "running".to_owned(),
         authorization_uri: None,
+        created: jiff::Timestamp::now().as_second(),
+        lease: false,
     };
     let lock = std::fs::OpenOptions::new()
         .write(true)
@@ -247,6 +325,7 @@ pub(crate) fn run(args: &Args) -> Result<(), String> {
         save(&ticket.directory, &receipt)?;
         return Err("another host operation is running".to_owned());
     }
+    receipt.lease = true;
     save(&ticket.directory, &receipt)?;
     let shared = std::sync::Arc::new(std::sync::Mutex::new(receipt.clone()));
     let directory = ticket.directory.clone();
@@ -319,7 +398,7 @@ fn execute(
 ) -> Result<(), String> {
     match task {
         Task::Restore { input, key, config } => {
-            crate::backup_cli::restore(&input, &key, directory, config.as_deref())
+            crate::managed_restore::execute(directory, &input, &key, config.as_deref())
         }
         Task::Restart { name } => {
             crate::service::native_action("restart", &name)?;
@@ -330,7 +409,7 @@ fn execute(
         Task::Broker { setup } => crate::broker::execute(directory, &setup, progress.as_ref()),
         Task::TestTunnel => crate::tunnel_observe::test(directory),
         Task::CloudflareSetup { setup } => crate::cloudflare::configure(directory, &setup),
-        Task::InstallTool { tool } => crate::managed_tools::install(tool).map(drop),
+        Task::InstallTool { tool } => crate::managed_tool_update::execute(directory, tool),
         Task::RecoverUpdate { executable, config } => {
             crate::update_recovery::execute(directory, &executable, &config)
         }
@@ -368,7 +447,11 @@ pub(crate) fn wait_healthy(directory: &Path) -> Result<(), String> {
 fn reboot() -> Result<(), String> {
     use crate::process_runner::{Native, Request, Runner as _};
     #[cfg(target_os = "linux")]
-    let (program, args) = (PathBuf::from("/usr/bin/systemctl"), vec!["reboot".into()]);
+    let (program, args) = if crate::service::use_openrc() {
+        (PathBuf::from("/sbin/reboot"), vec![])
+    } else {
+        (PathBuf::from("/usr/bin/systemctl"), vec!["reboot".into()])
+    };
     #[cfg(windows)]
     let (program, args) = (
         PathBuf::from(
@@ -400,6 +483,13 @@ fn reboot() -> Result<(), String> {
 }
 
 pub(crate) fn receipts(directory: &Path) -> Result<Vec<Receipt>, String> {
+    let mut history = receipts_all(directory)?;
+    history.sort_by_key(|receipt| (receipt.created, receipt.id.clone()));
+    let skip = history.len().saturating_sub(256);
+    Ok(history.into_iter().skip(skip).collect())
+}
+
+fn receipts_all(directory: &Path) -> Result<Vec<Receipt>, String> {
     let path = directory.join("host-jobs");
     if !path.exists() {
         return Ok(Vec::new());
@@ -410,10 +500,10 @@ pub(crate) fn receipts(directory: &Path) -> Result<Vec<Receipt>, String> {
     }
     let mut entries = std::fs::read_dir(path)
         .map_err(|_| "host job history unavailable")?
-        .take(257)
+        .take(8193)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|_| "host job history unavailable")?;
-    if entries.len() > 256 {
+    if entries.len() > 8192 {
         return Err("host job history limit exceeded".to_owned());
     }
     entries.sort_by_key(std::fs::DirEntry::file_name);
@@ -423,7 +513,9 @@ pub(crate) fn receipts(directory: &Path) -> Result<Vec<Receipt>, String> {
         let Some(id) = name.to_str().and_then(|name| name.strip_suffix(".json")) else {
             continue;
         };
-        result_path(directory, id)?;
+        if result_path(directory, id).is_err() {
+            continue;
+        }
         if archive::regular(&entry.path())? > 4096 {
             return Err("host receipt exceeds limit".to_owned());
         }
@@ -434,12 +526,12 @@ pub(crate) fn receipts(directory: &Path) -> Result<Vec<Receipt>, String> {
         if source.len() > 4096 {
             return Err("host receipt exceeds limit".to_owned());
         }
-        let receipt: Receipt =
+        let mut receipt: Receipt =
             serde_json::from_slice(&source).map_err(|_| "invalid host receipt")?;
         if receipt.id != id
             || !matches!(
                 receipt.state.as_str(),
-                "queued" | "running" | "completed" | "failed" | "unsupported"
+                "queued" | "running" | "completed" | "failed" | "unsupported" | "interrupted"
             )
             || !matches!(
                 receipt.action.as_str(),
@@ -457,6 +549,21 @@ pub(crate) fn receipts(directory: &Path) -> Result<Vec<Receipt>, String> {
             )
         {
             return Err("invalid host receipt".to_owned());
+        }
+        if (receipt.state == "running" && receipt.lease && !active(directory, id)?)
+            || (receipt.state == "queued"
+                && receipt.created > 0
+                && jiff::Timestamp::now()
+                    .as_second()
+                    .saturating_sub(receipt.created)
+                    > 300
+                && !active(directory, id)?)
+        {
+            "interrupted".clone_into(&mut receipt.state);
+            receipt.authorization_uri = None;
+        }
+        if !matches!(receipt.state.as_str(), "queued" | "running") {
+            receipt.authorization_uri = None;
         }
         if receipt.authorization_uri.as_ref().is_some_and(|uri| {
             crate::cloudflare::authorization_url(uri.as_bytes())
@@ -489,7 +596,7 @@ pub(crate) fn wait(directory: &Path, id: &str) -> Result<(), String> {
         }
         match receipt.state.as_str() {
             "completed" => return Ok(()),
-            "failed" | "unsupported" => {
+            "failed" | "unsupported" | "interrupted" => {
                 return Err("host operation failed; inspect the recovery files".to_owned());
             }
             _ => std::thread::sleep(std::time::Duration::from_millis(200)),
@@ -513,6 +620,8 @@ mod tests {
                 action: "restore".to_owned(),
                 state: "completed".to_owned(),
                 authorization_uri: None,
+                created: jiff::Timestamp::now().as_second(),
+                lease: false,
             },
         )
         .unwrap();
@@ -538,5 +647,50 @@ mod tests {
         check_private_ticket(&path).unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
         assert!(check_private_ticket(&path).is_err());
+    }
+    #[test]
+    fn completed_receipts_are_retained_without_deleting_unknown_files() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join("host-jobs")).unwrap();
+        let unknown = root.path().join("host-jobs/operator.txt");
+        std::fs::write(&unknown, b"keep me").unwrap();
+        for id in 0..260 {
+            save(
+                root.path(),
+                &Receipt {
+                    id: format!("{id:032x}"),
+                    action: "restart".to_owned(),
+                    state: "completed".to_owned(),
+                    authorization_uri: None,
+                    created: i64::from(id),
+                    lease: false,
+                },
+            )
+            .unwrap();
+        }
+        assert_eq!(receipts(root.path()).unwrap().len(), 256);
+        assert_eq!(std::fs::read(unknown).unwrap(), b"keep me");
+    }
+    #[test]
+    fn a_running_receipt_is_interrupted_only_after_its_job_lock_is_released() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join("host-jobs")).unwrap();
+        let id = "e".repeat(32);
+        let lock = job_lock(root.path(), &id).unwrap();
+        save(
+            root.path(),
+            &Receipt {
+                id: id.clone(),
+                action: "restart".to_owned(),
+                state: "running".to_owned(),
+                authorization_uri: None,
+                created: 1,
+                lease: true,
+            },
+        )
+        .unwrap();
+        assert_eq!(receipts(root.path()).unwrap()[0].state, "running");
+        drop(lock);
+        assert_eq!(receipts(root.path()).unwrap()[0].state, "interrupted");
     }
 }

@@ -133,6 +133,15 @@ pub(crate) fn verify(
     }
     Ok(())
 }
+pub(crate) fn selected_service(
+    executable: &Path,
+    directory: &Path,
+    config: &Path,
+) -> Result<String, String> {
+    let binding = read(&record_path(executable)?)?;
+    verify(executable, directory, config, &binding.service)?;
+    Ok(binding.service)
+}
 pub(crate) fn release(executable: &Path, service: &str) -> Result<(), String> {
     let path = record_path(executable)?;
     if path.exists() && read(&path)?.service == service {

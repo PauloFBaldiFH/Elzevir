@@ -81,12 +81,12 @@ Nenhum: não há área de paridade.
 
 ## 6. Limites desta entrega
 
-A7 entrega systemd e SCM Windows como previsto no recorte do roadmap. OpenRC
-e launchd continuam previstos para seus pacotes; plataformas sem adaptador
-recusam operações, sem simular instalação. Não inclui A9, firewall, ACLs, conta,
-download de binário, atualização, reinício da máquina ou botões da P12. Esta
-máquina não tem systemd como PID 1 nem SCM: testes reais de registro/início no
-gerenciador exigem runners dessas plataformas. Compilação não é execução.
+A distribuição inclui adaptadores systemd, OpenRC e SCM Windows. Plataformas
+sem adaptador, inclusive macOS/launchd, recusam operações. Instaladores, ACLs,
+atualizações e reinício pelo painel são descritos nas specs de distribuição,
+ferramentas e operações do painel. Esta máquina não tem systemd como PID 1 nem
+SCM: testes reais de registro/início exigem runners dessas plataformas.
+Compilação cruzada e testes com dublês não comprovam instalação nativa.
 
 ## 7. OpenRC na distribuição A9
 

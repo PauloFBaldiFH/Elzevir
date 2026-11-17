@@ -13,6 +13,22 @@ use std::process::{Command, Output, Stdio};
 
 const PASSWORD: &str = "fictional-init-password-123";
 
+#[test]
+fn installer_port_preflight_refuses_an_occupied_address_without_creating_data() {
+    let root = tempfile::tempdir().unwrap();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let result = init(
+        root.path(),
+        &["--check-port", "--listen", &address],
+        PASSWORD,
+    );
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("listen address is unavailable"));
+    assert!(!root.path().join("elzevir.toml").exists());
+    assert!(!root.path().join("data-local").exists());
+}
+
 fn init(directory: &Path, extra: &[&str], password: &str) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_elzevir"));
     command.arg("init");

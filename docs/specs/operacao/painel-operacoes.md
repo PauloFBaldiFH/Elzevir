@@ -35,7 +35,7 @@ restaurar executável e dados anteriores (a versão nova pode ter migrado o
 esquema), iniciar a anterior e verificar novamente. Falha de download, hash ou
 backup nunca para o serviço. No Windows o auxiliar é uma cópia do executável,
 permitindo substituir o arquivo original enquanto o painel ainda está aberto.
-# Recuperação de atualização
+## Recuperação de atualização
 
 Na seção Atualizações, `r` prepara a recuperação de uma atualização interrompida.
 O operador informa o executável instalado (vazio usa o atual) e confirma a ação.
@@ -43,3 +43,10 @@ A composição valida que o diário privado pertence à configuração e institu
 selecionadas antes de aceitar o trabalho. O painel não interpreta o diário nem
 executa comandos de serviço diretamente.
 
+
+Recibos de operações de host são limitados a 256. A retenção remove somente
+recibos reconhecidos de trabalhos encerrados, preservando trabalhos ativos e
+arquivos desconhecidos. Uma trava por trabalho permite reconhecer processo
+interrompido sem confundir reutilização de PID. Solicitação que não chega a
+iniciar em cinco minutos aparece como interrompida. A observação não escreve
+no histórico; a limpeza acontece na publicação de um novo recibo.

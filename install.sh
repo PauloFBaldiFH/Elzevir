@@ -39,6 +39,8 @@ esac
 [[ $login =~ ^[a-zA-Z0-9_.-]{1,64}$ ]] || fail 'invalid administrator login'
 [[ $version == latest || $version =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || fail 'version must be latest or a stable SemVer tag'
 binary=/usr/local/bin/elzevir
+[[ $identifier == library ]] || binary=/usr/local/lib/elzevir-$identifier/elzevir
+program_parent=${binary%/*}
 config=/etc/elzevir/$identifier.toml
 data=/var/lib/elzevir/$identifier
 service=elzevir-$identifier
@@ -55,10 +57,22 @@ if [[ -z $download_only ]]; then
     [[ ! -L $binary && ! -L $config && ! -L $data ]] || fail 'installation paths must not be symlinks'
     [[ ! -e $config || -f $config ]] || fail 'configuration must be a regular file'
     [[ ! -e $binary || -f $binary ]] || fail 'binary must be a regular file'
+    candidate=$program_parent
+    while [[ $candidate != / ]]; do
+        [[ ! -L $candidate ]] || fail 'program directories must not be symlinks'
+        if [[ -e $candidate ]]; then
+            [[ -d $candidate && $(stat -c %u "$candidate") -eq 0 ]] || fail 'program directories must belong to root'
+            permissions=$(stat -c %a "$candidate")
+            (( (8#$permissions & 022) == 0 )) || fail 'program directories must not be writable by other accounts'
+        fi
+        candidate=${candidate%/*}
+        [[ -n $candidate ]] || candidate=/
+    done
     if [[ -e $config ]]; then
         [[ -x $binary && -f $data/elzevir.db ]] || fail 'existing installation is incomplete; inspect it before retrying'
     else
         [[ -n $institution ]] || fail 'set --name for the first installation'
+        [[ ! -e $binary ]] || fail 'binary exists without matching configuration; it was preserved'
         [[ ! -e $data ]] || fail 'data directory already exists; configuration will not be guessed'
     fi
 fi
@@ -95,7 +109,20 @@ if [[ -n $download_only ]]; then
     printf 'Verified package saved to %s\n' "$download_only"
     exit 0
 fi
+if ! id elzevir >/dev/null 2>&1; then
+    if command -v useradd >/dev/null; then useradd --system --user-group --home-dir /var/lib/elzevir --shell /usr/sbin/nologin elzevir;
+    elif command -v adduser >/dev/null && command -v addgroup >/dev/null; then addgroup -S elzevir; adduser -S -D -H -G elzevir -h /var/lib/elzevir -s /sbin/nologin elzevir;
+    else fail 'a system account creation utility is required'; fi
+fi
 if [[ -e $config ]]; then
+    manager_state=$("$binary" service status --name "$service") || fail 'cannot inspect the existing service'
+    if [[ $manager_state == *'"state":"not_installed"'* ]]; then
+        chown -R elzevir:elzevir "$data"
+        chown root:elzevir /etc/elzevir "$config"
+        chmod 640 "$config"
+        "$binary" service install --name "$service" --config "$config"
+        "$binary" service start --name "$service"
+    fi
     "$binary" update --config "$config" --service "$service" --version "$version" --package "$temporary/$name" --checksums "$temporary/SHA256SUMS" --confirm-update --wait
     exit 0
 fi
@@ -105,14 +132,12 @@ install -d -m 755 /var/lib/elzevir
 case $(stat -f -c %T /var/lib/elzevir) in nfs*|cifs|smb*|9p|fuse.sshfs) fail 'the institution database requires a local filesystem' ;; esac
 available=$(stat -f -c '%a %S' /var/lib/elzevir | awk '{printf "%.0f",$1*$2}')
 [[ $available -ge 1073741824 ]] || fail 'at least 1 GiB free local space is required'
-if ! id elzevir >/dev/null 2>&1; then
-    if command -v useradd >/dev/null; then useradd --system --user-group --home-dir /var/lib/elzevir --shell /usr/sbin/nologin elzevir;
-    elif command -v adduser >/dev/null && command -v addgroup >/dev/null; then addgroup -S elzevir; adduser -S -D -H -G elzevir -h /var/lib/elzevir -s /sbin/nologin elzevir;
-    else fail 'a system account creation utility is required'; fi
-fi
+
+install -d -m 755 "${binary%/*}"
+install -d -m 755 "$program_parent"
 install -m 755 "$temporary/payload/elzevir" "$binary"
 [[ -r /dev/tty ]] || fail 'initial installation requires a controlling terminal for the private password prompt'
-"$binary" init --name "$institution" --config "$config" --data-dir "$data" --login "$login" --listen "$listen" </dev/tty
+"$binary" init --name "$institution" --config "$config" --data-dir "$data" --login "$login" --listen "$listen" --check-port </dev/tty
 chown -R elzevir:elzevir "$data"
 chown root:elzevir /etc/elzevir "$config"
 chmod 750 /etc/elzevir

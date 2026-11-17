@@ -930,6 +930,13 @@ mod tests {
             if matches!(path, "/v1/library" | "/v1/tunnel-token") {
                 assert!(headers.iter().any(|(name, _)| *name == "X-KEI-Signature"));
             }
+            if value
+                .get("lost_response")
+                .and_then(serde_json::Value::as_bool)
+                == Some(true)
+            {
+                return Err("simulated lost response".to_owned());
+            }
             Ok(Response {
                 status: 200,
                 body: zeroize::Zeroizing::new(serde_json::to_vec(&value).unwrap()),
@@ -1004,11 +1011,8 @@ mod tests {
         assert!(!location(directory.path()).exists());
         assert!(!connection.0.get());
     }
-    #[test]
-    fn enrollment_persists_identity_and_origin_before_connecting_without_storing_token() {
-        let directory = tempfile::tempdir().unwrap();
-        let setup = fixture(directory.path());
-        let fake = Fake {
+    fn happy_broker() -> Fake {
+        Fake {
             replies: RefCell::new(VecDeque::from([
                 (
                     "GET",
@@ -1044,7 +1048,13 @@ mod tests {
                 ("GET", "/v1/library", info()),
             ])),
             calls: Cell::new(0),
-        };
+        }
+    }
+    #[test]
+    fn enrollment_persists_identity_and_origin_before_connecting_without_storing_token() {
+        let directory = tempfile::tempdir().unwrap();
+        let setup = fixture(directory.path());
+        let fake = happy_broker();
         let connection = Connection(Cell::new(false));
         execute_with(directory.path(), &setup, &fake, &connection, None).unwrap();
         assert!(connection.0.get());
@@ -1060,5 +1070,94 @@ mod tests {
             .resolve()
             .unwrap();
         assert!(require_host_policy(&settings).is_err());
+    }
+    #[test]
+    fn lost_authorization_response_reuses_the_identity_and_retries_device_start() {
+        let directory = tempfile::tempdir().unwrap();
+        let setup = fixture(directory.path());
+        let first = happy_broker();
+        first.replies.borrow_mut().get_mut(1).unwrap().2 =
+            serde_json::json!({"lost_response":true});
+        let connection = Connection(Cell::new(false));
+        assert!(execute_with(directory.path(), &setup, &first, &connection, None).is_err());
+        let public_key = load(directory.path()).unwrap().key().unwrap().public();
+        let retry = happy_broker();
+        execute_with(directory.path(), &setup, &retry, &connection, None).unwrap();
+        assert_eq!(
+            load(directory.path()).unwrap().key().unwrap().public(),
+            public_key
+        );
+        assert!(connection.0.get());
+    }
+    #[test]
+    fn consumed_enrollment_after_lost_response_reuses_the_same_signing_key() {
+        let directory = tempfile::tempdir().unwrap();
+        let setup = fixture(directory.path());
+        let first = happy_broker();
+        first.replies.borrow_mut().get_mut(3).unwrap().2 =
+            serde_json::json!({"lost_response":true});
+        let connection = Connection(Cell::new(false));
+        assert!(execute_with(directory.path(), &setup, &first, &connection, None).is_err());
+        let public_key = load(directory.path()).unwrap().key().unwrap().public();
+        let retry = happy_broker();
+        retry.replies.borrow_mut().remove(1);
+        retry.replies.borrow_mut().get_mut(1).unwrap().2 = serde_json::json!({"status":"consumed"});
+        execute_with(directory.path(), &setup, &retry, &connection, None).unwrap();
+        assert_eq!(
+            load(directory.path()).unwrap().key().unwrap().public(),
+            public_key
+        );
+        assert!(connection.0.get());
+    }
+    #[test]
+    fn recovery_can_retry_rotation_with_the_identity_persisted_before_failure() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut setup = fixture(directory.path());
+        let connection = Connection(Cell::new(false));
+        execute_with(directory.path(), &setup, &happy_broker(), &connection, None).unwrap();
+        let identity = load(directory.path()).unwrap();
+        let public_key = identity.key().unwrap().public();
+        let exported = directory.path().join("recovery.json");
+        crate::backup_archive::write_new(&exported, &serde_json::to_vec(&identity).unwrap())
+            .unwrap();
+        setup.action = Action::Recover { input: exported };
+        for lost in [true, false] {
+            let mut replies = happy_broker().replies.into_inner();
+            replies.retain(|(_, path, _)| {
+                matches!(
+                    *path,
+                    "/v1/capabilities" | "/v1/library" | "/v1/tunnel-token"
+                )
+            });
+            replies.insert(
+                2,
+                (
+                    "POST",
+                    "/v1/rotate",
+                    if lost {
+                        serde_json::json!({"lost_response":true})
+                    } else {
+                        serde_json::json!({})
+                    },
+                ),
+            );
+            let fake = Fake {
+                replies: RefCell::new(replies),
+                calls: Cell::new(0),
+            };
+            fake.replies
+                .borrow_mut()
+                .insert(3, ("GET", "/v1/library", info()));
+            connection.0.set(false);
+            assert_eq!(
+                execute_with(directory.path(), &setup, &fake, &connection, None).is_err(),
+                lost
+            );
+            assert_eq!(connection.0.get(), !lost);
+            assert_eq!(
+                load(directory.path()).unwrap().key().unwrap().public(),
+                public_key
+            );
+        }
     }
 }

@@ -17,12 +17,36 @@ $hash = 'a' * 64
 $sums = "$hash  package.zip`n"
 Assert-True ((Get-ElzevirChecksum $sums 'package.zip') -ceq $hash) 'Checksum was not exact'
 Assert-Throws { Get-ElzevirChecksum ($sums + $sums) 'package.zip' }
+Assert-Throws { Get-ElzevirChecksum ($sums + 'invalid  package.zip') 'package.zip' }
 Assert-Throws { Get-ElzevirChecksum $sums 'another.zip' }
+Assert-Throws { Get-ElzevirResponse 'http://example.invalid/package.zip' }
+Assert-Throws { Get-ElzevirResponse 'https://user:password@example.invalid/package.zip' }
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $temporary = Join-Path ([IO.Path]::GetTempPath()) ('elzevir-bootstrap-test-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $temporary | Out-Null
 try {
+    $originalResponse = (Get-Item Function:Get-ElzevirResponse).ScriptBlock
+    $script:declaredLength = -1
+    try {
+        function Get-ElzevirResponse {
+            $response = New-Object PSObject -Property @{ ContentLength=$script:declaredLength }
+            $response | Add-Member ScriptMethod GetResponseStream { return [IO.MemoryStream]::new([byte[]](1,2,3), $false) }
+            $response | Add-Member ScriptMethod Dispose {}
+            return $response
+        }
+        $download = Join-Path $temporary 'download'
+        Assert-Throws { Save-ElzevirDownload 'https://example.invalid/package' $download 2 }
+        Assert-True (-not (Test-Path -LiteralPath $download)) 'Oversized partial download was kept'
+        Save-ElzevirDownload 'https://example.invalid/package' $download 3
+        Assert-True ((Get-Item -LiteralPath $download).Length -eq 3) 'Streaming download failed'
+        Assert-Throws { Save-ElzevirDownload 'https://example.invalid/package' $download 3 }
+        Assert-True ((Get-Item -LiteralPath $download).Length -eq 3) 'Existing download was modified'
+        Remove-Item -LiteralPath $download
+        $script:declaredLength = 4
+        Assert-Throws { Save-ElzevirDownload 'https://example.invalid/package' $download 8 }
+        Assert-True (-not (Test-Path -LiteralPath $download)) 'Truncated download was kept'
+    } finally { Set-Item Function:Get-ElzevirResponse $originalResponse }
     $package = Join-Path $temporary 'fixture.zip'
     $zip = [IO.Compression.ZipFile]::Open($package, [IO.Compression.ZipArchiveMode]::Create)
     try {

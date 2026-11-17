@@ -315,7 +315,7 @@ pub(crate) fn native_action(action: &str, name: &str) -> Result<(), String> {
 }
 
 #[cfg(target_os = "linux")]
-fn use_openrc() -> bool {
+pub(crate) fn use_openrc() -> bool {
     !Path::new("/run/systemd/system").is_dir() && Path::new("/sbin/openrc").is_file()
 }
 #[cfg(target_os = "linux")]
@@ -328,7 +328,7 @@ fn native_backend() -> Box<dyn Backend> {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn use_openrc() -> bool {
+pub(crate) fn use_openrc() -> bool {
     false
 }
 

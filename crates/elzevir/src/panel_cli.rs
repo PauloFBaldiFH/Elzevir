@@ -221,6 +221,7 @@ impl Collector {
                         state: match receipt.state.as_str() {
                             "queued" => "op-queued",
                             "running" => "op-running",
+                            "interrupted" => "op-interrupted",
                             "completed" => "op-completed",
                             "unsupported" => "broker-unsupported",
                             _ => "op-failed",

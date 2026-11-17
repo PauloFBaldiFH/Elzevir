@@ -21,6 +21,14 @@ class InstallerTests(unittest.TestCase):
             result = subprocess.run(["bash", str(ROOT / "install.sh"), "--dry-run", "--id", argument], capture_output=True)
             self.assertNotEqual(result.returncode, 0)
 
+    def test_additional_institutions_have_independent_executables(self):
+        plans = []
+        for institution in ["library", "alpha", "beta"]:
+            result = subprocess.run(["bash", str(ROOT / "install.sh"), "--dry-run", "--id", institution], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            plans.append(dict(line.split("=", 1) for line in result.stdout.splitlines())["binary"])
+        self.assertEqual(len(set(plans)), 3)
+
     def download(self, *, bad_hash=False, symlink=False):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)

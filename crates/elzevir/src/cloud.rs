@@ -432,15 +432,6 @@ pub(crate) fn execute(
         Action::RunPlan { .. } => return Err("invalid cloud backup dispatch".to_owned()),
         _ => {}
     }
-    match action {
-        Action::Plan { definition } => {
-            return crate::cloud_plans::upsert(directory, definition.clone()).map(drop);
-        }
-        Action::DisablePlan { id } => return crate::cloud_plans::disable(directory, id),
-        Action::RemovePlan { id } => return crate::cloud_plans::remove(directory, id),
-        Action::RunPlan { .. } => return Err("invalid cloud backup dispatch".to_owned()),
-        _ => {}
-    }
     require_limited_account()?;
     let lease = crate::managed_tools::lease(crate::managed_tools::Tool::Rclone)?;
     let program = &lease.path;

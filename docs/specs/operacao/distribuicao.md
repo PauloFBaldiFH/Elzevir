@@ -40,3 +40,9 @@ reinício. Repetir uma recuperação já restaurada não reaplica o backup sobre
 escritas posteriores. Uma versão nova já saudável apenas conclui o diário;
 uma versão anterior saudável durante rollback só conclui depois da fase de
 restauração. Configuração explícita inválida ou de outra instituição é recusada.
+
+Instâncias adicionais (`--id`/`-Id` diferente de `library`) usam executável em
+diretório de programas próprio. A primeira instalação recusa sobrescrever um
+executável existente sem configuração correspondente. Reexecução com banco e
+configuração válidos, mas serviço ainda ausente, registra e inicia o serviço
+antes de seguir pelo fluxo de atualização; não recria banco nem administrador.

@@ -61,3 +61,12 @@ O preparo e os originais ficam em pasta privada irmã da instituição, fora de
 sua árvore gravável pelo serviço. A configuração externa conserva seu original
 no próprio diretório, para permitir volumes diferentes. A recuperação confere
 uma cópia privada do diário antes de aceitar o marcador nos dados.
+
+## Restauração pelo serviço gerenciado
+
+O painel valida arquivo/chave antes de parar o serviço da instituição vinculada
+ao executável. Depois restaura, reinicia e exige saúde. Se a restauração ou
+a saúde falhar, para o serviço, repõe os arquivos originais preservados no
+diário privado e reinicia a instalação anterior. Recusa vínculo com outra
+instituição. Falha ao parar impede qualquer troca de dados. O comando offline
+continua exigindo servidor parado e não controla o gerenciador de serviços.

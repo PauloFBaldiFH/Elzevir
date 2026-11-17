@@ -64,3 +64,9 @@ O login mantém o certificado de gestão exclusivamente no perfil do operador
 (`~/.cloudflared/cert.pem` ou `%USERPROFILE%\.cloudflared\cert.pem`). O diretório
 da instituição recebe apenas a credencial limitada ao túnel; uma restauração
 não concede gestão da conta e exige novo login antes de alterar DNS.
+
+Atualizar cloudflared para o conector selecionado observa o serviço antes de
+instalar. Se estiver em execução, para e tenta reiniciá-lo também quando a
+instalação falha. Um conector parado permanece parado. A operação não para
+conectores de outras instituições; se outro processo impedir a troca do
+executável compartilhado, a instalação falha preservando o anterior.

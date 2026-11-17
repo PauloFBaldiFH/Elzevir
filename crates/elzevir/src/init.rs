@@ -30,9 +30,20 @@ pub(crate) struct InitArgs {
     /// Read a password line from redirected stdin instead of prompting.
     #[arg(long)]
     password_stdin: bool,
+    /// Reserve the listen address during initialization, for managed installation.
+    #[arg(long)]
+    check_port: bool,
 }
 
 pub(crate) fn run(args: &InitArgs) -> Result<(), String> {
+    let _listener = if args.check_port {
+        Some(
+            std::net::TcpListener::bind(args.listen)
+                .map_err(|_| "listen address is unavailable; no institution was created")?,
+        )
+    } else {
+        None
+    };
     let config = new_path(&args.config)?;
     let data_dir = new_path(&args.data_dir)?;
     if config == data_dir {

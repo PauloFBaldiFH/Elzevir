@@ -241,7 +241,7 @@ fn restore_with(
     config: Option<&Path>,
     rebuild_action: impl FnOnce(&Path) -> Result<(), String>,
 ) -> Result<(), String> {
-    restore_inner(input, key, directory, config, rebuild_action, true)
+    restore_inner(input, key, directory, config, rebuild_action, true).map(drop)
 }
 
 pub(crate) fn restore_rollback(
@@ -250,7 +250,16 @@ pub(crate) fn restore_rollback(
     directory: &Path,
     config: Option<&Path>,
 ) -> Result<(), String> {
-    restore_inner(input, key, directory, config, rebuild, false)
+    restore_inner(input, key, directory, config, rebuild, false).map(drop)
+}
+
+pub(crate) fn restore_managed(
+    input: &Path,
+    key: &Path,
+    directory: &Path,
+    config: &Path,
+) -> Result<crate::restore_journal::Journal, String> {
+    restore_inner(input, key, directory, Some(config), rebuild, true)
 }
 
 fn restore_inner(
@@ -260,7 +269,7 @@ fn restore_inner(
     config: Option<&Path>,
     rebuild_action: impl FnOnce(&Path) -> Result<(), String>,
     safety_snapshot: bool,
-) -> Result<(), String> {
+) -> Result<crate::restore_journal::Journal, String> {
     let directory = directory
         .canonicalize()
         .map_err(|_| "restore directory must already exist")?;
@@ -342,7 +351,7 @@ fn restore_inner(
     } else {
         crate::restore_journal::Journal::commit(&directory)?;
     }
-    result
+    result.map(|()| journal)
 }
 
 fn validate_auxiliary(directory: &Path, reset_cloud_schedules: bool) -> Result<(), String> {

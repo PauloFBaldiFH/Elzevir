@@ -214,6 +214,19 @@ impl Journal {
         }
         Self::commit(directory)
     }
+    pub(crate) fn recover_committed(&self, directory: &Path) -> Result<(), String> {
+        if !pending(directory) {
+            let proof = safety_path(directory, &self.id)?.join("journal.json");
+            let bytes = crate::installation::read_private(&proof, 16_384)?;
+            let expected = serde_json::to_vec(self).map_err(|_| "cannot encode restore journal")?;
+            if bytes != expected {
+                return Err("private restore proof changed".to_owned());
+            }
+            crate::backup_archive::write_new(&directory.join(NAME), &bytes)?;
+            sync(directory)?;
+        }
+        recover(directory, Some(&self.config))
+    }
     pub(crate) fn commit(directory: &Path) -> Result<(), String> {
         std::fs::remove_file(directory.join(NAME))
             .map_err(|_| "cannot finalize restore journal")?;
@@ -358,5 +371,33 @@ mod tests {
             original
         );
         assert!(!pending(directory.path()));
+    }
+    #[test]
+    fn failed_service_start_can_recover_original_files_after_restore_commit() {
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().join("library");
+        std::fs::create_dir(&directory).unwrap();
+        let crate::DataDir {
+            store,
+            _lock: lock_file,
+            ..
+        } = crate::open_store(&directory).unwrap();
+        store.shutdown().unwrap();
+        drop(lock_file);
+        let database = directory.join("elzevir.db");
+        let original = std::fs::read(&database).unwrap();
+        let config = root.path().join("server.toml");
+        std::fs::write(&config, b"original configuration").unwrap();
+        let safety = create_safety(&directory).unwrap();
+        let journal = Journal::begin(&directory, &safety, &config).unwrap();
+        journal.preserve(&directory, &database).unwrap();
+        journal.preserve(&directory, &config).unwrap();
+        std::fs::write(&database, b"replacement database").unwrap();
+        std::fs::write(&config, b"replacement configuration").unwrap();
+        Journal::commit(&directory).unwrap();
+        journal.recover_committed(&directory).unwrap();
+        assert_eq!(std::fs::read(database).unwrap(), original);
+        assert_eq!(std::fs::read(config).unwrap(), b"original configuration");
+        assert!(!pending(&directory));
     }
 }

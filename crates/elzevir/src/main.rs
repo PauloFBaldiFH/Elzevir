@@ -33,6 +33,8 @@ mod koha_codes;
 mod local_artifacts;
 mod local_disk;
 mod logging;
+mod managed_restore;
+mod managed_tool_update;
 mod managed_tools;
 mod memory;
 mod operations;
