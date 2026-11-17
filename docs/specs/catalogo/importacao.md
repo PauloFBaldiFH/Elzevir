@@ -58,6 +58,11 @@ A escritora é o gargalo: o mapeamento é 20 vezes mais rápido que a gravação
 
 ## 6. Fora do escopo
 
+O módulo avançado de detecção, preparação, edição e prévia está planejado em
+[importação universal](importacao-universal.md) (I0–I10), compartilhado pela
+web da equipe e pela CLI. A proposta preserva o contrato descrito acima;
+I0 contém somente documentos, sem novos formatos disponíveis.
+
 - Casamento com registros existentes e reimportação sem duplicar: tarefa 1.10.
-- MARCXML e UNIMARC na importação: Fase 4. A linha de comando está em [linha de comando](linha-de-comando.md).
+- MARCXML passa a ser planejado em I3 da spec universal; UNIMARC continua na Fase 4. A linha de comando está em [linha de comando](linha-de-comando.md).
 - Acelerar a escritora (por exemplo, não serializar os bytes do registro de origem como lista JSON no `audit_log`): quando um caso real pedir.
