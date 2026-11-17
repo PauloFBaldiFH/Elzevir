@@ -410,6 +410,50 @@ async fn a_search_shows_the_families_found_on_the_same_screen() {
 }
 
 #[tokio::test]
+async fn the_facets_strip_adds_and_drops_filters() {
+    let app = app();
+    let session = signed_in(&app).await;
+    let page = |uri: &'static str| {
+        let app = app.clone();
+        let session = session.clone();
+        async move { body(send(&app, get(uri, Some(&session), None)).await).await }
+    };
+    // Browsing shows the strip too, with each value linked by name.
+    let browse = page("/equipe/acervo").await;
+    assert!(browse.contains(r#"<div class="facet-strip""#));
+    assert!(browse.contains("One family"));
+    assert!(browse.contains("<summary>Language</summary>"));
+    assert!(browse.contains(
+        r#"<a href="/equipe/acervo?q=&#38;f=language%3Apor">Portuguese</a> <span class="facet-count">1</span>"#
+    ));
+    assert!(!browse.contains("chip-filter"));
+    // A filter alone searches: the chip drops it, the form keeps it, the value is not a link.
+    let filtered = page("/equipe/acervo?q=&f=language%3Apor&f=itemtype%3ABK").await;
+    assert!(filtered.contains("One record found"));
+    assert!(filtered.contains("Livro 002"));
+    assert!(filtered.contains(
+        r#"<a class="chip chip-filter" href="/equipe/acervo?q=" title="Remove this filter">Language: Portuguese"#
+    ));
+    assert!(filtered.contains(r#"<input type="hidden" name="f" value="language:por">"#));
+    assert!(filtered.contains("<strong>Portuguese</strong>"));
+    assert!(
+        filtered.contains(r#"href="/equipe/acervo?q=&#38;f=language%3Apor&#38;f=language%3Aeng""#)
+    );
+    assert!(!filtered.contains("itemtype"));
+    // The next page's rows come without a strip.
+    let rows = send(
+        &app,
+        get(
+            "/equipe/acervo?q=livro&from=1",
+            Some(&session),
+            Some("next"),
+        ),
+    )
+    .await;
+    assert!(!body(rows).await.contains("facet-strip"));
+}
+
+#[tokio::test]
 async fn a_malformed_cursor_starts_from_the_first_page() {
     let app = app();
     let session = signed_in(&app).await;

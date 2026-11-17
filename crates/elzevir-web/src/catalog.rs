@@ -11,7 +11,7 @@ use askama::Template;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{Html, IntoResponse, Redirect, Response};
-use elzevir_app::catalog::{CodeLists, ShelfSignal, StatementReader};
+use elzevir_app::catalog::{CatalogReader, CodeLists, ShelfSignal, StatementReader};
 use elzevir_app::editing::CatalogEditor;
 use elzevir_app::export::{
     ExportOptions, RecordExportError, RecordFormat, RecordSource, export_record,
@@ -22,6 +22,7 @@ use elzevir_app::listing::{
     WorkRow,
 };
 use elzevir_app::rdf::{IriBase, RdfFormat, export_rdf};
+use elzevir_app::search::{FacetCounts, Filter, SearchIndex, SearchQuery, SearchScope};
 use elzevir_app::staff::Permission;
 use elzevir_app::suggestions::AuthoritySuggestions;
 use elzevir_domain::catalog::InstanceId;
@@ -31,6 +32,7 @@ use elzevir_web_templates::{
 };
 use serde::Deserialize;
 
+use crate::facets;
 use crate::icons::{
     NO_CONTENT, agent_icon, content_badge, item_icon, material_badges, signal_icon, subject_icon,
 };
@@ -60,14 +62,33 @@ pub struct StaffPorts {
 }
 
 /// Query string of `/equipe/acervo`.
-#[derive(Deserialize)]
-pub(crate) struct CatalogParams {
-    #[serde(default)]
+struct CatalogParams {
     q: String,
     /// Browsing: the family the page starts after.
     after: Option<String>,
     /// Searching: the hit the page starts from.
     from: Option<String>,
+    /// The filters in force (facetas.md, item 4).
+    filters: Vec<Filter>,
+}
+
+impl CatalogParams {
+    /// Reads the parameters, the last of each name winning, and every filter.
+    fn from_pairs(pairs: &[(String, String)]) -> Self {
+        let last = |name: &str| {
+            pairs
+                .iter()
+                .rev()
+                .find(|(key, _)| key == name)
+                .map(|(_, value)| value.clone())
+        };
+        Self {
+            q: last("q").unwrap_or_default(),
+            after: last("after"),
+            from: last("from"),
+            filters: facets::filters_of(pairs),
+        }
+    }
 }
 
 /// One page, as read.
@@ -77,52 +98,87 @@ enum Page {
     Search(listing::SearchPage, Scan),
 }
 
-/// `GET /equipe/acervo?q=&after=&from=`: the listing, or a search when `q` is given. An
-/// HTMX request for the next page gets only the rows.
+/// Reads one page of the listing and, unless only rows are asked for or a code was
+/// scanned, the facets of what it shows (facetas.md, item 11). Blocking.
+fn read_page(
+    listing: &dyn CatalogListing,
+    index: &dyn SearchIndex,
+    catalog: &dyn CatalogReader,
+    params: CatalogParams,
+    rows_only: bool,
+) -> Result<(Page, CodeLists, Option<FacetCounts>, CatalogParams), ()> {
+    let codes = catalog.codes().map_err(drop)?;
+    let filters = &params.filters;
+    let page = if params.q.trim().is_empty() && filters.is_empty() {
+        // A malformed cursor is read as the first page.
+        let after = params.after.as_deref().and_then(FamilyCursor::from_token);
+        listing::browse(listing, after.as_ref())
+            .map(Page::Browse)
+            .map_err(drop)
+    } else if let Some(from) = &params.from {
+        // A later page of a text search: the scan rule saw the first one.
+        let from = from.parse::<usize>().unwrap_or(0);
+        listing::search(index, listing, &params.q, filters, from)
+            .map(|page| Page::Search(page, Scan::Text))
+            .map_err(drop)
+    } else if !filters.is_empty() {
+        // A filtered search lists what passes; a code typed there is just text.
+        listing::search(index, listing, &params.q, filters, 0)
+            .map(|page| Page::Search(page, Scan::Text))
+            .map_err(drop)
+    } else {
+        // One field for everything (docs/specs/catalogo/bipe.md).
+        let scan = listing::scan(listing, &params.q).map_err(drop)?;
+        match &scan {
+            Scan::Known(owner) => listing::scanned_page(listing, &params.q, owner).map_err(drop),
+            Scan::NewIsbn(_) | Scan::Text => {
+                listing::search(index, listing, &params.q, &[], 0).map_err(drop)
+            }
+        }
+        .map(|page| Page::Search(page, scan))
+    }?;
+    // A scanned code's page is that family alone: nothing to narrow.
+    let scanned = matches!(&page, Page::Search(_, Scan::Known(_)));
+    let counts = if rows_only || scanned {
+        None
+    } else {
+        let asked = SearchQuery {
+            text: &params.q,
+            filters,
+        };
+        Some(index.facets(&asked, SearchScope::Staff).map_err(drop)?)
+    };
+    Ok((page, codes, counts, params))
+}
+
+/// `GET /equipe/acervo?q=&after=&from=&f=`: the listing, or a search when `q` or a filter
+/// is given, with the facets strip. An HTMX request for the next page gets only the rows.
 pub(crate) async fn catalog(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Query(params): Query<CatalogParams>,
+    Query(pairs): Query<Vec<(String, String)>>,
 ) -> Response {
     let Some(session) = current_session(&state, &headers) else {
         return Redirect::to("/equipe/login").into_response();
     };
+    let params = CatalogParams::from_pairs(&pairs);
     let listing = Arc::clone(&state.inner.staff_ports.listing);
     let index = Arc::clone(&state.inner.opac.index);
     let catalog = Arc::clone(&state.inner.opac.catalog);
+    let rows_only = headers.contains_key("hx-request")
+        && headers
+            .get("hx-target")
+            .is_none_or(|target| target != "families");
     let read = tokio::task::spawn_blocking(move || {
-        let codes = catalog.codes().map_err(drop)?;
-        let page = if params.q.trim().is_empty() {
-            // A malformed cursor is read as the first page.
-            let after = params.after.as_deref().and_then(FamilyCursor::from_token);
-            listing::browse(&*listing, after.as_ref())
-                .map(Page::Browse)
-                .map_err(drop)
-        } else if let Some(from) = params.from {
-            // A later page of a text search: the scan rule saw the first one.
-            let from = from.parse::<usize>().unwrap_or(0);
-            listing::search(&*index, &*listing, &params.q, &[], from)
-                .map(|page| Page::Search(page, Scan::Text))
-                .map_err(drop)
-        } else {
-            // One field for everything (docs/specs/catalogo/bipe.md).
-            let scan = listing::scan(&*listing, &params.q).map_err(drop)?;
-            match &scan {
-                Scan::Known(owner) => {
-                    listing::scanned_page(&*listing, &params.q, owner).map_err(drop)
-                }
-                Scan::NewIsbn(_) | Scan::Text => {
-                    listing::search(&*index, &*listing, &params.q, &[], 0).map_err(drop)
-                }
-            }
-            .map(|page| Page::Search(page, scan))
-        }?;
-        Ok::<_, ()>((page, codes))
+        read_page(&*listing, &*index, &*catalog, params, rows_only)
     })
     .await;
-    let Ok(Ok((page, codes))) = read else {
+    let Ok(Ok((page, codes, counts, params))) = read else {
         return (StatusCode::SERVICE_UNAVAILABLE, "catalog unavailable").into_response();
     };
+    let t = &state.inner.i18n;
+    let query = params.q.trim();
+    let strip = counts.map(|counts| facets::strip(query, &params.filters, counts, t, &codes));
     let can_catalogue = session.identity.can(Permission::Cataloguing);
     let page = match &page {
         Page::Browse(page) => StaffCatalog {
@@ -141,6 +197,7 @@ pub(crate) async fn catalog(
                 .next
                 .as_ref()
                 .map(|next| format!("/equipe/acervo?after={}", url_encode(&next.token()))),
+            strip,
         },
         Page::Search(page, scan) => StaffCatalog {
             t: &state.inner.i18n,
@@ -155,17 +212,18 @@ pub(crate) async fn catalog(
                     .map(|row| family_line(row, &codes))
                     .collect(),
             ),
-            next_url: page
-                .next
-                .map(|from| format!("/equipe/acervo?q={}&from={from}", url_encode(&page.query))),
+            next_url: page.next.map(|from| {
+                format!(
+                    "{}&from={from}",
+                    facets::listing_url(&page.query, &params.filters)
+                )
+            }),
+            strip,
         },
     };
     // The search form swaps the whole list and picks it from a full page; the next-page
     // loader asks for the rows alone.
-    let whole_list = headers
-        .get("hx-target")
-        .is_some_and(|target| target == "families");
-    if headers.contains_key("hx-request") && !whole_list {
+    if rows_only {
         match page.as_rows().render() {
             Ok(html) => Html(html).into_response(),
             Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response(),
