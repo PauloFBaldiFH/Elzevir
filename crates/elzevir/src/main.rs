@@ -11,6 +11,9 @@ mod addresses;
 mod admin;
 mod backup_archive;
 mod backup_cli;
+mod broker;
+mod broker_cli;
+mod broker_protocol;
 mod catalog_cli;
 mod cloudflare;
 mod config;
@@ -77,6 +80,8 @@ enum Command {
     HostJob(host_jobs::Args),
     /// Install or inspect optional operational tools.
     Tools(tools_cli::Args),
+    /// Manage a free address through an explicitly compatible broker.
+    Address(broker_cli::Args),
     /// Configure and observe the managed public tunnel.
     Tunnel(tunnel_cli::Args),
     /// Install a verified release with backup and automatic rollback.
@@ -136,6 +141,7 @@ fn main() -> ExitCode {
     let result = match Cli::parse().command {
         Command::HostJob(args) => host_jobs::run(&args),
         Command::Tools(args) => tools_cli::run(args),
+        Command::Address(args) => broker_cli::run(args),
         Command::Tunnel(args) => tunnel_cli::run(args),
         Command::Update(args) => update::run(args),
         Command::Serve(args) => args
@@ -344,6 +350,7 @@ fn serve_controlled(
         return Ok(());
     }
     cloudflare::require_host_policy(settings)?;
+    broker::require_host_policy(settings)?;
     let data_dir = &settings.data_dir;
     let loaded = config::load(data_dir)?;
     if let Some((path, report)) = &loaded.table_report {

@@ -21,6 +21,7 @@ pub(crate) fn rows(
     if let Some(result) = operations.and_then(|operations| operations.result) {
         rows.push(Line::from(messages.get(result)));
     }
+    rows.extend(remote_rows(operations, messages));
     if let Some(operations) = operations {
         for job in operations
             .jobs
@@ -28,7 +29,10 @@ pub(crate) fn rows(
             .filter(|job| {
                 matches!(
                     job.action,
-                    "op-cloudflare-login" | "op-cloudflare-setup" | "op-tunnel-test"
+                    "op-cloudflare-login"
+                        | "op-cloudflare-setup"
+                        | "op-tunnel-test"
+                        | "broker-operation"
                 )
             })
             .take(3)
@@ -94,5 +98,31 @@ pub(crate) fn rows(
         }
     }
     rows.push(Line::default());
+    rows
+}
+
+fn remote_rows(operations: Option<&Operations>, messages: &Messages) -> Vec<Line<'static>> {
+    let mut rows = Vec::new();
+    if let Some(remote) = operations.and_then(|operations| operations.remote_address.as_ref()) {
+        rows.push(row(messages, "broker-observed", Some(text(&remote.at))));
+        rows.push(row(
+            messages,
+            "broker-listed",
+            Some(messages.get(if remote.listed {
+                "broker-on"
+            } else {
+                "broker-off"
+            })),
+        ));
+        rows.push(row(
+            messages,
+            "broker-remote",
+            Some(messages.get(if remote.staff_remote {
+                "broker-on"
+            } else {
+                "broker-off"
+            })),
+        ));
+    }
     rows
 }

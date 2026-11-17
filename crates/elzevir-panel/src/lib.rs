@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Terminal administration interface.
 
+mod address_operations;
 mod address_view;
+pub use address_operations::AddressOperation;
 mod addresses;
 mod dashboard;
 mod diagnostic_view;
@@ -11,12 +13,13 @@ mod messages;
 mod operation_view;
 mod operations;
 mod runtime;
+mod sharing;
 mod tunnel_view;
 mod view;
 mod worker;
 
 pub use addresses::{
-    AddressBook, PublicCheck, StaffAccess, Tunnel, TunnelLog, TunnelState, TunnelTab,
+    AddressBook, PublicCheck, RemoteAddress, StaffAccess, Tunnel, TunnelLog, TunnelState, TunnelTab,
 };
 pub use diagnostics::{
     CheckResult, DiagnosticAction, Diagnostics, ExportState, LogEntry, LogEvent, LogFeed, LogState,
@@ -247,6 +250,15 @@ impl Panel {
             return false;
         }
         let operation = match (self.section, key) {
+            (Section::Addresses, 'Q') => {
+                self.tunnel_tab = if self.tunnel_tab == TunnelTab::Share {
+                    TunnelTab::Test
+                } else {
+                    TunnelTab::Share
+                };
+                self.scroll = 0;
+                return true;
+            }
             (Section::Addresses, 'h') => {
                 self.tunnel_tab = TunnelTab::Log;
                 self.scroll = 0;
@@ -255,6 +267,11 @@ impl Panel {
             (Section::Addresses, 't') => {
                 self.tunnel_tab = TunnelTab::Test;
                 Operation::TestTunnel
+            }
+            (Section::Addresses, key) if address_operations::shortcut(key).is_some() => {
+                Operation::Address(
+                    address_operations::shortcut(key).unwrap_or(AddressOperation::Refresh),
+                )
             }
             (Section::Addresses, 'l') => Operation::CloudflareLogin,
             (Section::Addresses, 's') => Operation::CloudflareSetup {

@@ -86,6 +86,7 @@ pub(crate) fn operator_private(path: &Path) -> Result<(), String> {
         .join("System32")
         .join("icacls.exe");
         let output = Native.run(Request {
+            environment: None,
             program,
             args: vec![
                 path.as_os_str().to_owned(),

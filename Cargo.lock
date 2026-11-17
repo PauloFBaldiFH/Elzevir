@@ -997,8 +997,10 @@ dependencies = [
  "getrandom 0.4.3",
  "http-body-util",
  "interprocess",
+ "ipnet",
  "jiff",
  "mimalloc",
+ "ring",
  "rpassword",
  "rustix",
  "rustls",
@@ -1074,6 +1076,7 @@ version = "0.0.0"
 dependencies = [
  "fluent-bundle 0.16.0",
  "insta",
+ "qrcode",
  "ratatui",
  "thiserror 2.0.21",
  "unic-langid",
@@ -2526,6 +2529,12 @@ dependencies = [
  "tempfile",
  "unarray",
 ]
+
+[[package]]
+name = "qrcode"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d68782463e408eb1e668cf6152704bd856c78c5b6417adaee3203d8f4c1fc9ec"
 
 [[package]]
 name = "quick-error"

@@ -238,6 +238,7 @@ impl Context {
             )?
         };
         let output = Native.run(Request {
+            environment: None,
             progress: None,
             program: staged.clone(),
             args: vec!["--version".into()],

@@ -4,6 +4,8 @@
 /// An operation confirmed by the user, delivered once to the composition boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// One explicit free-address service intention.
+    Address(crate::AddressOperation),
     /// Explicitly test the configured public HTTPS endpoints.
     TestTunnel,
     /// Publish separate catalog/staff hostnames through the selected Cloudflare account.
@@ -78,6 +80,7 @@ impl Operation {
     #[must_use]
     pub const fn key(&self) -> &'static str {
         match self {
+            Self::Address(action) => action.key(),
             Self::TestTunnel => "op-tunnel-test",
             Self::CloudflareSetup { .. } => "op-cloudflare-setup",
             Self::CloudflareLogin => "op-cloudflare-login",
@@ -131,10 +134,11 @@ pub struct Operations {
     pub authorization_uris: Vec<String>,
     /// Public tunnel candidates and bounded evidence.
     pub tunnel: crate::TunnelState,
+    /// Last safe remote address-service observation.
+    pub remote_address: Option<crate::RemoteAddress>,
 }
 
 /// Bounded editing and confirmation, without access to operating-system resources.
-#[derive(Debug)]
 pub struct Form {
     /// Action currently being prepared.
     pub operation: Operation,
@@ -150,6 +154,7 @@ impl Form {
     #[must_use]
     pub fn new(operation: Operation) -> Self {
         let (labels, values) = match &operation {
+            Operation::Address(action) => action.fields(),
             Operation::CloudflareSetup {
                 catalog,
                 staff,
@@ -214,8 +219,12 @@ impl Form {
         if !self.confirming() {
             return None;
         }
+        if let Operation::Address(action) = self.operation {
+            return Some(Operation::Address(action.finish(self.values)?));
+        }
         let mut values = self.values.into_iter();
         Some(match self.operation {
+            Operation::Address(_) => return None,
             Operation::CloudflareSetup { .. } => Operation::CloudflareSetup {
                 catalog: values.next()?,
                 staff: values.next()?,
@@ -254,5 +263,14 @@ impl Form {
                 zone: values.next()?,
             },
         })
+    }
+}
+
+impl std::fmt::Debug for Form {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("Form")
+            .field("field", &self.field)
+            .finish_non_exhaustive()
     }
 }

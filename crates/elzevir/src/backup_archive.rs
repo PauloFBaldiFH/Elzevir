@@ -240,39 +240,7 @@ pub(crate) fn create(
         database_schema: database.schema_version,
         entries: Vec::new(),
     };
-    let mut auxiliary = 0_u64;
-    for (name, path) in &mut files {
-        let bytes = regular(path)?;
-        if name != "database.sqlite" && path.parent() != Some(scratch.path()) {
-            let staged = scratch.path().join(name.replace('/', "-"));
-            let mut target = tempfile::NamedTempFile::new_in(scratch.path())
-                .map_err(|_| "cannot stage backup input")?;
-            let relative = path
-                .strip_prefix(directory)
-                .map_err(|_| "backup input must be inside the institution")?;
-            let mut source = scoped_file(&scope, relative)?.take(MAX_AUX + 1);
-            let copied = std::io::copy(&mut source, target.as_file_mut())
-                .map_err(|_| "cannot stage backup input")?;
-            if copied != bytes || copied > MAX_AUX {
-                return Err("backup input changed or exceeds limit".to_owned());
-            }
-            target
-                .persist_noclobber(&staged)
-                .map_err(|_| "cannot stage backup input")?;
-            *path = staged;
-        }
-        if name != "database.sqlite" {
-            auxiliary = auxiliary.saturating_add(bytes);
-        }
-        if auxiliary > MAX_AUX {
-            return Err("auxiliary backup input exceeds limit".to_owned());
-        }
-        manifest.entries.push(Entry {
-            name: name.clone(),
-            bytes,
-            sha256: hash(path)?,
-        });
-    }
+    stage_inputs(directory, &scope, scratch.path(), &mut files, &mut manifest)?;
     let mut file = tempfile::NamedTempFile::new_in(output.parent().ok_or("backup needs parent")?)
         .map_err(|_| "cannot prepare backup output")?;
     let recipient = identity.to_public();
@@ -308,6 +276,49 @@ pub(crate) fn create(
     file.persist_noclobber(output)
         .map_err(|_| "cannot publish backup without replacement")?;
     Ok(manifest)
+}
+
+fn stage_inputs(
+    directory: &Path,
+    scope: &cap_std::fs::Dir,
+    scratch: &Path,
+    files: &mut [(String, std::path::PathBuf)],
+    manifest: &mut Manifest,
+) -> Result<(), String> {
+    let mut auxiliary = 0_u64;
+    for (name, path) in files {
+        let bytes = regular(path)?;
+        if name != "database.sqlite" && path.parent() != Some(scratch) {
+            let staged = scratch.join(name.replace('/', "-"));
+            let mut target = tempfile::NamedTempFile::new_in(scratch)
+                .map_err(|_| "cannot stage backup input")?;
+            let relative = path
+                .strip_prefix(directory)
+                .map_err(|_| "backup input must be inside the institution")?;
+            let mut source = scoped_file(scope, relative)?.take(MAX_AUX + 1);
+            let copied = std::io::copy(&mut source, target.as_file_mut())
+                .map_err(|_| "cannot stage backup input")?;
+            if copied != bytes || copied > MAX_AUX {
+                return Err("backup input changed or exceeds limit".to_owned());
+            }
+            target
+                .persist_noclobber(&staged)
+                .map_err(|_| "cannot stage backup input")?;
+            *path = staged;
+        }
+        if name != "database.sqlite" {
+            auxiliary = auxiliary.saturating_add(bytes);
+        }
+        if auxiliary > MAX_AUX {
+            return Err("auxiliary backup input exceeds limit".to_owned());
+        }
+        manifest.entries.push(Entry {
+            name: name.clone(),
+            bytes,
+            sha256: hash(path)?,
+        });
+    }
+    Ok(())
 }
 
 fn output_id(output: &Path) -> Result<String, String> {

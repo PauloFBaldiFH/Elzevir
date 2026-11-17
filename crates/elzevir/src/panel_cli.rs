@@ -170,10 +170,10 @@ fn component(check: crate::health::Check) -> Component {
 impl Collector {
     fn operations(&mut self, request: &ObservationRequest) -> elzevir_panel::Operations {
         if let ObservationRequest::Operate(operation) = request {
-            self.operation_result = Some(if self.operate(operation).is_ok() {
-                "op-submitted"
-            } else {
-                "op-refused"
+            self.operation_result = Some(match self.operate(operation) {
+                Ok(()) => "op-submitted",
+                Err(error) if error.starts_with("B1:") => "broker-unsupported",
+                Err(_) => "op-refused",
             });
         }
         let mut result = elzevir_panel::Operations {
@@ -185,6 +185,7 @@ impl Collector {
                 .and_then(|release| release.body.clone()),
             ..elzevir_panel::Operations::default()
         };
+        result.remote_address = crate::broker::observe(&self.directory).ok().flatten();
         result.tunnel = match crate::tunnel_observe::observe(&self.directory) {
             Ok(Some(tunnel)) => elzevir_panel::TunnelState::Configured(tunnel),
             Ok(None) => elzevir_panel::TunnelState::NotConfigured,
@@ -210,6 +211,7 @@ impl Collector {
                             "cloudflare_login" => "op-cloudflare-login",
                             "cloudflare_setup" => "op-cloudflare-setup",
                             "tunnel_test" => "op-tunnel-test",
+                            "broker" => "broker-operation",
                             "install_cloudflared" => "op-install-cloudflared",
                             "install_rclone" => "op-install-rclone",
                             _ => "op-reboot",
@@ -218,6 +220,7 @@ impl Collector {
                             "queued" => "op-queued",
                             "running" => "op-running",
                             "completed" => "op-completed",
+                            "unsupported" => "broker-unsupported",
                             _ => "op-failed",
                         },
                     }),
@@ -323,7 +326,8 @@ impl Collector {
                 };
                 crate::admin::backup_policy(&info, policy)?;
             }
-            Operation::Restore { .. }
+            Operation::Address(_)
+            | Operation::Restore { .. }
             | Operation::Restart { .. }
             | Operation::Reboot
             | Operation::Update { .. }
@@ -348,6 +352,14 @@ impl Collector {
     ) -> Result<Option<crate::host_jobs::Task>, String> {
         use elzevir_panel::Operation;
         Ok(match operation {
+            Operation::Address(action) => Some(crate::host_jobs::Task::Broker {
+                setup: crate::broker::panel_setup(
+                    self.config
+                        .as_deref()
+                        .ok_or("address requires a configuration file")?,
+                    action,
+                )?,
+            }),
             Operation::CloudflareSetup {
                 catalog,
                 staff,

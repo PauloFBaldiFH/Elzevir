@@ -247,7 +247,16 @@ impl Drop for Worker {
 
 impl Client {
     fn work(&self, config: &str, store: &elzevir_store::ElzevirStore) -> Result<(), String> {
+        let mut heartbeat_at = None;
         loop {
+            if heartbeat_at
+                .is_none_or(|at: std::time::Instant| at.elapsed() >= Duration::from_hours(1))
+            {
+                if crate::broker::heartbeat(&self.0.directory).is_err() {
+                    tracing::warn!(event = "broker.heartbeat_failed");
+                }
+                heartbeat_at = Some(std::time::Instant::now());
+            }
             let mut state = self
                 .0
                 .state

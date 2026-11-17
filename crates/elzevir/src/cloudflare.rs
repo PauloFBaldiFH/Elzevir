@@ -138,6 +138,7 @@ fn login_with(
 ) -> Result<(), String> {
     if std::fs::symlink_metadata(source).is_err() {
         let output = runner.run(Request {
+            environment: None,
             program: program.to_owned(),
             args: vec!["--no-autoupdate".into(), "tunnel".into(), "login".into()],
             input: None,
@@ -315,6 +316,7 @@ fn cloudflared(
     args: Vec<std::ffi::OsString>,
 ) -> Result<(), String> {
     let output = runner.run(Request {
+        environment: None,
         program: program.to_owned(),
         args,
         input: None,
@@ -489,6 +491,12 @@ fn configure_with(
     {
         return Err("tunnel requires this institution and a fixed local origin port".to_owned());
     }
+    if directory.join("secrets/broker.json").exists() {
+        return Err(
+            "existing free address must be reviewed before configuring an own-domain tunnel"
+                .to_owned(),
+        );
+    }
     certificate(certificate_path)?;
     let mut intent = prepare_intent(&directory, setup)?;
     let original = read_text(&setup.config, 65_536)?;
@@ -569,6 +577,9 @@ pub(crate) fn require_host_policy(settings: &crate::server_config::Settings) -> 
 }
 
 pub(crate) fn public_hosts(directory: &Path) -> Result<Option<(String, String)>, String> {
+    if let Some(hosts) = crate::broker::hosts(directory)? {
+        return Ok(Some((hosts.opac, hosts.staff)));
+    }
     Ok(load_intent(directory)?
         .filter(|intent| {
             intent.enforce_hosts

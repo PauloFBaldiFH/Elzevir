@@ -144,7 +144,10 @@ fn address_rows(
     state: &LiveState,
     messages: &Messages,
 ) -> Vec<Line<'static>> {
-    let mut rows = vec![Line::from(messages.get("op-cloudflare-help"))];
+    let mut rows = vec![
+        Line::from(messages.get("op-cloudflare-help")),
+        Line::from(messages.get("broker-help")),
+    ];
     if let Some(sample) = snapshot {
         for uri in &sample.operations.authorization_uris {
             rows.push(row(
@@ -154,11 +157,13 @@ fn address_rows(
             ));
         }
     }
-    rows.extend(crate::tunnel_view::rows(
-        snapshot.map(|sample| &sample.operations),
-        panel.tunnel_tab,
-        messages,
-    ));
+    if panel.tunnel_tab != crate::TunnelTab::Share {
+        rows.extend(crate::tunnel_view::rows(
+            snapshot.map(|sample| &sample.operations),
+            panel.tunnel_tab,
+            messages,
+        ));
+    }
     rows.extend(crate::address_view::rows(
         &state.institution,
         snapshot.map(|sample| &sample.addresses),

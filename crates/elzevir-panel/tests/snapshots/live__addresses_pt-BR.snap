@@ -7,16 +7,19 @@ Administração do Elzevir
 |  d Painel de controle    ||Em execução                                                                     ||Biblioteca de teste         |
 |  x Diagnóstico           ||                                                                                ||                            |
 |> a Endereços e acesso    ||l Entrar na Cloudflare · s Domínio próprio · t Teste · h Log                    ||Listener configurado        |
-|  b Backup e agendamentos ||Não foi possível observar a configuração do túnel público.                      ||127.0.0.1:0                 |
-|  u Atualizações          ||                                                                                ||                            |
-|  r Reiniciar             ||Modo no arquivo carregado: Mesmo endereço                                       ||Listener observado          |
-|                          ||Modo em execução: Nomes de host separados                                       ||127.0.0.1:8080              |
+|  b Backup e agendamentos ||g endereço gratuito · c consultar broker · w/W equipe ligar/desligar · j/J lista||127.0.0.1:0                 |
+|  u Atualizações          ||incluir/remover · k exportar recuperação · o recuperar · n renovar · z desistir ||                            |
+|  r Reiniciar             ||· Q QR                                                                          ||Listener observado          |
+|                          ||Não foi possível observar a configuração do túnel público.                      ||127.0.0.1:8080              |
+|                          ||                                                                                ||                            |
+|                          ||Modo no arquivo carregado: Mesmo endereço                                       ||Última consulta: há 0       |
+|                          ||Modo em execução: Nomes de host separados                                       ||segundos                    |
 |                          ||Nome de host do catálogo: catalog.example                                       ||                            |
-|                          ||Nome de host da equipe: staff.example                                           ||Última consulta: há 0       |
-|                          ||Catálogo (neste computador): http://catalog.example:8080/                       ||segundos                    |
+|                          ||Nome de host da equipe: staff.example                                           ||Observações somente de      |
+|                          ||Catálogo (neste computador): http://catalog.example:8080/                       ||leitura                     |
 |                          ||Equipe (neste computador): http://staff.example:8080/equipe                     ||                            |
-|                          ||Teste HTTP do catálogo: OK                                                      ||Observações somente de      |
-|                          ||Teste HTTP do formulário de login: Falha                                        ||leitura                     |
+|                          ||Teste HTTP do catálogo: OK                                                      ||                            |
+|                          ||Teste HTTP do formulário de login: Falha                                        ||                            |
 |                          ||Início dos testes (UTC): 2026-11-16T12:00:00Z                                   ||                            |
 |                          ||v: testar catálogo e formulário de login | f: atualizar observações             ||                            |
 |                          ||Testes feitos nesta máquina; DNS, TLS e acesso remoto não foram testados.       ||                            |
@@ -26,8 +29,5 @@ Administração do Elzevir
 |                          ||Publicação na internet/túnel: não configurada nesta etapa.                      ||                            |
 |                          ||                                                                                ||                            |
 |                          ||Modos disponíveis para a equipe                                                 ||                            |
-|                          ||Mesmo endereço: catálogo / e equipe /equipe.                                    ||                            |
-|                          ||Nomes de host: catalog_host e staff_host no listener principal.                 ||                            |
-|                          ||Listener próprio: listen da equipe e allow_ips opcionais.                       ||                            |
 +--------------------------++--------------------------------------------------------------------------------++----------------------------+
 Tab/setas: navegar | f: atualizar | PgUp/PgDn: rolar | Ctrl+P: paleta | q/Ctrl+C: sair

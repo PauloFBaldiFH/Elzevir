@@ -109,7 +109,7 @@ pub(crate) fn form(frame: &mut Frame, panel: &Panel, messages: &Messages, ascii:
     if form.confirming() {
         rows.push(Line::from(messages.get("op-confirm")));
         for (key, value) in form.labels.iter().zip(&form.values) {
-            rows.push(row(messages, key, Some(text(value))));
+            rows.push(row(messages, key, Some(field_value(key, value))));
         }
     } else {
         let key = form.labels.get(form.field).copied().unwrap_or("op-output");
@@ -118,7 +118,7 @@ pub(crate) fn form(frame: &mut Frame, panel: &Panel, messages: &Messages, ascii:
             "> {}",
             form.values
                 .get(form.field)
-                .map_or_else(String::new, |value| text(value))
+                .map_or_else(String::new, |value| field_value(key, value))
         )));
         rows.push(Line::from(messages.get("op-edit-help")));
     }
@@ -129,4 +129,12 @@ pub(crate) fn form(frame: &mut Frame, panel: &Panel, messages: &Messages, ascii:
             .block(crate::view::block(messages.get("op-dialog"), ascii)),
         popup,
     );
+}
+
+fn field_value(key: &str, value: &str) -> String {
+    if key == "broker-password" {
+        "*".repeat(value.chars().count().min(64))
+    } else {
+        text(value)
+    }
 }

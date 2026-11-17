@@ -7,14 +7,16 @@ Elzevir administration
 |  d Dashboard             ||Running                                                                         ||Biblioteca de teste         |
 |  x Diagnostics           ||                                                                                ||                            |
 |> a Addresses and access  ||l Cloudflare login · s Own domain · t Test · h Log                              ||Configured listener         |
-|  b Backups and schedules ||Public tunnel configuration could not be observed.                              ||127.0.0.1:0                 |
-|  u Updates               ||                                                                                ||                            |
-|  r Restart               ||Mode in loaded file: Same address                                               ||Observed listener           |
-|                          ||Running mode: Separate hostnames                                                ||127.0.0.1:8080              |
+|  b Backups and schedules ||g free address · c refresh broker · w/W staff on/off · j/J listing on/off · k   ||127.0.0.1:0                 |
+|  u Updates               ||export recovery · o recover · n renew · z give up · Q share QR                  ||                            |
+|  r Restart               ||Public tunnel configuration could not be observed.                              ||Observed listener           |
+|                          ||                                                                                ||127.0.0.1:8080              |
+|                          ||Mode in loaded file: Same address                                               ||                            |
+|                          ||Running mode: Separate hostnames                                                ||Last check: 0 seconds ago   |
 |                          ||Catalog hostname: catalog.example                                               ||                            |
-|                          ||Staff hostname: staff.example                                                   ||Last check: 0 seconds ago   |
+|                          ||Staff hostname: staff.example                                                   ||Read-only observations      |
 |                          ||Catalog (this computer): http://catalog.example:8080/                           ||                            |
-|                          ||Staff (this computer): http://staff.example:8080/equipe                         ||Read-only observations      |
+|                          ||Staff (this computer): http://staff.example:8080/equipe                         ||                            |
 |                          ||Catalog HTTP test: OK                                                           ||                            |
 |                          ||Login form HTTP test: Failed                                                    ||                            |
 |                          ||Tests started (UTC): 2026-11-16T12:00:00Z                                       ||                            |
@@ -27,7 +29,5 @@ Elzevir administration
 |                          ||                                                                                ||                            |
 |                          ||Available staff modes                                                           ||                            |
 |                          ||Same address: catalog / and staff /equipe.                                      ||                            |
-|                          ||Hostnames: catalog_host and staff_host on the main listener.                    ||                            |
-|                          ||Separate listener: staff listen and optional allow_ips.                         ||                            |
 +--------------------------++--------------------------------------------------------------------------------++----------------------------+
 Tab/arrows: navigate | f: refresh | PgUp/PgDn: scroll | Ctrl+P: palette | q/Ctrl+C: quit

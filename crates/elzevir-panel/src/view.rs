@@ -25,9 +25,9 @@ fn body(area: Rect) -> Rect {
 
 fn columns(area: Rect) -> [Rect; 3] {
     let areas = Layout::horizontal([
-        Constraint::Length(28),
+        Constraint::Length(if area.width < 110 { 22 } else { 28 }),
         Constraint::Min(1),
-        Constraint::Length(30),
+        Constraint::Length(if area.width < 110 { 0 } else { 30 }),
     ])
     .split(body(area));
     std::array::from_fn(|i| areas.get(i).copied().unwrap_or_default())
@@ -116,6 +116,14 @@ pub fn draw(frame: &mut Frame, panel: &Panel, messages: &Messages, ascii: bool) 
     menu(frame, panel, messages, navigation, ascii);
     if let Mode::Live(state) = &panel.mode {
         crate::dashboard::draw(frame, panel, state, messages, work, context, ascii);
+        if panel.section == Section::Addresses && panel.tunnel_tab == crate::TunnelTab::Share {
+            crate::sharing::draw(
+                frame,
+                state.snapshot.as_ref().filter(|_| state.age_seconds <= 5),
+                messages,
+                ascii,
+            );
+        }
     } else {
         let description = vec![
             Line::from(messages.get("panel-demo")),

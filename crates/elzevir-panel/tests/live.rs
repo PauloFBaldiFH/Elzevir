@@ -393,3 +393,29 @@ fn public_tunnel_test_and_log_tabs_never_conflate_a_gate_with_a_failure() {
         assert!(!logged.contains("tunnel-event-connected"));
     }
 }
+
+#[test]
+fn remote_staff_password_is_masked_while_editing_and_confirming_in_both_languages() {
+    use elzevir_panel::{AddressOperation, Form, Operation, Section};
+    let mut panel = connected();
+    panel.section = Section::Addresses;
+    let mut form = Form::new(Operation::Address(AddressOperation::Staff {
+        username: "operator".to_owned(),
+        password: "fictional-private-password".to_owned(),
+        cidrs: String::new(),
+    }));
+    form.field = 1;
+    panel.form = Some(form);
+    for language in ["en", "pt-BR"] {
+        let editing = screen(&panel, language);
+        assert!(!editing.contains("fictional-private-password"));
+        assert!(editing.contains("********"));
+    }
+    panel.form.as_mut().unwrap().field = 3;
+    for language in ["en", "pt-BR"] {
+        let confirmed = screen(&panel, language);
+        assert!(!confirmed.contains("fictional-private-password"));
+        assert!(confirmed.contains("********"));
+    }
+    assert!(!format!("{panel:?}").contains("fictional-private-password"));
+}

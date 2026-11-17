@@ -111,6 +111,8 @@ pub enum TunnelTab {
     Test,
     /// Redacted connector log projection.
     Log,
+    /// Public catalog QR code.
+    Share,
 }
 
 impl PublicCheck {
@@ -125,4 +127,15 @@ impl PublicCheck {
             Self::Unknown => "unknown",
         }
     }
+}
+
+/// Safe last observation from the free-address service.
+#[derive(Debug, Clone)]
+pub struct RemoteAddress {
+    /// When the remote settings were observed.
+    pub at: String,
+    /// Whether the public directory includes the catalog.
+    pub listed: bool,
+    /// Whether remote staff edge authentication is enabled.
+    pub staff_remote: bool,
 }

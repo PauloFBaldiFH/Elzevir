@@ -11,6 +11,7 @@ use std::{
 pub(crate) type Progress = std::sync::Arc<dyn Fn(&[u8]) -> Result<(), String> + Send + Sync>;
 
 pub(crate) struct Request {
+    pub environment: Option<Vec<(String, zeroize::Zeroizing<String>)>>,
     pub progress: Option<Progress>,
     pub program: PathBuf,
     pub args: Vec<OsString>,
@@ -48,7 +49,33 @@ impl Runner for Native {
             .map_err(|_| "cannot rewind process input")?;
         let stdout = tempfile::tempfile().map_err(|_| "cannot capture process output")?;
         let stderr = tempfile::tempfile().map_err(|_| "cannot capture process errors")?;
-        let mut child = Command::new(&request.program)
+        let mut command = Command::new(&request.program);
+        if let Some(environment) = &request.environment {
+            if environment
+                .iter()
+                .map(|(name, value)| name.len() + value.len() + 2)
+                .sum::<usize>()
+                > 24_000
+                || environment.iter().any(|(name, value)| {
+                    !name.starts_with("RCLONE_")
+                        || !name
+                            .bytes()
+                            .all(|byte| byte.is_ascii_uppercase() || byte == b'_')
+                        || value.contains('\0')
+                })
+            {
+                return Err("invalid private tool environment".to_owned());
+            }
+            for (name, _) in std::env::vars_os() {
+                if name.to_string_lossy().starts_with("RCLONE_") {
+                    command.env_remove(name);
+                }
+            }
+            for (name, value) in environment {
+                command.env(name, value.as_str());
+            }
+        }
+        let mut child = command
             .args(&request.args)
             .stdin(Stdio::from(input))
             .stdout(

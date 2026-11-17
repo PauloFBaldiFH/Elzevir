@@ -29,6 +29,8 @@ flate2 = "1"
 zip = { version = "9.6", default-features = false, features = ["deflate-flate2"] }
 sha2 = "0.10"
 base64 = "0.23"
+ring = "0.17"
+ipnet = "2"
 cap-std = "4.0"
 cap-fs-ext = "4.0"
 zeroize = "1"

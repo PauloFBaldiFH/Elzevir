@@ -285,6 +285,7 @@ fn check_version(
     version: &str,
 ) -> Result<(), String> {
     let checked = runner.run(Request {
+        environment: None,
         progress: None,
         program: staged.to_owned(),
         args: vec!["--version".into()],

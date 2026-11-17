@@ -371,6 +371,7 @@ pub(super) fn grant_tunnel_access(plan: &Plan) -> Result<(), String> {
     }
     let logs = plan.data_dir.join("logs/cloudflared");
     let output = Native.run(Request {
+        environment: None,
         program: program.clone(),
         args: vec![
             logs.into_os_string(),
@@ -387,6 +388,7 @@ pub(super) fn grant_tunnel_access(plan: &Plan) -> Result<(), String> {
     }
     for path in paths {
         let output = Native.run(Request {
+            environment: None,
             program: program.clone(),
             args: vec![
                 path.into_os_string(),
