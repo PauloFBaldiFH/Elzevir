@@ -88,3 +88,8 @@ instituição e o pai do alvo. Caminhos comuns, caminhos canônicos do Windows
 a mesma instituição. Alvos de outra instituição ou não declarados continuam
 recusados antes de mover arquivos. A configuração restaurada aponta ao caminho
 canônico do diretório de destino.
+
+A proteção Windows substitui primeiro as permissões explícitas pela herança
+padrão do pai (`icacls /reset`) e depois remove essa herança e aplica a lista
+restrita. Remover somente a herança não elimina grants explícitos do criador
+ou de contas anteriores. O proprietário é alterado apenas após proteger a DACL.

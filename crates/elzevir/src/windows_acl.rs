@@ -20,14 +20,13 @@ pub(super) fn protect(
     program: &Path,
     runner: &impl Runner,
 ) -> Result<(), String> {
-    if matches!(scope, Scope::SharedTools) {
-        apply(
-            program,
-            runner,
-            vec![path.as_os_str().to_owned(), "/reset".into()],
-            "cannot reset shared tool directory ACL",
-        )?;
-    }
+    // Inheritance removal alone retains explicit grants from the creator or a prior owner.
+    apply(
+        program,
+        runner,
+        vec![path.as_os_str().to_owned(), "/reset".into()],
+        "cannot reset private Windows ACL",
+    )?;
     let rights = if directory { "(OI)(CI)F" } else { "F" };
     let mut args = vec![
         path.as_os_str().to_owned(),
@@ -119,28 +118,31 @@ mod tests {
                     shared
                 );
                 assert!(calls.last().unwrap().iter().any(|arg| arg == "/setowner"));
-                assert_eq!(calls.len(), if shared { 3 } else { 2 });
+                assert_eq!(calls.len(), 3);
+                assert_eq!(calls.first().unwrap().get(1).unwrap(), "/reset");
             }
         }
     }
     #[test]
     fn acl_failure_stops_before_any_later_mutation() {
-        for failed in 1..=3 {
-            let runner = Icacls {
-                fail: Some(failed),
-                ..Icacls::default()
-            };
-            assert!(
-                protect(
-                    Path::new("private path"),
-                    true,
-                    Scope::SharedTools,
-                    Path::new("icacls.exe"),
-                    &runner
-                )
-                .is_err()
-            );
-            assert_eq!(runner.calls.borrow().len(), failed);
+        for scope in [Scope::Operator, Scope::SharedTools] {
+            for failed in 1..=3 {
+                let runner = Icacls {
+                    fail: Some(failed),
+                    ..Icacls::default()
+                };
+                assert!(
+                    protect(
+                        Path::new("private path"),
+                        true,
+                        scope,
+                        Path::new("icacls.exe"),
+                        &runner
+                    )
+                    .is_err()
+                );
+                assert_eq!(runner.calls.borrow().len(), failed);
+            }
         }
     }
 }
