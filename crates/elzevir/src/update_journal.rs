@@ -90,7 +90,7 @@ impl Journal {
             phase: Phase::Prepared,
             backup: None,
         };
-        if previous != journal.previous()? {
+        if installation::absolute(previous)? != journal.previous()? {
             return Err("previous executable must belong to this update".to_owned());
         }
         journal.save()?;
@@ -243,6 +243,56 @@ impl Journal {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn previous_executable_accepts_a_parent_alias_but_rejects_another_directory() {
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().join("library");
+        let alias = root.path().join("alias");
+        let outside = root.path().join("outside");
+        for path in [&directory, &alias, &outside] {
+            std::fs::create_dir(path).unwrap();
+        }
+        let config = root.path().join("server.toml");
+        let executable = root.path().join("elzevir");
+        std::fs::write(&config, b"fictional config").unwrap();
+        std::fs::write(&executable, b"old executable").unwrap();
+        installation::claim(&executable, &directory, &config, "elzevir").unwrap();
+        let name = format!(
+            "elzevir-previous-{}{}",
+            "a".repeat(32),
+            if cfg!(windows) { ".exe" } else { "" }
+        );
+        assert!(
+            Journal::begin(
+                &executable,
+                &directory,
+                &config,
+                "elzevir",
+                &outside.join(&name),
+                "v1.0.0",
+                "b".repeat(64)
+            )
+            .unwrap_err()
+            .contains("must belong")
+        );
+        assert!(!pending(&executable).unwrap());
+        let previous = alias.join("..").join(&name);
+        let journal = Journal::begin(
+            &executable,
+            &directory,
+            &config,
+            "elzevir",
+            &previous,
+            "v1.0.0",
+            "b".repeat(64),
+        )
+        .unwrap();
+        assert_eq!(
+            journal.previous().unwrap(),
+            root.path().canonicalize().unwrap().join(name)
+        );
+    }
+
     #[test]
     fn interruption_between_binary_renames_recovers_the_owned_previous_file() {
         let root = tempfile::tempdir().unwrap();

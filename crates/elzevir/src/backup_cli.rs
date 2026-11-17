@@ -515,7 +515,7 @@ mod tests {
             .resolve()
             .unwrap()
             .data_dir,
-            directory.path()
+            directory.path().canonicalize().unwrap()
         );
         let reopened = crate::open_store(directory.path()).unwrap();
         reopened.store.shutdown().unwrap();

@@ -81,3 +81,10 @@ deve concluir com sucesso antes de mover qualquer arquivo da instituição.
 Falha em uma etapa aborta a operação, sem fallback para permissões amplas.
 Testes Windows verificam proprietário, herança e permissões de arquivos e pastas
 temporários, além da restauração e rollback do banco fictício.
+
+Antes de comparar destinos declarados, a restauração resolve o diretório da
+instituição e o pai do alvo. Caminhos comuns, caminhos canônicos do Windows
+(com prefixo verbatim) e aliases que resolvem para o mesmo diretório identificam
+a mesma instituição. Alvos de outra instituição ou não declarados continuam
+recusados antes de mover arquivos. A configuração restaurada aponta ao caminho
+canônico do diretório de destino.

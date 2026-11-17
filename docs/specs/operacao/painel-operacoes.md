@@ -56,3 +56,8 @@ independentemente da umask do processo. Em Unix, o criador solicita modo 0700
 para o diretório e 0600 para arquivos privados. A validação continua recusando
 tickets que o operador ou outro processo tornou acessíveis a grupo/outros.
 O mesmo criador privado é usado para estagiar dados de backup e restauração.
+
+O diário de atualização compara o caminho do executável anterior após resolver
+seu diretório pai, mantendo o nome derivado do identificador da atualização.
+Aliases do mesmo diretório (inclusive o prefixo verbatim do Windows) são válidos;
+um arquivo em outro diretório permanece recusado antes de publicar o diário.

@@ -172,6 +172,10 @@ impl Journal {
         Ok(safety_path(directory, &self.id)?.join(format!("original-{name}")))
     }
     pub(crate) fn preserve(&self, directory: &Path, target: &Path) -> Result<(), String> {
+        let canonical_directory = directory
+            .canonicalize()
+            .map_err(|_| "restore directory unavailable")?;
+        let directory = canonical_directory.as_path();
         let target = absolute(target)?;
         let entry = self
             .entries
@@ -358,8 +362,15 @@ mod tests {
             &directory.path().join("server.toml"),
         )
         .unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let unrelated = outside.path().join("elzevir.db");
+        std::fs::write(&unrelated, b"unrelated database").unwrap();
+        assert!(journal.preserve(directory.path(), &unrelated).is_err());
+        assert_eq!(std::fs::read(&unrelated).unwrap(), b"unrelated database");
+        let alias = directory.path().join("alias");
+        std::fs::create_dir(&alias).unwrap();
         journal
-            .preserve(directory.path(), &directory.path().join("elzevir.db"))
+            .preserve(&alias.join(".."), &directory.path().join("elzevir.db"))
             .unwrap();
         assert!(crate::open_store(directory.path()).is_err());
         assert!(!directory.path().join("elzevir.db").exists());
