@@ -147,6 +147,54 @@ pub(crate) fn operator_private(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+pub(crate) fn program(path: &Path, reference: &Path, service: &str) -> Result<(), String> {
+    if !crate::service::valid_name(service) {
+        return Err("invalid executable service account".to_owned());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
+        let metadata =
+            std::fs::metadata(reference).map_err(|_| "installed executable unavailable")?;
+        let file = std::fs::File::open(path).map_err(|_| "staged executable unavailable")?;
+        rustix::fs::fchown(
+            &file,
+            Some(rustix::process::Uid::from_raw(metadata.uid())),
+            Some(rustix::process::Gid::from_raw(metadata.gid())),
+        )
+        .map_err(|_| "cannot retain executable ownership")?;
+        file.set_permissions(std::fs::Permissions::from_mode(metadata.mode() & 0o777))
+            .map_err(|_| "cannot retain executable permissions")?;
+    }
+    #[cfg(windows)]
+    {
+        use crate::process_runner::{Native, Request, Runner as _};
+        let program = std::path::PathBuf::from(
+            std::env::var_os("SystemRoot").ok_or("Windows directory unavailable")?,
+        )
+        .join("System32/icacls.exe");
+        let output = Native.run(Request {
+            environment: None,
+            progress: None,
+            program,
+            args: vec![
+                path.as_os_str().to_owned(),
+                "/inheritance:e".into(),
+                "/grant:r".into(),
+                format!("NT SERVICE\\{service}:RX").into(),
+            ],
+            input: None,
+            timeout: std::time::Duration::from_secs(10),
+            limit: 4096,
+        })?;
+        if !output.success {
+            return Err("cannot retain service executable access".to_owned());
+        }
+        let _ = reference;
+    }
+    Ok(())
+}
+
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;

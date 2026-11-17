@@ -40,7 +40,10 @@ mod suggestions;
 mod worklist;
 mod writer;
 
-pub use backup::{SnapshotInfo, inspect_snapshot, snapshot_offline, supported_schema_version};
+pub use backup::{
+    SnapshotInfo, inspect_snapshot, inspect_snapshot_controlled, snapshot_offline,
+    supported_schema_version,
+};
 pub use config::StoreConfig;
 pub use elzevir::{ElzevirHandler, ElzevirStore};
 pub use error::{CommandFailed, StoreError, SubmitError};

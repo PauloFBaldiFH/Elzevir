@@ -53,7 +53,7 @@ pub(crate) fn rows(
         for job in operations.jobs.iter().filter(|job| match section {
             crate::Section::Updates => matches!(
                 job.action,
-                "op-update" | "op-install-cloudflared" | "op-install-rclone"
+                "op-update" | "op-update-recover" | "op-install-cloudflared" | "op-install-rclone"
             ),
             crate::Section::Restart => matches!(job.action, "op-restart" | "op-reboot"),
             _ => matches!(

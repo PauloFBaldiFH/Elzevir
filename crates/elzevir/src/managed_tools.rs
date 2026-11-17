@@ -35,7 +35,7 @@ impl Tool {
         format!("{}{}", self.name(), if cfg!(windows) { ".exe" } else { "" })
     }
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Installed {
     schema: u8,
@@ -147,6 +147,9 @@ fn read_record(tool: Tool, directory: &Path) -> Result<Installed, String> {
     Ok(record)
 }
 fn binary_at(tool: Tool, directory: &Path) -> Result<PathBuf, String> {
+    if std::fs::symlink_metadata(tool_journal(tool, directory)).is_ok() {
+        return Err("complete the interrupted tool installation before use".to_owned());
+    }
     let record = read_record(tool, directory)?;
     let path = directory.join(tool.filename());
     if archive::regular(&path)? > MAX_TOOL || crate::release::hash(&path)? != record.sha256 {
@@ -156,6 +159,24 @@ fn binary_at(tool: Tool, directory: &Path) -> Result<PathBuf, String> {
 }
 pub(crate) fn binary(tool: Tool) -> Result<PathBuf, String> {
     binary_at(tool, &root(false)?)
+}
+pub(crate) struct Lease {
+    pub(crate) path: PathBuf,
+    _lock: std::fs::File,
+}
+pub(crate) fn lease(tool: Tool) -> Result<Lease, String> {
+    lease_at(tool, &root(false)?)
+}
+fn lease_at(tool: Tool, directory: &Path) -> Result<Lease, String> {
+    let lock_path = directory.join(format!(".{}.lock", tool.name()));
+    archive::regular(&lock_path)?;
+    let lock = std::fs::File::open(lock_path).map_err(|_| "tool lock unavailable")?;
+    lock.try_lock_shared()
+        .map_err(|_| "optional tool is being updated")?;
+    Ok(Lease {
+        path: binary_at(tool, directory)?,
+        _lock: lock,
+    })
 }
 pub(crate) fn installed(tool: Tool) -> Result<Installed, String> {
     let directory = root(false)?;
@@ -179,17 +200,7 @@ pub(crate) fn ensure(tool: Tool) -> Result<PathBuf, String> {
     binary(tool)
 }
 
-fn install_at(
-    tool: Tool,
-    directory: &Path,
-    source: &impl Download,
-    runner: &impl Runner,
-) -> Result<Installed, String> {
-    let metadata =
-        std::fs::symlink_metadata(directory).map_err(|_| "tool program directory unavailable")?;
-    if !metadata.is_dir() || metadata.is_symlink() {
-        return Err("invalid tool program directory".to_owned());
-    }
+fn installation_lock(tool: Tool, directory: &Path) -> Result<std::fs::File, String> {
     let lock_path = directory.join(format!(".{}.lock", tool.name()));
     if std::fs::symlink_metadata(&lock_path).is_ok() {
         archive::regular(&lock_path)?;
@@ -201,7 +212,29 @@ fn install_at(
         .open(lock_path)
         .map_err(|_| "tool lock unavailable")?;
     lock.try_lock()
-        .map_err(|_| "another tool installation is running")?;
+        .map_err(|_| "optional tool is in use or another installation is running")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        lock.set_permissions(std::fs::Permissions::from_mode(0o644))
+            .map_err(|_| "cannot set tool lock permissions")?;
+    }
+    Ok(lock)
+}
+
+fn install_at(
+    tool: Tool,
+    directory: &Path,
+    source: &impl Download,
+    runner: &impl Runner,
+) -> Result<Installed, String> {
+    let metadata =
+        std::fs::symlink_metadata(directory).map_err(|_| "tool program directory unavailable")?;
+    if !metadata.is_dir() || metadata.is_symlink() {
+        return Err("invalid tool program directory".to_owned());
+    }
+    let _lock = installation_lock(tool, directory)?;
+    recover_publication(tool, directory)?;
     let mut bytes = Vec::new();
     source.fetch(
         &format!(
@@ -267,12 +300,16 @@ fn install_at(
         std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(0o755))
             .map_err(|_| "cannot prepare official tool executable")?;
     }
+    let staged_hash = crate::release::hash(&staged)?;
     check_version(runner, &staged, tool, &release.tag_name)?;
+    if crate::release::hash(&staged)? != staged_hash {
+        return Err("official tool changed during version verification".to_owned());
+    }
     let record = Installed {
         schema: 1,
         tool,
         version: release.tag_name,
-        sha256: crate::release::hash(&staged)?,
+        sha256: staged_hash,
     };
     publish(tool, directory, &staged, &record)?;
     Ok(record)
@@ -307,56 +344,143 @@ fn check_version(
 
 fn publish(tool: Tool, directory: &Path, staged: &Path, record: &Installed) -> Result<(), String> {
     let target = directory.join(tool.filename());
-    let previous = staged.with_file_name("previous-tool");
-    let existed = std::fs::symlink_metadata(&target).is_ok();
-    if existed {
-        archive::regular(&target)?;
-        let old = read_record(tool, directory)?;
-        let current = crate::release::hash(&target)?;
-        if current != old.sha256 && current != record.sha256 {
-            return Err("existing program is not an owned official tool".to_owned());
+    let old = if std::fs::symlink_metadata(&target).is_ok() {
+        binary_at(tool, directory)?;
+        Some(read_record(tool, directory)?)
+    } else {
+        if record_path(tool, directory).exists() {
+            return Err("tool record without executable requires recovery".to_owned());
         }
+        None
+    };
+    let previous = tool_previous(tool, directory);
+    if std::fs::symlink_metadata(&previous).is_ok() {
+        return Err("previous tool recovery file must be new".to_owned());
+    }
+    let journal = ToolJournal {
+        schema: 1,
+        old,
+        new: record.clone(),
+    };
+    journal.save(tool, directory)?;
+    if journal.old.is_some() {
         std::fs::rename(&target, &previous)
             .map_err(|_| "stop the optional tool service before updating")?;
     }
-    let result = (|| {
-        std::fs::rename(staged, &target).map_err(|_| "cannot publish official tool")?;
-        let mut record_file =
-            tempfile::NamedTempFile::new_in(directory).map_err(|_| "cannot stage tool record")?;
-        record_file
-            .write_all(&serde_json::to_vec(record).map_err(|_| "cannot encode tool record")?)
-            .and_then(|()| record_file.as_file().sync_all())
-            .map_err(|_| "cannot write tool record")?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            record_file
-                .as_file()
-                .set_permissions(std::fs::Permissions::from_mode(0o644))
-                .map_err(|_| "cannot set tool record permissions")?;
-        }
-        record_file
-            .persist(record_path(tool, directory))
-            .map_err(|_| "cannot publish tool record")?;
-        Ok(())
-    })();
-    if result.is_err() {
-        if target.exists() {
-            std::fs::remove_file(&target).map_err(|_| "cannot clear failed tool installation")?;
-        }
-        if existed {
-            std::fs::rename(previous, target)
-                .map_err(|_| "cannot restore previous optional tool")?;
-        }
+    if std::fs::rename(staged, &target).is_err() {
+        recover_publication(tool, directory)?;
+        return Err("cannot publish official tool; previous state recovered".to_owned());
     }
-    result
+    crate::installation::sync_directory(directory)?;
+    write_record(tool, directory, record)?;
+    journal.finish(tool, directory)
+}
+fn write_record(tool: Tool, directory: &Path, record: &Installed) -> Result<(), String> {
+    let mut file =
+        tempfile::NamedTempFile::new_in(directory).map_err(|_| "cannot stage tool record")?;
+    file.write_all(&serde_json::to_vec(record).map_err(|_| "cannot encode tool record")?)
+        .and_then(|()| file.as_file().sync_all())
+        .map_err(|_| "cannot write tool record")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        file.as_file()
+            .set_permissions(std::fs::Permissions::from_mode(0o644))
+            .map_err(|_| "cannot set tool record permissions")?;
+    }
+    file.persist(record_path(tool, directory))
+        .map_err(|_| "cannot publish tool record")?;
+    crate::installation::sync_directory(directory)
+}
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ToolJournal {
+    schema: u8,
+    old: Option<Installed>,
+    new: Installed,
+}
+fn tool_journal(tool: Tool, directory: &Path) -> PathBuf {
+    directory.join(format!(".{}-update.json", tool.name()))
+}
+fn tool_previous(tool: Tool, directory: &Path) -> PathBuf {
+    directory.join(format!(".{}-previous", tool.name()))
+}
+impl ToolJournal {
+    fn save(&self, tool: Tool, directory: &Path) -> Result<(), String> {
+        crate::installation::publish_private(
+            &tool_journal(tool, directory),
+            &serde_json::to_vec(self).map_err(|_| "cannot encode tool journal")?,
+        )
+    }
+    fn finish(&self, tool: Tool, directory: &Path) -> Result<(), String> {
+        let previous = tool_previous(tool, directory);
+        if std::fs::symlink_metadata(&previous).is_ok() {
+            let old = self.old.as_ref().ok_or("unexpected previous tool file")?;
+            if crate::release::hash(&previous)? != old.sha256 {
+                return Err("previous tool changed; recovery files preserved".to_owned());
+            }
+            std::fs::remove_file(previous).map_err(|_| "cannot remove owned previous tool")?;
+        }
+        std::fs::remove_file(tool_journal(tool, directory))
+            .map_err(|_| "cannot finalize tool journal")?;
+        crate::installation::sync_directory(directory)
+    }
+}
+fn valid_record(record: &Installed, tool: Tool) -> bool {
+    record.schema == 1
+        && record.tool == tool
+        && valid_version(&record.version)
+        && record.sha256.len() == 64
+        && record.sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+fn recover_publication(tool: Tool, directory: &Path) -> Result<(), String> {
+    let path = tool_journal(tool, directory);
+    if std::fs::symlink_metadata(&path).is_err() {
+        return Ok(());
+    }
+    let journal: ToolJournal =
+        serde_json::from_slice(&crate::installation::read_private(&path, 8192)?)
+            .map_err(|_| "invalid tool recovery journal")?;
+    if journal.schema != 1
+        || !valid_record(&journal.new, tool)
+        || journal
+            .old
+            .as_ref()
+            .is_some_and(|old| !valid_record(old, tool))
+    {
+        return Err("invalid tool recovery record".to_owned());
+    }
+    let target = directory.join(tool.filename());
+    let selected = if std::fs::symlink_metadata(&target).is_ok() {
+        let hash = crate::release::hash(&target)?;
+        if hash == journal.new.sha256 {
+            &journal.new
+        } else if let Some(old) = journal.old.as_ref().filter(|old| old.sha256 == hash) {
+            old
+        } else {
+            return Err("tool changed outside installation; recovery files preserved".to_owned());
+        }
+    } else if let Some(old) = &journal.old {
+        let previous = tool_previous(tool, directory);
+        if crate::release::hash(&previous)? != old.sha256 {
+            return Err("previous tool checksum mismatch".to_owned());
+        }
+        std::fs::rename(previous, &target).map_err(|_| "cannot recover previous tool")?;
+        crate::installation::sync_directory(directory)?;
+        old
+    } else {
+        if record_path(tool, directory).exists() || tool_previous(tool, directory).exists() {
+            return Err("unexpected tool recovery state".to_owned());
+        }
+        return journal.finish(tool, directory);
+    };
+    write_record(tool, directory, selected)?;
+    journal.finish(tool, directory)
 }
 
 fn extract_rclone(package: &Path, directory: &Path, version: &str) -> Result<PathBuf, String> {
-    let mut archive = zip::ZipArchive::new(
-        std::fs::File::open(package).map_err(|_| "rclone package unavailable")?,
-    )
-    .map_err(|_| "invalid rclone ZIP")?;
+    let mut archive = zip::ZipArchive::new(crate::release::bounded_zip(package, 32)?)
+        .map_err(|_| "invalid rclone ZIP")?;
     if archive.len() > 32 {
         return Err("rclone package entry limit exceeded".to_owned());
     }
@@ -472,5 +596,90 @@ mod tests {
         assert!(install_at(Tool::Cloudflared, directory.path(), &source, &source).is_err());
         assert_eq!(source.runs.get(), 0);
         assert!(!directory.path().join(Tool::Cloudflared.filename()).exists());
+    }
+    #[test]
+    fn concurrent_readers_prevent_replacement_until_both_release_the_tool() {
+        let directory = tempfile::tempdir().unwrap();
+        let source = Fake {
+            bad_hash: false,
+            runs: Cell::new(0),
+        };
+        install_at(Tool::Cloudflared, directory.path(), &source, &source).unwrap();
+        let first = lease_at(Tool::Cloudflared, directory.path()).unwrap();
+        let second = lease_at(Tool::Cloudflared, directory.path()).unwrap();
+        assert!(install_at(Tool::Cloudflared, directory.path(), &source, &source).is_err());
+        drop(first);
+        assert!(install_at(Tool::Cloudflared, directory.path(), &source, &source).is_err());
+        drop(second);
+        install_at(Tool::Cloudflared, directory.path(), &source, &source).unwrap();
+    }
+    struct MutatingRunner;
+    impl Runner for MutatingRunner {
+        fn run(&self, request: Request) -> Result<Output, String> {
+            std::fs::write(request.program, b"changed during version check").unwrap();
+            Ok(Output {
+                success: true,
+                stdout: b"cloudflared version 2026.11.0".to_vec(),
+            })
+        }
+    }
+    #[test]
+    fn version_probe_cannot_publish_a_changed_executable() {
+        let directory = tempfile::tempdir().unwrap();
+        let source = Fake {
+            bad_hash: false,
+            runs: Cell::new(0),
+        };
+        assert!(
+            install_at(
+                Tool::Cloudflared,
+                directory.path(),
+                &source,
+                &MutatingRunner
+            )
+            .is_err()
+        );
+        assert!(!directory.path().join(Tool::Cloudflared.filename()).exists());
+    }
+    #[test]
+    fn interrupted_tool_publication_recovers_old_or_finishes_new_without_network() {
+        for new_published in [false, true] {
+            let directory = tempfile::tempdir().unwrap();
+            let tool = Tool::Cloudflared;
+            let source = Fake {
+                bad_hash: false,
+                runs: Cell::new(0),
+            };
+            install_at(tool, directory.path(), &source, &source).unwrap();
+            let target = directory.path().join(tool.filename());
+            let old = read_record(tool, directory.path()).unwrap();
+            let new = Installed {
+                schema: 1,
+                tool,
+                version: "2026.12.0".to_owned(),
+                sha256: format!("{:x}", sha2::Sha256::digest(b"new executable")),
+            };
+            let journal = ToolJournal {
+                schema: 1,
+                old: Some(old),
+                new,
+            };
+            journal.save(tool, directory.path()).unwrap();
+            std::fs::rename(&target, tool_previous(tool, directory.path())).unwrap();
+            if new_published {
+                std::fs::write(&target, b"new executable").unwrap();
+            }
+            recover_publication(tool, directory.path()).unwrap();
+            assert!(binary_at(tool, directory.path()).is_ok());
+            assert_eq!(
+                read_record(tool, directory.path()).unwrap().version,
+                if new_published {
+                    "2026.12.0"
+                } else {
+                    "2026.11.0"
+                }
+            );
+            assert!(!tool_journal(tool, directory.path()).exists());
+        }
     }
 }

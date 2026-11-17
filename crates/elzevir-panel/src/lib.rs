@@ -308,6 +308,9 @@ impl Panel {
             },
             (Section::Restart, 'm') => Operation::Reboot,
             (Section::Updates, 'c') => Operation::CheckUpdates,
+            (Section::Updates, 'r') => Operation::RecoverUpdate {
+                executable: String::new(),
+            },
             (Section::Updates, 'g') => Operation::InstallCloudflared,
             (Section::Updates, 'l') => Operation::InstallRclone,
             (Section::Updates, 'i') => Operation::Update {

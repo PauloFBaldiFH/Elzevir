@@ -31,6 +31,10 @@ pub(crate) enum Task {
     InstallTool {
         tool: crate::managed_tools::Tool,
     },
+    RecoverUpdate {
+        executable: PathBuf,
+        config: PathBuf,
+    },
     Update {
         config: PathBuf,
         name: String,
@@ -84,6 +88,7 @@ fn action(task: &Task) -> &'static str {
             crate::managed_tools::Tool::Rclone => "install_rclone",
         },
         Task::Update { .. } => "update",
+        Task::RecoverUpdate { .. } => "recover_update",
     }
 }
 fn save(directory: &Path, receipt: &Receipt) -> Result<(), String> {
@@ -101,7 +106,9 @@ fn save(directory: &Path, receipt: &Receipt) -> Result<(), String> {
 }
 
 pub(crate) fn launch(directory: &Path, task: Task) -> Result<String, String> {
-    archive::regular(&directory.join("elzevir.db"))?;
+    if !matches!(task, Task::RecoverUpdate { .. }) {
+        archive::regular(&directory.join("elzevir.db"))?;
+    }
     crate::backup_cli::make_directory(&directory.join("host-jobs"))?;
     let id = archive::identifier()?;
     let ticket = Ticket {
@@ -131,7 +138,10 @@ pub(crate) fn launch(directory: &Path, task: Task) -> Result<String, String> {
     };
     save(directory, &receipt)?;
     let executable = std::env::current_exe().map_err(|_| "cannot locate host executable")?;
-    let helper = if matches!(ticket.task, Task::Update { .. }) {
+    let helper = if matches!(
+        ticket.task,
+        Task::Update { .. } | Task::RecoverUpdate { .. }
+    ) {
         let helper = temporary.path().join(if cfg!(windows) {
             "helper.exe"
         } else {
@@ -241,6 +251,9 @@ pub(crate) fn run(args: &Args) -> Result<(), String> {
     let shared = std::sync::Arc::new(std::sync::Mutex::new(receipt.clone()));
     let directory = ticket.directory.clone();
     let progress: crate::process_runner::Progress = std::sync::Arc::new(move |bytes| {
+        if bytes.is_empty() {
+            return Ok(());
+        }
         if let Some(uri) = crate::cloudflare::authorization_url(bytes)
             .or_else(|| crate::broker::authorization_url(&directory, bytes))
         {
@@ -318,6 +331,9 @@ fn execute(
         Task::TestTunnel => crate::tunnel_observe::test(directory),
         Task::CloudflareSetup { setup } => crate::cloudflare::configure(directory, &setup),
         Task::InstallTool { tool } => crate::managed_tools::install(tool).map(drop),
+        Task::RecoverUpdate { executable, config } => {
+            crate::update_recovery::execute(directory, &executable, &config)
+        }
         Task::Update {
             config,
             name,
@@ -431,6 +447,7 @@ pub(crate) fn receipts(directory: &Path) -> Result<Vec<Receipt>, String> {
                     | "restart"
                     | "reboot"
                     | "update"
+                    | "recover_update"
                     | "install_cloudflared"
                     | "install_rclone"
                     | "cloudflare_login"

@@ -46,3 +46,21 @@ fn restore_fields_are_bounded_and_escape_cancels_without_submission() {
     assert!(panel.diagnostics.requested.is_none());
     assert!(!panel.diagnostics.pending);
 }
+
+#[test]
+fn interrupted_update_recovery_requires_a_target_and_explicit_confirmation() {
+    let mut panel = Panel::live(Institution::default());
+    panel.section = Section::Updates;
+    key(&mut panel, KeyCode::Char('r'));
+    assert!(panel.form.is_some());
+    assert!(panel.diagnostics.requested.is_none());
+    key(&mut panel, KeyCode::Enter);
+    assert!(panel.form.as_ref().unwrap().confirming());
+    key(&mut panel, KeyCode::Char('y'));
+    assert_eq!(
+        panel.diagnostics.requested,
+        Some(ObservationRequest::Operate(Operation::RecoverUpdate {
+            executable: String::new()
+        }))
+    );
+}

@@ -227,10 +227,24 @@ trait Backend {
     fn upload(&self, directory: &Path, plan: &Plan, source: &Path) -> Result<(), String>;
     fn remove(&self, directory: &Path, artifact: &Artifact) -> Result<(), String>;
 }
-struct Native;
+struct Native {
+    control: crate::cancellation::Control,
+}
+impl Native {
+    fn progress(&self) -> crate::process_runner::Progress {
+        let control = std::sync::Arc::clone(&self.control);
+        std::sync::Arc::new(move |_| crate::cancellation::check(&control))
+    }
+}
 impl Backend for Native {
     fn upload(&self, directory: &Path, plan: &Plan, source: &Path) -> Result<(), String> {
-        crate::cloud::upload(directory, &plan.connection, &plan.folder, source)
+        crate::cloud::upload(
+            directory,
+            &plan.connection,
+            &plan.folder,
+            source,
+            Some(self.progress()),
+        )
     }
     fn remove(&self, directory: &Path, artifact: &Artifact) -> Result<(), String> {
         crate::cloud::remove_owned(
@@ -238,6 +252,7 @@ impl Backend for Native {
             &artifact.connection,
             &artifact.folder,
             &artifact.id,
+            Some(self.progress()),
         )
     }
 }
@@ -247,16 +262,41 @@ pub(crate) fn execute(
     job: &str,
     config: &str,
     readers: &elzevir_store::ReadPool,
+    control: crate::cancellation::Control,
 ) -> Result<(), String> {
-    execute_with(directory, plan, job, config, readers, &Native)
+    let native = Native { control };
+    execute_with_control(
+        directory,
+        plan,
+        job,
+        config,
+        readers,
+        &native,
+        &native.control,
+    )
 }
+
+#[cfg(test)]
 fn execute_with(
+    directory: &Path,
+    plan: &str,
+    job: &str,
+    config: &str,
+    readers: &elzevir_store::ReadPool,
+    backend: &impl Backend,
+) -> Result<(), String> {
+    let control: crate::cancellation::Control = std::sync::Arc::new(|| false);
+    execute_with_control(directory, plan, job, config, readers, backend, &control)
+}
+
+fn execute_with_control(
     directory: &Path,
     plan_id: &str,
     job_id: &str,
     config: &str,
     readers: &elzevir_store::ReadPool,
     backend: &impl Backend,
+    control: &crate::cancellation::Control,
 ) -> Result<(), String> {
     let plan = get(directory, plan_id)?;
     let mut ledger = ledger(directory)?;
@@ -265,7 +305,7 @@ fn execute_with(
     }
     crate::backup_cli::make_directory(&directory.join("backups"))?;
     let output = crate::backup_cli::artifact(directory, job_id)?;
-    crate::backup_archive::create(directory, config, &output, Some(readers))?;
+    crate::backup_archive::create_controlled(directory, config, &output, Some(readers), control)?;
     crate::local_artifacts::record(directory, job_id)?;
     backend.upload(directory, &plan, &output)?;
     ledger.artifacts.push(Artifact {

@@ -231,6 +231,14 @@ fn dispatch(backend: &(impl Backend + ?Sized), action: Action) -> Result<(), Str
                     serde_json::to_string(&plan).map_err(|_| "cannot encode service plan")?
                 );
             } else {
+                require_operator()?;
+                let _program_lock = crate::installation::lock(&plan.executable)?;
+                crate::installation::claim(
+                    &plan.executable,
+                    &plan.data_dir,
+                    &plan.config,
+                    &plan.name,
+                )?;
                 backend.install(&plan)?;
                 println!(
                     "elzevir: service installed and enabled; start it after checking account permissions"
@@ -276,6 +284,12 @@ fn control(backend: &(impl Backend + ?Sized), action: &str, target: &Target) -> 
         );
     } else {
         backend.action(action, &target.target.name)?;
+        if action == "uninstall" {
+            crate::installation::release(
+                &std::env::current_exe().map_err(|_| "program unavailable")?,
+                &target.target.name,
+            )?;
+        }
         println!("elzevir: service {action} completed");
     }
     Ok(())

@@ -149,7 +149,7 @@ op-update-check = Check latest official release
 op-update = Update Elzevir — verified backup and automatic rollback
 op-version = Version tag (vMAJOR.MINOR.PATCH) or latest: { $value }
 op-latest = Latest observed release: { $value }
-op-update-help = Updates section: c Check release · i Install · g cloudflared · l rclone
+op-update-help = Updates section: c Check release · i Install · r Recover update · g cloudflared · l rclone
 
 op-install-cloudflared = Install or update verified cloudflared
 op-install-rclone = Install or update verified rclone
@@ -237,3 +237,6 @@ cloud-plan-id-optional = Existing plan ID (empty creates new): { $value }
 cloud-plan-name = Plan name: { $value }
 cloud-backup = Cloud backup
 cloud-retention-pending = Verified copies remain above retention; cleanup needs review
+
+op-update-recover = Recover interrupted update
+op-executable = Installed executable path (empty = current): { $value }

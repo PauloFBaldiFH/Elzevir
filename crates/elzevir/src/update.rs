@@ -16,7 +16,14 @@ trait Backend {
 fn transaction(backend: &impl Backend) -> Result<(), String> {
     backend.step("download")?;
     backend.step("backup")?;
-    backend.step("stop")?;
+    if let Err(error) = backend.step("stop") {
+        backend
+            .step("start")
+            .map_err(|_| "stop failed and the previous service could not be restarted")?;
+        backend.step("rollback_health")?;
+        backend.step("finalize")?;
+        return Err(error);
+    }
     let result = backend
         .step("final_backup")
         .and_then(|()| backend.step("swap"))
@@ -30,9 +37,10 @@ fn transaction(backend: &impl Backend) -> Result<(), String> {
         backend.step("rollback_data")?;
         backend.step("start")?;
         backend.step("rollback_health")?;
+        backend.step("finalize")?;
         return Err("update failed; the previous version and database were restored".to_owned());
     }
-    Ok(())
+    backend.step("finalize")
 }
 
 #[derive(clap::Args)]
@@ -99,9 +107,9 @@ pub(crate) fn run(args: Args) -> Result<(), String> {
 struct Prepared {
     scratch: tempfile::TempDir,
     staged: Option<PathBuf>,
-    backup: Option<PathBuf>,
     previous: PathBuf,
     swapped: bool,
+    journal: Option<crate::update_journal::Journal>,
 }
 struct Context {
     directory: PathBuf,
@@ -126,7 +134,13 @@ pub(crate) fn execute(directory: &Path, update: Update) -> Result<(), String> {
     if !crate::service::valid_name(&update.name) {
         return Err("invalid update service".to_owned());
     }
+    crate::service::require_operator()?;
+    crate::installation::verify(&update.executable, directory, &update.config, &update.name)?;
+    let _program_lock = crate::installation::lock(&update.executable)?;
     archive::regular(&update.executable)?;
+    if crate::update_journal::pending(&update.executable)? {
+        return Err("recover the interrupted update before installing another version".to_owned());
+    }
     let parent = update
         .executable
         .parent()
@@ -149,12 +163,21 @@ pub(crate) fn execute(directory: &Path, update: Update) -> Result<(), String> {
         prepared: RefCell::new(Prepared {
             scratch,
             staged: None,
-            backup: None,
             previous,
             swapped: false,
+            journal: None,
         }),
     };
-    transaction(&context)
+    let result = transaction(&context);
+    if result.is_err()
+        && !context.prepared.borrow().swapped
+        && let Some(journal) = &context.prepared.borrow().journal
+        && journal.phase == crate::update_journal::Phase::Prepared
+        && crate::update_journal::pending(&context.executable)?
+    {
+        journal.finish()?;
+    }
+    result
 }
 
 impl Backend for Context {
@@ -162,34 +185,63 @@ impl Backend for Context {
         match name {
             "download" => self.prepare(),
             "backup" => {
-                let backup = backup(&self.directory, &self.config, false)?;
-                self.prepared.borrow_mut().backup = Some(backup);
+                drop(backup(&self.directory, &self.config, false)?);
                 Ok(())
             }
             "final_backup" => {
                 let backup = backup(&self.directory, &self.config, true)?;
-                self.prepared.borrow_mut().backup = Some(backup);
+                {
+                    let mut prepared = self.prepared.borrow_mut();
+                    prepared
+                        .journal
+                        .as_mut()
+                        .ok_or("update journal absent")?
+                        .protect_backup(&backup)?;
+                }
                 Ok(())
             }
             "stop" => crate::service::native_action("stop", &self.name),
             "swap" => self.swap(),
-            "start" => crate::service::native_action("start", &self.name),
-            "health" | "rollback_health" => crate::host_jobs::wait_healthy(&self.directory),
+            "start" => {
+                if let Some(journal) = self.prepared.borrow_mut().journal.as_mut()
+                    && matches!(journal.phase, crate::update_journal::Phase::Swapping)
+                {
+                    journal.phase(crate::update_journal::Phase::Starting)?;
+                }
+                crate::service::native_action("start", &self.name)
+            }
+            "health" => self.healthy(true),
+            "rollback_health" => self.healthy(false),
+            "finalize" => {
+                if let Some(journal) = &self.prepared.borrow().journal
+                    && crate::update_journal::pending(&self.executable)?
+                {
+                    journal.finish()?;
+                }
+                Ok(())
+            }
             "rollback_binary" => self.rollback_binary(),
             "rollback_data" => {
                 if self.prepared.borrow().swapped {
                     let backup = self
                         .prepared
                         .borrow()
-                        .backup
-                        .clone()
-                        .ok_or("update recovery backup absent")?;
+                        .journal
+                        .as_ref()
+                        .ok_or("update recovery journal absent")?
+                        .backup()?;
                     crate::backup_cli::restore_rollback(
                         &backup,
                         &self.directory.join("backup.key"),
                         &self.directory,
                         Some(&self.config),
                     )?;
+                    self.prepared
+                        .borrow_mut()
+                        .journal
+                        .as_mut()
+                        .ok_or("update recovery journal absent")?
+                        .phase(crate::update_journal::Phase::Restored)?;
                 }
                 Ok(())
             }
@@ -208,28 +260,7 @@ impl Context {
             return Err("invalid update version".to_owned());
         }
         let staged = if let (Some(package), Some(checksums)) = (&self.package, &self.checksums) {
-            if archive::regular(checksums)? > 65_536 {
-                return Err("release checksums exceed limit".to_owned());
-            }
-            let sums =
-                std::fs::read_to_string(checksums).map_err(|_| "release checksums unavailable")?;
-            let expected_name = format!(
-                "elzevir-{version}-{}.{}",
-                crate::release::target()?,
-                if cfg!(windows) { "zip" } else { "tar.gz" }
-            );
-            if package.file_name().and_then(|name| name.to_str()) != Some(expected_name.as_str()) {
-                return Err("package name does not match release version and platform".to_owned());
-            }
-            let expected = crate::release::checksum(&sums, &expected_name)?;
-            if crate::release::hash(package)? != expected {
-                return Err("release checksum mismatch".to_owned());
-            }
-            crate::release::unpack(
-                package,
-                self.prepared.borrow().scratch.path(),
-                cfg!(windows),
-            )?
+            self.stage_local(&version, package, checksums)?
         } else {
             crate::release::stage(
                 &crate::release::Http,
@@ -237,6 +268,7 @@ impl Context {
                 self.prepared.borrow().scratch.path(),
             )?
         };
+        let new_hash = crate::release::hash(&staged)?;
         let output = Native.run(Request {
             environment: None,
             progress: None,
@@ -254,7 +286,22 @@ impl Context {
         {
             return Err("release executable version mismatch".to_owned());
         }
-        self.prepared.borrow_mut().staged = Some(staged);
+        if crate::release::hash(&staged)? != new_hash {
+            return Err("release executable changed during its version check".to_owned());
+        }
+        crate::file_owner::program(&staged, &self.executable, &self.name)?;
+        let journal = crate::update_journal::Journal::begin(
+            &self.executable,
+            &self.directory,
+            &self.config,
+            &self.name,
+            &self.prepared.borrow().previous,
+            &version,
+            new_hash,
+        )?;
+        let mut prepared = self.prepared.borrow_mut();
+        prepared.staged = Some(staged);
+        prepared.journal = Some(journal);
         Ok(())
     }
     fn swap(&self) -> Result<(), String> {
@@ -263,11 +310,17 @@ impl Context {
         if std::fs::symlink_metadata(&prepared.previous).is_ok() {
             return Err("previous-version destination must be new".to_owned());
         }
-        let permissions = std::fs::metadata(&self.executable)
-            .map_err(|_| "installed executable unavailable")?
-            .permissions();
-        std::fs::set_permissions(staged, permissions)
-            .map_err(|_| "cannot retain executable permissions")?;
+        let journal = prepared.journal.as_ref().ok_or("update journal absent")?;
+        if crate::release::hash(&self.executable)? != journal.old_hash
+            || crate::release::hash(staged)? != journal.new_hash
+        {
+            return Err("update executable changed before publication".to_owned());
+        }
+        prepared
+            .journal
+            .as_mut()
+            .ok_or("update journal absent")?
+            .phase(crate::update_journal::Phase::Swapping)?;
         std::fs::rename(&self.executable, &prepared.previous)
             .map_err(|_| "cannot retain previous executable")?;
         prepared.swapped = true;
@@ -276,26 +329,85 @@ impl Context {
             &self.executable,
         )
         .map_err(|_| "cannot publish update executable")?;
-        Ok(())
+        crate::installation::sync_directory(
+            self.executable.parent().ok_or("program parent required")?,
+        )
     }
     fn rollback_binary(&self) -> Result<(), String> {
-        let prepared = self.prepared.borrow();
+        let mut prepared = self.prepared.borrow_mut();
         if prepared.swapped {
-            if self.executable.exists() {
-                std::fs::rename(
-                    &self.executable,
-                    prepared.scratch.path().join(if cfg!(windows) {
-                        "failed.exe"
-                    } else {
-                        "failed"
-                    }),
-                )
-                .map_err(|_| "cannot set aside failed executable")?;
-            }
-            std::fs::rename(&prepared.previous, &self.executable)
-                .map_err(|_| "cannot restore previous executable")?;
+            let journal = prepared.journal.as_mut().ok_or("update journal absent")?;
+            journal.phase(crate::update_journal::Phase::Recovering)?;
+            journal.rollback_binary()?;
         }
         Ok(())
+    }
+    fn healthy(&self, new: bool) -> Result<(), String> {
+        crate::host_jobs::wait_healthy(&self.directory)?;
+        let expected = {
+            let prepared = self.prepared.borrow();
+            let journal = prepared.journal.as_ref().ok_or("update journal absent")?;
+            if new {
+                journal.new_version.clone()
+            } else {
+                journal.old_version.clone()
+            }
+        };
+        let observed = crate::status::inspect(&self.directory);
+        if observed
+            .health
+            .is_none_or(|health| health.version != expected)
+        {
+            return Err("service version did not match the update transaction".to_owned());
+        }
+        Ok(())
+    }
+    fn stage_local(
+        &self,
+        version: &str,
+        package: &Path,
+        checksums: &Path,
+    ) -> Result<PathBuf, String> {
+        use std::io::Read as _;
+        if archive::regular(checksums)? > 65_536 || archive::regular(package)? > 512 * 1024 * 1024 {
+            return Err("local release package or checksums exceed limit".to_owned());
+        }
+        let mut sums = String::new();
+        std::fs::File::open(checksums)
+            .and_then(|file| file.take(65_537).read_to_string(&mut sums))
+            .map_err(|_| "release checksums unavailable")?;
+        if sums.len() > 65_536 {
+            return Err("release checksums exceed limit".to_owned());
+        }
+        let name = format!(
+            "elzevir-{version}-{}.{}",
+            crate::release::target()?,
+            if cfg!(windows) { "zip" } else { "tar.gz" }
+        );
+        if package.file_name().and_then(|value| value.to_str()) != Some(name.as_str()) {
+            return Err("package does not match release/platform".to_owned());
+        }
+        let expected = crate::release::checksum(&sums, &name)?;
+        let prepared = self.prepared.borrow();
+        let staged = prepared.scratch.path().join(&name);
+        archive::write_new(&staged, &[])?;
+        let mut output = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&staged)
+            .map_err(|_| "cannot stage local release")?;
+        let mut input = std::fs::File::open(package)
+            .map_err(|_| "local release unavailable")?
+            .take(512 * 1024 * 1024 + 1);
+        if std::io::copy(&mut input, &mut output).map_err(|_| "cannot stage local release")?
+            > 512 * 1024 * 1024
+        {
+            return Err("local release exceeds limit".to_owned());
+        }
+        output.sync_all().map_err(|_| "cannot sync local release")?;
+        if crate::release::hash(&staged)? != expected {
+            return Err("release checksum mismatch".to_owned());
+        }
+        crate::release::unpack(&staged, prepared.scratch.path(), cfg!(windows))
     }
 }
 
@@ -373,6 +485,25 @@ mod tests {
         }
     }
     #[test]
+    fn failed_initial_stop_restarts_and_checks_the_old_service_without_swapping() {
+        let fake = Fake {
+            calls: RefCell::new(vec![]),
+            fail: "stop",
+        };
+        assert!(transaction(&fake).is_err());
+        assert_eq!(
+            *fake.calls.borrow(),
+            [
+                "download",
+                "backup",
+                "stop",
+                "start",
+                "rollback_health",
+                "finalize"
+            ]
+        );
+    }
+    #[test]
     fn failed_health_restores_both_database_and_binary_before_starting_the_old_version() {
         let fake = Fake {
             calls: RefCell::new(vec![]),
@@ -393,7 +524,8 @@ mod tests {
                 "rollback_binary",
                 "rollback_data",
                 "start",
-                "rollback_health"
+                "rollback_health",
+                "finalize"
             ]
         );
     }

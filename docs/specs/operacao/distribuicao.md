@@ -20,3 +20,23 @@ e configuração, faz backup antes de substituir o binário e restaura o anterio
 se o serviço novo não ficar saudável. Firewall e exclusão do Defender são
 opções explícitas, nunca padrão. Dependências cloudflared/rclone são instaladas
 somente por ação correspondente do painel. Nenhum teste instala serviço real.
+
+Cada executável instalado fica vinculado a uma instituição e serviço por
+registro privado no diretório de programas. Reutilizar o mesmo executável para
+outra instituição é recusado; instalações adicionais usam diretório de programas
+próprio. A atualização confere essa associação antes de parar o serviço, para
+não migrar um banco ou substituir o binário de outra instituição.
+
+A atualização mantém diário privado no diretório de programas antes de trocar
+o executável. A última cópia fria fica em pasta privada do operador, fora dos
+dados graváveis pelo serviço, e seu hash fica no diário. Uma recuperação
+explícita conclui uma versão já saudável ou repõe o executável anterior e seu
+banco. Arquivos divergentes dos hashes registrados são preservados e recusados.
+
+Recuperação antes da troca do executável reinicia a versão anterior sem exigir
+uma cópia fria ainda não criada. Depois de iniciada a troca, valida a cópia
+privada antes de parar o serviço e registra a restauração do banco antes do
+reinício. Repetir uma recuperação já restaurada não reaplica o backup sobre
+escritas posteriores. Uma versão nova já saudável apenas conclui o diário;
+uma versão anterior saudável durante rollback só conclui depois da fase de
+restauração. Configuração explícita inválida ou de outra instituição é recusada.

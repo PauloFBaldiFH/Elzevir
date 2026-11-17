@@ -51,6 +51,16 @@ impl Runner for Native {
         let stderr = tempfile::tempfile().map_err(|_| "cannot capture process errors")?;
         let mut command = Command::new(&request.program);
         configure_environment(&mut command, request.environment.as_deref())?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt as _;
+            command.process_group(0);
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt as _;
+            command.creation_flags(0x0800_0000 | 0x0000_0200);
+        }
         let mut child = command
             .args(&request.args)
             .stdin(Stdio::from(input))
@@ -70,6 +80,10 @@ impl Runner for Native {
         let mut observed = (0, 0);
         let status = loop {
             if let Some(progress) = &request.progress {
+                if progress(&[]).is_err() {
+                    terminate(&mut child);
+                    return Err("optional tool interrupted".to_owned());
+                }
                 let current = (
                     stdout
                         .metadata()
@@ -84,8 +98,7 @@ impl Runner for Native {
                         .and_then(|()| snapshot(&stderr, request.limit))
                         .and_then(|bytes| progress(&bytes));
                     if result.is_err() {
-                        drop(child.kill());
-                        drop(child.wait());
+                        terminate(&mut child);
                         return Err(
                             "optional tool progress failed or exceeded its limit".to_owned()
                         );
@@ -109,14 +122,49 @@ impl Runner for Native {
                 }
                 _ => {
                     // Reap after any timeout/output/error path; never leak an unattended child.
-                    drop(child.kill());
-                    drop(child.wait());
+                    terminate(&mut child);
                     return Err("optional tool failed, exceeded its limit or timed out".to_owned());
                 }
             }
         };
         finish_output(stdout, &stderr, status.success(), request.limit)
     }
+}
+
+fn terminate(child: &mut std::process::Child) {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        if let Ok(raw) = i32::try_from(child.id())
+            && let Some(pid) = rustix::process::Pid::from_raw(raw)
+            && rustix::process::kill_process_group(pid, rustix::process::Signal::KILL).is_err()
+        {
+            tracing::debug!(event = "process.group_kill_refused");
+        }
+    }
+    #[cfg(windows)]
+    {
+        if let Some(root) = std::env::var_os("SystemRoot")
+            && let Ok(mut killer) =
+                Command::new(std::path::PathBuf::from(root).join("System32/taskkill.exe"))
+                    .args(["/T", "/F", "/PID", &child.id().to_string()])
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+        {
+            let started = Instant::now();
+            while started.elapsed() < Duration::from_secs(2) {
+                if killer.try_wait().is_ok_and(|status| status.is_some()) {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            drop(killer.kill());
+            drop(killer.wait());
+        }
+    }
+    drop(child.kill());
+    drop(child.wait());
 }
 
 fn configure_environment(
@@ -227,6 +275,25 @@ fn snapshot(file: &std::fs::File, limit: u64) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn silent_child_is_reaped_when_cooperative_control_refuses_progress() {
+        let at = Instant::now();
+        let result = Native.run(Request {
+            environment: None,
+            program: "/bin/sleep".into(),
+            args: vec!["5".into()],
+            input: None,
+            progress: Some(std::sync::Arc::new(|_| {
+                Err("fixture cancellation".to_owned())
+            })),
+            timeout: Duration::from_secs(6),
+            limit: 128,
+        });
+        assert!(result.is_err());
+        assert!(at.elapsed() < Duration::from_secs(2));
+    }
     #[test]
     fn progress_reads_do_not_move_the_childs_shared_write_offset() {
         let mut writer = tempfile::tempfile().unwrap();

@@ -8,6 +8,7 @@ use rusqlite::{
 };
 use std::{
     path::Path,
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -35,11 +36,26 @@ pub fn supported_schema_version() -> i64 {
 /// # Errors
 /// Refuses links, non-files, corrupt/foreign images and newer schemas.
 pub fn inspect_snapshot(path: &Path) -> Result<SnapshotInfo, StoreError> {
+    inspect_snapshot_controlled(path, Arc::new(|| false))
+}
+
+/// Verifies an image with cooperative interruption of integrity checks.
+///
+/// # Errors
+/// Returns cancellation, integrity, schema or SQLite failures.
+pub fn inspect_snapshot_controlled(
+    path: &Path,
+    control: Arc<dyn Fn() -> bool + Send + Sync>,
+) -> Result<SnapshotInfo, StoreError> {
+    if control() {
+        return Err(failure("image verification interrupted"));
+    }
     let metadata = std::fs::symlink_metadata(path).map_err(|_| failure("image unavailable"))?;
     if !metadata.is_file() || metadata.is_symlink() {
         return Err(failure("image must be a regular file"));
     }
-    let connection = schema::open_reader(path)?;
+    let mut connection = schema::open_reader(path)?;
+    connection.progress_handler(4096, Some(move || control()))?;
     let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
     if version > supported_schema_version() {
         return Err(StoreError::SchemaTooNew {
@@ -61,7 +77,14 @@ pub fn inspect_snapshot(path: &Path) -> Result<SnapshotInfo, StoreError> {
     })
 }
 
-fn snapshot(connection: &Connection, path: &Path) -> Result<SnapshotInfo, StoreError> {
+fn snapshot(
+    connection: &Connection,
+    path: &Path,
+    control: Arc<dyn Fn() -> bool + Send + Sync>,
+) -> Result<SnapshotInfo, StoreError> {
+    if control() {
+        return Err(failure("snapshot interrupted"));
+    }
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
@@ -83,6 +106,9 @@ fn snapshot(connection: &Connection, path: &Path) -> Result<SnapshotInfo, StoreE
             let backup = Backup::new(connection, &mut destination)?;
             let started = Instant::now();
             loop {
+                if control() {
+                    return Err(failure("snapshot interrupted"));
+                }
                 if started.elapsed() > Duration::from_mins(15) {
                     return Err(failure("snapshot deadline exceeded"));
                 }
@@ -99,7 +125,7 @@ fn snapshot(connection: &Connection, path: &Path) -> Result<SnapshotInfo, StoreE
         // The artifact must not need a WAL or SHM file to be verified/restored.
         destination.execute_batch("PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL;")?;
         drop(destination);
-        inspect_snapshot(path)
+        inspect_snapshot_controlled(path, control)
     })();
     if result.is_err() {
         // Only the file exclusively created above belongs to this operation.
@@ -116,7 +142,18 @@ impl ReadPool {
     /// # Errors
     /// Returns SQLite, integrity, deadline or exclusive-destination failures.
     pub fn snapshot(&self, path: &Path) -> Result<SnapshotInfo, StoreError> {
-        self.read(|connection| snapshot(connection, path))
+        self.snapshot_controlled(path, Arc::new(|| false))
+    }
+    /// Copies an image while allowing an operational shutdown to interrupt it.
+    ///
+    /// # Errors
+    /// Returns interruption, integrity, deadline or exclusive-destination failures.
+    pub fn snapshot_controlled(
+        &self,
+        path: &Path,
+        control: Arc<dyn Fn() -> bool + Send + Sync>,
+    ) -> Result<SnapshotInfo, StoreError> {
+        self.read(|connection| snapshot(connection, path, control))
     }
 }
 
@@ -136,5 +173,5 @@ pub fn snapshot_offline(source: &Path, destination: &Path) -> Result<SnapshotInf
             | OpenFlags::SQLITE_OPEN_NOFOLLOW,
     )?;
     connection.busy_timeout(Duration::from_secs(5))?;
-    snapshot(&connection, destination)
+    snapshot(&connection, destination, Arc::new(|| false))
 }

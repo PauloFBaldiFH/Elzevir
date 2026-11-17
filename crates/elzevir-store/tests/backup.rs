@@ -31,3 +31,23 @@ fn verification_refuses_foreign_images_without_modifying_them() {
     assert!(inspect_snapshot(&image).is_err());
     assert_eq!(std::fs::read_to_string(&image).unwrap(), "user content");
 }
+
+#[test]
+fn interrupted_snapshot_leaves_no_image_and_the_live_pool_remains_usable() {
+    let root = tempfile::tempdir().unwrap();
+    let source = root.path().join("live.db");
+    let store = ElzevirStore::open(&source, &StoreConfig::default(), ElzevirHandler).unwrap();
+    let image = root.path().join("cancelled.db");
+    assert!(
+        store
+            .readers()
+            .snapshot_controlled(&image, std::sync::Arc::new(|| true))
+            .is_err()
+    );
+    assert!(!image.exists());
+    store
+        .readers()
+        .snapshot(&root.path().join("valid.db"))
+        .unwrap();
+    store.shutdown().unwrap();
+}

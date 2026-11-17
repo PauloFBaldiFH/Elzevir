@@ -14,6 +14,7 @@ mod backup_cli;
 mod broker;
 mod broker_cli;
 mod broker_protocol;
+mod cancellation;
 mod catalog_cli;
 mod cloud;
 mod cloud_cli;
@@ -27,6 +28,7 @@ mod health;
 mod host_jobs;
 mod http_client;
 mod init;
+mod installation;
 mod koha_codes;
 mod local_artifacts;
 mod local_disk;
@@ -50,6 +52,8 @@ mod tools_cli;
 mod tunnel_cli;
 mod tunnel_observe;
 mod update;
+mod update_journal;
+mod update_recovery;
 
 use std::future::IntoFuture;
 use std::io::BufRead;
@@ -92,6 +96,8 @@ enum Command {
     Tunnel(tunnel_cli::Args),
     /// Install a verified release with backup and automatic rollback.
     Update(update::Args),
+    /// Recover an update interrupted between backup, executable swap and restart.
+    RecoverUpdate(update_recovery::Args),
     /// Serves the OPAC and the staff interface.
     Serve(server_config::ServeArgs),
     /// Initializes a new institution and its first administrator.
@@ -151,6 +157,7 @@ fn main() -> ExitCode {
         Command::Cloud(args) => cloud_cli::run(args),
         Command::Tunnel(args) => tunnel_cli::run(args),
         Command::Update(args) => update::run(args),
+        Command::RecoverUpdate(args) => update_recovery::run(&args),
         Command::Serve(args) => args
             .resolve()
             .map_err(|error| error.to_string())

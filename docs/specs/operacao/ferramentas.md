@@ -11,9 +11,23 @@ Os executáveis ficam em diretório de programas controlado pelo administrador,
 fora dos dados graváveis pela conta do daemon. Cada execução confere o registro
 e hash do arquivo. Ferramentas não são procuradas em PATH gravável para execução
 privilegiada. Instalação/substituição é serializada por trava de ferramenta.
+Execuções de rclone mantêm trava compartilhada desde a validação do hash até o
+fim do processo; atualização exige trava exclusiva e recusa ferramenta em uso.
+A publicação mantém diário privado no diretório de programas. Repetir a
+instalação recupera a troca interrompida: conclui o registro para um executável
+novo conhecido ou repõe o anterior se o destino estiver ausente. Executáveis
+com hash desconhecido são preservados e recusados.
+O hash antes e depois da verificação de versão do executável estagiado deve
+coincidir.
 Segredos são arquivos privados dentro de `DATA_DIR/secrets`; nunca argumentos,
 logs, histórico de trabalhos nem arquivos de suporte. Executores usam argv,
 entrada privada, captura limitada, timeout e encerramento/reap de subprocessos.
+
+Domínio próprio é opcional e pode ser informado depois da instalação. Os
+hostnames do catálogo e da equipe entram na ação explícita de publicação; não
+há domínio padrão a registrar. Antes dessa ação, a instalação permanece local.
+Escolher o domínio depois não exige recompilar o Elzevir. A ativação pública
+exige autorização da conta Cloudflare, configuração de DNS e teste HTTPS real.
 
 Túnel com domínio próprio exige configuração de equipe por hostname diferente
 do catálogo; a borda do Elzevir recusa equipe pelo hostname do catálogo. Origem

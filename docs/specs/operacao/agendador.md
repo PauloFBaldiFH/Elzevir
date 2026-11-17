@@ -18,3 +18,9 @@ A UI lista política, trabalhos, artefatos e resultados do mesmo servidor.
 A retenção considera apenas nomes de backup gerados pelo Elzevir, arquivos
 regulares concluídos e sem links. Nunca remove arquivos desconhecidos ou a
 cópia mais nova. A falha de limpeza não invalida o artefato já publicado.
+
+A parada concede vinte segundos para concluir o trabalho corrente. Depois,
+cópia SQLite, verificação, empacotamento e processos de nuvem cooperam com o
+cancelamento. Um artefato parcial não é publicado como concluído; subprocessos
+são encerrados e coletados antes de liberar o banco. O trabalho interrompido
+fica distinto de falha de configuração e de cópia concluída.

@@ -267,6 +267,7 @@ fn providers_with(
     directory: &Path,
     program: &Path,
     runner: &impl Runner,
+    progress: Option<Progress>,
 ) -> Result<Vec<Provider>, String> {
     let output = run(
         runner,
@@ -277,7 +278,7 @@ fn providers_with(
             zeroize::Zeroizing::new("NOTICE".to_owned()),
         )],
         None,
-        None,
+        progress,
         4 * 1024 * 1024,
     )?;
     let providers: Vec<Provider> =
@@ -441,8 +442,9 @@ pub(crate) fn execute(
         _ => {}
     }
     require_limited_account()?;
-    let program = crate::managed_tools::binary(crate::managed_tools::Tool::Rclone)?;
-    execute_with(directory, action, &program, &Native, progress)
+    let lease = crate::managed_tools::lease(crate::managed_tools::Tool::Rclone)?;
+    let program = &lease.path;
+    execute_with(directory, action, program, &Native, progress)
 }
 fn execute_with(
     directory: &Path,
@@ -456,15 +458,17 @@ fn execute_with(
         | Action::DisablePlan { .. }
         | Action::RemovePlan { .. }
         | Action::RunPlan { .. } => Err("invalid cloud metadata dispatch".to_owned()),
-        Action::RemoveConnection { id } => remove_connection(directory, id, program, runner),
-        Action::Providers => providers_with(directory, program, runner).map(drop),
+        Action::RemoveConnection { id } => {
+            remove_connection(directory, id, program, runner, progress)
+        }
+        Action::Providers => providers_with(directory, program, runner, progress).map(drop),
         Action::Begin { .. } => begin(directory, action, program, runner, progress),
         Action::Answer {
             id,
             revision,
             value,
         } => answer(directory, id, revision, value, program, runner, progress),
-        Action::Test { id, folder } => test(directory, id, folder, program, runner),
+        Action::Test { id, folder } => test(directory, id, folder, program, runner, progress),
     }
 }
 
@@ -491,8 +495,8 @@ fn begin(
     {
         return Err("invalid cloud connection name or provider".to_owned());
     }
-    let providers =
-        cached_providers(directory).or_else(|_| providers_with(directory, program, runner))?;
+    let providers = cached_providers(directory)
+        .or_else(|_| providers_with(directory, program, runner, progress.clone()))?;
     if !providers.iter().any(|entry| entry.name == *provider) {
         return Err("unknown rclone provider".to_owned());
     }
@@ -728,6 +732,7 @@ fn transfer_with(
     source: &Path,
     program: &Path,
     runner: &impl Runner,
+    progress: Option<Progress>,
 ) -> Result<(), String> {
     archive::regular(source)?;
     let name = source
@@ -752,7 +757,7 @@ fn transfer_with(
         ],
         environment(directory, connection),
         None,
-        None,
+        progress.clone(),
         65_536,
     )?;
     run(
@@ -779,7 +784,7 @@ fn transfer_with(
         ],
         environment(directory, connection),
         None,
-        None,
+        progress,
         65_536,
     )?;
     Ok(())
@@ -790,6 +795,7 @@ fn test(
     folder_name: &str,
     program: &Path,
     runner: &impl Runner,
+    progress: Option<Progress>,
 ) -> Result<(), String> {
     require_limited_account()?;
     let connection = connection(directory, id)?;
@@ -812,6 +818,7 @@ fn test(
         &source,
         program,
         runner,
+        progress.clone(),
     )?;
     run(
         runner,
@@ -824,7 +831,7 @@ fn test(
         ],
         environment(directory, &connection),
         None,
-        None,
+        progress,
         65_536,
     )?;
     crate::broker::publish(directory,&directory.join(format!("cloud-test-{id}.json")),&serde_json::to_vec(&serde_json::json!({"schema":1,"id":id,"at":jiff::Timestamp::now().to_string(),"verified":true})).map_err(|_| "cannot encode cloud test result")?)
@@ -834,6 +841,7 @@ pub(crate) fn upload(
     id: &str,
     folder_name: &str,
     source: &Path,
+    progress: Option<Progress>,
 ) -> Result<(), String> {
     require_limited_account()?;
     let connection = connection(directory, id)?;
@@ -841,14 +849,16 @@ pub(crate) fn upload(
         return Err("cloud connection is not ready".to_owned());
     }
     let _lock = lock(directory, &connection)?;
-    let program = crate::managed_tools::binary(crate::managed_tools::Tool::Rclone)?;
+    let lease = crate::managed_tools::lease(crate::managed_tools::Tool::Rclone)?;
+    let program = &lease.path;
     transfer_with(
         directory,
         &connection,
         folder_name,
         source,
-        &program,
+        program,
         &Native,
+        progress,
     )
 }
 pub(crate) fn remove_owned(
@@ -856,6 +866,7 @@ pub(crate) fn remove_owned(
     id: &str,
     folder_name: &str,
     artifact_id: &str,
+    progress: Option<Progress>,
 ) -> Result<(), String> {
     require_limited_account()?;
     if !valid_id(artifact_id) {
@@ -866,10 +877,11 @@ pub(crate) fn remove_owned(
         return Err("cloud connection is not ready".to_owned());
     }
     let _lock = lock(directory, &connection)?;
-    let program = crate::managed_tools::binary(crate::managed_tools::Tool::Rclone)?;
+    let lease = crate::managed_tools::lease(crate::managed_tools::Tool::Rclone)?;
+    let program = &lease.path;
     run(
         &Native,
-        &program,
+        program,
         vec![
             "deletefile".into(),
             destination(
@@ -883,7 +895,7 @@ pub(crate) fn remove_owned(
         ],
         environment(directory, &connection),
         None,
-        None,
+        progress,
         65_536,
     )?;
     Ok(())
@@ -912,7 +924,11 @@ pub(crate) fn queue(directory: &Path, id: &str, action: &Action) -> Result<(), S
     }
     archive::write_new(&request_path(directory, id)?, &bytes)
 }
-pub(crate) fn execute_queued(directory: &Path, id: &str) -> Result<(), String> {
+pub(crate) fn execute_queued(
+    directory: &Path,
+    id: &str,
+    control: crate::cancellation::Control,
+) -> Result<(), String> {
     let path = request_path(directory, id)?;
     let action: Action = serde_json::from_slice(&read(&path, 24_000)?)
         .map_err(|_| "invalid private cloud request")?;
@@ -920,6 +936,10 @@ pub(crate) fn execute_queued(directory: &Path, id: &str) -> Result<(), String> {
     let target = directory.to_owned();
     let job = id.to_owned();
     let progress: Progress = std::sync::Arc::new(move |bytes| {
+        crate::cancellation::check(&control)?;
+        if bytes.is_empty() {
+            return Ok(());
+        }
         if let Some(uri) = authorization_url(bytes) {
             crate::broker::publish(
                 &target,
@@ -1118,6 +1138,7 @@ fn remove_connection(
     id: &str,
     program: &Path,
     runner: &impl Runner,
+    progress: Option<Progress>,
 ) -> Result<(), String> {
     let connection = connection(directory, id)?;
     let mut catalog = catalog(directory)?;
@@ -1139,7 +1160,7 @@ fn remove_connection(
             vec!["config".into(), "delete".into(), remote(&connection).into()],
             environment(directory, &connection),
             None,
-            None,
+            progress,
             65_536,
         )?;
     } else if config(directory, &connection).exists() {

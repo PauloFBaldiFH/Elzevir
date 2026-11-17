@@ -1,5 +1,17 @@
 # Endereço gratuito e recuperação — P6/P7
 
+O domínio público pode ser definido depois da instalação. Não há URL de broker
+nem sufixo de domínio embutidos no cliente: a URL entra na inscrição e os
+hostnames do catálogo e da equipe vêm da resposta validada do serviço. Sem
+inscrição, o Elzevir continua funcionando localmente; não cria identidade,
+DNS ou túnel automaticamente. A ausência de domínio não bloqueia a instalação,
+o painel, os backups nem os agendamentos.
+
+Para ativar o endereço gratuito posteriormente, é necessário disponibilizar um
+broker compatível com o contrato abaixo, configurar seu domínio/DNS e informar
+sua URL HTTPS na inscrição. Essa etapa requer teste real de provisionamento e
+acesso público; testes locais do cliente não comprovam a implantação externa.
+
 O operador informa a URL HTTPS do broker. O cliente recusa redirecionamentos,
 credenciais na URL, query/fragmento e caminhos de base. Antes de enviar nome ou
 contato, exige `services` contendo `elzevir` e a capacidade versionada

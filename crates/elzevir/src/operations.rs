@@ -62,6 +62,7 @@ pub(crate) struct View {
 }
 
 struct Shared {
+    cancellation: crate::cancellation::Cancellation,
     state: Mutex<WorkerState>,
     wake: Condvar,
     directory: PathBuf,
@@ -239,6 +240,7 @@ impl Worker {
         }
         save_history(&directory, &history)?;
         let client = Client(Arc::new(Shared {
+            cancellation: crate::cancellation::Cancellation::default(),
             state: Mutex::new(WorkerState {
                 history,
                 stopping: false,
@@ -254,6 +256,7 @@ impl Worker {
                 if result.is_err()
                     && let Ok(mut state) = runner.0.state.lock()
                 {
+                    runner.0.cancellation.stop();
                     state.stopping = true;
                 }
                 result
@@ -277,6 +280,7 @@ impl Worker {
             .state
             .lock()
             .map_err(|_| "operational worker unavailable")?;
+        self.client.0.cancellation.stop();
         state.stopping = true;
         drop(state);
         self.client.0.wake.notify_one();
@@ -331,6 +335,7 @@ impl Client {
                 save_history(&self.0.directory, &state.history)?;
                 drop(state);
                 let result = self.execute(&job, config, store);
+                let interrupted = (self.0.cancellation.control())();
                 let mut state = self
                     .0
                     .state
@@ -344,6 +349,8 @@ impl Client {
                     .ok_or("operational job lost")?;
                 entry.state = if result.is_ok() {
                     State::Completed
+                } else if interrupted {
+                    State::Interrupted
                 } else {
                     State::Failed
                 };
@@ -376,6 +383,7 @@ impl Client {
         config: &str,
         store: &elzevir_store::ElzevirStore,
     ) -> Result<(), String> {
+        let control = self.0.cancellation.control();
         match &job.task {
             Task::CloudBackup { plan } => crate::cloud_plans::execute(
                 &self.0.directory,
@@ -383,22 +391,28 @@ impl Client {
                 &job.id,
                 config,
                 store.readers(),
+                Arc::clone(&control),
             )?,
-            Task::ConfigureCloud => crate::cloud::execute_queued(&self.0.directory, &job.id)?,
+            Task::ConfigureCloud => {
+                crate::cloud::execute_queued(&self.0.directory, &job.id, Arc::clone(&control))?;
+            }
             Task::Backup => {
                 crate::backup_cli::make_directory(&self.0.directory.join("backups"))?;
-                archive::create(
+                archive::create_controlled(
                     &self.0.directory,
                     config,
                     &crate::backup_cli::artifact(&self.0.directory, &job.id)?,
                     Some(store.readers()),
+                    &control,
                 )?;
                 crate::local_artifacts::record(&self.0.directory, &job.id)?;
             }
             Task::Verify { id } => {
-                archive::extract(
+                archive::extract_controlled(
                     &crate::backup_cli::artifact(&self.0.directory, id)?,
                     &self.0.directory.join("backup.key"),
+                    Arc::clone(&control),
+                    Some(&self.0.directory),
                 )?;
             }
         }

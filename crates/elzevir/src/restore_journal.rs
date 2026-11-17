@@ -49,24 +49,30 @@ fn absolute(path: &Path) -> Result<PathBuf, String> {
     Ok(parent.join(path.file_name().ok_or("configuration filename required")?))
 }
 
-fn scope(directory: &Path) -> String {
+fn scope(directory: &Path) -> Result<String, String> {
     use sha2::{Digest as _, Sha256};
-    format!(
+    let directory = directory
+        .canonicalize()
+        .map_err(|_| "institution unavailable")?;
+    Ok(format!(
         "{:x}",
         Sha256::digest(directory.as_os_str().as_encoded_bytes())
     )
     .chars()
     .take(16)
-    .collect()
+    .collect())
 }
 pub(crate) fn trusted_parent(directory: &Path) -> Result<PathBuf, String> {
+    let directory = directory
+        .canonicalize()
+        .map_err(|_| "institution unavailable")?;
     let parent = directory
         .parent()
         .ok_or("institution directory needs an administrator-controlled parent")?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt as _;
-        let owner = std::fs::metadata(directory).map_err(|_| "institution unavailable")?;
+        let owner = std::fs::metadata(&directory).map_err(|_| "institution unavailable")?;
         let metadata =
             std::fs::symlink_metadata(parent).map_err(|_| "institution parent unavailable")?;
         if rustix::process::geteuid().is_root()
@@ -82,11 +88,11 @@ pub(crate) fn trusted_parent(directory: &Path) -> Result<PathBuf, String> {
     }
     Ok(parent.to_owned())
 }
-fn safety_path(directory: &Path, id: &str) -> Result<PathBuf, String> {
+pub(crate) fn safety_path(directory: &Path, id: &str) -> Result<PathBuf, String> {
     if id.len() != 32 || !id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err("invalid restore identity".to_owned());
     }
-    Ok(trusted_parent(directory)?.join(format!(".elzevir-restore-{}-{id}", scope(directory))))
+    Ok(trusted_parent(directory)?.join(format!(".elzevir-restore-{}-{id}", scope(directory)?)))
 }
 pub(crate) fn create_safety(directory: &Path) -> Result<PathBuf, String> {
     let path = safety_path(directory, &crate::backup_archive::identifier()?)?;
@@ -106,10 +112,11 @@ pub(crate) fn create_safety(directory: &Path) -> Result<PathBuf, String> {
 impl Journal {
     pub(crate) fn begin(directory: &Path, safety: &Path, config: &Path) -> Result<Self, String> {
         let config = absolute(config)?;
+        let prefix = format!(".elzevir-restore-{}-", scope(directory)?);
         let id = safety
             .file_name()
             .and_then(|name| name.to_str())
-            .and_then(|name| name.strip_prefix(&format!(".elzevir-restore-{}-", scope(directory))))
+            .and_then(|name| name.strip_prefix(&prefix))
             .ok_or("invalid restore safety path")?
             .to_owned();
         let mut journal = Self {
@@ -118,8 +125,14 @@ impl Journal {
             config,
             entries: Vec::new(),
         };
+        if safety != safety_path(directory, &journal.id)? {
+            return Err("restore safety directory does not match its institution".to_owned());
+        }
         for name in FILES {
             let target = journal.target(directory, name)?;
+            if std::fs::symlink_metadata(journal.saved(directory, name)?).is_ok() {
+                return Err("restore original destination must be new".to_owned());
+            }
             let existed = match std::fs::symlink_metadata(target) {
                 Ok(metadata)
                     if !metadata.is_symlink() && (metadata.is_file() || metadata.is_dir()) =>
@@ -154,7 +167,7 @@ impl Journal {
         if name == "server-config" {
             return Ok(self.config.with_file_name(format!(
                 ".elzevir-restore-{}-{}.server-config",
-                scope(directory),
+                scope(directory)?,
                 self.id
             )));
         }
@@ -175,6 +188,13 @@ impl Journal {
                 .map_err(|_| "cannot retain restore original")?;
             sync(directory)?;
             sync(&safety_path(directory, &self.id)?)?;
+            if entry.name == "server-config" {
+                sync(
+                    self.config
+                        .parent()
+                        .ok_or("configuration parent required")?,
+                )?;
+            }
         }
         Ok(())
     }
@@ -290,7 +310,10 @@ mod tests {
         } = data;
         drop(lock_file);
         let safety = create_safety(directory.path()).unwrap();
-        assert_eq!(safety.parent(), directory.path().parent());
+        assert_eq!(
+            safety.parent(),
+            directory.path().canonicalize().unwrap().parent()
+        );
         assert!(!safety.starts_with(directory.path()));
         Journal::begin(
             directory.path(),

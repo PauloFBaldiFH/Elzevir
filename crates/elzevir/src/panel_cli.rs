@@ -209,6 +209,7 @@ impl Collector {
                             "restore" => "op-restore",
                             "restart" => "op-restart",
                             "update" => "op-update",
+                            "recover_update" => "op-update-recover",
                             "cloudflare_login" => "op-cloudflare-login",
                             "cloudflare_setup" => "op-cloudflare-setup",
                             "tunnel_test" => "op-tunnel-test",
@@ -346,6 +347,7 @@ impl Collector {
             | Operation::Restart { .. }
             | Operation::Reboot
             | Operation::Update { .. }
+            | Operation::RecoverUpdate { .. }
             | Operation::CheckUpdates
             | Operation::InstallCloudflared
             | Operation::InstallRclone
@@ -416,6 +418,33 @@ impl Collector {
                 checksums: None,
                 executable: std::env::current_exe().map_err(|_| "update executable unavailable")?,
             }),
+            Operation::RecoverUpdate { executable } => {
+                let executable = if executable.trim().is_empty() {
+                    std::env::current_exe().map_err(|_| "recovery executable unavailable")?
+                } else {
+                    executable.into()
+                };
+                let journal = crate::update_journal::Journal::load(&executable)?;
+                let selected = self
+                    .directory
+                    .canonicalize()
+                    .map_err(|_| "selected institution unavailable")?;
+                let config = self
+                    .config
+                    .as_ref()
+                    .ok_or("update recovery requires a configuration file")?;
+                if journal.directory != selected
+                    || crate::installation::absolute(config)? != journal.config
+                {
+                    return Err(
+                        "update recovery belongs to another selected institution".to_owned()
+                    );
+                }
+                Some(crate::host_jobs::Task::RecoverUpdate {
+                    executable: journal.executable,
+                    config: journal.config,
+                })
+            }
             Operation::Restore { input, key } => Some(crate::host_jobs::Task::Restore {
                 input: input.into(),
                 key: key.into(),

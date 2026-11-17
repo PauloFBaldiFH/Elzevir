@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Streaming authenticated backups; no live database, key or index is copied blindly.
 
+use crate::cancellation::{Control, Reader as Controlled, check};
 use age::secrecy::ExposeSecret as _;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -17,6 +18,11 @@ fn private_scratch(directory: &Path) -> Result<tempfile::TempDir, String> {
     #[cfg(target_os = "linux")]
     if !rustix::process::geteuid().is_root() {
         return tempfile::tempdir_in(directory).map_err(|_| "cannot prepare backup".to_owned());
+    }
+    #[cfg(windows)]
+    if crate::service::require_operator().is_err() {
+        return tempfile::tempdir_in(directory)
+            .map_err(|_| "cannot prepare private backup scratch".to_owned());
     }
     let _ = directory;
     tempfile::tempdir().map_err(|_| "cannot prepare private backup scratch".to_owned())
@@ -132,11 +138,12 @@ pub(crate) fn key(path: &Path, create: bool) -> Result<age::x25519::Identity, St
         .map_err(|_| "invalid backup key".to_owned())
 }
 
-fn hash(path: &Path) -> Result<String, String> {
+fn hash(path: &Path, control: &Control) -> Result<String, String> {
     let mut source = std::fs::File::open(path).map_err(|_| "snapshot file unavailable")?;
     let mut digest = Sha256::new();
     let mut buffer = vec![0_u8; 65_536].into_boxed_slice();
     loop {
+        check(control)?;
         let read = source
             .read(&mut buffer)
             .map_err(|_| "cannot hash snapshot")?;
@@ -210,6 +217,18 @@ pub(crate) fn create(
     output: &Path,
     readers: Option<&elzevir_store::ReadPool>,
 ) -> Result<Manifest, String> {
+    let control: Control = std::sync::Arc::new(|| false);
+    create_controlled(directory, config, output, readers, &control)
+}
+
+pub(crate) fn create_controlled(
+    directory: &Path,
+    config: &str,
+    output: &Path,
+    readers: Option<&elzevir_store::ReadPool>,
+    control: &Control,
+) -> Result<Manifest, String> {
+    check(control)?;
     let directory = directory
         .canonicalize()
         .map_err(|_| "institution unavailable")?;
@@ -227,7 +246,7 @@ pub(crate) fn create(
     let scratch = private_scratch(directory)?;
     let image = scratch.path().join("database.sqlite");
     let database = match readers {
-        Some(pool) => pool.snapshot(&image),
+        Some(pool) => pool.snapshot_controlled(&image, std::sync::Arc::clone(control)),
         None => elzevir_store::snapshot_offline(&directory.join("elzevir.db"), &image),
     }
     .map_err(|_| "database snapshot failed")?;
@@ -248,19 +267,48 @@ pub(crate) fn create(
         database_schema: database.schema_version,
         entries: Vec::new(),
     };
-    stage_inputs(directory, &scope, scratch.path(), &mut files, &mut manifest)?;
+    stage_inputs(
+        directory,
+        &scope,
+        scratch.path(),
+        &mut files,
+        &mut manifest,
+        control,
+    )?;
     let mut file = tempfile::NamedTempFile::new_in(output.parent().ok_or("backup needs parent")?)
         .map_err(|_| "cannot prepare backup output")?;
-    let recipient = identity.to_public();
+    encrypt(
+        file.as_file_mut(),
+        &manifest,
+        &files,
+        &identity.to_public(),
+        control,
+    )?;
+    file.as_file()
+        .sync_all()
+        .map_err(|_| "cannot sync backup")?;
+    check(control)?;
+    file.persist_noclobber(output)
+        .map_err(|_| "cannot publish backup without replacement")?;
+    Ok(manifest)
+}
+
+fn encrypt(
+    file: &mut std::fs::File,
+    manifest: &Manifest,
+    files: &[(String, std::path::PathBuf)],
+    recipient: &age::x25519::Recipient,
+    control: &Control,
+) -> Result<(), String> {
     let encryptor =
-        age::Encryptor::with_recipients(std::iter::once(&recipient as &dyn age::Recipient))
+        age::Encryptor::with_recipients(std::iter::once(recipient as &dyn age::Recipient))
             .map_err(|_| "cannot encrypt backup")?;
     let writer = encryptor
-        .wrap_output(file.as_file_mut())
+        .wrap_output(file)
         .map_err(|_| "cannot encrypt backup")?;
     let gzip = flate2::write::GzEncoder::new(writer, flate2::Compression::default());
     let mut archive = tar::Builder::new(gzip);
-    let bytes = serde_json::to_vec(&manifest).map_err(|_| "cannot encode backup manifest")?;
+    let bytes = serde_json::to_vec(manifest).map_err(|_| "cannot encode backup manifest")?;
     let mut header = tar::Header::new_gnu();
     header.set_size(u64::try_from(bytes.len()).map_err(|_| "manifest too large")?);
     header.set_mode(0o600);
@@ -268,9 +316,23 @@ pub(crate) fn create(
     archive
         .append_data(&mut header, "manifest.json", bytes.as_slice())
         .map_err(|_| "cannot write backup manifest")?;
-    for (name, path) in &files {
+    for ((name, path), entry) in files.iter().zip(&manifest.entries) {
+        check(control)?;
+        let mut header = tar::Header::new_gnu();
+        header.set_size(entry.bytes);
+        header.set_mode(0o600);
+        header.set_entry_type(tar::EntryType::Regular);
+        header.set_cksum();
+        let source = std::fs::File::open(path).map_err(|_| "backup entry unavailable")?;
         archive
-            .append_path_with_name(path, name)
+            .append_data(
+                &mut header,
+                name,
+                Controlled {
+                    source,
+                    control: std::sync::Arc::clone(control),
+                },
+            )
             .map_err(|_| "cannot write backup entry")?;
     }
     archive
@@ -278,12 +340,7 @@ pub(crate) fn create(
         .and_then(flate2::write::GzEncoder::finish)
         .and_then(age::stream::StreamWriter::finish)
         .map_err(|_| "cannot finish encrypted backup")?;
-    file.as_file()
-        .sync_all()
-        .map_err(|_| "cannot sync backup")?;
-    file.persist_noclobber(output)
-        .map_err(|_| "cannot publish backup without replacement")?;
-    Ok(manifest)
+    Ok(())
 }
 
 fn stage_inputs(
@@ -292,6 +349,7 @@ fn stage_inputs(
     scratch: &Path,
     files: &mut [(String, std::path::PathBuf)],
     manifest: &mut Manifest,
+    control: &Control,
 ) -> Result<(), String> {
     let mut auxiliary = 0_u64;
     for (name, path) in files {
@@ -323,7 +381,7 @@ fn stage_inputs(
         manifest.entries.push(Entry {
             name: name.clone(),
             bytes,
-            sha256: hash(path)?,
+            sha256: hash(path, control)?,
         });
     }
     Ok(())
@@ -428,11 +486,23 @@ pub(crate) struct Extracted {
 
 /// Extracts only declared regular entries, with byte limits and full authentication.
 pub(crate) fn extract(input: &Path, key_file: &Path) -> Result<Extracted, String> {
+    extract_controlled(input, key_file, std::sync::Arc::new(|| false), None)
+}
+pub(crate) fn extract_controlled(
+    input: &Path,
+    key_file: &Path,
+    control: Control,
+    scratch: Option<&Path>,
+) -> Result<Extracted, String> {
+    check(&control)?;
     if regular(input)? > MAX_DB {
         return Err("backup exceeds input limit".to_owned());
     }
     let identity = key(key_file, false)?;
-    let source = std::fs::File::open(input).map_err(|_| "backup unavailable")?;
+    let source = Controlled {
+        source: std::fs::File::open(input).map_err(|_| "backup unavailable")?,
+        control: std::sync::Arc::clone(&control),
+    };
     let header = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let source = HeaderLimit {
         source,
@@ -449,24 +519,16 @@ pub(crate) fn extract(input: &Path, key_file: &Path) -> Result<Extracted, String
         .entries()
         .map_err(|_| "invalid backup archive")?
         .raw(true);
-    let mut first = entries
+    let first = entries
         .next()
         .ok_or("backup manifest absent")?
         .map_err(|_| "invalid backup manifest")?;
-    if first.path().map_err(|_| "invalid entry")?.as_ref() != Path::new("manifest.json")
-        || first.size() > 65_536
-        || !first.header().entry_type().is_file()
-    {
-        return Err("invalid backup manifest".to_owned());
-    }
-    let mut bytes = Vec::new();
-    first
-        .read_to_end(&mut bytes)
-        .map_err(|_| "invalid backup manifest")?;
-    let manifest: Manifest =
-        serde_json::from_slice(&bytes).map_err(|_| "invalid backup manifest")?;
+    let manifest = read_manifest(first)?;
     let (names, total) = validate_manifest(&manifest)?;
-    let directory = tempfile::tempdir().map_err(|_| "cannot prepare restore")?;
+    let directory = match scratch {
+        Some(directory) => private_scratch(directory)?,
+        None => tempfile::tempdir().map_err(|_| "cannot prepare restore")?,
+    };
     if fs4::available_space(directory.path()).map_err(|_| "cannot inspect restore space")?
         < total.saturating_add(16 * 1024 * 1024)
     {
@@ -504,7 +566,7 @@ pub(crate) fn extract(input: &Path, key_file: &Path) -> Result<Extracted, String
             .map_err(|_| "cannot extract backup entry")?;
         let copied =
             std::io::copy(&mut entry, &mut output).map_err(|_| "cannot extract backup entry")?;
-        if copied != expected.bytes || hash(&path)? != expected.sha256 {
+        if copied != expected.bytes || hash(&path, &control)? != expected.sha256 {
             return Err("backup checksum mismatch".to_owned());
         }
     }
@@ -512,8 +574,11 @@ pub(crate) fn extract(input: &Path, key_file: &Path) -> Result<Extracted, String
         return Err("incomplete backup".to_owned());
     }
     authenticate_tail(archive.into_inner())?;
-    let info = elzevir_store::inspect_snapshot(&directory.path().join("database.sqlite"))
-        .map_err(|_| "backup database integrity failed")?;
+    let info = elzevir_store::inspect_snapshot_controlled(
+        &directory.path().join("database.sqlite"),
+        control,
+    )
+    .map_err(|_| "backup database integrity failed")?;
     if info.schema_version != manifest.database_schema {
         return Err("backup schema mismatch".to_owned());
     }
@@ -521,6 +586,20 @@ pub(crate) fn extract(input: &Path, key_file: &Path) -> Result<Extracted, String
         directory,
         manifest,
     })
+}
+
+fn read_manifest<R: Read>(mut first: tar::Entry<'_, R>) -> Result<Manifest, String> {
+    if first.path().map_err(|_| "invalid entry")?.as_ref() != Path::new("manifest.json")
+        || first.size() > 65_536
+        || !first.header().entry_type().is_file()
+    {
+        return Err("invalid backup manifest".to_owned());
+    }
+    let mut bytes = Vec::new();
+    first
+        .read_to_end(&mut bytes)
+        .map_err(|_| "invalid backup manifest")?;
+    serde_json::from_slice(&bytes).map_err(|_| "invalid backup manifest".to_owned())
 }
 
 fn authenticate_tail<R: Read>(mut gzip: flate2::read::GzDecoder<R>) -> Result<(), String> {

@@ -226,10 +226,9 @@ fn untar(package: &Path, output: &Path, binary: &str) -> Result<(), String> {
     }
     Ok(())
 }
-fn unzip(package: &Path, output: &Path, binary: &str) -> Result<(), String> {
-    // The official format has exactly three entries, no ZIP64 or archive comments.
-    // Bound directory entry count before the ZIP parser allocates its central index.
+pub(crate) fn bounded_zip(package: &Path, limit: u16) -> Result<std::fs::File, String> {
     use std::io::{Seek, SeekFrom};
+    // Official packages use single-disk ZIP without comments or ZIP64.
     let mut input = std::fs::File::open(package).map_err(|_| "package unavailable")?;
     input
         .seek(SeekFrom::End(-22))
@@ -243,12 +242,18 @@ fn unzip(package: &Path, output: &Path, binary: &str) -> Result<(), String> {
             .get(10..12)
             .and_then(|bytes| <[u8; 2]>::try_from(bytes).ok())
             .map(u16::from_le_bytes)
-            .is_none_or(|count| count > 3)
+            .is_none_or(|count| count > limit)
+        || end.get(4..8) != Some(&[0, 0, 0, 0])
+        || end.get(8..10) != end.get(10..12)
         || end.get(20..22) != Some(&[0, 0])
     {
         return Err("unsupported release ZIP directory".to_owned());
     }
     input.rewind().map_err(|_| "cannot rewind release ZIP")?;
+    Ok(input)
+}
+fn unzip(package: &Path, output: &Path, binary: &str) -> Result<(), String> {
+    let input = bounded_zip(package, 3)?;
     let mut archive = zip::ZipArchive::new(input).map_err(|_| "invalid release ZIP")?;
     if archive.len() > 3 {
         return Err("release ZIP exceeds entry limit".to_owned());
@@ -325,5 +330,52 @@ mod tests {
         crate::backup_archive::write_new(&output, b"old").unwrap();
         assert!(unpack(&package, directory.path(), false).is_err());
         assert_eq!(std::fs::read(output).unwrap(), b"old");
+    }
+    #[test]
+    fn valid_windows_release_extracts_and_never_overwrites_an_existing_binary() {
+        let root = tempfile::tempdir().unwrap();
+        let package = root.path().join("release.zip");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&package).unwrap());
+        zip.start_file("elzevir.exe", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(b"fictional windows executable").unwrap();
+        zip.start_file("LICENSE", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(b"fictional license").unwrap();
+        zip.finish().unwrap();
+        let output = unpack(&package, root.path(), true).unwrap();
+        assert_eq!(
+            std::fs::read(&output).unwrap(),
+            b"fictional windows executable"
+        );
+        assert!(unpack(&package, root.path(), true).is_err());
+        assert_eq!(
+            std::fs::read(&output).unwrap(),
+            b"fictional windows executable"
+        );
+        assert!(bounded_zip(&package, 1).is_err());
+    }
+    #[test]
+    fn official_windows_zip_extracts_only_the_executable_and_preserves_existing_files() {
+        let root = tempfile::tempdir().unwrap();
+        let package = root.path().join("release.zip");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&package).unwrap());
+        for (name, contents) in [
+            ("elzevir.exe", "fictional executable"),
+            ("LICENSE", "license"),
+            ("README.md", "readme"),
+        ] {
+            zip.start_file(name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(contents.as_bytes()).unwrap();
+        }
+        zip.finish().unwrap();
+        let target = root.path().join("out");
+        std::fs::create_dir(&target).unwrap();
+        let executable = unpack(&package, &target, true).unwrap();
+        assert_eq!(std::fs::read(&executable).unwrap(), b"fictional executable");
+        assert!(!target.join("README.md").exists());
+        assert!(unpack(&package, &target, true).is_err());
+        assert_eq!(std::fs::read(&executable).unwrap(), b"fictional executable");
     }
 }

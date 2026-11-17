@@ -31,6 +31,11 @@ pub enum Operation {
     InstallRclone,
     /// Fetch metadata for the latest official release.
     CheckUpdates,
+    /// Recover an interrupted update using its private operator journal.
+    RecoverUpdate {
+        /// Installed executable path; empty selects the current executable.
+        executable: String,
+    },
     /// Install a pinned release through the managed service.
     Update {
         /// Version tag or latest.
@@ -90,6 +95,7 @@ impl Operation {
             Self::InstallCloudflared => "op-install-cloudflared",
             Self::InstallRclone => "op-install-rclone",
             Self::CheckUpdates => "op-update-check",
+            Self::RecoverUpdate { .. } => "op-update-recover",
             Self::Update { .. } => "op-update",
             Self::Restart { .. } => "op-restart",
             Self::Reboot => "op-reboot",
@@ -187,6 +193,9 @@ impl Form {
                 vec!["op-version", "op-service"],
                 vec![version.clone(), name.clone()],
             ),
+            Operation::RecoverUpdate { executable } => {
+                (vec!["op-executable"], vec![executable.clone()])
+            }
             Operation::Restart { name } => (vec!["op-service"], vec![name.clone()]),
             Operation::TestTunnel
             | Operation::CloudflareLogin
@@ -246,6 +255,9 @@ impl Form {
             Operation::InstallCloudflared => Operation::InstallCloudflared,
             Operation::InstallRclone => Operation::InstallRclone,
             Operation::CheckUpdates => Operation::CheckUpdates,
+            Operation::RecoverUpdate { .. } => Operation::RecoverUpdate {
+                executable: values.next()?,
+            },
             Operation::Update { .. } => Operation::Update {
                 version: values.next()?,
                 name: values.next()?,
