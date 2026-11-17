@@ -61,6 +61,7 @@ function Save-ElzevirDownload([uri] $Uri, [string] $Output, [long] $Limit) {
     $input = $null
     $target = $null
     $created = $false
+    $deadline = [Diagnostics.Stopwatch]::StartNew()
     try {
         if ($response.ContentLength -gt $Limit) { throw 'Release download exceeds size limit' }
         $input = $response.GetResponseStream()
@@ -69,6 +70,7 @@ function Save-ElzevirDownload([uri] $Uri, [string] $Output, [long] $Limit) {
         $buffer = New-Object byte[] 65536
         [long] $total = 0
         while (($read = $input.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            if ($deadline.Elapsed.TotalSeconds -gt 900) { throw 'Release download timed out' }
             $total += $read
             if ($total -gt $Limit) { throw 'Release download exceeds size limit' }
             $target.Write($buffer, 0, $read)

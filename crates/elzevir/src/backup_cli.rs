@@ -104,7 +104,10 @@ pub(crate) fn make_directory(directory: &Path) -> Result<(), String> {
         Ok(metadata) if metadata.is_dir() && !metadata.is_symlink() => Ok(()),
         Ok(_) => Err("operation directory must not be a file or link".to_owned()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            #[cfg(unix)]
             let mut builder = std::fs::DirBuilder::new();
+            #[cfg(not(unix))]
+            let builder = std::fs::DirBuilder::new();
             #[cfg(unix)]
             {
                 use std::os::unix::fs::DirBuilderExt;
@@ -276,6 +279,7 @@ fn restore_inner(
     let _lock = lock(&directory)?;
     let restored = archive::extract(input, key)?;
     let config = config.map_or_else(|| directory.join("server.toml"), Path::to_owned);
+    let config = crate::installation::absolute(&config)?;
     let source = crate::server_config::relocate(
         &text(&restored.directory.path().join("server.toml"))?,
         &directory,

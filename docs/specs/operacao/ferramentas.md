@@ -11,6 +11,10 @@ Os executáveis ficam em diretório de programas controlado pelo administrador,
 fora dos dados graváveis pela conta do daemon. Cada execução confere o registro
 e hash do arquivo. Ferramentas não são procuradas em PATH gravável para execução
 privilegiada. Instalação/substituição é serializada por trava de ferramenta.
+O diretório compartilhado de ferramentas fica separado dos diretórios privados
+de cada instituição. A instalação aplica leitura/execução para as contas de
+serviço, sem escrita, independentemente da umask ou da primeira instituição
+instalada. Os registros privados de recuperação continuam restritos ao operador.
 Execuções de rclone mantêm trava compartilhada desde a validação do hash até o
 fim do processo; atualização exige trava exclusiva e recusa ferramenta em uso.
 A publicação mantém diário privado no diretório de programas. Repetir a

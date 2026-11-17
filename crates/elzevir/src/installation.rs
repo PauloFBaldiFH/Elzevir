@@ -18,7 +18,8 @@ struct Binding {
 pub(crate) fn absolute(path: &Path) -> Result<PathBuf, String> {
     let parent = path
         .parent()
-        .ok_or("program/configuration needs a parent")?
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."))
         .canonicalize()
         .map_err(|_| "program/configuration parent unavailable")?;
     Ok(parent.join(
@@ -224,6 +225,17 @@ pub(crate) fn lock(executable: &Path) -> Result<std::fs::File, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn bare_relative_file_names_resolve_against_the_current_directory() {
+        assert_eq!(
+            absolute(Path::new("fictional-config.toml")).unwrap(),
+            std::env::current_dir()
+                .unwrap()
+                .canonicalize()
+                .unwrap()
+                .join("fictional-config.toml")
+        );
+    }
     #[test]
     fn a_second_institution_cannot_rebind_the_installed_binary() {
         let root = tempfile::tempdir().unwrap();

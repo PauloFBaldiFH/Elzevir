@@ -41,12 +41,7 @@ pub(crate) fn pending(directory: &Path) -> bool {
 }
 
 fn absolute(path: &Path) -> Result<PathBuf, String> {
-    let parent = path
-        .parent()
-        .ok_or("configuration needs a parent")?
-        .canonicalize()
-        .map_err(|_| "configuration parent unavailable")?;
-    Ok(parent.join(path.file_name().ok_or("configuration filename required")?))
+    crate::installation::absolute(path)
 }
 
 fn scope(directory: &Path) -> Result<String, String> {
@@ -96,7 +91,10 @@ pub(crate) fn safety_path(directory: &Path, id: &str) -> Result<PathBuf, String>
 }
 pub(crate) fn create_safety(directory: &Path) -> Result<PathBuf, String> {
     let path = safety_path(directory, &crate::backup_archive::identifier()?)?;
+    #[cfg(unix)]
     let mut builder = std::fs::DirBuilder::new();
+    #[cfg(not(unix))]
+    let builder = std::fs::DirBuilder::new();
     #[cfg(unix)]
     {
         use std::os::unix::fs::DirBuilderExt as _;

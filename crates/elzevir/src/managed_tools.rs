@@ -84,15 +84,14 @@ fn asset_name(tool: Tool, version: &str) -> Result<String, String> {
 
 fn root(create: bool) -> Result<PathBuf, String> {
     #[cfg(target_os = "linux")]
-    let path = PathBuf::from("/usr/local/lib/elzevir/tools");
+    let path = PathBuf::from("/usr/local/lib/elzevir-tools");
     #[cfg(windows)]
     let path = PathBuf::from(
         std::env::var_os("ProgramW6432")
             .or_else(|| std::env::var_os("ProgramFiles"))
             .ok_or("program directory unavailable")?,
     )
-    .join("Elzevir")
-    .join("tools");
+    .join("ElzevirTools");
     #[cfg(not(any(target_os = "linux", windows)))]
     return Err("managed tools unavailable on this platform".to_owned());
     #[cfg(any(target_os = "linux", windows))]
@@ -119,6 +118,7 @@ fn root(create: bool) -> Result<PathBuf, String> {
         if create {
             std::fs::create_dir_all(&path)
                 .map_err(|_| "tool installation requires program-directory write permission")?;
+            crate::file_owner::program_directory(&path)?;
         }
         Ok(path)
     }
@@ -184,6 +184,7 @@ pub(crate) fn installed(tool: Tool) -> Result<Installed, String> {
     read_record(tool, &directory)
 }
 pub(crate) fn install(tool: Tool) -> Result<Installed, String> {
+    crate::service::require_operator()?;
     install_at(
         tool,
         &root(true)?,
@@ -336,7 +337,11 @@ fn check_version(
         Tool::Cloudflared => format!("cloudflared version {version}"),
         Tool::Rclone => format!("rclone {version}"),
     };
-    if !checked.success || !first.starts_with(&expected_version) {
+    if !checked.success
+        || first
+            .strip_prefix(&expected_version)
+            .is_none_or(|suffix| !suffix.is_empty() && !suffix.starts_with(char::is_whitespace))
+    {
         return Err("official tool version mismatch".to_owned());
     }
     Ok(())
@@ -680,6 +685,34 @@ mod tests {
                 }
             );
             assert!(!tool_journal(tool, directory.path()).exists());
+        }
+    }
+    #[test]
+    fn version_validation_rejects_a_different_version_with_the_same_prefix() {
+        struct Probe(&'static str);
+        impl Runner for Probe {
+            fn run(&self, _: Request) -> Result<Output, String> {
+                Ok(Output {
+                    success: true,
+                    stdout: self.0.as_bytes().to_vec(),
+                })
+            }
+        }
+        for (output, accepted) in [
+            ("cloudflared version 2026.11.0", true),
+            ("cloudflared version 2026.11.0 (built for fixture)", true),
+            ("cloudflared version 2026.11.01", false),
+        ] {
+            assert_eq!(
+                check_version(
+                    &Probe(output),
+                    Path::new("fictional"),
+                    Tool::Cloudflared,
+                    "2026.11.0"
+                )
+                .is_ok(),
+                accepted
+            );
         }
     }
 }

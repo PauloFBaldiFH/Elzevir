@@ -147,6 +147,50 @@ pub(crate) fn operator_private(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+pub(crate) fn program_directory(path: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))
+            .map_err(|_| "cannot grant limited service access to tool directory")?;
+    }
+    #[cfg(windows)]
+    {
+        use crate::process_runner::{Native, Request, Runner as _};
+        let program = std::path::PathBuf::from(
+            std::env::var_os("SystemRoot").ok_or("Windows directory unavailable")?,
+        )
+        .join("System32/icacls.exe");
+        for args in [
+            vec![path.as_os_str().to_owned(), "/reset".into()],
+            vec![
+                path.as_os_str().to_owned(),
+                "/inheritance:r".into(),
+                "/grant:r".into(),
+                "*S-1-5-18:(OI)(CI)F".into(),
+                "*S-1-5-32-544:(OI)(CI)F".into(),
+                "*S-1-5-6:(OI)(CI)RX".into(),
+                "/setowner".into(),
+                "*S-1-5-32-544".into(),
+            ],
+        ] {
+            let result = Native.run(Request {
+                environment: None,
+                progress: None,
+                program: program.clone(),
+                args,
+                input: None,
+                timeout: std::time::Duration::from_secs(10),
+                limit: 4096,
+            })?;
+            if !result.success {
+                return Err("cannot protect shared tool directory ACL".to_owned());
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn program(path: &Path, reference: &Path, service: &str) -> Result<(), String> {
     if !crate::service::valid_name(service) {
         return Err("invalid executable service account".to_owned());

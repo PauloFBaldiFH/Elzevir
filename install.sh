@@ -86,8 +86,8 @@ temporary=$(mktemp -d)
 trap 'rm -rf -- "$temporary"' EXIT
 name=elzevir-$version-$target.tar.gz
 base=$repository/releases/download/$version
-fetch() { curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location --max-redirs 5 --max-time 900 --max-filesize 536870912 --output "$2" "$1"; }
-fetch "$base/SHA256SUMS" "$temporary/SHA256SUMS"
+fetch() { curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location --max-redirs 5 --max-time 900 --max-filesize "${3:-536870912}" --output "$2" "$1"; }
+fetch "$base/SHA256SUMS" "$temporary/SHA256SUMS" 65536
 [[ $(stat -c %s "$temporary/SHA256SUMS") -le 65536 ]] || fail 'checksum document exceeds limit'
 expected=$(awk -v name="$name" '$2==name || $2=="*"name { if (found++) exit 2; hash=$1 } END {if(found!=1) exit 1; print hash}' "$temporary/SHA256SUMS") || fail 'package checksum absent or duplicated'
 [[ $expected =~ ^[a-fA-F0-9]{64}$ ]] || fail 'invalid package checksum'

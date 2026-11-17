@@ -187,16 +187,24 @@ fn configure_environment(
         {
             return Err("invalid private tool environment".to_owned());
         }
-        for (name, _) in std::env::vars_os() {
-            if name.to_string_lossy().starts_with("RCLONE_") {
-                command.env_remove(name);
-            }
-        }
+        clear_rclone_environment(command, std::env::vars_os().map(|(name, _)| name));
         for (name, value) in environment {
             command.env(name, value.as_str());
         }
     }
     Ok(())
+}
+
+fn clear_rclone_environment(command: &mut Command, names: impl Iterator<Item = OsString>) {
+    for name in names {
+        if name
+            .to_string_lossy()
+            .get(..7)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("RCLONE_"))
+        {
+            command.env_remove(name);
+        }
+    }
 }
 
 fn finish_output(
@@ -275,6 +283,28 @@ fn snapshot(file: &std::fs::File, limit: u64) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mixed_case_inherited_rclone_flags_are_removed_without_changing_other_variables() {
+        let mut command = Command::new("fictional-tool");
+        clear_rclone_environment(
+            &mut command,
+            ["rclone_dump", "RcLoNe_CONFIG", "OTHER_CONFIG"]
+                .into_iter()
+                .map(OsString::from),
+        );
+        let removed: Vec<_> = command
+            .get_envs()
+            .filter_map(|(name, value)| {
+                value
+                    .is_none()
+                    .then_some(name.to_string_lossy().into_owned())
+            })
+            .collect();
+        assert_eq!(removed.len(), 2);
+        assert!(removed.contains(&"rclone_dump".to_owned()));
+        assert!(removed.contains(&"RcLoNe_CONFIG".to_owned()));
+    }
 
     #[cfg(target_os = "linux")]
     #[test]

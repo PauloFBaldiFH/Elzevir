@@ -9,7 +9,7 @@ somente em arquivos privados. Não mostra ajuda dinâmica que possa incluir
 segredos em comandos de autorização. Perguntas opcionais aceitam o padrão.
 
 Respostas usam ambiente privado do subprocesso (`RCLONE_STATE`/`RCLONE_RESULT`),
-com limpeza de variáveis rclone herdadas e nível ERROR. Nunca argumentos nem
+com limpeza de variáveis rclone herdadas e nível NOTICE para permitir o endereço de autorização, sem ativar debug. Nunca argumentos nem
 shell. Senhas de opções `IsPassword` são obscurecidas via stdin antes de
 responder, como o configurador nativo. Obscure não substitui permissões privadas
 nem a cifra age do backup. OAuth usa o callback local do rclone; o painel mostra
@@ -36,3 +36,8 @@ não executa rclone sobre configurações graváveis pelo daemon. O IPC admite
 frames de até 32 KiB e respostas de 64 KiB. Respostas privadas ficam em arquivo
 0600 até o trabalho começar, são consumidas antes da execução e nunca entram no
 histórico. Uma interrupção descarta entradas pendentes e pede nova resposta.
+## Ambiente herdado no Windows
+
+A limpeza de variáveis herdadas de rclone ignora maiúsculas/minúsculas no
+prefixo RCLONE_, pois o Windows trata nomes de ambiente dessa forma. Assim,
+flags de depuração ou configuração com grafia mista não contornam a limpeza.
