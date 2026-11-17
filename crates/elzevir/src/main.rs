@@ -12,6 +12,7 @@ mod health;
 mod init;
 mod koha_codes;
 mod local_disk;
+mod logging;
 mod memory;
 mod runtime_info;
 mod server_config;
@@ -181,25 +182,60 @@ fn spawn_indexer(
     index: Arc<TantivyIndex>,
     parallelism: Parallelism,
     probe: Arc<health::Probe>,
-) -> Result<(), String> {
+) -> Result<Indexer, String> {
     let options = IndexOptions {
         parallelism,
         batch: INDEX_BATCH,
     };
-    std::thread::Builder::new()
+    let (stop, receiver) = std::sync::mpsc::channel();
+    let instance = probe.instance().to_owned();
+    let task = std::thread::Builder::new()
         .name("elzevir-indexer".to_owned())
         .spawn(move || {
             loop {
-                let outcome = index_pending(&*store, &*store, &*index, &options);
-                probe.indexed(outcome.is_ok());
-                if let Err(e) = outcome {
-                    eprintln!("elzevir: indexing failed, retrying: {e}");
+                if let Ok(report) = index_pending(&*store, &*store, &*index, &options) {
+                    probe.indexed(true);
+                    if report.effects > 0 {
+                        logging::emit(
+                            probe.instance(),
+                            logging::Event::IndexerCommitted {
+                                effects: report.effects,
+                            },
+                        );
+                    }
+                } else {
+                    probe.indexed(false);
+                    logging::emit(probe.instance(), logging::Event::IndexerFailed);
                 }
-                std::thread::sleep(INDEX_INTERVAL);
+                match receiver.recv_timeout(INDEX_INTERVAL) {
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                    _ => break,
+                }
             }
         })
-        .map(drop)
-        .map_err(|e| format!("cannot start the indexer: {e}"))
+        .map_err(|error| format!("cannot start the indexer: {error}"))?;
+    Ok(Indexer {
+        instance,
+        stop: Some(stop),
+        task: Some(task),
+    })
+}
+
+struct Indexer {
+    instance: String,
+    stop: Option<std::sync::mpsc::Sender<()>>,
+    task: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Drop for Indexer {
+    fn drop(&mut self) {
+        drop(self.stop.take());
+        if let Some(task) = self.task.take()
+            && task.join().is_err()
+        {
+            logging::emit(&self.instance, logging::Event::IndexerPanicked);
+        }
+    }
 }
 
 fn serve(
@@ -214,62 +250,78 @@ fn serve(
     }
     let DataDir { store, _lock } = open_store(data_dir)?;
     let store = Arc::new(store);
-    let (index, parallelism) = open_index(data_dir)?;
-    let index = Arc::new(index);
+    let _logs = logging::start(data_dir)?;
     let probe = Arc::new(health::Probe::new(Arc::clone(&store))?);
-    spawn_indexer(
-        Arc::clone(&store),
-        Arc::clone(&index),
-        parallelism,
-        Arc::clone(&probe),
-    )?;
-    let i18n = I18n::english().map_err(|e| e.to_string())?;
-    let config = WebConfig {
-        secure_cookies: !insecure_cookies,
-        iri_base,
-        author_table: loaded.author_table,
-        ..WebConfig::default()
-    };
-    let opac = OpacPorts {
-        catalog: Arc::clone(&store) as _,
-        index,
-    };
-    let staff_ports = StaffPorts {
-        listing: Arc::clone(&store) as _,
-        records: Arc::clone(&store) as _,
-        editor: Arc::clone(&store) as _,
-        suggestions: Arc::clone(&store) as _,
-        items: Arc::clone(&store) as _,
-        statements: Arc::clone(&store) as _,
-        history: Arc::clone(&store) as _,
-        authorities: Arc::clone(&store) as _,
-    };
-    let app = elzevir_web::router(AppState::new(
-        store,
-        Arc::new(memory::AllocatorProbe),
-        opac,
-        staff_ports,
-        i18n,
-        config,
-    ));
-    let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
-    runtime.block_on(async move {
-        let listener = tokio::net::TcpListener::bind(listen)
-            .await
-            .map_err(|e| format!("cannot listen on {listen}: {e}"))?;
-        let address = listener.local_addr().map_err(|error| error.to_string())?;
-        let health_listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-            .await
-            .map_err(|error| format!("cannot bind local health listener: {error}"))?;
-        let health_address = health_listener
-            .local_addr()
-            .map_err(|error| error.to_string())?;
-        let _metadata =
-            runtime_info::RuntimeFile::publish(data_dir, probe.instance(), health_address)?;
-        println!("elzevir: listening on http://{address}");
-        println!("elzevir: health on http://{health_address}/health");
-        serve_http(listener, app, health_listener, probe).await
-    })
+    let instance = probe.instance().to_owned();
+    let result = (|| {
+        let (index, parallelism) = open_index(data_dir)?;
+        let index = Arc::new(index);
+        let indexer = spawn_indexer(
+            Arc::clone(&store),
+            Arc::clone(&index),
+            parallelism,
+            Arc::clone(&probe),
+        )?;
+        let i18n = I18n::english().map_err(|e| e.to_string())?;
+        let config = WebConfig {
+            secure_cookies: !insecure_cookies,
+            iri_base,
+            author_table: loaded.author_table,
+            ..WebConfig::default()
+        };
+        let opac = OpacPorts {
+            catalog: Arc::clone(&store) as _,
+            index,
+        };
+        let staff_ports = StaffPorts {
+            listing: Arc::clone(&store) as _,
+            records: Arc::clone(&store) as _,
+            editor: Arc::clone(&store) as _,
+            suggestions: Arc::clone(&store) as _,
+            items: Arc::clone(&store) as _,
+            statements: Arc::clone(&store) as _,
+            history: Arc::clone(&store) as _,
+            authorities: Arc::clone(&store) as _,
+        };
+        let app = elzevir_web::router(AppState::new(
+            store,
+            Arc::new(memory::AllocatorProbe),
+            opac,
+            staff_ports,
+            i18n,
+            config,
+        ));
+        let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+        let result = runtime.block_on(async move {
+            let listener = tokio::net::TcpListener::bind(listen)
+                .await
+                .map_err(|e| format!("cannot listen on {listen}: {e}"))?;
+            let address = listener.local_addr().map_err(|error| error.to_string())?;
+            let health_listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+                .await
+                .map_err(|error| format!("cannot bind local health listener: {error}"))?;
+            let health_address = health_listener
+                .local_addr()
+                .map_err(|error| error.to_string())?;
+            let _metadata =
+                runtime_info::RuntimeFile::publish(data_dir, probe.instance(), health_address)?;
+            logging::emit(probe.instance(), logging::Event::ServerStarted);
+            println!("elzevir: listening on http://{address}");
+            println!("elzevir: health on http://{health_address}/health");
+            serve_http(listener, app, health_listener, probe).await
+        });
+        drop(indexer);
+        result
+    })();
+    logging::emit(
+        &instance,
+        if result.is_ok() {
+            logging::Event::ServerStopped
+        } else {
+            logging::Event::ServerFailed
+        },
+    );
+    result
 }
 
 async fn serve_http(
@@ -360,4 +412,23 @@ fn add_staff(data_dir: &Path, login: &str, admin: bool, cataloguing: bool) -> Re
     };
     println!("elzevir: staff account `{login}` created (id {})", id.0);
     Ok(())
+}
+
+#[cfg(test)]
+mod indexer_tests {
+    use super::*;
+
+    #[test]
+    fn stopping_the_indexer_releases_its_store_references() {
+        let root = tempfile::tempdir().unwrap();
+        let data = open_store(root.path()).unwrap();
+        let store = Arc::new(data.store);
+        let weak = Arc::downgrade(&store);
+        let (index, parallelism) = open_index(root.path()).unwrap();
+        let probe = Arc::new(health::Probe::new(Arc::clone(&store)).unwrap());
+        {
+            let _worker = spawn_indexer(store, Arc::new(index), parallelism, probe).unwrap();
+        }
+        assert!(weak.upgrade().is_none());
+    }
 }
