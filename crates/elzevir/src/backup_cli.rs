@@ -273,8 +273,7 @@ fn restore_inner(
     )?;
     // Validate auxiliary configuration before any live file is moved.
     validate_auxiliary(restored.directory.path(), safety_snapshot)?;
-    let safety = directory.join(format!("restore-safety-{}", archive::identifier()?));
-    make_directory(&safety)?;
+    let safety = crate::restore_journal::create_safety(&directory)?;
     // A consistent independent image is retained even if rebuilding the replacement fails.
     if safety_snapshot {
         elzevir_store::snapshot_offline(
@@ -283,7 +282,9 @@ fn restore_inner(
         )
         .map_err(|_| "cannot create restore safety image")?;
     }
-    let stage = tempfile::tempdir_in(&directory).map_err(|_| "cannot stage restore")?;
+    let stage = tempfile::tempdir_in(crate::restore_journal::trusted_parent(&directory)?)
+        .map_err(|_| "cannot stage restore")?;
+    crate::file_owner::operator_private(stage.path())?;
     let mut replacements = Vec::new();
     for (name, target) in [
         ("database.sqlite", "elzevir.db"),

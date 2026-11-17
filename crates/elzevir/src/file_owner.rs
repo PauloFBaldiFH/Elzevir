@@ -93,11 +93,19 @@ pub(crate) fn configuration(path: &Path, reference: &Path) -> Result<(), String>
 }
 /// Protects a management credential from the institution's service identity.
 pub(crate) fn operator_private(path: &Path) -> Result<(), String> {
+    let metadata =
+        std::fs::symlink_metadata(path).map_err(|_| "operator-private path unavailable")?;
+    if metadata.is_symlink() || (!metadata.is_file() && !metadata.is_dir()) {
+        return Err("operator-private path must be regular".to_owned());
+    }
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
-            .map_err(|_| "cannot protect operator credential")?;
+        std::fs::set_permissions(
+            path,
+            std::fs::Permissions::from_mode(if metadata.is_dir() { 0o700 } else { 0o600 }),
+        )
+        .map_err(|_| "cannot protect operator credential")?;
     }
     #[cfg(windows)]
     {
@@ -114,8 +122,16 @@ pub(crate) fn operator_private(path: &Path) -> Result<(), String> {
                 path.as_os_str().to_owned(),
                 "/inheritance:r".into(),
                 "/grant:r".into(),
-                "*S-1-5-18:F".into(),
-                "*S-1-5-32-544:F".into(),
+                format!(
+                    "*S-1-5-18:{}",
+                    if metadata.is_dir() { "(OI)(CI)F" } else { "F" }
+                )
+                .into(),
+                format!(
+                    "*S-1-5-32-544:{}",
+                    if metadata.is_dir() { "(OI)(CI)F" } else { "F" }
+                )
+                .into(),
                 "/setowner".into(),
                 "*S-1-5-32-544".into(),
             ],

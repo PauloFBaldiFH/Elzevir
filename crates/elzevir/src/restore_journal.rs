@@ -49,13 +49,67 @@ fn absolute(path: &Path) -> Result<PathBuf, String> {
     Ok(parent.join(path.file_name().ok_or("configuration filename required")?))
 }
 
+fn scope(directory: &Path) -> String {
+    use sha2::{Digest as _, Sha256};
+    format!(
+        "{:x}",
+        Sha256::digest(directory.as_os_str().as_encoded_bytes())
+    )
+    .chars()
+    .take(16)
+    .collect()
+}
+pub(crate) fn trusted_parent(directory: &Path) -> Result<PathBuf, String> {
+    let parent = directory
+        .parent()
+        .ok_or("institution directory needs an administrator-controlled parent")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt as _;
+        let owner = std::fs::metadata(directory).map_err(|_| "institution unavailable")?;
+        let metadata =
+            std::fs::symlink_metadata(parent).map_err(|_| "institution parent unavailable")?;
+        if rustix::process::geteuid().is_root()
+            && (metadata.uid() != 0
+                || metadata.mode() & 0o022 != 0
+                    && !(metadata.mode() & 0o1000 != 0 && owner.uid() == 0))
+        {
+            return Err(
+                "privileged restore requires an administrator-controlled institution parent"
+                    .to_owned(),
+            );
+        }
+    }
+    Ok(parent.to_owned())
+}
+fn safety_path(directory: &Path, id: &str) -> Result<PathBuf, String> {
+    if id.len() != 32 || !id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err("invalid restore identity".to_owned());
+    }
+    Ok(trusted_parent(directory)?.join(format!(".elzevir-restore-{}-{id}", scope(directory))))
+}
+pub(crate) fn create_safety(directory: &Path) -> Result<PathBuf, String> {
+    let path = safety_path(directory, &crate::backup_archive::identifier()?)?;
+    let mut builder = std::fs::DirBuilder::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt as _;
+        builder.mode(0o700);
+    }
+    builder
+        .create(&path)
+        .map_err(|_| "restore safety directory must be new")?;
+    crate::file_owner::operator_private(&path)?;
+    Ok(path)
+}
+
 impl Journal {
     pub(crate) fn begin(directory: &Path, safety: &Path, config: &Path) -> Result<Self, String> {
         let config = absolute(config)?;
         let id = safety
             .file_name()
             .and_then(|name| name.to_str())
-            .and_then(|name| name.strip_prefix("restore-safety-"))
+            .and_then(|name| name.strip_prefix(&format!(".elzevir-restore-{}-", scope(directory))))
             .ok_or("invalid restore safety path")?
             .to_owned();
         let mut journal = Self {
@@ -96,10 +150,15 @@ impl Journal {
             directory.join(name)
         })
     }
-    fn saved(&self, directory: &Path, name: &str) -> PathBuf {
-        directory
-            .join(format!("restore-safety-{}", self.id))
-            .join(format!("original-{name}"))
+    fn saved(&self, directory: &Path, name: &str) -> Result<PathBuf, String> {
+        if name == "server-config" {
+            return Ok(self.config.with_file_name(format!(
+                ".elzevir-restore-{}-{}.server-config",
+                scope(directory),
+                self.id
+            )));
+        }
+        Ok(safety_path(directory, &self.id)?.join(format!("original-{name}")))
     }
     pub(crate) fn preserve(&self, directory: &Path, target: &Path) -> Result<(), String> {
         let target = absolute(target)?;
@@ -112,10 +171,10 @@ impl Journal {
             })
             .ok_or("undeclared restore target")?;
         if entry.existed {
-            std::fs::rename(&target, self.saved(directory, &entry.name))
+            std::fs::rename(&target, self.saved(directory, &entry.name)?)
                 .map_err(|_| "cannot retain restore original")?;
             sync(directory)?;
-            sync(&directory.join(format!("restore-safety-{}", self.id)))?;
+            sync(&safety_path(directory, &self.id)?)?;
         }
         Ok(())
     }
@@ -123,7 +182,7 @@ impl Journal {
         // Remove a replacement database/index before restoring their original sidecars.
         for entry in &self.entries {
             let target = self.target(directory, &entry.name)?;
-            let saved = self.saved(directory, &entry.name);
+            let saved = self.saved(directory, &entry.name)?;
             if std::fs::symlink_metadata(&saved).is_ok() {
                 remove(&target)?;
                 std::fs::rename(saved, target).map_err(
@@ -182,11 +241,27 @@ pub(crate) fn recover(directory: &Path, config: Option<&Path>) -> Result<(), Str
     {
         return Err("incompatible restore journal or configuration path".to_owned());
     }
-    let safety = directory.join(format!("restore-safety-{}", journal.id));
+    let safety = safety_path(&directory, &journal.id)?;
     let metadata =
-        std::fs::symlink_metadata(safety).map_err(|_| "restore safety directory unavailable")?;
+        std::fs::symlink_metadata(&safety).map_err(|_| "restore safety directory unavailable")?;
     if !metadata.is_dir() || metadata.is_symlink() {
         return Err("invalid restore safety directory".to_owned());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt as _;
+        if metadata.uid() != rustix::process::geteuid().as_raw() || metadata.mode() & 0o077 != 0 {
+            return Err(
+                "restore safety directory must be private to the recovering operator".to_owned(),
+            );
+        }
+    }
+    let proof = safety.join("journal.json");
+    if crate::backup_archive::regular(&proof)?
+        != u64::try_from(bytes.len()).map_err(|_| "invalid restore proof")?
+        || std::fs::read(proof).map_err(|_| "private restore proof unavailable")? != bytes
+    {
+        return Err("restore marker does not match its private journal".to_owned());
     }
     journal.rollback(&directory)
 }
@@ -206,6 +281,33 @@ fn sync(_directory: &Path) -> Result<(), String> {
 mod tests {
     use super::*;
     #[test]
+    fn safety_storage_is_outside_service_writable_data_and_forged_markers_are_rejected() {
+        let directory = tempfile::tempdir().unwrap();
+        let data = crate::open_store(directory.path()).unwrap();
+        data.store.shutdown().unwrap();
+        let crate::DataDir {
+            _lock: lock_file, ..
+        } = data;
+        drop(lock_file);
+        let safety = create_safety(directory.path()).unwrap();
+        assert_eq!(safety.parent(), directory.path().parent());
+        assert!(!safety.starts_with(directory.path()));
+        Journal::begin(
+            directory.path(),
+            &safety,
+            &directory.path().join("server.toml"),
+        )
+        .unwrap();
+        let marker = directory.path().join(NAME);
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&marker).unwrap()).unwrap();
+        value["entries"][0]["existed"] = false.into();
+        std::fs::write(&marker, serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(recover(directory.path(), None).is_err());
+        assert!(directory.path().join("elzevir.db").exists());
+        std::fs::remove_dir_all(safety).unwrap();
+    }
+    #[test]
     fn crash_between_file_moves_is_recoverable_without_an_available_live_database() {
         let directory = tempfile::tempdir().unwrap();
         let data = crate::open_store(directory.path()).unwrap();
@@ -215,10 +317,7 @@ mod tests {
         } = data;
         drop(lock_file);
         let original = std::fs::read(directory.path().join("elzevir.db")).unwrap();
-        let safety = directory
-            .path()
-            .join(format!("restore-safety-{}", "a".repeat(32)));
-        std::fs::create_dir(&safety).unwrap();
+        let safety = create_safety(directory.path()).unwrap();
         let journal = Journal::begin(
             directory.path(),
             &safety,

@@ -55,3 +55,9 @@ a retenção de até 365 cópias não perde a propriedade de arquivos antigos ao
 truncar a tela de histórico. Arquivos sem registro permanecem intocados. Planos
 de nuvem e seu catálogo de propriedade remota são transportados dentro da cifra;
 após restauração, as agendas de nuvem ficam desativadas até revisão explícita.
+
+Em restauração elevada, o pai dos dados deve ser controlado pelo administrador.
+O preparo e os originais ficam em pasta privada irmã da instituição, fora de
+sua árvore gravável pelo serviço. A configuração externa conserva seu original
+no próprio diretório, para permitir volumes diferentes. A recuperação confere
+uma cópia privada do diário antes de aceitar o marcador nos dados.
