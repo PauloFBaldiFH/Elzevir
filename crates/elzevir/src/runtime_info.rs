@@ -99,7 +99,7 @@ impl Drop for RuntimeFile {
         if read(&self.path).is_ok_and(|info| info.instance == self.instance) {
             // Metadata is advisory. After an unclean exit the lock still prevents false readiness.
             if std::fs::remove_file(&self.path).is_err() {
-                eprintln!("elzevir: cannot remove owned runtime metadata");
+                crate::logging::emit(&self.instance, crate::logging::Event::RuntimeCleanupFailed);
             }
         }
     }

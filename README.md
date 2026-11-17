@@ -37,3 +37,10 @@ elzevir status --config elzevir.toml --json
 A consulta informa `running`, `degraded`, `stopped` ou `unavailable`, sem abrir
 SQLite nem criar arquivos. Retorna código zero somente quando o servidor está
 pronto. Veja o [contrato do status local](docs/specs/operacao/status-local.md).
+
+## Logs de operação
+
+`serve` grava eventos JSON em `DATA_DIR/logs/elzevir.DATA.jsonl`, com data UTC,
+rotação diária e retenção configurada para sete arquivos. Os eventos de início,
+parada e indexação omitem o conteúdo das requisições. Consulte o
+[contrato dos logs operacionais](docs/specs/operacao/logs-operacionais.md).
