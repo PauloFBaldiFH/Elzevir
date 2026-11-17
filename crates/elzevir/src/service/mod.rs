@@ -71,8 +71,16 @@ pub(crate) struct Entry {
     pub(crate) name: String,
 }
 
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Role {
+    Server,
+    Tunnel,
+}
+
 #[derive(Serialize)]
 pub(crate) struct Plan {
+    pub(crate) role: Role,
     schema: u8,
     platform: &'static str,
     action: &'static str,
@@ -171,6 +179,7 @@ fn plan(args: &Install) -> Result<Plan, String> {
     let privileged_port = low(settings.listen)
         || matches!(settings.staff,crate::access_config::StaffMode::SeparateListener {listen,..} if low(listen));
     let plan = Plan {
+        role: Role::Server,
         schema: 1,
         platform: platform()?,
         action: "install",
@@ -307,4 +316,164 @@ fn native_backend() -> Box<dyn Backend> {
 #[cfg(not(target_os = "linux"))]
 fn use_openrc() -> bool {
     false
+}
+
+pub(crate) fn arguments(plan: &Plan) -> Result<Vec<String>, String> {
+    let config = plan
+        .config
+        .to_str()
+        .ok_or("service configuration path must be Unicode")?
+        .to_owned();
+    Ok(match plan.role {
+        Role::Server if cfg!(windows) => vec![
+            "service".to_owned(),
+            "run".to_owned(),
+            "--name".to_owned(),
+            plan.name.clone(),
+            "--config".to_owned(),
+            config,
+        ],
+        Role::Server => vec!["serve".to_owned(), "--config".to_owned(), config],
+        Role::Tunnel => vec![
+            "--no-autoupdate".to_owned(),
+            "--config".to_owned(),
+            config,
+            "tunnel".to_owned(),
+            "run".to_owned(),
+        ],
+    })
+}
+
+pub(crate) fn install_tunnel(directory: &Path, config: &Path) -> Result<String, String> {
+    let directory = path(directory)?;
+    let name = tunnel_name(&directory)?;
+    crate::backup_archive::regular(config)?;
+    let plan = Plan {
+        role: Role::Tunnel,
+        schema: 1,
+        platform: platform()?,
+        action: "install",
+        name: name.clone(),
+        executable: crate::managed_tools::binary(crate::managed_tools::Tool::Cloudflared)?,
+        config: path(config)?,
+        data_dir: directory,
+        account: if cfg!(windows) {
+            format!("NT SERVICE\\{name}")
+        } else {
+            "elzevir".to_owned()
+        },
+        privileged_port: false,
+        unit: None,
+    };
+    #[cfg(target_os = "linux")]
+    let plan = Plan {
+        unit: Some(if use_openrc() {
+            openrc::render(&plan)?
+        } else {
+            systemd::render(&plan)?
+        }),
+        ..plan
+    };
+    #[cfg(target_os = "linux")]
+    let backend = native_backend();
+    #[cfg(windows)]
+    let backend: Box<dyn Backend> = Box::new(windows::Windows);
+    #[cfg(any(target_os = "linux", windows))]
+    {
+        let status = backend.status(&name)?;
+        match status.get("state").and_then(serde_json::Value::as_str) {
+            Some("not_installed") => backend.install(&plan)?,
+            Some("running" | "stopped" | "failed" | "starting" | "stopping") => {}
+            _ => return Err("tunnel service state unavailable".to_owned()),
+        }
+        #[cfg(windows)]
+        windows::grant_tunnel_access(&plan)?;
+        Ok(name)
+    }
+    #[cfg(not(any(target_os = "linux", windows)))]
+    {
+        Err("tunnel services unavailable on this platform".to_owned())
+    }
+}
+
+pub(crate) fn tunnel_name(directory: &Path) -> Result<String, String> {
+    use sha2::{Digest as _, Sha256};
+    let directory = path(directory)?;
+    let hash = format!(
+        "{:x}",
+        Sha256::digest(directory.to_string_lossy().as_bytes())
+    );
+    Ok(format!(
+        "elzevir-tunnel-{}",
+        hash.get(..16).ok_or("invalid institution identity")?
+    ))
+}
+
+pub(crate) fn native_status(name: &str) -> Result<serde_json::Value, String> {
+    if !valid_name(name) {
+        return Err("invalid managed service name".to_owned());
+    }
+    #[cfg(target_os = "linux")]
+    let backend = native_backend();
+    #[cfg(windows)]
+    let backend: Box<dyn Backend> = Box::new(windows::Windows);
+    #[cfg(any(target_os = "linux", windows))]
+    {
+        backend.status(name)
+    }
+    #[cfg(not(any(target_os = "linux", windows)))]
+    {
+        Err("service observation unavailable".to_owned())
+    }
+}
+
+pub(crate) fn require_operator() -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    {
+        if rustix::process::geteuid().is_root() {
+            Ok(())
+        } else {
+            Err("Cloudflare account management requires an elevated terminal".to_owned())
+        }
+    }
+    #[cfg(windows)]
+    {
+        windows::require_operator()
+    }
+    #[cfg(not(any(target_os = "linux", windows)))]
+    {
+        Err("Cloudflare account management unavailable on this platform".to_owned())
+    }
+}
+
+#[cfg(test)]
+mod auxiliary_tests {
+    use super::*;
+    #[test]
+    fn tunnel_service_uses_a_private_config_path_without_inline_credentials() {
+        let plan = Plan {
+            schema: 1,
+            platform: "test",
+            action: "install",
+            name: "elzevir-tunnel-test".to_owned(),
+            executable: "/opt/cloudflared".into(),
+            config: "/var/lib/library/secrets/tunnel config.json".into(),
+            data_dir: "/var/lib/library".into(),
+            account: "elzevir".to_owned(),
+            privileged_port: false,
+            unit: None,
+            role: Role::Tunnel,
+        };
+        let arguments = arguments(&plan).unwrap();
+        assert!(
+            arguments
+                .iter()
+                .any(|value| value == "/var/lib/library/secrets/tunnel config.json")
+        );
+        assert!(
+            !arguments
+                .iter()
+                .any(|value| value == "--token" || value == "serve" || value == "service")
+        );
+    }
 }

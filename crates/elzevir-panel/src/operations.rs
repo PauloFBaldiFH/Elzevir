@@ -4,6 +4,27 @@
 /// An operation confirmed by the user, delivered once to the composition boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Explicitly test the configured public HTTPS endpoints.
+    TestTunnel,
+    /// Publish separate catalog/staff hostnames through the selected Cloudflare account.
+    CloudflareSetup {
+        /// Catalog hostname.
+        catalog: String,
+        /// Staff hostname.
+        staff: String,
+        /// Optional tunnel name.
+        name: String,
+        /// Managed library service name.
+        service: String,
+        /// auto or http2.
+        protocol: String,
+    },
+    /// Sign in to Cloudflare, reusing an existing private certificate when present.
+    CloudflareLogin,
+    /// Install or update the verified official Cloudflare tunnel binary.
+    InstallCloudflared,
+    /// Install or update the verified official rclone binary.
+    InstallRclone,
     /// Fetch metadata for the latest official release.
     CheckUpdates,
     /// Install a pinned release through the managed service.
@@ -57,6 +78,11 @@ impl Operation {
     #[must_use]
     pub const fn key(&self) -> &'static str {
         match self {
+            Self::TestTunnel => "op-tunnel-test",
+            Self::CloudflareSetup { .. } => "op-cloudflare-setup",
+            Self::CloudflareLogin => "op-cloudflare-login",
+            Self::InstallCloudflared => "op-install-cloudflared",
+            Self::InstallRclone => "op-install-rclone",
             Self::CheckUpdates => "op-update-check",
             Self::Update { .. } => "op-update",
             Self::Restart { .. } => "op-restart",
@@ -101,6 +127,10 @@ pub struct Operations {
     pub latest: Option<String>,
     /// Bounded plain-text official release notes.
     pub release_notes: Option<String>,
+    /// Allowlisted sign-in URLs for pending interactive jobs.
+    pub authorization_uris: Vec<String>,
+    /// Public tunnel candidates and bounded evidence.
+    pub tunnel: crate::TunnelState,
 }
 
 /// Bounded editing and confirmation, without access to operating-system resources.
@@ -110,7 +140,7 @@ pub struct Form {
     pub operation: Operation,
     /// Current field, or confirmation when all fields have been entered.
     pub field: usize,
-    /// Values under edit, at most three fields of 512 Unicode scalar values each.
+    /// Values under edit, at most eight fields of 512 Unicode scalar values each.
     pub values: Vec<String>,
     /// Translation keys for the fields.
     pub labels: Vec<&'static str>,
@@ -120,12 +150,38 @@ impl Form {
     #[must_use]
     pub fn new(operation: Operation) -> Self {
         let (labels, values) = match &operation {
+            Operation::CloudflareSetup {
+                catalog,
+                staff,
+                name,
+                service,
+                protocol,
+            } => (
+                vec![
+                    "op-catalog-host",
+                    "op-staff-host",
+                    "op-tunnel-name",
+                    "op-service",
+                    "op-transport",
+                ],
+                vec![
+                    catalog.clone(),
+                    staff.clone(),
+                    name.clone(),
+                    service.clone(),
+                    protocol.clone(),
+                ],
+            ),
             Operation::Update { version, name } => (
                 vec!["op-version", "op-service"],
                 vec![version.clone(), name.clone()],
             ),
             Operation::Restart { name } => (vec!["op-service"], vec![name.clone()]),
-            Operation::CheckUpdates
+            Operation::TestTunnel
+            | Operation::CloudflareLogin
+            | Operation::InstallCloudflared
+            | Operation::InstallRclone
+            | Operation::CheckUpdates
             | Operation::Reboot
             | Operation::BackupNow
             | Operation::VerifyLatest => (vec![], vec![]),
@@ -160,6 +216,17 @@ impl Form {
         }
         let mut values = self.values.into_iter();
         Some(match self.operation {
+            Operation::CloudflareSetup { .. } => Operation::CloudflareSetup {
+                catalog: values.next()?,
+                staff: values.next()?,
+                name: values.next()?,
+                service: values.next()?,
+                protocol: values.next()?,
+            },
+            Operation::TestTunnel => Operation::TestTunnel,
+            Operation::CloudflareLogin => Operation::CloudflareLogin,
+            Operation::InstallCloudflared => Operation::InstallCloudflared,
+            Operation::InstallRclone => Operation::InstallRclone,
             Operation::CheckUpdates => Operation::CheckUpdates,
             Operation::Update { .. } => Operation::Update {
                 version: values.next()?,

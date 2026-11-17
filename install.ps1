@@ -80,7 +80,7 @@ $institutionRoot = Join-Path (Join-Path $env:ProgramData 'Elzevir') $Id
 $config = Join-Path $institutionRoot 'server.toml'
 $data = Join-Path $institutionRoot 'data'
 $binary = Join-Path $installRoot 'elzevir.exe'
-$service = 'elzevir-' + $Id
+$service = if ($Id -ceq 'library') { 'elzevir' } else { 'elzevir-' + $Id }
 if ($Plan) {
     [ordered]@{ target=$target; version=$Version; binary=$binary; config=$config; data=$data; service=$service; firewall=[bool]$OpenFirewall; defender=[bool]$DefenderExclusion } | ConvertTo-Json -Compress
     return

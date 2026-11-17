@@ -12,6 +12,7 @@ mod admin;
 mod backup_archive;
 mod backup_cli;
 mod catalog_cli;
+mod cloudflare;
 mod config;
 mod diagnostic_logs;
 mod diagnostics;
@@ -23,6 +24,7 @@ mod init;
 mod koha_codes;
 mod local_disk;
 mod logging;
+mod managed_tools;
 mod memory;
 mod operations;
 mod operations_cli;
@@ -37,6 +39,9 @@ mod service;
 mod shutdown;
 mod status;
 mod support_archive;
+mod tools_cli;
+mod tunnel_cli;
+mod tunnel_observe;
 mod update;
 
 use std::future::IntoFuture;
@@ -70,6 +75,10 @@ struct Cli {
 enum Command {
     #[command(hide = true)]
     HostJob(host_jobs::Args),
+    /// Install or inspect optional operational tools.
+    Tools(tools_cli::Args),
+    /// Configure and observe the managed public tunnel.
+    Tunnel(tunnel_cli::Args),
     /// Install a verified release with backup and automatic rollback.
     Update(update::Args),
     /// Serves the OPAC and the staff interface.
@@ -126,6 +135,8 @@ enum StaffAction {
 fn main() -> ExitCode {
     let result = match Cli::parse().command {
         Command::HostJob(args) => host_jobs::run(&args),
+        Command::Tools(args) => tools_cli::run(args),
+        Command::Tunnel(args) => tunnel_cli::run(args),
         Command::Update(args) => update::run(args),
         Command::Serve(args) => args
             .resolve()
@@ -332,6 +343,7 @@ fn serve_controlled(
     if control.requested() {
         return Ok(());
     }
+    cloudflare::require_host_policy(settings)?;
     let data_dir = &settings.data_dir;
     let loaded = config::load(data_dir)?;
     if let Some((path, report)) = &loaded.table_report {

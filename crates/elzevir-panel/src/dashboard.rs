@@ -11,12 +11,16 @@ use ratatui::{
 };
 
 pub(crate) fn text(value: &str) -> String {
+    safe_text(value, 512)
+}
+
+fn safe_text(value: &str, limit: usize) -> String {
     value
         .chars()
         .filter(|c| {
             !c.is_control() && !matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
         })
-        .take(512)
+        .take(limit)
         .collect()
 }
 
@@ -75,12 +79,7 @@ pub(crate) fn draw(
             messages,
         ));
     } else if panel.section == Section::Addresses {
-        rows.extend(crate::address_view::rows(
-            &state.institution,
-            snapshot.map(|s| &s.addresses),
-            panel.diagnostics.pending,
-            messages,
-        ));
+        rows.extend(address_rows(panel, snapshot, state, messages));
     } else if matches!(
         panel.section,
         Section::Backup | Section::Restart | Section::Updates
@@ -137,6 +136,36 @@ pub(crate) fn draw(
             .block(crate::view::block(messages.get("panel-context"), ascii)),
         context,
     );
+}
+
+fn address_rows(
+    panel: &Panel,
+    snapshot: Option<&crate::Snapshot>,
+    state: &LiveState,
+    messages: &Messages,
+) -> Vec<Line<'static>> {
+    let mut rows = vec![Line::from(messages.get("op-cloudflare-help"))];
+    if let Some(sample) = snapshot {
+        for uri in &sample.operations.authorization_uris {
+            rows.push(row(
+                messages,
+                "op-authorize-uri",
+                Some(safe_text(uri, 2048)),
+            ));
+        }
+    }
+    rows.extend(crate::tunnel_view::rows(
+        snapshot.map(|sample| &sample.operations),
+        panel.tunnel_tab,
+        messages,
+    ));
+    rows.extend(crate::address_view::rows(
+        &state.institution,
+        snapshot.map(|sample| &sample.addresses),
+        panel.diagnostics.pending,
+        messages,
+    ));
+    rows
 }
 
 fn readings(

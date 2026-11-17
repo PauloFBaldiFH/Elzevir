@@ -185,8 +185,17 @@ impl Collector {
                 .and_then(|release| release.body.clone()),
             ..elzevir_panel::Operations::default()
         };
+        result.tunnel = match crate::tunnel_observe::observe(&self.directory) {
+            Ok(Some(tunnel)) => elzevir_panel::TunnelState::Configured(tunnel),
+            Ok(None) => elzevir_panel::TunnelState::NotConfigured,
+            Err(_) => elzevir_panel::TunnelState::Unavailable,
+        };
         // Client-side jobs are separate from the daemon that they may need to stop.
         if let Ok(receipts) = crate::host_jobs::receipts(&self.directory) {
+            result.authorization_uris = receipts
+                .iter()
+                .filter_map(|receipt| receipt.authorization_uri.clone())
+                .collect();
             result.jobs.extend(
                 receipts
                     .into_iter()
@@ -198,6 +207,11 @@ impl Collector {
                             "restore" => "op-restore",
                             "restart" => "op-restart",
                             "update" => "op-update",
+                            "cloudflare_login" => "op-cloudflare-login",
+                            "cloudflare_setup" => "op-cloudflare-setup",
+                            "tunnel_test" => "op-tunnel-test",
+                            "install_cloudflared" => "op-install-cloudflared",
+                            "install_rclone" => "op-install-rclone",
                             _ => "op-reboot",
                         },
                         state: match receipt.state.as_str() {
@@ -260,31 +274,7 @@ impl Collector {
                 identity.to_string().expose_secret().as_bytes(),
             );
         }
-        let host = match operation {
-            Operation::Update { version, name } => Some(crate::host_jobs::Task::Update {
-                config: self
-                    .config
-                    .as_ref()
-                    .ok_or("update requires a configuration file")?
-                    .canonicalize()
-                    .map_err(|_| "configuration unavailable")?,
-                name: name.clone(),
-                version: version.clone(),
-                package: None,
-                checksums: None,
-                executable: std::env::current_exe().map_err(|_| "update executable unavailable")?,
-            }),
-            Operation::Restore { input, key } => Some(crate::host_jobs::Task::Restore {
-                input: input.into(),
-                key: key.into(),
-                config: self.config.clone(),
-            }),
-            Operation::Restart { name } => {
-                Some(crate::host_jobs::Task::Restart { name: name.clone() })
-            }
-            Operation::Reboot => Some(crate::host_jobs::Task::Reboot),
-            _ => None,
-        };
+        let host = self.host_operation(operation)?;
         if let Some(task) = host {
             crate::host_jobs::launch(&self.directory, task)?;
             return Ok(());
@@ -337,12 +327,79 @@ impl Collector {
             | Operation::Restart { .. }
             | Operation::Reboot
             | Operation::Update { .. }
-            | Operation::CheckUpdates => {
+            | Operation::CheckUpdates
+            | Operation::InstallCloudflared
+            | Operation::InstallRclone
+            | Operation::TestTunnel
+            | Operation::CloudflareLogin
+            | Operation::CloudflareSetup { .. } => {
                 return Err("invalid host operation dispatch".to_owned());
             }
             Operation::ExportKey { .. } => return Err("invalid export dispatch".to_owned()),
         }
         Ok(())
+    }
+}
+
+impl Collector {
+    fn host_operation(
+        &self,
+        operation: &elzevir_panel::Operation,
+    ) -> Result<Option<crate::host_jobs::Task>, String> {
+        use elzevir_panel::Operation;
+        Ok(match operation {
+            Operation::CloudflareSetup {
+                catalog,
+                staff,
+                name,
+                service,
+                protocol,
+            } => Some(crate::host_jobs::Task::CloudflareSetup {
+                setup: crate::cloudflare::Setup {
+                    config: self
+                        .config
+                        .as_ref()
+                        .ok_or("tunnel setup requires a configuration file")?
+                        .clone(),
+                    catalog: catalog.clone(),
+                    staff: staff.clone(),
+                    name: name.clone(),
+                    service: service.clone(),
+                    protocol: protocol.clone(),
+                },
+            }),
+            Operation::CloudflareLogin => Some(crate::host_jobs::Task::CloudflareLogin),
+            Operation::TestTunnel => Some(crate::host_jobs::Task::TestTunnel),
+            Operation::InstallCloudflared => Some(crate::host_jobs::Task::InstallTool {
+                tool: crate::managed_tools::Tool::Cloudflared,
+            }),
+            Operation::InstallRclone => Some(crate::host_jobs::Task::InstallTool {
+                tool: crate::managed_tools::Tool::Rclone,
+            }),
+            Operation::Update { version, name } => Some(crate::host_jobs::Task::Update {
+                config: self
+                    .config
+                    .as_ref()
+                    .ok_or("update requires a configuration file")?
+                    .canonicalize()
+                    .map_err(|_| "configuration unavailable")?,
+                name: name.clone(),
+                version: version.clone(),
+                package: None,
+                checksums: None,
+                executable: std::env::current_exe().map_err(|_| "update executable unavailable")?,
+            }),
+            Operation::Restore { input, key } => Some(crate::host_jobs::Task::Restore {
+                input: input.into(),
+                key: key.into(),
+                config: self.config.clone(),
+            }),
+            Operation::Restart { name } => {
+                Some(crate::host_jobs::Task::Restart { name: name.clone() })
+            }
+            Operation::Reboot => Some(crate::host_jobs::Task::Reboot),
+            _ => None,
+        })
     }
 }
 

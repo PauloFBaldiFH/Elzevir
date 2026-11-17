@@ -271,6 +271,25 @@ pub(crate) fn relocate(source: &str, directory: &Path) -> Result<String, String>
     toml::to_string_pretty(&config).map_err(|_| "cannot relocate server configuration".to_owned())
 }
 
+/// Sets the host boundary required by a public tunnel while retaining server settings.
+pub(crate) fn with_hosts(source: &str, catalog: &str, staff: &str) -> Result<String, String> {
+    let mut config: FileConfig =
+        toml::from_str(source).map_err(|_| "invalid tunnel server configuration")?;
+    config.staff = crate::access_config::StaffMode::Hostname {
+        catalog_host: catalog.to_owned(),
+        staff_host: staff.to_owned(),
+    };
+    config
+        .validate()
+        .map_err(|_| "invalid tunnel server configuration")?;
+    config
+        .staff
+        .validate(Some(config.server.listen))
+        .map_err(|_| "invalid tunnel host boundary")?;
+    toml::to_string_pretty(&config)
+        .map_err(|_| "cannot encode tunnel server configuration".to_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

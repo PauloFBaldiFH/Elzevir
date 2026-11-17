@@ -2,6 +2,7 @@
 //! Native Windows SCM registration, control and process entry.
 
 use super::{Backend, Entry, Plan};
+use std::path::PathBuf;
 use std::{
     ffi::OsString,
     sync::{
@@ -98,14 +99,10 @@ impl Backend for Windows {
             start_type: ServiceStartType::AutoStart,
             error_control: ServiceErrorControl::Normal,
             executable_path: plan.executable.clone(),
-            launch_arguments: vec![
-                "service".into(),
-                "run".into(),
-                "--name".into(),
-                plan.name.clone().into(),
-                "--config".into(),
-                plan.config.as_os_str().to_owned(),
-            ],
+            launch_arguments: super::arguments(plan)?
+                .into_iter()
+                .map(Into::into)
+                .collect(),
             dependencies: vec![],
             account_name: Some(plan.account.clone().into()),
             account_password: None,
@@ -348,4 +345,67 @@ fn run_service(entry: &Entry) -> Result<(), String> {
     } else {
         result
     }
+}
+
+/// A tunnel identity only reads the connector config/credential and executes the tool.
+pub(super) fn grant_tunnel_access(plan: &Plan) -> Result<(), String> {
+    use crate::process_runner::{Native, Request, Runner as _};
+    let program = PathBuf::from(
+        std::env::var_os("SystemRoot").ok_or("Windows system directory unavailable")?,
+    )
+    .join("System32")
+    .join("icacls.exe");
+    let mut paths = vec![
+        plan.executable.clone(),
+        plan.data_dir.clone(),
+        plan.data_dir.join("secrets"),
+        plan.data_dir.join("logs"),
+        plan.config.clone(),
+    ];
+    for name in ["cf-credentials.json", "cf-token.txt"] {
+        let path = plan.data_dir.join("secrets").join(name);
+        if path.exists() {
+            crate::backup_archive::regular(&path)?;
+            paths.push(path);
+        }
+    }
+    let logs = plan.data_dir.join("logs/cloudflared");
+    let output = Native.run(Request {
+        program: program.clone(),
+        args: vec![
+            logs.into_os_string(),
+            "/grant".into(),
+            format!("{}:(OI)(CI)M", plan.account).into(),
+        ],
+        input: None,
+        progress: None,
+        timeout: Duration::from_secs(10),
+        limit: 4096,
+    })?;
+    if !output.success {
+        return Err("cannot grant tunnel log directory access".to_owned());
+    }
+    for path in paths {
+        let output = Native.run(Request {
+            program: program.clone(),
+            args: vec![
+                path.into_os_string(),
+                "/grant".into(),
+                format!("{}:RX", plan.account).into(),
+            ],
+            input: None,
+            progress: None,
+            timeout: Duration::from_secs(10),
+            limit: 4096,
+        })?;
+        if !output.success {
+            return Err("cannot grant tunnel service access".to_owned());
+        }
+    }
+    Ok(())
+}
+
+/// Opening the SCM with create rights checks elevation without registering anything.
+pub(super) fn require_operator() -> Result<(), String> {
+    manager(true).map(drop)
 }

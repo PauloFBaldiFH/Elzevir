@@ -22,9 +22,13 @@ pub(super) fn render(plan: &Plan) -> Result<String, String> {
         return Err("OpenRC requires a non-privileged listener port".to_owned());
     }
     let binary = quote(&plan.executable)?;
-    let config = quote(&plan.config)?;
+    let arguments = super::arguments(plan)?
+        .iter()
+        .map(|argument| quote(Path::new(argument)))
+        .collect::<Result<Vec<_>, _>>()?
+        .join(" ");
     Ok(format!(
-        "{MARKER}description='Elzevir library service'\npidfile='/run/{name}.pid'\ndepend() {{ need net; }}\nstart() {{\n  ebegin 'Starting Elzevir'\n  start-stop-daemon --start --background --make-pidfile --pidfile \"$pidfile\" --user '{account}' --umask 0077 --exec {binary} -- serve --config {config}\n  eend $?\n}}\nstop() {{\n  ebegin 'Stopping Elzevir'\n  start-stop-daemon --stop --retry TERM/45/KILL/5 --pidfile \"$pidfile\" --exec {binary}\n  result=$?\n  if [ \"$result\" -eq 0 ]; then rm -f -- \"$pidfile\"; fi\n  eend \"$result\"\n}}\nstatus() {{\n  if start-stop-daemon --status --pidfile \"$pidfile\" --exec {binary}; then\n    einfo 'elzevir-state=running'; return 0\n  else\n    einfo 'elzevir-state=stopped'; return 3\n  fi\n}}\n",
+        "{MARKER}description='Elzevir library service'\npidfile='/run/{name}.pid'\ndepend() {{ need net; }}\nstart() {{\n  ebegin 'Starting Elzevir'\n  start-stop-daemon --start --background --make-pidfile --pidfile \"$pidfile\" --user '{account}' --umask 0077 --exec {binary} -- {arguments}\n  eend $?\n}}\nstop() {{\n  ebegin 'Stopping Elzevir'\n  start-stop-daemon --stop --retry TERM/45/KILL/5 --pidfile \"$pidfile\" --exec {binary}\n  result=$?\n  if [ \"$result\" -eq 0 ]; then rm -f -- \"$pidfile\"; fi\n  eend \"$result\"\n}}\nstatus() {{\n  if start-stop-daemon --status --pidfile \"$pidfile\" --exec {binary}; then\n    einfo 'elzevir-state=running'; return 0\n  else\n    einfo 'elzevir-state=stopped'; return 3\n  fi\n}}\n",
         name = plan.name,
         account = plan.account
     ))
@@ -149,6 +153,7 @@ mod tests {
     #[test]
     fn paths_with_shell_metacharacters_are_literal_in_generated_functions() {
         let plan = Plan {
+            role: super::super::Role::Server,
             schema: 1,
             platform: "openrc",
             action: "install",

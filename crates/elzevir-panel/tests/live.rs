@@ -341,3 +341,55 @@ fn addresses_separate_loaded_configuration_observation_and_local_tests() {
         Some(elzevir_panel::ObservationRequest::TestAddresses)
     );
 }
+
+#[test]
+fn interactive_cloudflare_sign_in_displays_only_the_projected_browser_link() {
+    let mut panel = connected();
+    panel.section = elzevir_panel::Section::Addresses;
+    if let Mode::Live(state) = &mut panel.mode {
+        let sample = state.snapshot.as_mut().unwrap();
+        sample
+            .operations
+            .authorization_uris
+            .push("https://dash.cloudflare.com/argotunnel?callback=fictional".to_owned());
+    }
+    for language in ["en", "pt-BR"] {
+        let rendered = screen(&panel, language);
+        assert!(rendered.contains("dash.cloudflare.com/argotunnel?callback=fictional"));
+        assert!(!rendered.contains("op-authorize-uri"));
+        assert!(!rendered.contains("PRIVATE KEY"));
+    }
+}
+
+#[test]
+fn public_tunnel_test_and_log_tabs_never_conflate_a_gate_with_a_failure() {
+    let mut panel = connected();
+    panel.section = elzevir_panel::Section::Addresses;
+    if let Mode::Live(state) = &mut panel.mode {
+        state.snapshot.as_mut().unwrap().operations.tunnel =
+            elzevir_panel::TunnelState::Configured(elzevir_panel::Tunnel {
+                catalog: "https://catalog.example.org/".to_owned(),
+                staff: "https://staff.example.org/equipe".to_owned(),
+                catalog_check: elzevir_panel::PublicCheck::Ok,
+                staff_check: elzevir_panel::PublicCheck::Protected,
+                tested_at: Some("2026-11-17T00:00:00Z".to_owned()),
+                logs: elzevir_panel::TunnelLog::Ready {
+                    events: vec!["tunnel-event-connected"],
+                    omitted: 1,
+                },
+            });
+    }
+    for (language, gate, event) in [
+        ("en", "Protected by", "Connector registered"),
+        ("pt-BR", "Protegido pela", "Conector registrou"),
+    ] {
+        panel.tunnel_tab = elzevir_panel::TunnelTab::Test;
+        let tested = screen(&panel, language);
+        assert!(tested.contains(gate));
+        assert!(tested.contains("catalog.example.org"));
+        panel.tunnel_tab = elzevir_panel::TunnelTab::Log;
+        let logged = screen(&panel, language);
+        assert!(logged.contains(event));
+        assert!(!logged.contains("tunnel-event-connected"));
+    }
+}

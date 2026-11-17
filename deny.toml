@@ -7,6 +7,13 @@ all-features = true
 [advisories]
 version = 2
 yanked = "deny"
+# age 0.11.5's translation macros read Cargo.toml/i18n.toml at build time.
+# Upstream i18n-config 0.4.8 has no maintained release; these are maintenance
+# advisories, not vulnerabilities. Neither parser is exposed to backup input.
+# age 0.12.1 was evaluated: it adds crypto-bigint 0.5.5 (RUSTSEC-2026-0387).
+# Keep the X25519 implementation without that vulnerable dependency and revisit
+# when age's HPKE dependencies or i18n-config are updated. No vulnerability waived.
+ignore = ["RUSTSEC-2026-0374", "RUSTSEC-2026-0173"]
 
 [licenses]
 version = 2

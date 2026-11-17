@@ -35,7 +35,11 @@ fn quote(path: &Path, exec: bool) -> Result<String, String> {
 
 pub(super) fn render(plan: &Plan) -> Result<String, String> {
     let executable = quote(&plan.executable, true)?;
-    let config = quote(&plan.config, true)?;
+    let arguments = super::arguments(plan)?
+        .iter()
+        .map(|argument| quote(Path::new(argument), true))
+        .collect::<Result<Vec<_>, _>>()?
+        .join(" ");
     let data = quote(&plan.data_dir, false)?;
     let capability = if plan.privileged_port {
         "CapabilityBoundingSet=CAP_NET_BIND_SERVICE\nAmbientCapabilities=CAP_NET_BIND_SERVICE\n"
@@ -43,7 +47,7 @@ pub(super) fn render(plan: &Plan) -> Result<String, String> {
         "CapabilityBoundingSet=\n"
     };
     Ok(format!(
-        "{MARKER}[Unit]\nDescription=Elzevir library service ({name})\nAfter=network.target\n\n[Service]\nType=simple\nUser={account}\nUMask=0077\nWorkingDirectory=/\nExecStart={executable} serve --config {config}\nRestart=on-failure\nRestartSec=5s\nKillSignal=SIGTERM\nTimeoutStopSec=45s\nNoNewPrivileges=true\nProtectSystem=strict\nProtectHome=true\nReadWritePaths={data}\nRuntimeDirectory={name}\nRuntimeDirectoryMode=0700\nEnvironment=TMPDIR=/run/{name}\n{capability}\n[Install]\nWantedBy=multi-user.target\n",
+        "{MARKER}[Unit]\nDescription=Elzevir library service ({name})\nAfter=network.target\n\n[Service]\nType=simple\nUser={account}\nUMask=0077\nWorkingDirectory=/\nExecStart={executable} {arguments}\nRestart=on-failure\nRestartSec=5s\nKillSignal=SIGTERM\nTimeoutStopSec=45s\nNoNewPrivileges=true\nProtectSystem=strict\nProtectHome=true\nReadWritePaths={data}\nRuntimeDirectory={name}\nRuntimeDirectoryMode=0700\nEnvironment=TMPDIR=/run/{name}\n{capability}\n[Install]\nWantedBy=multi-user.target\n",
         name = plan.name,
         account = plan.account
     ))
@@ -310,6 +314,7 @@ mod tests {
     }
     fn plan() -> Plan {
         Plan {
+            role: super::super::Role::Server,
             schema: 1,
             platform: "systemd",
             action: "install",

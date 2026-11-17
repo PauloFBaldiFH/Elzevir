@@ -25,6 +25,9 @@ impl Download for Http {
             .header("User-Agent", "Elzevir-operations")
             .call()
             .map_err(|_| "official download unavailable")?;
+        if !response.status().is_success() {
+            return Err("official download refused".to_owned());
+        }
         let bytes = std::io::copy(&mut response.body_mut().as_reader().take(limit + 1), output)
             .map_err(|_| "official download failed")?;
         if bytes > limit {

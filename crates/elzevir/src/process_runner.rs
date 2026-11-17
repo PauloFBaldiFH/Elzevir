@@ -8,7 +8,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+pub(crate) type Progress = std::sync::Arc<dyn Fn(&[u8]) -> Result<(), String> + Send + Sync>;
+
 pub(crate) struct Request {
+    pub progress: Option<Progress>,
     pub program: PathBuf,
     pub args: Vec<OsString>,
     pub input: Option<zeroize::Zeroizing<Vec<u8>>>,
@@ -18,6 +21,12 @@ pub(crate) struct Request {
 pub(crate) struct Output {
     pub success: bool,
     pub stdout: Vec<u8>,
+}
+impl Drop for Output {
+    fn drop(&mut self) {
+        use zeroize::Zeroize as _;
+        self.stdout.zeroize();
+    }
 }
 pub(crate) trait Runner {
     fn run(&self, request: Request) -> Result<Output, String>;
@@ -37,7 +46,7 @@ impl Runner for Native {
         input
             .seek(SeekFrom::Start(0))
             .map_err(|_| "cannot rewind process input")?;
-        let mut stdout = tempfile::tempfile().map_err(|_| "cannot capture process output")?;
+        let stdout = tempfile::tempfile().map_err(|_| "cannot capture process output")?;
         let stderr = tempfile::tempfile().map_err(|_| "cannot capture process errors")?;
         let mut child = Command::new(&request.program)
             .args(&request.args)
@@ -55,7 +64,33 @@ impl Runner for Native {
             .spawn()
             .map_err(|_| "cannot start optional tool")?;
         let started = Instant::now();
+        let mut observed = (0, 0);
         let status = loop {
+            if let Some(progress) = &request.progress {
+                let current = (
+                    stdout
+                        .metadata()
+                        .map_or(u64::MAX, |metadata| metadata.len()),
+                    stderr
+                        .metadata()
+                        .map_or(u64::MAX, |metadata| metadata.len()),
+                );
+                if current != observed {
+                    let result = snapshot(&stdout, request.limit)
+                        .and_then(|bytes| progress(&bytes))
+                        .and_then(|()| snapshot(&stderr, request.limit))
+                        .and_then(|bytes| progress(&bytes));
+                    if result.is_err() {
+                        drop(child.kill());
+                        drop(child.wait());
+                        return Err(
+                            "optional tool progress failed or exceeded its limit".to_owned()
+                        );
+                    }
+                    observed = current;
+                }
+            }
+
             match child.try_wait() {
                 Ok(Some(status)) => break status,
                 Ok(None)
@@ -77,30 +112,93 @@ impl Runner for Native {
                 }
             }
         };
-        if stdout
+        finish_output(stdout, &stderr, status.success(), request.limit)
+    }
+}
+
+fn finish_output(
+    mut stdout: std::fs::File,
+    stderr: &std::fs::File,
+    success: bool,
+    limit: u64,
+) -> Result<Output, String> {
+    if stdout
+        .metadata()
+        .map_err(|_| "process output unavailable")?
+        .len()
+        > limit
+        || stderr
             .metadata()
-            .map_err(|_| "process output unavailable")?
+            .map_err(|_| "process errors unavailable")?
             .len()
-            > request.limit
-            || stderr
-                .metadata()
-                .map_err(|_| "process errors unavailable")?
-                .len()
-                > request.limit
-        {
-            return Err("optional tool output exceeds limit".to_owned());
+            > limit
+    {
+        return Err("optional tool output exceeds limit".to_owned());
+    }
+    stdout
+        .seek(SeekFrom::Start(0))
+        .map_err(|_| "cannot rewind process output")?;
+    let mut bytes = Vec::new();
+    stdout
+        .take(limit + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "process output unavailable")?;
+    Ok(Output {
+        success,
+        stdout: bytes,
+    })
+}
+
+/// Positional reads leave the child's shared output cursor untouched.
+fn snapshot(file: &std::fs::File, limit: u64) -> Result<Vec<u8>, String> {
+    let length = file
+        .metadata()
+        .map_err(|_| "process output unavailable")?
+        .len();
+    if length > limit {
+        return Err("process output exceeds limit".to_owned());
+    }
+    let mut bytes =
+        vec![0_u8; usize::try_from(length).map_err(|_| "process output exceeds limit")?];
+    let mut done = 0;
+    while done < bytes.len() {
+        let offset = u64::try_from(done).map_err(|_| "process output exceeds limit")?;
+        let buffer = bytes
+            .get_mut(done..)
+            .ok_or("invalid process output offset")?;
+        #[cfg(unix)]
+        let read = {
+            use std::os::unix::fs::FileExt;
+            file.read_at(buffer, offset)
+        };
+        #[cfg(windows)]
+        let read = {
+            use std::os::windows::fs::FileExt;
+            file.seek_read(buffer, offset)
+        };
+        #[cfg(not(any(unix, windows)))]
+        let read: std::io::Result<usize> =
+            Err(std::io::Error::other("process progress unavailable"));
+        let read = read.map_err(|_| "cannot observe process output")?;
+        if read == 0 {
+            break;
         }
-        stdout
-            .seek(SeekFrom::Start(0))
-            .map_err(|_| "cannot rewind process output")?;
-        let mut bytes = Vec::new();
-        stdout
-            .take(request.limit + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|_| "process output unavailable")?;
-        Ok(Output {
-            success: status.success(),
-            stdout: bytes,
-        })
+        done += read;
+    }
+    bytes.truncate(done);
+    Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn progress_reads_do_not_move_the_childs_shared_write_offset() {
+        let mut writer = tempfile::tempfile().unwrap();
+        let reader = writer.try_clone().unwrap();
+        writer.write_all(b"first").unwrap();
+        assert_eq!(snapshot(&reader, 100).unwrap(), b"first");
+        writer.write_all(b"second").unwrap();
+        assert_eq!(snapshot(&reader, 100).unwrap(), b"firstsecond");
     }
 }

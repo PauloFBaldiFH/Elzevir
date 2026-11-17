@@ -23,11 +23,14 @@ clap.workspace = true
 getrandom.workspace = true
 interprocess = { version = "2.4", features = ["tokio"] }
 fs4 = "0.13"
-age = { version = "0.11", default-features = false }
+age = { version = "=0.11.5", default-features = false }
 tar = "0.4"
 flate2 = "1"
 zip = { version = "9.6", default-features = false, features = ["deflate-flate2"] }
 sha2 = "0.10"
+base64 = "0.23"
+cap-std = "4.0"
+cap-fs-ext = "4.0"
 zeroize = "1"
 sysinfo = { version = "0.40", default-features = false, features = ["disk", "system", "network"] }
 jiff = { workspace = true, features = ["serde"] }

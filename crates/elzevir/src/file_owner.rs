@@ -50,3 +50,80 @@ pub(crate) fn private_tree(_path: &Path, _reference: &Path) -> Result<(), String
     // Windows files inherit the protected installation-directory ACL from A9.
     Ok(())
 }
+
+/// Retains an existing configuration's group-read grant for a separate service account.
+pub(crate) fn configuration(path: &Path, reference: &Path) -> Result<(), String> {
+    private_tree(path, reference)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(reference)
+            .map_err(|_| "configuration owner unavailable")?
+            .permissions()
+            .mode();
+        std::fs::set_permissions(
+            path,
+            std::fs::Permissions::from_mode(0o600 | (mode & 0o040)),
+        )
+        .map_err(|_| "cannot retain service configuration access")?;
+    }
+    Ok(())
+}
+/// Protects a management credential from the institution's service identity.
+pub(crate) fn operator_private(path: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|_| "cannot protect operator credential")?;
+    }
+    #[cfg(windows)]
+    {
+        use crate::process_runner::{Native, Request, Runner as _};
+        let program = std::path::PathBuf::from(
+            std::env::var_os("SystemRoot").ok_or("Windows system directory unavailable")?,
+        )
+        .join("System32")
+        .join("icacls.exe");
+        let output = Native.run(Request {
+            program,
+            args: vec![
+                path.as_os_str().to_owned(),
+                "/inheritance:r".into(),
+                "/grant:r".into(),
+                "*S-1-5-18:F".into(),
+                "*S-1-5-32-544:F".into(),
+                "/setowner".into(),
+                "*S-1-5-32-544".into(),
+            ],
+            input: None,
+            progress: None,
+            timeout: std::time::Duration::from_secs(10),
+            limit: 4096,
+        })?;
+        if !output.success {
+            return Err("cannot protect operator credential ACL".to_owned());
+        }
+    }
+    Ok(())
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    #[test]
+    fn restored_root_owned_configs_keep_their_service_group_read_grant() {
+        use std::os::unix::fs::PermissionsExt;
+        let directory = tempfile::tempdir().unwrap();
+        let original = directory.path().join("original");
+        let staged = directory.path().join("staged");
+        std::fs::write(&original, "config").unwrap();
+        std::fs::write(&staged, "replacement").unwrap();
+        std::fs::set_permissions(&original, std::fs::Permissions::from_mode(0o640)).unwrap();
+        configuration(&staged, &original).unwrap();
+        assert_eq!(
+            std::fs::metadata(staged).unwrap().permissions().mode() & 0o777,
+            0o640
+        );
+    }
+}

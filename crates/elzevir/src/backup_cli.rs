@@ -344,12 +344,7 @@ fn restore_inner(
             journal.preserve(&directory, &directory.join(name))?;
         }
         for (source, target) in &replacements {
-            if source.exists() {
-                crate::file_owner::private_tree(
-                    source,
-                    if target.exists() { target } else { &directory },
-                )?;
-            }
+            prepare_replacement(source, target, &configuration_target, &directory)?;
             journal.preserve(&directory, target)?;
             if source.exists() {
                 std::fs::rename(source, target).map_err(|_| "cannot publish restored file")?;
@@ -365,6 +360,23 @@ fn restore_inner(
         crate::restore_journal::Journal::commit(&directory)?;
     }
     result
+}
+
+fn prepare_replacement(
+    source: &Path,
+    target: &Path,
+    configuration_target: &Path,
+    directory: &Path,
+) -> Result<(), String> {
+    if source.exists() {
+        let reference = if target.exists() { target } else { directory };
+        if target == configuration_target {
+            crate::file_owner::configuration(source, reference)?;
+        } else {
+            crate::file_owner::private_tree(source, reference)?;
+        }
+    }
+    Ok(())
 }
 
 fn rebuild(directory: &Path) -> Result<(), String> {

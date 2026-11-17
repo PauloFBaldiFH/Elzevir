@@ -20,6 +20,14 @@ pub(crate) enum Task {
         name: String,
     },
     Reboot,
+    CloudflareLogin,
+    TestTunnel,
+    CloudflareSetup {
+        setup: crate::cloudflare::Setup,
+    },
+    InstallTool {
+        tool: crate::managed_tools::Tool,
+    },
     Update {
         config: PathBuf,
         name: String,
@@ -43,6 +51,8 @@ pub(crate) struct Receipt {
     pub id: String,
     pub action: String,
     pub state: String,
+    #[serde(default)]
+    pub authorization_uri: Option<String>,
 }
 
 #[derive(clap::Args)]
@@ -62,6 +72,13 @@ fn action(task: &Task) -> &'static str {
         Task::Restore { .. } => "restore",
         Task::Restart { .. } => "restart",
         Task::Reboot => "reboot",
+        Task::CloudflareLogin => "cloudflare_login",
+        Task::TestTunnel => "tunnel_test",
+        Task::CloudflareSetup { .. } => "cloudflare_setup",
+        Task::InstallTool { tool } => match tool {
+            crate::managed_tools::Tool::Cloudflared => "install_cloudflared",
+            crate::managed_tools::Tool::Rclone => "install_rclone",
+        },
         Task::Update { .. } => "update",
     }
 }
@@ -104,6 +121,7 @@ pub(crate) fn launch(directory: &Path, task: Task) -> Result<String, String> {
         id: id.clone(),
         action: action(&ticket.task).to_owned(),
         state: "queued".to_owned(),
+        authorization_uri: None,
     };
     save(directory, &receipt)?;
     let executable = std::env::current_exe().map_err(|_| "cannot locate host executable")?;
@@ -200,6 +218,7 @@ pub(crate) fn run(args: &Args) -> Result<(), String> {
         id: ticket.id,
         action: action(&ticket.task).to_owned(),
         state: "running".to_owned(),
+        authorization_uri: None,
     };
     let lock = std::fs::OpenOptions::new()
         .write(true)
@@ -213,7 +232,19 @@ pub(crate) fn run(args: &Args) -> Result<(), String> {
         return Err("another host operation is running".to_owned());
     }
     save(&ticket.directory, &receipt)?;
-    let result = execute(&ticket.directory, ticket.task);
+    let shared = std::sync::Arc::new(std::sync::Mutex::new(receipt.clone()));
+    let directory = ticket.directory.clone();
+    let progress: crate::process_runner::Progress = std::sync::Arc::new(move |bytes| {
+        if let Some(uri) = crate::cloudflare::authorization_url(bytes) {
+            let mut receipt = shared.lock().map_err(|_| "host progress unavailable")?;
+            if receipt.authorization_uri.as_ref() != Some(&uri) {
+                receipt.authorization_uri = Some(uri);
+                save(&directory, &receipt)?;
+            }
+        }
+        Ok(())
+    });
+    let result = execute(&ticket.directory, ticket.task, Some(progress));
     if result.is_ok() {
         "completed"
     } else {
@@ -258,7 +289,11 @@ fn check_private_ticket(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn execute(directory: &Path, task: Task) -> Result<(), String> {
+fn execute(
+    directory: &Path,
+    task: Task,
+    progress: Option<crate::process_runner::Progress>,
+) -> Result<(), String> {
     match task {
         Task::Restore { input, key, config } => {
             crate::backup_cli::restore(&input, &key, directory, config.as_deref())
@@ -268,6 +303,10 @@ fn execute(directory: &Path, task: Task) -> Result<(), String> {
             wait_healthy(directory)
         }
         Task::Reboot => reboot(),
+        Task::CloudflareLogin => crate::cloudflare::login(directory, progress),
+        Task::TestTunnel => crate::tunnel_observe::test(directory),
+        Task::CloudflareSetup { setup } => crate::cloudflare::configure(directory, &setup),
+        Task::InstallTool { tool } => crate::managed_tools::install(tool).map(drop),
         Task::Update {
             config,
             name,
@@ -317,6 +356,7 @@ fn reboot() -> Result<(), String> {
     #[cfg(any(target_os = "linux", windows))]
     {
         let output = Native.run(Request {
+            progress: None,
             program,
             args,
             input: None,
@@ -356,10 +396,16 @@ pub(crate) fn receipts(directory: &Path) -> Result<Vec<Receipt>, String> {
             continue;
         };
         result_path(directory, id)?;
-        if archive::regular(&entry.path())? > 1024 {
+        if archive::regular(&entry.path())? > 4096 {
             return Err("host receipt exceeds limit".to_owned());
         }
-        let source = std::fs::read(entry.path()).map_err(|_| "host receipt unavailable")?;
+        let mut source = Vec::new();
+        std::fs::File::open(entry.path())
+            .and_then(|file| file.take(4097).read_to_end(&mut source))
+            .map_err(|_| "host receipt unavailable")?;
+        if source.len() > 4096 {
+            return Err("host receipt exceeds limit".to_owned());
+        }
         let receipt: Receipt =
             serde_json::from_slice(&source).map_err(|_| "invalid host receipt")?;
         if receipt.id != id
@@ -369,10 +415,23 @@ pub(crate) fn receipts(directory: &Path) -> Result<Vec<Receipt>, String> {
             )
             || !matches!(
                 receipt.action.as_str(),
-                "restore" | "restart" | "reboot" | "update"
+                "restore"
+                    | "restart"
+                    | "reboot"
+                    | "update"
+                    | "install_cloudflared"
+                    | "install_rclone"
+                    | "cloudflare_login"
+                    | "cloudflare_setup"
+                    | "tunnel_test"
             )
         {
             return Err("invalid host receipt".to_owned());
+        }
+        if receipt.authorization_uri.as_ref().is_some_and(|uri| {
+            crate::cloudflare::authorization_url(uri.as_bytes()).as_deref() != Some(uri.as_str())
+        }) {
+            return Err("invalid host authorization URI".to_owned());
         }
         receipts.push(receipt);
     }
@@ -381,12 +440,20 @@ pub(crate) fn receipts(directory: &Path) -> Result<Vec<Receipt>, String> {
 
 pub(crate) fn wait(directory: &Path, id: &str) -> Result<(), String> {
     let started = std::time::Instant::now();
+    let mut seen_uri = None;
     while started.elapsed() < std::time::Duration::from_mins(45) {
         let receipts = receipts(directory)?;
         let receipt = receipts
             .iter()
             .find(|receipt| receipt.id == id)
             .ok_or("host job receipt unavailable")?;
+        if receipt.authorization_uri.is_some() && receipt.authorization_uri != seen_uri {
+            println!(
+                "{}",
+                serde_json::json!({"authorization_uri":receipt.authorization_uri})
+            );
+            seen_uri = receipt.authorization_uri.clone();
+        }
         match receipt.state.as_str() {
             "completed" => return Ok(()),
             "failed" => return Err("host operation failed; inspect the recovery files".to_owned()),
@@ -410,13 +477,14 @@ mod tests {
                 id: id.clone(),
                 action: "restore".to_owned(),
                 state: "completed".to_owned(),
+                authorization_uri: None,
             },
         )
         .unwrap();
         assert_eq!(receipts(directory.path()).unwrap().len(), 1);
         std::fs::write(
             result_path(directory.path(), &id).unwrap(),
-            vec![b'a'; 1025],
+            vec![b'a'; 4097],
         )
         .unwrap();
         assert!(receipts(directory.path()).is_err());

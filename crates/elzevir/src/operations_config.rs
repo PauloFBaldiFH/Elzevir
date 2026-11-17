@@ -103,7 +103,7 @@ pub(crate) fn save(directory: &Path, policy: &Policy) -> Result<(), String> {
     file.write_all(source.as_bytes())
         .and_then(|()| file.as_file().sync_all())
         .map_err(|_| "cannot write operational policy")?;
-    crate::file_owner::private_tree(file.path(), if path.exists() { &path } else { directory })?;
+    crate::file_owner::configuration(file.path(), if path.exists() { &path } else { directory })?;
     file.persist(&path)
         .map_err(|_| "cannot publish operational policy")?;
     Ok(())

@@ -46,3 +46,83 @@ pub struct AddressBook {
     /// UTC start time of the explicit local tests.
     pub tested_at: Option<String>,
 }
+
+/// Evidence from an explicit public HTTPS request.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum PublicCheck {
+    /// No explicit request yet.
+    #[default]
+    NotRun,
+    /// The endpoint responded successfully or redirected to sign-in.
+    Ok,
+    /// A staff edge gate refused the unauthenticated request.
+    Protected,
+    /// The endpoint responded with an error.
+    Failed,
+    /// The request could not establish a trustworthy response.
+    Unknown,
+}
+/// Allowlisted connector events; raw tool messages never enter this model.
+#[derive(Debug, Clone, Default)]
+pub enum TunnelLog {
+    /// No safe log source could be read.
+    #[default]
+    Unavailable,
+    /// A bounded private log window was projected.
+    Ready {
+        /// Known Fluent keys, newest events first.
+        events: Vec<&'static str>,
+        /// Complete unrecognized/invalid records omitted from the window.
+        omitted: u64,
+    },
+}
+/// Configured public candidates and the most recent explicit checks.
+#[derive(Debug, Clone)]
+pub struct Tunnel {
+    /// Configured catalog URL; this alone does not prove reachability.
+    pub catalog: String,
+    /// Configured staff URL; this alone does not prove reachability.
+    pub staff: String,
+    /// UTC time of the last explicit test.
+    pub tested_at: Option<String>,
+    /// Most recent catalog response.
+    pub catalog_check: PublicCheck,
+    /// Most recent staff response.
+    pub staff_check: PublicCheck,
+    /// Bounded, redacted connector events.
+    pub logs: TunnelLog,
+}
+/// Missing configuration is distinct from failed observation.
+#[derive(Debug, Clone, Default)]
+pub enum TunnelState {
+    /// No configured managed public connector.
+    NotConfigured,
+    /// Managed candidates with explicit evidence.
+    Configured(Tunnel),
+    /// Configuration could not be safely observed.
+    #[default]
+    Unavailable,
+}
+/// Selected detail tab within Addresses.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TunnelTab {
+    /// Public addresses and explicit test results.
+    #[default]
+    Test,
+    /// Redacted connector log projection.
+    Log,
+}
+
+impl PublicCheck {
+    /// Stable value for command-line reports, independent of translation.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::NotRun => "not_run",
+            Self::Ok => "ok",
+            Self::Protected => "protected",
+            Self::Failed => "failed",
+            Self::Unknown => "unknown",
+        }
+    }
+}

@@ -6,15 +6,18 @@ Elzevir administration
 +Sections------------------++Addresses and access------------------------------------------------------------++Selected institution--------+
 |  d Dashboard             ||Running                                                                         ||Biblioteca de teste         |
 |  x Diagnostics           ||                                                                                ||                            |
-|> a Addresses and access  ||Mode in loaded file: Same address                                               ||Configured listener         |
-|  b Backups and schedules ||Running mode: Separate hostnames                                                ||127.0.0.1:0                 |
-|  u Updates               ||Catalog hostname: catalog.example                                               ||                            |
-|  r Restart               ||Staff hostname: staff.example                                                   ||Observed listener           |
-|                          ||Catalog (this computer): http://catalog.example:8080/                           ||127.0.0.1:8080              |
-|                          ||Staff (this computer): http://staff.example:8080/equipe                         ||                            |
-|                          ||Catalog HTTP test: OK                                                           ||Last check: 0 seconds ago   |
+|> a Addresses and access  ||l Cloudflare login · s Own domain · t Test · h Log                              ||Configured listener         |
+|  b Backups and schedules ||Public tunnel configuration could not be observed.                              ||127.0.0.1:0                 |
+|  u Updates               ||                                                                                ||                            |
+|  r Restart               ||Mode in loaded file: Same address                                               ||Observed listener           |
+|                          ||Running mode: Separate hostnames                                                ||127.0.0.1:8080              |
+|                          ||Catalog hostname: catalog.example                                               ||                            |
+|                          ||Staff hostname: staff.example                                                   ||Last check: 0 seconds ago   |
+|                          ||Catalog (this computer): http://catalog.example:8080/                           ||                            |
+|                          ||Staff (this computer): http://staff.example:8080/equipe                         ||Read-only observations      |
+|                          ||Catalog HTTP test: OK                                                           ||                            |
 |                          ||Login form HTTP test: Failed                                                    ||                            |
-|                          ||Tests started (UTC): 2026-11-16T12:00:00Z                                       ||Read-only observations      |
+|                          ||Tests started (UTC): 2026-11-16T12:00:00Z                                       ||                            |
 |                          ||v: test catalog and login form | f: refresh observations                        ||                            |
 |                          ||Tests are from this machine; DNS, TLS and remote access are not tested.         ||                            |
 |                          ||                                                                                ||                            |
@@ -26,8 +29,5 @@ Elzevir administration
 |                          ||Same address: catalog / and staff /equipe.                                      ||                            |
 |                          ||Hostnames: catalog_host and staff_host on the main listener.                    ||                            |
 |                          ||Separate listener: staff listen and optional allow_ips.                         ||                            |
-|                          ||Edit [staff] in TOML, restart the server, then reopen the panel to reload the   ||                            |
-|                          ||file.                                                                           ||                            |
-|                          ||                                                                                ||                            |
 +--------------------------++--------------------------------------------------------------------------------++----------------------------+
 Tab/arrows: navigate | f: refresh | PgUp/PgDn: scroll | Ctrl+P: palette | q/Ctrl+C: quit

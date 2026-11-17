@@ -19,6 +19,7 @@ pub(crate) fn secure_agent(redirects: u32, timeout: Duration) -> Result<ureq::Ag
     Ok(ureq::Agent::config_builder()
         .tls_config(tls)
         .https_only(true)
+        .http_status_as_error(false)
         .max_redirects(redirects)
         .timeout_global(Some(timeout))
         .build()

@@ -11,10 +11,13 @@ mod messages;
 mod operation_view;
 mod operations;
 mod runtime;
+mod tunnel_view;
 mod view;
 mod worker;
 
-pub use addresses::{AddressBook, StaffAccess};
+pub use addresses::{
+    AddressBook, PublicCheck, StaffAccess, Tunnel, TunnelLog, TunnelState, TunnelTab,
+};
 pub use diagnostics::{
     CheckResult, DiagnosticAction, Diagnostics, ExportState, LogEntry, LogEvent, LogFeed, LogState,
     ObservationRequest,
@@ -121,6 +124,8 @@ pub struct Panel {
     pub diagnostics: DiagnosticAction,
     /// Bounded operation form and explicit confirmation.
     pub form: Option<Form>,
+    /// Selected public tunnel detail tab.
+    pub tunnel_tab: TunnelTab,
     /// Vertical dashboard scroll offset.
     pub scroll: u16,
     /// Currently selected section.
@@ -242,19 +247,43 @@ impl Panel {
             return false;
         }
         let operation = match (self.section, key) {
+            (Section::Addresses, 'h') => {
+                self.tunnel_tab = TunnelTab::Log;
+                self.scroll = 0;
+                return true;
+            }
+            (Section::Addresses, 't') => {
+                self.tunnel_tab = TunnelTab::Test;
+                Operation::TestTunnel
+            }
+            (Section::Addresses, 'l') => Operation::CloudflareLogin,
+            (Section::Addresses, 's') => Operation::CloudflareSetup {
+                catalog: String::new(),
+                staff: String::new(),
+                name: String::new(),
+                service: "elzevir".to_owned(),
+                protocol: "auto".to_owned(),
+            },
             (Section::Backup, 'n' | 'v' | 'e' | 'k' | 'o' | 's') => backup_operation(key),
             (Section::Restart, 't') => Operation::Restart {
                 name: "elzevir".to_owned(),
             },
             (Section::Restart, 'm') => Operation::Reboot,
             (Section::Updates, 'c') => Operation::CheckUpdates,
+            (Section::Updates, 'g') => Operation::InstallCloudflared,
+            (Section::Updates, 'l') => Operation::InstallRclone,
             (Section::Updates, 'i') => Operation::Update {
                 version: "latest".to_owned(),
                 name: "elzevir".to_owned(),
             },
             _ => return false,
         };
-        self.form = Some(Form::new(operation));
+        if matches!(operation, Operation::TestTunnel) {
+            self.diagnostics.requested = Some(ObservationRequest::Operate(operation));
+            self.diagnostics.pending = true;
+        } else {
+            self.form = Some(Form::new(operation));
+        }
         true
     }
 

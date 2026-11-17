@@ -42,6 +42,7 @@ binary=/usr/local/bin/elzevir
 config=/etc/elzevir/$identifier.toml
 data=/var/lib/elzevir/$identifier
 service=elzevir-$identifier
+[[ $identifier != library ]] || service=elzevir
 if $plan; then
     printf 'target=%s\nversion=%s\nbinary=%s\nconfig=%s\ndata=%s\nservice=%s\nfirewall=%s\n' "$target" "$version" "$binary" "$config" "$data" "$service" "$firewall"
     exit 0

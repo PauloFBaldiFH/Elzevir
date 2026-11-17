@@ -36,3 +36,16 @@ pelo menos a cópia mais nova. Falhas são códigos estáticos sem conteúdo pri
 Origem: A5/P8 da análise do painel de Paulo; liberdade de implementação,
 sem regra de paridade com Koha. Dependências novas de arquivo/cifra precisam
 passar cargo-deny. Testes usam diretórios temporários e banco fictício.
+
+O certificado de gestão da conta Cloudflare (`cf-cert.pem`) é uma exceção:
+pertence ao operador elevado, fica inacessível ao daemon e não entra nos backups
+da instituição. A recuperação inclui as credenciais limitadas do conector; para
+administrar a conta/DNS depois de recuperar, o operador entra novamente na
+Cloudflare. O manifesto recusa esse nome reservado, inclusive variações de caixa.
+
+O preparo de arquivos usa diretório temporário privado do processo, fora do
+diretório gravável pelo serviço. Arquivos auxiliares são abertos por capacidade
+relativa à instituição: links não podem escapar desse diretório. Uma tabela de
+autores externa deve ser movida para a instituição para participar do backup.
+O espaço temporário necessário inclui a imagem SQLite descomprimida; o operador
+pode selecionar um volume privado maior por `TMPDIR` (ou `TEMP` no Windows).

@@ -13,6 +13,32 @@ use std::{
 const MAX_AUX: u64 = 16 * 1024 * 1024;
 const MAX_DB: u64 = 512 * 1024 * 1024 * 1024;
 
+fn private_scratch(directory: &Path) -> Result<tempfile::TempDir, String> {
+    #[cfg(target_os = "linux")]
+    if !rustix::process::geteuid().is_root() {
+        return tempfile::tempdir_in(directory).map_err(|_| "cannot prepare backup".to_owned());
+    }
+    let _ = directory;
+    tempfile::tempdir().map_err(|_| "cannot prepare private backup scratch".to_owned())
+}
+
+fn scoped_file(scope: &cap_std::fs::Dir, relative: &Path) -> Result<cap_std::fs::File, String> {
+    use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt as _};
+    let mut options = cap_std::fs::OpenOptions::new();
+    options.read(true).follow(FollowSymlinks::No);
+    let file = scope
+        .open_with(relative, &options)
+        .map_err(|_| "backup input must be a regular file inside the institution")?;
+    if !file
+        .metadata()
+        .map_err(|_| "backup input unavailable")?
+        .is_file()
+    {
+        return Err("backup input must be a regular file".to_owned());
+    }
+    Ok(file)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Entry {
@@ -126,7 +152,8 @@ fn allowed(name: &str) -> bool {
         name,
         "database.sqlite" | "server.toml" | "library.toml" | "operations.toml" | "author-table.txt"
     ) || name.strip_prefix("secrets/").is_some_and(|leaf| {
-        !leaf.is_empty()
+        !leaf.eq_ignore_ascii_case("cf-cert.pem")
+            && !leaf.is_empty()
             && leaf.len() <= 64
             && leaf
                 .as_bytes()
@@ -175,6 +202,12 @@ pub(crate) fn create(
     output: &Path,
     readers: Option<&elzevir_store::ReadPool>,
 ) -> Result<Manifest, String> {
+    let directory = directory
+        .canonicalize()
+        .map_err(|_| "institution unavailable")?;
+    let directory = directory.as_path();
+    let scope = cap_std::fs::Dir::open_ambient_dir(directory, cap_std::ambient_authority())
+        .map_err(|_| "institution unavailable")?;
     regular(&directory.join("elzevir.db"))?;
     if std::fs::symlink_metadata(output).is_ok() {
         return Err("backup destination already exists".to_owned());
@@ -183,7 +216,7 @@ pub(crate) fn create(
         return Err("configuration exceeds backup limit".to_owned());
     }
     let identity = key(&directory.join("backup.key"), true)?;
-    let scratch = tempfile::tempdir_in(directory).map_err(|_| "cannot prepare backup")?;
+    let scratch = private_scratch(directory)?;
     let image = scratch.path().join("database.sqlite");
     let database = match readers {
         Some(pool) => pool.snapshot(&image),
@@ -198,7 +231,7 @@ pub(crate) fn create(
         ("database.sqlite".to_owned(), image),
         ("server.toml".to_owned(), scratch.path().join("server.toml")),
     ];
-    let mut files = additional_files(directory, files)?;
+    let mut files = additional_files(directory, &scope, files)?;
     let mut manifest = Manifest {
         schema: 1,
         id: output_id(output)?,
@@ -214,9 +247,10 @@ pub(crate) fn create(
             let staged = scratch.path().join(name.replace('/', "-"));
             let mut target = tempfile::NamedTempFile::new_in(scratch.path())
                 .map_err(|_| "cannot stage backup input")?;
-            let mut source = std::fs::File::open(&*path)
-                .map_err(|_| "backup input unavailable")?
-                .take(MAX_AUX + 1);
+            let relative = path
+                .strip_prefix(directory)
+                .map_err(|_| "backup input must be inside the institution")?;
+            let mut source = scoped_file(&scope, relative)?.take(MAX_AUX + 1);
             let copied = std::io::copy(&mut source, target.as_file_mut())
                 .map_err(|_| "cannot stage backup input")?;
             if copied != bytes || copied > MAX_AUX {
@@ -288,6 +322,7 @@ fn output_id(output: &Path) -> Result<String, String> {
 
 fn additional_files(
     directory: &Path,
+    scope: &cap_std::fs::Dir,
     mut files: Vec<(String, std::path::PathBuf)>,
 ) -> Result<Vec<(String, std::path::PathBuf)>, String> {
     for (source, name) in [
@@ -302,8 +337,29 @@ fn additional_files(
             files.push((name.to_owned(), path));
         }
     }
-    if let Some((path, _)) = crate::config::load(directory)?.table_report {
-        files.push(("author-table.txt".to_owned(), path));
+    if directory.join("elzevir.toml").exists() {
+        let mut text = String::new();
+        scoped_file(scope, Path::new("elzevir.toml"))?
+            .take(MAX_AUX + 1)
+            .read_to_string(&mut text)
+            .map_err(|_| "library configuration unavailable")?;
+        if u64::try_from(text.len()).map_err(|_| "configuration too large")? > MAX_AUX {
+            return Err("library configuration too large".to_owned());
+        }
+        let config: toml::Value =
+            toml::from_str(&text).map_err(|_| "invalid library configuration")?;
+        if let Some(table) = config
+            .get("call_number")
+            .and_then(|value| value.get("author_table"))
+            .and_then(toml::Value::as_str)
+        {
+            let path = directory.join(table);
+            let relative = path
+                .strip_prefix(directory)
+                .map_err(|_| "author table must be inside the institution")?;
+            scoped_file(scope, relative)?;
+            files.push(("author-table.txt".to_owned(), path));
+        }
     }
     let secrets = directory.join("secrets");
     if secrets.exists() {
@@ -316,6 +372,13 @@ fn additional_files(
             .take(33)
         {
             let entry = entry.map_err(|_| "secrets unavailable")?;
+            if entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.eq_ignore_ascii_case("cf-cert.pem"))
+            {
+                continue;
+            }
             let name = format!(
                 "secrets/{}",
                 entry
@@ -553,5 +616,63 @@ mod tests {
         let corrupt = root.path().join("corrupt.age");
         std::fs::write(&corrupt, bytes).unwrap();
         assert!(extract(&corrupt, &root.path().join("backup.key")).is_err());
+    }
+}
+
+#[cfg(test)]
+mod account_certificate_tests {
+    use super::*;
+    #[test]
+    fn backup_rejects_author_tables_outside_the_institution() {
+        let directory = tempfile::tempdir().unwrap();
+        let external = tempfile::tempdir().unwrap();
+        let table = external.path().join("authors.txt");
+        std::fs::write(&table, "Ab 12\n").unwrap();
+        let data = crate::open_store(directory.path()).unwrap();
+        std::fs::write(
+            directory.path().join("elzevir.toml"),
+            format!(
+                "[call_number]\nauthor_table = {}\n",
+                toml::Value::String(table.to_string_lossy().into_owned())
+            ),
+        )
+        .unwrap();
+        let output = directory.path().join("backup.age");
+        assert!(
+            create(
+                directory.path(),
+                "config",
+                &output,
+                Some(data.store.readers())
+            )
+            .is_err()
+        );
+        assert!(!output.exists());
+    }
+    #[test]
+    fn institution_backups_exclude_the_operators_cloudflare_account_certificate() {
+        let directory = tempfile::tempdir().unwrap();
+        let data = crate::open_store(directory.path()).unwrap();
+        std::fs::create_dir(directory.path().join("secrets")).unwrap();
+        std::fs::write(
+            directory.path().join("secrets/cf-cert.pem"),
+            "fictional-account-master-credential",
+        )
+        .unwrap();
+        let output = directory.path().join("backup.age");
+        let manifest = create(
+            directory.path(),
+            "config",
+            &output,
+            Some(data.store.readers()),
+        )
+        .unwrap();
+        assert!(
+            !manifest
+                .entries
+                .iter()
+                .any(|entry| entry.name == "secrets/cf-cert.pem")
+        );
+        assert!(!allowed("secrets/cf-cert.pem"));
     }
 }
