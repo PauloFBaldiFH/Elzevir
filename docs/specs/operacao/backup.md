@@ -70,3 +70,14 @@ a saúde falhar, para o serviço, repõe os arquivos originais preservados no
 diário privado e reinicia a instalação anterior. Recusa vínculo com outra
 instituição. Falha ao parar impede qualquer troca de dados. O comando offline
 continua exigindo servidor parado e não controla o gerenciador de serviços.
+
+## ACLs de segurança no Windows
+
+Diretórios de preparo/recuperação do operador removem herança e concedem
+controle total somente a SYSTEM e Administradores. A troca de proprietário
+para Administradores usa uma chamada separada de `icacls /setowner`: o utilitário
+não aceita combinar essa forma com as alterações `/grant` da DACL. Cada etapa
+deve concluir com sucesso antes de mover qualquer arquivo da instituição.
+Falha em uma etapa aborta a operação, sem fallback para permissões amplas.
+Testes Windows verificam proprietário, herança e permissões de arquivos e pastas
+temporários, além da restauração e rollback do banco fictício.

@@ -99,7 +99,7 @@ jobs:
           tool: cargo-nextest
       - name: Publish Rust compiler errors as check annotations
         run: echo "::add-matcher::.github/rustc-problem-matcher.json"
-      - run: cargo nextest run --workspace --all-targets --locked
+      - run: cargo nextest run --workspace --all-targets --locked --no-fail-fast
         env:
           CARGO_TERM_COLOR: never
       - name: Native PowerShell bootstrap checks

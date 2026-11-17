@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Private restored files retain the institution owner's access after elevated recovery.
 use std::path::Path;
+#[cfg(any(windows, test))]
+#[path = "windows_acl.rs"]
+mod windows_acl;
+#[cfg(windows)]
+fn icacls() -> Result<std::path::PathBuf, String> {
+    Ok(std::path::PathBuf::from(
+        std::env::var_os("SystemRoot").ok_or("Windows system directory unavailable")?,
+    )
+    .join("System32")
+    .join("icacls.exe"))
+}
 
 pub(crate) fn private_file(file: &std::fs::File, reference: &Path) -> Result<(), String> {
     #[cfg(unix)]
@@ -108,42 +119,14 @@ pub(crate) fn operator_private(path: &Path) -> Result<(), String> {
         .map_err(|_| "cannot protect operator credential")?;
     }
     #[cfg(windows)]
-    {
-        use crate::process_runner::{Native, Request, Runner as _};
-        let program = std::path::PathBuf::from(
-            std::env::var_os("SystemRoot").ok_or("Windows system directory unavailable")?,
-        )
-        .join("System32")
-        .join("icacls.exe");
-        let output = Native.run(Request {
-            environment: None,
-            program,
-            args: vec![
-                path.as_os_str().to_owned(),
-                "/inheritance:r".into(),
-                "/grant:r".into(),
-                format!(
-                    "*S-1-5-18:{}",
-                    if metadata.is_dir() { "(OI)(CI)F" } else { "F" }
-                )
-                .into(),
-                format!(
-                    "*S-1-5-32-544:{}",
-                    if metadata.is_dir() { "(OI)(CI)F" } else { "F" }
-                )
-                .into(),
-                "/setowner".into(),
-                "*S-1-5-32-544".into(),
-            ],
-            input: None,
-            progress: None,
-            timeout: std::time::Duration::from_secs(10),
-            limit: 4096,
-        })?;
-        if !output.success {
-            return Err("cannot protect operator credential ACL".to_owned());
-        }
-    }
+    windows_acl::protect(
+        path,
+        metadata.is_dir(),
+        windows_acl::Scope::Operator,
+        &icacls()?,
+        &crate::process_runner::Native,
+    )?;
+
     Ok(())
 }
 
@@ -155,39 +138,14 @@ pub(crate) fn program_directory(path: &Path) -> Result<(), String> {
             .map_err(|_| "cannot grant limited service access to tool directory")?;
     }
     #[cfg(windows)]
-    {
-        use crate::process_runner::{Native, Request, Runner as _};
-        let program = std::path::PathBuf::from(
-            std::env::var_os("SystemRoot").ok_or("Windows directory unavailable")?,
-        )
-        .join("System32/icacls.exe");
-        for args in [
-            vec![path.as_os_str().to_owned(), "/reset".into()],
-            vec![
-                path.as_os_str().to_owned(),
-                "/inheritance:r".into(),
-                "/grant:r".into(),
-                "*S-1-5-18:(OI)(CI)F".into(),
-                "*S-1-5-32-544:(OI)(CI)F".into(),
-                "*S-1-5-6:(OI)(CI)RX".into(),
-                "/setowner".into(),
-                "*S-1-5-32-544".into(),
-            ],
-        ] {
-            let result = Native.run(Request {
-                environment: None,
-                progress: None,
-                program: program.clone(),
-                args,
-                input: None,
-                timeout: std::time::Duration::from_secs(10),
-                limit: 4096,
-            })?;
-            if !result.success {
-                return Err("cannot protect shared tool directory ACL".to_owned());
-            }
-        }
-    }
+    windows_acl::protect(
+        path,
+        true,
+        windows_acl::Scope::SharedTools,
+        &icacls()?,
+        &crate::process_runner::Native,
+    )?;
+
     Ok(())
 }
 

@@ -75,3 +75,9 @@ instalar. Se estiver em execução, para e tenta reiniciá-lo também quando a
 instalação falha. Um conector parado permanece parado. A operação não para
 conectores de outras instituições; se outro processo impedir a troca do
 executável compartilhado, a instalação falha preservando o anterior.
+
+No Windows, editar a DACL e trocar o proprietário são comandos distintos do
+`icacls`; qualquer falha interrompe a publicação. O diretório compartilhado de
+ferramentas mantém SYSTEM/Administradores com controle total e o grupo SERVICE
+somente com leitura/execução. Credenciais de gestão e diários privados não
+recebem esse grant do serviço. A verificação nativa inspeciona as ACLs resultantes.

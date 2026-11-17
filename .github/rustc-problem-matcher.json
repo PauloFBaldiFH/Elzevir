@@ -10,6 +10,22 @@
           "message": 2
         }
       ]
+    },
+    {
+      "owner": "elzevir-nextest",
+      "severity": "error",
+      "pattern": [
+        {
+          "regexp": "^\\s*thread .+ panicked at (.+):(\\d+):(\\d+):$",
+          "file": 1,
+          "line": 2,
+          "column": 3
+        },
+        {
+          "regexp": "^\\s*(.+)$",
+          "message": 1
+        }
+      ]
     }
   ]
 }
