@@ -129,6 +129,12 @@ pub fn snapshot_offline(source: &Path, destination: &Path) -> Result<SnapshotInf
     if !metadata.is_file() || metadata.is_symlink() {
         return Err(failure("source must be a regular file"));
     }
-    let connection = schema::open_reader(source)?;
+    let connection = Connection::open_with_flags(
+        source,
+        OpenFlags::SQLITE_OPEN_READ_ONLY
+            | OpenFlags::SQLITE_OPEN_NO_MUTEX
+            | OpenFlags::SQLITE_OPEN_NOFOLLOW,
+    )?;
+    connection.busy_timeout(Duration::from_secs(5))?;
     snapshot(&connection, destination)
 }

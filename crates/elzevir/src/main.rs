@@ -15,6 +15,9 @@ mod broker;
 mod broker_cli;
 mod broker_protocol;
 mod catalog_cli;
+mod cloud;
+mod cloud_cli;
+mod cloud_plans;
 mod cloudflare;
 mod config;
 mod diagnostic_logs;
@@ -25,6 +28,7 @@ mod host_jobs;
 mod http_client;
 mod init;
 mod koha_codes;
+mod local_artifacts;
 mod local_disk;
 mod logging;
 mod managed_tools;
@@ -82,6 +86,8 @@ enum Command {
     Tools(tools_cli::Args),
     /// Manage a free address through an explicitly compatible broker.
     Address(broker_cli::Args),
+    /// Configure cloud connections through the institution worker.
+    Cloud(cloud_cli::Args),
     /// Configure and observe the managed public tunnel.
     Tunnel(tunnel_cli::Args),
     /// Install a verified release with backup and automatic rollback.
@@ -142,6 +148,7 @@ fn main() -> ExitCode {
         Command::HostJob(args) => host_jobs::run(&args),
         Command::Tools(args) => tools_cli::run(args),
         Command::Address(args) => broker_cli::run(args),
+        Command::Cloud(args) => cloud_cli::run(args),
         Command::Tunnel(args) => tunnel_cli::run(args),
         Command::Update(args) => update::run(args),
         Command::Serve(args) => args

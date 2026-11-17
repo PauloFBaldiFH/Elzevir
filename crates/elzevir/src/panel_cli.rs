@@ -185,6 +185,7 @@ impl Collector {
                 .and_then(|release| release.body.clone()),
             ..elzevir_panel::Operations::default()
         };
+        result.cloud = crate::cloud::view(&self.directory).ok();
         result.remote_address = crate::broker::observe(&self.directory).ok().flatten();
         result.tunnel = match crate::tunnel_observe::observe(&self.directory) {
             Ok(Some(tunnel)) => elzevir_panel::TunnelState::Configured(tunnel),
@@ -234,6 +235,9 @@ impl Collector {
         let Ok(view) = crate::admin::operations(&info) else {
             return result;
         };
+        if let Some(uri) = view.authorization_uri {
+            result.authorization_uris.push(uri);
+        }
         result.keep = Some(view.policy.keep);
         result.daily = view
             .policy
@@ -249,6 +253,8 @@ impl Collector {
                     at: job.at,
                     action: match job.task {
                         crate::operations::Task::Backup => "op-backup-now",
+                        crate::operations::Task::ConfigureCloud => "cloud-operation",
+                        crate::operations::Task::CloudBackup { .. } => "cloud-backup",
                         crate::operations::Task::Verify { .. } => "op-backup-verify",
                     },
                     state: match job.state {
@@ -266,6 +272,11 @@ impl Collector {
 
     fn operate(&mut self, operation: &elzevir_panel::Operation) -> Result<(), String> {
         use elzevir_panel::Operation;
+        if let Operation::Cloud(action) = operation {
+            let info = crate::runtime_info::read(&self.directory.join(crate::runtime_info::NAME))?;
+            crate::admin::cloud(&info, crate::cloud::intention(action)?)?;
+            return Ok(());
+        }
         if matches!(operation, Operation::CheckUpdates) {
             self.latest = Some(crate::release::latest(&crate::release::Http)?);
             return Ok(());
@@ -294,8 +305,11 @@ impl Collector {
                     .into_iter()
                     .rev()
                     .find(|job| {
-                        matches!(job.task, crate::operations::Task::Backup)
-                            && job.state == crate::operations::State::Completed
+                        matches!(
+                            job.task,
+                            crate::operations::Task::Backup
+                                | crate::operations::Task::CloudBackup { .. }
+                        ) && job.state == crate::operations::State::Completed
                             && crate::backup_cli::artifact(&self.directory, &job.id)
                                 .is_ok_and(|path| path.is_file())
                     })
@@ -327,6 +341,7 @@ impl Collector {
                 crate::admin::backup_policy(&info, policy)?;
             }
             Operation::Address(_)
+            | Operation::Cloud(_)
             | Operation::Restore { .. }
             | Operation::Restart { .. }
             | Operation::Reboot

@@ -50,31 +50,7 @@ impl Runner for Native {
         let stdout = tempfile::tempfile().map_err(|_| "cannot capture process output")?;
         let stderr = tempfile::tempfile().map_err(|_| "cannot capture process errors")?;
         let mut command = Command::new(&request.program);
-        if let Some(environment) = &request.environment {
-            if environment
-                .iter()
-                .map(|(name, value)| name.len() + value.len() + 2)
-                .sum::<usize>()
-                > 24_000
-                || environment.iter().any(|(name, value)| {
-                    !name.starts_with("RCLONE_")
-                        || !name
-                            .bytes()
-                            .all(|byte| byte.is_ascii_uppercase() || byte == b'_')
-                        || value.contains('\0')
-                })
-            {
-                return Err("invalid private tool environment".to_owned());
-            }
-            for (name, _) in std::env::vars_os() {
-                if name.to_string_lossy().starts_with("RCLONE_") {
-                    command.env_remove(name);
-                }
-            }
-            for (name, value) in environment {
-                command.env(name, value.as_str());
-            }
-        }
+        configure_environment(&mut command, request.environment.as_deref())?;
         let mut child = command
             .args(&request.args)
             .stdin(Stdio::from(input))
@@ -141,6 +117,38 @@ impl Runner for Native {
         };
         finish_output(stdout, &stderr, status.success(), request.limit)
     }
+}
+
+fn configure_environment(
+    command: &mut Command,
+    environment: Option<&[(String, zeroize::Zeroizing<String>)]>,
+) -> Result<(), String> {
+    if let Some(environment) = environment {
+        if environment
+            .iter()
+            .map(|(name, value)| name.len() + value.len() + 2)
+            .sum::<usize>()
+            > 24_000
+            || environment.iter().any(|(name, value)| {
+                !name.starts_with("RCLONE_")
+                    || !name
+                        .bytes()
+                        .all(|byte| byte.is_ascii_uppercase() || byte == b'_')
+                    || value.contains('\0')
+            })
+        {
+            return Err("invalid private tool environment".to_owned());
+        }
+        for (name, _) in std::env::vars_os() {
+            if name.to_string_lossy().starts_with("RCLONE_") {
+                command.env_remove(name);
+            }
+        }
+        for (name, value) in environment {
+            command.env(name, value.as_str());
+        }
+    }
+    Ok(())
 }
 
 fn finish_output(

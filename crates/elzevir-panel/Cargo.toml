@@ -13,6 +13,7 @@ ratatui = { version = "0.30", default-features = false, features = ["crossterm"]
 fluent-bundle.workspace = true
 unic-langid.workspace = true
 thiserror.workspace = true
+serde.workspace = true
 qrcode = { version = "0.14", default-features = false }
 
 [dev-dependencies]

@@ -6,6 +6,8 @@
 pub enum Operation {
     /// One explicit free-address service intention.
     Address(crate::AddressOperation),
+    /// Cloud configuration through the limited service worker.
+    Cloud(crate::CloudOperation),
     /// Explicitly test the configured public HTTPS endpoints.
     TestTunnel,
     /// Publish separate catalog/staff hostnames through the selected Cloudflare account.
@@ -81,6 +83,7 @@ impl Operation {
     pub const fn key(&self) -> &'static str {
         match self {
             Self::Address(action) => action.key(),
+            Self::Cloud(action) => action.key(),
             Self::TestTunnel => "op-tunnel-test",
             Self::CloudflareSetup { .. } => "op-cloudflare-setup",
             Self::CloudflareLogin => "op-cloudflare-login",
@@ -136,6 +139,8 @@ pub struct Operations {
     pub tunnel: crate::TunnelState,
     /// Last safe remote address-service observation.
     pub remote_address: Option<crate::RemoteAddress>,
+    /// Safe cloud connection metadata.
+    pub cloud: Option<crate::CloudView>,
 }
 
 /// Bounded editing and confirmation, without access to operating-system resources.
@@ -155,6 +160,7 @@ impl Form {
     pub fn new(operation: Operation) -> Self {
         let (labels, values) = match &operation {
             Operation::Address(action) => action.fields(),
+            Operation::Cloud(action) => action.fields(),
             Operation::CloudflareSetup {
                 catalog,
                 staff,
@@ -219,12 +225,15 @@ impl Form {
         if !self.confirming() {
             return None;
         }
+        if let Operation::Cloud(action) = self.operation {
+            return Some(Operation::Cloud(action.finish(self.values)?));
+        }
         if let Operation::Address(action) = self.operation {
             return Some(Operation::Address(action.finish(self.values)?));
         }
         let mut values = self.values.into_iter();
         Some(match self.operation {
-            Operation::Address(_) => return None,
+            Operation::Address(_) | Operation::Cloud(_) => return None,
             Operation::CloudflareSetup { .. } => Operation::CloudflareSetup {
                 catalog: values.next()?,
                 staff: values.next()?,

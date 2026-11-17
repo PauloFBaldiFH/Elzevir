@@ -101,6 +101,7 @@ pub(crate) fn key(path: &Path, create: bool) -> Result<age::x25519::Identity, St
         file.write_all(text.expose_secret().as_bytes())
             .and_then(|()| file.as_file().sync_all())
             .map_err(|_| "cannot write backup key")?;
+        crate::file_owner::private_file(file.as_file(), parent)?;
         // A competing creator may win; always reload the published identity.
         if file.persist_noclobber(path).is_err() && !path.exists() {
             return Err("cannot publish backup key".to_owned());
@@ -150,7 +151,14 @@ fn hash(path: &Path) -> Result<String, String> {
 fn allowed(name: &str) -> bool {
     matches!(
         name,
-        "database.sqlite" | "server.toml" | "library.toml" | "operations.toml" | "author-table.txt"
+        "database.sqlite"
+            | "server.toml"
+            | "library.toml"
+            | "operations.toml"
+            | "author-table.txt"
+            | "cloud.json"
+            | "cloud-plans.json"
+            | "cloud-artifacts.json"
     ) || name.strip_prefix("secrets/").is_some_and(|leaf| {
         !leaf.eq_ignore_ascii_case("cf-cert.pem")
             && !leaf.is_empty()
@@ -339,6 +347,9 @@ fn additional_files(
     for (source, name) in [
         ("elzevir.toml", "library.toml"),
         ("operations.toml", "operations.toml"),
+        ("cloud.json", "cloud.json"),
+        ("cloud-plans.json", "cloud-plans.json"),
+        ("cloud-artifacts.json", "cloud-artifacts.json"),
     ] {
         let path = directory.join(source);
         if path
@@ -383,11 +394,15 @@ fn additional_files(
             .take(33)
         {
             let entry = entry.map_err(|_| "secrets unavailable")?;
-            if entry
-                .file_name()
-                .to_str()
-                .is_some_and(|name| name.eq_ignore_ascii_case("cf-cert.pem"))
-            {
+            if entry.file_name().to_str().is_some_and(|name| {
+                name.eq_ignore_ascii_case("cf-cert.pem")
+                    || name.strip_prefix("rclone-").is_some_and(|tail| {
+                        [".conf.old", ".pending.json"].iter().any(|suffix| {
+                            tail.strip_suffix(suffix)
+                                .is_some_and(crate::cloud::valid_id)
+                        })
+                    })
+            }) {
                 continue;
             }
             let name = format!(

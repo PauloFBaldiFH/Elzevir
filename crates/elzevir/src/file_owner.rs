@@ -2,6 +2,28 @@
 //! Private restored files retain the institution owner's access after elevated recovery.
 use std::path::Path;
 
+pub(crate) fn private_file(file: &std::fs::File, reference: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
+        let owner = std::fs::metadata(reference).map_err(|_| "institution owner unavailable")?;
+        let actual = file.metadata().map_err(|_| "private file unavailable")?;
+        if actual.uid() != owner.uid() || actual.gid() != owner.gid() {
+            rustix::fs::fchown(
+                file,
+                Some(rustix::process::Uid::from_raw(owner.uid())),
+                Some(rustix::process::Gid::from_raw(owner.gid())),
+            )
+            .map_err(|_| "cannot retain private file owner")?;
+        }
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))
+            .map_err(|_| "cannot protect private file")?;
+    }
+    #[cfg(not(unix))]
+    let _ = (file, reference);
+    Ok(())
+}
+
 #[cfg(unix)]
 pub(crate) fn private_tree(path: &Path, reference: &Path) -> Result<(), String> {
     use std::os::unix::fs::MetadataExt;

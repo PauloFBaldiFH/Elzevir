@@ -167,7 +167,7 @@ async fn typed_protocol_refuses_invalid_commands_versions_and_instances() {
         assert_eq!(response["result"]["code"], expected);
         assert!(!response.to_string().contains("never-echo-this-secret"));
     }
-    for bytes in [vec![b'x'; 4097], vec![0xff, b'\n']] {
+    for bytes in [vec![b'x'; 32_769], vec![0xff, b'\n']] {
         let response = exchange(&info, &bytes).await;
         assert_eq!(response["result"]["code"], "invalid_request");
     }

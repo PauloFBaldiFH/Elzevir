@@ -272,28 +272,7 @@ fn restore_inner(
         &directory,
     )?;
     // Validate auxiliary configuration before any live file is moved.
-    let library = restored.directory.path().join("library.toml");
-    if library.exists() {
-        let mut value: toml::Value = toml::from_str(&text(&library)?)
-            .map_err(|_| "invalid restored library configuration")?;
-        if restored.directory.path().join("author-table.txt").exists() {
-            let call = value
-                .get_mut("call_number")
-                .and_then(toml::Value::as_table_mut)
-                .ok_or("missing author table configuration")?;
-            call.insert(
-                "author_table".to_owned(),
-                toml::Value::String("author-table.txt".to_owned()),
-            );
-        }
-        let library_text =
-            toml::to_string_pretty(&value).map_err(|_| "invalid library configuration")?;
-        std::fs::write(&library, library_text)
-            .map_err(|_| "cannot prepare library configuration")?;
-        std::fs::rename(&library, restored.directory.path().join("elzevir.toml"))
-            .map_err(|_| "cannot prepare library configuration")?;
-        crate::config::load(restored.directory.path())?;
-    }
+    validate_auxiliary(restored.directory.path(), safety_snapshot)?;
     let safety = directory.join(format!("restore-safety-{}", archive::identifier()?));
     make_directory(&safety)?;
     // A consistent independent image is retained even if rebuilding the replacement fails.
@@ -311,6 +290,9 @@ fn restore_inner(
         ("elzevir.toml", "elzevir.toml"),
         ("operations.toml", "operations.toml"),
         ("author-table.txt", "author-table.txt"),
+        ("cloud.json", "cloud.json"),
+        ("cloud-plans.json", "cloud-plans.json"),
+        ("cloud-artifacts.json", "cloud-artifacts.json"),
     ] {
         let source = restored.directory.path().join(name);
         if source.exists() {
@@ -360,6 +342,47 @@ fn restore_inner(
         crate::restore_journal::Journal::commit(&directory)?;
     }
     result
+}
+
+fn validate_auxiliary(directory: &Path, reset_cloud_schedules: bool) -> Result<(), String> {
+    let library = directory.join("library.toml");
+    if library.exists() {
+        let mut value: toml::Value = toml::from_str(&text(&library)?)
+            .map_err(|_| "invalid restored library configuration")?;
+        if value
+            .get("call_number")
+            .and_then(|call| call.get("author_table"))
+            .is_some()
+            && !directory.join("author-table.txt").exists()
+        {
+            return Err("backup is missing its configured author table".to_owned());
+        }
+        if directory.join("author-table.txt").exists() {
+            let call = value
+                .get_mut("call_number")
+                .and_then(toml::Value::as_table_mut)
+                .ok_or("missing author table configuration")?;
+            call.insert(
+                "author_table".to_owned(),
+                toml::Value::String("author-table.txt".to_owned()),
+            );
+        }
+        let library_text =
+            toml::to_string_pretty(&value).map_err(|_| "invalid library configuration")?;
+        std::fs::write(&library, library_text)
+            .map_err(|_| "cannot prepare library configuration")?;
+        std::fs::rename(&library, directory.join("elzevir.toml"))
+            .map_err(|_| "cannot prepare library configuration")?;
+        crate::config::load(directory)?;
+    }
+    if directory.join("cloud-plans.json").exists() {
+        if reset_cloud_schedules {
+            crate::cloud_plans::restored(directory)?;
+        } else {
+            crate::cloud_plans::load(directory)?;
+        }
+    }
+    Ok(())
 }
 
 fn prepare_replacement(

@@ -419,3 +419,54 @@ fn remote_staff_password_is_masked_while_editing_and_confirming_in_both_language
     }
     assert!(!format!("{panel:?}").contains("fictional-private-password"));
 }
+
+#[test]
+fn cloud_provider_answers_are_masked_and_bound_to_the_current_question_revision() {
+    use elzevir_panel::{
+        CloudOperation, CloudQuestion, CloudView, ObservationRequest, Operation, Section,
+    };
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut panel = connected();
+    panel.section = Section::Backup;
+    if let Mode::Live(state) = &mut panel.mode {
+        state.snapshot.as_mut().unwrap().operations.cloud = Some(CloudView {
+            question: Some(CloudQuestion {
+                id: "a".repeat(32),
+                revision: "b".repeat(32),
+                name: "config_token".to_owned(),
+                help: String::new(),
+                examples: vec![],
+                default: String::new(),
+                secret: true,
+                refused: false,
+            }),
+            ..CloudView::default()
+        });
+    }
+    for code in std::iter::once(KeyCode::Char('a'))
+        .chain("fictional-private-token".chars().map(KeyCode::Char))
+    {
+        panel.handle(
+            &Event::Key(KeyEvent::new(code, KeyModifiers::NONE)),
+            120,
+            32,
+        );
+    }
+    for language in ["en", "pt-BR"] {
+        assert!(!screen(&panel, language).contains("fictional-private-token"));
+        assert!(screen(&panel, language).contains("********"));
+    }
+    panel.handle(
+        &Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        120,
+        32,
+    );
+    panel.handle(
+        &Event::Key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE)),
+        120,
+        32,
+    );
+    assert!(
+        matches!(&panel.diagnostics.requested,Some(ObservationRequest::Operate(Operation::Cloud(CloudOperation::Answer {revision,..}))) if *revision=="b".repeat(32))
+    );
+}

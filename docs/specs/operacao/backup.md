@@ -49,3 +49,9 @@ relativa à instituição: links não podem escapar desse diretório. Uma tabela
 autores externa deve ser movida para a instituição para participar do backup.
 O espaço temporário necessário inclui a imagem SQLite descomprimida; o operador
 pode selecionar um volume privado maior por `TMPDIR` (ou `TEMP` no Windows).
+
+O catálogo de artefatos locais é separado do histórico de 64 trabalhos. Assim,
+a retenção de até 365 cópias não perde a propriedade de arquivos antigos ao
+truncar a tela de histórico. Arquivos sem registro permanecem intocados. Planos
+de nuvem e seu catálogo de propriedade remota são transportados dentro da cifra;
+após restauração, as agendas de nuvem ficam desativadas até revisão explícita.

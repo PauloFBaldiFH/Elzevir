@@ -15,6 +15,8 @@ use std::{
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum Task {
     Backup,
+    ConfigureCloud,
+    CloudBackup { plan: String },
     Verify { id: String },
 }
 
@@ -47,6 +49,8 @@ pub(crate) struct Job {
 pub(crate) struct History {
     pub jobs: Vec<Job>,
     pub last_daily: Option<jiff::civil::Date>,
+    #[serde(default)]
+    pub last_cloud: std::collections::BTreeMap<String, jiff::civil::Date>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +58,7 @@ pub(crate) struct History {
 pub(crate) struct View {
     pub policy: Policy,
     pub jobs: Vec<Job>,
+    pub authorization_uri: Option<String>,
 }
 
 struct Shared {
@@ -133,9 +138,28 @@ impl Client {
         Ok(View {
             policy,
             jobs: state.history.jobs.clone(),
+            authorization_uri: state
+                .history
+                .jobs
+                .iter()
+                .find(|job| matches!(job.task, Task::ConfigureCloud) && job.state.active())
+                .and_then(|job| crate::cloud::authorization(&self.0.directory, &job.id)),
         })
     }
     pub(crate) fn submit(&self, task: Task) -> Result<Job, String> {
+        self.enqueue(task, None)
+    }
+    pub(crate) fn cloud(&self, action: &crate::cloud::Action) -> Result<Job, String> {
+        if let crate::cloud::Action::RunPlan { id } = action {
+            crate::cloud_plans::get(&self.0.directory, id)?;
+            return self.submit(Task::CloudBackup { plan: id.clone() });
+        }
+        self.enqueue(Task::ConfigureCloud, Some(action))
+    }
+    fn enqueue(&self, task: Task, action: Option<&crate::cloud::Action>) -> Result<Job, String> {
+        if matches!(task, Task::ConfigureCloud) && action.is_none() {
+            return Err("private cloud input is required".to_owned());
+        }
         if let Task::Verify { id } = &task {
             archive::regular(&crate::backup_cli::artifact(&self.0.directory, id)?)?;
         }
@@ -153,9 +177,18 @@ impl Client {
             state: State::Queued,
             at: jiff::Timestamp::now().to_string(),
         };
+        if let Some(action) = action {
+            crate::cloud::queue(&self.0.directory, &job.id, action)?;
+        }
         let mut history = state.history.clone();
         push(&mut history, job.clone());
-        save_history(&self.0.directory, &history)?;
+        if let Err(error) = save_history(&self.0.directory, &history) {
+            if action.is_some() {
+                std::fs::remove_file(crate::cloud::request_path(&self.0.directory, &job.id)?)
+                    .map_err(|_| "cannot discard unaccepted private cloud input")?;
+            }
+            return Err(error);
+        }
         state.history = history;
         self.0.wake.notify_one();
         Ok(job)
@@ -190,10 +223,18 @@ impl Worker {
         store: Arc<elzevir_store::ElzevirStore>,
     ) -> Result<Self, String> {
         crate::operations_config::load(&directory)?;
+        crate::cloud_plans::load(&directory)?;
         let mut history = read_history(&directory)?;
         for job in &mut history.jobs {
             if job.state.active() {
                 job.state = State::Interrupted;
+                if matches!(job.task, Task::ConfigureCloud) {
+                    let path = crate::cloud::request_path(&directory, &job.id)?;
+                    if path.exists() {
+                        std::fs::remove_file(path)
+                            .map_err(|_| "cannot discard interrupted private cloud input")?;
+                    }
+                }
             }
         }
         save_history(&directory, &history)?;
@@ -208,7 +249,15 @@ impl Worker {
         let runner = client.clone();
         let thread = std::thread::Builder::new()
             .name("elzevir-operations".to_owned())
-            .spawn(move || runner.work(&config, &store))
+            .spawn(move || {
+                let result = runner.work(&config, &store);
+                if result.is_err()
+                    && let Ok(mut state) = runner.0.state.lock()
+                {
+                    state.stopping = true;
+                }
+                result
+            })
             .map_err(|_| "cannot start operational worker")?;
         Ok(Self {
             client,
@@ -263,19 +312,13 @@ impl Client {
                 .lock()
                 .map_err(|_| "operational worker unavailable")?;
             let policy = crate::operations_config::load(&self.0.directory)?;
-            if !state.stopping
-                && !state.history.jobs.iter().any(|job| job.state.active())
-                && let Some(date) = policy.due(jiff::Timestamp::now(), state.history.last_daily)
-            {
-                let job = Job {
-                    id: archive::identifier()?,
-                    task: Task::Backup,
-                    state: State::Queued,
-                    at: jiff::Timestamp::now().to_string(),
-                };
-                state.history.last_daily = Some(date);
-                push(&mut state.history, job);
-                save_history(&self.0.directory, &state.history)?;
+            if !state.stopping && !state.history.jobs.iter().any(|job| job.state.active()) {
+                claim_due(
+                    &self.0.directory,
+                    &mut state.history,
+                    &policy,
+                    jiff::Timestamp::now(),
+                )?;
             }
             let queued = state
                 .history
@@ -306,7 +349,7 @@ impl Client {
                 };
                 save_history(&self.0.directory, &state.history)?;
                 if result.is_ok()
-                    && matches!(job.task, Task::Backup)
+                    && matches!(job.task, Task::Backup | Task::CloudBackup { .. })
                     && retain(&self.0.directory, &state.history, policy.keep).is_err()
                 {
                     // The completed, synced artifact remains valid when cleanup fails.
@@ -334,6 +377,14 @@ impl Client {
         store: &elzevir_store::ElzevirStore,
     ) -> Result<(), String> {
         match &job.task {
+            Task::CloudBackup { plan } => crate::cloud_plans::execute(
+                &self.0.directory,
+                plan,
+                &job.id,
+                config,
+                store.readers(),
+            )?,
+            Task::ConfigureCloud => crate::cloud::execute_queued(&self.0.directory, &job.id)?,
             Task::Backup => {
                 crate::backup_cli::make_directory(&self.0.directory.join("backups"))?;
                 archive::create(
@@ -342,6 +393,7 @@ impl Client {
                     &crate::backup_cli::artifact(&self.0.directory, &job.id)?,
                     Some(store.readers()),
                 )?;
+                crate::local_artifacts::record(&self.0.directory, &job.id)?;
             }
             Task::Verify { id } => {
                 archive::extract(
@@ -354,29 +406,93 @@ impl Client {
     }
 }
 
-/// Only artifacts with successful jobs are owned; unknown files are never candidates.
-fn retain(directory: &Path, history: &History, keep: u16) -> Result<(), String> {
-    let completed = history
-        .jobs
-        .iter()
-        .rev()
-        .filter(|job| matches!(job.task, Task::Backup) && job.state == State::Completed);
-    for job in completed.skip(usize::from(keep.max(1))) {
-        let path = crate::backup_cli::artifact(directory, &job.id)?;
-        match std::fs::symlink_metadata(&path) {
-            Ok(metadata) if metadata.is_file() && !metadata.is_symlink() => {
-                std::fs::remove_file(path).map_err(|_| "backup retention failed")?;
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            _ => return Err("backup retention target refused".to_owned()),
-        }
+fn claim_due(
+    directory: &Path,
+    history: &mut History,
+    policy: &Policy,
+    at: jiff::Timestamp,
+) -> Result<(), String> {
+    let plans = crate::cloud_plans::load(directory)?;
+    history
+        .last_cloud
+        .retain(|id, _| plans.iter().any(|plan| plan.id == *id));
+    let task = if let Some(date) = policy.due(at, history.last_daily) {
+        history.last_daily = Some(date);
+        Some(Task::Backup)
+    } else if let Some((id, date)) = crate::cloud_plans::due(directory, at, &history.last_cloud)? {
+        history.last_cloud.insert(id.clone(), date);
+        Some(Task::CloudBackup { plan: id })
+    } else {
+        None
+    };
+    if let Some(task) = task {
+        push(
+            history,
+            Job {
+                id: archive::identifier()?,
+                task,
+                state: State::Queued,
+                at: at.to_string(),
+            },
+        );
+        save_history(directory, history)?;
     }
     Ok(())
+}
+fn retain(directory: &Path, history: &History, keep: u16) -> Result<(), String> {
+    // Migrate retained ownership from earlier versions before presentation history is truncated.
+    for job in &history.jobs {
+        if matches!(job.task, Task::Backup | Task::CloudBackup { .. })
+            && job.state == State::Completed
+            && crate::backup_cli::artifact(directory, &job.id)?.is_file()
+        {
+            crate::local_artifacts::record(directory, &job.id)?;
+        }
+    }
+    crate::local_artifacts::retain(directory, keep)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn private_cloud_answers_are_consumed_without_entering_job_history() {
+        let directory = tempfile::tempdir().unwrap();
+        let data = crate::open_store(directory.path()).unwrap();
+        let worker = Worker::start(
+            directory.path().to_owned(),
+            "config".to_owned(),
+            Arc::new(data.store),
+        )
+        .unwrap();
+        let job = worker
+            .client()
+            .cloud(&crate::cloud::Action::Answer {
+                id: "a".repeat(32),
+                revision: "b".repeat(32),
+                value: "fictional-private-provider-answer".to_owned(),
+            })
+            .unwrap();
+        worker.finish().unwrap();
+        assert!(
+            !crate::cloud::request_path(directory.path(), &job.id)
+                .unwrap()
+                .exists()
+        );
+        let history =
+            std::fs::read_to_string(directory.path().join("operations-history.json")).unwrap();
+        assert!(!history.contains("fictional-private-provider-answer"));
+        assert!(!history.contains("revision"));
+        assert_eq!(
+            read_history(directory.path())
+                .unwrap()
+                .jobs
+                .first()
+                .unwrap()
+                .state,
+            State::Failed
+        );
+    }
     #[test]
     fn accepted_backup_survives_client_drop_and_stop_releases_the_store() {
         let directory = tempfile::tempdir().unwrap();

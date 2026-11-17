@@ -18,7 +18,7 @@ use tokio::{
 };
 
 const DEADLINE: Duration = Duration::from_secs(2);
-const MAX_FRAME: usize = 4096;
+const MAX_FRAME: usize = 32_768;
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -35,6 +35,9 @@ enum Command {
     Status,
     Diagnose,
     BackupNow,
+    ConfigureCloud {
+        action: crate::cloud::Action,
+    },
     Operations,
     Sessions,
     VerifyBackup {
@@ -97,7 +100,7 @@ async fn handle(
     let request = frame(&stream, MAX_FRAME)
         .await
         .ok()
-        .and_then(|bytes| serde_json::from_slice::<Request>(&bytes).ok());
+        .and_then(|bytes| serde_json::from_slice::<Request>(&zeroize::Zeroizing::new(bytes)).ok());
     let id = request.as_ref().map(|request| request.id);
     let result = match request {
         None => Outcome::Error {
@@ -144,6 +147,10 @@ async fn handle(
                 .submit(crate::operations::Task::Verify { id })
                 .map(|job| Outcome::Job { job }),
         ),
+        Some(Request {
+            command: Command::ConfigureCloud { action },
+            ..
+        }) => operation_result(operations.cloud(&action).map(|job| Outcome::Job { job })),
         Some(Request {
             command: Command::Operations,
             ..
@@ -255,8 +262,9 @@ async fn query(info: &RuntimeInfo, command: Command) -> Result<Outcome, String> 
         id: 1,
         command,
     };
-    let mut bytes =
-        serde_json::to_vec(&request).map_err(|_| "cannot encode administrative request")?;
+    let mut bytes = zeroize::Zeroizing::new(
+        serde_json::to_vec(&request).map_err(|_| "cannot encode administrative request")?,
+    );
     bytes.push(b'\n');
     let mut writer = &stream;
     writer
@@ -318,5 +326,15 @@ pub(crate) fn sessions(info: &RuntimeInfo) -> Result<usize, String> {
     match call(info, Command::Sessions)? {
         Outcome::Sessions { count } => Ok(count),
         _ => Err("session observation unavailable".to_owned()),
+    }
+}
+
+pub(crate) fn cloud(
+    info: &RuntimeInfo,
+    action: crate::cloud::Action,
+) -> Result<crate::operations::Job, String> {
+    match call(info, Command::ConfigureCloud { action })? {
+        Outcome::Job { job } => Ok(job),
+        _ => Err("cloud configuration request refused".to_owned()),
     }
 }

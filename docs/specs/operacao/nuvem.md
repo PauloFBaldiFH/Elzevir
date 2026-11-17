@@ -29,3 +29,10 @@ como concluído e aplica retenção dos IDs pertencentes ao plano. Falha remota
 não remove a cópia local nem promove sucesso no histórico. Arquivos estranhos
 no remoto não são candidatos a retenção. Um mesmo plano nunca executa duas
 vezes por data civil, inclusive em mudança de fuso/relógio ou reinício.
+
+O configurador e as transferências rodam exclusivamente na conta limitada do
+servidor. O cliente elevado instala o executável e envia intenções pelo IPC;
+não executa rclone sobre configurações graváveis pelo daemon. O IPC admite
+frames de até 32 KiB e respostas de 64 KiB. Respostas privadas ficam em arquivo
+0600 até o trabalho começar, são consumidas antes da execução e nunca entram no
+histórico. Uma interrupção descarta entradas pendentes e pede nova resposta.

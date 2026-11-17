@@ -5,7 +5,9 @@ mod address_operations;
 mod address_view;
 pub use address_operations::AddressOperation;
 mod addresses;
+mod cloud;
 mod dashboard;
+pub use cloud::{CloudConnection, CloudOperation, CloudPlan, CloudQuestion, CloudView};
 mod diagnostic_view;
 mod diagnostics;
 mod live;
@@ -245,6 +247,13 @@ impl Panel {
 }
 
 impl Panel {
+    fn cloud_view(&self) -> Option<&CloudView> {
+        if let Mode::Live(state) = &self.mode {
+            state.snapshot.as_ref()?.operations.cloud.as_ref()
+        } else {
+            None
+        }
+    }
     fn begin_operation(&mut self, key: char) -> bool {
         if !matches!(&self.mode, Mode::Live(_)) || self.palette || self.diagnostics.pending {
             return false;
@@ -281,7 +290,19 @@ impl Panel {
                 service: "elzevir".to_owned(),
                 protocol: "auto".to_owned(),
             },
-            (Section::Backup, 'n' | 'v' | 'e' | 'k' | 'o' | 's') => backup_operation(key),
+            (Section::Backup, key) if cloud::shortcut(key, self.cloud_view()).is_some() => {
+                Operation::Cloud(
+                    cloud::shortcut(key, self.cloud_view()).unwrap_or(CloudOperation::Providers),
+                )
+            }
+            (Section::Backup, 'n' | 'v' | 'e' | 'k' | 'o' | 's') => backup_operation(
+                key,
+                if let Mode::Live(state) = &self.mode {
+                    state.snapshot.as_ref().map(|snapshot| &snapshot.operations)
+                } else {
+                    None
+                },
+            ),
             (Section::Restart, 't') => Operation::Restart {
                 name: "elzevir".to_owned(),
             },
@@ -357,7 +378,7 @@ impl Panel {
     }
 }
 
-fn backup_operation(key: char) -> Operation {
+fn backup_operation(key: char, observed: Option<&Operations>) -> Operation {
     match key {
         'n' => Operation::BackupNow,
         'v' => Operation::VerifyLatest,
@@ -372,9 +393,15 @@ fn backup_operation(key: char) -> Operation {
             key: String::new(),
         },
         _ => Operation::Policy {
-            keep: "7".to_owned(),
-            time: String::new(),
-            zone: "UTC".to_owned(),
+            keep: observed.and_then(|ops| ops.keep).unwrap_or(7).to_string(),
+            time: observed
+                .and_then(|ops| ops.daily.as_deref())
+                .and_then(|daily| daily.split_once(' '))
+                .map_or_else(String::new, |(time, _)| time.to_owned()),
+            zone: observed
+                .and_then(|ops| ops.daily.as_deref())
+                .and_then(|daily| daily.split_once(' '))
+                .map_or_else(|| "UTC".to_owned(), |(_, zone)| zone.to_owned()),
         },
     }
 }
