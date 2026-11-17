@@ -192,7 +192,7 @@ pub(crate) fn launch(directory: &Path, task: Task) -> Result<String, String> {
             .map_err(|_| "institution directory unavailable")?,
         task,
     };
-    let temporary = tempfile::Builder::new()
+    let temporary = crate::private_temp::builder()
         .prefix("elzevir-host-")
         .tempdir()
         .map_err(|_| "cannot prepare host operation")?;
@@ -638,7 +638,7 @@ mod tests {
     #[test]
     fn host_ticket_requires_private_operator_owned_files() {
         use std::os::unix::fs::PermissionsExt;
-        let temporary = tempfile::Builder::new()
+        let temporary = crate::private_temp::builder()
             .prefix("elzevir-host-")
             .tempdir()
             .unwrap();

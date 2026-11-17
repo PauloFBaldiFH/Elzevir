@@ -75,7 +75,7 @@ pub(crate) fn run(args: &InitArgs) -> Result<(), String> {
         return Err("password must have at least 8 characters and at most 1024 bytes".to_owned());
     }
     let hash = hash_password(&password).map_err(|error| error.to_string())?;
-    let mut builder = tempfile::Builder::new();
+    let mut builder = crate::private_temp::builder();
     // No random suffix: create exactly the requested directory, exclusively.
     builder
         .prefix(data_dir.file_name().ok_or("invalid data directory")?)

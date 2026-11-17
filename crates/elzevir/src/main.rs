@@ -41,6 +41,7 @@ mod operations;
 mod operations_cli;
 mod operations_config;
 mod panel_cli;
+mod private_temp;
 mod process_runner;
 mod release;
 mod restore_journal;

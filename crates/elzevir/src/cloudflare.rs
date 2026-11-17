@@ -400,7 +400,8 @@ fn provision(
     let credentials = directory.join("secrets/cf-credentials.json");
     if intent.id.is_none() {
         if !credentials.exists() {
-            let stage = tempfile::tempdir().map_err(|_| "cannot stage tunnel credentials")?;
+            let stage =
+                crate::private_temp::directory().map_err(|_| "cannot stage tunnel credentials")?;
             let pending = stage.path().join("credentials.json");
             cloudflared(
                 runner,

@@ -795,7 +795,7 @@ fn test(
     }
     let _lock = lock(directory, &connection)?;
     folder(folder_name)?;
-    let stage = tempfile::tempdir().map_err(|_| "cannot prepare cloud test")?;
+    let stage = crate::private_temp::directory().map_err(|_| "cannot prepare cloud test")?;
     let name = format!("elzevir-test-{}.txt", archive::identifier()?);
     let source = stage.path().join(&name);
     archive::write_new(

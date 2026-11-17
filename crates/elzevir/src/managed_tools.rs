@@ -271,7 +271,8 @@ fn install_at(
     {
         return Err("invalid official tool checksum or size".to_owned());
     }
-    let scratch = tempfile::tempdir_in(directory).map_err(|_| "cannot stage official tool")?;
+    let scratch =
+        crate::private_temp::directory_in(directory).map_err(|_| "cannot stage official tool")?;
     let package = scratch.path().join(&name);
     let mut file = std::fs::File::create(&package).map_err(|_| "cannot stage tool package")?;
     source.fetch(

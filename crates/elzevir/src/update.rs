@@ -145,7 +145,7 @@ pub(crate) fn execute(directory: &Path, update: Update) -> Result<(), String> {
         .executable
         .parent()
         .ok_or("update executable needs parent")?;
-    let scratch = tempfile::tempdir_in(parent)
+    let scratch = crate::private_temp::directory_in(parent)
         .map_err(|_| "update requires write access to the executable directory")?;
     let previous = parent.join(format!(
         "elzevir-previous-{}{}",

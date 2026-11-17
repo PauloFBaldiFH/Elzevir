@@ -17,15 +17,16 @@ const MAX_DB: u64 = 512 * 1024 * 1024 * 1024;
 fn private_scratch(directory: &Path) -> Result<tempfile::TempDir, String> {
     #[cfg(target_os = "linux")]
     if !rustix::process::geteuid().is_root() {
-        return tempfile::tempdir_in(directory).map_err(|_| "cannot prepare backup".to_owned());
+        return crate::private_temp::directory_in(directory)
+            .map_err(|_| "cannot prepare backup".to_owned());
     }
     #[cfg(windows)]
     if crate::service::require_operator().is_err() {
-        return tempfile::tempdir_in(directory)
+        return crate::private_temp::directory_in(directory)
             .map_err(|_| "cannot prepare private backup scratch".to_owned());
     }
     let _ = directory;
-    tempfile::tempdir().map_err(|_| "cannot prepare private backup scratch".to_owned())
+    crate::private_temp::directory().map_err(|_| "cannot prepare private backup scratch".to_owned())
 }
 
 fn scoped_file(scope: &cap_std::fs::Dir, relative: &Path) -> Result<cap_std::fs::File, String> {
@@ -527,7 +528,7 @@ pub(crate) fn extract_controlled(
     let (names, total) = validate_manifest(&manifest)?;
     let directory = match scratch {
         Some(directory) => private_scratch(directory)?,
-        None => tempfile::tempdir().map_err(|_| "cannot prepare restore")?,
+        None => crate::private_temp::directory().map_err(|_| "cannot prepare restore")?,
     };
     if fs4::available_space(directory.path()).map_err(|_| "cannot inspect restore space")?
         < total.saturating_add(16 * 1024 * 1024)

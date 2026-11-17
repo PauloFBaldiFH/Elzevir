@@ -144,13 +144,12 @@ fn terminate(child: &mut std::process::Child) {
     #[cfg(windows)]
     {
         if let Some(root) = std::env::var_os("SystemRoot")
-            && let Ok(mut killer) =
-                Command::new(std::path::PathBuf::from(root).join("System32/taskkill.exe"))
-                    .args(["/T", "/F", "/PID", &child.id().to_string()])
-                    .stdin(Stdio::null())
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .spawn()
+            && let Ok(mut killer) = Command::new(PathBuf::from(root).join("System32/taskkill.exe"))
+                .args(["/T", "/F", "/PID", &child.id().to_string()])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
         {
             let started = Instant::now();
             while started.elapsed() < Duration::from_secs(2) {

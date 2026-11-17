@@ -50,3 +50,9 @@ arquivos desconhecidos. Uma trava por trabalho permite reconhecer processo
 interrompido sem confundir reutilização de PID. Solicitação que não chega a
 iniciar em cinco minutos aparece como interrompida. A observação não escreve
 no histórico; a limpeza acontece na publicação de um novo recibo.
+
+Tickets e diretórios temporários de operações são privados desde a criação,
+independentemente da umask do processo. Em Unix, o criador solicita modo 0700
+para o diretório e 0600 para arquivos privados. A validação continua recusando
+tickets que o operador ou outro processo tornou acessíveis a grupo/outros.
+O mesmo criador privado é usado para estagiar dados de backup e restauração.

@@ -295,8 +295,9 @@ fn restore_inner(
         )
         .map_err(|_| "cannot create restore safety image")?;
     }
-    let stage = tempfile::tempdir_in(crate::restore_journal::trusted_parent(&directory)?)
-        .map_err(|_| "cannot stage restore")?;
+    let stage =
+        crate::private_temp::directory_in(crate::restore_journal::trusted_parent(&directory)?)
+            .map_err(|_| "cannot stage restore")?;
     crate::file_owner::operator_private(stage.path())?;
     let mut replacements = Vec::new();
     for (name, target) in [
@@ -314,8 +315,9 @@ fn restore_inner(
         }
         replacements.push((stage.path().join(target), directory.join(target)));
     }
-    let config_stage = tempfile::tempdir_in(config.parent().ok_or("configuration needs a parent")?)
-        .map_err(|_| "cannot stage restored configuration")?;
+    let config_stage =
+        crate::private_temp::directory_in(config.parent().ok_or("configuration needs a parent")?)
+            .map_err(|_| "cannot stage restored configuration")?;
     archive::write_new(&config_stage.path().join("server.toml"), source.as_bytes())?;
     let configuration_target = config.clone();
     replacements.push((config_stage.path().join("server.toml"), config));
