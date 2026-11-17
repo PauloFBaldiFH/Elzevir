@@ -187,6 +187,8 @@ impl Collector {
         };
         result.cloud = crate::cloud::view(&self.directory).ok();
         result.remote_address = crate::broker::observe(&self.directory).ok().flatten();
+        // Invalid private configuration becomes unavailable, never a successful registration.
+        result.domain = crate::broker::domain_status(&self.directory).ok();
         result.tunnel = match crate::tunnel_observe::observe(&self.directory) {
             Ok(Some(tunnel)) => elzevir_panel::TunnelState::Configured(tunnel),
             Ok(None) => elzevir_panel::TunnelState::NotConfigured,

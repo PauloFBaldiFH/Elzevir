@@ -21,6 +21,7 @@ pub(crate) fn rows(
     if let Some(result) = operations.and_then(|operations| operations.result) {
         rows.push(Line::from(messages.get(result)));
     }
+    rows.extend(domain_rows(operations, messages));
     rows.extend(remote_rows(operations, messages));
     if let Some(operations) = operations {
         for job in operations
@@ -105,15 +106,20 @@ fn remote_rows(operations: Option<&Operations>, messages: &Messages) -> Vec<Line
     let mut rows = Vec::new();
     if let Some(remote) = operations.and_then(|operations| operations.remote_address.as_ref()) {
         rows.push(row(messages, "broker-observed", Some(text(&remote.at))));
-        rows.push(row(
-            messages,
-            "broker-listed",
-            Some(messages.get(if remote.listed {
-                "broker-on"
-            } else {
-                "broker-off"
-            })),
-        ));
+        if operations
+            .and_then(|operations| operations.domain.as_ref())
+            .is_none_or(|domain| domain.domain.is_empty())
+        {
+            rows.push(row(
+                messages,
+                "broker-listed",
+                Some(messages.get(if remote.listed {
+                    "broker-on"
+                } else {
+                    "broker-off"
+                })),
+            ));
+        }
         rows.push(row(
             messages,
             "broker-remote",
@@ -123,6 +129,61 @@ fn remote_rows(operations: Option<&Operations>, messages: &Messages) -> Vec<Line
                 "broker-off"
             })),
         ));
+    }
+    rows
+}
+
+fn domain_rows(operations: Option<&Operations>, messages: &Messages) -> Vec<Line<'static>> {
+    let mut rows = vec![Line::from(messages.get("domain-title"))];
+    if let Some(domain) = operations.and_then(|operations| operations.domain.as_ref()) {
+        rows.push(row(
+            messages,
+            "domain-broker",
+            Some(text(&domain.broker_url)),
+        ));
+        rows.push(row(
+            messages,
+            "domain-phase",
+            Some(messages.get(domain.phase.key())),
+        ));
+        rows.push(row(
+            messages,
+            "domain-connector",
+            Some(messages.get(domain.connector.key())),
+        ));
+        if let Some(status) = domain.remote_status {
+            rows.push(row(
+                messages,
+                "domain-remote-status",
+                Some(messages.get(status)),
+            ));
+        }
+        if let Some(host) = &domain.catalog {
+            rows.push(row(
+                messages,
+                "domain-assigned-catalog",
+                Some(text(&format!("https://{host}"))),
+            ));
+        }
+        if let Some(host) = &domain.staff {
+            rows.push(row(
+                messages,
+                "domain-assigned-staff",
+                Some(text(&format!("https://{host}"))),
+            ));
+        }
+        if !domain.staff_allow_cidrs.is_empty() {
+            rows.push(row(
+                messages,
+                "domain-networks",
+                Some(text(&domain.staff_allow_cidrs.join(", "))),
+            ));
+        }
+        if let Some(failure) = domain.failure {
+            rows.push(Line::from(messages.get(failure)));
+        }
+    } else {
+        rows.push(Line::from(messages.get("domain-unavailable")));
     }
     rows
 }

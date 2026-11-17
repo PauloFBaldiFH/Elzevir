@@ -18,8 +18,9 @@ pub(crate) struct Args {
 #[derive(clap::Subcommand)]
 enum Command {
     Enroll {
-        #[arg(long)]
-        broker: String,
+        /// HTTPS broker origin; defaults to `ELZEVIR_BROKER_URL` or <https://broker.elzevir.app>.
+        #[arg(long, alias = "broker-url")]
+        broker: Option<String>,
         #[arg(long)]
         institution: String,
         #[arg(long)]
@@ -27,7 +28,12 @@ enum Command {
         #[arg(long, default_value = "")]
         name: String,
     },
+    /// Show locally recorded registration progress and the connector service state.
+    Status,
+    /// Refresh the signed remote library observation.
     Refresh,
+    /// Legacy public-directory extension, when supported by the selected broker.
+    #[command(hide = true)]
     Listing {
         #[arg(long)]
         public: bool,
@@ -51,7 +57,7 @@ enum Command {
     },
 }
 pub(crate) fn run(args: Args) -> Result<(), String> {
-    if !args.confirm && !matches!(&args.action, Command::Refresh) {
+    if !args.confirm && !matches!(&args.action, Command::Refresh | Command::Status) {
         return Err("address management requires --confirm".to_owned());
     }
     let config = args
@@ -61,6 +67,14 @@ pub(crate) fn run(args: Args) -> Result<(), String> {
     let settings = crate::server_config::ServeArgs::for_status(Some(config.clone()), None)
         .resolve()
         .map_err(|error| error.to_string())?;
+    if matches!(&args.action, Command::Status) {
+        let status = crate::broker::domain_status(&settings.data_dir)?;
+        println!(
+            "{}",
+            serde_json::to_string(&status).map_err(|_| "cannot encode domain status")?
+        );
+        return Ok(());
+    }
     let action = match args.action {
         Command::Enroll {
             broker,
@@ -68,11 +82,12 @@ pub(crate) fn run(args: Args) -> Result<(), String> {
             email,
             name,
         } => Action::Enroll {
-            base: broker,
+            base: crate::broker_protocol::configured_url(broker.as_deref())?,
             institution,
             email,
             name,
         },
+        Command::Status => return Err("status was already handled".to_owned()),
         Command::Refresh => Action::Refresh,
         Command::Listing { public } => Action::Listing { public },
         Command::Staff { username, cidr } => {

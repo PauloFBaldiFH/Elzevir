@@ -7,16 +7,18 @@ Administração do Elzevir
 |  d Painel de controle    ||Em execução                                                                     ||Biblioteca de teste         |
 |  x Diagnóstico           ||                                                                                ||                            |
 |> a Endereços e acesso    ||l Entrar na Cloudflare · s Domínio próprio · t Teste · h Log                    ||Listener configurado        |
-|  b Backup e agendamentos ||g endereço gratuito · c consultar broker · w/W equipe ligar/desligar · j/J lista||127.0.0.1:0                 |
-|  u Atualizações          ||incluir/remover · k exportar recuperação · o recuperar · n renovar · z desistir ||                            |
-|  r Reiniciar             ||· Q QR                                                                          ||Listener observado          |
-|                          ||Não foi possível observar a configuração do túnel público.                      ||127.0.0.1:8080              |
-|                          ||                                                                                ||                            |
-|                          ||Modo no arquivo carregado: Mesmo endereço                                       ||Última consulta: há 0       |
-|                          ||Modo em execução: Nomes de host separados                                       ||segundos                    |
-|                          ||Nome de host do catálogo: catalog.example                                       ||                            |
-|                          ||Nome de host da equipe: staff.example                                           ||Observações somente de      |
-|                          ||Catálogo (neste computador): http://catalog.example:8080/                       ||leitura                     |
+|  b Backup e agendamentos ||g registrar/retomar *.elzevir.app · c consultar broker · w/W equipe             ||127.0.0.1:0                 |
+|  u Atualizações          ||ligar/desligar · k exportar recuperação · o recuperar · n renovar · z           ||                            |
+|  r Reiniciar             ||desvincular domínio · Q QR                                                      ||Listener observado          |
+|                          ||Domínio & Túnel (*.elzevir.app)                                                 ||127.0.0.1:8080              |
+|                          ||Estado do cadastro indisponível                                                 ||                            |
+|                          ||Não foi possível observar a configuração do túnel público.                      ||Última consulta: há 0       |
+|                          ||                                                                                ||segundos                    |
+|                          ||Modo no arquivo carregado: Mesmo endereço                                       ||                            |
+|                          ||Modo em execução: Nomes de host separados                                       ||Observações somente de      |
+|                          ||Nome de host do catálogo: catalog.example                                       ||leitura                     |
+|                          ||Nome de host da equipe: staff.example                                           ||                            |
+|                          ||Catálogo (neste computador): http://catalog.example:8080/                       ||                            |
 |                          ||Equipe (neste computador): http://staff.example:8080/equipe                     ||                            |
 |                          ||Teste HTTP do catálogo: OK                                                      ||                            |
 |                          ||Teste HTTP do formulário de login: Falha                                        ||                            |
@@ -27,7 +29,5 @@ Administração do Elzevir
 |                          ||Alternativas nas interfaces locais (sem teste de outro computador)              ||                            |
 |                          ||Sem alternativas IP para este bind; nomes exigem DNS/hosts no cliente.          ||                            |
 |                          ||Publicação na internet/túnel: não configurada nesta etapa.                      ||                            |
-|                          ||                                                                                ||                            |
-|                          ||Modos disponíveis para a equipe                                                 ||                            |
 +--------------------------++--------------------------------------------------------------------------------++----------------------------+
 Tab/setas: navegar | f: atualizar | PgUp/PgDn: rolar | Ctrl+P: paleta | q/Ctrl+C: sair

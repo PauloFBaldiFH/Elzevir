@@ -470,3 +470,55 @@ fn cloud_provider_answers_are_masked_and_bound_to_the_current_question_revision(
         matches!(&panel.diagnostics.requested,Some(ObservationRequest::Operate(Operation::Cloud(CloudOperation::Answer {revision,..}))) if *revision=="b".repeat(32))
     );
 }
+
+#[test]
+fn domain_flow_distinguishes_registration_connector_and_public_test_results() {
+    use elzevir_panel::{ConnectorState, DomainPhase, DomainStatus, Section};
+    let mut panel = connected();
+    panel.section = Section::Addresses;
+    if let Mode::Live(state) = &mut panel.mode {
+        state.snapshot.as_mut().unwrap().operations.domain = Some(DomainStatus {
+            broker_url: "https://broker.elzevir.app".to_owned(),
+            domain: "elzevir.app".to_owned(),
+            phase: DomainPhase::Provisioning,
+            catalog: Some("fictional.elzevir.app".to_owned()),
+            staff: Some("fictional-admin.elzevir.app".to_owned()),
+            failure: None,
+            connector: ConnectorState::Stopped,
+            staff_allow_cidrs: vec!["192.0.2.0/24".to_owned()],
+            remote_status: None,
+        });
+    }
+    for (language, phase, connector) in [
+        ("en", "Provisioning DNS and tunnel", "Stopped"),
+        ("pt-BR", "Provisionando DNS e túnel", "Parado"),
+    ] {
+        let rendered = screen(&panel, language);
+        assert!(rendered.contains(phase));
+        assert!(rendered.contains(connector));
+        assert!(rendered.contains("https://fictional.elzevir.app"));
+        assert!(rendered.contains("fictional-admin.elzevir.app"));
+        assert!(rendered.contains("192.0.2.0/24"));
+        assert!(!rendered.contains("domain-"));
+        assert!(!rendered.contains("device_code"));
+    }
+}
+
+#[test]
+fn registration_form_explains_the_default_broker_in_both_languages() {
+    use elzevir_panel::{AddressOperation, Form, Operation, Section};
+    let mut panel = connected();
+    panel.section = Section::Addresses;
+    panel.form = Some(Form::new(Operation::Address(AddressOperation::Enroll {
+        base: String::new(),
+        institution: "Fictional library".to_owned(),
+        email: "fictional@example.org".to_owned(),
+        name: "fictional".to_owned(),
+        service: "elzevir".to_owned(),
+    })));
+    for language in ["en", "pt-BR"] {
+        let rendered = screen(&panel, language);
+        assert!(rendered.contains("broker.elzevir.app"));
+        assert!(!rendered.contains("broker-url"));
+    }
+}

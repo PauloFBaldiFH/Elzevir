@@ -103,7 +103,7 @@ impl AddressOperation {
                 password,
                 cidrs,
             } => (
-                vec!["broker-user", "broker-password", "broker-cidrs"],
+                vec!["broker-username", "broker-password", "broker-cidrs"],
                 vec![username.clone(), password.clone(), cidrs.clone()],
             ),
             Self::Renew { service } => (vec!["op-service"], vec![service.clone()]),

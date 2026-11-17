@@ -97,7 +97,11 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
+      - name: Publish Rust compiler errors as check annotations
+        run: echo "::add-matcher::.github/rustc-problem-matcher.json"
       - run: cargo nextest run --workspace --all-targets --locked
+        env:
+          CARGO_TERM_COLOR: never
       - name: Native PowerShell bootstrap checks
         if: runner.os == 'Windows'
         shell: powershell

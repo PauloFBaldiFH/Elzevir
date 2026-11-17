@@ -145,6 +145,8 @@ pub struct Operations {
     pub tunnel: crate::TunnelState,
     /// Last safe remote address-service observation.
     pub remote_address: Option<crate::RemoteAddress>,
+    /// Registration phase, assigned hostnames and the local connector service state.
+    pub domain: Option<crate::DomainStatus>,
     /// Safe cloud connection metadata.
     pub cloud: Option<crate::CloudView>,
 }

@@ -29,25 +29,21 @@ pub(crate) fn origin(value: &str) -> Result<String, String> {
     ))
 }
 
-pub(crate) fn capabilities(bytes: &[u8]) -> Result<(), String> {
-    let value: serde_json::Value =
-        serde_json::from_slice(bytes).map_err(|_| "invalid broker capabilities")?;
-    if !value
-        .get("services")
-        .and_then(serde_json::Value::as_array)
-        .is_some_and(|services| services.iter().any(|name| name.as_str() == Some("elzevir")))
-        || value
-            .pointer("/elzevir/contract")
-            .and_then(serde_json::Value::as_u64)
-            != Some(1)
-        || value
-            .pointer("/elzevir/configurable_origin")
-            .and_then(serde_json::Value::as_bool)
-            != Some(true)
-    {
-        return Err("B1: broker does not support Elzevir with a configurable origin".to_owned());
+pub(crate) const DEFAULT_URL: &str = "https://broker.elzevir.app";
+pub(crate) const DOMAIN: &str = "elzevir.app";
+pub(crate) fn resolve_url(flag: Option<&str>, environment: Option<&str>) -> Result<String, String> {
+    origin(flag.or(environment).unwrap_or(DEFAULT_URL))
+}
+pub(crate) fn configured_url(flag: Option<&str>) -> Result<String, String> {
+    if flag.is_some() {
+        return resolve_url(flag, None);
     }
-    Ok(())
+    let environment = std::env::var("ELZEVIR_BROKER_URL");
+    match environment {
+        Ok(value) => resolve_url(flag, Some(&value)),
+        Err(std::env::VarError::NotPresent) => resolve_url(flag, None),
+        Err(std::env::VarError::NotUnicode(_)) => Err("invalid ELZEVIR_BROKER_URL".to_owned()),
+    }
 }
 
 pub(crate) struct Key(Ed25519KeyPair);
@@ -76,7 +72,7 @@ impl Key {
             || library.len() > 64
             || !library
                 .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
             || !(16..=64).contains(&nonce.len())
             || !nonce
                 .bytes()
@@ -122,13 +118,17 @@ pub(crate) struct Response {
     pub body: zeroize::Zeroizing<Vec<u8>>,
 }
 impl Response {
-    pub(crate) fn json<T: serde::de::DeserializeOwned>(&self) -> Result<T, String> {
+    pub(crate) fn success(&self) -> Result<(), String> {
         if !(200..300).contains(&self.status) {
             return Err(format!(
                 "address service refused the request (HTTP {})",
                 self.status
             ));
         }
+        Ok(())
+    }
+    pub(crate) fn json<T: serde::de::DeserializeOwned>(&self) -> Result<T, String> {
+        self.success()?;
         serde_json::from_slice(&self.body)
             .map_err(|_| "invalid address service response".to_owned())
     }
@@ -189,14 +189,21 @@ impl Transport for Http {
 mod tests {
     use super::*;
     #[test]
-    fn capabilities_cannot_silently_publish_elzevir_as_koha() {
-        for document in [r#"{"services":["koha"]}"#, r#"{"services":["elzevir"]}"#] {
-            assert!(capabilities(document.as_bytes()).is_err());
-        }
-        capabilities(
-            br#"{"services":["elzevir"],"elzevir":{"contract":1,"configurable_origin":true}}"#,
-        )
-        .unwrap();
+    fn broker_defaults_and_explicit_override_have_stable_precedence() {
+        assert_eq!(resolve_url(None, None).unwrap(), DEFAULT_URL);
+        assert_eq!(
+            resolve_url(None, Some("https://environment.example.org")).unwrap(),
+            "https://environment.example.org"
+        );
+        assert_eq!(
+            resolve_url(
+                Some("https://flag.example.org"),
+                Some("https://environment.example.org")
+            )
+            .unwrap(),
+            "https://flag.example.org"
+        );
+        assert!(resolve_url(None, Some("http://unsafe.example.org")).is_err());
     }
     #[test]
     fn signatures_bind_body_path_timestamp_nonce_and_library() {

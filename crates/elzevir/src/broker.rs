@@ -2,11 +2,37 @@
 //! Device enrollment and signed address management; credentials never enter argv.
 use crate::broker_protocol::{Http, Key, Response, Transport};
 use base64::Engine as _;
+use elzevir_panel::{ConnectorState, DomainPhase, DomainStatus};
+#[path = "broker_registration.rs"]
+mod registration;
+use registration::{begin, enroll};
+#[path = "broker_domain.rs"]
+mod domain;
+use domain::clear_binding;
+pub(crate) use domain::status as domain_status;
+
+trait FlowClock {
+    fn now(&self) -> i64;
+    fn wait(&self, seconds: u32);
+}
+struct NativeClock;
+impl FlowClock for NativeClock {
+    fn now(&self) -> i64 {
+        jiff::Timestamp::now().as_second()
+    }
+    fn wait(&self, seconds: u32) {
+        std::thread::sleep(Duration::from_secs(u64::from(seconds)));
+    }
+}
+fn default_interval() -> u32 {
+    10
+}
+
 use serde::{Deserialize, Serialize};
 use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -14,15 +40,29 @@ use std::{
 struct Identity {
     schema: u8,
     base: String,
+    #[serde(rename = "private_key", alias = "seed")]
     seed: String,
     origin: String,
     device_code: Option<String>,
     verification_uri: Option<String>,
     expires_at: i64,
+    #[serde(rename = "library_id", alias = "library")]
     library: Option<String>,
+    #[serde(rename = "job_id", alias = "job")]
     job: Option<String>,
+    #[serde(rename = "hostnames", alias = "hosts")]
     hosts: Option<Hosts>,
     ready: bool,
+    #[serde(default)]
+    domain: Option<String>,
+    #[serde(default)]
+    approved: bool,
+    #[serde(default = "default_interval")]
+    interval: u32,
+    #[serde(default)]
+    phase: DomainPhase,
+    #[serde(default)]
+    failure: Option<String>,
 }
 impl Drop for Identity {
     fn drop(&mut self) {
@@ -48,6 +88,32 @@ impl Hosts {
         }
         Ok(())
     }
+    fn validate_for(&mut self, domain: Option<&str>) -> Result<(), String> {
+        self.validate()?;
+        if let Some(domain) = domain {
+            let suffix = format!(".{domain}");
+            let slug = self
+                .opac
+                .strip_suffix(&suffix)
+                .ok_or("broker returned a different domain")?;
+            if domain != crate::broker_protocol::DOMAIN
+                || !valid_slug(slug)
+                || self.staff != format!("{slug}-admin.{domain}")
+            {
+                return Err("broker returned inconsistent catalog and staff hostnames".to_owned());
+            }
+        }
+        Ok(())
+    }
+}
+fn valid_slug(slug: &str) -> bool {
+    !slug.is_empty()
+        && slug.len() <= 57
+        && !slug.starts_with('-')
+        && !slug.ends_with('-')
+        && slug
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 fn read(path: &Path) -> Result<zeroize::Zeroizing<Vec<u8>>, String> {
     if crate::backup_archive::regular(path)? > 16_384 {
@@ -84,12 +150,27 @@ impl Identity {
                 .as_ref()
                 .is_some_and(|value| !identifier(value))
             || self.job.as_ref().is_some_and(|value| !identifier(value))
+            || !(1..=300).contains(&self.interval)
+            || self
+                .domain
+                .as_ref()
+                .is_some_and(|domain| domain != crate::broker_protocol::DOMAIN)
+            || self.failure.as_deref().is_some_and(|code| {
+                !matches!(
+                    code,
+                    "dns_conflict"
+                        | "quota_exceeded"
+                        | "domain_unavailable"
+                        | "tunnel_failed"
+                        | "provisioning_failed"
+                )
+            })
         {
             return Err("invalid address identity".to_owned());
         }
         self.key()?;
         if let Some(hosts) = &self.hosts {
-            hosts.clone().validate()?;
+            hosts.clone().validate_for(self.domain.as_deref())?;
         }
         if self.ready && (self.library.is_none() || self.hosts.is_none()) {
             return Err("incomplete address identity".to_owned());
@@ -136,7 +217,7 @@ fn identifier(value: &str) -> bool {
         && value.len() <= 64
         && value
             .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
 fn save(directory: &Path, identity: &Identity) -> Result<(), String> {
     identity.validate()?;
@@ -170,7 +251,7 @@ fn verification_url(base: &str, uri: &str) -> Result<(), String> {
     if !(4..=32).contains(&code.len())
         || !code
             .bytes()
-            .all(|byte| byte.is_ascii_uppercase() || byte == b'-')
+            .all(|byte| byte.is_ascii_uppercase() || matches!(byte, b'-' | b'_'))
     {
         return Err("invalid broker verification URL".to_owned());
     }
@@ -232,13 +313,6 @@ pub(crate) struct Setup {
     pub action: Action,
 }
 
-fn check_capabilities(transport: &impl Transport, base: &str) -> Result<(), String> {
-    let response = transport.request(base, "GET", "/v1/capabilities", &[], &[])?;
-    if response.status != 200 {
-        return Err("broker capabilities unavailable".to_owned());
-    }
-    crate::broker_protocol::capabilities(&response.body)
-}
 fn origin(settings: &crate::server_config::Settings) -> Result<String, String> {
     let mut address = settings.listen;
     if address.port() == 0 {
@@ -257,180 +331,63 @@ fn origin(settings: &crate::server_config::Settings) -> Result<String, String> {
     Ok(format!("http://{address}"))
 }
 #[derive(Deserialize)]
-struct Authorization {
-    device_code: String,
-    verification_uri: String,
-    expires_in: u32,
-    interval: u32,
-}
-#[derive(Deserialize)]
-struct Poll {
-    status: String,
-    interval: Option<u32>,
-}
-#[derive(Deserialize)]
-struct Enrolled {
-    library_id: String,
-    job_id: String,
-    hostnames: Hosts,
-}
-fn begin(
-    directory: &Path,
-    setup: &Setup,
-    settings: &crate::server_config::Settings,
-    transport: &impl Transport,
-) -> Result<Identity, String> {
-    let Action::Enroll {
-        base,
-        institution,
-        email,
-        name,
-    } = &setup.action
-    else {
-        return Err("invalid enrollment action".to_owned());
-    };
-    let base = crate::broker_protocol::origin(base)?;
-    check_capabilities(transport, &base)?;
-    if institution.trim().len() < 3
-        || institution.len() > 200
-        || email.len() > 254
-        || !email.contains('@')
-        || name.len() > 100
-        || [institution, email, name]
-            .iter()
-            .any(|value| value.chars().any(char::is_control))
-    {
-        return Err("invalid institution or contact".to_owned());
-    }
-    let mut identity = if location(directory).exists() {
-        let identity = load(directory)?;
-        if identity.base != base || identity.origin != origin(settings)? {
-            return Err("existing address identity must be reviewed before replacement".to_owned());
-        }
-        if identity.library.is_some()
-            || (identity.device_code.is_some()
-                && identity.expires_at > jiff::Timestamp::now().as_second())
-        {
-            return Ok(identity);
-        }
-        identity
-    } else {
-        let mut seed = zeroize::Zeroizing::new([0_u8; 32]);
-        getrandom::fill(seed.as_mut()).map_err(|_| "cannot generate address signing key")?;
-        Identity {
-            schema: 1,
-            base,
-            seed: base64::engine::general_purpose::STANDARD.encode(seed.as_ref()),
-            origin: origin(settings)?,
-            device_code: None,
-            verification_uri: None,
-            expires_at: 0,
-            library: None,
-            job: None,
-            hosts: None,
-            ready: false,
-        }
-    };
-    save(directory, &identity)?;
-    let body = serde_json::to_vec(&serde_json::json!({"institution_name":institution,"contact_email":email,"requested_name":name,"services":["elzevir"],"origin":identity.origin})).map_err(|_| "cannot encode enrollment")?;
-    let device: Authorization = transport
-        .request(&identity.base, "POST", "/v1/device/start", &[], &body)?
-        .json()?;
-    if device.device_code.is_empty()
-        || device.device_code.len() > 64
-        || !(1..=86_400).contains(&device.expires_in)
-        || !(1..=60).contains(&device.interval)
-    {
-        return Err("invalid enrollment response".to_owned());
-    }
-    verification_url(&identity.base, &device.verification_uri)?;
-    identity.device_code = Some(device.device_code);
-    identity.verification_uri = Some(device.verification_uri);
-    identity.expires_at = jiff::Timestamp::now()
-        .as_second()
-        .saturating_add(i64::from(device.expires_in));
-    save(directory, &identity)?;
-    Ok(identity)
-}
-fn enroll(
-    directory: &Path,
-    identity: &mut Identity,
-    transport: &impl Transport,
-    progress: Option<&crate::process_runner::Progress>,
-) -> Result<(), String> {
-    if identity.library.is_some() {
-        return Ok(());
-    }
-    if let (Some(progress), Some(uri)) = (progress, &identity.verification_uri) {
-        progress(uri.as_bytes())?;
-    }
-    let started = Instant::now();
-    loop {
-        if identity.expires_at <= jiff::Timestamp::now().as_second()
-            || started.elapsed() > Duration::from_mins(15)
-        {
-            return Err("address authorization expired; retry enrollment after review".to_owned());
-        }
-        let device = identity.device_code.as_ref().ok_or("enrollment was interrupted before its device code was saved; review the private identity before retrying")?;
-        let body = zeroize::Zeroizing::new(
-            serde_json::to_vec(&serde_json::json!({"device_code":device}))
-                .map_err(|_| "cannot encode enrollment poll")?,
-        );
-        let poll: Poll = transport
-            .request(&identity.base, "POST", "/v1/device/poll", &[], &body)?
-            .json()?;
-        match poll.status.as_str() {
-            "approved" | "consumed" => break,
-            "pending" => std::thread::sleep(Duration::from_secs(u64::from(
-                poll.interval.unwrap_or(10).clamp(1, 60),
-            ))),
-            _ => {
-                return Err("address authorization was denied or expired".to_owned());
-            }
-        }
-    }
-    let body = zeroize::Zeroizing::new(serde_json::to_vec(&serde_json::json!({"device_code":identity.device_code,"public_key":identity.key()?.public()})).map_err(|_| "cannot encode enrollment")?);
-    let mut enrolled: Enrolled = transport
-        .request(&identity.base, "POST", "/v1/enroll", &[], &body)?
-        .json()?;
-    enrolled.hostnames.validate()?;
-    if !identifier(&enrolled.library_id) || !identifier(&enrolled.job_id) {
-        return Err("invalid enrollment identity".to_owned());
-    }
-    identity.library = Some(enrolled.library_id);
-    identity.job = Some(enrolled.job_id);
-    identity.hosts = Some(enrolled.hostnames);
-    identity.device_code = None;
-    identity.verification_uri = None;
-    save(directory, identity)
-}
-
-#[derive(Deserialize)]
 struct Library {
-    id: String,
+    #[serde(default, alias = "library_id")]
+    id: Option<String>,
     status: String,
-    services: Vec<String>,
+    #[serde(default)]
+    domain: Option<String>,
+    #[serde(default)]
+    services: Option<Vec<String>>,
     hostnames: Hosts,
+    #[serde(default)]
     public_listing: bool,
+    #[serde(default)]
     staff_remote_access: bool,
+    #[serde(default)]
+    staff_allow_cidrs: Vec<String>,
 }
 #[derive(Deserialize)]
 struct Provision {
     state: String,
+    #[serde(default)]
+    error: Option<serde_json::Value>,
 }
-fn provisioned(identity: &Identity, transport: &impl Transport) -> Result<(), String> {
-    let Some(job) = &identity.job else {
+fn provisioned(
+    directory: &Path,
+    identity: &mut Identity,
+    transport: &impl Transport,
+    clock: &impl FlowClock,
+) -> Result<(), String> {
+    let Some(job) = identity.job.clone() else {
         return Ok(());
     };
-    let started = Instant::now();
-    while started.elapsed() < Duration::from_mins(10) {
+    identity.phase = DomainPhase::Provisioning;
+    identity.failure = None;
+    save(directory, identity)?;
+    let deadline = clock.now().saturating_add(600);
+    while clock.now() < deadline {
         let result: Provision = identity
             .signed(transport, "GET", &format!("/v1/jobs/{job}"), &[])?
             .json()?;
         match result.state.as_str() {
             "done" | "succeeded" => return Ok(()),
-            "queued" | "running" => std::thread::sleep(Duration::from_secs(5)),
+            "queued" | "pending" | "running" => clock.wait(5),
             _ => {
+                let code = result.error.as_ref().and_then(|error| {
+                    error
+                        .as_str()
+                        .or_else(|| error.get("code").and_then(serde_json::Value::as_str))
+                });
+                identity.failure = Some(match code {
+                    Some(
+                        code @ ("dns_conflict" | "quota_exceeded" | "domain_unavailable"
+                        | "tunnel_failed"),
+                    ) => code.to_owned(),
+                    _ => "provisioning_failed".to_owned(),
+                });
+                identity.phase = DomainPhase::Failed;
+                save(directory, identity)?;
                 return Err(
                     "address provisioning failed; the private identity was preserved".to_owned(),
                 );
@@ -443,12 +400,28 @@ fn library(identity: &Identity, transport: &impl Transport) -> Result<Library, S
     let mut info: Library = identity
         .signed(transport, "GET", "/v1/library", &[])?
         .json()?;
-    info.hostnames.validate()?;
-    if Some(info.id.as_str()) != identity.library.as_deref()
-        || !info.services.iter().any(|value| value == "elzevir")
-        || info.status != "active"
+    info.hostnames.validate_for(identity.domain.as_deref())?;
+    if info
+        .id
+        .as_deref()
+        .is_some_and(|id| Some(id) != identity.library.as_deref())
+        || info
+            .services
+            .as_ref()
+            .is_some_and(|services| !services.iter().any(|value| value == "elzevir"))
+        || info
+            .domain
+            .as_deref()
+            .is_some_and(|domain| domain != crate::broker_protocol::DOMAIN)
+        || info.status.len() > 32
+        || info.status.chars().any(char::is_control)
+        || info.staff_allow_cidrs.len() > 20
+        || info
+            .staff_allow_cidrs
+            .iter()
+            .any(|cidr| cidr.parse::<ipnet::IpNet>().is_err())
     {
-        return Err("address service did not confirm an active Elzevir institution".to_owned());
+        return Err("address service returned an inconsistent institution".to_owned());
     }
     Ok(info)
 }
@@ -548,9 +521,13 @@ fn connect(
     identity: &mut Identity,
     transport: &impl Transport,
     connector: &impl Connector,
+    clock: &impl FlowClock,
 ) -> Result<(), String> {
-    provisioned(identity, transport)?;
+    provisioned(directory, identity, transport, clock)?;
     let info = library(identity, transport)?;
+    if info.status != "active" {
+        return Err("address service has not activated the institution".to_owned());
+    }
     identity.hosts = Some(info.hostnames.clone());
     let token: Token = identity
         .signed(transport, "GET", "/v1/tunnel-token", &[])?
@@ -562,14 +539,21 @@ fn connect(
     {
         return Err("invalid remote tunnel token".to_owned());
     }
+    // The daemon must enforce host separation even if starting the connector fails.
     identity.ready = true;
-    identity.job = None;
+    identity.phase = DomainPhase::Connecting;
+    identity.failure = None;
     save(directory, identity)?;
-    let result = connector.connect(directory, setup, &info.hostnames, &token.tunnel_token);
-    if result.is_err() {
+    if let Err(error) = connector.connect(directory, setup, &info.hostnames, &token.tunnel_token) {
+        identity.phase = DomainPhase::Failed;
+        identity.failure = Some("tunnel_failed".to_owned());
+        save(directory, identity)?;
         connector.stop(directory)?;
+        return Err(error);
     }
-    result
+    identity.job = None;
+    identity.phase = DomainPhase::Ready;
+    save(directory, identity)
 }
 pub(crate) fn execute(
     directory: &Path,
@@ -585,6 +569,23 @@ fn execute_with(
     transport: &impl Transport,
     connector: &impl Connector,
     progress: Option<&crate::process_runner::Progress>,
+) -> Result<(), String> {
+    execute_with_clock(
+        directory,
+        setup,
+        transport,
+        connector,
+        progress,
+        &NativeClock,
+    )
+}
+fn execute_with_clock(
+    directory: &Path,
+    setup: &Setup,
+    transport: &impl Transport,
+    connector: &impl Connector,
+    progress: Option<&crate::process_runner::Progress>,
+    clock: &impl FlowClock,
 ) -> Result<(), String> {
     if !crate::service::valid_name(&setup.service) {
         return Err("invalid address service name".to_owned());
@@ -605,16 +606,18 @@ fn execute_with(
             "address requires this institution without an existing own-domain tunnel".to_owned(),
         );
     }
-    let mut identity = selected_identity(directory, setup, &settings, transport)?;
+    let mut identity = selected_identity(directory, setup, &settings, transport, clock)?;
     if identity.origin != origin(&settings)? {
         return Err("configured origin differs from the enrolled origin".to_owned());
     }
     match &setup.action {
         Action::Enroll { .. } => {
-            enroll(directory, &mut identity, transport, progress)?;
-            connect(directory, setup, &mut identity, transport, connector)?;
+            enroll(directory, &mut identity, transport, progress, clock)?;
+            connect(directory, setup, &mut identity, transport, connector, clock)?;
         }
-        Action::Recover { .. } => connect(directory, setup, &mut identity, transport, connector)?,
+        Action::Recover { .. } => {
+            connect(directory, setup, &mut identity, transport, connector, clock)?;
+        }
         Action::Export { output } => {
             crate::backup_archive::write_new(
                 output,
@@ -627,27 +630,22 @@ fn execute_with(
         Action::Renew => {
             identity
                 .signed(transport, "POST", "/v1/rotate", b"{}")?
-                .json::<serde_json::Value>()?;
-            connect(directory, setup, &mut identity, transport, connector)?;
+                .success()?;
+            connect(directory, setup, &mut identity, transport, connector, clock)?;
         }
         Action::Withdraw => {
             connector.stop(directory)?;
             identity
                 .signed(transport, "DELETE", "/v1/library", &[])?
-                .json::<serde_json::Value>()?;
-            identity.ready = false;
-            save(directory, &identity)?;
-            if directory.join("secrets/cf-token.txt").exists() {
-                std::fs::remove_file(directory.join("secrets/cf-token.txt"))
-                    .map_err(|_| "cannot remove revoked connector token")?;
-            }
+                .success()?;
+            clear_binding(directory)?;
         }
         Action::Listing { public } => {
             let bytes = serde_json::to_vec(&serde_json::json!({"public":public}))
                 .map_err(|_| "cannot encode listing request")?;
             identity
                 .signed(transport, "PUT", "/v1/listing", &bytes)?
-                .json::<serde_json::Value>()?;
+                .success()?;
         }
         Action::Staff {
             username,
@@ -658,20 +656,18 @@ fn execute_with(
             let body = zeroize::Zeroizing::new(serde_json::to_vec(&serde_json::json!({"username":username,"password":password,"allow_cidrs":cidrs})).map_err(|_| "cannot encode staff access request")?);
             identity
                 .signed(transport, "PUT", "/v1/staff-credentials", &body)?
-                .json::<serde_json::Value>()?;
+                .success()?;
         }
         Action::DisableStaff => {
             identity
                 .signed(transport, "DELETE", "/v1/staff-credentials", &[])?
-                .json::<serde_json::Value>()?;
+                .success()?;
         }
-        Action::Refresh => {
-            library(&identity, transport)?;
-        }
+        Action::Refresh => {}
     }
     if !matches!(&setup.action, Action::Withdraw | Action::Export { .. }) {
         let info = library(&identity, transport)?;
-        let view = serde_json::json!({"schema":1,"at":jiff::Timestamp::now().to_string(),"catalog":info.hostnames.opac,"staff":info.hostnames.staff,"listed":info.public_listing,"staff_remote":info.staff_remote_access});
+        let view = serde_json::json!({"schema":1,"at":jiff::Timestamp::now().to_string(),"catalog":info.hostnames.opac,"staff":info.hostnames.staff,"listed":info.public_listing,"staff_remote":info.staff_remote_access,"staff_allow_cidrs":info.staff_allow_cidrs,"status":info.status});
         publish(
             directory,
             &directory.join("broker-observation.json"),
@@ -685,9 +681,10 @@ fn selected_identity(
     setup: &Setup,
     settings: &crate::server_config::Settings,
     transport: &impl Transport,
+    clock: &impl FlowClock,
 ) -> Result<Identity, String> {
     match &setup.action {
-        Action::Enroll { .. } => begin(directory, setup, settings, transport),
+        Action::Enroll { .. } => begin(directory, setup, settings, transport, clock),
         Action::Recover { input } => {
             let identity: Identity = serde_json::from_slice(&read(input)?)
                 .map_err(|_| "invalid address recovery file")?;
@@ -701,7 +698,6 @@ fn selected_identity(
                     return Err("existing address identity differs from the recovery file; it was preserved".to_owned());
                 }
             }
-            check_capabilities(transport, &identity.base)?;
             library(&identity, transport)?;
             if identity.origin != origin(settings)? {
                 return Err("recovery requires the original loopback origin port; review server configuration".to_owned());
@@ -709,7 +705,7 @@ fn selected_identity(
             save(directory, &identity)?;
             identity
                 .signed(transport, "POST", "/v1/rotate", b"{}")?
-                .json::<serde_json::Value>()?;
+                .success()?;
             Ok(identity)
         }
         _ => load(directory),
@@ -733,6 +729,9 @@ fn validate_staff(username: &str, password: &str, cidrs: &[String]) -> Result<()
     Ok(())
 }
 pub(crate) fn heartbeat(directory: &Path) -> Result<(), String> {
+    heartbeat_with(directory, &Http)
+}
+fn heartbeat_with(directory: &Path, transport: &impl Transport) -> Result<(), String> {
     if !location(directory).exists() {
         return Ok(());
     }
@@ -744,8 +743,8 @@ pub(crate) fn heartbeat(directory: &Path) -> Result<(), String> {
         serde_json::to_vec(&serde_json::json!({"installer_version":env!("CARGO_PKG_VERSION")}))
             .map_err(|_| "cannot encode address heartbeat")?;
     identity
-        .signed(&Http, "POST", "/v1/heartbeat", &body)?
-        .json::<serde_json::Value>()?;
+        .signed(transport, "POST", "/v1/heartbeat", &body)?
+        .success()?;
     Ok(())
 }
 pub(crate) fn hosts(directory: &Path) -> Result<Option<Hosts>, String> {
@@ -790,7 +789,9 @@ pub(crate) fn panel_setup(
         } => {
             service.clone_from(name_service);
             Action::Enroll {
-                base: base.clone(),
+                base: crate::broker_protocol::configured_url(
+                    (!base.is_empty()).then_some(base.as_str()),
+                )?,
                 institution: institution.clone(),
                 email: email.clone(),
                 name: name.clone(),
@@ -851,9 +852,13 @@ struct Observation {
     staff: String,
     listed: bool,
     staff_remote: bool,
+    #[serde(default)]
+    staff_allow_cidrs: Vec<String>,
+    #[serde(default)]
+    status: Option<String>,
 }
-pub(crate) fn observe(directory: &Path) -> Result<Option<elzevir_panel::RemoteAddress>, String> {
-    let Some(hosts) = hosts(directory)? else {
+fn observation(directory: &Path, identity: &Identity) -> Result<Option<Observation>, String> {
+    let Some(hosts) = &identity.hosts else {
         return Ok(None);
     };
     let path = directory.join("broker-observation.json");
@@ -870,14 +875,31 @@ pub(crate) fn observe(directory: &Path) -> Result<Option<elzevir_panel::RemoteAd
         || observed.catalog != hosts.opac
         || observed.staff != hosts.staff
         || at.as_second() > jiff::Timestamp::now().as_second().saturating_add(300)
+        || observed.staff_allow_cidrs.len() > 20
+        || observed
+            .staff_allow_cidrs
+            .iter()
+            .any(|value| value.parse::<ipnet::IpNet>().is_err())
     {
         return Err("address observation does not match the current identity".to_owned());
     }
-    Ok(Some(elzevir_panel::RemoteAddress {
-        at: observed.at,
-        listed: observed.listed,
-        staff_remote: observed.staff_remote,
-    }))
+    Ok(Some(observed))
+}
+pub(crate) fn observe(directory: &Path) -> Result<Option<elzevir_panel::RemoteAddress>, String> {
+    if !location(directory).exists() {
+        return Ok(None);
+    }
+    let identity = load(directory)?;
+    if !identity.ready {
+        return Ok(None);
+    }
+    Ok(
+        observation(directory, &identity)?.map(|observed| elzevir_panel::RemoteAddress {
+            at: observed.at,
+            listed: observed.listed,
+            staff_remote: observed.staff_remote,
+        }),
+    )
 }
 
 #[cfg(test)]
@@ -909,8 +931,7 @@ mod tests {
             assert_eq!((method, path), (expected_method, expected_path));
             if path == "/v1/device/start" {
                 let value: serde_json::Value = serde_json::from_slice(body).unwrap();
-                assert_eq!(value["origin"], "http://[::1]:9099");
-                assert_eq!(value["services"], serde_json::json!(["elzevir"]));
+                assert_eq!(value["domain"], "elzevir.app");
             }
             if path == "/v1/enroll" {
                 let value: serde_json::Value = serde_json::from_slice(body).unwrap();
@@ -924,8 +945,7 @@ mod tests {
             }
             if path == "/v1/device/start" {
                 let request: serde_json::Value = serde_json::from_slice(body).unwrap();
-                assert_eq!(request["origin"], "http://[::1]:9099");
-                assert_eq!(request["services"], serde_json::json!(["elzevir"]));
+                assert_eq!(request["domain"], "elzevir.app");
             }
             if matches!(path, "/v1/library" | "/v1/tunnel-token") {
                 assert!(headers.iter().any(|(name, _)| *name == "X-KEI-Signature"));
@@ -962,7 +982,7 @@ mod tests {
             Ok(())
         }
     }
-    fn fixture(directory: &Path) -> Setup {
+    pub(super) fn fixture(directory: &Path) -> Setup {
         let config = directory.join("server.toml");
         std::fs::write(
             &config,
@@ -987,52 +1007,43 @@ mod tests {
         }
     }
     fn info() -> serde_json::Value {
-        serde_json::json!({"id":"fictional-library","status":"active","services":["elzevir"],"hostnames":{"opac":"catalog.example.org","staff":"staff.example.org"},"public_listing":false,"staff_remote_access":false})
+        serde_json::json!({"id":"fictional-library","status":"active","services":["elzevir"],"hostnames":{"opac":"fictional.elzevir.app","staff":"fictional-admin.elzevir.app"},"public_listing":false,"staff_remote_access":false})
     }
     #[test]
-    fn unsupported_broker_cannot_receive_personal_data_or_create_identity() {
+    fn changing_broker_never_sends_an_existing_identity_or_contact_to_another_service() {
         let directory = tempfile::tempdir().unwrap();
-        let setup = fixture(directory.path());
+        let mut setup = fixture(directory.path());
+        let connection = Connection(Cell::new(false));
+        execute_with(directory.path(), &setup, &happy_broker(), &connection, None).unwrap();
+        let public = load(directory.path()).unwrap().key().unwrap().public();
+        if let Action::Enroll { base, .. } = &mut setup.action {
+            *base = "https://other.example.org".to_owned();
+        }
         let fake = Fake {
-            replies: RefCell::new(VecDeque::from([(
-                "GET",
-                "/v1/capabilities",
-                serde_json::json!({"services":["koha"]}),
-            )])),
+            replies: RefCell::new(VecDeque::new()),
             calls: Cell::new(0),
         };
-        let connection = Connection(Cell::new(false));
-        assert!(
-            execute_with(directory.path(), &setup, &fake, &connection, None)
-                .unwrap_err()
-                .starts_with("B1:")
+        connection.0.set(false);
+        assert!(execute_with(directory.path(), &setup, &fake, &connection, None).is_err());
+        assert_eq!(fake.calls.get(), 0);
+        assert_eq!(
+            load(directory.path()).unwrap().key().unwrap().public(),
+            public
         );
-        assert_eq!(fake.calls.get(), 1);
-        assert!(!location(directory.path()).exists());
         assert!(!connection.0.get());
     }
     fn happy_broker() -> Fake {
         Fake {
             replies: RefCell::new(VecDeque::from([
                 (
-                    "GET",
-                    "/v1/capabilities",
-                    serde_json::json!({"services":["elzevir"],"elzevir":{"contract":1,"configurable_origin":true}}),
-                ),
-                (
                     "POST",
                     "/v1/device/start",
-                    serde_json::json!({"device_code":"fictional-device","verification_uri":"https://broker.example.org/join?c=BCDF-GHJK","expires_in":600,"interval":1}),
-                ),
-                (
-                    "POST",
-                    "/v1/device/poll",
-                    serde_json::json!({"status":"approved"}),
+                    serde_json::json!({"device_code":"fictional-device","verification_uri":"https://broker.example.org/join?c=BCDF-GHJK","domain":"elzevir.app","status":"approved","expires_in":600,"interval":1}),
                 ),
                 (
                     "POST",
                     "/v1/enroll",
-                    serde_json::json!({"library_id":"fictional-library","job_id":"fictional-job","hostnames":{"opac":"catalog.example.org","staff":"staff.example.org"}}),
+                    serde_json::json!({"library_id":"fictional-library","job_id":"fictional-job","domain":"elzevir.app","hostnames":{"opac":"fictional.elzevir.app","staff":"fictional-admin.elzevir.app"}}),
                 ),
                 (
                     "GET",
@@ -1076,7 +1087,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let setup = fixture(directory.path());
         let first = happy_broker();
-        first.replies.borrow_mut().get_mut(1).unwrap().2 =
+        first.replies.borrow_mut().get_mut(0).unwrap().2 =
             serde_json::json!({"lost_response":true});
         let connection = Connection(Cell::new(false));
         assert!(execute_with(directory.path(), &setup, &first, &connection, None).is_err());
@@ -1090,18 +1101,17 @@ mod tests {
         assert!(connection.0.get());
     }
     #[test]
-    fn consumed_enrollment_after_lost_response_reuses_the_same_signing_key() {
+    fn approved_enrollment_after_lost_response_reuses_the_same_signing_key() {
         let directory = tempfile::tempdir().unwrap();
         let setup = fixture(directory.path());
         let first = happy_broker();
-        first.replies.borrow_mut().get_mut(3).unwrap().2 =
+        first.replies.borrow_mut().get_mut(1).unwrap().2 =
             serde_json::json!({"lost_response":true});
         let connection = Connection(Cell::new(false));
         assert!(execute_with(directory.path(), &setup, &first, &connection, None).is_err());
         let public_key = load(directory.path()).unwrap().key().unwrap().public();
         let retry = happy_broker();
-        retry.replies.borrow_mut().remove(1);
-        retry.replies.borrow_mut().get_mut(1).unwrap().2 = serde_json::json!({"status":"consumed"});
+        retry.replies.borrow_mut().remove(0);
         execute_with(directory.path(), &setup, &retry, &connection, None).unwrap();
         assert_eq!(
             load(directory.path()).unwrap().key().unwrap().public(),
@@ -1123,14 +1133,9 @@ mod tests {
         setup.action = Action::Recover { input: exported };
         for lost in [true, false] {
             let mut replies = happy_broker().replies.into_inner();
-            replies.retain(|(_, path, _)| {
-                matches!(
-                    *path,
-                    "/v1/capabilities" | "/v1/library" | "/v1/tunnel-token"
-                )
-            });
+            replies.retain(|(_, path, _)| matches!(*path, "/v1/library" | "/v1/tunnel-token"));
             replies.insert(
-                2,
+                1,
                 (
                     "POST",
                     "/v1/rotate",
@@ -1147,7 +1152,7 @@ mod tests {
             };
             fake.replies
                 .borrow_mut()
-                .insert(3, ("GET", "/v1/library", info()));
+                .insert(2, ("GET", "/v1/library", info()));
             connection.0.set(false);
             assert_eq!(
                 execute_with(directory.path(), &setup, &fake, &connection, None).is_err(),
@@ -1161,3 +1166,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "broker_contract_tests.rs"]
+mod contract_tests;

@@ -93,9 +93,33 @@ sync/purge sobre o remoto. Falha de envio preserva a cópia local.
 
 Domínio é opcional e pode ser escolhido posteriormente, sem recompilar.
 Domínio próprio requer autorização da conta Cloudflare e dois hostnames
-distintos para catálogo/equipe. O endereço gratuito requer um broker externo
-compatível com o contrato B1. A implementação local não implanta esse serviço,
-nem registra domínio/DNS. O teste público real é feito depois da configuração.
+distintos para catálogo/equipe. Para endereço gratuito, abra **Endereços e acesso**
+e pressione **g** no fluxo **Domínio & Túnel (*.elzevir.app)**. O padrão é
+https://broker.elzevir.app; deixe o campo de URL vazio para usar esse padrão ou
+ELZEVIR_BROKER_URL. Informe biblioteca, contato e slug opcional. Confirme o
+cadastro e, se houver revisão pendente, use o link de autorização apresentado.
+O painel retoma o provisionamento e mostra os endereços atribuídos e o estado
+local do cloudflared. Use **c** para atualizar o estado remoto, **w/W** para
+configurar/desativar acesso da equipe, **n** para rotacionar o token e **z**
+para desvincular. Testes HTTPS continuam disponíveis em **t**.
+
+A CLI oferece o mesmo fluxo (terminal de administrador/operador):
+
+```sh
+elzevir address --config /caminho/server.toml --confirm --wait enroll --institution 'Fictional library' --email contato@example.org --name minha-biblioteca
+elzevir address --config /caminho/server.toml status
+elzevir address --config /caminho/server.toml --wait refresh
+elzevir address --config /caminho/server.toml --confirm --wait staff --username equipe --cidr 192.0.2.0/24
+elzevir address --config /caminho/server.toml --confirm --wait renew
+```
+
+A inscrição aceita `--broker` ou `--broker-url` para override da URL HTTPS.
+A senha remota é lida de forma mascarada, sem argumento de linha de comando.
+A identidade Ed25519 fica no arquivo privado `DATA_DIR/secrets/broker.json`.
+Instalar/iniciar o programa não registra domínio nem DNS automaticamente;
+esses efeitos só ocorrem após o cadastro confirmado pelo operador. O contrato
+é validado com respostas simuladas; a validação pública real exige executar
+o fluxo contra o serviço e testar DNS/HTTPS.
 
 ## Atualizações
 
@@ -128,7 +152,7 @@ segurança para nova tentativa.
 | A8–A9 | Workflow de quatro alvos, checksums e instaladores | Executar/publicar uma release validada |
 | P1–P4 | Painel, observações, diagnóstico e modos de acesso | Avaliação de uso |
 | P5 | Túnel de domínio próprio e teste público | Conta Cloudflare, DNS e domínio escolhido |
-| P6–P7 | Cliente B1, equipe remota, listagem, recuperação e QR | Implantar broker compatível e validar o fluxo público |
+| P6–P7 | Device Flow do kei-broker, domínio gratuito elzevir.app, equipe remota, recuperação e QR | Validar inscrição, DNS/HTTPS e túnel no serviço público |
 | P8–P10 | Central de backup, rclone, crypt e planos de nuvem | Autorizar/testar provedores escolhidos |
 | P11 | Atualizações e recuperação do Elzevir e das ferramentas | Pacotes oficiais e execução nativa |
 | P12 | Contagem de sessões, reinício de serviço e máquina | Controle nativo na máquina do operador |

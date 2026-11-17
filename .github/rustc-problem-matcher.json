@@ -1,0 +1,15 @@
+{
+  "problemMatcher": [
+    {
+      "owner": "elzevir-rustc",
+      "severity": "error",
+      "pattern": [
+        {
+          "regexp": "^error(?:\\[([^\\]]+)\\])?: (.+)$",
+          "code": 1,
+          "message": 2
+        }
+      ]
+    }
+  ]
+}

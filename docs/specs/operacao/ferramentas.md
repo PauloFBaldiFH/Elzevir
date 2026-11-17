@@ -40,13 +40,14 @@ interação na conta do operador e só o endereço autorizado aparece na UI. O
 config de cloudflared é gerado de dados tipados (JSON compatível com YAML).
 Teste e log são projeções limitadas, sem conteúdo de tokens/certificados.
 
-Endereço gratuito consulta `/v1/capabilities` antes de pedir inscrição. Sem
-suporte explícito a `elzevir` e origem configurável, recusa cadastro e informa a
-dependência B1; não tenta publicar como Koha. Assinaturas seguem KEI-SIG-v1,
-Ed25519, relógio UTC e nonce aleatório. Recuperação inclui chave somente em
-arquivo privado explicitamente exportado. Credenciais de equipe remota,
-listagem pública, renovação e desistência têm confirmação própria. QR contém
-somente endereço público validado, nunca token ou chave.
+Endereço gratuito usa https://broker.elzevir.app e a zona elzevir.app,
+com override explícito por flag ou ELZEVIR_BROKER_URL. Segue o Device Flow e
+as rotas assinadas descritas em [broker.md](broker.md), sem exigir capabilities.
+A origem configurada e a separação de hostnames do Elzevir são preservadas.
+Assinaturas seguem KEI-SIG-v1, Ed25519, relógio UTC e nonce aleatório.
+Recuperação inclui chave somente em arquivo privado explicitamente exportado.
+Credenciais de equipe remota, rotação e desvinculação têm confirmação própria.
+QR contém somente endereço público validado, nunca token ou chave.
 
 A configuração de nuvem deriva das opções de `rclone config providers`, com
 limites de campos e tamanhos. Segredos usam entrada privada e arquivos; o

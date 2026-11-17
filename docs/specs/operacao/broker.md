@@ -1,56 +1,73 @@
-# Endereço gratuito e recuperação — P6/P7
+# Domínio e túnel Elzevir — P6/P7
 
-O domínio público pode ser definido depois da instalação. Não há URL de broker
-nem sufixo de domínio embutidos no cliente: a URL entra na inscrição e os
-hostnames do catálogo e da equipe vêm da resposta validada do serviço. Sem
-inscrição, o Elzevir continua funcionando localmente; não cria identidade,
-DNS ou túnel automaticamente. A ausência de domínio não bloqueia a instalação,
-o painel, os backups nem os agendamentos.
+O serviço padrão é https://broker.elzevir.app e o domínio solicitado é
+elzevir.app. A CLI aceita --broker/--broker-url; a variável ELZEVIR_BROKER_URL
+substitui o padrão quando não há flag. No painel, URL vazia usa ambiente/padrão.
+A escolha do endpoint é persistida com a identidade: mudar o ambiente não troca
+silenciosamente o serviço de uma inscrição existente. Instalar/iniciar o
+Elzevir não registra biblioteca, DNS ou túnel automaticamente.
 
-Para ativar o endereço gratuito posteriormente, é necessário disponibilizar um
-broker compatível com o contrato abaixo, configurar seu domínio/DNS e informar
-sua URL HTTPS na inscrição. Essa etapa requer teste real de provisionamento e
-acesso público; testes locais do cliente não comprovam a implantação externa.
+## Registro
 
-O operador informa a URL HTTPS do broker. O cliente recusa redirecionamentos,
-credenciais na URL, query/fragmento e caminhos de base. Antes de enviar nome ou
-contato, exige `services` contendo `elzevir` e a capacidade versionada
-`elzevir: {contract: 1, configurable_origin: true}`. Sem isso, informa B1 e não
-cria inscrição. Esse contrato exige implementação e implantação no repositório
-do broker; a integração local não ativa um serviço externo automaticamente.
+O cliente não exige /v1/capabilities nem o anúncio B1 do protótipo anterior.
+POST /v1/device/start envia institution_name, contact_email, requested_name
+quando preenchido e domain=elzevir.app; CNPJ é omitido. Não exige campos
+extras ou extensões do broker anterior. A origem HTTP loopback e a porta
+configurada continuam registradas localmente para validar retomada e recuperação.
+A resposta informa status, domain, suggested_slug, expires_in e interval;
+verification_uri e hostnames são opcionais. Se approved, segue direto para
+enroll. Se pending, espera interval antes de cada POST /v1/device/poll;
+respeita um novo interval válido e termina em approved, denied ou expired.
+Polling e provisionamento têm prazo total limitado e relógio substituível nos
+testes. Consumed continua aceito para repetir enroll após perda de resposta.
 
-`POST /v1/device/start` recebe os campos KEI existentes e `origin`, a URL HTTP
-loopback com porta real do Elzevir. O broker deve persistir essa origem junto
-à inscrição e gerar ingress para os hostnames `opac` e `staff`. Não usa portas
-padrão do Koha. Aprovação usa `/v1/device/poll`; inscrição envia chave pública
-Ed25519 raw de 32 bytes em Base64 padrão. O fluxo mantém uma identidade privada
-antes da inscrição e guarda library/job IDs antes de esperar provisionamento.
+POST /v1/enroll envia device_code e chave pública Ed25519 raw de 32 bytes em
+Base64 padrão; aceita 202 com library_id, job_id, domain e hostnames. Antes de
+qualquer efeito no host, valida domain=elzevir.app e o par de nomes
+<slug>.elzevir.app / <slug>-admin.elzevir.app. O cliente não publica Elzevir
+como Koha e não aceita os dois usos no mesmo hostname.
 
-Requisições posteriores assinam exatamente `KEI-SIG-v1`, método maiúsculo,
-caminho e query, segundos UTC, nonce aleatório e SHA-256 do corpo, separados
-por newline e sem newline final. Assinaturas usam implementação criptográfica
-existente. Timeout, corpo e repetição são limitados. Respostas e mensagens
-remotas não entram nos logs nem no histórico. Falhas não publicam endereços
-como testados e não substituem identidade existente.
+A chave é gerada localmente e salva antes de enviar a inscrição. A configuração
+privada em DATA_DIR/secrets/broker.json contém private_key (seed Ed25519 de
+32 bytes em Base64), library_id, hostnames, domínio, URL e progresso. Lê também
+os nomes seed/library/hosts de configurações anteriores. IDs são persistidos
+antes de esperar GET /v1/jobs/<id>; repetir uma operação retoma o trabalho em
+vez de gerar outra identidade. Configurações antigas sem domínio continuam
+legíveis, sem serem convertidas silenciosamente para outro endereço.
 
-Só um conector gerenciado por instituição. O modo por hostname é validado no
-servidor antes de iniciar o túnel; o token fica em arquivo privado, nunca em
-argv. Um batimento por hora pertence ao trabalhador do servidor. A resposta do
-broker é uma observação; não modifica a senha local da equipe.
+## Assinaturas e operações
 
-Listagem, credenciais da borda, renovar token e desistir exigem intenções
-separadas. Senha remota usa formulário mascarado ou prompt privado, sem opção
-CLI com texto da senha. Faixas CIDR são validadas e limitadas a vinte.
+Os quatro headers X-KEI-Library/Timestamp/Nonce/Signature seguem KEI-SIG-v1:
+método maiúsculo, path/query exato, segundos UTC, nonce URL-safe e SHA-256 hex
+do corpo, separados por newline sem newline final. GET/DELETE sem corpo
+assinam os bytes vazios. Respostas de operações sem payload aceitam 204.
 
-Recuperação exporta JSON versionado com identidade Ed25519, biblioteca e URL
-em arquivo novo privado. Importação valida a capacidade, a assinatura em
-`GET /v1/library` e os hostnames antes de persistir a identidade, e renova o
-token. Não executa conteúdo do arquivo. Se a renovação falhar, mantém os dados
-para repetir a operação e informa falha; não declara exclusão do host anterior.
-QR representa exclusivamente a URL pública do catálogo.
+GET /v1/jobs/<id> espera done; failed preserva a identidade e apresenta erro
+classificado, sem copiar tokens ou mensagens remotas livres para a interface.
+GET /v1/tunnel-token fornece o token ao cloudflared por arquivo privado
+(token-file), equivalente à opção --token sem expor o segredo em argv.
+GET /v1/library observa estado, hostnames, staff_remote_access e
+staff_allow_cidrs; campos opcionais como services/public_listing não são
+pré-requisitos do novo contrato.
 
-B1 também deve tornar `/v1/enroll` idempotente para a mesma dupla
-`device_code`/chave pública, devolvendo os mesmos IDs após perda da resposta.
-O cliente repete a inscrição quando o poll informa `consumed`; outra chave
-continua recusada. A capacidade de contrato 1 só deve ser anunciada depois de
-validar origem, idempotência e a proteção/listagem de equipe para Elzevir.
+PUT/DELETE /v1/staff-credentials gerencia acesso remoto independentemente da
+senha local. Senhas têm 12–256 caracteres e entrada mascarada; CIDRs são
+validados. POST /v1/rotate busca novo token e reconecta; POST /v1/heartbeat
+envia installer_version. DELETE /v1/library para o conector e desprovisiona;
+só depois da confirmação remota limpa o vínculo local, permitindo novo cadastro.
+URL HTTPS, corpos, prazos, nonce, nomes e arquivos têm limites explícitos.
+
+## Painel e recuperação
+
+A seção Endereços apresenta o fluxo Domínio & Túnel (*.elzevir.app), com ações
+separadas de registrar/retomar, atualizar estado, configurar/desativar equipe,
+rotacionar e desvincular. Mostra fase de autorização/provisionamento/conexão,
+endereços atribuídos, observação remota e estado local do serviço cloudflared.
+Endereço atribuído/configurado não é prova de disponibilidade pública: os
+resultados do teste HTTPS continuam separados. Abrir a tela não chama o broker. Sem observação do gerenciador local, o estado
+do conector é desconhecido, inclusive antes do primeiro cadastro.
+
+Exportar a identidade exige arquivo privado novo. Recuperação valida domínio,
+biblioteca e chave antes de persistir; renova o token e permite repetir após
+falha. QR representa somente a URL pública do catálogo. A validação do contrato
+usa respostas simuladas, sem criar conta, DNS, túnel ou inscrição de verdade.
