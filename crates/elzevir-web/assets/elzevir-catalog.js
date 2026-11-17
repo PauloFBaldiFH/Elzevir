@@ -1707,3 +1707,74 @@ document.addEventListener("change", (event) => {
   icon.hidden = !symbol;
   icon.querySelector("use")?.setAttribute("href", `/static/elzevir-icons.svg#${symbol}`);
 });
+
+// Families selected for a batch action (lote.md, items 1 to 8): kept in the tab, across
+// pages, searches and lists.
+const SELECTION_KEY = "elzevir-selection";
+const MAX_SELECTION = 500;
+
+function storedSelection() {
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(SELECTION_KEY) ?? "[]");
+    return Array.isArray(stored) ? stored.filter((head) => typeof head === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+const selected = new Set(storedSelection().slice(0, MAX_SELECTION));
+
+function saveSelection() {
+  try {
+    sessionStorage.setItem(SELECTION_KEY, JSON.stringify([...selected]));
+  } catch {
+    // Without storage the selection lasts until the page changes.
+  }
+}
+
+function showSelection() {
+  for (const box of document.querySelectorAll("input.family-select")) {
+    box.checked = selected.has(box.value);
+  }
+  const bar = document.querySelector(".selection-bar");
+  if (!bar) return;
+  bar.hidden = selected.size === 0;
+  bar.querySelector(".selection-count").textContent = String(selected.size);
+  bar.querySelector(".selection-full").hidden = selected.size < MAX_SELECTION;
+  const heads = [...selected].map((head) => `head=${encodeURIComponent(head)}`).join("&");
+  for (const link of bar.querySelectorAll("a.selection-export")) {
+    link.href = `/equipe/acervo/lote/marc?format=${link.dataset.format}&${heads}`;
+  }
+}
+
+document.addEventListener("click", (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  // The box sits in the row's summary: ticking it must not open the family.
+  const box = target?.closest("input.family-select");
+  if (box) {
+    event.stopPropagation();
+    return;
+  }
+  if (target?.closest(".selection-clear")) {
+    selected.clear();
+    saveSelection();
+    showSelection();
+  }
+}, true);
+
+document.addEventListener("change", (event) => {
+  const box = event.target;
+  if (!(box instanceof HTMLInputElement) || !box.classList.contains("family-select")) return;
+  if (box.checked && selected.size >= MAX_SELECTION) {
+    box.checked = false;
+  } else if (box.checked) {
+    selected.add(box.value);
+  } else {
+    selected.delete(box.value);
+  }
+  saveSelection();
+  showSelection();
+});
+
+showSelection();
+document.addEventListener("htmx:afterSettle", showSelection);

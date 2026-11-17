@@ -518,6 +518,44 @@ async fn a_malformed_cursor_starts_from_the_first_page() {
 }
 
 #[tokio::test]
+async fn the_selected_families_are_exported_as_one_file() {
+    let app = app();
+    let uri = "/equipe/acervo/lote/marc?format=marcxml&head=w1&head=w2&head=w1&head=zz";
+    let refused = send(&app, get(uri, None, None)).await;
+    assert_eq!(refused.status(), StatusCode::SEE_OTHER);
+    let session = signed_in(&app).await;
+    // Each row has its box, and the bar waits hidden for a selection.
+    let page = body(send(&app, get("/equipe/acervo", Some(&session), None)).await).await;
+    assert!(page.contains(r#"<input type="checkbox" class="family-select" value="w1""#));
+    assert!(page.contains(
+        r#"<div class="selection-bar" role="region" aria-label="Selected families" hidden>"#
+    ));
+    // Work 2's Instance has no stored record: it is left out, Work 1's comes once.
+    let xml = send(&app, get(uri, Some(&session), None)).await;
+    assert_eq!(xml.status(), StatusCode::OK);
+    assert_eq!(
+        xml.headers()[header::CONTENT_DISPOSITION],
+        r#"attachment; filename="elzevir-lote.xml""#
+    );
+    let xml = body(xml).await;
+    assert!(xml.starts_with("<?xml") && xml.ends_with("</collection>\n"));
+    assert_eq!(xml.matches("<record>").count(), 1);
+    let marc21 = send(
+        &app,
+        get("/equipe/acervo/lote/marc?head=w1", Some(&session), None),
+    )
+    .await;
+    assert_eq!(marc21.headers()[header::CONTENT_TYPE], "application/marc");
+    for bad in [
+        "/equipe/acervo/lote/marc?format=pdf&head=w1",
+        "/equipe/acervo/lote/marc?format=marc21&head=x9",
+    ] {
+        let response = send(&app, get(bad, Some(&session), None)).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{bad}");
+    }
+}
+
+#[tokio::test]
 async fn one_record_is_exported_as_marc21_or_marcxml() {
     let app = app();
     let refused = send(&app, get("/equipe/acervo/instancia/10/marc", None, None)).await;

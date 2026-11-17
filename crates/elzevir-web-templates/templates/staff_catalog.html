@@ -19,6 +19,13 @@
   </div>
 </div>
 <nav class="trail" aria-label="{{ t.get("staff-catalog-focus-label") }}" hidden><span>{{ t.get("staff-catalog-title") }}</span> › <strong class="trail-family"></strong> <span class="trail-level" hidden></span></nav>
+<div class="selection-bar" role="region" aria-label="{{ t.get("selection-label") }}" hidden>
+  <span>{{ t.get("selection-count") }} <strong class="selection-count">0</strong></span>
+  <span class="selection-full muted" hidden>{{ t.get("selection-full") }}</span>
+  <a class="selection-export" data-format="marc21" href="/equipe/acervo/lote/marc" download>{{ t.get("selection-export-marc21") }}</a>
+  <a class="selection-export" data-format="marcxml" href="/equipe/acervo/lote/marc" download>{{ t.get("selection-export-marcxml") }}</a>
+  <button type="button" class="selection-clear">{{ t.get("selection-clear") }}</button>
+</div>
 <section id="families" aria-live="polite"{% if let Some(scan) = scan %} data-scan="{{ scan.kind }}"{% if let Some(instance) = scan.instance %} data-scan-instance="{{ instance }}"{% endif %}{% if let Some(item) = scan.item %} data-scan-item="{{ item }}"{% endif %}{% if let Some(isbn) = scan.isbn %} data-scan-isbn="{{ isbn }}"{% endif %}{% endif %}>
   {% if let Some(strip) = strip %}
   <div class="facet-strip" role="group" aria-label="{{ t.get("facet-strip-label") }}">
@@ -48,6 +55,7 @@
     <li class="family" id="f-{{ family.head }}" data-head="{{ family.head }}">
      <details class="family-focus"{% if family.open %} open{% endif %}>
       <summary class="family-row">
+        <input type="checkbox" class="family-select" value="{{ family.head }}" aria-label="{{ t.get("selection-select") }}">
         <svg class="row-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ family.icon }}"></use></svg>
         <span class="row-title"><strong>{{ family.title }}</strong>{% if family.hub.is_some() %} <span class="row-hub">{{ t.get("staff-badge-hub") }}</span>{% endif %} <span class="row-shape">{{ family.shape_text(t) }}</span></span>
         <span class="row-agents">{% for authority in family.authorities %}{% if !authority.subject %}<span class="chip chip-agent"><svg class="badge-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ authority.icon }}"></use></svg>{{ authority.name }}</span>{% endif %}{% endfor %}</span>
