@@ -16,6 +16,7 @@ pub(crate) enum Event {
     IndexerFailed,
     IndexerPanicked,
     RuntimeCleanupFailed,
+    AdminHandlerFailed,
 }
 
 /// Records a known event with the identity generated for this execution.
@@ -38,6 +39,9 @@ pub(crate) fn emit(instance: &str, event: Event) {
         }
         Event::IndexerPanicked => {
             tracing::warn!(target: TARGET, institution = "local", instance, event = "indexer.panicked", "indexer worker panicked");
+        }
+        Event::AdminHandlerFailed => {
+            tracing::warn!(target: TARGET, institution = "local", instance, event = "admin.handler_failed", "administrative handler failed");
         }
         Event::RuntimeCleanupFailed => {
             tracing::warn!(target: TARGET, institution = "local", instance, event = "runtime.cleanup_failed", "runtime metadata cleanup failed");

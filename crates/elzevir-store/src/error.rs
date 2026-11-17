@@ -5,6 +5,9 @@
 /// the batch.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum StoreError {
+    /// Snapshot or verification failed without changing the active database.
+    #[error("snapshot: {0}")]
+    Backup(String),
     /// An external reader prevented the final truncate checkpoint.
     #[error("database checkpoint is busy")]
     CheckpointBusy,

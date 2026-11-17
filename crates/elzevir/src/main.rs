@@ -6,17 +6,38 @@
     reason = "the command line reports errors on the terminal"
 )]
 
+mod access_config;
+mod addresses;
+mod admin;
+mod backup_archive;
+mod backup_cli;
 mod catalog_cli;
 mod config;
+mod diagnostic_logs;
+mod diagnostics;
+mod file_owner;
 mod health;
+mod host_jobs;
+mod http_client;
 mod init;
 mod koha_codes;
 mod local_disk;
 mod logging;
 mod memory;
+mod operations;
+mod operations_cli;
+mod operations_config;
+mod panel_cli;
+mod process_runner;
+mod release;
+mod restore_journal;
 mod runtime_info;
 mod server_config;
+mod service;
+mod shutdown;
 mod status;
+mod support_archive;
+mod update;
 
 use std::future::IntoFuture;
 use std::io::BufRead;
@@ -47,12 +68,28 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    #[command(hide = true)]
+    HostJob(host_jobs::Args),
+    /// Install a verified release with backup and automatic rollback.
+    Update(update::Args),
     /// Serves the OPAC and the staff interface.
     Serve(server_config::ServeArgs),
     /// Initializes a new institution and its first administrator.
     Init(init::InitArgs),
     /// Reports local server status without opening its database.
     Status(status::StatusArgs),
+    /// Native administrative terminal panel.
+    Panel(panel_cli::PanelArgs),
+    /// Safe diagnostics and optional redacted support archive.
+    Diagnose(diagnostics::DiagnoseArgs),
+    /// Configured and observed local addresses.
+    Addresses(addresses::AddressArgs),
+    /// Create, verify, export and restore encrypted snapshots.
+    Backup(backup_cli::BackupArgs),
+    /// Observe jobs and configure operational schedules.
+    Operations(operations_cli::Args),
+    /// Manage the operating-system service.
+    Service(service::ServiceArgs),
     /// Manages staff accounts.
     #[command(subcommand)]
     Staff(StaffAction),
@@ -88,20 +125,20 @@ enum StaffAction {
 
 fn main() -> ExitCode {
     let result = match Cli::parse().command {
-        Command::Serve(args) => {
-            args.resolve()
-                .map_err(|error| error.to_string())
-                .and_then(|settings| {
-                    serve(
-                        &settings.data_dir,
-                        settings.listen,
-                        settings.insecure_cookies,
-                        settings.iri_base,
-                    )
-                })
-        }
+        Command::HostJob(args) => host_jobs::run(&args),
+        Command::Update(args) => update::run(args),
+        Command::Serve(args) => args
+            .resolve()
+            .map_err(|error| error.to_string())
+            .and_then(|settings| serve(&settings)),
         Command::Init(args) => init::run(&args),
         Command::Status(args) => status::run(args),
+        Command::Panel(args) => panel_cli::run(args),
+        Command::Diagnose(args) => diagnostics::run(args),
+        Command::Addresses(args) => addresses::run(args),
+        Command::Service(args) => service::run(args),
+        Command::Backup(args) => backup_cli::run(args),
+        Command::Operations(args) => operations_cli::run(args),
         Command::Staff(StaffAction::Add {
             data_dir,
             login,
@@ -131,6 +168,11 @@ pub(crate) struct DataDir {
 }
 
 pub(crate) fn open_store(data_dir: &Path) -> Result<DataDir, String> {
+    if restore_journal::pending(data_dir) {
+        return Err(
+            "interrupted restore requires backup recover-restore before startup".to_owned(),
+        );
+    }
     std::fs::create_dir_all(data_dir)
         .map_err(|e| format!("cannot create {}: {e}", data_dir.display()))?;
     let lock_path = data_dir.join("elzevir.lock");
@@ -238,12 +280,59 @@ impl Drop for Indexer {
     }
 }
 
-fn serve(
-    data_dir: &Path,
-    listen: SocketAddr,
-    insecure_cookies: bool,
-    iri_base: Option<String>,
+struct WebRuntime {
+    router: axum::Router,
+    state: AppState,
+}
+
+fn web_app(
+    store: &Arc<ElzevirStore>,
+    index: Arc<TantivyIndex>,
+    config: WebConfig,
+) -> Result<WebRuntime, String> {
+    let i18n = I18n::english().map_err(|error| error.to_string())?;
+    let opac = OpacPorts {
+        catalog: Arc::clone(store) as _,
+        index,
+    };
+    let staff_ports = StaffPorts {
+        listing: Arc::clone(store) as _,
+        records: Arc::clone(store) as _,
+        editor: Arc::clone(store) as _,
+        suggestions: Arc::clone(store) as _,
+        items: Arc::clone(store) as _,
+        statements: Arc::clone(store) as _,
+        history: Arc::clone(store) as _,
+        authorities: Arc::clone(store) as _,
+        work_lists: Arc::clone(store) as _,
+    };
+    let state = AppState::new(
+        Arc::clone(store) as _,
+        Arc::new(memory::AllocatorProbe),
+        opac,
+        staff_ports,
+        i18n,
+        config,
+    );
+    Ok(WebRuntime {
+        router: elzevir_web::router(state.clone()),
+        state,
+    })
+}
+
+fn serve(settings: &server_config::Settings) -> Result<(), String> {
+    serve_controlled(settings, &shutdown::Control::default(), || Ok(()))
+}
+
+fn serve_controlled(
+    settings: &server_config::Settings,
+    control: &shutdown::Control,
+    ready: impl FnOnce() -> Result<(), String>,
 ) -> Result<(), String> {
+    if control.requested() {
+        return Ok(());
+    }
+    let data_dir = &settings.data_dir;
     let loaded = config::load(data_dir)?;
     if let Some((path, report)) = &loaded.table_report {
         println!("{}", config::summary(path, report));
@@ -252,6 +341,11 @@ fn serve(
     let store = Arc::new(store);
     let _logs = logging::start(data_dir)?;
     let probe = Arc::new(health::Probe::new(Arc::clone(&store))?);
+    let operations = operations::Worker::start(
+        data_dir.to_owned(),
+        server_config::snapshot(settings).map_err(|_| "cannot snapshot operational settings")?,
+        Arc::clone(&store),
+    )?;
     let instance = probe.instance().to_owned();
     let result = (|| {
         let (index, parallelism) = open_index(data_dir)?;
@@ -262,58 +356,40 @@ fn serve(
             parallelism,
             Arc::clone(&probe),
         )?;
-        let i18n = I18n::english().map_err(|e| e.to_string())?;
-        let config = WebConfig {
-            secure_cookies: !insecure_cookies,
-            iri_base,
-            author_table: loaded.author_table,
-            time_zone: loaded.time_zone,
-            ..WebConfig::default()
-        };
-        let opac = OpacPorts {
-            catalog: Arc::clone(&store) as _,
+        let app = web_app(
+            &store,
             index,
-        };
-        let staff_ports = StaffPorts {
-            listing: Arc::clone(&store) as _,
-            records: Arc::clone(&store) as _,
-            editor: Arc::clone(&store) as _,
-            suggestions: Arc::clone(&store) as _,
-            items: Arc::clone(&store) as _,
-            statements: Arc::clone(&store) as _,
-            history: Arc::clone(&store) as _,
-            authorities: Arc::clone(&store) as _,
-            work_lists: Arc::clone(&store) as _,
-        };
-        let app = elzevir_web::router(AppState::new(
-            store,
-            Arc::new(memory::AllocatorProbe),
-            opac,
-            staff_ports,
-            i18n,
-            config,
-        ));
+            WebConfig {
+                secure_cookies: !settings.insecure_cookies,
+                iri_base: settings.iri_base.clone(),
+                author_table: loaded.author_table,
+                time_zone: loaded.time_zone,
+                ..WebConfig::default()
+            },
+        )?;
         let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
-        let result = runtime.block_on(async move {
-            let listener = tokio::net::TcpListener::bind(listen)
-                .await
-                .map_err(|e| format!("cannot listen on {listen}: {e}"))?;
-            let address = listener.local_addr().map_err(|error| error.to_string())?;
-            let health_listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-                .await
-                .map_err(|error| format!("cannot bind local health listener: {error}"))?;
-            let health_address = health_listener
-                .local_addr()
-                .map_err(|error| error.to_string())?;
-            let _metadata =
-                runtime_info::RuntimeFile::publish(data_dir, probe.instance(), health_address)?;
-            logging::emit(probe.instance(), logging::Event::ServerStarted);
-            println!("elzevir: listening on http://{address}");
-            println!("elzevir: health on http://{health_address}/health");
-            serve_http(listener, app, health_listener, probe).await
-        });
+        let result = runtime.block_on(run_http(
+            settings,
+            control,
+            ready,
+            app,
+            Arc::clone(&probe),
+            operations.client(),
+        ));
         drop(indexer);
-        result
+        // Runtime drop waits for blocking reads; keep the institution lock until all
+        // readers are gone and the existing writer has reported its final checkpoint.
+        drop(runtime);
+        operations.finish()?;
+        drop(probe);
+        let closed = Arc::try_unwrap(store)
+            .map_err(|_| "database still in use during shutdown".to_owned())
+            .and_then(|store| {
+                store
+                    .shutdown()
+                    .map_err(|_| "database shutdown/checkpoint failed".to_owned())
+            });
+        result.and(closed)
     })();
     logging::emit(
         &instance,
@@ -326,52 +402,139 @@ fn serve(
     result
 }
 
-async fn serve_http(
-    listener: tokio::net::TcpListener,
-    app: axum::Router,
-    health_listener: tokio::net::TcpListener,
+async fn run_http(
+    settings: &server_config::Settings,
+    control: &shutdown::Control,
+    ready: impl FnOnce() -> Result<(), String>,
+    web: WebRuntime,
     probe: Arc<health::Probe>,
+    operations: operations::Client,
 ) -> Result<(), String> {
+    let WebRuntime { router: app, state } = web;
+    let data_dir = &settings.data_dir;
+    let listen = settings.listen;
+    let catalog_policy = settings
+        .staff
+        .catalog_policy()
+        .map_err(|error| error.to_string())?;
+
+    let mut signals =
+        shutdown::Signals::register(control).map_err(|_| "cannot register shutdown signals")?;
+    let listener = tokio::net::TcpListener::bind(listen)
+        .await
+        .map_err(|e| format!("cannot listen on {listen}: {e}"))?;
+    let address = listener
+        .local_addr()
+        .map_err(|e| format!("cannot read listener address: {e}"))?;
+    let staff_binding = bind_staff(&settings.staff).await?;
+    let staff_address = staff_binding
+        .as_ref()
+        .map_or(address, |(_, address, _)| *address);
+    let catalog_policy = catalog_policy.with_listener_addresses(address, staff_address);
+    let health_listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .map_err(|_| "cannot bind local health listener")?;
+    let health_address = health_listener
+        .local_addr()
+        .map_err(|_| "cannot read health listener address")?;
+    let admin_listener = admin::transport::Bound::bind(probe.instance())
+        .map_err(|_| "cannot bind private administrative endpoint")?;
+    let staff_mode = settings
+        .staff
+        .observed(staff_binding.as_ref().map(|(_, address, _)| *address));
+    let _metadata = runtime_info::RuntimeFile::publish(
+        data_dir,
+        probe.instance(),
+        health_address,
+        Some(admin_listener.endpoint.clone()),
+        Some(address),
+        Some(staff_mode),
+    )?;
     let health_app = axum::Router::new()
         .route("/health", axum::routing::get(health::endpoint))
-        .with_state(probe);
-    let (stop, receiver) = tokio::sync::watch::channel(false);
-    let catalog = axum::serve(listener, app)
+        .with_state(Arc::clone(&probe));
+    let receiver = control.receiver();
+    let admin_server = admin::serve(
+        admin_listener,
+        Arc::clone(&probe),
+        operations,
+        state,
+        receiver.clone(),
+    );
+    let health_server = axum::serve(health_listener, health_app)
         .with_graceful_shutdown(wait_shutdown(receiver.clone()))
         .into_future();
-    let readiness = axum::serve(health_listener, health_app)
-        .with_graceful_shutdown(wait_shutdown(receiver))
-        .into_future();
-    let servers = async {
-        tokio::try_join!(catalog, readiness)
-            .map(drop)
-            .map_err(|error| error.to_string())
-    };
-    let signal = async {
-        // Preserve serving when the platform cannot install the signal handler.
-        if tokio::signal::ctrl_c().await.is_err() {
-            std::future::pending::<()>().await;
+    let staff_app = app.clone();
+    let staff_server = async move {
+        if let Some((listener, _, policy)) = staff_binding {
+            axum::serve(
+                listener,
+                elzevir_web::restrict_access(
+                    staff_app,
+                    policy.with_listener_addresses(address, staff_address),
+                )
+                .into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .with_graceful_shutdown(wait_shutdown(receiver))
+            .await
+        } else {
+            Ok(())
         }
+    };
+    logging::emit(probe.instance(), logging::Event::ServerStarted);
+    println!("elzevir: listening on http://{address}");
+    println!("elzevir: health on http://{health_address}/health");
+    let server = axum::serve(
+        listener,
+        elzevir_web::restrict_access(app, catalog_policy)
+            .into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(wait_shutdown(control.receiver()))
+    .into_future();
+    if !control.requested() {
+        ready()?;
+    }
+    let servers = async {
+        tokio::try_join!(server, staff_server, health_server, admin_server)
+            .map(drop)
+            .map_err(|_| "server listener failed".to_owned())
     };
     tokio::pin!(servers);
     tokio::select! {
-        outcome = &mut servers => outcome,
-        () = signal => {
-            stop.send_replace(true);
-            servers.await
+        result = &mut servers => result,
+        () = signals.wait(control) => {
+            tokio::time::timeout(Duration::from_secs(30), &mut servers).await.map_err(|_| "HTTP shutdown deadline exceeded".to_owned())?
         }
     }
 }
 
-async fn wait_shutdown(mut receiver: tokio::sync::watch::Receiver<bool>) {
-    loop {
-        if *receiver.borrow_and_update() {
-            return;
-        }
-        if receiver.changed().await.is_err() {
-            return;
-        }
-    }
+async fn bind_staff(
+    mode: &access_config::StaffMode,
+) -> Result<
+    Option<(
+        tokio::net::TcpListener,
+        SocketAddr,
+        elzevir_web::AccessPolicy,
+    )>,
+    String,
+> {
+    let Some((bind, policy)) = mode
+        .staff_policy()
+        .map_err(|_| "invalid staff listener policy")?
+    else {
+        return Ok(None);
+    };
+    let listener = tokio::net::TcpListener::bind(bind)
+        .await
+        .map_err(|_| "cannot bind staff listener")?;
+    let address = listener
+        .local_addr()
+        .map_err(|_| "cannot read staff listener address")?;
+    Ok(Some((listener, address, policy)))
+}
+
+async fn wait_shutdown(receiver: tokio::sync::watch::Receiver<bool>) {
+    shutdown::wait(receiver).await;
 }
 
 fn add_staff(data_dir: &Path, login: &str, admin: bool, cataloguing: bool) -> Result<(), String> {
@@ -414,6 +577,17 @@ fn add_staff(data_dir: &Path, login: &str, admin: bool, cataloguing: bool) -> Re
     };
     println!("elzevir: staff account `{login}` created (id {})", id.0);
     Ok(())
+}
+
+fn panel_text(value: &str, limit: usize) -> String {
+    value
+        .chars()
+        .filter(|character| {
+            !character.is_control()
+                && !matches!(character,'\u{202a}'..='\u{202e}'|'\u{2066}'..='\u{2069}')
+        })
+        .take(limit)
+        .collect()
 }
 
 #[cfg(test)]

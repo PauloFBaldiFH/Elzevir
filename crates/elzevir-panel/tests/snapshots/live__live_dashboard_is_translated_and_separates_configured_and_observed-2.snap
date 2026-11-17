@@ -1,0 +1,33 @@
+---
+source: crates/elzevir-panel/tests/live.rs
+expression: "screen(&panel, \"pt-BR\")"
+---
+Administração do Elzevir
++Seções--------------------++Painel de controle--------------------------------------------------------------++Instituição selecionada-----+
+|> d Painel de controle    ||Em execução                                                                     ||Biblioteca de teste         |
+|  x Diagnóstico           ||                                                                                ||                            |
+|  a Endereços e acesso    ||Versão: 0.0.0                                                                   ||Listener configurado        |
+|  b Backup e agendamentos ||PID: 42                                                                         ||127.0.0.1:0                 |
+|  u Atualizações          ||Tempo em execução (segundos): 123                                               ||                            |
+|  r Reiniciar             ||Banco: OK                                                                       ||Listener observado          |
+|                          ||Indexador: OK                                                                   ||127.0.0.1:8080              |
+|                          ||                                                                                ||                            |
+|                          ||CPU da máquina (%): 12.5                                                        ||Última consulta: há 0       |
+|                          ||Memória da máquina (MiB): 1024 / 8192                                           ||segundos                    |
+|                          ||Espaço livre (bytes): 104857600                                                 ||                            |
+|                          ||Tamanho do banco (bytes): 4194304                                               ||Observações somente de      |
+|                          ||Tamanho do WAL (bytes): 0                                                       ||leitura                     |
+|                          ||                                                                                ||                            |
+|                          ||Catálogo (neste computador): http://127.0.0.1:8080/                             ||                            |
+|                          ||Equipe (neste computador): http://127.0.0.1:8080/equipe                         ||                            |
+|                          ||Endereços derivados do listener; HTTP não testado.                              ||                            |
+|                          ||Acesso na rede local: não medido                                                ||                            |
+|                          ||Acesso pela internet: não configurado                                           ||                            |
+|                          ||Backup: ainda não disponível                                                    ||                            |
+|                          ||                                                                                ||                            |
+|                          ||                                                                                ||                            |
+|                          ||                                                                                ||                            |
+|                          ||                                                                                ||                            |
+|                          ||                                                                                ||                            |
++--------------------------++--------------------------------------------------------------------------------++----------------------------+
+Tab/setas: navegar | f: atualizar | PgUp/PgDn: rolar | Ctrl+P: paleta | q/Ctrl+C: sair

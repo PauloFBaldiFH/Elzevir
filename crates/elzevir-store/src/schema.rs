@@ -604,7 +604,7 @@ pub(crate) fn open_reader(path: &Path) -> Result<Connection, StoreError> {
 }
 
 /// Newest schema version this build knows.
-fn latest_version() -> i64 {
+pub(crate) fn latest_version() -> i64 {
     i64::try_from(MIGRATIONS.len()).unwrap_or(i64::MAX)
 }
 

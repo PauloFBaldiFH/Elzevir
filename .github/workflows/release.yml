@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: '0'
+
+jobs:
+  build:
+    name: Package (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, target: x86_64-unknown-linux-musl, archive: tar.gz }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl, archive: tar.gz }
+          - { os: windows-2025, target: x86_64-pc-windows-msvc, archive: zip }
+          - { os: windows-11-arm, target: aarch64-pc-windows-msvc, archive: zip }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate version tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          version="$(sed -n 's/^version = "\([0-9][^"]*\)"/\1/p' Cargo.toml | head -n 1)"
+          test "v$version" = "$RELEASE_TAG"
+      - name: Install toolchain and target
+        shell: bash
+        run: |
+          rustup toolchain install
+          rustup target add '${{ matrix.target }}'
+      - name: Install musl compiler
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes musl-tools
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+      - name: Build
+        run: cargo build --release --locked --package elzevir --target ${{ matrix.target }}
+      - name: Package Linux
+        if: runner.os == 'Linux'
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TARGET: ${{ matrix.target }}
+        run: |
+          target/$RELEASE_TARGET/release/elzevir --version
+          mkdir -p package dist
+          cp target/$RELEASE_TARGET/release/elzevir README.md LICENSE package/
+          tar -C package -czf "dist/elzevir-$RELEASE_TAG-$RELEASE_TARGET.tar.gz" elzevir README.md LICENSE
+      - name: Package Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TARGET: ${{ matrix.target }}
+        run: |
+          & "target/$env:RELEASE_TARGET/release/elzevir.exe" --version
+          if ($LASTEXITCODE -ne 0) { throw 'Binary smoke test failed' }
+          New-Item -ItemType Directory package, dist | Out-Null
+          Copy-Item "target/$env:RELEASE_TARGET/release/elzevir.exe", README.md, LICENSE package/
+          Compress-Archive -Path package/* -DestinationPath "dist/elzevir-$env:RELEASE_TAG-$env:RELEASE_TARGET.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elzevir-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  draft:
+    name: Create reviewable release draft
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: elzevir-*
+          merge-multiple: true
+          path: dist
+      - name: Checksums and draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          cp install.sh install.ps1 dist/
+          cd dist
+          sha256sum elzevir-*.tar.gz elzevir-*.zip install.sh install.ps1 > SHA256SUMS
+          sha256sum --check SHA256SUMS
+          cd ..
+          gh release create "$RELEASE_TAG" dist/* --verify-tag --draft --generate-notes

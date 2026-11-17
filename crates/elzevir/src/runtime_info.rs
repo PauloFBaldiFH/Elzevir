@@ -15,6 +15,12 @@ pub(crate) struct RuntimeInfo {
     pub(crate) instance: String,
     pub(crate) pid: u32,
     pub(crate) address: SocketAddr,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) admin: Option<crate::admin::transport::Endpoint>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) listen: Option<SocketAddr>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) staff: Option<crate::access_config::StaffMode>,
 }
 
 pub(crate) fn read(path: &Path) -> Result<RuntimeInfo, String> {
@@ -29,15 +35,25 @@ pub(crate) fn read(path: &Path) -> Result<RuntimeInfo, String> {
     if source.len() > 4096 {
         return Err("runtime metadata too large".to_owned());
     }
-    let info: RuntimeInfo =
+    let mut info: RuntimeInfo =
         serde_json::from_str(&source).map_err(|_| "invalid runtime metadata")?;
     info.validate()?;
     Ok(info)
 }
 
 impl RuntimeInfo {
-    fn validate(&self) -> Result<(), String> {
-        if self.schema != 1
+    fn validate(&mut self) -> Result<(), String> {
+        if self
+            .admin
+            .as_ref()
+            .is_some_and(|endpoint| !endpoint.valid(&self.instance))
+            || self.listen.is_some_and(|address| address.port() == 0)
+            || self
+                .staff
+                .as_mut()
+                .is_some_and(|mode| mode.validate(self.listen).is_err())
+            || self.staff.as_ref().is_some_and(|mode| matches!(mode, crate::access_config::StaffMode::SeparateListener { listen, .. } if listen.port() == 0))
+            || self.schema != 1
             || self.pid == 0
             || !self.address.ip().is_loopback()
             || self.address.port() == 0
@@ -60,6 +76,9 @@ impl RuntimeFile {
         data_dir: &Path,
         instance: &str,
         address: SocketAddr,
+        admin: Option<crate::admin::transport::Endpoint>,
+        listen: Option<SocketAddr>,
+        staff: Option<crate::access_config::StaffMode>,
     ) -> Result<Self, String> {
         let path = data_dir.join(NAME);
         match std::fs::symlink_metadata(&path) {
@@ -69,11 +88,14 @@ impl RuntimeFile {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(_) => return Err("cannot inspect runtime metadata".to_owned()),
         }
-        let info = RuntimeInfo {
+        let mut info = RuntimeInfo {
             schema: 1,
             instance: instance.to_owned(),
             pid: std::process::id(),
             address,
+            admin,
+            listen,
+            staff,
         };
         info.validate()?;
         let bytes = serde_json::to_vec(&info).map_err(|_| "cannot encode runtime metadata")?;
@@ -116,10 +138,13 @@ mod tests {
         std::fs::write(&path, "user content").unwrap();
         let instance = "0".repeat(32);
         let address = "127.0.0.1:12345".parse().unwrap();
-        assert!(RuntimeFile::publish(directory.path(), &instance, address).is_err());
+        assert!(
+            RuntimeFile::publish(directory.path(), &instance, address, None, None, None).is_err()
+        );
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "user content");
         std::fs::remove_file(&path).unwrap();
-        let owned = RuntimeFile::publish(directory.path(), &instance, address).unwrap();
+        let owned =
+            RuntimeFile::publish(directory.path(), &instance, address, None, None, None).unwrap();
         assert_eq!(read(&path).unwrap().instance, instance);
         #[cfg(unix)]
         {
@@ -137,8 +162,12 @@ mod tests {
     fn cleanup_does_not_remove_replacement_metadata() {
         let directory = tempfile::tempdir().unwrap();
         let address = "127.0.0.1:12345".parse().unwrap();
-        let previous = RuntimeFile::publish(directory.path(), &"0".repeat(32), address).unwrap();
-        let current = RuntimeFile::publish(directory.path(), &"1".repeat(32), address).unwrap();
+        let previous =
+            RuntimeFile::publish(directory.path(), &"0".repeat(32), address, None, None, None)
+                .unwrap();
+        let current =
+            RuntimeFile::publish(directory.path(), &"1".repeat(32), address, None, None, None)
+                .unwrap();
         drop(previous);
         assert_eq!(
             read(&directory.path().join(NAME)).unwrap().instance,

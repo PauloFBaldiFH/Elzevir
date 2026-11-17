@@ -31,6 +31,8 @@ pub(crate) struct ServeArgs {
 
 /// Validated options used to start one institution's server.
 pub(crate) struct Settings {
+    pub(crate) institution_name: Option<String>,
+    pub(crate) staff: crate::access_config::StaffMode,
     pub(crate) data_dir: PathBuf,
     pub(crate) listen: SocketAddr,
     pub(crate) insecure_cookies: bool,
@@ -43,6 +45,7 @@ struct FileConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     institution: Option<Institution>,
     server: Server,
+    staff: crate::access_config::StaffMode,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -73,6 +76,8 @@ impl Default for Server {
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum ConfigError {
+    #[error("invalid staff access configuration")]
+    InvalidAccess,
     #[error("cannot read configuration {}: {source}", path.display())]
     Read {
         path: PathBuf,
@@ -108,10 +113,13 @@ impl ServeArgs {
     }
 
     pub(crate) fn resolve(self) -> Result<Settings, ConfigError> {
-        let file = match &self.config {
+        let mut file = match &self.config {
             Some(path) => load(path)?,
             None => FileConfig::default(),
         };
+        file.staff
+            .validate(Some(self.listen.unwrap_or(file.server.listen)))
+            .map_err(|_| ConfigError::InvalidAccess)?;
         let server = file.server;
         let from_file = server.data_dir.map(|directory| {
             if directory.is_absolute() {
@@ -132,6 +140,8 @@ impl ServeArgs {
             return Err(ConfigError::EmptyDataDir);
         }
         Ok(Settings {
+            institution_name: file.institution.map(|institution| institution.name),
+            staff: file.staff,
             data_dir,
             listen: self.listen.unwrap_or(server.listen),
             insecure_cookies: self.insecure_cookies.unwrap_or(server.insecure_cookies),
@@ -153,7 +163,7 @@ fn load(path: &Path) -> Result<FileConfig, ConfigError> {
     if source.len() > MAX_BYTES {
         return Err(ConfigError::TooLarge(path.to_owned()));
     }
-    let config: FileConfig = toml::from_str(&source).map_err(|error: toml::de::Error| {
+    let mut config: FileConfig = toml::from_str(&source).map_err(|error: toml::de::Error| {
         // TOML's Display includes source excerpts and values. Only report location.
         let offset = error.span().map_or(0, |span| span.start);
         let prefix = source.get(..offset).unwrap_or_default();
@@ -171,7 +181,10 @@ fn load(path: &Path) -> Result<FileConfig, ConfigError> {
 }
 
 impl FileConfig {
-    fn validate(&self) -> Result<(), ConfigError> {
+    fn validate(&mut self) -> Result<(), ConfigError> {
+        self.staff
+            .validate(None)
+            .map_err(|_| ConfigError::InvalidAccess)?;
         if let Some(institution) = &self.institution {
             validate_name(&institution.name)?;
         }
@@ -205,10 +218,11 @@ pub(crate) fn render_init(
     insecure_cookies: bool,
 ) -> Result<String, ConfigError> {
     validate_name(name)?;
-    let config = FileConfig {
+    let mut config = FileConfig {
         institution: Some(Institution {
             name: name.trim().to_owned(),
         }),
+        staff: crate::access_config::StaffMode::default(),
         server: Server {
             data_dir: Some(data_dir.to_owned()),
             listen,
@@ -222,6 +236,39 @@ pub(crate) fn render_init(
         return Err(ConfigError::Serialize);
     }
     Ok(source)
+}
+
+/// Captures the effective server configuration, including command-line overrides.
+pub(crate) fn snapshot(settings: &Settings) -> Result<String, ConfigError> {
+    toml::to_string_pretty(&FileConfig {
+        institution: settings
+            .institution_name
+            .as_ref()
+            .map(|name| Institution { name: name.clone() }),
+        staff: settings.staff.clone(),
+        server: Server {
+            data_dir: Some(settings.data_dir.clone()),
+            listen: settings.listen,
+            insecure_cookies: settings.insecure_cookies,
+            iri_base: settings.iri_base.clone(),
+        },
+    })
+    .map_err(|_| ConfigError::Serialize)
+}
+
+/// Relocates a validated backup without losing the institution's access policy.
+pub(crate) fn relocate(source: &str, directory: &Path) -> Result<String, String> {
+    let mut config: FileConfig =
+        toml::from_str(source).map_err(|_| "invalid restored server configuration")?;
+    config
+        .validate()
+        .map_err(|_| "invalid restored server configuration")?;
+    config
+        .staff
+        .validate(Some(config.server.listen))
+        .map_err(|_| "invalid restored access policy")?;
+    config.server.data_dir = Some(directory.to_owned());
+    toml::to_string_pretty(&config).map_err(|_| "cannot relocate server configuration".to_owned())
 }
 
 #[cfg(test)]

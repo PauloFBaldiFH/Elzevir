@@ -32,6 +32,19 @@ allow = [
 [licenses.private]
 ignore = true
 
+# interprocess transitives: reviewed LICENSE.txt files grant unrestricted use,
+# modification and distribution (0BSD), compatible with GPL-3.0-or-later.
+# Restrict acceptance to these exact versions; future updates require review.
+[[licenses.exceptions]]
+name = "recvmsg"
+version = "=1.0.0"
+allow = ["0BSD"]
+
+[[licenses.exceptions]]
+name = "doctest-file"
+version = "=1.1.1"
+allow = ["0BSD"]
+
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"

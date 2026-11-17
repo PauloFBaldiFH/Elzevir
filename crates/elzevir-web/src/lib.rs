@@ -93,6 +93,12 @@ struct Inner {
 }
 
 impl AppState {
+    /// Number of unexpired staff sessions, for local operational confirmation only.
+    #[must_use]
+    pub fn staff_session_count(&self) -> usize {
+        self.inner.sessions.count()
+    }
+
     /// Builds the state from its ports.
     #[must_use]
     pub fn new(

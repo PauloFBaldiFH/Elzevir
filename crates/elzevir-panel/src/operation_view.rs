@@ -1,0 +1,132 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Operational forms and job history; only recognized presentation keys are localized.
+use crate::dashboard::{row, text};
+use crate::{Messages, Panel, Snapshot};
+use ratatui::{
+    Frame,
+    layout::Rect,
+    text::Line,
+    widgets::{Clear, Paragraph, Wrap},
+};
+
+pub(crate) fn rows(
+    snapshot: Option<&Snapshot>,
+    pending: bool,
+    messages: &Messages,
+) -> Vec<Line<'static>> {
+    let operations = snapshot.map(|snapshot| &snapshot.operations);
+    let mut rows = vec![
+        Line::from(messages.get("op-backup-help")),
+        Line::from(messages.get("op-restart-help")),
+        Line::from(messages.get("op-update-help")),
+        row(
+            messages,
+            "op-latest",
+            operations.and_then(|ops| ops.latest.as_deref()).map(text),
+        ),
+        row(
+            messages,
+            "op-sessions",
+            operations
+                .and_then(|ops| ops.sessions)
+                .map(|count| count.to_string()),
+        ),
+        Line::default(),
+        row(
+            messages,
+            "op-retention",
+            operations
+                .and_then(|ops| ops.keep)
+                .map(|keep| keep.to_string()),
+        ),
+        row(
+            messages,
+            "op-daily",
+            Some(
+                operations
+                    .and_then(|ops| ops.daily.as_deref())
+                    .map_or_else(|| messages.get("op-disabled"), text),
+            ),
+        ),
+    ];
+    if pending {
+        rows.push(Line::from(messages.get("op-pending")));
+    }
+    if let Some(result) = operations.and_then(|ops| ops.result) {
+        rows.push(Line::from(messages.get(result)));
+    }
+    if let Some(notes) = operations.and_then(|ops| ops.release_notes.as_deref()) {
+        rows.push(Line::from(text(notes)));
+    }
+    rows.push(Line::default());
+    if let Some(operations) = operations {
+        for job in &operations.jobs {
+            rows.push(Line::from(format!(
+                "{} {} {}",
+                text(&job.at),
+                messages.get(job.action),
+                messages.get(job.state)
+            )));
+            rows.push(Line::from(text(&job.id)));
+        }
+    }
+    rows
+}
+
+pub(crate) fn form(frame: &mut Frame, panel: &Panel, messages: &Messages, ascii: bool) {
+    let Some(form) = &panel.form else {
+        return;
+    };
+    let area = frame.area();
+    let popup = Rect::new(
+        area.x + area.width.saturating_sub(72) / 2,
+        area.y + area.height.saturating_sub(12) / 2,
+        area.width.min(72),
+        area.height.min(12),
+    );
+    let mut rows = vec![
+        Line::from(messages.get(form.operation.key())),
+        Line::default(),
+    ];
+    if let crate::Mode::Live(state) = &panel.mode {
+        rows.push(Line::from(
+            state
+                .institution
+                .name
+                .as_deref()
+                .map_or_else(|| messages.get("panel-no-name"), text),
+        ));
+        rows.push(row(
+            messages,
+            "op-sessions",
+            state
+                .snapshot
+                .as_ref()
+                .and_then(|snapshot| snapshot.operations.sessions)
+                .map(|count| count.to_string()),
+        ));
+    }
+    if form.confirming() {
+        rows.push(Line::from(messages.get("op-confirm")));
+        for (key, value) in form.labels.iter().zip(&form.values) {
+            rows.push(row(messages, key, Some(text(value))));
+        }
+    } else {
+        let key = form.labels.get(form.field).copied().unwrap_or("op-output");
+        rows.push(row(messages, key, Some(String::new())));
+        rows.push(Line::from(format!(
+            "> {}",
+            form.values
+                .get(form.field)
+                .map_or_else(String::new, |value| text(value))
+        )));
+        rows.push(Line::from(messages.get("op-edit-help")));
+    }
+    frame.render_widget(Clear, popup);
+    frame.render_widget(
+        Paragraph::new(rows)
+            .wrap(Wrap { trim: false })
+            .block(crate::view::block(messages.get("op-dialog"), ascii)),
+        popup,
+    );
+}

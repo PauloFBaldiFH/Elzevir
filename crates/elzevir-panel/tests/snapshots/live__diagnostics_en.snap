@@ -1,0 +1,33 @@
+---
+source: crates/elzevir-panel/tests/live.rs
+expression: text
+---
+Elzevir administration
++Sections------------------++Diagnostics---------------------------------------------------------------------++Selected institution--------+
+|  d Dashboard             ||Running                                                                         ||Biblioteca de teste         |
+|> x Diagnostics           ||                                                                                ||                            |
+|  a Addresses and access  ||Database: OK                                                                    ||Configured listener         |
+|  b Backups and schedules ||Indexer: OK                                                                     ||127.0.0.1:0                 |
+|  u Updates               ||SQLite quick_check: OK                                                          ||                            |
+|  r Restart               ||Catalog HTTP (local): Failed                                                    ||Observed listener           |
+|                          ||Free space (bytes): 104857600                                                   ||127.0.0.1:8080              |
+|                          ||Free space check: OK                                                            ||                            |
+|                          ||Local volume: Not run                                                           ||Last check: 0 seconds ago   |
+|                          ||Basic directory access: Not run                                                 ||                            |
+|                          ||Checks started (UTC): 2026-11-16T12:00:00Z                                      ||Read-only observations      |
+|                          ||Clock synchronization: not checked                                              ||                            |
+|                          ||Tunnel: not checked (future step)                                               ||                            |
+|                          ||Latest release: not checked (future step)                                       ||                            |
+|                          ||v: run checks | e: verify and export ZIP in current folder                      ||                            |
+|                          ||No support archive requested.                                                   ||                            |
+|                          ||                                                                                ||                            |
+|                          ||Recent operational events (live)                                                ||                            |
+|                          ||2026-11-16T12:00:00Z INFO Server started                                        ||                            |
+|                          ||                                                                                ||                            |
+|                          ||                                                                                ||                            |
+|                          ||                                                                                ||                            |
+|                          ||                                                                                ||                            |
+|                          ||                                                                                ||                            |
+|                          ||                                                                                ||                            |
++--------------------------++--------------------------------------------------------------------------------++----------------------------+
+Tab/arrows: navigate | f: refresh | PgUp/PgDn: scroll | Ctrl+P: palette | q/Ctrl+C: quit
