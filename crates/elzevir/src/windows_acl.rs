@@ -183,6 +183,8 @@ $rules = @($acl.GetAccessRules($true,$true,$sid) | ForEach-Object {
                 "-Command",
                 script,
             ])
+            // Windows PowerShell must load its own modules, not inherited PowerShell 7 modules.
+            .env_remove("PSModulePath")
             .env("ELZEVIR_ACL_TEST_PATH", path)
             .output()
             .unwrap();
