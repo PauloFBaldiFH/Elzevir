@@ -199,7 +199,7 @@ main:has(.wide) { max-width: none; padding: 0; }
 .family { content-visibility: auto; contain-intrinsic-size: auto 3.5rem; }
 /* The compact row (spec de UI §20 item 2): the summary of the family's <details>. */
 .family-row {
-  display: grid; grid-template-columns: 20px minmax(0, 2.4fr) minmax(0, 1.4fr) 7rem minmax(0, 1fr);
+  display: grid; grid-template-columns: 18px 20px minmax(0, 2.4fr) minmax(0, 1.4fr) 7rem minmax(0, 1fr);
   gap: 14px; align-items: center;
   margin: 6px 0; padding: 9px 12px;
   border: 1px solid var(--elzevir-color-border); border-radius: 12px;
@@ -210,6 +210,10 @@ main:has(.wide) { max-width: none; padding: 0; }
 .family-row:hover { border-color: var(--work-border); }
 .family-row:focus-visible { outline: 2px solid var(--work-accent); outline-offset: 1px; }
 .family-focus[open] > .family-row { border-color: var(--work-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--work-accent) 18%, transparent); }
+.family-select { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--elzevir-color-primary); }
+.selection-bar { position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 10px 0 0; padding: 8px 12px; border: 1px solid var(--elzevir-color-primary); border-radius: 10px; background: var(--card-bg); font-size: 0.85rem; }
+.selection-bar[hidden] { display: none; }
+.selection-bar button { padding: 3px 10px; font-size: 0.82rem; }
 .row-icon { width: 18px; height: 18px; color: var(--text-muted); }
 .row-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .row-shape { color: var(--text-muted); font-size: 0.82rem; }
@@ -356,7 +360,7 @@ a.chip-identifier:hover { text-decoration: underline; }
 @media (max-width: 60rem) {
   .family-grid, .family-grid.no-hub, .catalog.hide-hub .family-grid, .catalog.hide-auth .family-grid,
   .catalog.hide-auth .family-grid.no-hub, .catalog.hide-auth.hide-hub .family-grid { grid-template-columns: 1fr; gap: 12px; }
-  .family-row { grid-template-columns: 20px minmax(0, 1fr) auto; }
+  .family-row { grid-template-columns: 18px 20px minmax(0, 1fr) auto; }
   .row-agents, .row-class { display: none; }
   .track-editions { grid-column: auto; grid-template-columns: 1fr; }
   .track-editions > .col-header + .col-header { display: none; }
