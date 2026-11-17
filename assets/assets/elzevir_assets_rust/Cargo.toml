@@ -1,0 +1,9 @@
+[package]
+name = "elzevir-assets"
+version = "0.1.0"
+edition = "2021"
+description = "Gerador vetorial de mascotes e ícones do Elzevir, feito em Rust"
+
+[dependencies]
+resvg = "=0.48.1"
+ico = "=0.6.0"
