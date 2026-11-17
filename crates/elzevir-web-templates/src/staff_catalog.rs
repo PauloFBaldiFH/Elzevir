@@ -34,8 +34,12 @@ pub struct StaffCatalog<'a> {
 /// The strip under the search: active filters as removable chips and a menu per facet.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FacetStrip {
-    /// Families matching in all.
-    pub families: usize,
+    /// The work lists, the one shown marked (facetas.md, item 13).
+    pub lists: Vec<WorkListLink>,
+    /// Whether the work list shown is empty.
+    pub list_empty: bool,
+    /// Families matching in all; `None` on a work list, which is not counted.
+    pub families: Option<usize>,
     /// The filters in force, each with the address that drops it.
     pub active: Vec<ActiveFilter>,
     /// The filters as `facet:value`, carried by the search form so a new query keeps them.
@@ -49,12 +53,25 @@ pub struct FacetStrip {
 impl FacetStrip {
     /// How many families match, as a sentence.
     #[must_use]
-    pub fn families_text(&self, t: &I18n) -> String {
-        t.get_numbers(
-            "facet-families",
-            &[("count", u64::try_from(self.families).unwrap_or(u64::MAX))],
-        )
+    pub fn families_text(&self, t: &I18n) -> Option<String> {
+        self.families.map(|families| {
+            t.get_numbers(
+                "facet-families",
+                &[("count", u64::try_from(families).unwrap_or(u64::MAX))],
+            )
+        })
     }
+}
+
+/// One work list as a segmented button.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkListLink {
+    /// Message key of its name.
+    pub label_key: &'static str,
+    /// Its address.
+    pub url: String,
+    /// Whether it is the one shown.
+    pub current: bool,
 }
 
 /// One filter in force.
@@ -91,6 +108,12 @@ pub struct FacetOption {
 }
 
 impl StaffCatalog<'_> {
+    /// Whether the page is a work list with nothing in it.
+    #[must_use]
+    pub fn list_empty(&self) -> bool {
+        self.strip.as_ref().is_some_and(|strip| strip.list_empty)
+    }
+
     /// How many records matched, as a sentence, for a search.
     #[must_use]
     pub fn count_text(&self) -> Option<String> {

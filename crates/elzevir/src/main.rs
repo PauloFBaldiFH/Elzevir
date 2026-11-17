@@ -228,6 +228,7 @@ fn serve(
         secure_cookies: !insecure_cookies,
         iri_base,
         author_table: loaded.author_table,
+        time_zone: loaded.time_zone,
         ..WebConfig::default()
     };
     let opac = OpacPorts {
@@ -243,6 +244,7 @@ fn serve(
         statements: Arc::clone(&store) as _,
         history: Arc::clone(&store) as _,
         authorities: Arc::clone(&store) as _,
+        work_lists: Arc::clone(&store) as _,
     };
     let app = elzevir_web::router(AppState::new(
         store,

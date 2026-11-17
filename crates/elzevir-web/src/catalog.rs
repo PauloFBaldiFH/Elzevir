@@ -25,6 +25,7 @@ use elzevir_app::rdf::{IriBase, RdfFormat, export_rdf};
 use elzevir_app::search::{FacetCounts, Filter, SearchIndex, SearchQuery, SearchScope};
 use elzevir_app::staff::Permission;
 use elzevir_app::suggestions::AuthoritySuggestions;
+use elzevir_app::worklist::{self, WorkList, WorkListQuery, WorkListReader};
 use elzevir_domain::catalog::InstanceId;
 use elzevir_web_templates::{
     AuthorityLine, Cord, FamilyLine, HubLine, InstanceLine, PillLine, ScanLine, StaffCatalog,
@@ -59,6 +60,8 @@ pub struct StaffPorts {
     pub history: Arc<dyn HistoryReader>,
     /// The agents and subjects the authorities column edits (docs/specs/catalogo/autoridades.md).
     pub authorities: Arc<dyn AuthorityReader>,
+    /// The families of the work lists (docs/specs/catalogo/facetas.md, part c).
+    pub work_lists: Arc<dyn WorkListReader>,
 }
 
 /// Query string of `/equipe/acervo`.
@@ -70,6 +73,8 @@ struct CatalogParams {
     from: Option<String>,
     /// The filters in force (facetas.md, item 4).
     filters: Vec<Filter>,
+    /// The work list asked for, which text and filters override (facetas.md, item 14).
+    list: Option<WorkList>,
 }
 
 impl CatalogParams {
@@ -87,6 +92,9 @@ impl CatalogParams {
             after: last("after"),
             from: last("from"),
             filters: facets::filters_of(pairs),
+            list: last(facets::LIST_PARAM)
+                .as_deref()
+                .and_then(WorkList::from_name),
         }
     }
 }
@@ -96,20 +104,54 @@ enum Page {
     Browse(listing::ListingPage),
     /// A search, with what its text was taken for.
     Search(listing::SearchPage, Scan),
+    /// A work list.
+    List(worklist::ListPage, WorkList),
 }
 
-/// Reads one page of the listing and, unless only rows are asked for or a code was
-/// scanned, the facets of what it shows (facetas.md, item 11). Blocking.
+/// The ports a page reads, borrowed.
+struct Readers<'a> {
+    listing: &'a dyn CatalogListing,
+    index: &'a dyn SearchIndex,
+    catalog: &'a dyn CatalogReader,
+    work_lists: &'a dyn WorkListReader,
+}
+
+impl<'a> Readers<'a> {
+    fn of(state: &'a AppState) -> Self {
+        Self {
+            listing: &*state.inner.staff_ports.listing,
+            index: &*state.inner.opac.index,
+            catalog: &*state.inner.opac.catalog,
+            work_lists: &*state.inner.staff_ports.work_lists,
+        }
+    }
+}
+
+/// Reads one page of the listing and, unless only rows are asked for, a code was scanned
+/// or the page is a work list, the facets of what it shows (facetas.md, items 11 and 17).
+/// `list` is the work list asked for, as the store reads it. Blocking.
 fn read_page(
-    listing: &dyn CatalogListing,
-    index: &dyn SearchIndex,
-    catalog: &dyn CatalogReader,
+    readers: &Readers<'_>,
     params: CatalogParams,
+    list: Option<(WorkList, WorkListQuery)>,
     rows_only: bool,
 ) -> Result<(Page, CodeLists, Option<FacetCounts>, CatalogParams), ()> {
+    let Readers {
+        listing,
+        index,
+        catalog,
+        work_lists,
+    } = *readers;
     let codes = catalog.codes().map_err(drop)?;
     let filters = &params.filters;
-    let page = if params.q.trim().is_empty() && filters.is_empty() {
+    let plain = params.q.trim().is_empty() && filters.is_empty();
+    let page = if let Some((list, query)) = list.filter(|_| plain) {
+        // A malformed offset is read as the first page.
+        let from = params.from.as_deref().and_then(|from| from.parse().ok());
+        worklist::page(work_lists, listing, query, from.unwrap_or(0))
+            .map(|page| Page::List(page, list))
+            .map_err(drop)
+    } else if plain {
         // A malformed cursor is read as the first page.
         let after = params.after.as_deref().and_then(FamilyCursor::from_token);
         listing::browse(listing, after.as_ref())
@@ -137,9 +179,9 @@ fn read_page(
         }
         .map(|page| Page::Search(page, scan))
     }?;
-    // A scanned code's page is that family alone: nothing to narrow.
-    let scanned = matches!(&page, Page::Search(_, Scan::Known(_)));
-    let counts = if rows_only || scanned {
+    // A scanned code's page is that family alone, and a list is not narrowed.
+    let unfaceted = matches!(&page, Page::Search(_, Scan::Known(_)) | Page::List(..));
+    let counts = if rows_only || unfaceted {
         None
     } else {
         let asked = SearchQuery {
@@ -162,15 +204,20 @@ pub(crate) async fn catalog(
         return Redirect::to("/equipe/login").into_response();
     };
     let params = CatalogParams::from_pairs(&pairs);
-    let listing = Arc::clone(&state.inner.staff_ports.listing);
-    let index = Arc::clone(&state.inner.opac.index);
-    let catalog = Arc::clone(&state.inner.opac.catalog);
+    let list = params
+        .list
+        .map(|list| list_query(list, session.identity.id, &state.inner.config.time_zone));
+    if list.as_ref().is_some_and(Option::is_none) {
+        return (StatusCode::SERVICE_UNAVAILABLE, "clock unavailable").into_response();
+    }
+    let list = list.flatten();
+    let reading = state.clone();
     let rows_only = headers.contains_key("hx-request")
         && headers
             .get("hx-target")
             .is_none_or(|target| target != "families");
     let read = tokio::task::spawn_blocking(move || {
-        read_page(&*listing, &*index, &*catalog, params, rows_only)
+        read_page(&Readers::of(&reading), params, list, rows_only)
     })
     .await;
     let Ok(Ok((page, codes, counts, params))) = read else {
@@ -178,8 +225,17 @@ pub(crate) async fn catalog(
     };
     let t = &state.inner.i18n;
     let query = params.q.trim();
-    let strip = counts.map(|counts| facets::strip(query, &params.filters, counts, t, &codes));
+    let strip = match (&page, counts) {
+        (Page::List(list, name), _) if !rows_only => {
+            Some(facets::list_strip(*name, list.rows.is_empty()))
+        }
+        (_, Some(counts)) => Some(facets::strip(query, &params.filters, counts, t, &codes)),
+        _ => None,
+    };
     let can_catalogue = session.identity.can(Permission::Cataloguing);
+    let lines = |rows: &[FamilyRow]| -> Vec<FamilyLine> {
+        rows.iter().map(|row| family_line(row, &codes)).collect()
+    };
     let page = match &page {
         Page::Browse(page) => StaffCatalog {
             t: &state.inner.i18n,
@@ -188,11 +244,7 @@ pub(crate) async fn catalog(
             query: "",
             total: None,
             scan: None,
-            rows: page
-                .rows
-                .iter()
-                .map(|row| family_line(row, &codes))
-                .collect(),
+            rows: lines(&page.rows),
             next_url: page
                 .next
                 .as_ref()
@@ -206,18 +258,26 @@ pub(crate) async fn catalog(
             query: &page.query,
             total: Some(page.total),
             scan: scan_line(scan, can_catalogue),
-            rows: opened(
-                page.rows
-                    .iter()
-                    .map(|row| family_line(row, &codes))
-                    .collect(),
-            ),
+            rows: opened(lines(&page.rows)),
             next_url: page.next.map(|from| {
                 format!(
                     "{}&from={from}",
                     facets::listing_url(&page.query, &params.filters)
                 )
             }),
+            strip,
+        },
+        Page::List(page, list) => StaffCatalog {
+            t: &state.inner.i18n,
+            csrf: &session.csrf,
+            can_catalogue,
+            query: "",
+            total: None,
+            scan: None,
+            rows: lines(&page.rows),
+            next_url: page
+                .next
+                .map(|from| format!("{}&from={from}", facets::list_url(*list))),
             strip,
         },
     };
@@ -231,6 +291,30 @@ pub(crate) async fn catalog(
     } else {
         render(&page)
     }
+}
+
+/// What the store reads for `list`, asked by `staff`; `None` only if the clock is out of
+/// the calendar's range.
+fn list_query(
+    list: WorkList,
+    staff: elzevir_app::staff::StaffId,
+    time_zone: &jiff::tz::TimeZone,
+) -> Option<(WorkList, WorkListQuery)> {
+    let query = match list {
+        WorkList::Recent => WorkListQuery::TouchedBy(staff),
+        WorkList::ImportedToday => WorkListQuery::ImportedSince(today_began(time_zone)?),
+    };
+    Some((list, query))
+}
+
+/// When today began in the library's time zone (facetas.md, item 16); `None` only if
+/// the clock is out of the calendar's range.
+fn today_began(time_zone: &jiff::tz::TimeZone) -> Option<jiff::Timestamp> {
+    jiff::Timestamp::now()
+        .to_zoned(time_zone.clone())
+        .start_of_day()
+        .ok()
+        .map(|start| start.timestamp())
 }
 
 /// What the page's script does with a scanned code (bipe.md, items 7 and 8): the grid of

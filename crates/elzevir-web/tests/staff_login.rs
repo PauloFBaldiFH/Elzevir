@@ -75,6 +75,7 @@ fn app() -> Router {
             statements: Arc::new(common::Statements),
             history: Arc::new(common::History),
             authorities: Arc::new(common::Authorities),
+            work_lists: Arc::new(common::WorkLists),
         },
         I18n::english().unwrap(),
         config,

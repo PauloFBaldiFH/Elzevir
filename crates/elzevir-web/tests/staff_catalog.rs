@@ -248,6 +248,7 @@ fn app() -> Router {
             statements: Arc::new(common::Statements),
             history: Arc::new(common::History),
             authorities: Arc::new(common::Authorities),
+            work_lists: Arc::new(common::WorkLists),
         },
         I18n::english().unwrap(),
         WebConfig {
@@ -451,6 +452,56 @@ async fn the_facets_strip_adds_and_drops_filters() {
     )
     .await;
     assert!(!body(rows).await.contains("facet-strip"));
+}
+
+#[tokio::test]
+async fn the_work_lists_show_what_the_person_touched_and_imported_today() {
+    let app = app();
+    let session = signed_in(&app).await;
+    let page = |uri: &'static str| {
+        let app = app.clone();
+        let session = session.clone();
+        async move { body(send(&app, get(uri, Some(&session), None)).await).await }
+    };
+    // Outside a list, "whole catalog" is the one marked.
+    let browse = page("/equipe/acervo").await;
+    assert!(browse.contains(
+        r#"<a href="/equipe/acervo" aria-current="page">Whole catalog</a><a href="/equipe/acervo?list=recent">My recent</a>"#
+    ));
+    // Ana's list starts with what ana touched last, without counts or facet menus.
+    let recent = page("/equipe/acervo?list=recent").await;
+    assert!(
+        recent
+            .contains(r#"<a href="/equipe/acervo?list=recent" aria-current="page">My recent</a>"#)
+    );
+    assert!(!recent.contains("facet-menu") && !recent.contains("facet-families"));
+    let first = recent.find("Dom Casmurro").unwrap();
+    assert!(recent.find("Livro 035").is_some_and(|next| first < next));
+    assert!(recent.contains("/equipe/acervo?list=recent&#38;from=30"));
+    assert!(!recent.contains("Nothing in this list."));
+    // The next page goes on where the first stopped, as rows alone.
+    let rows = send(
+        &app,
+        get(
+            "/equipe/acervo?list=recent&from=30",
+            Some(&session),
+            Some("next"),
+        ),
+    )
+    .await;
+    let rows = body(rows).await;
+    assert!(rows.contains("Livro 006") && !rows.contains("Livro 007"));
+    assert!(!rows.contains("work-lists"));
+    let today = page("/equipe/acervo?list=imported-today").await;
+    assert!(today.contains("Nothing in this list."));
+    // Text wins over a list; an unknown list is the plain listing.
+    assert!(
+        page("/equipe/acervo?list=recent&q=livro")
+            .await
+            .contains("facet-menu")
+    );
+    let unknown = page("/equipe/acervo?list=quarantine").await;
+    assert!(unknown.contains(r#"<a href="/equipe/acervo" aria-current="page">"#));
 }
 
 #[tokio::test]

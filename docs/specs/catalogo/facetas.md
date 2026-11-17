@@ -1,6 +1,6 @@
 # Facetas e filtros da listagem
 
-> Status: tarefa 2.10, partes a (índice e aplicação) e b (faixa na listagem). Base: [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (tabela da Fase 2, linha 2.10), [interface](../../UI_BIBFRAME_INTERACTION_SPEC.md) §20 item 8, [busca](busca.md) e [listagem](listagem.md). As listas de trabalho salvas são a parte c.
+> Status: tarefa 2.10, partes a (índice e aplicação), b (faixa na listagem) e c (listas de trabalho). Base: [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (tabela da Fase 2, linha 2.10), [interface](../../UI_BIBFRAME_INTERACTION_SPEC.md) §20 item 8, [busca](busca.md) e [listagem](listagem.md).
 
 ## 1. Comportamento
 
@@ -41,6 +41,15 @@
 11. A faixa aparece na listagem, na busca e na busca filtrada; não aparece na página de um código bipado (é a família sozinha) nem nas linhas da página seguinte. A página seguinte leva os mesmos filtros.
 12. As facetas do acervo inteiro (sem texto e sem filtros), que toda página de navegação mostra, ficam guardadas por geração do leitor do índice e são recalculadas depois de cada commit.
 
+### Listas de trabalho (parte c)
+
+13. A faixa começa com as listas de trabalho como botões segmentados (interface §20, item 8): **Todo o acervo**, **Meus recentes** e **Importados hoje**. A lista escolhida aparece marcada (`aria-current`); fora de uma lista, a marcada é "Todo o acervo".
+14. Cada lista é uma visão da listagem, com endereço próprio: `/equipe/acervo?list=recent` e `?list=imported-today`. Nome de lista desconhecido é ignorado. A lista não se soma a texto nem a filtros: com `q` ou `f`, vale a busca; buscar pelo formulário sai da lista, e os botões levam à lista sem texto nem filtros.
+15. **Meus recentes**: as famílias em que a pessoa logada mexeu (criou, editou, ligou autoridade, salvou exemplares), lidas do `audit_log` pelas entidades de cada comando (a mesma origem do [histórico](historico.md)): Obra pela sua família, Instância pela família da sua Obra. Ordem: a família tocada por último primeiro. Vale o que os 2.000 comandos mais recentes da pessoa tocaram.
+16. **Importados hoje**: as famílias das Instâncias vindas de arquivo (`catalog.import_record`, e `catalog.add_record` com registro de origem) desde a meia-noite de hoje no fuso da biblioteca, a mais recente primeiro, entre os 2.000 comandos de importação mais recentes do dia. O fuso é `[library] time_zone` no `elzevir.toml` (nome IANA, como `America/Sao_Paulo`); sem ele, o fuso do sistema.
+17. Família que deixou de existir sai da lista. A página tem 30 famílias, como a listagem; a seguinte vem pelo mesmo carregamento (`from=`), sem faixa. Numa lista, a faixa não tem contagem nem menus de facetas: só os botões.
+18. Ficam para depois, porque dependem de funções que ainda não existem: **Em quarentena** (a quarentena chega com a mesclagem da Onda 2, interface §7) e **Incompletos para o perfil** (os perfis por categoria saíram com o BIBFRAME completo, [ADR 0003](../../adr/0003-bibframe-completo.md); falta decidir o que "incompleto" quer dizer sem perfil).
+
 ## 2. Origem no Koha
 
 O Koha mostra facetas na busca do OPAC e da equipe (`C4::Search::getRecords` com `Koha::SearchEngine::Elasticsearch::QueryBuilder::build_query`, que pede agregações; as facetas configuráveis em `admin/searchengine/elasticsearch/mappings.yaml` com `facet: 1`: autor, assunto, assunto geográfico, série, tipo de item, unidade de origem, unidade atual, localização, idioma). Conta registros bibliográficos, e um filtro novo restringe a busca (`limit=`). O Elzevir conta famílias, não tem tipo de item e acrescenta conteúdo, suporte, gênero, público e ano.
@@ -54,5 +63,6 @@ O Koha mostra facetas na busca do OPAC e da equipe (`C4::Search::getRecords` com
 - `crates/elzevir/tests/search.rs`: sobre os 200 registros da base de testes, as contagens batem com uma contagem feita direto no banco.
 - `elzevir-web` (unidade): filtros da URL e endereços de acrescentar e tirar; nomes dos valores. `crates/elzevir-web/tests/staff_catalog.rs`: faixa na navegação, filtro sozinho vira busca, chip, campo oculto, valor ativo sem link, filtro desconhecido ignorado, linhas da página seguinte sem faixa.
 - `elzevir-search`: as contagens guardadas do acervo inteiro mudam depois de um commit.
+- `elzevir-store` (unidade): "meus recentes" agrupa por família, na ordem do último toque, só da pessoa; "importados hoje" pega importação de arquivo depois do instante dado e deixa de fora o que foi criado na tela. `elzevir-app::worklist`: páginas sem buraco nem repetição. `crates/elzevir-web/tests/staff_catalog.rs`: botões das listas, lista marcada, lista com a pessoa logada, página seguinte com `list=`.
 
 Desempenho (critério da 2.10: p95 < 50 ms em 1 milhão de registros): `cargo bench -p elzevir --bench opac` mede a página de navegação e a de busca já com a faixa, e uma página filtrada (só `language:por`, e palavras com `language:por`).

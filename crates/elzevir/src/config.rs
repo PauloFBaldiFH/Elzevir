@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use elzevir_domain::call_number::{AuthorTable, MAX_TABLE_LINES, TableReport};
+use jiff::tz::TimeZone;
 use serde::Deserialize;
 
 /// Most bytes of `elzevir.toml`.
@@ -23,6 +24,17 @@ pub(crate) struct Config {
     /// How call numbers are suggested.
     #[serde(default)]
     call_number: CallNumber,
+    /// The library itself.
+    #[serde(default)]
+    library: Library,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Library {
+    /// The IANA name of its time zone, such as `America/Sao_Paulo`; the system's when
+    /// absent (docs/specs/catalogo/facetas.md, item 16).
+    time_zone: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -39,6 +51,8 @@ pub(crate) struct Loaded {
     pub(crate) author_table: Option<Arc<AuthorTable>>,
     /// What reading the table found, to show at start.
     pub(crate) table_report: Option<(PathBuf, TableReport)>,
+    /// The library's time zone.
+    pub(crate) time_zone: TimeZone,
 }
 
 /// Reads `data_dir/elzevir.toml` and what it points to; no file is no configuration.
@@ -48,10 +62,16 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         None => Config::default(),
         Some(text) => toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?,
     };
+    let time_zone = match &config.library.time_zone {
+        Some(name) => TimeZone::get(name)
+            .map_err(|e| format!("{}: library.time_zone: {e}", path.display()))?,
+        None => TimeZone::system(),
+    };
     let Some(table) = config.call_number.author_table else {
         return Ok(Loaded {
             author_table: None,
             table_report: None,
+            time_zone,
         });
     };
     let table_path = data_dir.join(table);
@@ -66,6 +86,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
     Ok(Loaded {
         author_table: Some(Arc::new(table)),
         table_report: Some((table_path, report)),
+        time_zone,
     })
 }
 
@@ -143,5 +164,17 @@ mod tests {
         )
         .unwrap();
         assert!(load(dir.path()).unwrap_err().contains("unknown field"));
+    }
+
+    #[test]
+    fn the_time_zone_is_named_or_the_systems() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(load(dir.path()).unwrap().time_zone, TimeZone::system());
+        let config = dir.path().join("elzevir.toml");
+        std::fs::write(&config, "[library]\ntime_zone = \"America/Sao_Paulo\"\n").unwrap();
+        let zone = load(dir.path()).unwrap().time_zone;
+        assert_eq!(zone.iana_name(), Some("America/Sao_Paulo"));
+        std::fs::write(&config, "[library]\ntime_zone = \"Mars/Olympus\"\n").unwrap();
+        assert!(load(dir.path()).unwrap_err().contains("library.time_zone"));
     }
 }
