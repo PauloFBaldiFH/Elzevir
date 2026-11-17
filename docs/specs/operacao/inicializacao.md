@@ -81,3 +81,9 @@ for encerrado abruptamente, pode restar uma pasta incompleta, que a próxima
 execução preserva e recusa. A verificação de volume não identifica toda camada
 de armazenamento por baixo de overlay nem pastas sincronizadas na nuvem;
 não use NFS/SMB, OneDrive ou equivalentes para os dados SQLite.
+## Pré-verificação de porta pelo instalador
+
+`init --check-port` verifica se o endereço solicitado pode ser vinculado antes
+de pedir a senha ou criar dados. Mantém a porta reservada durante a criação e
+a libera ao terminar. A verificação é opcional para usos offline de init;
+os instaladores a solicitam na primeira instalação.

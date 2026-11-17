@@ -1,0 +1,33 @@
+---
+source: crates/elzevir-panel/tests/live.rs
+expression: text
+---
+Administração do Elzevir
++Seções--------------------++Endereços e acesso--------------------------------------------------------------++Instituição selecionada-----+
+|  d Painel de controle    ||Em execução                                                                     ||Biblioteca de teste         |
+|  x Diagnóstico           ||                                                                                ||                            |
+|> a Endereços e acesso    ||l Entrar na Cloudflare · s Domínio próprio · t Teste · h Log                    ||Listener configurado        |
+|  b Backup e agendamentos ||g registrar/retomar *.elzevir.app · c consultar broker · w/W equipe             ||127.0.0.1:0                 |
+|  u Atualizações          ||ligar/desligar · k exportar recuperação · o recuperar · n renovar · z           ||                            |
+|  r Reiniciar             ||desvincular domínio · Q QR                                                      ||Listener observado          |
+|                          ||Domínio & Túnel (*.elzevir.app)                                                 ||127.0.0.1:8080              |
+|                          ||Estado do cadastro indisponível                                                 ||                            |
+|                          ||Não foi possível observar a configuração do túnel público.                      ||Última consulta: há 0       |
+|                          ||                                                                                ||segundos                    |
+|                          ||Modo no arquivo carregado: Mesmo endereço                                       ||                            |
+|                          ||Modo em execução: Nomes de host separados                                       ||Observações somente de      |
+|                          ||Nome de host do catálogo: catalog.example                                       ||leitura                     |
+|                          ||Nome de host da equipe: staff.example                                           ||                            |
+|                          ||Catálogo (neste computador): http://catalog.example:8080/                       ||                            |
+|                          ||Equipe (neste computador): http://staff.example:8080/equipe                     ||                            |
+|                          ||Teste HTTP do catálogo: OK                                                      ||                            |
+|                          ||Teste HTTP do formulário de login: Falha                                        ||                            |
+|                          ||Início dos testes (UTC): 2026-11-16T12:00:00Z                                   ||                            |
+|                          ||v: testar catálogo e formulário de login | f: atualizar observações             ||                            |
+|                          ||Testes feitos nesta máquina; DNS, TLS e acesso remoto não foram testados.       ||                            |
+|                          ||                                                                                ||                            |
+|                          ||Alternativas nas interfaces locais (sem teste de outro computador)              ||                            |
+|                          ||Sem alternativas IP para este bind; nomes exigem DNS/hosts no cliente.          ||                            |
+|                          ||Publicação na internet/túnel: não configurada nesta etapa.                      ||                            |
++--------------------------++--------------------------------------------------------------------------------++----------------------------+
+Tab/setas: navegar | f: atualizar | PgUp/PgDn: rolar | Ctrl+P: paleta | q/Ctrl+C: sair

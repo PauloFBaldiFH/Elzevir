@@ -17,8 +17,8 @@ com HTTP local, use `serve --config elzevir.toml --insecure-cookies`.
 
 Para automação, use `init --password-stdin` com entrada redirecionada ou a
 variável `ELZEVIR_STAFF_PASSWORD`. A [especificação da inicialização](docs/specs/operacao/inicializacao.md)
-descreve as opções e os limites desta etapa. Instaladores e registro como
-serviço serão entregues separadamente.
+descreve as opções e os limites desta etapa. Consulte o [guia de operação](docs/operacao.md)
+para instaladores Linux/Windows, serviço, painel, backups e atualizações.
 
 ## Saúde local
 
@@ -44,3 +44,15 @@ pronto. Veja o [contrato do status local](docs/specs/operacao/status-local.md).
 rotação diária e retenção configurada para sete arquivos. Os eventos de início,
 parada e indexação omitem o conteúdo das requisições. Consulte o
 [contrato dos logs operacionais](docs/specs/operacao/logs-operacionais.md).
+
+## Painel de administração
+
+```sh
+elzevir panel --demo --lang pt-BR
+elzevir panel --config elzevir.toml --lang pt-BR
+```
+
+O modo demo usa dados simulados. O modo conectado consulta a instituição
+selecionada e mostra as ações disponíveis em cada seção. As operações que
+controlam serviços e arquivos de instalação exigem privilégios do operador.
+Veja o [guia e a situação do roadmap operacional](docs/operacao.md).

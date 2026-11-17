@@ -24,6 +24,8 @@ pub(crate) struct Status {
     schema: u8,
     pub(crate) state: &'static str,
     pub(crate) health: Option<Report>,
+    pub(crate) listen: Option<std::net::SocketAddr>,
+    pub(crate) staff: Option<crate::access_config::StaffMode>,
     reason: Option<&'static str>,
 }
 
@@ -33,6 +35,8 @@ impl Status {
             schema: 1,
             state,
             health: None,
+            listen: None,
+            staff: None,
             reason: Some(reason),
         }
     }
@@ -87,6 +91,12 @@ pub(crate) fn inspect(directory: &std::path::Path) -> Status {
     let Ok(info) = runtime_info::read(&directory.join(runtime_info::NAME)) else {
         return Status::state("unavailable", "invalid_runtime_metadata");
     };
+    if info.admin.is_some() {
+        return match crate::admin::status(&info) {
+            Ok(health) => from_health(health, info.listen, info.staff),
+            Err(_) => Status::state("unavailable", "admin_unavailable"),
+        };
+    }
     let config = ureq::Agent::config_builder()
         .proxy(None)
         .http_status_as_error(false)
@@ -117,10 +127,14 @@ pub(crate) fn inspect(directory: &std::path::Path) -> Status {
     if !matches!((code, health.healthy()), (200, true) | (503, false)) {
         return Status::state("unavailable", "invalid_health_response");
     }
-    from_health(health)
+    from_health(health, info.listen, info.staff)
 }
 
-fn from_health(health: Report) -> Status {
+fn from_health(
+    health: Report,
+    listen: Option<std::net::SocketAddr>,
+    staff: Option<crate::access_config::StaffMode>,
+) -> Status {
     Status {
         schema: 1,
         state: if health.healthy() {
@@ -129,6 +143,8 @@ fn from_health(health: Report) -> Status {
             "degraded"
         },
         health: Some(health),
+        listen,
+        staff,
         reason: None,
     }
 }

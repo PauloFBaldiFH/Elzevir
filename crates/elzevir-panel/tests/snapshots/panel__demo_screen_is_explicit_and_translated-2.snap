@@ -1,0 +1,27 @@
+---
+source: crates/elzevir-panel/tests/panel.rs
+expression: "screen(&panel, \"pt-BR\", 120, 24)"
+---
+Administração do Elzevir | DEMO
+┌Seções────────────────────┐┌Painel de controle──────────────────────────────────────────┐┌Instituição selecionada─────┐
+│> d Painel de controle    ││DEMONSTRAÇÃO - dados simulados                              ││Biblioteca de demonstração  │
+│  x Diagnóstico           ││                                                            ││                            │
+│  a Endereços e acesso    ││Estado do serviço, endereços e saúde aparecerão aqui quando ││Instituição fictícia        │
+│  b Backup e agendamentos ││conectado.                                                  ││                            │
+│  u Atualizações          ││                                                            ││Estado do servidor: não lido│
+│  r Reiniciar             ││Apenas demonstração. Nenhuma operação está disponível e nada││                            │
+│                          ││é alterado no sistema.                                      ││| Animação de demonstração  │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+└──────────────────────────┘└────────────────────────────────────────────────────────────┘└────────────────────────────┘
+Tab/setas: navegar | d/x/a/b/u/r: seção | Ctrl+P: paleta | Enter/Esc: fechar paleta | q/Ctrl+C: sair

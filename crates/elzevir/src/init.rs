@@ -30,9 +30,20 @@ pub(crate) struct InitArgs {
     /// Read a password line from redirected stdin instead of prompting.
     #[arg(long)]
     password_stdin: bool,
+    /// Reserve the listen address during initialization, for managed installation.
+    #[arg(long)]
+    check_port: bool,
 }
 
 pub(crate) fn run(args: &InitArgs) -> Result<(), String> {
+    let _listener = if args.check_port {
+        Some(
+            std::net::TcpListener::bind(args.listen)
+                .map_err(|_| "listen address is unavailable; no institution was created")?,
+        )
+    } else {
+        None
+    };
     let config = new_path(&args.config)?;
     let data_dir = new_path(&args.data_dir)?;
     if config == data_dir {
@@ -64,7 +75,7 @@ pub(crate) fn run(args: &InitArgs) -> Result<(), String> {
         return Err("password must have at least 8 characters and at most 1024 bytes".to_owned());
     }
     let hash = hash_password(&password).map_err(|error| error.to_string())?;
-    let mut builder = tempfile::Builder::new();
+    let mut builder = crate::private_temp::builder();
     // No random suffix: create exactly the requested directory, exclusively.
     builder
         .prefix(data_dir.file_name().ok_or("invalid data directory")?)

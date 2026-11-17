@@ -1,0 +1,23 @@
+[package]
+name = "elzevir-panel"
+description = "Terminal administration interface, independent of storage and system operations."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+ratatui = { version = "0.30", default-features = false, features = ["crossterm"] }
+fluent-bundle.workspace = true
+unic-langid.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+qrcode = { version = "0.14", default-features = false }
+
+[dev-dependencies]
+insta.workspace = true
+
+[lints]
+workspace = true

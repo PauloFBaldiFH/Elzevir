@@ -78,9 +78,45 @@ impl Sessions {
         self.lock().remove(id);
     }
 
+    /// Counts unexpired staff sessions without returning identities or extending idle time.
+    #[must_use]
+    pub fn count(&self) -> usize {
+        self.count_at(Instant::now())
+    }
+
+    fn count_at(&self, now: Instant) -> usize {
+        let mut active = self.lock();
+        active.retain(|_, session| now.saturating_duration_since(session.last_seen) < self.idle);
+        active.len()
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, Session>> {
         // A poisoned lock means a request panicked mid-update of one entry; the map is
         // still a valid map, and the worst case is one stale session.
         self.active.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+#[cfg(test)]
+mod operational_tests {
+    use super::*;
+    #[test]
+    fn operational_count_does_not_extend_session_idle_time() {
+        let sessions = Sessions::new(Duration::from_mins(1));
+        let now = Instant::now();
+        sessions.lock().insert(
+            "fictional-token".to_owned(),
+            Session {
+                identity: StaffIdentity {
+                    id: elzevir_app::staff::StaffId(1),
+                    login: "fictional".to_owned(),
+                    permissions: std::collections::BTreeSet::default(),
+                },
+                csrf: "fictional-csrf".to_owned(),
+                last_seen: now,
+            },
+        );
+        assert_eq!(sessions.count_at(now + Duration::from_secs(59)), 1);
+        assert_eq!(sessions.count_at(now + Duration::from_mins(1)), 0);
     }
 }

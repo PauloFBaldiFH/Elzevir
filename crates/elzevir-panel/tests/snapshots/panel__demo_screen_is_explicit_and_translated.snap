@@ -1,0 +1,27 @@
+---
+source: crates/elzevir-panel/tests/panel.rs
+expression: "screen(&panel, \"en\", 120, 24)"
+---
+Elzevir administration | DEMO
+┌Sections──────────────────┐┌Dashboard───────────────────────────────────────────────────┐┌Selected institution────────┐
+│> d Dashboard             ││DEMONSTRATION - simulated data                              ││Demonstration library       │
+│  x Diagnostics           ││                                                            ││                            │
+│  a Addresses and access  ││Service status, addresses and health will appear here when  ││Fictitious institution      │
+│  b Backups and schedules ││connected.                                                  ││                            │
+│  u Updates               ││                                                            ││Server status: not read     │
+│  r Restart               ││Demo only. No operation is available and no system changes  ││                            │
+│                          ││are made.                                                   ││| Demo animation            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+│                          ││                                                            ││                            │
+└──────────────────────────┘└────────────────────────────────────────────────────────────┘└────────────────────────────┘
+Tab/arrows: navigate | d/x/a/b/u/r: section | Ctrl+P: palette | Enter/Esc: close palette | q/Ctrl+C: quit

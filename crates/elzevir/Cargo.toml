@@ -12,6 +12,7 @@ publish.workspace = true
 elzevir-app.workspace = true
 elzevir-domain.workspace = true
 elzevir-marc.workspace = true
+elzevir-panel.workspace = true
 elzevir-store.workspace = true
 elzevir-web.workspace = true
 elzevir-sip2.workspace = true
@@ -20,7 +21,21 @@ elzevir-web-templates.workspace = true
 axum.workspace = true
 clap.workspace = true
 getrandom.workspace = true
-jiff.workspace = true
+interprocess = { version = "2.4", features = ["tokio"] }
+fs4 = "0.13"
+age = { version = "=0.11.5", default-features = false }
+tar = "0.4"
+flate2 = "1"
+zip = { version = "9.6", default-features = false, features = ["deflate-flate2"] }
+sha2 = "0.10"
+base64 = "0.23"
+ring = "0.17"
+ipnet = "2"
+cap-std = "4.0"
+cap-fs-ext = "4.0"
+zeroize = "1"
+sysinfo = { version = "0.40", default-features = false, features = ["disk", "system", "network"] }
+jiff = { workspace = true, features = ["serde"] }
 serde.workspace = true
 serde_json.workspace = true
 tracing = { version = "0.1", default-features = false, features = ["std"] }
@@ -35,17 +50,18 @@ rustls.workspace = true
 rustls-native-certs.workspace = true
 ureq.workspace = true
 stats_alloc = { workspace = true, optional = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "net", "signal", "macros", "sync"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "net", "signal", "macros", "sync", "io-util", "time"] }
 
 [dev-dependencies]
 http-body-util.workspace = true
 tower.workspace = true
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
-rustix = { version = "1", features = ["fs"] }
+rustix = { version = "1", features = ["fs", "process"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-sysinfo = { version = "0.40", default-features = false, features = ["disk"] }
+widestring = "1"
+windows-service = "=0.8.1"
 
 [[bench]]
 name = "opac"

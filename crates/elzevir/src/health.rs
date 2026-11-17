@@ -16,6 +16,14 @@ pub(crate) enum Check {
     Failed,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Integrity {
+    Ok,
+    Failed,
+    Unknown,
+}
+
 /// Versioned, bounded health response; never includes paths or user data.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -41,6 +49,7 @@ pub(crate) struct Probe {
     started: Instant,
     indexer: Mutex<Option<(Check, Instant)>>,
     inspections: Arc<tokio::sync::Semaphore>,
+    integrity_checks: Arc<tokio::sync::Semaphore>,
 }
 
 impl Probe {
@@ -54,6 +63,7 @@ impl Probe {
             started: Instant::now(),
             indexer: Mutex::new(None),
             inspections: Arc::new(tokio::sync::Semaphore::new(4)),
+            integrity_checks: Arc::new(tokio::sync::Semaphore::new(1)),
         })
     }
 
@@ -119,6 +129,58 @@ impl Probe {
             Err(_) => self.report(Check::Failed),
         }
     }
+    pub(crate) async fn integrity(self: &Arc<Self>) -> Integrity {
+        let Ok(permit) = Arc::clone(&self.integrity_checks).try_acquire_owned() else {
+            return Integrity::Unknown;
+        };
+        let probe = Arc::clone(self);
+        tokio::task::spawn_blocking(move || {
+            // Cancellation must not release the concurrency bound before SQLite finishes.
+            let _permit = permit;
+            probe
+                .store
+                .readers()
+                .read_with_hooks(|connection| {
+                    let started = Instant::now();
+                    let interrupted = Arc::new(std::sync::atomic::AtomicBool::new(false));
+                    let timeout = Arc::clone(&interrupted);
+                    let active = Arc::new(std::sync::atomic::AtomicBool::new(true));
+                    let checking = Arc::clone(&active);
+                    if connection
+                        .progress_handler(
+                            1000,
+                            Some(move || {
+                                let expired = checking.load(std::sync::atomic::Ordering::Relaxed)
+                                    && started.elapsed() >= Duration::from_secs(1);
+                                timeout.store(expired, std::sync::atomic::Ordering::Relaxed);
+                                expired
+                            }),
+                        )
+                        .is_err()
+                    {
+                        active.store(false, std::sync::atomic::Ordering::Relaxed);
+                        return Ok(Integrity::Unknown);
+                    }
+                    let result = connection
+                        .query_row("PRAGMA quick_check(1)", [], |row| row.get::<_, String>(0));
+                    // Even if removing a hook fails, it must not interrupt a future borrower.
+                    active.store(false, std::sync::atomic::Ordering::Relaxed);
+                    let restored = connection.progress_handler(0, None::<fn() -> bool>).is_ok();
+                    let state =
+                        if !restored || interrupted.load(std::sync::atomic::Ordering::Relaxed) {
+                            Integrity::Unknown
+                        } else if result.is_ok_and(|message| message == "ok") {
+                            Integrity::Ok
+                        } else {
+                            Integrity::Failed
+                        };
+                    Ok::<_, std::convert::Infallible>(state)
+                })
+                .unwrap_or_else(|never| match never {})
+        })
+        .await
+        .unwrap_or(Integrity::Unknown)
+    }
 }
 
 fn index_state(observation: Option<(Check, Instant)>, now: Instant) -> Check {
@@ -147,6 +209,20 @@ pub(crate) async fn endpoint(State(probe): State<Arc<Probe>>) -> impl axum::resp
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn explicit_integrity_is_bounded_and_leaves_readers_usable() {
+        let root = tempfile::tempdir().unwrap();
+        let data = crate::open_store(root.path()).unwrap();
+        let probe = Arc::new(Probe::new(Arc::new(data.store)).unwrap());
+        let busy = Arc::clone(&probe.integrity_checks)
+            .try_acquire_owned()
+            .unwrap();
+        assert_eq!(probe.integrity().await, Integrity::Unknown);
+        drop(busy);
+        assert_eq!(probe.integrity().await, Integrity::Ok);
+        assert_eq!(probe.integrity().await, Integrity::Ok);
+        assert_eq!(probe.snapshot().await.database, Check::Ok);
+    }
 
     #[tokio::test]
     async fn inspection_pressure_is_bounded_and_recovers_when_capacity_returns() {
