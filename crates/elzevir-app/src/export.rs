@@ -10,7 +10,9 @@ use std::io::{BufRead, Write};
 use std::num::NonZeroUsize;
 
 use elzevir_domain::catalog::{InstanceId, WorkId};
-use elzevir_marc::{Limits, MarcReader, Record, RecordRef};
+use elzevir_marc::{
+    Limits, MARCXML_COLLECTION_FOOTER, MARCXML_COLLECTION_HEADER, MarcReader, Record, RecordRef,
+};
 
 use crate::catalog::{CatalogReadError, NewRecord};
 use crate::marc_mapping::{bibframe_to_marc, marc_to_bibframe};
@@ -193,6 +195,63 @@ pub fn export_record<S: RecordSource + ?Sized>(
             Ok(Some(xml.into_bytes()))
         }
     }
+}
+
+/// A selection of records written as one file (docs/specs/catalogo/lote.md, items 7
+/// and 8).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SelectionExport {
+    /// The file: the records one after the other, or one MARCXML collection.
+    pub bytes: Vec<u8>,
+    /// Records left out, in the order asked.
+    pub failures: Vec<FailedExport>,
+}
+
+/// The records of `instances`, in that order, in `format`, each written as the batch
+/// export writes it. Instances that do not exist are left out silently; records that
+/// cannot be written are left out and named.
+///
+/// # Errors
+///
+/// When the catalog cannot be read.
+pub fn export_selection<S: RecordSource + ?Sized>(
+    source: &S,
+    instances: &[InstanceId],
+    format: RecordFormat,
+    limits: &Limits,
+) -> Result<SelectionExport, CatalogReadError> {
+    let mut export = SelectionExport::default();
+    let mut xml = String::new();
+    if format == RecordFormat::MarcXml {
+        xml.push_str(MARCXML_COLLECTION_HEADER);
+    }
+    let mut marc21 = Vec::new();
+    for &instance in instances {
+        let Some(stored) = stored_record(source, instance)? else {
+            continue;
+        };
+        marc21.clear();
+        let written = to_marc(&stored.record, limits, &mut marc21).and_then(|()| match format {
+            RecordFormat::Marc21 => {
+                export.bytes.extend_from_slice(&marc21);
+                Ok(())
+            }
+            RecordFormat::MarcXml => {
+                let record = RecordRef::parse(&marc21, limits).map_err(ExportFailure::Source)?;
+                Record::from_ref(&record)
+                    .write_marcxml_collection_record(&mut xml)
+                    .map_err(ExportFailure::Write)
+            }
+        });
+        if let Err(failure) = written {
+            export.failures.push(FailedExport { instance, failure });
+        }
+    }
+    if format == RecordFormat::MarcXml {
+        xml.push_str(MARCXML_COLLECTION_FOOTER);
+        export.bytes = xml.into_bytes();
+    }
+    Ok(export)
 }
 
 /// One stored record; `None` when the Instance does not exist.

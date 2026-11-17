@@ -8,6 +8,7 @@
 mod access;
 mod assets;
 mod authorities;
+mod batch;
 mod catalog;
 mod creating;
 mod described;
@@ -130,6 +131,7 @@ pub fn router(state: AppState) -> Router {
         .route("/static/elzevir-icons.svg", get(assets::icons))
         .route("/equipe", get(staff::home))
         .route("/equipe/acervo", get(catalog::catalog))
+        .route("/equipe/acervo/lote/marc", get(batch::export_marc))
         .route(
             "/equipe/acervo/instancia/{id}/marc",
             get(catalog::export_marc),
