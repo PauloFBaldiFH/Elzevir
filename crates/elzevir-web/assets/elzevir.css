@@ -177,6 +177,20 @@ main:has(.wide) { max-width: none; padding: 0; }
 .catalog-search input { flex: 1; background: var(--card-bg); border-radius: 10px; }
 .catalog-search button { border-radius: 10px; font-weight: 700; }
 .count { margin: 14px 0 0; font-size: 0.85rem; }
+/* Facets strip (spec de UI §20 item 8): menus with counts and removable chips, one line. */
+.facet-strip { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; font-size: 0.82rem; }
+.facet-menu { position: relative; }
+.facet-menu > summary { list-style: none; cursor: pointer; padding: 3px 10px; border: 1px solid var(--elzevir-color-border); border-radius: 999px; background: var(--card-bg); }
+.facet-menu > summary::-webkit-details-marker { display: none; }
+.facet-menu > summary::after { content: " ▾"; color: var(--text-muted); }
+.facet-menu[open] > summary { border-color: var(--work-border); }
+.facet-options { position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; min-width: 14rem; max-height: 20rem; overflow-y: auto; margin: 0; padding: 6px 0; list-style: none; background: var(--card-bg); border: 1px solid var(--elzevir-color-border); border-radius: 10px; box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12); }
+.facet-options li { display: flex; justify-content: space-between; gap: 12px; padding: 3px 12px; }
+.facet-options a { color: inherit; text-decoration: none; }
+.facet-options a:hover { text-decoration: underline; }
+.facet-count { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.chip.chip-filter { margin: 0; padding: 2px 10px; border-radius: 999px; border-color: var(--work-border); background: var(--work-bg); color: var(--work-accent); text-decoration: none; }
+.facet-clear { color: var(--text-muted); }
 .families { list-style: none; padding: 0; margin: 0; }
 .family { content-visibility: auto; contain-intrinsic-size: auto 3.5rem; }
 /* The compact row (spec de UI §20 item 2): the summary of the family's <details>. */

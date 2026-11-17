@@ -9,6 +9,7 @@
     <label class="visually-hidden" for="q">{{ t.get("staff-catalog-search-label") }}</label>
     <input id="q" name="q" type="search" value="{{ query }}" maxlength="256" autofocus
            placeholder="{{ t.get("staff-catalog-search-placeholder") }}">
+    {% if let Some(strip) = strip %}{% for kept in strip.kept %}<input type="hidden" name="f" value="{{ kept }}">{% endfor %}{% endif %}
     <button type="submit">{{ t.get("staff-catalog-search-button") }}</button>
   </form>
   {% if can_catalogue %}<button type="button" class="new-family" data-action="new-family" aria-keyshortcuts="N">+ {{ t.get("new-family") }} <kbd>{{ t.get("new-family-hint") }}</kbd></button>{% endif %}
@@ -19,6 +20,25 @@
 </div>
 <nav class="trail" aria-label="{{ t.get("staff-catalog-focus-label") }}" hidden><span>{{ t.get("staff-catalog-title") }}</span> › <strong class="trail-family"></strong> <span class="trail-level" hidden></span></nav>
 <section id="families" aria-live="polite"{% if let Some(scan) = scan %} data-scan="{{ scan.kind }}"{% if let Some(instance) = scan.instance %} data-scan-instance="{{ instance }}"{% endif %}{% if let Some(item) = scan.item %} data-scan-item="{{ item }}"{% endif %}{% if let Some(isbn) = scan.isbn %} data-scan-isbn="{{ isbn }}"{% endif %}{% endif %}>
+  {% if let Some(strip) = strip %}
+  <div class="facet-strip" role="group" aria-label="{{ t.get("facet-strip-label") }}">
+    <span class="facet-families muted">{{ strip.families_text(t) }}</span>
+    {% for menu in strip.menus %}
+    <details class="facet-menu" data-facet="{{ menu.name }}">
+      <summary>{{ t.get(menu.title_key) }}</summary>
+      <ul class="facet-options">
+        {% for option in menu.options %}
+        <li>{% if let Some(href) = option.add_url %}<a href="{{ href }}">{{ option.label }}</a>{% else %}<strong>{{ option.label }}</strong>{% endif %} <span class="facet-count">{{ option.families }}</span></li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endfor %}
+    {% for filter in strip.active %}
+    <a class="chip chip-filter" href="{{ filter.remove_url }}" title="{{ t.get("facet-remove") }}">{{ t.get(filter.facet_key) }}: {{ filter.label }} <span aria-hidden="true">×</span></a>
+    {% endfor %}
+    {% if let Some(clear) = strip.clear_url %}<a class="facet-clear" href="{{ clear }}">{{ t.get("facet-clear") }}</a>{% endif %}
+  </div>
+  {% endif %}
   {% if let Some(text) = count_text() %}<p class="muted count">{{ text }}</p>{% endif %}
   <ol class="families">
   {% block rows %}

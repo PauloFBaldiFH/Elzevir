@@ -65,7 +65,7 @@ pub(crate) fn set_statements(tx: &WriteTx<'_>, update: &StatementsUpdate) -> Set
     check_entities(connection, &update.statements)?;
     connection
         .execute(
-            "DELETE FROM statements WHERE subject_kind = ?1 AND subject_id = ?2",
+            "DELETE FROM statements WHERE subject_kind = ?1 AND subject_id = ?2 AND parent IS NULL",
             params![kind_number(subject.entity), subject.id],
         )
         .map_err(StoreError::from)?;
@@ -114,7 +114,7 @@ pub(crate) fn store_description(
     let key = params![kind_number(subject.entity), subject.id];
     connection
         .execute(
-            "DELETE FROM statements WHERE subject_kind = ?1 AND subject_id = ?2",
+            "DELETE FROM statements WHERE subject_kind = ?1 AND subject_id = ?2 AND parent IS NULL",
             key,
         )
         .map_err(StoreError::from)?;
@@ -165,7 +165,7 @@ pub(crate) fn replace_property(
     check_entities(connection, replacing)?;
     connection
         .execute(
-            "DELETE FROM statements WHERE subject_kind = ?1 AND subject_id = ?2",
+            "DELETE FROM statements WHERE subject_kind = ?1 AND subject_id = ?2 AND parent IS NULL",
             params![kind_number(subject.entity), subject.id],
         )
         .map_err(StoreError::from)?;

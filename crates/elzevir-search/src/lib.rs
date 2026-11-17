@@ -10,8 +10,9 @@
 mod facets;
 mod schema;
 
+use std::collections::HashSet;
 use std::path::Path;
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use elzevir_app::material::{CarrierKind, ContentKind, Material};
 use elzevir_app::parallelism::Parallelism;
@@ -27,8 +28,8 @@ use tantivy::query::{
 };
 use tantivy::schema::{IndexRecordOption, Value};
 use tantivy::{
-    Document, Index, IndexReader, IndexSettings, IndexWriter, Order, ReloadPolicy, TantivyDocument,
-    Term,
+    Document, Index, IndexReader, IndexSettings, IndexWriter, Order, ReloadPolicy, Searcher,
+    TantivyDocument, Term,
 };
 
 use crate::facets::FacetCollector;
@@ -46,6 +47,11 @@ pub struct TantivyIndex {
     fields: Fields,
     writer: Mutex<IndexWriter>,
     reader: IndexReader,
+    /// The facets of the whole catalog for the staff, by searcher generation: every
+    /// browsing page shows them, and they change only with a commit.
+    whole: Mutex<Option<(u64, FacetCounts)>>,
+    /// The families with more than one Instance, by searcher generation, for counting.
+    shared: Mutex<Option<(u64, Arc<HashSet<u64>>)>>,
 }
 
 impl TantivyIndex {
@@ -88,12 +94,21 @@ impl TantivyIndex {
         Self::start(Index::create_in_ram(schema), fields, parallelism)
     }
 
-    fn start(index: Index, fields: Fields, parallelism: Parallelism) -> Result<Self, SearchError> {
+    fn start(
+        mut index: Index,
+        fields: Fields,
+        parallelism: Parallelism,
+    ) -> Result<Self, SearchError> {
         schema::register_tokenizers(&index);
         let threads = match parallelism {
             Parallelism::Serial => 1,
             Parallelism::Threads(threads) => threads.get().min(MAX_THREADS),
         };
+        if threads > 1 {
+            // Segments are searched in parallel: a filter that matches most of a large
+            // catalog counts its facets on every core (facetas.md, item 12).
+            index.set_multithread_executor(threads).map_err(error)?;
+        }
         let writer = index
             .writer_with_num_threads(threads, threads.saturating_mul(MEMORY_PER_THREAD))
             .map_err(error)?;
@@ -107,6 +122,8 @@ impl TantivyIndex {
             fields,
             writer: Mutex::new(writer),
             reader,
+            whole: Mutex::new(None),
+            shared: Mutex::new(None),
         })
     }
 
@@ -292,6 +309,22 @@ impl TantivyIndex {
         }
     }
 
+    /// The families with more than one Instance in what `searcher` reads, computed once
+    /// per generation.
+    fn shared_families(&self, searcher: &Searcher) -> Result<Arc<HashSet<u64>>, SearchError> {
+        let generation = searcher.generation().generation_id();
+        // A poisoned cache only holds a derived set; it is computed again.
+        let mut cached = self.shared.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some((at, shared)) = cached.as_ref()
+            && *at == generation
+        {
+            return Ok(Arc::clone(shared));
+        }
+        let shared = Arc::new(facets::shared_families(searcher).map_err(error)?);
+        *cached = Some((generation, Arc::clone(&shared)));
+        Ok(shared)
+    }
+
     /// The OPAC leaves out the Instances hidden from it; the staff sees them all.
     fn scoped(&self, query: Box<dyn Query>, scope: SearchScope) -> Box<dyn Query> {
         match scope {
@@ -429,9 +462,29 @@ impl SearchIndex for TantivyIndex {
         scope: SearchScope,
     ) -> Result<FacetCounts, SearchError> {
         let searcher = self.reader.searcher();
+        let whole =
+            asked.text.trim().is_empty() && asked.filters.is_empty() && scope == SearchScope::Staff;
+        let generation = searcher.generation().generation_id();
+        if whole {
+            // A poisoned cache only holds counts; they are recomputed below.
+            let cached = self.whole.lock().unwrap_or_else(PoisonError::into_inner);
+            if let Some((at, counts)) = cached.as_ref()
+                && *at == generation
+            {
+                return Ok(counts.clone());
+            }
+        }
         let query = self.scoped(self.filtered(asked), scope);
-        let families = searcher.search(&*query, &FacetCollector).map_err(error)?;
-        Ok(facets::counts(families, asked.filters))
+        let collector = FacetCollector {
+            shared: self.shared_families(&searcher)?,
+        };
+        let families = searcher.search(&*query, &collector).map_err(error)?;
+        let counts = facets::counts(families, asked.filters);
+        if whole {
+            *self.whole.lock().unwrap_or_else(PoisonError::into_inner) =
+                Some((generation, counts.clone()));
+        }
+        Ok(counts)
     }
 }
 
@@ -647,17 +700,57 @@ mod tests {
         };
         let counts = index.facets(&asked, SearchScope::Staff).unwrap();
         assert_eq!(values(&counts, Facet::Year), [("1925".to_owned(), 1)]);
-        let counts = facets::counts(
-            index
-                .reader
-                .searcher()
-                .search(&AllQuery, &FacetCollector)
-                .unwrap(),
-            &late,
-        );
+        let searcher = index.reader.searcher();
+        let collector = FacetCollector {
+            shared: index.shared_families(&searcher).unwrap(),
+        };
+        let counts = facets::counts(searcher.search(&AllQuery, &collector).unwrap(), &late);
         let years = values(&counts, Facet::Year);
         assert_eq!(years.len(), FACET_VALUES + 1);
         assert_eq!(years.last().map(|(v, _)| v.as_str()), Some("1925"));
+    }
+
+    #[test]
+    fn a_family_split_across_segments_counts_once() {
+        let index = indexed(vec![document(1, 10, Some(5), &["por"], &["1"])]);
+        // A second commit makes a second segment with the same Hub.
+        index
+            .apply(IndexBatch {
+                upserts: vec![
+                    document(2, 11, Some(5), &["por"], &["1"]),
+                    document(3, 12, None, &["por"], &["1"]),
+                ],
+                removals: Vec::new(),
+                cursor: 2,
+            })
+            .unwrap();
+        assert!(index.reader.searcher().segment_readers().len() >= 2);
+        let filters = Filter::parse([("branch", "1")]);
+        let asked = SearchQuery {
+            text: "",
+            filters: &filters,
+        };
+        let counts = index.facets(&asked, SearchScope::Staff).unwrap();
+        assert_eq!(counts.families, 2);
+        assert_eq!(values(&counts, Facet::Language), [("por".to_owned(), 2)]);
+    }
+
+    #[test]
+    fn the_whole_catalog_counts_follow_each_commit() {
+        let index = indexed(vec![document(1, 10, None, &["por"], &[])]);
+        let all = SearchQuery::words("");
+        assert_eq!(index.facets(&all, SearchScope::Staff).unwrap().families, 1);
+        assert_eq!(index.facets(&all, SearchScope::Staff).unwrap().families, 1);
+        index
+            .apply(IndexBatch {
+                upserts: vec![document(2, 11, None, &["eng"], &[])],
+                removals: Vec::new(),
+                cursor: 2,
+            })
+            .unwrap();
+        let counts = index.facets(&all, SearchScope::Staff).unwrap();
+        assert_eq!(counts.families, 2);
+        assert_eq!(values(&counts, Facet::Language).len(), 2);
     }
 
     #[test]
