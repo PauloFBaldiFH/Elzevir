@@ -70,3 +70,18 @@ O arquivo da LC não entra no repositório (242 MB); só o registro com delimita
 - Exportar só uma parte do acervo (por unidade, por data, por lista de ids), como `export_records.pl`.
 - Acrescentar o `999 $c` com o id do Elzevir na exportação.
 - Importação pela tela, no servidor.
+
+## 5. Compatibilidade
+
+O contrato v0 acima continua descrevendo os comandos disponíveis. Os novos
+formatos e opções entram por PRs separados; a importação ISO 2709 direta,
+suas ações de casamento, códigos de saída e trava da pasta são preservados.
+
+## 6. Evolução planejada: importação universal
+
+Ver [importação universal](importacao-universal.md), proposta em I0.
+A detecção pelo conteúdo entra em I2, os leitores por etapas e
+`elzevir import --data-dir DIR --preview ARQUIVO` em I5. A prévia não grava
+o catálogo, códigos, auditoria ou efeitos. A tela web de I7 chama a mesma
+preparação em `elzevir-app`, dentro de `serve`; não abre a CLI contra a
+pasta já travada pelo servidor. Nenhuma dessas capacidades é entregue em I0.

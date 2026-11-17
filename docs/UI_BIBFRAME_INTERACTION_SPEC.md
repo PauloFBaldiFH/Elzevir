@@ -28,6 +28,7 @@
 18. [Muro Acervo ↔ Leitores e empréstimo](#18-muro-acervo--leitores-e-empréstimo)
 19. [Decisões do esboço v9](#19-decisões-do-esboço-v9)
 20. [Mecânicas pelo olhar do catalogador](#20-mecânicas-pelo-olhar-do-catalogador)
+21. [Importação universal na interface da equipe](#21-importação-universal-na-interface-da-equipe)
 
 ## 1. Princípios
 
@@ -503,3 +504,65 @@ Aprovadas por Paulo em 2026-11-14, com o rascunho `elzevir-rascunho-v10.html` co
 | 8 (listas de trabalho e facetas na faixa horizontal) | 2.10 (nova) |
 | 12 (largura das colunas) | 2.3 (feito) |
 | 11 (exportar o registro) | MARC21 e MARCXML na 2.4; BIBFRAME RDF/XML na 2.11 (nova); citação e intercâmbio na Fase 4 |
+
+## 21. Importação universal na interface da equipe
+
+Proposta I0; a implementação da tela pertence ao I7 da
+[spec de importação universal](specs/catalogo/importacao-universal.md).
+É uma rota própria da equipe, acessível com permissão de catalogação.
+Não é uma tela do TUI. Usa Askama + HTMX e Fluent (en antes de pt-BR).
+
+### 21.1 Passos e resultado visível
+
+1. **Enviar arquivo:** informar limites antes do envio; mostrar progresso
+   e permitir voltar sem criar registros no acervo.
+2. **Conferir formato:** exibir formato detectado e evidência, com troca
+   manual. Ambiguidade pede revisão; troca refaz a validação inteira.
+3. **Preparar e mapear:** analisar todo o arquivo. Para planilha, conferir
+   colunas → propriedades BIBFRAME/campos de exemplar; sugestões incertas
+   não são decisões. Cadastros são escolhidos por nome, sem siglas locais.
+4. **Ver prévia e editar:** três registros iniciais, com acesso aos demais,
+   em blocos Obra / Instância / Exemplar. Origem MARC tem inspeção ao lado,
+   comparação antes/depois e edição individual ou regras em lote.
+   Planilha é editada diretamente em BIBFRAME. Aplicar regra mostra alcance.
+5. **Rever problemas e casamento:** erros e avisos do arquivo inteiro,
+   navegáveis até o registro/campo; códigos de barras ausentes ou repetidos
+   vão para revisão. Mesmas regras e ações da CLI. Alterar uma escolha
+   invalida a prévia anterior e sinaliza a necessidade de preparar de novo.
+6. **Confirmar:** ação separada, com contagens, avisos e substituições.
+   Erros pendentes bloqueiam; avisos ficam visíveis. O botão de salvar uma
+   edição nunca confirma o lote. O servidor valida a revisão recebida.
+7. **Relatório:** mostrar o que a escritora realmente confirmou, inclusive
+   recusas de exemplares e interrupção parcial. Atualizar a página não
+   importa de novo. Informar a remoção do lote ao concluir a confirmação
+   e oferecer o relatório sem dados brutos de origem.
+
+### 21.2 Teclado e preservação da revisão
+
+- `Tab`/`Shift+Tab` percorrem controles na ordem visual; listas e grade
+  oferecem navegação por teclado, com rótulo, posição e erro associado.
+- `Enter` aciona o controle focado. Num campo não é confirmação de lote.
+  `Ctrl+Enter` aplica a edição ao lote preparado, sem gravar no acervo;
+  somente o botão explícito de confirmação inicia a importação.
+- `Esc` fecha primeiro menus, ajuda e comparação passageira; depois volta
+  diretamente à visão geral do lote. Mantém escolhas e edições preparadas.
+  Edição local ainda não salva oferece guardar ou descartar explicitamente;
+  erro ao guardar mantém o conteúdo e o foco no problema.
+- Sair da rota mantém o lote privado. **Cancelar lote** é outra ação, com
+  confirmação que informa a remoção do original e das edições. Nunca há
+  descarte por `Esc`, expiração de sessão ou troca de etapa sem aviso.
+- Não se perdem silenciosamente colunas, campos repetidos, registros
+  excluídos, regras, valores inválidos, avisos ou resultados parciais.
+
+### 21.3 Alcance das exceções e fronteiras
+
+A rota de preparação é uma exceção ao fluxo de tela única do §1.1.
+Editar MARC antes da importação é uma exceção restrita ao lote, na borda;
+não muda a inspeção somente leitura do MARC catalogado (§1.2 e §9).
+Salvar por bloco (§20.4) aqui significa salvar preparação fora do banco.
+Todas as propriedades e listas oficiais seguem o ADR 0003, sem perfis.
+
+O servidor exige sessão, permissão e CSRF em mudanças e confirmação;
+valida instituição, operador e id opaco do lote. Conteúdo enviado aparece
+escapado. A web chama portas de `elzevir-app`; não lê MARC ou SQLite
+diretamente, não inicia a CLI e não decide casamento no navegador.
