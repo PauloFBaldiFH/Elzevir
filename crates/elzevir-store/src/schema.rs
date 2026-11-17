@@ -489,6 +489,11 @@ const MIGRATIONS: &[&str] = &[
     "ALTER TABLE agents ADD COLUMN row_version INTEGER NOT NULL DEFAULT 1;",
     // 40: a subject is edited once for every record that names it, as an agent is.
     "ALTER TABLE subjects ADD COLUMN row_version INTEGER NOT NULL DEFAULT 1;",
+    // 41: the work lists read a person's commands, and the imports of a day, from the
+    // newest (docs/specs/catalogo/facetas.md, items 15 and 16).
+    "CREATE INDEX audit_by_actor ON audit_log (actor, seq) WHERE actor IS NOT NULL;
+     CREATE INDEX audit_by_kind ON audit_log (kind, at);
+     CREATE INDEX audit_entities_by_seq ON audit_entities (audit_seq);",
 ];
 
 /// The migration that creates `match_keys`.
@@ -558,6 +563,10 @@ const AGENT_VERSION: i64 = 39;
 /// Migration that gives subjects a version; only the tests that rewind the schema need it.
 #[cfg(test)]
 const SUBJECT_VERSION: i64 = 40;
+/// Migration that indexes the `audit_log` for the work lists; only the tests that rewind
+/// the schema need it.
+#[cfg(test)]
+const WORK_LISTS_VERSION: i64 = 41;
 /// Migration that lets an Instance be hidden from the OPAC.
 const OPAC_HIDDEN_VERSION: i64 = 38;
 /// Migration that drops `extra`.
@@ -1315,7 +1324,7 @@ mod catalog_tests {
             .unwrap();
         connection
             .execute_batch(
-                "DROP TABLE instance_notes; ALTER TABLE works DROP COLUMN audience;
+                "DROP INDEX audit_by_actor; DROP INDEX audit_by_kind; DROP INDEX audit_entities_by_seq; DROP TABLE instance_notes; ALTER TABLE works DROP COLUMN audience;
                  DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; DROP TABLE koha_type_statements; ALTER TABLE circulation_policies ADD COLUMN code TEXT; UPDATE circulation_policies SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 4 AND local_id = circulation_policies.id), 'P' || id); ALTER TABLE circulation_policies RENAME COLUMN name TO description; ALTER TABLE circulation_policies RENAME TO item_types; ALTER TABLE items RENAME COLUMN policy_id TO item_type; DELETE FROM koha_codes WHERE kind = 4; ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id), 'B' || id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id; ALTER TABLE items DROP COLUMN collection_id; DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes; ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone; ALTER TABLE branches DROP COLUMN email; ALTER TABLE branches DROP COLUMN url; ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; DROP TABLE subject_identifiers; ALTER TABLE subjects DROP COLUMN name_parts; DROP TABLE contribution_identifiers; ALTER TABLE contributions DROP COLUMN role_term; ALTER TABLE agents DROP COLUMN name_parts; DROP INDEX subjects_identity; ALTER TABLE subjects DROP COLUMN subdivisions; CREATE UNIQUE INDEX subjects_identity ON subjects (kind, heading, coalesce(thesaurus, 0)); ALTER TABLE works ADD COLUMN material_type INTEGER; ALTER TABLE instances ADD COLUMN material_type INTEGER; ALTER TABLE subjects DROP COLUMN row_version; ALTER TABLE agents DROP COLUMN row_version; ALTER TABLE instances DROP COLUMN opac_hidden; DROP TABLE audit_entities; ALTER TABLE audit_log DROP COLUMN at; PRAGMA user_version = 5;",
             )
             .unwrap();
@@ -2304,6 +2313,14 @@ mod catalog_tests {
     }
 
     fn rewind(connection: &Connection, version: i64) {
+        if version < WORK_LISTS_VERSION {
+            connection
+                .execute_batch(
+                    "DROP INDEX audit_by_actor; DROP INDEX audit_by_kind;
+                     DROP INDEX audit_entities_by_seq;",
+                )
+                .unwrap();
+        }
         if version < SUBJECT_VERSION {
             connection
                 .execute_batch("ALTER TABLE subjects DROP COLUMN row_version;")

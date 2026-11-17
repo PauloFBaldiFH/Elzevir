@@ -179,6 +179,10 @@ main:has(.wide) { max-width: none; padding: 0; }
 .count { margin: 14px 0 0; font-size: 0.85rem; }
 /* Facets strip (spec de UI §20 item 8): menus with counts and removable chips, one line. */
 .facet-strip { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; font-size: 0.82rem; }
+.work-lists { display: inline-flex; border: 1px solid var(--elzevir-color-border); border-radius: 8px; overflow: hidden; }
+.work-lists a { padding: 3px 10px; color: inherit; text-decoration: none; background: var(--card-bg); }
+.work-lists a + a { border-left: 1px solid var(--elzevir-color-border); }
+.work-lists a[aria-current="page"] { background: var(--elzevir-color-primary); color: var(--elzevir-color-primary-text); font-weight: 600; }
 .facet-menu { position: relative; }
 .facet-menu > summary { list-style: none; cursor: pointer; padding: 3px 10px; border: 1px solid var(--elzevir-color-border); border-radius: 999px; background: var(--card-bg); }
 .facet-menu > summary::-webkit-details-marker { display: none; }

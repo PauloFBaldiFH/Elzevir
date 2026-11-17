@@ -22,7 +22,8 @@
 <section id="families" aria-live="polite"{% if let Some(scan) = scan %} data-scan="{{ scan.kind }}"{% if let Some(instance) = scan.instance %} data-scan-instance="{{ instance }}"{% endif %}{% if let Some(item) = scan.item %} data-scan-item="{{ item }}"{% endif %}{% if let Some(isbn) = scan.isbn %} data-scan-isbn="{{ isbn }}"{% endif %}{% endif %}>
   {% if let Some(strip) = strip %}
   <div class="facet-strip" role="group" aria-label="{{ t.get("facet-strip-label") }}">
-    <span class="facet-families muted">{{ strip.families_text(t) }}</span>
+    <nav class="work-lists" aria-label="{{ t.get("list-label") }}">{% for list in strip.lists %}<a href="{{ list.url }}"{% if list.current %} aria-current="page"{% endif %}>{{ t.get(list.label_key) }}</a>{% endfor %}</nav>
+    {% if let Some(text) = strip.families_text(t) %}<span class="facet-families muted">{{ text }}</span>{% endif %}
     {% for menu in strip.menus %}
     <details class="facet-menu" data-facet="{{ menu.name }}">
       <summary>{{ t.get(menu.title_key) }}</summary>
@@ -39,6 +40,7 @@
     {% if let Some(clear) = strip.clear_url %}<a class="facet-clear" href="{{ clear }}">{{ t.get("facet-clear") }}</a>{% endif %}
   </div>
   {% endif %}
+  {% if list_empty() %}<p class="muted count">{{ t.get("list-empty") }}</p>{% endif %}
   {% if let Some(text) = count_text() %}<p class="muted count">{{ text }}</p>{% endif %}
   <ol class="families">
   {% block rows %}

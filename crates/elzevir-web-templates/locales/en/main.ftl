@@ -105,6 +105,11 @@ facet-families = { $count ->
 }
 facet-remove = Remove this filter
 facet-clear = Clear filters
+list-label = Work lists
+list-all = Whole catalog
+list-recent = My recent
+list-imported-today = Imported today
+list-empty = Nothing in this list.
 facet-branch = Branch
 facet-content = Content
 facet-carrier = Carrier

@@ -28,3 +28,4 @@ pub mod search;
 pub mod staff;
 pub mod statement_rows;
 pub mod suggestions;
+pub mod worklist;

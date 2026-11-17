@@ -58,6 +58,9 @@ pub struct WebConfig {
     /// The library's author table, which the item grid's suggested call number reads
     /// (docs/specs/catalogo/numero-de-chamada.md); no suggestion without one.
     pub author_table: Option<Arc<AuthorTable>>,
+    /// The library's time zone, where "today" of a work list begins
+    /// (docs/specs/catalogo/facetas.md, item 16).
+    pub time_zone: jiff::tz::TimeZone,
 }
 
 impl Default for WebConfig {
@@ -67,6 +70,7 @@ impl Default for WebConfig {
             session_idle: Duration::from_hours(8),
             iri_base: None,
             author_table: None,
+            time_zone: jiff::tz::TimeZone::UTC,
         }
     }
 }
