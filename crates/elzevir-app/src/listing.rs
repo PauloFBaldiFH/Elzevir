@@ -60,6 +60,32 @@ pub enum FamilyHead {
     Work(WorkId),
 }
 
+impl FamilyHead {
+    /// The family as the listing writes it: `h` and the Hub's id, or `w` and the Work's.
+    #[must_use]
+    pub fn name(self) -> String {
+        match self {
+            Self::Hub(hub) => format!("h{}", hub.0),
+            Self::Work(work) => format!("w{}", work.0),
+        }
+    }
+
+    /// Reads a [`name`](Self::name); `None` when it is malformed.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        let digits = name.get(1..)?;
+        if !digits.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        let id: i64 = digits.parse().ok()?;
+        match name.get(..1)? {
+            "h" => Some(Self::Hub(HubId(id))),
+            "w" => Some(Self::Work(WorkId(id))),
+            _ => None,
+        }
+    }
+}
+
 /// Where a family sits in the listing: families are ordered by `sort_key`, then by head
 /// (Hubs before Works, then by id), so the order is total and a page can start after any
 /// family.
