@@ -16,6 +16,7 @@ elzevir-web-templates.workspace = true
 askama.workspace = true
 axum.workspace = true
 getrandom.workspace = true
+jiff.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt"] }

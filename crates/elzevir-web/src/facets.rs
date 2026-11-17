@@ -5,9 +5,12 @@
 use elzevir_app::catalog::CodeLists;
 use elzevir_app::material::{CarrierKind, ContentKind};
 use elzevir_app::search::{Facet, FacetCounts, Filter};
+use elzevir_app::worklist::WorkList;
 use elzevir_data::vocabulary;
 use elzevir_domain::catalog::BranchId;
-use elzevir_web_templates::{ActiveFilter, FacetMenu, FacetOption, FacetStrip, I18n, url_encode};
+use elzevir_web_templates::{
+    ActiveFilter, FacetMenu, FacetOption, FacetStrip, I18n, WorkListLink, url_encode,
+};
 
 use crate::icons::{carrier_badge, content_badge};
 
@@ -22,6 +25,42 @@ pub(crate) fn filters_of(pairs: &[(String, String)]) -> Vec<Filter> {
             .filter(|(name, _)| name == FILTER_PARAM)
             .filter_map(|(_, value)| value.split_once(':')),
     )
+}
+
+/// The query parameter of a work list (facetas.md, item 14).
+pub(crate) const LIST_PARAM: &str = "list";
+
+/// The address of a work list's page.
+pub(crate) fn list_url(list: WorkList) -> String {
+    format!("/equipe/acervo?{LIST_PARAM}={}", list.name())
+}
+
+/// The work lists' buttons, `current` marked; "whole catalog" outside a list.
+fn lists(current: Option<WorkList>) -> Vec<WorkListLink> {
+    let whole = WorkListLink {
+        label_key: "list-all",
+        url: "/equipe/acervo".to_owned(),
+        current: current.is_none(),
+    };
+    std::iter::once(whole)
+        .chain(WorkList::ALL.into_iter().map(|list| WorkListLink {
+            label_key: match list {
+                WorkList::Recent => "list-recent",
+                WorkList::ImportedToday => "list-imported-today",
+            },
+            url: list_url(list),
+            current: current == Some(list),
+        }))
+        .collect()
+}
+
+/// The strip of a work list's page: its buttons alone (facetas.md, item 17).
+pub(crate) fn list_strip(list: WorkList, empty: bool) -> FacetStrip {
+    FacetStrip {
+        lists: lists(Some(list)),
+        list_empty: empty,
+        ..FacetStrip::default()
+    }
 }
 
 /// The listing address for `query` and `filters`.
@@ -125,7 +164,9 @@ pub(crate) fn strip(
         })
         .collect();
     FacetStrip {
-        families: counts.families,
+        lists: lists(None),
+        list_empty: false,
+        families: Some(counts.families),
         active,
         kept: filters.iter().map(written).collect(),
         clear_url: (!filters.is_empty()).then(|| listing_url(query, &[])),
@@ -195,5 +236,10 @@ mod tests {
             Some("/equipe/acervo?q=&f=language%3Apor&f=language%3Aeng")
         );
         assert_eq!(options[1].label, "English");
+        let marked: Vec<_> = strip.lists.iter().map(|list| list.current).collect();
+        assert_eq!(marked, [true, false, false]);
+        let list = list_strip(WorkList::Recent, true);
+        assert_eq!(list.lists[1].url, "/equipe/acervo?list=recent");
+        assert!(list.lists[1].current && list.families.is_none() && list.menus.is_empty());
     }
 }

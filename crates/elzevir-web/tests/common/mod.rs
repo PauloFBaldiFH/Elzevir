@@ -555,3 +555,27 @@ impl elzevir_app::history::HistoryReader for History {
         ])
     }
 }
+
+/// The staff account `n` last touched Work `n`, and before it Works 35 down to 1; nothing
+/// was imported today.
+pub(crate) struct WorkLists;
+
+impl elzevir_app::worklist::WorkListReader for WorkLists {
+    fn heads(
+        &self,
+        query: elzevir_app::worklist::WorkListQuery,
+        offset: usize,
+        limit: NonZeroUsize,
+    ) -> Result<Vec<FamilyHead>, CatalogReadError> {
+        use elzevir_app::worklist::WorkListQuery;
+        let WorkListQuery::TouchedBy(staff) = query else {
+            return Ok(Vec::new());
+        };
+        Ok(std::iter::once(staff.0)
+            .chain((1..=35).rev().filter(|n| *n != staff.0))
+            .skip(offset)
+            .take(limit.get())
+            .map(|n| FamilyHead::Work(WorkId(n)))
+            .collect())
+    }
+}

@@ -36,6 +36,7 @@ mod registries;
 mod schema;
 mod statements;
 mod suggestions;
+mod worklist;
 mod writer;
 
 pub use config::StoreConfig;
