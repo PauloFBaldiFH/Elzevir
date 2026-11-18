@@ -177,6 +177,9 @@ pub enum ImportError {
     /// The writer stopped.
     #[error(transparent)]
     SinkClosed(#[from] SinkClosed),
+    /// A malformed or oversized XML input stopped its stream.
+    #[error(transparent)]
+    Xml(#[from] elzevir_marc::MarcXmlError),
 }
 
 /// A record read from the file, with its place in it.
@@ -201,12 +204,66 @@ pub fn import_marc21<R: BufRead, S: RecordSink>(
     options: &ImportOptions,
 ) -> Result<ImportReport, ImportError> {
     let mut reader = MarcReader::new(input, options.limits);
+    import_chunks(
+        |report| read_chunk(&mut reader, options.chunk.get(), report),
+        sink,
+        options,
+    )
+}
+
+/// Imports UTF-8 MARCXML through the same mapping, queue and matching as ISO 2709.
+/// Converted ISO bytes are retained as source; XML structural errors are terminal.
+///
+/// # Errors
+///
+/// [`ImportError`] on XML/I/O failure or a stopped writer; committed records stay.
+pub fn import_marcxml<R: BufRead, S: RecordSink>(
+    input: R,
+    sink: &S,
+    options: &ImportOptions,
+) -> Result<ImportReport, ImportError> {
+    let mut reader = elzevir_marc::MarcXmlReader::new(input, elzevir_marc::XmlLimits::default());
+    import_chunks(
+        |report| {
+            let mut chunk = Vec::with_capacity(options.chunk.get());
+            while chunk.len() < options.chunk.get() {
+                let Some(record) = reader.next() else { break };
+                let record = record?;
+                let place = RawPlace {
+                    index: report.read,
+                    offset: reader.record_offset(),
+                };
+                report.read = report.read.saturating_add(1);
+                let mut bytes = Vec::new();
+                match record.write_iso2709(&mut bytes) {
+                    Ok(()) => chunk.push(RawRecord {
+                        index: place.index,
+                        offset: place.offset,
+                        bytes,
+                    }),
+                    Err(error) => report
+                        .failures
+                        .push(place.failed(RecordFailure::Source(error))),
+                }
+            }
+            Ok(chunk)
+        },
+        sink,
+        options,
+    )
+}
+
+fn import_chunks<S: RecordSink>(
+    mut read: impl FnMut(&mut ImportReport) -> Result<Vec<RawRecord>, ImportError>,
+    sink: &S,
+    options: &ImportOptions,
+) -> Result<ImportReport, ImportError> {
     let mut report = ImportReport::default();
     // The previous chunk's answers, collected after the next chunk is mapped so that the
     // writer commits one chunk while the threads map the next.
     let mut waiting: VecDeque<(RawPlace, S::Pending)> = VecDeque::new();
     loop {
-        let chunk = read_chunk(&mut reader, options.chunk.get(), &mut report)?;
+        let chunk = read(&mut report)?;
         if chunk.is_empty() {
             break;
         }

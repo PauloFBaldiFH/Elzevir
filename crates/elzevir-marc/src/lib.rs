@@ -14,6 +14,7 @@ mod error;
 mod iso2709_writer;
 mod limits;
 mod marcxml;
+mod marcxml_reader;
 mod owned;
 mod publish;
 mod reader;
@@ -24,6 +25,10 @@ pub use charset::{DetectedEncoding, Marc8Text, iso5426_to_utf8, marc8_to_utf8};
 pub use error::{ReadError, RecordError, WriteError};
 pub use limits::Limits;
 pub use marcxml::{MARCXML_COLLECTION_FOOTER, MARCXML_COLLECTION_HEADER};
+pub use marcxml_reader::{
+    MAX_XML_DEPTH, MAX_XML_ELEMENT_BYTES, MAX_XML_ELEMENTS_PER_RECORD, MAX_XML_INPUT_BYTES,
+    MAX_XML_RECORD_BYTES, MAX_XML_RECORDS, MarcXmlError, MarcXmlReader, XmlLimits, XmlProblem,
+};
 pub use owned::{Field, Record, Subfield};
 pub use publish::publish_atomically;
 pub use reader::MarcReader;

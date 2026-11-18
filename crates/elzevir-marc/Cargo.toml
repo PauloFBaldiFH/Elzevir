@@ -11,6 +11,7 @@ publish.workspace = true
 [dependencies]
 elzevir-data.workspace = true
 thiserror.workspace = true
+quick-xml.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
