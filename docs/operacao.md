@@ -6,10 +6,10 @@ próprios. O catálogo continua funcionando quando o painel é fechado.
 
 ## Instalação gerenciada
 
-Linux x86_64/ARM64 exige systemd ou OpenRC. Windows x64/ARM64 exige Windows 10
-1809+ ou Server 2019+. O banco deve ficar em disco local. Para usar os
-instaladores públicos, primeiro é necessário publicar uma release validada
-com binário, pacote e SHA256SUMS. A criação deste código não publica releases.
+Linux x86_64/ARM64 exige systemd ou OpenRC para registrar o serviço. Windows
+x64/ARM64 exige Windows 10 1809+ ou Server 2019+. O banco deve ficar em disco
+local. Para instalar no PATH do usuário e rodar pelo terminal, siga a
+[instalação rápida](../README.md#instalação-rápida).
 
 Com os scripts e uma release disponíveis:
 

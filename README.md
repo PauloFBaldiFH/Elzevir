@@ -1,9 +1,51 @@
 # Elzevir
 A modern and lightweight library system
 
+## Instalação Rápida
+
+**Linux (Bash)**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/PauloFBaldiFH/Elzevir/main/install.sh | bash
+```
+
+**Windows (PowerShell)**
+
+```powershell
+irm https://raw.githubusercontent.com/PauloFBaldiFH/Elzevir/main/install.ps1 | iex
+```
+
+Os instaladores verificam o SHA-256 do pacote e adicionam `elzevir` ao PATH
+do usuário. Eles consultam a release estável mais recente. Enquanto ela
+estiver indisponível, usam o pré-lançamento `v0.1.0-alpha.1`.
+
+Para iniciar o servidor no mesmo terminal:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+elzevir serve --data-dir "${XDG_DATA_HOME:-$HOME/.local/share}/elzevir"
+```
+
+```powershell
+elzevir serve --data-dir "$env:LOCALAPPDATA\Elzevir\data"
+```
+
+Abra o catálogo em `http://127.0.0.1:8080`. Em outro terminal, abra o
+painel Ratatui com a mesma pasta de dados, ou use `--demo` para explorar
+o painel com dados simulados.
+
+```bash
+elzevir panel --data-dir "${XDG_DATA_HOME:-$HOME/.local/share}/elzevir" --lang pt-BR
+```
+
+```powershell
+elzevir panel --data-dir "$env:LOCALAPPDATA\Elzevir\data" --lang pt-BR
+```
+
 ## Primeira inicialização
 
-Com o binário disponível no terminal, execute em uma pasta da instalação:
+Para criar uma instituição com administrador e configuração própria, execute
+em uma pasta local com destinos novos:
 
 ```sh
 elzevir init --name "Minha biblioteca"

@@ -1,18 +1,32 @@
 # Distribuição e instalação — A8/A9
 
-Uma tag SemVer `vMAJOR.MINOR.PATCH` gera quatro arquivos: Linux musl x86_64 e
-AArch64 e Windows MSVC x86_64 e ARM64. Cada pacote contém o binário, licença e
-leia-me. A construção executa `--version` nativamente. O job de publicação
-calcula `SHA256SUMS` de todos os pacotes e cria release em rascunho. O PR não
-publica tag nem release. A instalação pública exige primeiro publicar uma
-release validada; a versão `0.0.0` de desenvolvimento não é release estável.
+Uma tag SemVer, inclusive de pré-lançamento, deve coincidir com a versão do
+workspace. A tag dispara a compilação nativa otimizada para Linux x86_64 GNU,
+Linux musl x86_64 e AArch64 e Windows MSVC x86_64 e ARM64. Os arquivos
+`elzevir-linux-x86_64.tar.gz` e `elzevir-windows-x86_64.zip` são os pacotes
+de instalação rápida para x86_64. Os pacotes com nome versionado atendem
+à instalação gerenciada e às atualizações.
 
-Os instaladores Linux e PowerShell resolvem uma release uma única vez, fixam a
-tag, baixam pacote e somas por HTTPS e verificam SHA-256 antes de extrair ou
-executar. Recusam arquiteturas/gerenciadores não suportados, destinos ambíguos,
-configurações existentes incompletas e extração insegura. `--dry-run`/`-Plan`
-apresentam o plano sem baixar nem alterar arquivos. O administrador informa
-nome/login; a senha é solicitada pelo próprio `elzevir init`, sem argumento.
+Cada pacote contém licença, leia-me e o executável `elzevir`, que inclui o
+servidor, a TUI `panel`, as migrações SQLite e os assets web. A validação
+executa o binário extraído fora do checkout e verifica o catálogo, a busca
+e a saúde do banco e do indexador. O job de publicação calcula `SHA256SUMS`
+dos pacotes e dos instaladores, anexa os arquivos ao release e publica.
+Tags com sufixo de pré-lançamento são publicadas como pré-releases.
+
+Os instaladores Linux e PowerShell consultam `releases/latest` e fixam a tag
+resolvida antes de baixar pacote e somas por HTTPS. Enquanto o repositório
+ainda não tiver uma release estável, usam a tag inicial `v0.1.0-alpha.1`.
+`--version`/`-Version` permite fixar outra tag. O SHA-256 é verificado
+antes da extração segura e da execução.
+
+Sem opções de serviço, a instalação rápida grava o binário no PATH do
+usuário, cria o diretório de dados local, verifica a versão e o subcomando
+`panel` e exibe os caminhos. Reinstalar preserva os dados da instituição.
+Com as opções de serviço, o fluxo gerenciado exige o gerenciador suportado
+e recusa destinos ambíguos e configurações incompletas. O administrador
+informa nome e login. A senha é solicitada pelo próprio `elzevir init`.
+`--dry-run`/`-Plan` apresentam o plano sem baixar nem alterar arquivos.
 
 Linux usa conta dedicada não-root e diretório local privado; Windows usa a
 conta virtual do serviço com ACL explícita. A segunda execução preserva banco

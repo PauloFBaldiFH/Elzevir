@@ -29,19 +29,31 @@ class InstallerTests(unittest.TestCase):
             plans.append(dict(line.split("=", 1) for line in result.stdout.splitlines())["binary"])
         self.assertEqual(len(set(plans)), 3)
 
-    def download(self, *, bad_hash=False, symlink=False):
+    def download(self, *, bad_hash=False, symlink=False, quick_install=False, latest=None):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             fixture = directory / "fixture"
             fixture.mkdir()
-            machine = os.uname().machine
-            target = "x86_64" if machine == "x86_64" else "aarch64"
-            name = f"elzevir-v1.2.3-{target}-unknown-linux-musl.tar.gz"
+            target = "x86_64" if os.uname().machine == "x86_64" else "aarch64"
+            tag = (latest or "v0.1.0-alpha.1") if quick_install else "v1.2.3"
+            name = f"elzevir-{tag}-{target}-unknown-linux-musl.tar.gz"
+            binary = b"fictional executable; never run"
+            if quick_install:
+                libc = os.confstr("CS_GNU_LIBC_VERSION") or ""
+                if target == "x86_64" and libc.startswith("glibc ") and tuple(map(int, libc.split()[1].split("."))) >= (2, 35):
+                    name = "elzevir-linux-x86_64.tar.gz"
+                binary = f"""#!/usr/bin/env bash
+case "$*" in
+    --version) printf '%s\\n' 'elzevir {tag[1:]}' ;;
+    'panel --help') printf '%s\\n' 'Usage: elzevir panel' ;;
+    *) exit 1 ;;
+esac
+""".encode()
             package = fixture / name
             with tarfile.open(package, "w:gz") as archive:
                 for filename in ["elzevir", "README.md", "LICENSE"]:
                     header = tarfile.TarInfo(filename)
-                    content = b"fictional executable; never run"
+                    content = binary if filename == "elzevir" else b"fictional documentation"
                     header.size = len(content)
                     if symlink and filename == "elzevir":
                         header.type = tarfile.SYMTYPE
@@ -53,13 +65,52 @@ class InstallerTests(unittest.TestCase):
             mock = directory / "bin"
             mock.mkdir()
             curl = mock / "curl"
-            curl.write_text("#!/usr/bin/env python3\nimport os,shutil,sys\nfrom pathlib import Path\nargs=sys.argv[1:]\ndestination=args[args.index('--output')+1]\nshutil.copyfile(Path(os.environ['ELZEVIR_TEST_FIXTURE'])/args[-1].split('/')[-1],destination)\n")
+            curl.write_text("""#!/usr/bin/env python3
+import os, shutil, sys
+from pathlib import Path
+args = sys.argv[1:]
+fixture = Path(os.environ['ELZEVIR_TEST_FIXTURE'])
+destination = args[args.index('--output') + 1]
+url = args[-1]
+if url.endswith('/releases/latest'):
+    latest = os.environ['ELZEVIR_TEST_LATEST']
+    print(url.removesuffix('/latest') + (f'/tag/{latest}' if latest else ''), end='')
+else:
+    assert url.split('/')[-2] == os.environ['ELZEVIR_TEST_TAG'], url
+    shutil.copyfile(fixture / url.split('/')[-1], destination)
+""")
             curl.chmod(0o700)
             environment = os.environ.copy()
             environment["PATH"] = str(mock) + os.pathsep + environment["PATH"]
             environment["ELZEVIR_TEST_FIXTURE"] = str(fixture)
+            environment["ELZEVIR_TEST_LATEST"] = latest or ""
+            environment["ELZEVIR_TEST_TAG"] = tag
+            if quick_install:
+                test_home = directory / "profile"
+                test_home.mkdir()
+                (test_home / ".bash_profile").write_text("export EXISTING_PROFILE=preserved\n")
+                environment["HOME"] = str(test_home)
+                environment["XDG_DATA_HOME"] = str(directory / "local data")
+                script = (ROOT / "install.sh").read_text()
+                data = directory / "local data" / "elzevir"
+                for _ in range(2):
+                    result = subprocess.run(["bash"], input=script, env=environment, capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn(f"elzevir {tag[1:]}", result.stdout)
+                    self.assertTrue(data.is_dir())
+                    sentinel = data / "preserve"
+                    if sentinel.exists():
+                        self.assertEqual(sentinel.read_text(), "existing data")
+                    else:
+                        sentinel.write_text("existing data")
+                self.assertEqual((test_home / ".local/bin/elzevir").read_bytes(), binary)
+                profile = (test_home / ".bash_profile").read_text()
+                self.assertIn("export EXISTING_PROFILE=preserved", profile)
+                self.assertEqual(profile.count("# Elzevir PATH"), 1)
+                self.assertEqual((test_home / ".bashrc").read_text().count("# Elzevir PATH"), 1)
+                return
             output = directory / "verified"
-            result = subprocess.run(["bash", str(ROOT / "install.sh"), "--version", "v1.2.3", "--download-only", str(output)], env=environment, capture_output=True, text=True)
+            result = subprocess.run(["bash", str(ROOT / "install.sh"), "--id", "library", "--version", tag, "--download-only", str(output)], env=environment, capture_output=True, text=True)
             if bad_hash or symlink:
                 self.assertNotEqual(result.returncode, 0)
                 self.assertFalse(output.exists(), result.stdout)
@@ -75,6 +126,12 @@ class InstallerTests(unittest.TestCase):
 
     def test_matching_hash_does_not_authorize_archive_symlinks(self):
         self.download(symlink=True)
+
+    def test_quick_install_from_stdin_falls_back_to_the_initial_alpha(self):
+        self.download(quick_install=True)
+
+    def test_quick_install_prefers_the_stable_latest_release(self):
+        self.download(quick_install=True, latest="v2.0.0")
 
 
 if __name__ == "__main__":
