@@ -26,6 +26,7 @@ pub(crate) async fn home(State(state): State<AppState>, headers: HeaderMap) -> R
         login: &session.identity.login,
         is_admin: session.identity.can(Permission::Administration),
         can_catalogue: session.identity.can(Permission::Cataloguing),
+        can_import: state.imports.is_some() && session.identity.can(Permission::Cataloguing),
         csrf: &session.csrf,
     })
 }

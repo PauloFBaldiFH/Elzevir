@@ -14,7 +14,7 @@ use super::{
 };
 use crate::catalog::{CatalogReadError, CatalogRefusal, ItemData, NewRecord};
 use crate::import_detection::{
-    Detection, Evidence, ImportFormat, MAX_DETECTION_BYTES, detect_format,
+    Detection, Evidence, ImportFormat, MAX_DETECTION_BYTES, detect_format, select_marc,
 };
 use crate::matching::{Decision, ItemsDecision, MatchKey, RecordAction, decide, match_keys};
 
@@ -86,13 +86,30 @@ pub struct PreviewIssue {
     pub item: Option<usize>,
     /// Reason for review or refusal.
     pub reason: String,
-    pub(super) kind: IssueKind,
+    /// Classification for localized diagnostics.
+    pub kind: IssueKind,
 }
 
+/// Reason a preview requires review.
 #[derive(Clone, Copy)]
-pub(super) enum IssueKind {
-    Validation,
+pub enum IssueKind {
+    /// Source record could not be converted or mapped.
+    InvalidRecord,
+    /// A prepared description failed validation.
+    InvalidDescription,
+    /// An item refers to a missing branch.
+    UnknownBranch,
+    /// An item refers to a missing type.
+    UnknownItemType,
+    /// An item failed another registry check.
+    ItemRegistry,
+    /// No barcode was supplied.
     MissingBarcode,
+    /// The barcode is repeated in the source.
+    RepeatedBarcode,
+    /// The barcode already belongs to a catalog item.
+    UsedBarcode,
+    /// A possible match with an earlier zero-based source record.
     BatchMatch(u64),
 }
 
@@ -127,9 +144,23 @@ pub fn preview(
     catalog: Option<&dyn PreviewCatalog>,
     options: &ImportOptions,
 ) -> Result<PreviewReport, PreviewError> {
+    preview_page(input, catalog, options, 0)
+}
+
+/// Validates the whole input and returns samples starting at the selected record.
+///
+/// # Errors
+/// Reports the same preparation errors as [`preview`].
+pub fn preview_page(
+    input: impl BufRead,
+    catalog: Option<&dyn PreviewCatalog>,
+    options: &ImportOptions,
+    from: u64,
+) -> Result<PreviewReport, PreviewError> {
     let mut inspection = Inspection {
         options,
         catalog,
+        from,
         keys: BTreeMap::new(),
         barcodes: BTreeSet::new(),
         report: PreviewReport {
@@ -150,8 +181,17 @@ pub fn preview(
 }
 
 pub(super) fn scan(
+    input: impl BufRead,
+    limits: Limits,
+    visit: impl FnMut(Result<RawRecord, FailedRecord>) -> Result<(), PreviewError>,
+) -> Result<Detection, PreviewError> {
+    scan_as(input, limits, None, visit)
+}
+
+pub(super) fn scan_as(
     mut input: impl BufRead,
     limits: Limits,
+    selected: Option<ImportFormat>,
     mut visit: impl FnMut(Result<RawRecord, FailedRecord>) -> Result<(), PreviewError>,
 ) -> Result<Detection, PreviewError> {
     let mut prefix = Vec::new();
@@ -160,7 +200,12 @@ pub(super) fn scan(
         .take(MAX_DETECTION_BYTES as u64)
         .read_to_end(&mut prefix)
         .map_err(ImportError::Io)?;
-    let detection = detect_format(&prefix);
+    let detected = detect_format(&prefix);
+    let detection = if selected.is_some() {
+        select_marc(detected, selected).ok_or(PreviewError::Format(detected))?
+    } else {
+        detected
+    };
     let input = prefix.as_slice().chain(input);
     let mut index = 0;
     let mut visit = |index, value| {
@@ -257,6 +302,7 @@ fn check_bytes(bytes: u64) -> Result<(), PreviewError> {
 struct Inspection<'a> {
     options: &'a ImportOptions,
     catalog: Option<&'a dyn PreviewCatalog>,
+    from: u64,
     keys: BTreeMap<MatchKey, u64>,
     barcodes: BTreeSet<String>,
     report: PreviewReport,
@@ -296,14 +342,14 @@ impl Inspection<'_> {
                         offset: error.offset,
                     },
                     None,
-                    IssueKind::Validation,
+                    IssueKind::InvalidRecord,
                     error.failure.to_string(),
                 );
                 return Ok(());
             }
         };
         self.report.prepared += 1;
-        if self.report.samples.len() < MAX_PREVIEW_RECORDS {
+        if place.index >= self.from && self.report.samples.len() < MAX_PREVIEW_RECORDS {
             self.report.samples.push(PreviewSample {
                 index: place.index,
                 work: record.work_title.clone(),
@@ -318,7 +364,12 @@ impl Inspection<'_> {
                 (EntityKind::Instance, &record.instance.description),
             ] {
                 if let Err(error) = check_description(kind, description) {
-                    self.issue(place, None, IssueKind::Validation, error.to_string());
+                    self.issue(
+                        place,
+                        None,
+                        IssueKind::InvalidDescription,
+                        error.to_string(),
+                    );
                 }
             }
         }
@@ -388,13 +439,17 @@ impl Inspection<'_> {
             None => Some(CatalogRefusal::UnknownBranch(String::new())),
         };
         let reason = match refusal {
-            Some(CatalogRefusal::UnknownBranch(_)) => Some("unknown branch"),
-            Some(CatalogRefusal::UnknownItemType(_)) => Some("unknown item type"),
-            Some(_) => Some("item registry refusal"),
+            Some(CatalogRefusal::UnknownBranch(_)) => {
+                Some((IssueKind::UnknownBranch, "unknown branch"))
+            }
+            Some(CatalogRefusal::UnknownItemType(_)) => {
+                Some((IssueKind::UnknownItemType, "unknown item type"))
+            }
+            Some(_) => Some((IssueKind::ItemRegistry, "item registry refusal")),
             None => None,
         };
-        if let Some(reason) = reason {
-            self.issue(place, Some(position), IssueKind::Validation, reason);
+        if let Some((kind, reason)) = reason {
+            self.issue(place, Some(position), kind, reason);
         }
         let Some(barcode) = &item.barcode else {
             self.issue(
@@ -411,7 +466,7 @@ impl Inspection<'_> {
                 self.issue(
                     place,
                     Some(position),
-                    IssueKind::Validation,
+                    IssueKind::RepeatedBarcode,
                     "barcode already present in the batch",
                 );
             }
@@ -421,7 +476,7 @@ impl Inspection<'_> {
                 self.issue(
                     place,
                     Some(position),
-                    IssueKind::Validation,
+                    IssueKind::UsedBarcode,
                     "barcode already in use",
                 );
             }

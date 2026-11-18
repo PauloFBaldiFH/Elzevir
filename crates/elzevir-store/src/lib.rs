@@ -119,7 +119,7 @@ impl<H: CommandHandler> Store<H> {
     ///
     /// [`SubmitError::Closed`] when the writer has stopped.
     pub fn submit_waiting(&self, command: H::Command) -> Result<Pending<H>, SubmitError> {
-        self.writer.submit_waiting(command)
+        self.writer.submit_waiting(None, command)
     }
 
     /// A digest of every table's content, for comparing two databases built from the same

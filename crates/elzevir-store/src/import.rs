@@ -5,6 +5,7 @@ use elzevir_app::catalog::{CatalogCommand, CatalogOutput, ImportRecord, NewRecor
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::import::{PendingRecord, RecordRejected, RecordSink, SinkClosed};
 use elzevir_app::matching::Matching;
+use elzevir_app::staff::StaffId;
 
 use crate::{CommandFailed, ElzevirHandler, ElzevirStore, Pending};
 
@@ -19,16 +20,48 @@ impl RecordSink for ElzevirStore {
         record: NewRecord,
         matching: Option<Matching>,
     ) -> Result<PendingAdd, SinkClosed> {
-        let command = match matching {
-            Some(matching) => {
-                CatalogCommand::ImportRecord(Box::new(ImportRecord { record, matching }))
-            }
-            None => CatalogCommand::AddRecord(Box::new(record)),
-        };
-        self.submit_waiting(WriteCommand::Catalog(command))
-            .map(PendingAdd)
-            .map_err(|_| SinkClosed)
+        submit(self, None, record, matching)
     }
+}
+
+/// The same writer queue with a staff actor for audit attribution.
+pub struct StaffRecordSink<'a>(&'a ElzevirStore, StaffId);
+
+impl ElzevirStore {
+    /// Uses the existing record commands on behalf of the authenticated operator.
+    #[must_use]
+    pub fn import_as(&self, staff: StaffId) -> StaffRecordSink<'_> {
+        StaffRecordSink(self, staff)
+    }
+}
+
+impl RecordSink for StaffRecordSink<'_> {
+    type Pending = PendingAdd;
+
+    fn submit(
+        &self,
+        record: NewRecord,
+        matching: Option<Matching>,
+    ) -> Result<PendingAdd, SinkClosed> {
+        submit(self.0, Some(self.1.0), record, matching)
+    }
+}
+
+fn submit(
+    store: &ElzevirStore,
+    actor: Option<i64>,
+    record: NewRecord,
+    matching: Option<Matching>,
+) -> Result<PendingAdd, SinkClosed> {
+    let command = match matching {
+        Some(matching) => CatalogCommand::ImportRecord(Box::new(ImportRecord { record, matching })),
+        None => CatalogCommand::AddRecord(Box::new(record)),
+    };
+    store
+        .writer
+        .submit_waiting(actor, WriteCommand::Catalog(command))
+        .map(PendingAdd)
+        .map_err(|_| SinkClosed)
 }
 
 impl PendingRecord for PendingAdd {

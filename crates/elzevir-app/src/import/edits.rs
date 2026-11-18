@@ -2,6 +2,7 @@
 //! Structured MARC edits applied before preparation and mapping.
 
 use std::collections::BTreeSet;
+use std::fmt::Write as _;
 use std::io::{BufRead, Write};
 
 use elzevir_marc::{Field, Limits, Record, RecordRef, Subfield, Tag};
@@ -9,10 +10,10 @@ use serde::{Deserialize, Serialize};
 
 use super::preview::{
     IssueKind, MAX_IMPORT_FILE_BYTES, MAX_IMPORT_RECORDS, MAX_PREVIEW_RECORDS, PreviewError,
-    PreviewReport, batch_match_reason, scan,
+    PreviewReport, batch_match_reason, scan_as,
 };
 use super::{ImportError, RawPlace, RecordFailure};
-use crate::import_detection::Detection;
+use crate::import_detection::{Detection, ImportFormat};
 use crate::matching::Matching;
 
 /// Maximum edits in one batch.
@@ -433,10 +434,30 @@ pub struct RenderReport {
     pub changed: u64,
     /// First few changes.
     pub samples: Vec<ChangedSample>,
+    /// The selected page of source records.
+    pub source: Vec<SourceSample>,
     positions: Vec<RawPlace>,
 }
 
+/// Source and edited MARC rendered as plain text for the review page.
+pub struct SourceSample {
+    /// One-based position in the uploaded file.
+    pub record: u64,
+    /// Original MARC presentation.
+    pub before: String,
+    /// Edited MARC presentation when changed.
+    pub after: Option<String>,
+}
+
 impl RenderReport {
+    /// Finds a record by its original position for a diagnostic link.
+    #[must_use]
+    pub fn selected_index(&self, index: u64) -> Option<usize> {
+        self.positions
+            .binary_search_by_key(&index, |place| place.index)
+            .ok()
+    }
+
     /// Maps an ISO stream position back to the zero-based index and byte in the source.
     #[must_use]
     pub fn source_position(&self, index: u64, offset: u64) -> (u64, u64) {
@@ -464,9 +485,10 @@ impl RenderReport {
                 }
                 IssueKind::BatchMatch(index) => {
                     issue.reason = batch_match_reason(original(index));
+                    issue.kind = IssueKind::BatchMatch(original(index));
                     true
                 }
-                IssueKind::Validation => true,
+                _ => true,
             }
         });
     }
@@ -478,17 +500,33 @@ impl RenderReport {
 /// Reports an invalid source, recipe, edit or output limit.
 pub fn render(
     input: impl BufRead,
+    output: impl Write,
+    recipe: &Recipe,
+    max_bytes: usize,
+) -> Result<RenderReport, PreviewError> {
+    render_page(input, output, recipe, max_bytes, None, None)
+}
+
+/// Renders the bounded ISO stream and optionally presents a page of its original MARC.
+///
+/// # Errors
+/// Reports the same errors as [`render`].
+pub fn render_page(
+    input: impl BufRead,
     mut output: impl Write,
     recipe: &Recipe,
     max_bytes: usize,
+    from: Option<u64>,
+    selected: Option<ImportFormat>,
 ) -> Result<RenderReport, PreviewError> {
     recipe.validate()?;
     let limits = Limits::default();
     let mut remaining = max_bytes.min(MAX_IMPORT_FILE_BYTES);
     let (mut read, mut excluded, mut changed) = (0, 0, 0);
     let mut samples = Vec::new();
+    let mut source = Vec::new();
     let mut positions = Vec::new();
-    let detection = scan(input, limits, |raw| {
+    let detection = scan_as(input, limits, selected, |raw| {
         let position = raw
             .as_ref()
             .map_or_else(|error| error.index, |record| record.index)
@@ -515,6 +553,18 @@ pub fn render(
             changed += 1;
         }
         let bytes = edited.as_deref().unwrap_or(&raw.bytes);
+        if from.is_some_and(|from| positions.len() as u64 >= from)
+            && source.len() < MAX_PREVIEW_RECORDS
+        {
+            source.push(SourceSample {
+                record: position,
+                before: display_record(&raw.bytes, limits)?,
+                after: edited
+                    .as_deref()
+                    .map(|bytes| display_record(bytes, limits))
+                    .transpose()?,
+            });
+        }
         remaining = remaining
             .checked_sub(bytes.len())
             .ok_or(PreviewError::Limit("rendered bytes"))?;
@@ -548,8 +598,22 @@ pub fn render(
         excluded,
         changed,
         samples,
+        source,
         positions,
     })
+}
+
+fn display_record(bytes: &[u8], limits: Limits) -> Result<String, PreviewError> {
+    let parsed =
+        RecordRef::parse(bytes, &limits).map_err(|error| PreviewError::Edit(error.to_string()))?;
+    let mut record = Record::from_ref(&parsed);
+    record.marc21_to_utf8();
+    let mut display = format!("LDR  {}\n", String::from_utf8_lossy(&record.leader));
+    for field in &record.fields {
+        writeln!(display, "{}  {}", field.tag(), field_text(field))
+            .map_err(|error| PreviewError::Edit(error.to_string()))?;
+    }
+    Ok(display)
 }
 
 fn edit_bytes<'a>(

@@ -4,6 +4,7 @@
 > preservando ISO 2709. I3 acrescenta MARCXML à aplicação e I4 acrescenta
 > MarcEdit `.mrk`. I5 entrega a preparação integral MARC por `--preview`.
 > I6 acrescenta lotes MARC privados, edições e confirmação por revisão.
+> I7 oferece a revisão desses lotes na interface autenticada da equipe.
 > A importação direta pela CLI mantém o contrato de I2.
 > Base: [importação atual](importacao.md), [casamento](casamento.md),
 > [BIBFRAME completo](bibframe-completo.md),
@@ -273,8 +274,25 @@ A I6 oferece `elzevir import-batch --data-dir DIR --operator ID` com
 deve existir. A identidade do operador nessa CLI local é fornecida pelo
 operador do sistema. No Windows, o diretório de dados precisa ter a ACL
 privada da instalação. A CLI confirma pelo mesmo bloqueio de escritora de
-`elzevir import`, com `elzevir serve` parado. A interface autenticada fica
-na I7.
+`elzevir import`, com `elzevir serve` parado.
+
+Em I7, `/equipe/acervo/importar` abre a lista dos lotes do catalogador e
+oferece envio multipart em fluxo. A sessão fornece o operador e o servidor
+fornece a instituição. O token CSRF precede o arquivo no formulário e é
+conferido também nas ações de edição, prévia, confirmação e cancelamento.
+A tela usa os leitores MARC da I6, mostra a detecção e edita a mesma
+receita JSON estruturada. A troca de leitor invalida a revisão e passa
+pela validação do arquivo inteiro. Evidência de planilha, SQL ou
+contêiner impede a seleção de um leitor MARC. Revisão da origem e
+paginação ficam na rota do lote.
+O servidor chama a operação compartilhada com a CLI e usa a própria
+escritora para confirmar, com o operador da sessão na auditoria.
+
+Após confirmar, a resposta redireciona ao relatório com as contagens e
+as posições de recusas. O operador pode baixar esse resultado como JSON.
+Os dez relatórios mais recentes ficam na memória do servidor, cada um
+acessível pelo mesmo catalogador até expirar dessa lista ou o servidor
+reiniciar. Originais e receitas seguem as regras de remoção da I6.
 
 A revisão inicial é 1. A receita JSON substitui a receita anterior e
 contém `edits`, `exclude`, `accept_missing_barcodes` e `matching` opcionais.

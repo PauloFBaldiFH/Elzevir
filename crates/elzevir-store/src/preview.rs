@@ -8,7 +8,9 @@ use std::path::Path;
 use elzevir_app::catalog::{CatalogReadError, CatalogRefusal, ItemData};
 use elzevir_app::commands::WriteRefusal;
 use elzevir_app::import::ImportOptions;
-use elzevir_app::import::preview::{PreviewCatalog, PreviewError, PreviewReport, preview};
+use elzevir_app::import::preview::{
+    PreviewCatalog, PreviewError, PreviewReport, preview, preview_page,
+};
 use elzevir_app::matching::MatchKey;
 use elzevir_domain::catalog::InstanceId;
 use rusqlite::{Connection, params};
@@ -41,7 +43,20 @@ impl ReadPool {
     pub fn preview_import(
         &self,
         input: impl BufRead,
+        options: ImportOptions,
+    ) -> Result<PreviewReport, PreviewError> {
+        self.preview_import_page(input, options, 0)
+    }
+
+    /// Uses a single catalog snapshot to validate the whole stream and sample a page.
+    ///
+    /// # Errors
+    /// Reports read, preparation and schema errors.
+    pub fn preview_import_page(
+        &self,
+        input: impl BufRead,
         mut options: ImportOptions,
+        from: u64,
     ) -> Result<PreviewReport, PreviewError> {
         self.read(|connection| {
             let transaction = connection.unchecked_transaction().map_err(read_error)?;
@@ -54,7 +69,7 @@ impl ReadPool {
                 );
             }
             options.translations = koha_types::read(&transaction)?;
-            preview(input, Some(&Snapshot(&transaction)), &options)
+            preview_page(input, Some(&Snapshot(&transaction)), &options, from)
         })
     }
 }

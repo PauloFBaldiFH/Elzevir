@@ -6,16 +6,18 @@ use std::path::Path;
 
 use cap_fs_ext::{DirExt, FollowSymlinks, OpenOptionsFollowExt};
 use cap_std::fs::{Dir, DirBuilder, OpenOptions};
-use elzevir_app::import::edits::{Recipe, RenderReport, render};
+use elzevir_app::import::batches::{BatchState as State, BatchSummary, MAX_BATCH_MANIFEST_BYTES};
+use elzevir_app::import::edits::{Recipe, RenderReport, render_page};
 use elzevir_app::import::preview::MAX_IMPORT_FILE_BYTES;
-use elzevir_app::import_detection::{ImportFormat, MAX_DETECTION_BYTES, detect_format};
+use elzevir_app::import_detection::{
+    ImportFormat, MAX_DETECTION_BYTES, detect_format, select_marc,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 const MAX_STAGED_BATCHES: usize = 10;
 const MAX_STAGED_BATCH_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_STAGED_TOTAL_BYTES: u64 = 4 * MAX_STAGED_BATCH_BYTES;
-const MAX_BATCH_MANIFEST_BYTES: u64 = 1024 * 1024;
 const MANIFEST_RESERVATION: u64 = 2 * MAX_BATCH_MANIFEST_BYTES;
 const VERSION: u32 = 1;
 const ROOT: &str = "imports";
@@ -23,16 +25,6 @@ const LOCK: &str = ".lock";
 const SOURCE: &str = "original";
 const MANIFEST: &str = "manifest.json";
 const NEXT: &str = "manifest.next";
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum State {
-    Preparing,
-    Review,
-    Ready,
-    Confirming,
-    Closed,
-}
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -42,6 +34,8 @@ pub(crate) struct Batch {
     operator: u64,
     id: String,
     format: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    selected: Option<ImportFormat>,
     sha256: String,
     pub(crate) revision: u64,
     pub(crate) state: State,
@@ -102,7 +96,11 @@ impl Batches {
         })
     }
 
-    pub(crate) fn stage(&self, source: &Path) -> Result<Batch, String> {
+    pub(crate) fn stage(
+        &self,
+        source: impl Read,
+        selected: Option<ImportFormat>,
+    ) -> Result<Batch, String> {
         let (count, bytes) = self.usage()?;
         if count >= MAX_STAGED_BATCHES {
             return Err("import batch count limit exceeded".into());
@@ -110,10 +108,9 @@ impl Batches {
         if bytes > MAX_STAGED_TOTAL_BYTES - MANIFEST_RESERVATION {
             return Err("no import quota available for a new batch".into());
         }
-        let source = open_path(source)?;
         let id = crate::backup_archive::identifier()?;
         create_dir(&self.root, &id).map_err(io_error)?;
-        match sync_dir(&self.root).and_then(|()| self.capture(&id, source)) {
+        match sync_dir(&self.root).and_then(|()| self.capture(&id, source, selected)) {
             Ok(batch) => Ok(batch),
             Err(error) => {
                 self.root
@@ -124,13 +121,19 @@ impl Batches {
         }
     }
 
-    fn capture(&self, id: &str, source: std::fs::File) -> Result<Batch, String> {
+    fn capture(
+        &self,
+        id: &str,
+        source: impl Read,
+        selected: Option<ImportFormat>,
+    ) -> Result<Batch, String> {
         let mut batch = Batch {
             version: VERSION,
             institution: self.institution.clone(),
             operator: self.operator,
             id: id.into(),
             format: String::new(),
+            selected: None,
             sha256: String::new(),
             revision: 1,
             state: State::Preparing,
@@ -149,27 +152,30 @@ impl Batches {
         }
         output.sync_all().map_err(io_error)?;
         drop(output);
-        let input = read_file(&dir, SOURCE)?;
+        self.choose_format(&mut batch, selected)?;
+        batch.sha256 = source.digest();
+        batch.state = State::Review;
+        self.save(&batch)?;
+        Ok(batch)
+    }
+
+    pub(crate) fn choose_format(
+        &self,
+        batch: &mut Batch,
+        selected: Option<ImportFormat>,
+    ) -> Result<(), String> {
+        let input = read_file(&self.batch_dir(&batch.id)?, SOURCE)?;
         let mut prefix = Vec::new();
         input
             .take(MAX_DETECTION_BYTES as u64)
             .read_to_end(&mut prefix)
             .map_err(io_error)?;
-        let detection = detect_format(&prefix);
-        if !matches!(
-            detection.format,
-            ImportFormat::Iso2709 | ImportFormat::MarcXml | ImportFormat::MarcText
-        ) {
-            return Err(format!(
-                "unsupported or inconclusive input: {:?}",
-                detection.evidence
-            ));
-        }
+        let detected = detect_format(&prefix);
+        let detection = select_marc(detected, selected)
+            .ok_or_else(|| format!("unsupported or inconclusive input: {:?}", detected.evidence))?;
         batch.format = format!("{:?}", detection.format);
-        batch.sha256 = source.digest();
-        batch.state = State::Review;
-        self.save(&batch)?;
-        Ok(batch)
+        batch.selected = selected;
+        Ok(())
     }
 
     pub(crate) fn load(&self, id: &str) -> Result<Batch, String> {
@@ -184,6 +190,22 @@ impl Batches {
             return Err("incompatible batch or operator".into());
         }
         Ok(batch)
+    }
+
+    pub(crate) fn list(&self) -> Result<Vec<BatchSummary>, String> {
+        self.usage()?;
+        let mut batches = Vec::new();
+        for entry in self.root.entries().map_err(io_error)? {
+            let name = entry.map_err(io_error)?.file_name();
+            // An incomplete manifest or another operator's batch is not visible.
+            if let Some(id) = name.to_str()
+                && let Ok(batch) = self.load(id)
+            {
+                batches.push(batch.summary());
+            }
+        }
+        batches.sort_unstable_by(|left, right| left.id.cmp(&right.id));
+        Ok(batches)
     }
 
     pub(crate) fn save(&self, batch: &Batch) -> Result<(), String> {
@@ -209,6 +231,7 @@ impl Batches {
     pub(crate) fn render(
         &self,
         batch: &Batch,
+        from: Option<u64>,
     ) -> Result<(std::fs::File, RenderReport, String), String> {
         let dir = self.batch_dir(&batch.id)?;
         let source = read_file(&dir, SOURCE)?;
@@ -224,8 +247,15 @@ impl Batches {
         let limit = usize::try_from(self.available(&dir)?)
             .unwrap_or(usize::MAX)
             .min(MAX_IMPORT_FILE_BYTES);
-        let report = render(&mut input, &mut output, &batch.recipe, limit)
-            .map_err(|error| error.to_string())?;
+        let report = render_page(
+            &mut input,
+            &mut output,
+            &batch.recipe,
+            limit,
+            from,
+            batch.selected,
+        )
+        .map_err(|error| error.to_string())?;
         if input.into_inner().digest() != batch.sha256
             || format!("{:?}", report.detection.format) != batch.format
         {
@@ -284,8 +314,14 @@ impl Batches {
 }
 
 impl Batch {
-    pub(crate) fn id(&self) -> &str {
-        &self.id
+    pub(crate) fn summary(&self) -> BatchSummary {
+        BatchSummary {
+            id: self.id.clone(),
+            revision: self.revision,
+            state: self.state,
+            format: self.format.clone(),
+            selected: self.selected,
+        }
     }
 
     pub(crate) fn check_review(&self) -> Result<(), String> {
@@ -416,7 +452,7 @@ fn read_file(dir: &Dir, name: impl AsRef<Path>) -> Result<std::fs::File, String>
     Ok(file)
 }
 
-fn open_path(path: &Path) -> Result<std::fs::File, String> {
+pub(crate) fn open_path(path: &Path) -> Result<std::fs::File, String> {
     let parent = path
         .parent()
         .filter(|path| !path.as_os_str().is_empty())

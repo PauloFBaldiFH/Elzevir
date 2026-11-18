@@ -17,6 +17,7 @@ mod facets;
 mod form_sections;
 mod history;
 mod icons;
+mod importing;
 mod items;
 mod new_record;
 mod opac;
@@ -80,6 +81,7 @@ impl Default for WebConfig {
 #[derive(Clone)]
 pub struct AppState {
     inner: Arc<Inner>,
+    imports: Option<Arc<importing::Imports>>,
 }
 
 struct Inner {
@@ -111,6 +113,7 @@ impl AppState {
         config: WebConfig,
     ) -> Self {
         Self {
+            imports: None,
             inner: Arc::new(Inner {
                 staff,
                 memory,
@@ -123,6 +126,18 @@ impl AppState {
             }),
         }
     }
+
+    /// Connects the prepared imports for this institution.
+    ///
+    /// # Errors
+    /// Returns an error if the embedded import translations cannot load.
+    pub fn with_imports(
+        mut self,
+        port: Arc<dyn elzevir_app::import::batches::BatchPort>,
+    ) -> Result<Self, elzevir_web_templates::I18nError> {
+        self.imports = Some(Arc::new(importing::Imports::new(port)?));
+        Ok(self)
+    }
 }
 
 /// All routes, with security headers on every response.
@@ -134,6 +149,7 @@ pub fn router(state: AppState) -> Router {
         .route("/static/elzevir.css", get(assets::stylesheet))
         .route("/static/htmx.min.js", get(assets::htmx))
         .route("/static/elzevir-catalog.js", get(assets::catalog_script))
+        .route("/static/elzevir-import.js", get(assets::import_script))
         .route("/static/elzevir-icons.svg", get(assets::icons))
         .route("/equipe", get(staff::home))
         .route("/equipe/acervo", get(catalog::catalog))
@@ -206,6 +222,7 @@ pub fn router(state: AppState) -> Router {
             get(registries::registries).post(registries::change_registry),
         )
         .merge(authority_routes())
+        .merge(importing::routes())
         .layer(axum::middleware::map_response(security::headers))
         .with_state(state)
 }

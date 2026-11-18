@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Import catalog records · Elzevir</title>
+  <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
+  <link rel="stylesheet" href="/static/elzevir.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/elzevir-import.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">Elzevir</a>
+    <nav>
+      <a href="/">Catalog</a>
+      <a href="/equipe">Staff</a>
+    </nav>
+  </header>
+  <main>
+
+<section id="import-workspace" class="import-workspace" hx-history="false">
+  <a href="/equipe/acervo">Catalog</a>
+  <h1>Import catalog records</h1>
+
+
+
+    <p><a href="/equipe/acervo/importar">Back to your batches</a></p>
+    <p>MarcEdit · Ready for confirmation · Revision 3</p>
+
+      <form action="/equipe/acervo/importar/BATCH-ID/editar" method="post" data-import-edit>
+        <input type="hidden" name="csrf" value="SESSION-CSRF">
+        <input type="hidden" name="revision" value="3">
+
+  <label for="edit-format">Source format</label>
+  <select id="edit-format" name="format">
+    <option value="auto">Detect from the file</option>
+    <option value="iso">ISO 2709</option>
+    <option value="xml">MARCXML</option>
+    <option value="mrk" selected>MarcEdit</option>
+  </select>
+
+        <label for="import-recipe">Edit recipe</label>
+        <textarea id="import-recipe" name="recipe" rows="7" spellcheck="false" aria-describedby="import-recipe-help">{
+  &#34;edits&#34;: [
+    {
+      &#34;record&#34;: 1,
+      &#34;tag&#34;: &#34;245&#34;,
+      &#34;change&#34;: {
+        &#34;op&#34;: &#34;replace_subfield&#34;,
+        &#34;code&#34;: &#34;a&#34;,
+        &#34;value&#34;: &#34;Revised title&#34;
+      }
+    }
+  ],
+  &#34;exclude&#34;: [],
+  &#34;accept_missing_barcodes&#34;: [],
+  &#34;matching&#34;: null
+}</textarea>
+        <p id="import-recipe-help">Use record numbers from the source. Omit record to apply an edit throughout the batch. The recipe also accepts exclusions, matching choices and explicit acceptance of missing barcodes.</p>
+        <details><summary>Example recipe for editing a title</summary><pre>{"edits":[{"record":1,"tag":"245","change":{"op":"replace_subfield","code":"a","value":""}}]}</pre></details>
+        <button type="submit">Save choices</button>
+      </form>
+      <form action="/equipe/acervo/importar/BATCH-ID/prever" method="post">
+        <input type="hidden" name="csrf" value="SESSION-CSRF">
+        <input type="hidden" name="revision" value="3">
+        <button type="submit">Review preview</button>
+      </form>
+
+
+      <section id="import-preview" aria-labelledby="import-preview-heading">
+        <h2 id="import-preview-heading">Review preview</h2>
+        <p>The file starts with a MarcEdit leader line.</p>
+        <p>4 source records · 0 excluded · 1 edited · 0 items to submit · 0 possible matches · 0 possible replacements</p>
+
+
+        <article id="record-1">
+          <h3>Record 1</h3>
+          <div class="import-record">
+
+            <dl>
+              <dt>Work</dt><dd>Revised title</dd>
+              <dt>Instance</dt><dd>Revised title</dd>
+              <dt>Items</dt><dd>0</dd>
+
+            </dl>
+
+            <details>
+              <summary>Original MARC</summary>
+              <pre>LDR  00079nam a2200037 a 4500
+245  10$aBefore &#60;script&#62;fictitious()&#60;/script&#62;
+</pre>
+
+              <h4>Edited MARC</h4><pre>LDR  00056nam a2200037 a 4500
+245  10$aRevised title
+</pre>
+
+            </details>
+          </div>
+        </article>
+
+        <article id="record-2">
+          <h3>Record 2</h3>
+          <div class="import-record">
+
+            <dl>
+              <dt>Work</dt><dd>Second synthetic record</dd>
+              <dt>Instance</dt><dd>Second synthetic record</dd>
+              <dt>Items</dt><dd>0</dd>
+
+            </dl>
+
+            <details>
+              <summary>Original MARC</summary>
+              <pre>LDR  00066nam a2200037 a 4500
+245  10$aSecond synthetic record
+</pre>
+
+            </details>
+          </div>
+        </article>
+
+        <article id="record-3">
+          <h3>Record 3</h3>
+          <div class="import-record">
+
+            <dl>
+              <dt>Work</dt><dd>Third synthetic record</dd>
+              <dt>Instance</dt><dd>Third synthetic record</dd>
+              <dt>Items</dt><dd>0</dd>
+
+            </dl>
+
+            <details>
+              <summary>Original MARC</summary>
+              <pre>LDR  00065nam a2200037 a 4500
+245  10$aThird synthetic record
+</pre>
+
+            </details>
+          </div>
+        </article>
+
+        <nav aria-label="Record pages">
+
+          <a href="/equipe/acervo/importar/BATCH-ID?from=3&#38;problems=0#import-preview">Next page</a>
+        </nav>
+
+      </section>
+
+
+      <form action="/equipe/acervo/importar/BATCH-ID/confirmar" method="post">
+        <input type="hidden" name="csrf" value="SESSION-CSRF">
+        <input type="hidden" name="revision" value="3">
+        <button type="submit">Confirm import</button>
+      </form>
+
+    <details>
+      <summary>Cancel batch</summary>
+      <p>Canceling removes the original file and saved edits.</p>
+      <form action="/equipe/acervo/importar/BATCH-ID/cancelar" method="post">
+        <input type="hidden" name="csrf" value="SESSION-CSRF">
+        <input type="hidden" name="revision" value="3">
+
+        <button type="submit">Remove this batch</button>
+      </form>
+    </details>
+
+</section>
+
+  </main>
+</body>
+</html>
