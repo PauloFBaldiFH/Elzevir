@@ -45,7 +45,10 @@ pub(crate) struct ImportArgs {
     /// with their codes as names.
     #[arg(long)]
     create_codes: bool,
-    /// The MARC21 file (ISO 2709).
+    /// Inspect a MARC file using a read-only view of the catalog.
+    #[arg(long)]
+    preview: bool,
+    /// The MARC21 file (ISO 2709, or XML and mnemonic text in preview).
     file: PathBuf,
 }
 
@@ -140,6 +143,9 @@ fn open_input(path: &Path) -> Result<BufReader<File>, String> {
 
 pub(crate) fn import(args: &ImportArgs) -> Result<(), String> {
     let mut input = open_input(&args.file)?;
+    if args.preview {
+        return preview(args, input);
+    }
     require_iso2709(&mut input)?;
     let data = open_store(&args.data_dir)?;
     if args.create_codes {
@@ -156,6 +162,61 @@ pub(crate) fn import(args: &ImportArgs) -> Result<(), String> {
     let report = import_marc21(input, &data.store, &options).map_err(|e| e.to_string())?;
     print_import(&report);
     Ok(())
+}
+
+fn preview(args: &ImportArgs, input: BufReader<File>) -> Result<(), String> {
+    if args.create_codes {
+        return Err("--create-codes is incompatible with --preview".into());
+    }
+    if crate::restore_journal::pending(&args.data_dir) {
+        return Err("interrupted restore requires backup recover-restore before preview".into());
+    }
+    let options = ImportOptions {
+        matching: args.matching(),
+        ..ImportOptions::default()
+    };
+    let report = elzevir_store::preview_import(&args.data_dir.join("elzevir.db"), input, options)
+        .map_err(|error| error.to_string())?;
+    println!(
+        "elzevir: {:?} ({:?}) preview: {} records read, {} prepared, {} blocking diagnostics",
+        report.detection.format,
+        report.detection.evidence,
+        report.read,
+        report.prepared,
+        report.issues.len()
+    );
+    for sample in report.samples {
+        println!(
+            "record {}: Work: {:?} | Instance: {:?} | Items: {}",
+            sample.index + 1,
+            sample.work,
+            sample.instance,
+            sample.items
+        );
+    }
+    for (index, instance) in report.matches {
+        println!(
+            "record {}: possible match with instance {}",
+            index + 1,
+            instance.0
+        );
+    }
+    for issue in &report.issues {
+        let item = issue
+            .item
+            .map_or_else(String::new, |position| format!(", item {}", position + 1));
+        eprintln!(
+            "elzevir: record {} (byte {}){item}: {}",
+            issue.index + 1,
+            issue.offset,
+            issue.reason
+        );
+    }
+    if report.issues.is_empty() {
+        Ok(())
+    } else {
+        Err("preview requires review".into())
+    }
 }
 
 fn require_iso2709(input: &mut impl BufRead) -> Result<(), String> {

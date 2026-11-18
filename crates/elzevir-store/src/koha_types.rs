@@ -56,41 +56,44 @@ fn store(
 
 impl TypeTranslationSource for ElzevirStore {
     fn type_translations(&self) -> Result<TypeTranslations, CatalogReadError> {
-        self.readers()
-            .read(|c| {
-                let mut statement = c.prepare(
-                    "SELECT code, entity, property, scheme, value FROM koha_type_statements
-                     ORDER BY code, entity, position",
-                )?;
-                let rows = statement
-                    .query_map([], |row| {
-                        Ok((
-                            row.get::<_, String>(0)?,
-                            row.get::<_, i64>(1)?,
-                            row.get::<_, String>(2)?,
-                            row.get::<_, String>(3)?,
-                            row.get::<_, String>(4)?,
-                        ))
-                    })?
-                    .collect::<Result<Vec<_>, _>>()?;
-                let mut translations = TypeTranslations::default();
-                for (code, entity, property, scheme, value) in rows {
-                    let translation = translations.0.entry(code).or_default();
-                    let description = if entity == WORK {
-                        &mut translation.work
-                    } else {
-                        &mut translation.instance
-                    };
-                    if property == "class" {
-                        description.classes.push(value);
-                    } else {
-                        description
-                            .statements
-                            .push(concept(&property, &scheme, &value));
-                    }
-                }
-                Ok(translations)
-            })
-            .map_err(|e: rusqlite::Error| CatalogReadError(e.to_string()))
+        self.readers().read(read)
     }
+}
+
+pub(crate) fn read(connection: &Connection) -> Result<TypeTranslations, CatalogReadError> {
+    fn load(connection: &Connection) -> rusqlite::Result<TypeTranslations> {
+        let mut statement = connection.prepare(
+            "SELECT code, entity, property, scheme, value FROM koha_type_statements
+                     ORDER BY code, entity, position",
+        )?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut translations = TypeTranslations::default();
+        for (code, entity, property, scheme, value) in rows {
+            let translation = translations.0.entry(code).or_default();
+            let description = if entity == WORK {
+                &mut translation.work
+            } else {
+                &mut translation.instance
+            };
+            if property == "class" {
+                description.classes.push(value);
+            } else {
+                description
+                    .statements
+                    .push(concept(&property, &scheme, &value));
+            }
+        }
+        Ok(translations)
+    }
+    load(connection).map_err(|e| CatalogReadError(e.to_string()))
 }

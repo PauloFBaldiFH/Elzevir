@@ -659,14 +659,7 @@ pub(crate) fn item_codes(
     connection: &Connection,
     item: &ItemData,
 ) -> Result<Places, CommandFailed<WriteRefusal>> {
-    let branch = |code: &str| {
-        places::by_code(connection, Coded::Branch, code)?
-            .ok_or_else(|| refused(CatalogRefusal::UnknownBranch(code.to_owned())))
-    };
-    let home = branch(&item.home_branch)?;
-    let holding = branch(&item.holding_branch)?;
-    let policy = places::by_code(connection, Coded::Policy, &item.item_type)?
-        .ok_or_else(|| refused(CatalogRefusal::UnknownItemType(item.item_type.clone())))?;
+    let [home, holding, policy] = required_item_codes(connection, item)?;
     let location = item
         .location
         .as_deref()
@@ -684,6 +677,21 @@ pub(crate) fn item_codes(
         location,
         collection,
     })
+}
+
+pub(crate) fn required_item_codes(
+    connection: &Connection,
+    item: &ItemData,
+) -> Result<[i64; 3], CommandFailed<WriteRefusal>> {
+    let branch = |code: &str| {
+        places::by_code(connection, Coded::Branch, code)?
+            .ok_or_else(|| refused(CatalogRefusal::UnknownBranch(code.to_owned())))
+    };
+    let home = branch(&item.home_branch)?;
+    let holding = branch(&item.holding_branch)?;
+    let policy = places::by_code(connection, Coded::Policy, &item.item_type)?
+        .ok_or_else(|| refused(CatalogRefusal::UnknownItemType(item.item_type.clone())))?;
+    Ok([home, holding, policy])
 }
 
 /// Stores an imported Item.

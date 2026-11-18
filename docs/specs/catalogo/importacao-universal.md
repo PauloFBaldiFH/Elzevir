@@ -2,8 +2,8 @@
 
 > Status: implementação incremental I0–I10; I2 acrescenta detecção à CLI,
 > preservando ISO 2709. I3 acrescenta MARCXML à aplicação e I4 acrescenta
-> MarcEdit `.mrk`. A CLI mantém o contrato de I2. Prévia e tela entram nas
-> etapas abaixo.
+> MarcEdit `.mrk`. I5 entrega a preparação integral MARC por `--preview`.
+> A importação direta pela CLI mantém o contrato de I2.
 > Base: [importação atual](importacao.md), [casamento](casamento.md),
 > [BIBFRAME completo](bibframe-completo.md),
 > [ADR da importação universal](../../adr/0004-importacao-universal.md) e
@@ -211,12 +211,30 @@ opções de casamento invalida a prévia anterior e exige nova preparação.
 
 ### 1.6 Prévia, revisão e casamento
 
-`elzevir import --data-dir DIR --preview ARQUIVO` é a interface planejada
-para preparar sem gravar catálogo, auditoria, códigos ou efeitos. A tela
+`elzevir import --data-dir DIR --preview ARQUIVO` prepara ISO 2709, MARCXML
+e MarcEdit sem gravar catálogo, auditoria, códigos ou efeitos. A tela
 chama a mesma função de aplicação. Consulta ao catálogo usa só o pool de
 leitura, por portas de `elzevir-app`, inclusive para cadastros e colisões.
 `--preview` termina com saída 1 se houver erro ou revisão obrigatória pendente;
 prévia válida, inclusive com avisos, termina com 0. O ISO direto não muda.
+
+A prévia da CLI trata uma base ausente como catálogo vazio e exige schema
+atual para consultar uma base existente. `--create-codes` é incompatível com
+a prévia. Os leitores compartilham conversão e mapeamento com a importação.
+A leitura do catálogo usa um snapshot pelo pool de leitura. Erros
+estruturais dos formatos textuais interrompem a preparação. A CLI apresenta
+até três amostras mapeadas e emite todos os diagnósticos de validação nas
+entradas lidas até o fim.
+Ao abrir uma base SQLite em modo WAL, a própria biblioteca pode criar
+arquivos auxiliares WAL/SHM para coordenar a leitura.
+
+As ações de casamento disponíveis na CLI também valem para a previsão.
+Chaves repetidas no lote pedem revisão e apontam para o primeiro registro
+nessa situação, sem pressupor o resultado de substituições ainda pendentes.
+Exemplares que a ação escolhida descarta ficam fora da validação de
+cadastros e de códigos de barras. Para exemplares que seriam gravados, o
+código ausente ou repetido exige revisão, salvo colisão coberta pela ação
+explícita de substituição.
 
 A amostra inicial tem três registros em blocos Obra / Instância / Exemplar;
 todos os demais e todos os diagnósticos são acessíveis por paginação.

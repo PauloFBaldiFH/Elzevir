@@ -77,11 +77,10 @@ O contrato v0 acima continua descrevendo os comandos disponíveis. Os novos
 formatos e opções entram por PRs separados; a importação ISO 2709 direta,
 suas ações de casamento, códigos de saída e trava da pasta são preservados.
 
-## 6. Evolução planejada: importação universal
+## 6. Prévia da importação universal
 
-Ver [importação universal](importacao-universal.md), proposta em I0.
-A detecção pelo conteúdo está no I2, os leitores entram por etapas e
-`elzevir import --data-dir DIR --preview ARQUIVO` em I5. A prévia não grava
-o catálogo, códigos, auditoria ou efeitos. A tela web de I7 chama a mesma
-preparação em `elzevir-app`, dentro de `serve`; não abre a CLI contra a
-pasta já travada pelo servidor. Nenhuma dessas capacidades é entregue em I0.
+`elzevir import --data-dir DIR --preview ARQUIVO` aceita ISO 2709, MARCXML
+e MarcEdit UTF-8. A prévia consulta o catálogo em modo de leitura, apresenta
+até três amostras e retorna saída 1 se um problema exigir revisão.
+`--create-codes` é incompatível com a prévia. A importação direta continua
+aceitando ISO 2709. Veja a [spec da importação universal](importacao-universal.md).
