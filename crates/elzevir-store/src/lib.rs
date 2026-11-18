@@ -32,6 +32,7 @@ mod koha_types;
 mod listing;
 mod matching;
 mod places;
+mod preview;
 mod readers;
 mod registries;
 mod schema;
@@ -48,6 +49,7 @@ pub use config::StoreConfig;
 pub use elzevir::{ElzevirHandler, ElzevirStore};
 pub use error::{CommandFailed, StoreError, SubmitError};
 pub use import::PendingAdd;
+pub use preview::preview_import;
 pub use readers::ReadPool;
 pub use writer::{CommandHandler, Pending, WriteTx};
 

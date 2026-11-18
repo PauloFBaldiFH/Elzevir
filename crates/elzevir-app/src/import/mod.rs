@@ -5,6 +5,8 @@
 //! the writer one by one, in file order. The order is what keeps a parallel import equal
 //! to a serial one (docs/arquitetura/03-estrategia-reconstrucao.md, §1.2 items 2 and 8).
 
+pub mod preview;
+
 use std::collections::VecDeque;
 use std::io::BufRead;
 use std::num::NonZeroUsize;
@@ -279,16 +281,9 @@ fn import_converted<S: RecordSink>(
                     offset,
                 };
                 report.read = report.read.saturating_add(1);
-                let mut bytes = Vec::new();
-                match record.write_iso2709(&mut bytes) {
-                    Ok(()) => chunk.push(RawRecord {
-                        index: place.index,
-                        offset: place.offset,
-                        bytes,
-                    }),
-                    Err(error) => report
-                        .failures
-                        .push(place.failed(RecordFailure::Source(error))),
+                match encode_source(&record, place) {
+                    Ok(record) => chunk.push(record),
+                    Err(failed) => report.failures.push(failed),
                 }
             }
             Ok(chunk)
@@ -296,6 +291,18 @@ fn import_converted<S: RecordSink>(
         sink,
         options,
     )
+}
+
+fn encode_source(record: &Record, place: RawPlace) -> Result<RawRecord, FailedRecord> {
+    let mut bytes = Vec::new();
+    record
+        .write_iso2709(&mut bytes)
+        .map_err(|error| place.failed(RecordFailure::Source(error)))?;
+    Ok(RawRecord {
+        index: place.index,
+        offset: place.offset,
+        bytes,
+    })
 }
 
 fn import_chunks<S: RecordSink>(
