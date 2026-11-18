@@ -7,7 +7,7 @@ mod sql;
 pub const MAX_DETECTION_BYTES: usize = 8 * 1024;
 
 /// The source families of the universal import roadmap.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ImportFormat {
     /// The existing binary MARC path.
     Iso2709,
@@ -59,6 +59,24 @@ pub struct Detection {
     pub format: ImportFormat,
     /// Safe, structured evidence, never a copy of input bytes.
     pub evidence: Evidence,
+}
+
+/// Selects a MARC reader while retaining the evidence found in the source.
+///
+/// Positive evidence of a table, SQL or a container always excludes a MARC reader.
+#[must_use]
+pub fn select_marc(detected: Detection, selected: Option<ImportFormat>) -> Option<Detection> {
+    use ImportFormat::{Iso2709, MarcText, MarcXml};
+    if !matches!(detected.format, Iso2709 | MarcXml | MarcText)
+        && detected.evidence != Evidence::Inconclusive
+    {
+        return None;
+    }
+    let format = selected.unwrap_or(detected.format);
+    matches!(format, Iso2709 | MarcXml | MarcText).then_some(Detection {
+        format,
+        evidence: detected.evidence,
+    })
 }
 
 /// Inspects at most [`MAX_DETECTION_BYTES`] without I/O or executing source content.

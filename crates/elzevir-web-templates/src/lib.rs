@@ -5,6 +5,7 @@
 //! (English first, then Brazilian Portuguese; docs/arquitetura/04-decisoes.md, §1 item 7).
 
 mod staff_catalog;
+mod staff_import;
 mod staff_item_grid;
 mod staff_record_fields;
 mod staff_record_form;
@@ -13,6 +14,10 @@ mod staff_registries;
 pub use staff_catalog::{
     ActiveFilter, AuthorityLine, Cord, FacetMenu, FacetOption, FacetStrip, FamilyLine, HubLine,
     InstanceLine, PillLine, ScanLine, StaffCatalog, WorkLine, WorkListLink,
+};
+pub use staff_import::{
+    ImportBatchLink, ImportDraft, ImportPage, ImportPreview, ImportReceipt, ImportSample,
+    ImportView,
 };
 pub use staff_item_grid::{
     GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid, SuggestedCallNumber,
@@ -31,6 +36,7 @@ use unic_langid::{LanguageIdentifier, langid};
 
 /// English messages, compiled into the binary.
 const EN_MESSAGES: &str = include_str!("../locales/en/main.ftl");
+const PT_BR_IMPORT: &str = include_str!("../locales/pt-BR/import.ftl");
 
 /// Interface texts for one language.
 pub struct I18n {
@@ -54,6 +60,14 @@ impl I18n {
     /// Fails only if the embedded `.ftl` file is invalid, which the tests rule out.
     pub fn english() -> Result<Self, I18nError> {
         Self::load(langid!("en"), EN_MESSAGES)
+    }
+
+    /// Brazilian Portuguese language bundle for the import workspace.
+    ///
+    /// # Errors
+    /// Fails if the embedded Fluent resource is invalid.
+    pub fn import_portuguese() -> Result<Self, I18nError> {
+        Self::load(langid!("pt-BR"), PT_BR_IMPORT)
     }
 
     fn load(lang: LanguageIdentifier, source: &str) -> Result<Self, I18nError> {
@@ -359,6 +373,8 @@ pub struct StaffHome<'a> {
     pub is_admin: bool,
     /// Whether to show what cataloguers may change.
     pub can_catalogue: bool,
+    /// Whether prepared imports are available to this operator.
+    pub can_import: bool,
     /// Anti-forgery token for the sign-out form.
     pub csrf: &'a str,
 }

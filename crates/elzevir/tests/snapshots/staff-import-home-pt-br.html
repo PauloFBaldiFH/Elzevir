@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Importar registros para o acervo · Elzevir</title>
+  <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
+  <link rel="stylesheet" href="/static/elzevir.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/elzevir-import.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">Elzevir</a>
+    <nav>
+      <a href="/">Catálogo</a>
+      <a href="/equipe">Equipe</a>
+    </nav>
+  </header>
+  <main>
+
+<section id="import-workspace" class="import-workspace" hx-history="false">
+  <a href="/equipe/acervo">Acervo</a>
+  <h1>Importar registros para o acervo</h1>
+
+
+
+    <form action="/equipe/acervo/importar" method="post" enctype="multipart/form-data"
+          hx-post="/equipe/acervo/importar" hx-encoding="multipart/form-data" hx-select="#import-workspace"
+          hx-target="#import-workspace" hx-swap="outerHTML" hx-push-url="true" data-import-upload>
+      <input type="hidden" name="csrf" value="SESSION-CSRF">
+
+  <label for="upload-format">Formato da origem</label>
+  <select id="upload-format" name="format">
+    <option value="auto" selected>Detectar pelo arquivo</option>
+    <option value="iso">ISO 2709</option>
+    <option value="xml">MARCXML</option>
+    <option value="mrk">MarcEdit</option>
+  </select>
+
+      <label for="import-file">Arquivo de origem</label>
+      <input id="import-file" name="file" type="file" required aria-describedby="import-limit">
+      <p id="import-limit">ISO 2709, MARCXML ou MarcEdit (.mrk), até 512 MiB e 100.000 registros.</p>
+      <button type="submit">Preparar lote</button>
+      <progress max="100" value="0" aria-label="Progresso do envio" hidden></progress>
+    </form>
+
+
+
+</section>
+
+  </main>
+</body>
+</html>

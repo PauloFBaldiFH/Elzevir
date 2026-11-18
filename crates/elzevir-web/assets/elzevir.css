@@ -573,3 +573,28 @@ a.chip-identifier:hover { text-decoration: underline; }
 .registry-new form { border-bottom: 0; }
 .codes-alert { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--elzevir-color-border); }
 .codes-refused { border-color: var(--elzevir-color-signal-out); background: var(--elzevir-color-out-bg); color: var(--elzevir-color-out-text); }
+
+/* Prepared imports use the same spacing and colour tokens as the staff catalog. */
+.import-workspace { max-inline-size: 68rem; margin-inline: auto; }
+.import-workspace form, .import-workspace > details, .import-workspace article {
+  margin-block: var(--elzevir-space);
+  padding: var(--elzevir-space);
+  border: 1px solid var(--elzevir-color-border);
+  border-radius: var(--elzevir-radius);
+}
+.import-workspace form label { display: block; margin-block-end: .5rem; }
+.import-workspace textarea {
+  inline-size: 100%;
+  padding: .75rem;
+  color: inherit;
+  background: var(--elzevir-color-canvas);
+  border: 1px solid var(--elzevir-color-border);
+  border-radius: var(--elzevir-radius);
+}
+.import-workspace form button { margin-block-start: .5rem; }
+.import-workspace [role="alert"] { color: var(--elzevir-color-error); }
+.import-workspace nav a { margin-inline-end: var(--elzevir-space); }
+.import-record { display: grid; gap: var(--elzevir-space); grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); }
+.import-workspace pre { max-block-size: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.import-workspace dl { display: grid; grid-template-columns: max-content 1fr; gap: .35rem 1rem; }
+.import-workspace dd { margin: 0; overflow-wrap: anywhere; }

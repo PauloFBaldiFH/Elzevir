@@ -165,13 +165,17 @@ impl<H: CommandHandler> WriterHandle<H> {
 }
 
 impl<H: CommandHandler> WriterHandle<H> {
-    pub(crate) fn submit_waiting(&self, command: H::Command) -> Result<Pending<H>, SubmitError> {
+    pub(crate) fn submit_waiting(
+        &self,
+        actor: Option<i64>,
+        command: H::Command,
+    ) -> Result<Pending<H>, SubmitError> {
         let queue = self.queue.as_ref().ok_or(SubmitError::Closed)?;
         let (reply, receiver) = oneshot::channel();
         queue
             .send(Request {
                 command,
-                actor: None,
+                actor,
                 reply,
             })
             .map_err(|_| SubmitError::Closed)?;

@@ -29,6 +29,7 @@ mod host_jobs;
 mod http_client;
 mod import_batch_cli;
 mod import_batches;
+mod import_service;
 mod init;
 mod installation;
 mod koha_codes;
@@ -327,6 +328,7 @@ struct WebRuntime {
 fn web_app(
     store: &Arc<ElzevirStore>,
     index: Arc<TantivyIndex>,
+    data_dir: &Path,
     config: WebConfig,
 ) -> Result<WebRuntime, String> {
     let i18n = I18n::english().map_err(|error| error.to_string())?;
@@ -352,7 +354,12 @@ fn web_app(
         staff_ports,
         i18n,
         config,
-    );
+    )
+    .with_imports(Arc::new(import_service::WebImports {
+        data_dir: data_dir.to_owned(),
+        store: Arc::clone(store),
+    }))
+    .map_err(|error| error.to_string())?;
     Ok(WebRuntime {
         router: elzevir_web::router(state.clone()),
         state,
@@ -400,6 +407,7 @@ fn serve_controlled(
         let app = web_app(
             &store,
             index,
+            data_dir,
             WebConfig {
                 secure_cookies: !settings.insecure_cookies,
                 iri_base: settings.iri_base.clone(),

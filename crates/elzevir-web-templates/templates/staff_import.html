@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% macro source_format(id, selection) %}
+  <label for="{{ id }}">{{ t.get("import-format") }}</label>
+  <select id="{{ id }}" name="format">
+    <option value="auto"{% if selection == "auto" %} selected{% endif %}>{{ t.get("import-format-auto") }}</option>
+    <option value="iso"{% if selection == "iso" %} selected{% endif %}>{{ t.get("import-iso") }}</option>
+    <option value="xml"{% if selection == "xml" %} selected{% endif %}>{{ t.get("import-xml") }}</option>
+    <option value="mrk"{% if selection == "mrk" %} selected{% endif %}>{{ t.get("import-mrk") }}</option>
+  </select>
+{% endmacro %}
+{% block title %}{{ t.get("import-title") }}{% endblock %}
+{% block head %}<script src="/static/elzevir-import.js" defer></script>{% endblock %}
+{% block content %}
+<section id="import-workspace" class="import-workspace" hx-history="false">
+  <a href="/equipe/acervo">{{ t.get("staff-home-catalog") }}</a>
+  <h1>{{ t.get("import-title") }}</h1>
+  {% if let Some(key) = notice %}<p role="alert">{{ t.get(key) }}</p>{% endif %}
+  {% if let Some(text) = detail %}<details><summary>{{ t.get("import-details") }}</summary><pre>{{ text }}</pre></details>{% endif %}
+  {% match view %}
+  {% when ImportView::Home with (batches, receipts) %}
+    <form action="/equipe/acervo/importar" method="post" enctype="multipart/form-data"
+          hx-post="/equipe/acervo/importar" hx-encoding="multipart/form-data" hx-select="#import-workspace"
+          hx-target="#import-workspace" hx-swap="outerHTML" hx-push-url="true" data-import-upload>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% call source_format("upload-format", "auto") %}{% endcall %}
+      <label for="import-file">{{ t.get("import-file") }}</label>
+      <input id="import-file" name="file" type="file" required aria-describedby="import-limit">
+      <p id="import-limit">{{ t.get("import-limit") }}</p>
+      <button type="submit">{{ t.get("import-upload") }}</button>
+      <progress max="100" value="0" aria-label="{{ t.get("import-progress") }}" hidden></progress>
+    </form>
+    {% if !batches.is_empty() %}
+    <h2>{{ t.get("import-drafts") }}</h2>
+    <ul>{% for batch in batches %}
+      <li><a href="/equipe/acervo/importar/{{ batch.id }}">{{ batch.label }} · {{ batch.id }}</a></li>
+    {% endfor %}</ul>
+    {% endif %}
+    {% if !receipts.is_empty() %}
+    <h2>{{ t.get("import-recent-results") }}</h2>
+    <ul>{% for id in receipts %}
+      <li><a href="/equipe/acervo/importar/{{ id }}/resultado">{{ t.get("import-result") }} · {{ id }}</a></li>
+    {% endfor %}</ul>
+    {% endif %}
+  {% when ImportView::Draft with (draft) %}
+    <p><a href="/equipe/acervo/importar">{{ t.get("import-drafts-back") }}</a></p>
+    <p>{{ draft.link.label }} · {{ t.get("import-revision") }} {{ draft.revision }}</p>
+    {% if draft.editable %}
+      <form action="/equipe/acervo/importar/{{ draft.link.id }}/editar" method="post" data-import-edit>
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="revision" value="{{ draft.revision }}">
+        {% call source_format("edit-format", draft.format) %}{% endcall %}
+        <label for="import-recipe">{{ t.get("import-recipe") }}</label>
+        <textarea id="import-recipe" name="recipe" rows="7" spellcheck="false" aria-describedby="import-recipe-help">{{ draft.recipe }}</textarea>
+        <p id="import-recipe-help">{{ t.get("import-recipe-help") }}</p>
+        <details><summary>{{ t.get("import-recipe-example") }}</summary><pre>{"edits":[{"record":1,"tag":"245","change":{"op":"replace_subfield","code":"a","value":""}}]}</pre></details>
+        <button type="submit">{{ t.get("import-save") }}</button>
+      </form>
+      <form action="/equipe/acervo/importar/{{ draft.link.id }}/prever" method="post">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="revision" value="{{ draft.revision }}">
+        <button type="submit">{{ t.get("import-preview") }}</button>
+      </form>
+    {% endif %}
+    {% if let Some(preview) = draft.preview %}
+      <section id="import-preview" aria-labelledby="import-preview-heading">
+        <h2 id="import-preview-heading">{{ t.get("import-preview") }}</h2>
+        <p>{{ preview.evidence }}</p>
+        <p>{{ preview.counts }}</p>
+        {% if preview.replace_items %}<p>{{ t.get("import-replace-items-note") }}</p>{% endif %}
+        {% for entry in preview.records %}
+        <article id="record-{{ entry.record }}">
+          <h3>{{ t.get("import-record") }} {{ entry.record }}</h3>
+          <div class="import-record">
+            {% if let Some(mapped) = entry.mapped %}
+            <dl>
+              <dt>{{ t.get("import-work") }}</dt><dd>{{ mapped.0 }}</dd>
+              <dt>{{ t.get("import-instance") }}</dt><dd>{{ mapped.1 }}</dd>
+              <dt>{{ t.get("import-items") }}</dt><dd>{{ mapped.2 }}</dd>
+              {% if let Some(candidate) = entry.candidate %}
+              <dt>{{ t.get("import-candidate") }}</dt><dd>{{ candidate }}</dd>
+              {% endif %}
+            </dl>
+            {% endif %}
+            <details>
+              <summary>{{ t.get("import-source") }}</summary>
+              <pre>{{ entry.before }}</pre>
+              {% if let Some(after) = entry.after %}
+              <h4>{{ t.get("import-edited") }}</h4><pre>{{ after }}</pre>
+              {% endif %}
+            </details>
+          </div>
+        </article>
+        {% endfor %}
+        <nav aria-label="{{ t.get("import-record-pages") }}">
+          {% if let Some(url) = preview.record_pages.0 %}<a href="{{ url }}">{{ t.get("import-previous") }}</a>{% endif %}
+          {% if let Some(url) = preview.record_pages.1 %}<a href="{{ url }}">{{ t.get("import-next") }}</a>{% endif %}
+        </nav>
+        {% if !preview.diagnostics.is_empty() %}
+        <h3 id="import-diagnostics">{{ t.get("import-diagnostics") }}</h3>
+        <ul>{% for diagnostic in preview.diagnostics %}
+          <li>
+            <a href="{{ diagnostic.0 }}">{{ diagnostic.1 }}</a>
+            {% if let Some(text) = diagnostic.2 %}<details><summary>{{ t.get("import-details") }}</summary><pre>{{ text }}</pre></details>{% endif %}
+          </li>
+        {% endfor %}</ul>
+        <nav aria-label="{{ t.get("import-diagnostic-pages") }}">
+          {% if let Some(url) = preview.diagnostic_pages.0 %}<a href="{{ url }}">{{ t.get("import-previous") }}</a>{% endif %}
+          {% if let Some(url) = preview.diagnostic_pages.1 %}<a href="{{ url }}">{{ t.get("import-next") }}</a>{% endif %}
+        </nav>
+        {% endif %}
+      </section>
+    {% endif %}
+    {% if draft.ready %}
+      <form action="/equipe/acervo/importar/{{ draft.link.id }}/confirmar" method="post">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="revision" value="{{ draft.revision }}">
+        <button type="submit">{{ t.get("import-confirm") }}</button>
+      </form>
+    {% endif %}
+    <details>
+      <summary>{{ t.get("import-cancel") }}</summary>
+      <p>{{ t.get("import-cancel-copy") }}</p>
+      <form action="/equipe/acervo/importar/{{ draft.link.id }}/cancelar" method="post">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="revision" value="{{ draft.revision }}">
+        {% if draft.interrupted %}
+        <label><input name="acknowledged" type="checkbox" value="yes" required> {{ t.get("import-acknowledge") }}</label>
+        {% endif %}
+        <button type="submit">{{ t.get("import-confirm-cancel") }}</button>
+      </form>
+    </details>
+  {% when ImportView::Result with (receipt) %}
+    <h2>{{ t.get("import-result") }}</h2>
+    {% if receipt.removed %}<p>{{ t.get("import-removed") }}</p>{% endif %}
+    <dl>{% for count in receipt.counts %}<dt>{{ t.get(count.0) }}</dt><dd>{{ count.1 }}</dd>{% endfor %}</dl>
+    {% if !receipt.refusals.is_empty() %}
+    <ul>{% for refusal in receipt.refusals %}<li>{{ refusal }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if receipt.more %}<p>{{ t.get("import-more-refusals") }}</p>{% endif %}
+    <p><a href="{{ receipt.download }}">{{ t.get("import-download") }}</a></p>
+    <p><a href="/equipe/acervo/importar">{{ t.get("import-drafts-back") }}</a></p>
+  {% when ImportView::Error %}
+    <p><a href="/equipe/acervo/importar">{{ t.get("import-drafts-back") }}</a></p>
+  {% endmatch %}
+</section>
+{% endblock %}
