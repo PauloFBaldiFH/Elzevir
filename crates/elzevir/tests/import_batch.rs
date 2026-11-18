@@ -106,6 +106,63 @@ fn recipe(dir: &Path, value: &str) -> String {
 }
 
 #[test]
+fn partial_koha_sql_uses_preview_revision_and_the_same_iso_writer() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path();
+    let path = data.join("catalog.txt");
+    let original = record("Synthetic Koha record");
+    let expected = record("Reviewed Koha record");
+    let mut xml = String::new();
+    let parsed = elzevir_marc::RecordRef::parse(&original, &Limits::default()).unwrap();
+    Record::from_ref(&parsed)
+        .write_marcxml_document(&mut xml)
+        .unwrap();
+    let source = format!(
+        "INSERT INTO borrower_attributes (note) VALUES ('SYNTHETIC_PRIVATE');\n\
+         INSERT INTO biblio_metadata (metadata,biblionumber) VALUES ('{xml}',123);"
+    );
+    fs::write(&path, &source).unwrap();
+    let preview = success(
+        Command::new(env!("CARGO_BIN_EXE_elzevir"))
+            .args(["import", "--preview", "--data-dir"])
+            .arg(data)
+            .arg(&path)
+            .output()
+            .unwrap(),
+    );
+    assert!(preview.contains("KohaSqlDump") && preview.contains("Synthetic Koha record"));
+    assert!(!preview.contains("SYNTHETIC_PRIVATE"));
+    assert!(!data.join("elzevir.db").exists());
+
+    // The first SQL declaration falls outside the automatic detection sample.
+    fs::write(&path, format!("# {}\n{source}", "x".repeat(8192))).unwrap();
+    let staged = success(
+        command(data, "1")
+            .args(["stage", "--koha-sql"])
+            .arg(&path)
+            .output()
+            .unwrap(),
+    );
+    let id = staged.split_ascii_whitespace().nth(1).unwrap();
+    let rules = recipe(
+        data,
+        r#"{"edits":[{"record":1,"tag":"245","change":{"op":"replace_subfield","code":"a","value":"Reviewed Koha record"}}]}"#,
+    );
+    success(run(data, &["edit", id, "1", &rules]));
+    refusal(&run(data, &["confirm", id, "1"]), "stale batch revision");
+    refusal(&run(data, &["confirm", id, "2"]), "cannot be confirmed");
+    let reviewed = success(run(data, &["preview", id]));
+    assert!(reviewed.contains("KohaSqlDump") && reviewed.contains("Reviewed Koha record"));
+    assert!(!reviewed.contains("SYNTHETIC_PRIVATE"));
+    assert!(!data.join("elzevir.db").exists());
+    let receipt: serde_json::Value =
+        serde_json::from_str(&success(run(data, &["confirm", id, "2"]))).unwrap();
+    assert_eq!(receipt["stored"], 1);
+    assert_eq!(export(data), expected);
+    assert!(!data.join("imports").join(id).exists());
+}
+
+#[test]
 fn positional_toml_prepares_a_sheet_and_refuses_duplicate_barcodes_in_a_new_batch() {
     let dir = tempfile::tempdir().unwrap();
     let data = dir.path();

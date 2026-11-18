@@ -24,13 +24,46 @@ pub struct ImportPage<'a> {
 /// Contents of the import workspace.
 pub enum ImportView {
     /// Upload and list of the operator's drafts.
-    Home(Vec<ImportBatchLink>, Vec<String>, bool),
+    Home(Vec<ImportBatchLink>, Vec<String>, ImportUpload),
     /// A draft or review page.
     Draft(Box<ImportDraft>),
     /// The writer's outcome.
     Result(ImportReceipt),
     /// A refusal without a batch view.
     Error,
+}
+
+/// Source initially selected in the upload form.
+#[derive(Clone, Copy)]
+pub enum ImportUpload {
+    /// Choose from the source evidence.
+    Auto,
+    /// Load a table or download a model.
+    Table,
+    /// Prepare a partial Koha SQL dump.
+    KohaSql,
+}
+
+impl ImportUpload {
+    /// Option sent by the form.
+    #[must_use]
+    pub const fn value(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Table => "table",
+            Self::KohaSql => "sql",
+        }
+    }
+
+    /// Fluent key for the format and size guidance.
+    #[must_use]
+    pub const fn limit(self) -> &'static str {
+        match self {
+            Self::Auto => "import-limit",
+            Self::Table => "import-table-limit",
+            Self::KohaSql => "import-sql-limit",
+        }
+    }
 }
 
 /// One visible batch.

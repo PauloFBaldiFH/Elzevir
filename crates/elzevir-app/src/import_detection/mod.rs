@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Bounded content evidence, not validation of an entire import source.
 
-mod sql;
+pub(crate) mod sql;
 
 /// Maximum prefix inspected; the CLI keeps these bytes in its import buffer.
 pub const MAX_DETECTION_BYTES: usize = 8 * 1024;
@@ -77,6 +77,25 @@ pub fn select_marc(detected: Detection, selected: Option<ImportFormat>) -> Optio
         format,
         evidence: detected.evidence,
     })
+}
+
+/// Selects a reader for staged bibliographic records, including validated Koha SQL.
+#[must_use]
+pub fn select_prepared(detected: Detection, selected: Option<ImportFormat>) -> Option<Detection> {
+    if selected.unwrap_or(detected.format) == ImportFormat::KohaSqlDump
+        && (detected.format == ImportFormat::KohaSqlDump
+            || matches!(
+                detected.evidence,
+                Evidence::EmptyInput | Evidence::Inconclusive
+            ))
+    {
+        Some(Detection {
+            format: ImportFormat::KohaSqlDump,
+            evidence: detected.evidence,
+        })
+    } else {
+        select_marc(detected, selected)
+    }
 }
 
 /// Inspects at most [`MAX_DETECTION_BYTES`] without I/O or executing source content.

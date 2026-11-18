@@ -12,7 +12,7 @@ use elzevir_app::import::preview::MAX_IMPORT_FILE_BYTES;
 use elzevir_app::import::sheet::TableSettings;
 use elzevir_app::import::table::{Delimiter, Encoding};
 use elzevir_app::import_detection::{
-    Evidence, ImportFormat, MAX_DETECTION_BYTES, detect_format, select_marc, table_delimiter,
+    Evidence, ImportFormat, MAX_DETECTION_BYTES, detect_format, select_prepared, table_delimiter,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -176,6 +176,9 @@ impl Batches {
             .read_to_end(&mut prefix)
             .map_err(io_error)?;
         let detected = detect_format(&prefix);
+        if detected.format == ImportFormat::KohaFullBackup {
+            return Err(elzevir_app::import::koha_sql::DumpProblem::FullBackup.to_string());
+        }
         let table = selected.is_none() && detected.format == ImportFormat::Delimited
             || selected == Some(ImportFormat::Delimited)
                 && matches!(
@@ -188,7 +191,7 @@ impl Batches {
         let format = if table {
             ImportFormat::Delimited
         } else {
-            select_marc(detected, selected)
+            select_prepared(detected, selected)
                 .ok_or_else(|| {
                     format!("unsupported or inconclusive input: {:?}", detected.evidence)
                 })?

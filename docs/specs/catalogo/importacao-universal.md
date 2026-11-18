@@ -7,6 +7,7 @@
 > I7 oferece a revisão desses lotes na interface autenticada da equipe.
 > I8 acrescenta preparação e confirmação de CSV e TSV nativos pela CLI e
 > pela interface da equipe, com um modelo BIBFRAME gerado pela aplicação.
+> I9 acrescenta a preparação e revisão de dumps parciais do Koha na borda MARC.
 > A importação direta pela CLI mantém o contrato de I2.
 > Base: [importação atual](importacao.md), [casamento](casamento.md),
 > [BIBFRAME completo](bibframe-completo.md),
@@ -79,8 +80,8 @@ comentários ou valores. O conjunto `biblio_metadata`, `items`, `borrowers`,
 uma tabela privada isolada não é. Prefixo incompleto não prova o inventário
 inteiro. ZIP/gzip retornam `Unknown` com evidência de contêiner reconhecido.
 Demais formatos, prefixos inconclusivos e contêineres são recusados com saída
-1, sem alterar a instituição. A classificação não substitui a validação do
-arquivo inteiro; um futuro leitor SQL deve conferir seu inventário completo.
+1, sem alterar a instituição. O leitor SQL da I9 confere as declarações de
+todo o arquivo antes de preparar registros para a escritora.
 
 ### 1.3 Preparar e preservar a origem
 
@@ -277,8 +278,8 @@ opções de casamento invalida a prévia anterior e exige nova preparação.
 
 ### 1.6 Prévia, revisão e casamento
 
-`elzevir import --data-dir DIR --preview ARQUIVO` prepara ISO 2709, MARCXML
-e MarcEdit sem gravar catálogo, auditoria, códigos ou efeitos. A tela
+`elzevir import --data-dir DIR --preview ARQUIVO` prepara ISO 2709, MARCXML,
+MarcEdit e SQL parcial do Koha sem gravar catálogo, auditoria, códigos ou efeitos. A tela
 chama a mesma função de aplicação. Consulta ao catálogo usa só o pool de
 leitura, por portas de `elzevir-app`, inclusive para cadastros e colisões.
 `--preview` termina com saída 1 se houver erro ou revisão obrigatória pendente;
@@ -417,20 +418,50 @@ evidência de gravação nem permite confirmar de novo.
 
 ### 1.8 SQL, contêineres e privacidade
 
-O leitor SQL aceita a gramática documentada e testada de `CREATE TABLE` e
-`INSERT`, respeitando colunas declaradas, aspas e escapes. Não executa SQL,
-scripts ou comandos de restauração. Extrai `biblio_metadata.metadata`,
-associa `items` pelo `biblionumber` e acrescenta `952` pela borda e suas
-correspondências. Não duplica exemplar já representado: conflito entre
-inventário e MARC, chave duplicada ou exemplar órfão exige revisão.
-Formato não coberto para; não adivinha posição de coluna ou relacionamento.
+I9 lê o dump como dados. `CREATE TABLE [IF NOT EXISTS]` registra a ordem
+das colunas. `INSERT INTO ... [(colunas)] VALUES (...), (...)` usa a lista
+explícita, ou a ordem do `CREATE TABLE` anterior quando necessário.
+Palavras-chave aceitam maiúsculas ou minúsculas. Identificadores ASCII
+podem vir entre crases. Um nome qualificado pertence ao mesmo esquema
+durante toda a leitura. Uma coluna de catálogo repetida ou ausente, ou uma
+linha que diverge das colunas declaradas, bloqueia a preparação.
+
+O subconjunto de exportação aceita números decimais, `NULL` e valores
+UTF-8 entre aspas simples ou duplas, com aspas duplicadas e os escapes
+MySQL `\0`, `\b`, `\n`, `\r`, `\t`, `\Z`, `\\`, `\'`,
+`\"`, `\%` e `\_`. São reconhecidos os comentários `--`, `#` e
+`/* ... */`, inclusive os condicionais do exportador. O leitor trata
+`DROP TABLE IF EXISTS`, `LOCK TABLES ... WRITE`, `UNLOCK TABLES` e
+`SET NAMES` de UTF-8 como cabeçalhos do dump. Cada instrução termina
+em ponto e vírgula. Expressões em valores, outros comandos e demais
+modos de escape ficam fora do subconjunto.
+
+`biblio_metadata` exige `biblionumber` e um registro MARCXML 21 por
+coluna `metadata`. `items` exige `biblionumber` e `itemnumber`.
+A associação usa esses identificadores e aceita que os exemplares
+venham antes da descrição. Para formar `952`, o leitor usa as colunas
+de catálogo mapeadas no projeto e guarda `itemnumber` em `$9`.
+Um `952` existente é reconhecido por `$9` ou por `$p`, com conferência
+dos dois quando presentes e das colunas mapeadas fornecidas no dump.
+Registros equivalentes preservam campos, indicadores e ordem.
+Conflitos, identificadores repetidos e exemplares órfãos bloqueiam
+o lote com a posição em bytes. `999$c`, `999$d` e `952$9` de origem
+são preservados.
 
 Tabelas `borrowers`, `borrower_*`, `issues`, `old_issues`, `reserves`,
 `accountlines` e demais tabelas fora de catálogo/exemplares são ignoradas
 sem materializar seus valores. Nenhum conteúdo delas entra em erro, log,
 relatório ou perfil salvo. A presença isolada de tabela ignorada não prova
-backup completo; o inventário de esquema completo é conferido antes de
-oferecer importação parcial. Dúvida exige revisão, sem executar o dump.
+backup completo. A combinação `biblio_metadata`, `items`, `borrowers`,
+`issues` e `systempreferences` bloqueia a preparação mesmo quando
+as declarações aparecem depois da amostra de detecção.
+
+`elzevir import --preview` e o fluxo de lotes aceitam a entrada SQL
+parcial. A etapa `import-batch stage` também admite a escolha explícita
+`--koha-sql` quando o prefixo é inconclusivo. Na área da equipe, use
+**Importar dump de catálogo do Koha**. O leitor converte o
+catálogo selecionado em ISO 2709 UTF-8 na borda. As receitas e a
+confirmação usam a revisão MARC existente e a mesma escritora.
 
 Arquivos compactados são inspecionados antes de extrair. Cada membro recebe
 a mesma detecção e limites; o inventário é revisado, não concatenado por
@@ -470,6 +501,11 @@ reduzem os limites nem a capacidade do importador ISO direto existente.
 | `MAX_MRK_INPUT_BYTES` | 512 MiB de entrada `.mrk`. |
 | `MAX_MRK_RECORDS` | 100.000 registros por entrada `.mrk`. |
 | `MAX_SQL_STATEMENT_BYTES` | 16 MiB por instrução, inclusive ao ignorar uma tabela. |
+| `MAX_SQL_COLUMNS` | 1.024 colunas por declaração ou linha. |
+| `MAX_SQL_IDENTIFIER_BYTES` | 64 bytes por nome SQL reconhecido. |
+| `MAX_SQL_VALUE_BYTES` | 1 MiB por valor de catálogo retido. |
+| `MAX_SQL_ITEMS` | 1.000.000 exemplares nas linhas de `items`. |
+| `MAX_SQL_DDL_DEPTH` | 32 níveis de parênteses nas definições de tabela. |
 | `MAX_ARCHIVE_MEMBERS` | 1.000 membros, contando diretórios e pacotes de planilha. |
 | `MAX_ARCHIVE_EXPANDED_BYTES` | 512 MiB no total expandido de um lote. |
 | `MAX_ARCHIVE_RATIO` | 100:1 por membro e acumulado, conferidos também durante expansão. |
@@ -492,6 +528,10 @@ Referências já estabelecidas: `reference/koha/tools/stage-marc-import.pl`,
 `_get_commit_action`), descritas em [casamento](casamento.md).
 Não se portam tabelas de staging nem se executam os importadores do Koha.
 I0 não realizou nova comparação contra uma instância de Koha.
+Na I9, a estrutura das tabelas vem do `installer/data/mysql/kohastructure.sql`
+do Koha fixado. A leitura de metadados e a projeção de exemplares seguem as
+referências `Koha::Biblio::Metadata::record` e `Koha::Item::as_marc_field`
+e os respectivos testes em `t/db_dependent/Koha/`.
 
 Inspiração de interação: `PauloFBaldiFH/koha.nexus`, `docs/magic-import.md`,
 `docs/field-mapping.md` e `panel/kei_panel/screens/fieldmap.py`.

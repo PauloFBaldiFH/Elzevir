@@ -92,3 +92,7 @@ import-evidence-table = A planilha foi lida com o separador selecionado.
 import-model-csv = Baixar modelo BIBFRAME em CSV
 import-model-tsv = Baixar modelo BIBFRAME em TSV
 import-table-recipe = Salve um mapeamento TOML versionado ou use o cabeçalho do modelo gerado. Salve uma nova revisão para mudar separador, codificação, agrupamento ou casamento.
+import-sql-link = Importar dump de catálogo do Koha
+import-sql = SQL parcial do Koha
+import-sql-limit = Dump parcial UTF-8 do Koha com registros e exemplares, até 512 MiB.
+import-evidence-sql = O dump contém declarações de tabelas de catálogo do Koha.

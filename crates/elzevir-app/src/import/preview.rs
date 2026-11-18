@@ -14,7 +14,7 @@ use super::{
 };
 use crate::catalog::{CatalogReadError, CatalogRefusal, ItemData, NewRecord, RecordItem};
 use crate::import_detection::{
-    Detection, Evidence, ImportFormat, MAX_DETECTION_BYTES, detect_format, select_marc,
+    Detection, Evidence, ImportFormat, MAX_DETECTION_BYTES, detect_format, select_prepared,
 };
 use crate::matching::{Decision, ItemsDecision, MatchKey, RecordAction, decide, match_keys};
 
@@ -234,12 +234,7 @@ pub(super) fn scan_as(
         .take(MAX_DETECTION_BYTES as u64)
         .read_to_end(&mut prefix)
         .map_err(ImportError::Io)?;
-    let detected = detect_format(&prefix);
-    let detection = if selected.is_some() {
-        select_marc(detected, selected).ok_or(PreviewError::Format(detected))?
-    } else {
-        detected
-    };
+    let mut detection = preview_format(detect_format(&prefix), selected)?;
     let input = prefix.as_slice().chain(input);
     let mut index = 0;
     let mut visit = |index, value| {
@@ -248,24 +243,8 @@ pub(super) fn scan_as(
         }
         visit(value)
     };
-    if detection.evidence == Evidence::EmptyInput {
-        // Recheck the provisional empty classification through EOF.
-        let mut input = input.take(MAX_IMPORT_FILE_BYTES as u64 + 1);
-        loop {
-            let bytes = input.fill_buf().map_err(ImportError::Io)?;
-            if bytes.is_empty() {
-                check_bytes(MAX_IMPORT_FILE_BYTES as u64 + 1 - input.limit())?;
-                return Ok(detection);
-            }
-            if !bytes.iter().all(u8::is_ascii_whitespace) {
-                return Err(PreviewError::Format(Detection {
-                    format: ImportFormat::Unknown,
-                    evidence: Evidence::Inconclusive,
-                }));
-            }
-            let count = bytes.len();
-            input.consume(count);
-        }
+    if detection.evidence == Evidence::EmptyInput && detection.format != ImportFormat::KohaSqlDump {
+        return verify_empty(input).map(|()| detection);
     }
     match detection.format {
         ImportFormat::Iso2709 => {
@@ -321,9 +300,59 @@ pub(super) fn scan_as(
                 index += 1;
             }
         }
+        ImportFormat::KohaSqlDump => {
+            let records = super::koha_sql::prepare(input).map_err(ImportError::from)?;
+            if !records.is_empty() {
+                detection.evidence = Evidence::KohaCatalogTables;
+            }
+            for (index, (record, offset)) in records.into_iter().enumerate() {
+                let place = RawPlace {
+                    index: index as u64,
+                    offset,
+                };
+                visit(place.index, encode_source(&record, place))?;
+            }
+        }
         _ => return Err(PreviewError::Format(detection)),
     }
     Ok(detection)
+}
+
+fn preview_format(
+    detected: Detection,
+    selected: Option<ImportFormat>,
+) -> Result<Detection, PreviewError> {
+    if detected.format == ImportFormat::KohaFullBackup {
+        return Err(ImportError::from(super::koha_sql::DumpError {
+            offset: 0,
+            problem: super::koha_sql::DumpProblem::FullBackup,
+        })
+        .into());
+    }
+    if selected.is_some() {
+        select_prepared(detected, selected).ok_or(PreviewError::Format(detected))
+    } else {
+        Ok(detected)
+    }
+}
+
+fn verify_empty(input: impl BufRead) -> Result<(), PreviewError> {
+    // Recheck the provisional empty classification through EOF.
+    let mut input = input.take(MAX_IMPORT_FILE_BYTES as u64 + 1);
+    loop {
+        let bytes = input.fill_buf().map_err(ImportError::Io)?;
+        if bytes.is_empty() {
+            return check_bytes(MAX_IMPORT_FILE_BYTES as u64 + 1 - input.limit());
+        }
+        if !bytes.iter().all(u8::is_ascii_whitespace) {
+            return Err(PreviewError::Format(Detection {
+                format: ImportFormat::Unknown,
+                evidence: Evidence::Inconclusive,
+            }));
+        }
+        let count = bytes.len();
+        input.consume(count);
+    }
 }
 
 fn check_bytes(bytes: u64) -> Result<(), PreviewError> {
