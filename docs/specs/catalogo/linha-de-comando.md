@@ -6,7 +6,7 @@
 
 ### `elzevir import --data-dir DIR [opções] ARQUIVO`
 
-1. Lê um arquivo MARC21 ISO 2709 e importa com `import_marc21`: o mesmo código que a importação pela tela vai usar. Paralelismo pelo número de núcleos; `ELZEVIR_SERIAL=import` deixa numa thread só ([importação](importacao.md), item 8).
+1. Detecta pelo conteúdo, sem consumir o buffer que será importado. Lê MARC21 ISO 2709 com `import_marc21`: o mesmo código que a importação pela tela vai usar. Formato ainda não suportado ou desconhecido termina com saída 1 antes de abrir a base ou criar códigos; extensão não decide o formato. Paralelismo pelo número de núcleos; `ELZEVIR_SERIAL=import` deixa numa thread só ([importação](importacao.md), item 8).
 2. **Casamento** ([casamento](casamento.md)):
 
 | Opção | Valores | Padrão |
@@ -80,7 +80,7 @@ suas ações de casamento, códigos de saída e trava da pasta são preservados.
 ## 6. Evolução planejada: importação universal
 
 Ver [importação universal](importacao-universal.md), proposta em I0.
-A detecção pelo conteúdo entra em I2, os leitores por etapas e
+A detecção pelo conteúdo está no I2, os leitores entram por etapas e
 `elzevir import --data-dir DIR --preview ARQUIVO` em I5. A prévia não grava
 o catálogo, códigos, auditoria ou efeitos. A tela web de I7 chama a mesma
 preparação em `elzevir-app`, dentro de `serve`; não abre a CLI contra a

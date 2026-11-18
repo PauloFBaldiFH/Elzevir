@@ -13,6 +13,7 @@ pub mod editing;
 pub mod export;
 pub mod history;
 pub mod import;
+pub mod import_detection;
 pub mod items;
 pub mod koha_types;
 pub mod listing;
