@@ -6,7 +6,7 @@ use std::io::{BufRead, Read};
 
 use elzevir_domain::catalog::InstanceId;
 use elzevir_domain::statement::{EntityKind, check_description};
-use elzevir_marc::{MarcTextReader, MarcXmlReader, MrkLimits, ReadError, XmlLimits};
+use elzevir_marc::{Limits, MarcTextReader, MarcXmlReader, MrkLimits, ReadError, XmlLimits};
 
 use super::{
     FailedRecord, ImportError, ImportOptions, MarcReader, RawPlace, RawRecord, RecordFailure,
@@ -59,6 +59,9 @@ pub enum PreviewError {
     /// A needed read could not be completed.
     #[error(transparent)]
     Catalog(#[from] CatalogReadError),
+    /// A recipe is invalid or cannot be applied to its selected record.
+    #[error("{0}")]
+    Edit(String),
 }
 
 /// A mapped record sample, without the raw source.
@@ -83,6 +86,18 @@ pub struct PreviewIssue {
     pub item: Option<usize>,
     /// Reason for review or refusal.
     pub reason: String,
+    pub(super) kind: IssueKind,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum IssueKind {
+    Validation,
+    MissingBarcode,
+    BatchMatch(u64),
+}
+
+pub(super) fn batch_match_reason(index: u64) -> String {
+    format!("possible match within the batch with record {}", index + 1)
 }
 
 /// Results of inspecting the whole source against one catalog view.
@@ -93,6 +108,8 @@ pub struct PreviewReport {
     pub read: u64,
     /// Records that passed conversion and mapping.
     pub prepared: u64,
+    /// Items the selected matching action would submit.
+    pub items: u64,
     /// First few prepared records.
     pub samples: Vec<PreviewSample>,
     /// Existing catalog candidates, indexed by source record.
@@ -106,10 +123,37 @@ pub struct PreviewReport {
 /// # Errors
 /// Returns format, stream, limit and catalog read errors.
 pub fn preview(
-    mut input: impl BufRead,
+    input: impl BufRead,
     catalog: Option<&dyn PreviewCatalog>,
     options: &ImportOptions,
 ) -> Result<PreviewReport, PreviewError> {
+    let mut inspection = Inspection {
+        options,
+        catalog,
+        keys: BTreeMap::new(),
+        barcodes: BTreeSet::new(),
+        report: PreviewReport {
+            detection: Detection {
+                format: ImportFormat::Unknown,
+                evidence: Evidence::Inconclusive,
+            },
+            read: 0,
+            prepared: 0,
+            items: 0,
+            samples: Vec::new(),
+            matches: Vec::new(),
+            issues: Vec::new(),
+        },
+    };
+    inspection.report.detection = scan(input, options.limits, |record| inspection.record(record))?;
+    Ok(inspection.report)
+}
+
+pub(super) fn scan(
+    mut input: impl BufRead,
+    limits: Limits,
+    mut visit: impl FnMut(Result<RawRecord, FailedRecord>) -> Result<(), PreviewError>,
+) -> Result<Detection, PreviewError> {
     let mut prefix = Vec::new();
     input
         .by_ref()
@@ -118,19 +162,12 @@ pub fn preview(
         .map_err(ImportError::Io)?;
     let detection = detect_format(&prefix);
     let input = prefix.as_slice().chain(input);
-    let mut inspection = Inspection {
-        options,
-        catalog,
-        keys: BTreeMap::new(),
-        barcodes: BTreeSet::new(),
-        report: PreviewReport {
-            detection,
-            read: 0,
-            prepared: 0,
-            samples: Vec::new(),
-            matches: Vec::new(),
-            issues: Vec::new(),
-        },
+    let mut index = 0;
+    let mut visit = |index, value| {
+        if index >= MAX_IMPORT_RECORDS {
+            return Err(PreviewError::Limit("record count"));
+        }
+        visit(value)
     };
     if detection.evidence == Evidence::EmptyInput {
         // Recheck the provisional empty classification through EOF.
@@ -139,7 +176,7 @@ pub fn preview(
             let bytes = input.fill_buf().map_err(ImportError::Io)?;
             if bytes.is_empty() {
                 check_bytes(MAX_IMPORT_FILE_BYTES as u64 + 1 - input.limit())?;
-                return Ok(inspection.report);
+                return Ok(detection);
             }
             if !bytes.iter().all(u8::is_ascii_whitespace) {
                 return Err(PreviewError::Format(Detection {
@@ -153,14 +190,10 @@ pub fn preview(
     }
     match detection.format {
         ImportFormat::Iso2709 => {
-            let mut reader =
-                MarcReader::new(input.take(MAX_IMPORT_FILE_BYTES as u64 + 1), options.limits);
+            let mut reader = MarcReader::new(input.take(MAX_IMPORT_FILE_BYTES as u64 + 1), limits);
             loop {
                 let offset = reader.offset();
-                let place = RawPlace {
-                    index: inspection.report.read,
-                    offset,
-                };
+                let place = RawPlace { index, offset };
                 let record = match reader.next_record() {
                     Some(Ok(record)) => Ok(RawRecord {
                         index: place.index,
@@ -177,35 +210,41 @@ pub fn preview(
                     }
                 };
                 check_bytes(reader.offset())?;
-                inspection.record(record)?;
+                visit(index, record)?;
+                index += 1;
             }
         }
         ImportFormat::MarcXml => {
             let mut reader = MarcXmlReader::new(input, XmlLimits::default());
             while let Some(record) = reader.next() {
                 let place = RawPlace {
-                    index: inspection.report.read,
+                    index,
                     offset: reader.record_offset(),
                 };
-                inspection.record(encode_source(&record.map_err(ImportError::Xml)?, place))?;
+                visit(
+                    index,
+                    encode_source(&record.map_err(ImportError::Xml)?, place),
+                )?;
+                index += 1;
             }
         }
         ImportFormat::MarcText => {
             let mut reader = MarcTextReader::new(input, MrkLimits::default());
             while let Some(record) = reader.next() {
                 let place = RawPlace {
-                    index: inspection.report.read,
+                    index,
                     offset: reader.record_offset(),
                 };
-                inspection.record(encode_source(
-                    &record.map_err(ImportError::MarcText)?,
-                    place,
-                ))?;
+                visit(
+                    index,
+                    encode_source(&record.map_err(ImportError::MarcText)?, place),
+                )?;
+                index += 1;
             }
         }
         _ => return Err(PreviewError::Format(detection)),
     }
-    Ok(inspection.report)
+    Ok(detection)
 }
 
 fn check_bytes(bytes: u64) -> Result<(), PreviewError> {
@@ -224,19 +263,23 @@ struct Inspection<'a> {
 }
 
 impl Inspection<'_> {
-    fn issue(&mut self, place: RawPlace, item: Option<usize>, reason: impl Into<String>) {
+    fn issue(
+        &mut self,
+        place: RawPlace,
+        item: Option<usize>,
+        kind: IssueKind,
+        reason: impl Into<String>,
+    ) {
         self.report.issues.push(PreviewIssue {
             index: place.index,
             offset: place.offset,
             item,
             reason: reason.into(),
+            kind,
         });
     }
 
     fn record(&mut self, raw: Result<RawRecord, FailedRecord>) -> Result<(), PreviewError> {
-        if self.report.read == MAX_IMPORT_RECORDS {
-            return Err(PreviewError::Limit("record count"));
-        }
         self.report.read += 1;
         let prepared = raw.and_then(|raw| {
             let (place, mapped) = prepare(raw, self.options);
@@ -253,6 +296,7 @@ impl Inspection<'_> {
                         offset: error.offset,
                     },
                     None,
+                    IssueKind::Validation,
                     error.failure.to_string(),
                 );
                 return Ok(());
@@ -274,11 +318,12 @@ impl Inspection<'_> {
                 (EntityKind::Instance, &record.instance.description),
             ] {
                 if let Err(error) = check_description(kind, description) {
-                    self.issue(place, None, error.to_string());
+                    self.issue(place, None, IssueKind::Validation, error.to_string());
                 }
             }
         }
         if decision.items != ItemsDecision::Ignore {
+            self.report.items += record.items.len() as u64;
             for (position, item) in record.items.iter().enumerate() {
                 self.item(place, position, item, decision.items)?;
             }
@@ -319,7 +364,8 @@ impl Inspection<'_> {
             self.issue(
                 place,
                 None,
-                format!("possible match within the batch with record {}", index + 1),
+                IssueKind::BatchMatch(index),
+                batch_match_reason(index),
             );
         }
         let matched = stored.is_some() || earlier.is_some();
@@ -348,10 +394,15 @@ impl Inspection<'_> {
             None => None,
         };
         if let Some(reason) = reason {
-            self.issue(place, Some(position), reason);
+            self.issue(place, Some(position), IssueKind::Validation, reason);
         }
         let Some(barcode) = &item.barcode else {
-            self.issue(place, Some(position), "missing barcode");
+            self.issue(
+                place,
+                Some(position),
+                IssueKind::MissingBarcode,
+                "missing barcode",
+            );
             return Ok(());
         };
         let repeated = !self.barcodes.insert(barcode.clone());
@@ -360,13 +411,19 @@ impl Inspection<'_> {
                 self.issue(
                     place,
                     Some(position),
+                    IssueKind::Validation,
                     "barcode already present in the batch",
                 );
             }
             if let Some(catalog) = self.catalog
                 && catalog.barcode_exists(barcode)?
             {
-                self.issue(place, Some(position), "barcode already in use");
+                self.issue(
+                    place,
+                    Some(position),
+                    IssueKind::Validation,
+                    "barcode already in use",
+                );
             }
         }
         Ok(())
