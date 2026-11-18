@@ -2,27 +2,29 @@
 //! Shared prepared import operations for the local CLI and the running institution.
 
 use std::fs::File;
-use std::io::{BufReader, Seek};
+use std::io::{BufReader, Cursor, Seek};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use elzevir_app::catalog::CatalogRefusal;
+use elzevir_app::catalog::{CatalogRefusal, CodeLists};
 use elzevir_app::import::batches::{
     BatchCommand, BatchError, BatchPort, BatchPreview, BatchReply, BatchState as State, BatchView,
     Completion, FormatChoice, Receipt, Refusal,
 };
+use elzevir_app::import::containers::{self, Selected};
 use elzevir_app::import::edits::{Recipe, RenderReport};
-use elzevir_app::import::sheet::PreparedTable;
+use elzevir_app::import::sheet::{self, PreparedTable, SheetError};
+use elzevir_app::import::table::Delimiter;
 use elzevir_app::import::{
     ImportError, ImportOptions, ImportReport, RecordFailure, RecordRejected, RecordSink,
     import_marc21,
 };
-use elzevir_app::import_detection::ImportFormat;
+use elzevir_app::import_detection::{Evidence, ImportFormat, table_delimiter};
 use elzevir_app::koha_types::TypeTranslationSource;
 use elzevir_app::staff::StaffId;
 use elzevir_store::ElzevirStore;
 
-use crate::import_batches::{Batch, Batches};
+use crate::import_batches::{Batch, Batches, is_delimited};
 
 pub(crate) struct WebImports {
     pub(crate) data_dir: PathBuf,
@@ -85,8 +87,10 @@ pub(crate) fn execute(
                 FormatChoice::Use(format) => batches.choose_format(&mut batch, Some(format)),
             };
             selection.map_err(BatchError::Invalid)?;
-            if (batch.is_table() && !recipe.edits.is_empty())
-                || (!batch.is_table() && recipe.table.is_some())
+            if batch.archive.is_none()
+                && (recipe.archive.is_some()
+                    || (batch.is_table() && !recipe.edits.is_empty())
+                    || (!batch.is_table() && recipe.table.is_some()))
             {
                 return Err(BatchError::Invalid(
                     "recipe is incompatible with the selected source format".into(),
@@ -145,6 +149,7 @@ fn view(batch: Batch, preview: Option<BatchPreview>) -> BatchReply {
     BatchReply::Batch(Box::new(BatchView {
         batch: batch.summary(),
         recipe: batch.recipe,
+        archive: batch.archive,
         preview,
     }))
 }
@@ -211,38 +216,160 @@ fn prepare(
     batch: &Batch,
     from: Option<u64>,
 ) -> Result<Prepared, BatchError> {
+    if batch.archive.is_some() {
+        return prepare_archive(data_dir, live, batches, batch, from);
+    }
     if batch.is_table() {
         let settings = batch.table_settings().map_err(BatchError::Invalid)?;
-        let (table, mut report) = batches
+        return batches
             .with_source(batch, |input| {
-                match live {
-                    Some((store, _)) => store.readers().preview_sheet(
-                        input,
-                        &settings,
-                        &batch.recipe,
-                        from.unwrap_or_default(),
-                    ),
-                    None => elzevir_store::preview_sheet(
-                        &data_dir.join("elzevir.db"),
-                        input,
-                        &settings,
-                        &batch.recipe,
-                        from.unwrap_or_default(),
-                    ),
-                }
+                prepare_table(
+                    data_dir,
+                    live,
+                    batch,
+                    from,
+                    Evidence::DelimitedRows,
+                    |codes| {
+                        sheet::prepare(
+                            input,
+                            &settings,
+                            codes,
+                            &batch.recipe.exclude,
+                            &batch.recipe.accept_missing_barcodes,
+                        )
+                    },
+                )
                 .map_err(|error| error.to_string())
             })
-            .map_err(BatchError::Invalid)?;
-        let stamp = Batches::table_stamp(batch, &table).map_err(BatchError::Invalid)?;
-        let rendered = RenderReport::for_table(&table, from);
-        rendered.review(&mut report, &batch.recipe);
-        return Ok(Prepared {
-            input: PreparedInput::Table(table),
-            preview: BatchPreview { rendered, report },
-            stamp,
-        });
+            .map_err(BatchError::Invalid);
     }
-    let (mut file, rendered, stamp) = batches.render(batch, from).map_err(BatchError::Invalid)?;
+    let rendered = batches.render(batch, from).map_err(BatchError::Invalid)?;
+    prepare_marc(data_dir, live, batch, from, rendered)
+}
+
+fn prepare_archive(
+    data_dir: &Path,
+    live: LiveStore<'_>,
+    batches: &Batches,
+    batch: &Batch,
+    from: Option<u64>,
+) -> Result<Prepared, BatchError> {
+    let recipe = &batch.recipe;
+    let selection = recipe.archive.as_ref().ok_or_else(|| {
+        BatchError::Invalid("choose a member from the inventory and a sheet for XLSX or ODS".into())
+    })?;
+    let source = batches.archive_source(batch).map_err(BatchError::Invalid)?;
+    let selected = containers::select(&source, selection)
+        .map_err(|error| BatchError::Invalid(error.to_string()))?;
+    drop(source);
+    match selected {
+        Selected::Workbook(rows) => {
+            check_table_recipe(recipe)?;
+            let settings = batch
+                .settings_for(Some(Delimiter::Comma))
+                .map_err(BatchError::Invalid)?;
+            prepare_table(
+                data_dir,
+                live,
+                batch,
+                from,
+                Evidence::WorkbookSheet,
+                |codes| {
+                    sheet::prepare_rows(
+                        rows.into_iter().map(Ok),
+                        &settings,
+                        codes,
+                        &recipe.exclude,
+                        &recipe.accept_missing_barcodes,
+                    )
+                },
+            )
+        }
+        Selected::File(bytes, detected) if is_delimited(detected, selection.format) => {
+            check_table_recipe(recipe)?;
+            let separator = table_delimiter(&bytes).or_else(|| {
+                (detected.evidence == Evidence::EmptyInput).then_some(Delimiter::Comma)
+            });
+            let settings = batch.settings_for(separator).map_err(BatchError::Invalid)?;
+            prepare_table(
+                data_dir,
+                live,
+                batch,
+                from,
+                Evidence::DelimitedRows,
+                |codes| {
+                    sheet::prepare(
+                        bytes.as_slice(),
+                        &settings,
+                        codes,
+                        &recipe.exclude,
+                        &recipe.accept_missing_barcodes,
+                    )
+                },
+            )
+        }
+        Selected::File(bytes, _) => {
+            if recipe.table.is_some() {
+                return Err(BatchError::Invalid(
+                    "table mapping does not apply to this member".into(),
+                ));
+            }
+            let rendered = batches
+                .render_member(batch, from, Cursor::new(bytes), selection.format)
+                .map_err(BatchError::Invalid)?;
+            prepare_marc(data_dir, live, batch, from, rendered)
+        }
+    }
+}
+
+fn check_table_recipe(recipe: &Recipe) -> Result<(), BatchError> {
+    if !recipe.edits.is_empty() {
+        return Err(BatchError::Invalid(
+            "MARC edits do not apply to a spreadsheet".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn prepare_table(
+    data_dir: &Path,
+    live: LiveStore<'_>,
+    batch: &Batch,
+    from: Option<u64>,
+    evidence: Evidence,
+    source: impl FnOnce(&CodeLists) -> Result<PreparedTable, SheetError>,
+) -> Result<Prepared, BatchError> {
+    let first = from.unwrap_or_default();
+    let (table, mut report) = match live {
+        Some((store, _)) => store
+            .readers()
+            .preview_table_source(&batch.recipe, first, source),
+        None => elzevir_store::preview_table_source(
+            &data_dir.join("elzevir.db"),
+            &batch.recipe,
+            first,
+            source,
+        ),
+    }
+    .map_err(|error| BatchError::Invalid(error.to_string()))?;
+    let stamp = Batches::table_stamp(batch, &table).map_err(BatchError::Invalid)?;
+    let mut rendered = RenderReport::for_table(&table, from);
+    rendered.detection.evidence = evidence;
+    rendered.review(&mut report, &batch.recipe);
+    Ok(Prepared {
+        input: PreparedInput::Table(table),
+        preview: BatchPreview { rendered, report },
+        stamp,
+    })
+}
+
+fn prepare_marc(
+    data_dir: &Path,
+    live: LiveStore<'_>,
+    batch: &Batch,
+    from: Option<u64>,
+    (mut file, rendered, stamp): (File, RenderReport, String),
+) -> Result<Prepared, BatchError> {
     let input = BufReader::new(&mut file);
     let mut report = match live {
         Some((store, _)) => {

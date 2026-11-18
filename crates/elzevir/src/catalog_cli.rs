@@ -240,6 +240,7 @@ fn require_iso2709(input: &mut impl BufRead) -> Result<(), String> {
         (ImportFormat::MarcXml, _) => "MARCXML",
         (ImportFormat::MarcText, _) => "MarcEdit",
         (ImportFormat::Delimited, _) => "CSV/TSV",
+        (ImportFormat::Archive, _) => "archive",
         (ImportFormat::KohaSqlDump, _) => "Koha SQL",
         (ImportFormat::Unknown, Evidence::ZipSignature) => "ZIP",
         (ImportFormat::Unknown, Evidence::GzipSignature) => "gzip",

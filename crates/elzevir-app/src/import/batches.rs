@@ -57,6 +57,8 @@ pub struct BatchView {
     pub batch: BatchSummary,
     /// Saved edit and matching choices.
     pub recipe: Recipe,
+    /// Validated archive leaves and worksheet names, when applicable.
+    pub archive: Option<super::containers::Inventory>,
     /// Preview when requested.
     pub preview: Option<BatchPreview>,
 }

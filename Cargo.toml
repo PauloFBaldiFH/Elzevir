@@ -29,6 +29,8 @@ argon2 = "0.6"
 askama = { version = "0.16", default-features = false, features = ["derive", "std"] }
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "form", "query", "json"] }
 clap = { version = "4", features = ["derive"] }
+calamine = { version = "=0.38.0", default-features = false }
+flate2 = "1"
 fluent-bundle = "0.16"
 getrandom = "0.4"
 mimalloc = { version = "0.1", default-features = false }
@@ -60,6 +62,7 @@ unicode-normalization = "0.1"
 tokio = { version = "1", default-features = false }
 tower = { version = "0.5", default-features = false, features = ["util"] }
 unic-langid = { version = "0.9", features = ["macros"] }
+zip = { version = "=9.6.1", default-features = false, features = ["deflate-flate2"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -8,6 +8,7 @@
 > I8 acrescenta preparação e confirmação de CSV e TSV nativos pela CLI e
 > pela interface da equipe, com um modelo BIBFRAME gerado pela aplicação.
 > I9 acrescenta a preparação e revisão de dumps parciais do Koha na borda MARC.
+> I10 acrescenta ZIP, gzip e as planilhas XLSX e ODS ao fluxo de lotes.
 > A importação direta pela CLI mantém o contrato de I2.
 > Base: [importação atual](importacao.md), [casamento](casamento.md),
 > [BIBFRAME completo](bibframe-completo.md),
@@ -463,11 +464,56 @@ parcial. A etapa `import-batch stage` também admite a escolha explícita
 catálogo selecionado em ISO 2709 UTF-8 na borda. As receitas e a
 confirmação usam a revisão MARC existente e a mesma escritora.
 
-Arquivos compactados são inspecionados antes de extrair. Cada membro recebe
-a mesma detecção e limites; o inventário é revisado, não concatenado por
-palpite. Planilha é reconhecida pela estrutura interna do pacote. Macros,
-fórmulas executáveis e referências externas não são executadas. Arquivos
-criados pelo usuário não são carregados como HTML nem buscados pela rede.
+#### Arquivos compactados e planilhas
+
+O envio pelo fluxo de lotes apresenta o inventário dos membros e o formato
+detectado pelo conteúdo. Selecione um arquivo por revisão, com o caminho
+exato em `archive.member`. Para uma planilha na raiz, use uma lista vazia.
+Em XLSX e ODS, escolha também o título exato da aba em `archive.sheet`.
+Use a receita da I8 em `table` quando precisar mapear cabeçalhos próprios,
+agrupar registros ou excluir colunas. A primeira linha ocupada da aba é
+o cabeçalho. Células conservam suas posições e usam os valores salvos no
+arquivo. Guarde identificadores com zeros à esquerda como texto.
+
+```json
+{"archive":{"member":["acervo.xlsx"],"sheet":"Livros"}}
+```
+
+Na tela da equipe, abra **Importar planilha ou arquivo compactado**.
+Envie o pacote, escolha o membro e a aba na receita, salve e revise a
+prévia. Pela CLI, salve a receita acima em `receita.json` e informe o
+identificador apresentado por `stage` no lugar de `ID_DO_LOTE`.
+
+```sh
+elzevir import-batch --data-dir ./dados --operator 1 stage lote.zip
+elzevir import-batch --data-dir ./dados --operator 1 edit ID_DO_LOTE 1 receita.json
+elzevir import-batch --data-dir ./dados --operator 1 preview ID_DO_LOTE
+elzevir import-batch --data-dir ./dados --operator 1 confirm ID_DO_LOTE 2
+```
+
+Confirme a revisão indicada pela prévia. Para um membro de detecção
+inconclusiva, a mesma receita admite `archive.format` com uma escolha
+compatível, como `"Delimited"` ou `"KohaSqlDump"`. O campo
+`archive.sheet` é exclusivo de planilhas.
+
+Em ZIP, o leitor valida o diretório central antes de abrir os membros.
+Aceita entradas comuns em ZIP clássico, armazenamento direto ou Deflate,
+com caminhos relativos UTF-8. Em gzip, os membros são lidos separadamente,
+com o nome do cabeçalho ou um identificador ordinal quando ele estiver
+ausente. Cada membro recebe a mesma detecção e validação de natureza.
+As cotas incluem as duas camadas possíveis e as partes internas de
+uma planilha. A preparação verifica os tamanhos reais durante a expansão.
+Os caminhos identificam membros do lote. A expansão usa leitores
+limitados, sem gravar arquivos nos caminhos fornecidos.
+
+XLSX e ODS são reconhecidos pelas partes internas e lidos com `calamine`.
+O XML dos pacotes deve estar em UTF-8. ODS exige o manifesto do pacote.
+Antes da leitura, limites de dimensões, células, repetições e conteúdo
+impedem amplificação por coordenadas e metadados das planilhas.
+Macros, fórmulas e referências externas são dados inertes. A prévia usa
+valores já salvos e apresenta a aba selecionada. A confirmação revalida
+o original e vincula membro, aba e receita à revisão. Registros
+tabulares passam pelos mesmos validadores e pela escritora da I8.
 Logs contêm etapa, posição e código de problema, sem células ou registros.
 
 ### 1.9 Limites planejados
@@ -510,6 +556,9 @@ reduzem os limites nem a capacidade do importador ISO direto existente.
 | `MAX_ARCHIVE_EXPANDED_BYTES` | 512 MiB no total expandido de um lote. |
 | `MAX_ARCHIVE_RATIO` | 100:1 por membro e acumulado, conferidos também durante expansão. |
 | `MAX_ARCHIVE_DEPTH` | 2 contêineres aninhados, contando o pacote de planilha. |
+| `MAX_ARCHIVE_NAME_BYTES` | 256 bytes por nome de membro. |
+| `MAX_WORKBOOK_CELLS` | 1.000.000 células no pacote e na área retangular da aba lida. |
+| `MAX_WORKBOOK_SHEETS` | 256 abas por planilha. |
 
 MARC convertido também obedece a `Limits` e à escrita ISO 2709 existentes
 (99.999 bytes por registro, 5.000 campos). Descrições e valores BIBFRAME

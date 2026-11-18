@@ -42,6 +42,8 @@ pub enum ImportUpload {
     Table,
     /// Prepare a partial Koha SQL dump.
     KohaSql,
+    /// Inventory compressed input or a workbook.
+    Archive,
 }
 
 impl ImportUpload {
@@ -52,6 +54,7 @@ impl ImportUpload {
             Self::Auto => "auto",
             Self::Table => "table",
             Self::KohaSql => "sql",
+            Self::Archive => "archive",
         }
     }
 
@@ -62,6 +65,7 @@ impl ImportUpload {
             Self::Auto => "import-limit",
             Self::Table => "import-table-limit",
             Self::KohaSql => "import-sql-limit",
+            Self::Archive => "import-archive-limit",
         }
     }
 }
@@ -92,6 +96,20 @@ pub struct ImportDraft {
     pub interrupted: bool,
     /// Validation of the whole batch and the selected page.
     pub preview: Option<ImportPreview>,
+    /// Member paths with their detected format and worksheet names.
+    pub archive: Option<Vec<ImportMember>>,
+    /// Selected path and worksheet for the saved revision.
+    pub archive_selection: Option<String>,
+}
+
+/// One file in a container inventory.
+pub struct ImportMember {
+    /// Exact JSON path for the recipe.
+    pub path: String,
+    /// Operator-facing detected format.
+    pub format: String,
+    /// Available worksheets.
+    pub sheets: Vec<String>,
 }
 
 /// Review results for one page.

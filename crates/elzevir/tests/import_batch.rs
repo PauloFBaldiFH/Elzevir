@@ -6,7 +6,9 @@
 )]
 
 use std::collections::BTreeSet;
+use std::fmt::Write as _;
 use std::fs;
+use std::io::{Cursor, Write as _};
 use std::path::Path;
 use std::process::{Command, Output};
 
@@ -103,6 +105,201 @@ fn recipe(dir: &Path, value: &str) -> String {
     let path = dir.join("recipe.json");
     fs::write(&path, value).unwrap();
     path.to_str().unwrap().to_owned()
+}
+
+fn container(parts: &[(&str, &[u8])]) -> Vec<u8> {
+    let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    for (name, bytes) in parts {
+        writer
+            .start_file(
+                *name,
+                zip::write::SimpleFileOptions::default()
+                    .compression_method(zip::CompressionMethod::Stored),
+            )
+            .unwrap();
+        writer.write_all(bytes).unwrap();
+    }
+    writer.finish().unwrap().into_inner()
+}
+
+#[test]
+fn a_zip_member_uses_the_same_marc_revision_and_source_identity() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path();
+    let path = data.join("packet.data");
+    let selected = record("Reviewed archive title");
+    let other = record("Unselected archive title");
+    let source = container(&[("other.mrc", &other), ("shelf/catalog.mrc", &selected)]);
+    fs::write(&path, &source).unwrap();
+    let staged = success(command(data, "1").arg("stage").arg(&path).output().unwrap());
+    assert!(staged.contains("shelf/catalog.mrc"));
+    let id = staged.split_ascii_whitespace().nth(1).unwrap();
+    refusal(&run(data, &["preview", id]), "choose a member");
+    let selected_recipe = recipe(data, r#"{"archive":{"member":["shelf/catalog.mrc"]}}"#);
+    success(run(data, &["edit", id, "1", &selected_recipe]));
+    let preview = success(run(data, &["preview", id]));
+    assert!(preview.contains("Reviewed archive title"));
+    assert!(!preview.contains("Unselected archive title"));
+    assert!(!data.join("elzevir.db").exists());
+    let original = data.join("imports").join(id).join("original");
+    fs::write(&original, container(&[("shelf/catalog.mrc", &other)])).unwrap();
+    refusal(
+        &run(data, &["confirm", id, "2"]),
+        "original identity changed",
+    );
+    fs::write(original, source).unwrap();
+    success(run(data, &["confirm", id, "2"]));
+    assert_eq!(export(data), selected);
+}
+
+fn synthetic_ods(
+    duplicate: bool,
+    items: elzevir_app::matching::ItemAction,
+) -> (Vec<u8>, serde_json::Value) {
+    const COLUMNS: &[(&str, &str)] = &[
+        ("Title", "Work.title"),
+        ("ISBN", "Instance.catalog.isbn"),
+        ("Barcode", "Item.catalog.barcode"),
+        ("Home", "Item.catalog.home_branch"),
+        ("Current", "Item.catalog.holding_branch"),
+        ("Policy", "Item.catalog.policy"),
+    ];
+    let mut xml = String::from(
+        r#"<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"><office:body><office:spreadsheet><table:table table:name="Livros">"#,
+    );
+    let mut row = |cells: &[&str]| {
+        xml.push_str("<table:table-row>");
+        for cell in cells {
+            write!(xml, r#"<table:table-cell office:value-type="string"><text:p>{cell}</text:p></table:table-cell>"#).unwrap();
+        }
+        xml.push_str("</table:table-row>");
+    };
+    row(&COLUMNS
+        .iter()
+        .map(|(header, _)| *header)
+        .collect::<Vec<_>>());
+    for index in 0..20 {
+        let prefix = format!("9781234567{index:02}");
+        let sum: u32 = prefix
+            .bytes()
+            .zip([1, 3].into_iter().cycle())
+            .map(|(digit, weight)| u32::from(digit - b'0') * weight)
+            .sum();
+        let barcode = if duplicate && index == 19 { 0 } else { index };
+        row(&[
+            &format!("Synthetic book {index:02}"),
+            &format!("{prefix}{}", (10 - sum % 10) % 10),
+            &format!("ODS-{barcode:02}"),
+            "Reading room",
+            "Reading room",
+            "Standard loan",
+        ]);
+    }
+    xml.push_str("</table:table></office:spreadsheet></office:body></office:document-content>");
+    let ods = container(&[
+        (
+            "mimetype",
+            b"application/vnd.oasis.opendocument.spreadsheet",
+        ),
+        ("content.xml", xml.as_bytes()),
+        (
+            "META-INF/manifest.xml",
+            br#"<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"><manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.spreadsheet"/><manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/></manifest:manifest>"#,
+        ),
+    ]);
+    let columns: Vec<_> = COLUMNS.iter().enumerate().map(|(index, (header, target))| {
+        serde_json::json!({"position": index+1, "header": header, "target": target})
+    }).collect();
+    let rules = elzevir_app::matching::Matching {
+        items,
+        ..elzevir_app::matching::Matching::new(elzevir_domain::catalog::MatchRule::Isbn)
+    };
+    let recipe = serde_json::json!({
+        "archive": {"member": ["books.bin"], "sheet": "Livros"},
+        "table": {"delimiter": "comma", "encoding": "utf8", "profile": {"version": 1, "columns": columns}},
+        "matching": rules
+    });
+    (container(&[("books.bin", &ods)]), recipe)
+}
+
+#[test]
+fn a_nested_ods_stores_twenty_native_books_matches_isbn_and_blocks_duplicates() {
+    use elzevir_app::matching::ItemAction;
+
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path();
+    let store = ElzevirStore::open(
+        &data.join("elzevir.db"),
+        &StoreConfig::default(),
+        ElzevirHandler,
+    )
+    .unwrap();
+    for setup in [
+        CatalogCommand::CreateBranch {
+            name: "Reading room".into(),
+        },
+        CatalogCommand::CreatePolicy {
+            name: "Standard loan".into(),
+        },
+    ] {
+        store
+            .submit(WriteCommand::Catalog(setup))
+            .unwrap()
+            .wait()
+            .unwrap();
+    }
+    store.shutdown().unwrap();
+    let file = data.join("library.zip");
+    let stage_book = |duplicate, items| {
+        let (bytes, profile) = synthetic_ods(duplicate, items);
+        fs::write(&file, bytes).unwrap();
+        let id = stage(data, &file);
+        let profile = recipe(data, &profile.to_string());
+        success(run(data, &["edit", &id, "1", &profile]));
+        id
+    };
+    let import_book = |items| {
+        let id = stage_book(false, items);
+        assert!(success(run(data, &["preview", &id])).contains("WorkbookSheet"));
+        serde_json::from_str::<serde_json::Value>(&success(run(data, &["confirm", &id, "2"])))
+            .unwrap()
+    };
+    let first = import_book(ItemAction::AlwaysAdd);
+    assert_eq!(first["stored"], 20);
+    assert_eq!(first["items_stored"], 20);
+    let second = import_book(ItemAction::Replace);
+    assert_eq!(second["stored"], 0);
+    assert_eq!(second["matched"], 20);
+    assert_eq!(second["items_replaced"], 20);
+    let marc = export(data);
+    let mut reader = MarcReader::new(marc.as_slice(), Limits::default());
+    let mut barcodes = BTreeSet::new();
+    while let Some(record) = reader.next_record() {
+        for field in record
+            .unwrap()
+            .fields()
+            .filter(|field| field.tag().as_bytes() == b"952")
+        {
+            barcodes.extend(
+                field
+                    .subfields()
+                    .filter(|(code, _)| *code == b'p')
+                    .map(|(_, text)| text.to_vec()),
+            );
+        }
+    }
+    assert_eq!(
+        barcodes,
+        (0..20)
+            .map(|index| format!("ODS-{index:02}").into_bytes())
+            .collect()
+    );
+    let rejected = stage_book(true, ItemAction::AlwaysAdd);
+    refusal(
+        &run(data, &["preview", &rejected]),
+        "item barcode \"ODS-00\" is repeated",
+    );
+    assert_eq!(export(data), marc);
 }
 
 #[test]

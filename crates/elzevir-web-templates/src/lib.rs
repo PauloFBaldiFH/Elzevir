@@ -16,8 +16,8 @@ pub use staff_catalog::{
     InstanceLine, PillLine, ScanLine, StaffCatalog, WorkLine, WorkListLink,
 };
 pub use staff_import::{
-    ImportBatchLink, ImportDraft, ImportPage, ImportPreview, ImportReceipt, ImportSample,
-    ImportUpload, ImportView,
+    ImportBatchLink, ImportDraft, ImportMember, ImportPage, ImportPreview, ImportReceipt,
+    ImportSample, ImportUpload, ImportView,
 };
 pub use staff_item_grid::{
     GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid, SuggestedCallNumber,

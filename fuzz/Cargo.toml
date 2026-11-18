@@ -13,6 +13,7 @@ cargo-fuzz = true
 elzevir-app = { path = "../crates/elzevir-app" }
 elzevir-marc = { path = "../crates/elzevir-marc" }
 libfuzzer-sys = "0.4"
+zip = { version = "=9.6.1", default-features = false }
 
 [[bin]]
 name = "iso2709"
@@ -59,6 +60,13 @@ bench = false
 [[bin]]
 name = "import_koha_sql"
 path = "fuzz_targets/import_koha_sql.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "import_containers"
+path = "fuzz_targets/import_containers.rs"
 test = false
 doc = false
 bench = false

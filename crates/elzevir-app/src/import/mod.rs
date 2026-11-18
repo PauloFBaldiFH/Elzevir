@@ -6,6 +6,7 @@
 //! to a serial one (docs/arquitetura/03-estrategia-reconstrucao.md, §1.2 items 2 and 8).
 
 pub mod batches;
+pub mod containers;
 pub mod edits;
 pub mod koha_sql;
 pub mod preview;

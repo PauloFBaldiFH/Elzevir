@@ -15,13 +15,14 @@ use elzevir_app::import::batches::{
     BatchCommand, BatchError, BatchPort, BatchPreview, BatchReply, BatchState, BatchSummary,
     BatchView, Completion, FormatChoice, MAX_BATCH_MANIFEST_BYTES,
 };
+use elzevir_app::import::containers::Kind;
 use elzevir_app::import::preview::{IssueKind, MAX_IMPORT_FILE_BYTES, MAX_PREVIEW_RECORDS};
 use elzevir_app::import_detection::{Evidence, ImportFormat};
 use elzevir_app::matching::{ItemAction, Matching, OnMatch};
 use elzevir_app::staff::{Permission, StaffId};
 use elzevir_web_templates::{
-    I18n, I18nError, ImportBatchLink, ImportDraft, ImportPage, ImportPreview, ImportReceipt,
-    ImportSample, ImportUpload, ImportView,
+    I18n, I18nError, ImportBatchLink, ImportDraft, ImportMember, ImportPage, ImportPreview,
+    ImportReceipt, ImportSample, ImportUpload, ImportView,
 };
 use serde::Deserialize;
 use tokio::sync::mpsc;
@@ -255,7 +256,9 @@ async fn home(
                 ImportView::Home(
                     batches,
                     session.imports.recent(session.active.identity.id),
-                    if page.koha_sql {
+                    if page.source.as_deref() == Some("archive") {
+                        ImportUpload::Archive
+                    } else if page.koha_sql {
                         ImportUpload::KohaSql
                     } else if page.tabular {
                         ImportUpload::Table
@@ -429,6 +432,7 @@ struct Page {
     tabular: bool,
     #[serde(default)]
     koha_sql: bool,
+    source: Option<String>,
 }
 
 async fn batch(
@@ -557,6 +561,7 @@ fn parse_format(value: &str) -> Result<Option<ImportFormat>, BatchError> {
         "mrk" => Ok(Some(ImportFormat::MarcText)),
         "table" => Ok(Some(ImportFormat::Delimited)),
         "sql" => Ok(Some(ImportFormat::KohaSqlDump)),
+        "archive" => Ok(Some(ImportFormat::Archive)),
         _ => Err(BatchError::Invalid("invalid source format".into())),
     }
 }
@@ -600,6 +605,7 @@ fn show_batch(
         batch,
         recipe,
         preview,
+        archive,
     } = view;
     let editable = matches!(batch.state, BatchState::Review | BatchState::Ready);
     let ready = batch.state == BatchState::Ready
@@ -616,10 +622,30 @@ fn show_batch(
         Some(ImportFormat::MarcText) => "mrk",
         Some(ImportFormat::Delimited) => "table",
         Some(ImportFormat::KohaSqlDump) => "sql",
+        Some(ImportFormat::Archive) => "archive",
+        _ if batch.format == "Archive" => "archive",
         _ if batch.format == "Delimited" => "table",
         _ if batch.format == "KohaSqlDump" => "sql",
         _ => "auto",
     };
+    let archive = archive.map(|inventory| {
+        inventory
+            .entries
+            .into_iter()
+            .map(|entry| {
+                let path = serde_json::to_string(&entry.member).unwrap_or_default();
+                ImportMember {
+                    path,
+                    format: archive_kind(t, entry.kind),
+                    sheets: entry.sheets,
+                }
+            })
+            .collect()
+    });
+    let archive_selection = recipe
+        .archive
+        .as_ref()
+        .and_then(|selected| serde_json::to_string(selected).ok());
     let link = batch_link(t, batch);
     let (recipe, status, notice, detail) = if let Some((recipe, failure)) = failed {
         let (status, key, detail) = error_view(failure);
@@ -646,11 +672,28 @@ fn show_batch(
             ready,
             interrupted,
             preview,
+            archive,
+            archive_selection,
         })),
         status,
         notice,
         detail,
     )
+}
+
+fn archive_kind(t: &I18n, kind: Kind) -> String {
+    match kind {
+        Kind::Xlsx => String::from("XLSX"),
+        Kind::Ods => String::from("ODS"),
+        Kind::File(format) => t.get(match format {
+            ImportFormat::Iso2709 => "import-iso",
+            ImportFormat::MarcXml => "import-xml",
+            ImportFormat::MarcText => "import-mrk",
+            ImportFormat::Delimited => "import-table",
+            ImportFormat::KohaSqlDump => "import-sql",
+            _ => "import-unknown",
+        }),
+    }
 }
 
 fn batch_link(t: &I18n, batch: BatchSummary) -> ImportBatchLink {
@@ -660,6 +703,7 @@ fn batch_link(t: &I18n, batch: BatchSummary) -> ImportBatchLink {
         "MarcText" => "import-mrk",
         "Delimited" => "import-table",
         "KohaSqlDump" => "import-sql",
+        "Archive" => "import-archive",
         _ => "import-unknown",
     };
     let state = match batch.state {
@@ -690,6 +734,7 @@ fn preview_page(
         Evidence::MarcTextLeader => "import-evidence-mrk",
         Evidence::DelimitedRows => "import-evidence-table",
         Evidence::KohaCatalogTables => "import-evidence-sql",
+        Evidence::WorkbookSheet => "import-evidence-workbook",
         Evidence::EmptyInput => "import-evidence-empty",
         _ => "import-evidence-unknown",
     };
