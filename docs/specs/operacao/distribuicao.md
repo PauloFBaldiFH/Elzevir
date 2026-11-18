@@ -60,3 +60,12 @@ diretório de programas próprio. A primeira instalação recusa sobrescrever um
 executável existente sem configuração correspondente. Reexecução com banco e
 configuração válidos, mas serviço ainda ausente, registra e inicia o serviço
 antes de seguir pelo fluxo de atualização; não recria banco nem administrador.
+
+## Atualização de instalação pessoal
+
+`elzevir update` seleciona a release oficial, verifica o SHA-256 e
+confirma a versão do executável. Com a instituição parada, mantém uma
+cópia preventiva do SQLite pelo serviço de backup antes de publicar o
+executável no mesmo volume. Instalações gerenciadas continuam usando
+o fluxo de serviço. `--no-self-update` e instalações do WinGet delegam
+a atualização ao instalador ou ao gerenciador de pacotes.

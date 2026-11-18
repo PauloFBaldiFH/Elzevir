@@ -11,7 +11,6 @@ use std::{
 };
 
 #[derive(clap::Args)]
-#[command(group(clap::ArgGroup::new("panel_mode").required(true).multiple(true).args(["demo", "config", "data_dir"])))]
 pub(crate) struct PanelArgs {
     /// Use simulated data without querying a server or measuring the host.
     #[arg(long, conflicts_with_all = ["config", "data_dir"])]
@@ -23,31 +22,55 @@ pub(crate) struct PanelArgs {
     #[arg(long)]
     data_dir: Option<PathBuf>,
     /// Interface language.
-    #[arg(long, default_value = "en", value_parser = ["en", "pt-BR"])]
-    lang: String,
+    #[arg(long, value_parser = ["en", "pt-BR"])]
+    lang: Option<String>,
     /// Draw borders with ASCII characters.
     #[arg(long)]
     ascii: bool,
 }
 
-pub(crate) fn run(args: PanelArgs) -> Result<(), String> {
+pub(crate) fn run(args: PanelArgs, no_self_update: bool) -> Result<(), String> {
     if args.demo {
-        return elzevir_panel::run(&args.lang, args.ascii).map_err(|error| error.to_string());
+        let language = crate::first_use::language(args.lang.as_deref());
+        return elzevir_panel::run(language, args.ascii).map_err(|error| error.to_string());
     }
-    let configured = args.config.is_some();
-    let settings = crate::server_config::ServeArgs::for_status(args.config.clone(), args.data_dir)
-        .resolve()
-        .map_err(|error| error.to_string())?;
+    if !crate::first_use::interactive() {
+        return Err("panel requires an interactive terminal (including with --demo)".into());
+    }
+    let mut input = crate::server_config::ServeArgs::for_status(args.config, args.data_dir);
+    input.lang = args.lang;
+    let (settings, config) = crate::first_use::resolve(input)?;
+    connected(&settings, config, args.ascii, no_self_update, || false)
+}
+
+pub(crate) fn connected(
+    settings: &crate::server_config::Settings,
+    config: Option<PathBuf>,
+    ascii: bool,
+    no_self_update: bool,
+    stopping: impl Fn() -> bool,
+) -> Result<(), String> {
     let institution = Institution {
-        name: settings.institution_name,
-        configured_listen: configured.then_some(settings.listen),
-        configured_access: configured.then(|| crate::addresses::presentation(&settings.staff)),
+        name: settings.institution_name.clone(),
+        configured_listen: config.as_ref().map(|_| settings.listen),
+        configured_access: config
+            .as_ref()
+            .map(|_| crate::addresses::presentation(&settings.staff)),
     };
-    let mut collector = Collector::new(settings.data_dir);
-    collector.config = args.config;
-    elzevir_panel::run_live(&args.lang, args.ascii, institution, move |request| {
-        collector.collect(&request)
-    })
+    let mut collector = Collector::new(settings.data_dir.clone());
+    collector.config = config;
+    collector.no_self_update = no_self_update;
+    collector.release_check = std::thread::Builder::new()
+        .name("elzevir-release-check".into())
+        .spawn(|| crate::release::latest(&crate::release::Metadata))
+        .ok();
+    elzevir_panel::run_live_until(
+        &settings.lang,
+        ascii,
+        institution,
+        move |request| collector.collect(&request),
+        stopping,
+    )
     .map_err(|error| error.to_string())
 }
 
@@ -60,6 +83,9 @@ struct Collector {
     operation_result: Option<&'static str>,
     config: Option<PathBuf>,
     latest: Option<crate::release::Latest>,
+    release_check: Option<std::thread::JoinHandle<Result<crate::release::Latest, String>>>,
+    catalog: Option<elzevir_panel::CatalogPage>,
+    no_self_update: bool,
 }
 
 impl Collector {
@@ -73,6 +99,9 @@ impl Collector {
             operation_result: None,
             config: None,
             latest: None,
+            release_check: None,
+            catalog: None,
+            no_self_update: false,
         }
     }
 
@@ -169,16 +198,14 @@ fn component(check: crate::health::Check) -> Component {
 
 impl Collector {
     fn operations(&mut self, request: &ObservationRequest) -> elzevir_panel::Operations {
-        if let ObservationRequest::Operate(operation) = request {
-            self.operation_result = Some(match self.operate(operation) {
-                Ok(()) => "op-submitted",
-                Err(error) if error.starts_with("B1:") => "broker-unsupported",
-                Err(_) => "op-refused",
-            });
-        }
+        self.observe_request(request);
         let mut result = elzevir_panel::Operations {
             result: self.operation_result,
+            catalog: self.catalog.clone(),
             latest: self.latest.as_ref().map(|release| release.tag_name.clone()),
+            update_available: self.latest.as_ref().is_some_and(|release| {
+                crate::personal_update::newer(&release.tag_name, env!("CARGO_PKG_VERSION"))
+            }),
             release_notes: self
                 .latest
                 .as_ref()
@@ -274,15 +301,50 @@ impl Collector {
         result
     }
 
+    fn observe_request(&mut self, request: &ObservationRequest) {
+        if self
+            .release_check
+            .as_ref()
+            .is_some_and(std::thread::JoinHandle::is_finished)
+            && let Some(check) = self.release_check.take()
+            && let Ok(Ok(release)) = check.join()
+            && self.latest.is_none()
+        {
+            self.latest = Some(release);
+        }
+        if let ObservationRequest::Operate(operation) = request {
+            self.operation_result = Some(match self.operate(operation) {
+                Ok(()) => match operation {
+                    elzevir_panel::Operation::Catalog(
+                        elzevir_panel::CatalogAction::Query(_)
+                        | elzevir_panel::CatalogAction::Policies,
+                    ) => "cat-results",
+                    elzevir_panel::Operation::Catalog(
+                        elzevir_panel::CatalogAction::DeletePolicy(_),
+                    ) => "cat-deleted",
+                    elzevir_panel::Operation::Catalog(_) => "cat-saved",
+                    _ => "op-submitted",
+                },
+                Err(error) if error.starts_with("B1:") => "broker-unsupported",
+                Err(_) => "op-refused",
+            });
+        }
+    }
+
     fn operate(&mut self, operation: &elzevir_panel::Operation) -> Result<(), String> {
         use elzevir_panel::Operation;
+        if let Operation::Catalog(action) = operation {
+            let info = crate::runtime_info::read(&self.directory.join(crate::runtime_info::NAME))?;
+            self.catalog = Some(crate::admin::catalog(&info, action.clone())?);
+            return Ok(());
+        }
         if let Operation::Cloud(action) = operation {
             let info = crate::runtime_info::read(&self.directory.join(crate::runtime_info::NAME))?;
             crate::admin::cloud(&info, crate::cloud::intention(action)?)?;
             return Ok(());
         }
         if matches!(operation, Operation::CheckUpdates) {
-            self.latest = Some(crate::release::latest(&crate::release::Http)?);
+            self.latest = Some(crate::release::latest(&crate::release::Metadata)?);
             return Ok(());
         }
         if let Operation::ExportKey { output } = operation {
@@ -344,7 +406,8 @@ impl Collector {
                 };
                 crate::admin::backup_policy(&info, policy)?;
             }
-            Operation::Address(_)
+            Operation::Catalog(_)
+            | Operation::Address(_)
             | Operation::Cloud(_)
             | Operation::Restore { .. }
             | Operation::Restart { .. }
@@ -408,19 +471,24 @@ impl Collector {
             Operation::InstallRclone => Some(crate::host_jobs::Task::InstallTool {
                 tool: crate::managed_tools::Tool::Rclone,
             }),
-            Operation::Update { version, name } => Some(crate::host_jobs::Task::Update {
-                config: self
-                    .config
-                    .as_ref()
-                    .ok_or("update requires a configuration file")?
-                    .canonicalize()
-                    .map_err(|_| "configuration unavailable")?,
-                name: name.clone(),
-                version: version.clone(),
-                package: None,
-                checksums: None,
-                executable: std::env::current_exe().map_err(|_| "update executable unavailable")?,
-            }),
+            Operation::Update { version, name } => {
+                let executable =
+                    std::env::current_exe().map_err(|_| "update executable unavailable")?;
+                crate::personal_update::allowed(&executable, self.no_self_update)?;
+                Some(crate::host_jobs::Task::Update {
+                    config: self
+                        .config
+                        .as_ref()
+                        .ok_or("update requires a configuration file")?
+                        .canonicalize()
+                        .map_err(|_| "configuration unavailable")?,
+                    name: name.clone(),
+                    version: version.clone(),
+                    package: None,
+                    checksums: None,
+                    executable,
+                })
+            }
             Operation::RecoverUpdate { executable } => {
                 let executable = if executable.trim().is_empty() {
                     std::env::current_exe().map_err(|_| "recovery executable unavailable")?

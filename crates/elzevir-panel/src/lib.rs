@@ -5,6 +5,10 @@ mod address_operations;
 mod address_view;
 pub use address_operations::AddressOperation;
 mod addresses;
+mod catalog;
+pub use catalog::{
+    CatalogAction, CatalogItem, CatalogItemStatus, CatalogList, CatalogPage, CatalogRow,
+};
 mod cloud;
 mod dashboard;
 mod domain;
@@ -17,8 +21,11 @@ mod messages;
 mod operation_view;
 mod operations;
 mod runtime;
+mod setup;
+pub use setup::{Setup, SetupProfile, setup};
 mod sharing;
 mod tunnel_view;
+mod ui;
 mod view;
 mod worker;
 
@@ -34,7 +41,7 @@ pub use live::{
 };
 pub use messages::Messages;
 pub use operations::{Form, Job, Operation, Operations};
-pub use runtime::{run, run_live};
+pub use runtime::{run, run_live, run_live_until};
 pub use view::draw;
 
 use ratatui::crossterm::event::{
@@ -66,18 +73,21 @@ pub enum Section {
     Backup,
     /// Release management.
     Updates,
+    /// Catalog and circulation policies.
+    Catalog,
     /// Service and machine restart.
     Restart,
 }
 
 impl Section {
     /// Navigation order.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Dashboard,
         Self::Diagnostics,
         Self::Addresses,
         Self::Backup,
         Self::Updates,
+        Self::Catalog,
         Self::Restart,
     ];
 
@@ -90,6 +100,7 @@ impl Section {
             Self::Addresses => "panel-addresses",
             Self::Backup => "panel-backup",
             Self::Updates => "panel-updates",
+            Self::Catalog => "panel-catalog",
             Self::Restart => "panel-restart",
         }
     }
@@ -103,6 +114,7 @@ impl Section {
             Self::Addresses => 'a',
             Self::Backup => 'b',
             Self::Updates => 'u',
+            Self::Catalog => 'm',
             Self::Restart => 'r',
         }
     }
@@ -135,6 +147,10 @@ pub struct Panel {
     pub tunnel_tab: TunnelTab,
     /// Vertical dashboard scroll offset.
     pub scroll: u16,
+    /// Selected row in the connected catalog.
+    pub catalog_row: usize,
+    /// Whether the focused record details are open.
+    pub catalog_details: Option<usize>,
     /// Currently selected section.
     pub section: Section,
     /// Whether the section palette is open.
@@ -163,6 +179,14 @@ impl Panel {
         if self.form.is_some() && self.handle_form(event) {
             return;
         }
+        if self.catalog_details.is_some() {
+            if matches!(event, Event::Key(key) if key.kind != KeyEventKind::Release
+                && matches!(key.code, KeyCode::Esc | KeyCode::Enter))
+            {
+                self.catalog_details = None;
+            }
+            return;
+        }
         let previous = self.section;
         match event {
             Event::Key(key) if key.kind != KeyEventKind::Release => {
@@ -177,7 +201,7 @@ impl Panel {
                     self.palette = !self.palette;
                 } else {
                     match key.code {
-                        KeyCode::Char(c) if self.begin_operation(c) => {}
+                        KeyCode::Char(c) if self.catalog_key(c) || self.begin_operation(c) => {}
                         KeyCode::Char('f') if matches!(&self.mode, Mode::Live(_)) => {
                             self.refresh_requested = true;
                         }
@@ -199,12 +223,34 @@ impl Panel {
                         KeyCode::PageDown => self.scroll = self.scroll.saturating_add(5).min(500),
                         KeyCode::PageUp => self.scroll = self.scroll.saturating_sub(5),
                         KeyCode::Home => self.scroll = 0,
+                        KeyCode::Enter
+                            if self.section == Section::Catalog && self.catalog_key('i') => {}
                         KeyCode::Esc | KeyCode::Enter => self.palette = false,
+                        KeyCode::Up | KeyCode::Down
+                            if self.section == Section::Catalog && self.catalog().is_some() =>
+                        {
+                            let count = self.catalog().map_or(0, |page| page.rows.len());
+                            self.catalog_row = if key.code == KeyCode::Up {
+                                self.catalog_row.saturating_sub(1)
+                            } else {
+                                self.catalog_row
+                                    .saturating_add(1)
+                                    .min(count.saturating_sub(1))
+                            };
+                        }
                         KeyCode::Tab | KeyCode::Down | KeyCode::Right => {
                             self.section = self.section.adjacent(true);
                         }
                         KeyCode::BackTab | KeyCode::Up | KeyCode::Left => {
                             self.section = self.section.adjacent(false);
+                        }
+                        KeyCode::Char(c @ '1'..='9') => {
+                            if let Some(section) = c
+                                .to_digit(10)
+                                .and_then(|n| Section::ALL.get(n as usize - 1))
+                            {
+                                self.select(*section);
+                            }
                         }
                         KeyCode::Char(c) => {
                             if let Some(section) =
@@ -217,26 +263,123 @@ impl Panel {
                     }
                 }
             }
-            Event::Mouse(mouse)
-                if mouse.kind == MouseEventKind::Down(MouseButton::Left)
-                    && width >= 80
-                    && height >= 18 =>
-            {
-                let area = ratatui::layout::Rect::new(0, 0, width, height);
-                let menu =
-                    view::menu_area(area, self.palette).inner(ratatui::layout::Margin::new(1, 1));
-                if menu.contains((mouse.column, mouse.row).into())
-                    && let Some(section) = Section::ALL.get(usize::from(mouse.row - menu.y))
-                {
-                    self.section = *section;
-                    self.palette = false;
-                }
+            Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
+                self.handle_legacy_click(mouse.column, mouse.row, width, height);
             }
             _ => {}
         }
         if previous != self.section {
-            self.scroll = 0;
+            self.enter_section();
         }
+    }
+
+    fn handle_legacy_click(&mut self, column: u16, row: u16, width: u16, height: u16) {
+        if width < 80 || height < 18 {
+            return;
+        }
+        let area = ratatui::layout::Rect::new(0, 0, width, height);
+        let menu = view::menu_area(area, self.palette).inner(ratatui::layout::Margin::new(1, 1));
+        if menu.contains((column, row).into())
+            && let Some(section) = Section::ALL.get(usize::from(row - menu.y))
+        {
+            self.section = *section;
+            self.palette = false;
+        }
+    }
+
+    pub(crate) fn select(&mut self, section: Section) {
+        if self.section != section {
+            self.section = section;
+            self.enter_section();
+        }
+        self.palette = false;
+    }
+
+    fn enter_section(&mut self) {
+        self.scroll = 0;
+        if self.section == Section::Catalog
+            && matches!(self.mode, Mode::Live(_))
+            && self.catalog().is_none()
+            && !self.diagnostics.pending
+        {
+            self.request_catalog(CatalogAction::Query(String::new()));
+        }
+    }
+
+    fn request_catalog(&mut self, action: CatalogAction) {
+        self.catalog_row = 0;
+        self.diagnostics.requested = Some(ObservationRequest::Operate(Operation::Catalog(action)));
+        self.diagnostics.pending = true;
+    }
+
+    pub(crate) fn catalog(&self) -> Option<&CatalogPage> {
+        let Mode::Live(state) = &self.mode else {
+            return None;
+        };
+        state.snapshot.as_ref()?.operations.catalog.as_ref()
+    }
+
+    fn catalog_key(&mut self, key: char) -> bool {
+        if self.section != Section::Catalog
+            || self.palette
+            || !matches!(self.mode, Mode::Live(_))
+            || self.diagnostics.pending
+        {
+            return false;
+        }
+        let page = self.catalog();
+        let policies = page.is_some_and(|page| page.list == CatalogList::Policies);
+        let row = page.and_then(|page| page.rows.get(self.catalog_row));
+        let action = match key {
+            'c' => {
+                self.request_catalog(if policies {
+                    CatalogAction::Query(String::new())
+                } else {
+                    CatalogAction::Policies
+                });
+                return true;
+            }
+            'f' => {
+                let query = page.map_or_else(String::new, |page| page.query.clone());
+                self.request_catalog(if policies {
+                    CatalogAction::Policies
+                } else {
+                    CatalogAction::Query(query)
+                });
+                return true;
+            }
+            'b' | '/' => {
+                CatalogAction::Query(page.map_or_else(String::new, |page| page.query.clone()))
+            }
+            'n' if policies => CatalogAction::CreatePolicy(String::new()),
+            'n' => CatalogAction::Create(String::new()),
+            'e' if policies => {
+                let Some(row) = row else { return true };
+                CatalogAction::RenamePolicy {
+                    id: row.id,
+                    name: row.title.clone(),
+                }
+            }
+            'e' => {
+                let Some(row) = row else { return true };
+                CatalogAction::Edit {
+                    id: row.id,
+                    version: row.version,
+                    title: row.title.clone(),
+                }
+            }
+            'd' if policies => {
+                let Some(row) = row else { return true };
+                CatalogAction::DeletePolicy(row.id)
+            }
+            'i' if row.is_some() => {
+                self.catalog_details = Some(self.catalog_row);
+                return true;
+            }
+            _ => return false,
+        };
+        self.form = Some(Form::new(Operation::Catalog(action)));
+        true
     }
 
     fn live_diagnostics(&self) -> bool {

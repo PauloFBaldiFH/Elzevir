@@ -14,24 +14,28 @@ const MAX_BYTES: usize = 64 * 1024;
 pub(crate) struct ServeArgs {
     /// TOML configuration file (paths inside it are relative to its directory).
     #[arg(long)]
-    config: Option<PathBuf>,
+    pub(crate) config: Option<PathBuf>,
     /// Institution data directory (overrides the configuration file).
-    #[arg(long, required_unless_present = "config")]
-    data_dir: Option<PathBuf>,
+    #[arg(long)]
+    pub(crate) data_dir: Option<PathBuf>,
     /// Address to listen on (default: 127.0.0.1:8080).
     #[arg(long)]
-    listen: Option<SocketAddr>,
+    pub(crate) listen: Option<SocketAddr>,
     /// Allow plain-HTTP cookies; use =false to override a true configuration value.
     #[arg(long, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
-    insecure_cookies: Option<bool>,
+    pub(crate) insecure_cookies: Option<bool>,
     /// Base of the BIBFRAME export IRIs; defaults to the requested host's /bibframe.
     #[arg(long)]
     iri_base: Option<String>,
+    /// Override the operating-system language.
+    #[arg(long, value_parser = ["en", "pt-BR"])]
+    pub(crate) lang: Option<String>,
 }
 
 /// Validated options used to start one institution's server.
 pub(crate) struct Settings {
     pub(crate) institution_name: Option<String>,
+    pub(crate) lang: String,
     pub(crate) staff: crate::access_config::StaffMode,
     pub(crate) data_dir: PathBuf,
     pub(crate) listen: SocketAddr,
@@ -109,6 +113,7 @@ impl ServeArgs {
             listen: None,
             insecure_cookies: None,
             iri_base: None,
+            lang: None,
         }
     }
 
@@ -140,6 +145,7 @@ impl ServeArgs {
             return Err(ConfigError::EmptyDataDir);
         }
         Ok(Settings {
+            lang: crate::first_use::language(self.lang.as_deref()).to_owned(),
             institution_name: file.institution.map(|institution| institution.name),
             staff: file.staff,
             data_dir,
@@ -200,7 +206,7 @@ impl FileConfig {
     }
 }
 
-fn validate_name(name: &str) -> Result<(), ConfigError> {
+pub(crate) fn validate_name(name: &str) -> Result<(), ConfigError> {
     if name.trim().is_empty()
         || name.trim().chars().count() > 200
         || name.chars().any(char::is_control)
@@ -301,6 +307,7 @@ mod tests {
             listen: None,
             insecure_cookies: None,
             iri_base: None,
+            lang: None,
         }
     }
 

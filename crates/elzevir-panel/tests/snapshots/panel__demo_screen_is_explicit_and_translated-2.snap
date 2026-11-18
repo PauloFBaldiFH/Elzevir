@@ -2,13 +2,14 @@
 source: crates/elzevir-panel/tests/panel.rs
 expression: "screen(&panel, \"pt-BR\", 120, 24)"
 ---
-Administração do Elzevir | DEMO
-┌Seções────────────────────┐┌Painel de controle──────────────────────────────────────────┐┌Instituição selecionada─────┐
-│> d Painel de controle    ││DEMONSTRAÇÃO - dados simulados                              ││Biblioteca de demonstração  │
-│  x Diagnóstico           ││                                                            ││                            │
-│  a Endereços e acesso    ││Estado do serviço, endereços e saúde aparecerão aqui quando ││Instituição fictícia        │
-│  b Backup e agendamentos ││conectado.                                                  ││                            │
-│  u Atualizações          ││                                                            ││Estado do servidor: não lido│
+🦀  Elzevir TUI  0.1.0-alpha.1  ·  Instituição fictícia
+╭Seções────────────────────╮  1 Início      2 Saúde     3 Acesso      4 Backup     5 Versões    6 Acervo    7 Reinício
+│▌ d Painel de controle    │╭Painel de controle──────────────────────────────────────────╮╭Instituição selecionada─────╮
+│  x Diagnóstico           ││DEMONSTRAÇÃO - dados simulados                              ││Biblioteca de demonstração  │
+│  a Endereços e acesso    ││                                                            ││                            │
+│  b Backup e agendamentos ││Estado do serviço, endereços e saúde aparecerão aqui quando ││Instituição fictícia        │
+│  u Atualizações          ││conectado.                                                  ││                            │
+│  m Acervo                ││                                                            ││Estado do servidor: não lido│
 │  r Reiniciar             ││Apenas demonstração. Nenhuma operação está disponível e nada││                            │
 │                          ││é alterado no sistema.                                      ││| Animação de demonstração  │
 │                          ││                                                            ││                            │
@@ -21,7 +22,6 @@ Administração do Elzevir | DEMO
 │                          ││                                                            ││                            │
 │                          ││                                                            ││                            │
 │                          ││                                                            ││                            │
-│                          ││                                                            ││                            │
-│                          ││                                                            ││                            │
-└──────────────────────────┘└────────────────────────────────────────────────────────────┘└────────────────────────────┘
-Tab/setas: navegar | d/x/a/b/u/r: seção | Ctrl+P: paleta | Enter/Esc: fechar paleta | q/Ctrl+C: sair
+│                          │╰────────────────────────────────────────────────────────────╯╰────────────────────────────╯
+╰──────────────────────────╯
+Tab/setas: navegar | 1-7: seção | Ctrl+P: paleta | Enter/Esc: fechar paleta | q/Ctrl+C: sair

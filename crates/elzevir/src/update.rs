@@ -46,12 +46,15 @@ fn transaction(backend: &impl Backend) -> Result<(), String> {
 #[derive(clap::Args)]
 pub(crate) struct Args {
     #[arg(long)]
-    config: PathBuf,
-    #[arg(long, default_value = "elzevir")]
+    config: Option<PathBuf>,
+    /// Data directory to back up for a personal installation.
+    #[arg(long, conflicts_with = "config")]
+    data_dir: Option<PathBuf>,
+    #[arg(long, default_value = "elzevir", requires = "config")]
     service: String,
     #[arg(long, default_value = "latest")]
     version: String,
-    #[arg(long, requires = "checksums")]
+    #[arg(long, requires_all = ["checksums", "config"])]
     package: Option<PathBuf>,
     #[arg(long, requires = "package")]
     checksums: Option<PathBuf>,
@@ -62,19 +65,33 @@ pub(crate) struct Args {
     #[arg(long)]
     wait: bool,
 }
-pub(crate) fn run(args: Args) -> Result<(), String> {
-    let settings = crate::server_config::ServeArgs::for_status(Some(args.config.clone()), None)
+pub(crate) fn run(args: Args, no_self_update: bool) -> Result<(), String> {
+    let executable = std::env::current_exe()
+        .and_then(|path| path.canonicalize())
+        .map_err(|_| "update executable unavailable")?;
+    crate::personal_update::allowed(&executable, no_self_update)?;
+    if args.version != "latest" && !crate::release::valid_version(&args.version) {
+        return Err("invalid release version".into());
+    }
+    let Some(config) = args.config else {
+        return crate::personal_update::run(
+            executable,
+            args.data_dir,
+            args.version,
+            args.dry_run,
+            args.wait,
+        );
+    };
+    let settings = crate::server_config::ServeArgs::for_status(Some(config.clone()), None)
         .resolve()
         .map_err(|error| error.to_string())?;
-    if !crate::service::valid_name(&args.service)
-        || (args.version != "latest" && !crate::release::valid_version(&args.version))
-    {
-        return Err("invalid update service or version".to_owned());
+    if !crate::service::valid_name(&args.service) {
+        return Err("invalid update service".to_owned());
     }
     if args.dry_run {
         println!(
             "{}",
-            serde_json::json!({"schema":1,"action":"update","version":args.version,"target":crate::release::target()?,"service":args.service,"config":args.config})
+            serde_json::json!({"schema":1,"action":"update","version":args.version,"target":crate::release::target()?,"service":args.service,"config":config})
         );
         return Ok(());
     }
@@ -83,18 +100,14 @@ pub(crate) fn run(args: Args) -> Result<(), String> {
     }
     let directory = settings.data_dir;
     let task = crate::host_jobs::Task::Update {
-        config: args
-            .config
+        config: config
             .canonicalize()
             .map_err(|_| "update configuration unavailable")?,
         name: args.service,
         version: args.version,
         package: args.package,
         checksums: args.checksums,
-        executable: std::env::current_exe()
-            .map_err(|_| "update executable unavailable")?
-            .canonicalize()
-            .map_err(|_| "update executable unavailable")?,
+        executable,
     };
     let id = crate::host_jobs::launch(&directory, task)?;
     println!("{}", serde_json::json!({"id":id,"state":"queued"}));
@@ -134,6 +147,7 @@ pub(crate) fn execute(directory: &Path, update: Update) -> Result<(), String> {
     if !crate::service::valid_name(&update.name) {
         return Err("invalid update service".to_owned());
     }
+    crate::personal_update::allowed(&update.executable, false)?;
     crate::service::require_operator()?;
     crate::installation::verify(&update.executable, directory, &update.config, &update.name)?;
     let _program_lock = crate::installation::lock(&update.executable)?;
@@ -249,6 +263,31 @@ impl Backend for Context {
         }
     }
 }
+pub(crate) fn verify_executable(staged: &Path, version: &str) -> Result<String, String> {
+    let new_hash = crate::release::hash(staged)?;
+    let output = Native.run(Request {
+        environment: None,
+        progress: None,
+        program: staged.to_owned(),
+        args: vec!["--version".into()],
+        input: None,
+        timeout: Duration::from_secs(10),
+        limit: 4096,
+    })?;
+    if !output.success
+        || std::str::from_utf8(&output.stdout)
+            .map_err(|_| "invalid release version output")?
+            .trim()
+            != format!("elzevir {}", version.trim_start_matches('v'))
+    {
+        return Err("release executable version mismatch".to_owned());
+    }
+    if crate::release::hash(staged)? != new_hash {
+        return Err("release executable changed during its version check".to_owned());
+    }
+    Ok(new_hash)
+}
+
 impl Context {
     fn prepare(&self) -> Result<(), String> {
         let version = if self.version == "latest" {
@@ -268,27 +307,7 @@ impl Context {
                 self.prepared.borrow().scratch.path(),
             )?
         };
-        let new_hash = crate::release::hash(&staged)?;
-        let output = Native.run(Request {
-            environment: None,
-            progress: None,
-            program: staged.clone(),
-            args: vec!["--version".into()],
-            input: None,
-            timeout: Duration::from_secs(10),
-            limit: 4096,
-        })?;
-        if !output.success
-            || std::str::from_utf8(&output.stdout)
-                .map_err(|_| "invalid release version output")?
-                .trim()
-                != format!("elzevir {}", version.trim_start_matches('v'))
-        {
-            return Err("release executable version mismatch".to_owned());
-        }
-        if crate::release::hash(&staged)? != new_hash {
-            return Err("release executable changed during its version check".to_owned());
-        }
+        let new_hash = verify_executable(&staged, &version)?;
         crate::file_owner::program(&staged, &self.executable, &self.name)?;
         let journal = crate::update_journal::Journal::begin(
             &self.executable,
@@ -411,46 +430,53 @@ impl Context {
     }
 }
 
+pub(crate) fn backup_stopped(
+    directory: &Path,
+    settings: &crate::server_config::Settings,
+) -> Result<PathBuf, String> {
+    crate::backup_cli::make_directory(&directory.join("backups"))?;
+    let path = crate::backup_cli::artifact(directory, &archive::identifier()?)?;
+    archive::create(
+        directory,
+        &crate::server_config::snapshot(settings)
+            .map_err(|_| "cannot snapshot update configuration")?,
+        &path,
+        None,
+    )?;
+    crate::file_owner::private_tree(&path, directory)?;
+    archive::extract(&path, &directory.join("backup.key"))?;
+    Ok(path)
+}
+
 fn backup(directory: &Path, config: &Path, stopped: bool) -> Result<PathBuf, String> {
-    let path = if stopped || crate::status::inspect(directory).state == "stopped" {
+    if stopped || crate::status::inspect(directory).state == "stopped" {
         let _lock = crate::backup_cli::lock(directory)?;
-        crate::backup_cli::make_directory(&directory.join("backups"))?;
-        let path = crate::backup_cli::artifact(directory, &archive::identifier()?)?;
         let settings = crate::server_config::ServeArgs::for_status(Some(config.to_owned()), None)
             .resolve()
             .map_err(|_| "update configuration unavailable")?;
-        archive::create(
-            directory,
-            &crate::server_config::snapshot(&settings)
-                .map_err(|_| "cannot snapshot update configuration")?,
-            &path,
-            None,
-        )?;
-        crate::file_owner::private_tree(&path, directory)?;
-        path
-    } else {
-        let info = crate::runtime_info::read(&directory.join(crate::runtime_info::NAME))?;
-        let job = crate::admin::start_backup(&info)?;
-        let started = Instant::now();
-        loop {
-            let view = crate::admin::operations(&info)?;
-            let current = view
-                .jobs
-                .iter()
-                .find(|entry| entry.id == job.id)
-                .ok_or("update backup job unavailable")?;
-            match current.state {
-                crate::operations::State::Completed => break,
-                crate::operations::State::Queued | crate::operations::State::Running
-                    if started.elapsed() < Duration::from_mins(30) =>
-                {
-                    std::thread::sleep(Duration::from_millis(200));
-                }
-                _ => return Err("update backup did not complete".to_owned()),
+        return backup_stopped(directory, &settings);
+    }
+    let info = crate::runtime_info::read(&directory.join(crate::runtime_info::NAME))?;
+    let job = crate::admin::start_backup(&info)?;
+    let started = Instant::now();
+    loop {
+        let view = crate::admin::operations(&info)?;
+        let current = view
+            .jobs
+            .iter()
+            .find(|entry| entry.id == job.id)
+            .ok_or("update backup job unavailable")?;
+        match current.state {
+            crate::operations::State::Completed => break,
+            crate::operations::State::Queued | crate::operations::State::Running
+                if started.elapsed() < Duration::from_mins(30) =>
+            {
+                std::thread::sleep(Duration::from_millis(200));
             }
+            _ => return Err("update backup did not complete".to_owned()),
         }
-        crate::backup_cli::artifact(directory, &job.id)?
-    };
+    }
+    let path = crate::backup_cli::artifact(directory, &job.id)?;
     archive::extract(&path, &directory.join("backup.key"))?;
     Ok(path)
 }

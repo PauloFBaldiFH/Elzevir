@@ -2,13 +2,14 @@
 source: crates/elzevir-panel/tests/live.rs
 expression: "screen(&panel, \"pt-BR\")"
 ---
-Administração do Elzevir
-+Seções--------------------++Painel de controle--------------------------------------------------------------++Instituição selecionada-----+
-|> d Painel de controle    ||Em execução                                                                     ||Biblioteca de teste         |
-|  x Diagnóstico           ||                                                                                ||                            |
-|  a Endereços e acesso    ||Versão: 0.0.0                                                                   ||Listener configurado        |
-|  b Backup e agendamentos ||PID: 42                                                                         ||127.0.0.1:0                 |
-|  u Atualizações          ||Tempo em execução (segundos): 123                                               ||                            |
+Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
++Seções--------------------+    1 Início         2 Saúde        3 Acesso        4 Backup        5 Versões       6 Acervo       7 Reinício
+|> d Painel de controle    |+Painel de controle--------------------------------------------------------------++Instituição selecionada-----+
+|  x Diagnóstico           ||Em execução                                                                     ||Biblioteca de teste         |
+|  a Endereços e acesso    ||                                                                                ||                            |
+|  b Backup e agendamentos ||Versão: 0.0.0                                                                   ||Listener configurado        |
+|  u Atualizações          ||PID: 42                                                                         ||127.0.0.1:0                 |
+|  m Acervo                ||Tempo em execução (segundos): 123                                               ||                            |
 |  r Reiniciar             ||Banco: OK                                                                       ||Listener observado          |
 |                          ||Indexador: OK                                                                   ||127.0.0.1:8080              |
 |                          ||                                                                                ||                            |
@@ -27,7 +28,6 @@ Administração do Elzevir
 |                          ||                                                                                ||                            |
 |                          ||                                                                                ||                            |
 |                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-+--------------------------++--------------------------------------------------------------------------------++----------------------------+
+|                          |+--------------------------------------------------------------------------------++----------------------------+
++--------------------------+                                                  Atualizar [F]
 Tab/setas: navegar | f: atualizar | PgUp/PgDn: rolar | Ctrl+P: paleta | q/Ctrl+C: sair

@@ -2,13 +2,14 @@
 source: crates/elzevir-panel/tests/live.rs
 expression: text
 ---
-Administração do Elzevir
-+Seções--------------------++Diagnóstico---------------------------------------------------------------------++Instituição selecionada-----+
-|  d Painel de controle    ||Em execução                                                                     ||Biblioteca de teste         |
-|> x Diagnóstico           ||                                                                                ||                            |
-|  a Endereços e acesso    ||Banco: OK                                                                       ||Listener configurado        |
-|  b Backup e agendamentos ||Indexador: OK                                                                   ||127.0.0.1:0                 |
-|  u Atualizações          ||SQLite quick_check: OK                                                          ||                            |
+Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
++Seções--------------------+    1 Início         2 Saúde        3 Acesso        4 Backup        5 Versões       6 Acervo       7 Reinício
+|  d Painel de controle    |+Diagnóstico---------------------------------------------------------------------++Instituição selecionada-----+
+|> x Diagnóstico           ||Em execução                                                                     ||Biblioteca de teste         |
+|  a Endereços e acesso    ||                                                                                ||                            |
+|  b Backup e agendamentos ||Banco: OK                                                                       ||Listener configurado        |
+|  u Atualizações          ||Indexador: OK                                                                   ||127.0.0.1:0                 |
+|  m Acervo                ||SQLite quick_check: OK                                                          ||                            |
 |  r Reiniciar             ||HTTP do catálogo (local): Falha                                                 ||Listener observado          |
 |                          ||Espaço livre (bytes): 104857600                                                 ||127.0.0.1:8080              |
 |                          ||Verificação de espaço livre: OK                                                 ||                            |
@@ -27,7 +28,6 @@ Administração do Elzevir
 |                          ||                                                                                ||                            |
 |                          ||                                                                                ||                            |
 |                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-+--------------------------++--------------------------------------------------------------------------------++----------------------------+
+|                          |+--------------------------------------------------------------------------------++----------------------------+
++--------------------------+            Verificar [V]                         Exportar [E]                         Atualizar [F]
 Tab/setas: navegar | f: atualizar | PgUp/PgDn: rolar | Ctrl+P: paleta | q/Ctrl+C: sair

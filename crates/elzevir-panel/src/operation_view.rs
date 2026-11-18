@@ -4,6 +4,7 @@ use crate::dashboard::{row, text};
 use crate::{Messages, Panel, Snapshot};
 use ratatui::{
     Frame,
+    crossterm::event::KeyCode,
     layout::Rect,
     text::Line,
     widgets::{Clear, Paragraph, Wrap},
@@ -166,7 +167,13 @@ fn backup_rows(operations: Option<&crate::Operations>, messages: &Messages) -> V
     rows
 }
 
-pub(crate) fn form(frame: &mut Frame, panel: &Panel, messages: &Messages, ascii: bool) {
+pub(crate) fn form(
+    frame: &mut Frame,
+    panel: &Panel,
+    messages: &Messages,
+    ascii: bool,
+    scene: &mut crate::ui::Scene,
+) {
     let Some(form) = &panel.form else {
         return;
     };
@@ -239,6 +246,12 @@ pub(crate) fn form(frame: &mut Frame, panel: &Panel, messages: &Messages, ascii:
             .block(crate::view::block(messages.get("op-dialog"), ascii)),
         popup,
     );
+    let primary = if form.confirming() {
+        ("ui-save", KeyCode::Char('y'))
+    } else {
+        ("ui-next", KeyCode::Enter)
+    };
+    crate::ui::modal_buttons(frame, popup, messages, ascii, scene, Some(primary));
 }
 
 fn field_value(key: &str, value: &str) -> String {

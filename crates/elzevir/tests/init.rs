@@ -35,6 +35,9 @@ fn init(directory: &Path, extra: &[&str], password: &str) -> Output {
     if !extra.contains(&"--name") {
         command.args(["--name", "Biblioteca de demonstração"]);
     }
+    if !extra.contains(&"--data-dir") {
+        command.args(["--data-dir", "data-local"]);
+    }
     command
         .args(extra)
         .current_dir(directory)
@@ -201,7 +204,7 @@ fn explicit_stdin_overrides_environment_and_custom_paths_are_escaped() {
 fn noninteractive_init_requires_an_explicit_password_source() {
     let root = tempfile::tempdir().unwrap();
     let output = Command::new(env!("CARGO_BIN_EXE_elzevir"))
-        .args(["init", "--name", "Test library"])
+        .args(["init", "--name", "Test library", "--data-dir", "data-local"])
         .current_dir(root.path())
         .env_remove("ELZEVIR_STAFF_PASSWORD")
         .stdin(Stdio::null())
@@ -239,4 +242,23 @@ fn dangling_links_are_never_replaced_or_followed() {
         assert!(!root.path().join("missing-target").exists());
         assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
     }
+}
+
+#[test]
+#[cfg(unix)]
+fn default_init_creates_the_institution_and_index_in_xdg_data_home() {
+    let root = tempfile::tempdir().unwrap();
+    let data_home = root.path().join("user-share");
+    let out = Command::new(env!("CARGO_BIN_EXE_elzevir"))
+        .args(["init", "--name", "Library"])
+        .env("XDG_DATA_HOME", &data_home)
+        .env("ELZEVIR_STAFF_PASSWORD", PASSWORD)
+        .current_dir(root.path())
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let data = data_home.join("elzevir");
+    assert!(data.join("server.toml").is_file());
+    assert!(data.join("index/meta.json").is_file());
+    assert!(log_in(&open(&data), "admin", PASSWORD).is_ok());
 }

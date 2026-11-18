@@ -189,6 +189,13 @@ function Install-ElzevirForUser([string] $Payload, [string] $BinDirectory, [stri
     Invoke-ElzevirNative $destination @('panel','--help') | Out-Null
     Write-Output "Installed: $destination"
     Write-Output "Data: $Data"
+    & $destination start --help *> $null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Output 'Run: elzevir start'
+    } else {
+        Write-Output "Run: elzevir serve --data-dir '$Data'"
+        $global:LASTEXITCODE = 0
+    }
 }
 function Grant-ElzevirServiceAccess([string] $InstallRoot, [string] $InstitutionRoot, [string] $Data, [string] $Service) {
     $account = 'NT SERVICE\' + $Service

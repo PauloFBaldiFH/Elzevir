@@ -238,7 +238,7 @@ fn absent_file_or_directory_is_reported_before_startup() {
 fn initialized_configuration_starts_the_real_catalog() {
     let root = tempfile::tempdir().unwrap();
     let result = Command::new(env!("CARGO_BIN_EXE_elzevir"))
-        .args(["init", "--name", "Test library"])
+        .args(["init", "--name", "Test library", "--data-dir", "data-local"])
         .env("ELZEVIR_STAFF_PASSWORD", "fictional-init-password")
         .current_dir(root.path())
         .output()
