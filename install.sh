@@ -11,20 +11,51 @@ listen=127.0.0.1:8080
 plan=false
 firewall=false
 download_only=
+managed=false
 repository=https://github.com/PauloFBaldiFH/Elzevir
+version_pattern='^v(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
 fail() { printf 'elzevir: %s\n' "$*" >&2; exit 1; }
 value() { [[ $# -ge 2 && -n $2 ]] || fail "missing value for $1"; }
+valid_version() {
+    local prerelease
+    [[ ${#1} -le 40 && $1 =~ $version_pattern ]] || return 1
+    prerelease=${BASH_REMATCH[4]-}
+    [[ ! ${prerelease#-} =~ (^|\.)0[0-9]+(\.|$) ]]
+}
+add_user_path() {
+    local login_profile="$HOME/.profile" profile
+    if [[ ":$PATH:" != *":$program_parent:"* ]]; then
+        if [[ -r $HOME/.bash_profile ]]; then
+            login_profile=$HOME/.bash_profile
+        elif [[ -r $HOME/.bash_login ]]; then
+            login_profile=$HOME/.bash_login
+        fi
+        for profile in "$HOME/.bashrc" "$login_profile"; do
+            if ! grep -Fxq '# Elzevir PATH' "$profile" 2>/dev/null; then
+                cat >> "$profile" <<'PROFILE'
+
+# Elzevir PATH
+case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) export PATH="$HOME/.local/bin:$PATH" ;;
+esac
+PROFILE
+            fi
+        done
+    fi
+    export PATH="$program_parent:$PATH"
+}
 while [[ $# -gt 0 ]]; do
     case $1 in
         --version) value "$@"; version=$2; shift 2 ;;
-        --name) value "$@"; institution=$2; shift 2 ;;
-        --id) value "$@"; identifier=$2; shift 2 ;;
-        --login) value "$@"; login=$2; shift 2 ;;
-        --listen) value "$@"; listen=$2; shift 2 ;;
+        --name) value "$@"; institution=$2; managed=true; shift 2 ;;
+        --id) value "$@"; identifier=$2; managed=true; shift 2 ;;
+        --login) value "$@"; login=$2; managed=true; shift 2 ;;
+        --listen) value "$@"; listen=$2; managed=true; shift 2 ;;
         --download-only) value "$@"; download_only=$2; shift 2 ;;
         --dry-run) plan=true; shift ;;
-        --open-firewall) firewall=true; shift ;;
-        --help) printf '%s\n' 'Usage: bash install.sh --name "Library" [--version v1.2.3] [--id library] [--login admin] [--listen 127.0.0.1:8080] [--open-firewall] [--dry-run] [--download-only NEW_DIRECTORY]'; exit 0 ;;
+        --open-firewall) firewall=true; managed=true; shift ;;
+        --help) printf '%s\n' 'Usage: bash install.sh [--version TAG] [--dry-run] [--download-only NEW_DIRECTORY]' 'Managed service: sudo bash install.sh --name "Library" [--id library] [--login admin] [--listen 127.0.0.1:8080] [--open-firewall]'; exit 0 ;;
         *) fail "unknown option: $1" ;;
     esac
 done
@@ -37,20 +68,34 @@ case $(uname -m) in
 esac
 [[ $identifier =~ ^[a-z0-9][a-z0-9-]{0,31}$ && $identifier != *- ]] || fail 'invalid institution identifier'
 [[ $login =~ ^[a-zA-Z0-9_.-]{1,64}$ ]] || fail 'invalid administrator login'
-[[ $version == latest || $version =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || fail 'version must be latest or a stable SemVer tag'
-binary=/usr/local/bin/elzevir
-[[ $identifier == library ]] || binary=/usr/local/lib/elzevir-$identifier/elzevir
+[[ $version == latest ]] || valid_version "$version" || fail 'version must be latest or a SemVer tag'
+if $managed; then
+    binary=/usr/local/bin/elzevir
+    [[ $identifier == library ]] || binary=/usr/local/lib/elzevir-$identifier/elzevir
+    config=/etc/elzevir/$identifier.toml
+    data=/var/lib/elzevir/$identifier
+    service=elzevir-$identifier
+    [[ $identifier != library ]] || service=elzevir
+else
+    binary=$HOME/.local/bin/elzevir
+    data_home=${XDG_DATA_HOME:-$HOME/.local/share}
+    [[ $data_home == /* ]] || data_home=$HOME/.local/share
+    data=$data_home/elzevir
+    config=
+    service=
+    libc=$(getconf GNU_LIBC_VERSION 2>/dev/null) || libc=
+    if [[ $target == x86_64-unknown-linux-musl && $libc =~ ^glibc\ ([0-9]+)\.([0-9]+)$ ]] &&
+        (( BASH_REMATCH[1] > 2 || (BASH_REMATCH[1] == 2 && BASH_REMATCH[2] >= 35) )); then
+        target=x86_64-unknown-linux-gnu
+    fi
+fi
 program_parent=${binary%/*}
-config=/etc/elzevir/$identifier.toml
-data=/var/lib/elzevir/$identifier
-service=elzevir-$identifier
-[[ $identifier != library ]] || service=elzevir
 if $plan; then
     printf 'target=%s\nversion=%s\nbinary=%s\nconfig=%s\ndata=%s\nservice=%s\nfirewall=%s\n' "$target" "$version" "$binary" "$config" "$data" "$service" "$firewall"
     exit 0
 fi
 for utility in curl tar sha256sum awk mktemp stat; do command -v "$utility" >/dev/null || fail "required utility unavailable: $utility"; done
-if [[ -z $download_only ]]; then
+if $managed && [[ -z $download_only ]]; then
     [[ $EUID -eq 0 ]] || fail 'run the installer as root'
     [[ -d /run/systemd/system || -x /sbin/openrc ]] || fail 'systemd or OpenRC is required'
     for utility in install chown chmod id; do command -v "$utility" >/dev/null || fail "required utility unavailable: $utility"; done
@@ -78,13 +123,18 @@ if [[ -z $download_only ]]; then
 fi
 if [[ $version == latest ]]; then
     resolved=$(curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location --max-redirs 5 --max-time 60 --output /dev/null --write-out '%{url_effective}' "$repository/releases/latest")
-    [[ $resolved == "$repository/releases/tag/"* ]] || fail 'cannot resolve a stable official release'
-    version=${resolved##*/}
-    [[ $version =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || fail 'latest release is not a stable SemVer tag'
+    case $resolved in
+        "$repository/releases/tag/"*) version=${resolved#"$repository/releases/tag/"} ;;
+        "$repository/releases") version=v0.1.0-alpha.1 ;;
+        *) fail 'cannot resolve an official release' ;;
+    esac
+    valid_version "$version" || fail 'invalid official release tag'
 fi
 temporary=$(mktemp -d)
-trap 'rm -rf -- "$temporary"' EXIT
+staged_binary=
+trap 'if [[ -n $staged_binary ]]; then rm -f -- "$staged_binary"; fi; rm -rf -- "$temporary"' EXIT
 name=elzevir-$version-$target.tar.gz
+[[ $target != x86_64-unknown-linux-gnu ]] || name=elzevir-linux-x86_64.tar.gz
 base=$repository/releases/download/$version
 fetch() { curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location --max-redirs 5 --max-time 900 --max-filesize "${3:-536870912}" --output "$2" "$1"; }
 fetch "$base/SHA256SUMS" "$temporary/SHA256SUMS" 65536
@@ -107,6 +157,21 @@ if [[ -n $download_only ]]; then
     mkdir -m 700 -- "$download_only"
     cp -- "$temporary/payload/elzevir" "$temporary/payload/README.md" "$temporary/payload/LICENSE" "$download_only/"
     printf 'Verified package saved to %s\n' "$download_only"
+    exit 0
+fi
+if ! $managed; then
+    [[ ! -L $binary && ( ! -e $binary || -f $binary ) ]] || fail 'binary destination must be a regular file'
+    [[ $("$temporary/payload/elzevir" --version) == "elzevir ${version#v}" ]] || fail 'package version mismatch'
+    "$temporary/payload/elzevir" panel --help >/dev/null
+    mkdir -p -m 700 -- "$data" "$program_parent"
+    staged_binary=$(mktemp "$program_parent/.elzevir-install.XXXXXXXX")
+    install -m 755 -- "$temporary/payload/elzevir" "$staged_binary"
+    mv -fT -- "$staged_binary" "$binary"
+    staged_binary=
+    add_user_path
+    elzevir --version
+    elzevir panel --help >/dev/null
+    printf 'Installed: %s\nData: %s\nOpen a new Bash shell or run: export PATH="$HOME/.local/bin:$PATH"\n' "$binary" "$data"
     exit 0
 fi
 if ! id elzevir >/dev/null 2>&1; then

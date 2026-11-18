@@ -12,7 +12,9 @@ foreach ($function in $functions) { Invoke-Expression $function.Extent.Text }
 function Assert-True([bool] $Value, [string] $Message) { if (-not $Value) { throw $Message } }
 function Assert-Throws([scriptblock] $Action) { $threw = $false; try { & $Action } catch { $threw = $true }; Assert-True $threw 'Operation should have been refused' }
 Assert-True (Test-ElzevirVersion 'v1.2.3') 'Stable version refused'
+Assert-True (Test-ElzevirVersion 'v0.1.0-alpha.1') 'Preview version refused'
 Assert-True (-not (Test-ElzevirVersion 'v01.2.3')) 'Noncanonical version accepted'
+Assert-True (-not (Test-ElzevirVersion 'v1.2.3-alpha.01')) 'Noncanonical preview version accepted'
 $hash = 'a' * 64
 $sums = "$hash  package.zip`n"
 Assert-True ((Get-ElzevirChecksum $sums 'package.zip') -ceq $hash) 'Checksum was not exact'
@@ -21,6 +23,20 @@ Assert-Throws { Get-ElzevirChecksum ($sums + 'invalid  package.zip') 'package.zi
 Assert-Throws { Get-ElzevirChecksum $sums 'another.zip' }
 Assert-Throws { Get-ElzevirResponse 'http://example.invalid/package.zip' }
 Assert-Throws { Get-ElzevirResponse 'https://user:password@example.invalid/package.zip' }
+$official = 'https://github.com/PauloFBaldiFH/Elzevir'
+$originalResponse = (Get-Item Function:Get-ElzevirResponse).ScriptBlock
+try {
+    function Get-ElzevirResponse([uri] $Uri, [switch] $Head) {
+        Assert-True ($Head -and $Uri.AbsoluteUri -ceq "$official/releases/latest") 'Unexpected release lookup'
+        $response = New-Object PSObject -Property @{ ResponseUri=[uri]$script:releaseUri }
+        $response | Add-Member ScriptMethod Dispose {}
+        return $response
+    }
+    $script:releaseUri = "$official/releases/tag/v2.0.0"
+    Assert-True ((Get-ElzevirLatest $official) -ceq 'v2.0.0') 'Stable latest release was not preferred'
+    $script:releaseUri = "$official/releases"
+    Assert-True ((Get-ElzevirLatest $official) -ceq 'v0.1.0-alpha.1') 'Initial preview was not selected without a stable release'
+} finally { Set-Item Function:Get-ElzevirResponse $originalResponse }
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $temporary = Join-Path ([IO.Path]::GetTempPath()) ('elzevir-bootstrap-test-' + [Guid]::NewGuid().ToString('N'))

@@ -43,17 +43,32 @@ pub(crate) struct Latest {
 }
 
 pub(crate) fn valid_version(version: &str) -> bool {
-    version.len() <= 40
-        && version.strip_prefix('v').is_some_and(|value| {
-            let parts = value.split('.').collect::<Vec<_>>();
-            parts.len() == 3
-                && parts.iter().all(|part| {
-                    !part.is_empty()
-                        && part.len() <= 10
-                        && part.bytes().all(|byte| byte.is_ascii_digit())
-                        && (!part.starts_with('0') || *part == "0")
-                })
-        })
+    let Some(value) = version.strip_prefix('v').filter(|_| version.len() <= 40) else {
+        return false;
+    };
+    let (core, prerelease) = value
+        .split_once('-')
+        .map_or((value, None), |(core, prerelease)| (core, Some(prerelease)));
+    let parts = core.split('.').collect::<Vec<_>>();
+    parts.len() == 3
+        && parts
+            .iter()
+            .all(|part| part.len() <= 10 && numeric_identifier(part))
+        && prerelease.is_none_or(|suffix| suffix.split('.').all(prerelease_identifier))
+}
+
+fn numeric_identifier(value: &str) -> bool {
+    !value.is_empty()
+        && value.bytes().all(|byte| byte.is_ascii_digit())
+        && (!value.starts_with('0') || value == "0")
+}
+
+fn prerelease_identifier(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        && (!value.bytes().all(|byte| byte.is_ascii_digit()) || numeric_identifier(value))
 }
 pub(crate) fn latest(source: &impl Download) -> Result<Latest, String> {
     let mut bytes = Vec::new();
@@ -295,7 +310,16 @@ mod tests {
     #[test]
     fn release_names_and_checksums_are_exact_and_unambiguous() {
         assert!(valid_version("v1.2.3"));
-        for value in ["v1.2", "v01.2.3", "../v1.2.3", "v1.2.3;command"] {
+        assert!(valid_version("v0.1.0-alpha.1"));
+        for value in [
+            "v1.2",
+            "v01.2.3",
+            "../v1.2.3",
+            "v1.2.3;command",
+            "v1.2.3-",
+            "v1.2.3-alpha..1",
+            "v1.2.3-alpha.01",
+        ] {
             assert!(!valid_version(value));
         }
         let hash = "a".repeat(64);

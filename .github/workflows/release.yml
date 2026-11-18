@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: '0'
@@ -18,10 +22,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-24.04, target: x86_64-unknown-linux-musl, archive: tar.gz }
-          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl, archive: tar.gz }
-          - { os: windows-2025, target: x86_64-pc-windows-msvc, archive: zip }
-          - { os: windows-11-arm, target: aarch64-pc-windows-msvc, archive: zip }
+          # Build against glibc 2.35 so the GNU package also runs on Ubuntu 22.04.
+          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu }
+          - { os: ubuntu-24.04, target: x86_64-unknown-linux-musl }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl }
+          - { os: windows-2025, target: x86_64-pc-windows-msvc }
+          - { os: windows-11-arm, target: aarch64-pc-windows-msvc }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +36,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          [[ ${#RELEASE_TAG} -le 40 && "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]
           version="$(sed -n 's/^version = "\([0-9][^"]*\)"/\1/p' Cargo.toml | head -n 1)"
           test "v$version" = "$RELEASE_TAG"
       - name: Install toolchain and target
@@ -39,7 +45,7 @@ jobs:
           rustup toolchain install
           rustup target add '${{ matrix.target }}'
       - name: Install musl compiler
-        if: runner.os == 'Linux'
+        if: endsWith(matrix.target, '-musl')
         run: sudo apt-get update && sudo apt-get install --yes musl-tools
       - uses: Swatinem/rust-cache@v2
         with:
@@ -50,17 +56,25 @@ jobs:
           CC_aarch64_unknown_linux_musl: musl-gcc
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
-        run: cargo build --release --locked --package elzevir --target ${{ matrix.target }}
+          RUSTFLAGS: ${{ runner.os == 'Windows' && '-C target-feature=+crt-static' || '' }}
+        run: cargo build --release --locked --package elzevir --bin elzevir --target ${{ matrix.target }}
       - name: Package Linux
         if: runner.os == 'Linux'
+        shell: bash
         env:
           RELEASE_TAG: ${{ github.ref_name }}
           RELEASE_TARGET: ${{ matrix.target }}
         run: |
-          target/$RELEASE_TARGET/release/elzevir --version
           mkdir -p package dist
-          cp target/$RELEASE_TARGET/release/elzevir README.md LICENSE package/
-          tar -C package -czf "dist/elzevir-$RELEASE_TAG-$RELEASE_TARGET.tar.gz" elzevir README.md LICENSE
+          cp "target/$RELEASE_TARGET/release/elzevir" README.md LICENSE package/
+          archive="dist/elzevir-$RELEASE_TAG-$RELEASE_TARGET.tar.gz"
+          if [[ "$RELEASE_TARGET" == x86_64-unknown-linux-gnu ]]; then
+            archive=dist/elzevir-linux-x86_64.tar.gz
+          fi
+          tar -C package -czf "$archive" elzevir README.md LICENSE
+          extracted=$(mktemp -d)
+          tar -C "$extracted" -xzf "$archive"
+          python3 tools/smoke-release.py "$extracted/elzevir" "$RELEASE_TAG"
       - name: Package Windows
         if: runner.os == 'Windows'
         shell: pwsh
@@ -68,19 +82,24 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
           RELEASE_TARGET: ${{ matrix.target }}
         run: |
-          & "target/$env:RELEASE_TARGET/release/elzevir.exe" --version
-          if ($LASTEXITCODE -ne 0) { throw 'Binary smoke test failed' }
           New-Item -ItemType Directory package, dist | Out-Null
           Copy-Item "target/$env:RELEASE_TARGET/release/elzevir.exe", README.md, LICENSE package/
-          Compress-Archive -Path package/* -DestinationPath "dist/elzevir-$env:RELEASE_TAG-$env:RELEASE_TARGET.zip"
+          $archive = "dist/elzevir-$env:RELEASE_TAG-$env:RELEASE_TARGET.zip"
+          Compress-Archive -Path package/* -DestinationPath $archive
+          if ($env:RELEASE_TARGET -eq 'x86_64-pc-windows-msvc') {
+              Copy-Item -LiteralPath $archive -Destination 'dist/elzevir-windows-x86_64.zip'
+          }
+          $extracted = Join-Path $env:RUNNER_TEMP 'elzevir-release'
+          Expand-Archive -LiteralPath $archive -DestinationPath $extracted
+          python tools/smoke-release.py (Join-Path $extracted 'elzevir.exe') $env:RELEASE_TAG
       - uses: actions/upload-artifact@v4
         with:
           name: elzevir-${{ matrix.target }}
           path: dist/*
           if-no-files-found: error
 
-  draft:
-    name: Create reviewable release draft
+  publish:
+    name: Publish GitHub release
     needs: build
     runs-on: ubuntu-24.04
     permissions:
@@ -92,14 +111,29 @@ jobs:
           pattern: elzevir-*
           merge-multiple: true
           path: dist
-      - name: Checksums and draft
+      - name: Verify and publish assets
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           cp install.sh install.ps1 dist/
+          test -s dist/elzevir-linux-x86_64.tar.gz
+          test -s dist/elzevir-windows-x86_64.zip
           cd dist
           sha256sum elzevir-*.tar.gz elzevir-*.zip install.sh install.ps1 > SHA256SUMS
           sha256sum --check SHA256SUMS
           cd ..
-          gh release create "$RELEASE_TAG" dist/* --verify-tag --draft --generate-notes
+          if draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [[ "$draft" != true ]]; then
+              echo "Release $RELEASE_TAG is already published."
+              exit 0
+            fi
+            gh release upload "$RELEASE_TAG" dist/* --clobber
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --draft --generate-notes dist/*
+          fi
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false
+          else
+            gh release edit "$RELEASE_TAG" --draft=false
+          fi

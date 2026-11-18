@@ -12,12 +12,14 @@ param(
     [switch] $DefenderExclusion,
     [string] $DownloadOnly
 )
+& {
+param($InstallerParameters)
+
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-# SPDX-License-Identifier: GPL-3.0-or-later
-Set-StrictMode -Version Latest
 function Test-ElzevirVersion([string] $Version) {
-    return $Version -cmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+    if ($Version.Length -gt 40 -or $Version -cnotmatch '\Av(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})(?:-(?<preview>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?\z') { return $false }
+    return $Matches['preview'] -cnotmatch '(^|\.)0[0-9]+(\.|$)'
 }
 function Get-ElzevirChecksum([string] $Checksums, [string] $Name) {
     $found = @()
@@ -54,6 +56,20 @@ function Get-ElzevirResponse([uri] $Uri, [switch] $Head) {
         return $response
     }
     throw 'Too many release redirects'
+}
+function Get-ElzevirLatest([string] $Repository) {
+    $response = Get-ElzevirResponse -Uri "$Repository/releases/latest" -Head
+    try { $resolved = $response.ResponseUri.AbsoluteUri } finally { $response.Dispose() }
+    $prefix = "$Repository/releases/tag/"
+    if ($resolved.StartsWith($prefix, [StringComparison]::Ordinal)) {
+        $tag = $resolved.Substring($prefix.Length)
+    } elseif ($resolved -ceq "$Repository/releases") {
+        $tag = 'v0.1.0-alpha.1'
+    } else {
+        throw 'Cannot resolve an official release'
+    }
+    if (-not (Test-ElzevirVersion $tag)) { throw 'Invalid official release tag' }
+    return $tag
 }
 function Save-ElzevirDownload([uri] $Uri, [string] $Output, [long] $Limit) {
     if ($Limit -le 0 -or $Limit -gt 536870912) { throw 'Invalid download size limit' }
@@ -131,9 +147,48 @@ function Invoke-ElzevirNative([string] $Program, [string[]] $Arguments) {
     & $Program @Arguments
     if ($LASTEXITCODE -ne 0) { throw 'Native Elzevir operation failed; configuration and data were preserved' }
 }
-function Set-ElzevirPrivateDirectory([string] $Path) {
-    & "$env:SystemRoot\System32\icacls.exe" $Path '/inheritance:r' '/grant:r' '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
+function Set-ElzevirPrivateDirectory([string] $Path, [switch] $ForUser) {
+    $grants = @('*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F')
+    if ($ForUser) {
+        $userSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        $grants += "*${userSid}:(OI)(CI)F"
+    }
+    & "$env:SystemRoot\System32\icacls.exe" $Path '/inheritance:r' '/grant:r' @grants | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Cannot protect installation directory' }
+}
+function Install-ElzevirForUser([string] $Payload, [string] $BinDirectory, [string] $Data, [string] $Version) {
+    $source = Join-Path $Payload 'elzevir.exe'
+    $reported = Invoke-ElzevirNative $source @('--version')
+    if ($reported -cne "elzevir $($Version.Substring(1))") { throw 'Package version mismatch' }
+    Invoke-ElzevirNative $source @('panel','--help') | Out-Null
+    $destination = Join-Path $BinDirectory 'elzevir.exe'
+    $null = [IO.Directory]::CreateDirectory($BinDirectory)
+    $null = [IO.Directory]::CreateDirectory($Data)
+    $staged = Join-Path $BinDirectory ('.elzevir-install-' + [Guid]::NewGuid().ToString('N') + '.exe')
+    [IO.File]::Copy($source, $staged)
+    try {
+        if (Test-Path -LiteralPath $destination) {
+            $existing = Get-Item -LiteralPath $destination
+            if ($existing.PSIsContainer -or ($existing.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Binary destination must be a regular file' }
+            [IO.File]::Replace($staged, $destination, [NullString]::Value)
+        } else {
+            [IO.File]::Move($staged, $destination)
+        }
+    } finally {
+        [IO.File]::Delete($staged)
+    }
+    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    if (($userPath -split ';') -notcontains $BinDirectory) {
+        $userPath = if ($userPath) { "$BinDirectory;$userPath" } else { $BinDirectory }
+        [Environment]::SetEnvironmentVariable('Path', $userPath, 'User')
+    }
+    if (($env:Path -split ';' | Select-Object -First 1) -ne $BinDirectory) {
+        $env:Path = "$BinDirectory;$env:Path"
+    }
+    Invoke-ElzevirNative $destination @('--version')
+    Invoke-ElzevirNative $destination @('panel','--help') | Out-Null
+    Write-Output "Installed: $destination"
+    Write-Output "Data: $Data"
 }
 function Grant-ElzevirServiceAccess([string] $InstallRoot, [string] $InstitutionRoot, [string] $Data, [string] $Service) {
     $account = 'NT SERVICE\' + $Service
@@ -155,19 +210,27 @@ switch ($architecture) {
     default { throw 'A 64-bit x64 or ARM64 operating system is required' }
 }
 if ($Id.EndsWith('-')) { throw 'Invalid institution identifier' }
-if ($Version -cne 'latest' -and -not (Test-ElzevirVersion $Version)) { throw 'Version must be latest or a stable SemVer tag' }
-$programFiles = if ($env:ProgramW6432) { $env:ProgramW6432 } else { $env:ProgramFiles }
-$installRoot = Join-Path $programFiles $(if ($Id -ceq 'library') { 'Elzevir' } else { 'Elzevir-' + $Id })
-$institutionRoot = Join-Path (Join-Path $env:ProgramData 'Elzevir') $Id
-$config = Join-Path $institutionRoot 'server.toml'
-$data = Join-Path $institutionRoot 'data'
+if ($Version -cne 'latest' -and -not (Test-ElzevirVersion $Version)) { throw 'Version must be latest or a SemVer tag' }
+$managed = [bool]($InstallerParameters.Keys | Where-Object { $_ -in @('Name','Id','Login','Listen','OpenFirewall','DefenderExclusion') })
+if ($managed) {
+    $programFiles = if ($env:ProgramW6432) { $env:ProgramW6432 } else { $env:ProgramFiles }
+    $installRoot = Join-Path $programFiles $(if ($Id -ceq 'library') { 'Elzevir' } else { 'Elzevir-' + $Id })
+    $institutionRoot = Join-Path (Join-Path $env:ProgramData 'Elzevir') $Id
+    $config = Join-Path $institutionRoot 'server.toml'
+    $data = Join-Path $institutionRoot 'data'
+    $service = if ($Id -ceq 'library') { 'elzevir' } else { 'elzevir-' + $Id }
+} else {
+    $installRoot = Join-Path $env:LOCALAPPDATA 'Programs\Elzevir\bin'
+    $data = Join-Path $env:LOCALAPPDATA 'Elzevir\data'
+    $config = $null
+    $service = $null
+}
 $binary = Join-Path $installRoot 'elzevir.exe'
-$service = if ($Id -ceq 'library') { 'elzevir' } else { 'elzevir-' + $Id }
 if ($Plan) {
     [ordered]@{ target=$target; version=$Version; binary=$binary; config=$config; data=$data; service=$service; firewall=[bool]$OpenFirewall; defender=[bool]$DefenderExclusion } | ConvertTo-Json -Compress
     return
 }
-if (-not $DownloadOnly) {
+if ($managed -and -not $DownloadOnly) {
     $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Run PowerShell as Administrator' }
     foreach ($path in @($installRoot,$institutionRoot,$config,$data,$binary)) {
@@ -181,17 +244,13 @@ if (-not $DownloadOnly) {
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 $repository = 'https://github.com/PauloFBaldiFH/Elzevir'
 if ($Version -ceq 'latest') {
-    $response = Get-ElzevirResponse -Uri "$repository/releases/latest" -Head
-    try { $resolved = $response.ResponseUri.AbsoluteUri } finally { $response.Dispose() }
-    if (-not $resolved.StartsWith("$repository/releases/tag/",[StringComparison]::Ordinal)) { throw 'Cannot resolve an official stable release' }
-    $Version = $resolved.Substring($resolved.LastIndexOf('/') + 1)
-    if (-not (Test-ElzevirVersion $Version)) { throw 'Latest release is not a stable SemVer tag' }
+    $Version = Get-ElzevirLatest $repository
 }
 $temporary = Join-Path ([IO.Path]::GetTempPath()) ('elzevir-install-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $temporary | Out-Null
-Set-ElzevirPrivateDirectory $temporary
 try {
-    $packageName = "elzevir-$Version-$target.zip"
+    Set-ElzevirPrivateDirectory $temporary -ForUser
+    $packageName = if (-not $managed -and $target -ceq 'x86_64-pc-windows-msvc') { 'elzevir-windows-x86_64.zip' } else { "elzevir-$Version-$target.zip" }
     $package = Join-Path $temporary $packageName
     $sumsPath = Join-Path $temporary 'SHA256SUMS'
     $base = "$repository/releases/download/$Version"
@@ -206,9 +265,13 @@ try {
     if ($DownloadOnly) {
         if (Test-Path -LiteralPath $DownloadOnly) { throw 'Download destination must be new' }
         New-Item -ItemType Directory -Path $DownloadOnly | Out-Null
-        Set-ElzevirPrivateDirectory $DownloadOnly
+        Set-ElzevirPrivateDirectory $DownloadOnly -ForUser
         Copy-Item -LiteralPath (Join-Path $payload 'elzevir.exe'),(Join-Path $payload 'README.md'),(Join-Path $payload 'LICENSE') -Destination $DownloadOnly
         Write-Output "Verified package saved to $DownloadOnly"
+        return
+    }
+    if (-not $managed) {
+        Install-ElzevirForUser $payload $installRoot $data $Version
         return
     }
     if (Test-Path -LiteralPath $config) {
@@ -267,3 +330,4 @@ try {
 } finally {
     Remove-Item -LiteralPath $temporary -Recurse -Force
 }
+} $PSBoundParameters

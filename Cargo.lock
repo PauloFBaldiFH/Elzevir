@@ -975,7 +975,7 @@ checksum = "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be"
 
 [[package]]
 name = "elzevir"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "age",
  "axum",
@@ -1028,7 +1028,7 @@ dependencies = [
 
 [[package]]
 name = "elzevir-app"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "argon2",
  "elzevir-data",
@@ -1046,11 +1046,11 @@ dependencies = [
 
 [[package]]
 name = "elzevir-data"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 
 [[package]]
 name = "elzevir-domain"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "elzevir-data",
  "jiff",
@@ -1061,7 +1061,7 @@ dependencies = [
 
 [[package]]
 name = "elzevir-marc"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "elzevir-data",
  "proptest",
@@ -1073,7 +1073,7 @@ dependencies = [
 
 [[package]]
 name = "elzevir-panel"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "fluent-bundle 0.16.0",
  "insta",
@@ -1086,7 +1086,7 @@ dependencies = [
 
 [[package]]
 name = "elzevir-scenarios"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "elzevir-domain",
  "jiff",
@@ -1099,7 +1099,7 @@ dependencies = [
 
 [[package]]
 name = "elzevir-search"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "elzevir-app",
  "elzevir-domain",
@@ -1110,14 +1110,14 @@ dependencies = [
 
 [[package]]
 name = "elzevir-sip2"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "elzevir-app",
 ]
 
 [[package]]
 name = "elzevir-store"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "elzevir-app",
  "elzevir-data",
@@ -1135,7 +1135,7 @@ dependencies = [
 
 [[package]]
 name = "elzevir-web"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "askama",
  "axum",
@@ -1155,7 +1155,7 @@ dependencies = [
 
 [[package]]
 name = "elzevir-web-templates"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "askama",
  "fluent-bundle 0.16.0",
@@ -4492,7 +4492,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "serde_json",
 ]
