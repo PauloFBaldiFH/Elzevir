@@ -224,6 +224,7 @@ pub(crate) fn routes() -> Router<AppState> {
             get(home).merge(post(upload).layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES))),
         )
         .route("/equipe/acervo/importar/{id}", get(batch))
+        .route("/equipe/acervo/importar/modelo/{format}", get(model))
         .route("/equipe/acervo/importar/{id}/resultado", get(result))
         .route("/equipe/acervo/importar/{id}/{action}", post(change))
         .layer(axum::middleware::map_response(private))
@@ -237,7 +238,11 @@ async fn private(mut response: Response) -> Response {
     response
 }
 
-async fn home(State(state): State<AppState>, session: ImportSession) -> Response {
+async fn home(
+    State(state): State<AppState>,
+    session: ImportSession,
+    Query(page): Query<Page>,
+) -> Response {
     match session.run(BatchCommand::List).await {
         Ok(BatchReply::List(batches)) => {
             let t = session.translations(&state);
@@ -247,7 +252,11 @@ async fn home(State(state): State<AppState>, session: ImportSession) -> Response
                 .collect();
             session.page(
                 &state,
-                ImportView::Home(batches, session.imports.recent(session.active.identity.id)),
+                ImportView::Home(
+                    batches,
+                    session.imports.recent(session.active.identity.id),
+                    page.tabular,
+                ),
                 StatusCode::OK,
                 None,
                 None,
@@ -410,6 +419,8 @@ struct Page {
     problems: usize,
     #[serde(default)]
     download: bool,
+    #[serde(default)]
+    tabular: bool,
 }
 
 async fn batch(
@@ -536,6 +547,7 @@ fn parse_format(value: &str) -> Result<Option<ImportFormat>, BatchError> {
         "iso" => Ok(Some(ImportFormat::Iso2709)),
         "xml" => Ok(Some(ImportFormat::MarcXml)),
         "mrk" => Ok(Some(ImportFormat::MarcText)),
+        "table" => Ok(Some(ImportFormat::Delimited)),
         _ => Err(BatchError::Invalid("invalid source format".into())),
     }
 }
@@ -544,7 +556,8 @@ fn parse_recipe(value: &str) -> Result<elzevir_app::import::edits::Recipe, Batch
     if value.len() as u64 > MAX_BATCH_MANIFEST_BYTES {
         return Err(BatchError::Invalid("recipe exceeds its byte limit".into()));
     }
-    serde_json::from_str(value).map_err(|error| BatchError::Invalid(error.to_string()))
+    elzevir_app::import::edits::Recipe::parse(value)
+        .map_err(|error| BatchError::Invalid(error.to_string()))
 }
 
 async fn edit_failure(
@@ -592,6 +605,8 @@ fn show_batch(
         Some(ImportFormat::Iso2709) => "iso",
         Some(ImportFormat::MarcXml) => "xml",
         Some(ImportFormat::MarcText) => "mrk",
+        Some(ImportFormat::Delimited) => "table",
+        _ if batch.format == "Delimited" => "table",
         _ => "auto",
     };
     let link = batch_link(t, batch);
@@ -632,6 +647,7 @@ fn batch_link(t: &I18n, batch: BatchSummary) -> ImportBatchLink {
         "Iso2709" => "import-iso",
         "MarcXml" => "import-xml",
         "MarcText" => "import-mrk",
+        "Delimited" => "import-table",
         _ => "import-unknown",
     };
     let state = match batch.state {
@@ -660,6 +676,7 @@ fn preview_page(
         Evidence::IsoLeader => "import-evidence-iso",
         Evidence::MarcXmlNamespace => "import-evidence-xml",
         Evidence::MarcTextLeader => "import-evidence-mrk",
+        Evidence::DelimitedRows => "import-evidence-table",
         Evidence::EmptyInput => "import-evidence-empty",
         _ => "import-evidence-unknown",
     };
@@ -841,7 +858,13 @@ async fn result(
         .refusals
         .iter()
         .take(DIAGNOSTICS_PER_PAGE)
-        .map(|refusal| location(t, refusal.record, refusal.offset, refusal.item))
+        .map(|refusal| match &refusal.detail {
+            Some(detail) => format!(
+                "{} · {detail}",
+                location(t, refusal.record, refusal.offset, None)
+            ),
+            None => location(t, refusal.record, refusal.offset, refusal.item),
+        })
         .collect();
     let page = ImportReceipt {
         download: format!("{ROOT}/{id}/resultado?download=true"),
@@ -858,4 +881,42 @@ async fn result(
         notice,
         None,
     )
+}
+
+async fn model(
+    State(state): State<AppState>,
+    session: ImportSession,
+    Path(format): Path<String>,
+) -> Response {
+    use elzevir_app::import::table::{Delimiter, write_model_header};
+    let (delimiter, content_type, file) = match format.as_str() {
+        "csv" => (
+            Delimiter::Comma,
+            "text/csv; charset=utf-8",
+            "attachment; filename=\"elzevir-model.csv\"",
+        ),
+        "tsv" => (
+            Delimiter::Tab,
+            "text/tab-separated-values; charset=utf-8",
+            "attachment; filename=\"elzevir-model.tsv\"",
+        ),
+        _ => return session.error(&state, StatusCode::NOT_FOUND, "import-missing", None),
+    };
+    let mut output = Vec::new();
+    if write_model_header(&mut output, delimiter).is_err() {
+        return session.error(
+            &state,
+            StatusCode::SERVICE_UNAVAILABLE,
+            "import-unavailable",
+            None,
+        );
+    }
+    (
+        [
+            (header::CONTENT_TYPE, content_type),
+            (header::CONTENT_DISPOSITION, file),
+        ],
+        output,
+    )
+        .into_response()
 }

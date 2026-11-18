@@ -80,7 +80,7 @@ fn an_item_added_after_the_import_is_exported() {
     let store = imported(&dir);
     let mut first =
         elzevir_app::export::RecordSource::records_after(&store, None, NonZeroUsize::MIN).unwrap();
-    let mut item = first.pop().unwrap().record.items.remove(0);
+    let mut item = first.pop().unwrap().record.items.into_marc().remove(0);
     item.barcode = Some("ELZ-NEW-1".to_owned());
     store
         .submit(WriteCommand::Catalog(CatalogCommand::AddItem(Box::new(
@@ -272,7 +272,7 @@ fn every_imported_record_reads_back_from_its_turtle_as_stored() {
         let read = records_from(&read_turtle(&text).unwrap(), &base);
         // The Items come back as the export sees them, and the source record stays out.
         let mut record = stored.record;
-        record.items = Vec::new();
+        record.items = Vec::new().into();
         record.source = None;
         let expected = ReadRecord {
             work: stored.work,

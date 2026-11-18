@@ -167,7 +167,7 @@ pub(crate) fn blank() -> NewRecord {
             description: instance_description,
             ..NewInstance::default()
         },
-        items: Vec::new(),
+        items: elzevir_app::catalog::RecordItems::default(),
         source: None,
     }
 }
@@ -186,7 +186,7 @@ fn copied(mut source: NewRecord) -> NewRecord {
         .description
         .statements
         .retain(|statement| !NOT_COPIED.contains(&statement.property.as_str()));
-    source.items.clear();
+    source.items = elzevir_app::catalog::RecordItems::default();
     source.source = None;
     source
 }

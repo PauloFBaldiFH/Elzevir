@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Private, revisioned staging and the on-disk confirmation boundary.
 
-use std::io::{self, BufReader, ErrorKind, Read, Seek, Write};
+use std::io::{self, BufRead, BufReader, ErrorKind, Read, Seek, Write};
 use std::path::Path;
 
 use cap_fs_ext::{DirExt, FollowSymlinks, OpenOptionsFollowExt};
@@ -9,8 +9,10 @@ use cap_std::fs::{Dir, DirBuilder, OpenOptions};
 use elzevir_app::import::batches::{BatchState as State, BatchSummary, MAX_BATCH_MANIFEST_BYTES};
 use elzevir_app::import::edits::{Recipe, RenderReport, render_page};
 use elzevir_app::import::preview::MAX_IMPORT_FILE_BYTES;
+use elzevir_app::import::sheet::TableSettings;
+use elzevir_app::import::table::{Delimiter, Encoding};
 use elzevir_app::import_detection::{
-    ImportFormat, MAX_DETECTION_BYTES, detect_format, select_marc,
+    Evidence, ImportFormat, MAX_DETECTION_BYTES, detect_format, select_marc, table_delimiter,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -36,6 +38,8 @@ pub(crate) struct Batch {
     format: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     selected: Option<ImportFormat>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    table_separator: Option<Delimiter>,
     sha256: String,
     pub(crate) revision: u64,
     pub(crate) state: State,
@@ -134,6 +138,7 @@ impl Batches {
             id: id.into(),
             format: String::new(),
             selected: None,
+            table_separator: None,
             sha256: String::new(),
             revision: 1,
             state: State::Preparing,
@@ -171,10 +176,33 @@ impl Batches {
             .read_to_end(&mut prefix)
             .map_err(io_error)?;
         let detected = detect_format(&prefix);
-        let detection = select_marc(detected, selected)
-            .ok_or_else(|| format!("unsupported or inconclusive input: {:?}", detected.evidence))?;
-        batch.format = format!("{:?}", detection.format);
+        let table = selected.is_none() && detected.format == ImportFormat::Delimited
+            || selected == Some(ImportFormat::Delimited)
+                && matches!(
+                    detected.evidence,
+                    Evidence::DelimitedRows
+                        | Evidence::AmbiguousDelimiter
+                        | Evidence::Inconclusive
+                        | Evidence::EmptyInput
+                );
+        let format = if table {
+            ImportFormat::Delimited
+        } else {
+            select_marc(detected, selected)
+                .ok_or_else(|| {
+                    format!("unsupported or inconclusive input: {:?}", detected.evidence)
+                })?
+                .format
+        };
+        batch.format = format!("{format:?}");
         batch.selected = selected;
+        batch.table_separator = table
+            .then(|| {
+                table_delimiter(&prefix).or_else(|| {
+                    (detected.evidence == Evidence::EmptyInput).then_some(Delimiter::Comma)
+                })
+            })
+            .flatten();
         Ok(())
     }
 
@@ -266,6 +294,40 @@ impl Batches {
         Ok((output.input, report, stamp))
     }
 
+    pub(crate) fn with_source<T>(
+        &self,
+        batch: &Batch,
+        read: impl FnOnce(&mut dyn BufRead) -> Result<T, String>,
+    ) -> Result<T, String> {
+        let source = read_file(&self.batch_dir(&batch.id)?, SOURCE)?;
+        if source.metadata().map_err(io_error)?.len() > MAX_IMPORT_FILE_BYTES as u64 {
+            return Err("original exceeds the import file limit".into());
+        }
+        let mut input = BufReader::new(HashInput::new(source));
+        let value = read(&mut input)?;
+        if input.into_inner().digest() != batch.sha256 {
+            return Err("original identity changed".into());
+        }
+        Ok(value)
+    }
+
+    pub(crate) fn table_stamp(
+        batch: &Batch,
+        prepared: &elzevir_app::import::sheet::PreparedTable,
+    ) -> Result<String, String> {
+        let mut output = HashInput::new(io::sink());
+        serde_json::to_writer(
+            &mut output,
+            &("table", &batch.sha256, batch.revision, &batch.recipe),
+        )
+        .map_err(|error| error.to_string())?;
+        for row in prepared.records() {
+            serde_json::to_writer(&mut output, &(row.row, &row.record))
+                .map_err(|error| error.to_string())?;
+        }
+        Ok(output.digest())
+    }
+
     pub(crate) fn clean(&self, batch: &Batch) -> Result<(), String> {
         let dir = self.batch_dir(&batch.id)?;
         remove_if_present(&dir, SOURCE)?;
@@ -314,6 +376,25 @@ impl Batches {
 }
 
 impl Batch {
+    pub(crate) fn is_table(&self) -> bool {
+        self.format == "Delimited"
+    }
+
+    pub(crate) fn table_settings(&self) -> Result<TableSettings, String> {
+        if let Some(settings) = &self.recipe.table {
+            return Ok(settings.clone());
+        }
+        let delimiter = self
+            .table_separator
+            .ok_or("choose a spreadsheet separator in the recipe")?;
+        Ok(TableSettings {
+            delimiter,
+            encoding: Encoding::Utf8,
+            profile: None,
+            group_by: None,
+        })
+    }
+
     pub(crate) fn summary(&self) -> BatchSummary {
         BatchSummary {
             id: self.id.clone(),
@@ -336,19 +417,24 @@ impl Batch {
 }
 
 pub(crate) fn read_recipe(path: &Path) -> Result<Recipe, String> {
-    let recipe: Recipe = load_json(open_path(path)?)?;
-    recipe.validate().map_err(|error| error.to_string())?;
-    Ok(recipe)
+    let bytes = read_manifest_bytes(open_path(path)?)?;
+    let text = std::str::from_utf8(&bytes).map_err(|_| "import recipe must be UTF-8")?;
+    Recipe::parse(text).map_err(|error| error.to_string())
 }
 
-fn load_json<T: serde::de::DeserializeOwned>(file: std::fs::File) -> Result<T, String> {
+fn read_manifest_bytes(file: std::fs::File) -> Result<Vec<u8>, String> {
     let mut bytes = Vec::new();
     file.take(MAX_BATCH_MANIFEST_BYTES + 1)
         .read_to_end(&mut bytes)
         .map_err(io_error)?;
     if bytes.len() as u64 > MAX_BATCH_MANIFEST_BYTES {
-        return Err("batch JSON exceeds its byte limit".into());
+        return Err("batch JSON or recipe exceeds its byte limit".into());
     }
+    Ok(bytes)
+}
+
+fn load_json<T: serde::de::DeserializeOwned>(file: std::fs::File) -> Result<T, String> {
+    let bytes = read_manifest_bytes(file)?;
     serde_json::from_slice(&bytes).map_err(|error| {
         format!(
             "invalid batch JSON at line {}, column {}",

@@ -100,7 +100,7 @@ mod tests {
             audience: None,
             languages: Vec::new(),
             subjects: Vec::new(),
-            items: Vec::new(),
+            items: crate::catalog::RecordItems::default(),
             source: None,
         }
     }

@@ -123,51 +123,7 @@ fn refusals(
         if !owned {
             refuse(ItemColumn::Row, RowProblem::UnknownItem);
         }
-        let fields = &row.fields;
-        if !exists(
-            connection,
-            "SELECT 1 FROM branches WHERE id = ?1",
-            fields.home_branch.0,
-        )? {
-            refuse(ItemColumn::HomeBranch, RowProblem::UnknownBranch);
-        }
-        if !exists(
-            connection,
-            "SELECT 1 FROM branches WHERE id = ?1",
-            fields.holding_branch.0,
-        )? {
-            refuse(ItemColumn::HoldingBranch, RowProblem::UnknownBranch);
-        }
-        if !exists(
-            connection,
-            "SELECT 1 FROM circulation_policies WHERE id = ?1",
-            fields.policy.0,
-        )? {
-            refuse(ItemColumn::Policy, RowProblem::UnknownPolicy);
-        }
-        // A shelving place or collection belongs to one branch: the Item's home one.
-        let in_branch = |sql: &str, id: i64| -> Result<bool, StoreError> {
-            Ok(connection
-                .query_row(sql, params![id, fields.home_branch.0], |_| Ok(()))
-                .optional()?
-                .is_some())
-        };
-        if let Some(location) = fields.location
-            && !in_branch(
-                "SELECT 1 FROM sublocations WHERE id = ?1 AND branch_id = ?2",
-                location.0,
-            )?
-        {
-            refuse(ItemColumn::Location, RowProblem::NotInBranch);
-        }
-        if let Some(collection) = fields.collection
-            && !in_branch(
-                "SELECT 1 FROM collections WHERE id = ?1 AND branch_id = ?2",
-                collection.0,
-            )?
-        {
-            refuse(ItemColumn::Collection, RowProblem::NotInBranch);
-        }
+        check_places(connection, &row.fields, &mut refuse)?;
         if let Some(barcode) = &row.fields.barcode {
             let holder = lookup(
                 connection,
@@ -190,6 +146,58 @@ fn refusals(
     Ok(refusals)
 }
 
+pub(crate) fn check_places(
+    connection: &Connection,
+    fields: &ItemFields,
+    mut refuse: impl FnMut(ItemColumn, RowProblem),
+) -> Result<(), StoreError> {
+    if !exists(
+        connection,
+        "SELECT 1 FROM branches WHERE id = ?1",
+        fields.home_branch.0,
+    )? {
+        refuse(ItemColumn::HomeBranch, RowProblem::UnknownBranch);
+    }
+    if !exists(
+        connection,
+        "SELECT 1 FROM branches WHERE id = ?1",
+        fields.holding_branch.0,
+    )? {
+        refuse(ItemColumn::HoldingBranch, RowProblem::UnknownBranch);
+    }
+    if !exists(
+        connection,
+        "SELECT 1 FROM circulation_policies WHERE id = ?1",
+        fields.policy.0,
+    )? {
+        refuse(ItemColumn::Policy, RowProblem::UnknownPolicy);
+    }
+    // A shelving place or collection belongs to one branch: the Item's home one.
+    let in_branch = |sql: &str, id: i64| -> Result<bool, StoreError> {
+        Ok(connection
+            .query_row(sql, params![id, fields.home_branch.0], |_| Ok(()))
+            .optional()?
+            .is_some())
+    };
+    if let Some(location) = fields.location
+        && !in_branch(
+            "SELECT 1 FROM sublocations WHERE id = ?1 AND branch_id = ?2",
+            location.0,
+        )?
+    {
+        refuse(ItemColumn::Location, RowProblem::NotInBranch);
+    }
+    if let Some(collection) = fields.collection
+        && !in_branch(
+            "SELECT 1 FROM collections WHERE id = ?1 AND branch_id = ?2",
+            collection.0,
+        )?
+    {
+        refuse(ItemColumn::Collection, RowProblem::NotInBranch);
+    }
+    Ok(())
+}
+
 fn exists(connection: &Connection, sql: &str, id: i64) -> Result<bool, StoreError> {
     Ok(connection
         .query_row(sql, params![id], |_| Ok(()))
@@ -208,7 +216,7 @@ fn places(fields: &ItemFields) -> Places {
     }
 }
 
-fn update_item(
+pub(crate) fn update_item(
     connection: &Connection,
     id: ItemId,
     fields: &ItemFields,
@@ -240,7 +248,7 @@ fn update_item(
 }
 
 /// A new Item: the grid's columns, normal status and nothing else (item 2).
-fn add_grid_item(
+pub(crate) fn add_grid_item(
     connection: &Connection,
     instance: InstanceId,
     fields: &ItemFields,

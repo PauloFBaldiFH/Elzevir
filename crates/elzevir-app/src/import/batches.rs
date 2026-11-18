@@ -70,6 +70,9 @@ pub struct Refusal {
     pub offset: u64,
     /// One-based item position, if the refusal affects an item.
     pub item: Option<usize>,
+    /// Native item validation detail, with the exact barcode when supplied.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }
 
 /// Actual counts from the writer and locations of refusals, without source values.
@@ -115,7 +118,7 @@ pub enum FormatChoice {
     Keep,
     /// Detect from the immutable source again.
     Detect,
-    /// Validate the entire source with the selected MARC reader.
+    /// Validate the source with the selected reader during preparation.
     Use(ImportFormat),
 }
 

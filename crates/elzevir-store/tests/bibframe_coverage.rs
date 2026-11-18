@@ -121,7 +121,7 @@ fn record(
         languages: Vec::new(),
         contributions: Vec::new(),
         subjects: Vec::new(),
-        items: Vec::new(),
+        items: elzevir_app::catalog::RecordItems::default(),
         source: None,
         instance: NewInstance {
             title: title.to_owned(),

@@ -124,7 +124,9 @@ fn editing_one_item_keeps_the_others_and_koha_subfields() {
         .find(|(_, (_, r))| tags(r, *b"952").len() >= 3)
         .unwrap();
     let mut edited = model(record);
-    edited.items[1].call_number = Some("320 X99".to_owned());
+    let mut items = std::mem::take(&mut edited.items).into_marc();
+    items[1].call_number = Some("320 X99".to_owned());
+    edited.items = items.into();
     let exported = bibframe_to_marc(&edited, Some(record));
     let (before, after) = (tags(record, *b"952"), tags(&exported, *b"952"));
     assert_eq!(after.len(), before.len(), "record {position}");
@@ -149,14 +151,16 @@ fn editing_one_item_keeps_the_others_and_koha_subfields() {
 fn a_new_item_becomes_a_new_952_after_the_others() {
     let (_, record) = &records()[0];
     let mut edited = model(record);
-    let mut item: ItemData = edited.items[0].clone();
+    let mut item: ItemData = edited.items.marc()[0].clone();
     item.barcode = Some("NOVO-1".to_owned());
     item.inventory_number = Some("2026/0001".to_owned());
-    edited.items.push(item.clone());
+    let mut items = std::mem::take(&mut edited.items).into_marc();
+    items.push(item.clone());
+    edited.items = items.into();
     let exported = bibframe_to_marc(&edited, Some(record));
     let items = tags(&exported, *b"952");
     assert_eq!(items.len(), tags(record, *b"952").len() + 1);
-    assert_eq!(model(&exported).items.last(), Some(&item));
+    assert_eq!(model(&exported).items.marc().last(), Some(&item));
     assert!(matches!(exported.fields.last(), Some(f) if f.tag().as_bytes() >= b"952"));
 }
 

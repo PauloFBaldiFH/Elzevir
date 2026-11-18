@@ -62,7 +62,7 @@ pub fn new_record(
         contributions: record_parts.contributions,
         subjects: record_parts.subjects,
         instance,
-        items: Vec::new(),
+        items: crate::catalog::RecordItems::default(),
         source: None,
     })
 }

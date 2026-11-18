@@ -424,7 +424,7 @@ fn write_lists(out: &mut Record, model: &NewRecord, before: Option<&NewRecord>) 
         rebuild(
             out,
             &current,
-            &model.items,
+            model.items.marc(),
             |item| item_field(item, None),
             |item, current| {
                 // A changed Item keeps the subfields Koha maintains (`$9`, `$6`...) of the

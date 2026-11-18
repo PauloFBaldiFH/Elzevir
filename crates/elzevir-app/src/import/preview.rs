@@ -12,7 +12,7 @@ use super::{
     FailedRecord, ImportError, ImportOptions, MarcReader, RawPlace, RawRecord, RecordFailure,
     encode_source, prepare,
 };
-use crate::catalog::{CatalogReadError, CatalogRefusal, ItemData, NewRecord};
+use crate::catalog::{CatalogReadError, CatalogRefusal, ItemData, NewRecord, RecordItem};
 use crate::import_detection::{
     Detection, Evidence, ImportFormat, MAX_DETECTION_BYTES, detect_format, select_marc,
 };
@@ -157,7 +157,43 @@ pub fn preview_page(
     options: &ImportOptions,
     from: u64,
 ) -> Result<PreviewReport, PreviewError> {
-    let mut inspection = Inspection {
+    let mut inspection = inspection(catalog, options, from);
+    inspection.report.detection = scan(input, options.limits, |record| inspection.record(record))?;
+    Ok(inspection.report)
+}
+
+/// Reviews fully mapped native records against the same catalog prediction rules.
+///
+/// # Errors
+/// Returns a catalog read failure.
+pub fn preview_table(
+    table: &super::sheet::PreparedTable,
+    catalog: Option<&dyn PreviewCatalog>,
+    options: &ImportOptions,
+    from: u64,
+) -> Result<PreviewReport, PreviewError> {
+    let mut inspection = inspection(catalog, options, from);
+    inspection.report.detection = Detection {
+        format: ImportFormat::Delimited,
+        evidence: Evidence::DelimitedRows,
+    };
+    for (index, row) in table.records().iter().enumerate() {
+        inspection.report.read += 1;
+        let place = RawPlace {
+            index: index as u64,
+            offset: row.offset,
+        };
+        inspection.prepared(place, &row.record)?;
+    }
+    Ok(inspection.report)
+}
+
+fn inspection<'a>(
+    catalog: Option<&'a dyn PreviewCatalog>,
+    options: &'a ImportOptions,
+    from: u64,
+) -> Inspection<'a> {
+    Inspection {
         options,
         catalog,
         from,
@@ -175,9 +211,7 @@ pub fn preview_page(
             matches: Vec::new(),
             issues: Vec::new(),
         },
-    };
-    inspection.report.detection = scan(input, options.limits, |record| inspection.record(record))?;
-    Ok(inspection.report)
+    }
 }
 
 pub(super) fn scan(
@@ -348,6 +382,10 @@ impl Inspection<'_> {
                 return Ok(());
             }
         };
+        self.prepared(place, &record)
+    }
+
+    fn prepared(&mut self, place: RawPlace, record: &NewRecord) -> Result<(), PreviewError> {
         self.report.prepared += 1;
         if place.index >= self.from && self.report.samples.len() < MAX_PREVIEW_RECORDS {
             self.report.samples.push(PreviewSample {
@@ -357,7 +395,7 @@ impl Inspection<'_> {
                 items: record.items.len(),
             });
         }
-        let decision = self.predict(place, &record)?;
+        let decision = self.predict(place, record)?;
         if decision.record != RecordAction::Ignore {
             for (kind, description) in [
                 (EntityKind::Work, &record.work_description),
@@ -375,8 +413,15 @@ impl Inspection<'_> {
         }
         if decision.items != ItemsDecision::Ignore {
             self.report.items += record.items.len() as u64;
-            for (position, item) in record.items.iter().enumerate() {
-                self.item(place, position, item, decision.items)?;
+            for (position, item) in record.items.entries().enumerate() {
+                match item {
+                    RecordItem::Marc(item) => self.item(place, position, item, decision.items)?,
+                    RecordItem::Native(item) => {
+                        if let Some(barcode) = &item.fields.barcode {
+                            self.barcode(place, position, barcode, decision.items)?;
+                        }
+                    }
+                }
             }
         }
         Ok(())
@@ -460,7 +505,17 @@ impl Inspection<'_> {
             );
             return Ok(());
         };
-        let repeated = !self.barcodes.insert(barcode.clone());
+        self.barcode(place, position, barcode, action)
+    }
+
+    fn barcode(
+        &mut self,
+        place: RawPlace,
+        position: usize,
+        barcode: &str,
+        action: ItemsDecision,
+    ) -> Result<(), CatalogReadError> {
+        let repeated = !self.barcodes.insert(barcode.to_owned());
         if action != ItemsDecision::Replace {
             if repeated {
                 self.issue(

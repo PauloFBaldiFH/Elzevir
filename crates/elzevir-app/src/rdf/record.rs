@@ -535,7 +535,7 @@ pub(super) mod tests {
                     ],
                     opac_hidden: false,
                 },
-                items: Vec::new(),
+                items: crate::catalog::RecordItems::default(),
                 source: None,
             },
         }

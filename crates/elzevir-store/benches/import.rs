@@ -73,7 +73,7 @@ fn codes(file: &[u8]) -> (BTreeSet<String>, BTreeSet<String>) {
     while let Some(record) = reader.next_record() {
         let mut record = Record::from_ref(&record.unwrap());
         record.marc21_to_utf8();
-        for item in marc_to_bibframe(&record, None).unwrap().items {
+        for item in marc_to_bibframe(&record, None).unwrap().items.into_marc() {
             branches.insert(item.home_branch);
             branches.insert(item.holding_branch);
             item_types.insert(item.item_type);

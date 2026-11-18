@@ -49,5 +49,12 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "import_table"
+path = "fuzz_targets/import_table.rs"
+test = false
+doc = false
+bench = false
+
 # Not part of the main workspace: it needs the nightly toolchain.
 [workspace]

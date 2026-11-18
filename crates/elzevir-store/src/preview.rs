@@ -8,9 +8,11 @@ use std::path::Path;
 use elzevir_app::catalog::{CatalogReadError, CatalogRefusal, ItemData};
 use elzevir_app::commands::WriteRefusal;
 use elzevir_app::import::ImportOptions;
+use elzevir_app::import::edits::Recipe;
 use elzevir_app::import::preview::{
-    PreviewCatalog, PreviewError, PreviewReport, preview, preview_page,
+    PreviewCatalog, PreviewError, PreviewReport, preview, preview_page, preview_table,
 };
+use elzevir_app::import::sheet::{PreparedTable, TableSettings, prepare};
 use elzevir_app::matching::MatchKey;
 use elzevir_domain::catalog::InstanceId;
 use rusqlite::{Connection, params};
@@ -35,7 +37,79 @@ pub fn preview_import(
     }
 }
 
+/// Prepares a sheet using registry names and collision checks from one read snapshot.
+///
+/// # Errors
+/// Reports read, preparation and schema errors.
+pub fn preview_sheet(
+    path: &Path,
+    input: impl BufRead,
+    settings: &TableSettings,
+    recipe: &Recipe,
+    from: u64,
+) -> Result<(PreparedTable, PreviewReport), PreviewError> {
+    match std::fs::metadata(path) {
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            sheet(input, settings, recipe, from, None)
+        }
+        Err(error) => Err(read_error(error).into()),
+        Ok(_) => ReadPool::open(path, NonZeroUsize::MIN)
+            .map_err(read_error)?
+            .preview_sheet(input, settings, recipe, from),
+    }
+}
+
+fn sheet(
+    input: impl BufRead,
+    settings: &TableSettings,
+    recipe: &Recipe,
+    from: u64,
+    connection: Option<&Connection>,
+) -> Result<(PreparedTable, PreviewReport), PreviewError> {
+    let codes = connection
+        .map(crate::items::code_lists)
+        .transpose()
+        .map_err(read_error)?
+        .unwrap_or_default();
+    let table = prepare(
+        input,
+        settings,
+        &codes,
+        &recipe.exclude,
+        &recipe.accept_missing_barcodes,
+    )
+    .map_err(|error| PreviewError::Edit(error.to_string()))?;
+    let snapshot = connection.map(Snapshot);
+    let catalog = snapshot
+        .as_ref()
+        .map(|snapshot| snapshot as &dyn PreviewCatalog);
+    let options = ImportOptions {
+        matching: recipe.matching,
+        ..ImportOptions::default()
+    };
+    let report = preview_table(&table, catalog, &options, from)?;
+    Ok((table, report))
+}
+
 impl ReadPool {
+    /// Prepares a spreadsheet from the server's existing read pool.
+    ///
+    /// # Errors
+    /// Reports read, preparation and schema errors.
+    pub fn preview_sheet(
+        &self,
+        input: impl BufRead,
+        settings: &TableSettings,
+        recipe: &Recipe,
+        from: u64,
+    ) -> Result<(PreparedTable, PreviewReport), PreviewError> {
+        self.read(|connection| {
+            let transaction = connection.unchecked_transaction().map_err(read_error)?;
+            check_schema(&transaction)?;
+            sheet(input, settings, recipe, from, Some(&transaction))
+        })
+    }
+
     /// Prepares an input using the current read snapshot and its stored translations.
     ///
     /// # Errors
@@ -60,17 +134,23 @@ impl ReadPool {
     ) -> Result<PreviewReport, PreviewError> {
         self.read(|connection| {
             let transaction = connection.unchecked_transaction().map_err(read_error)?;
-            let version: i64 = transaction
-                .pragma_query_value(None, "user_version", |row| row.get(0))
-                .map_err(read_error)?;
-            if version != schema::latest_version() {
-                return Err(
-                    CatalogReadError("preview requires the current catalog schema".into()).into(),
-                );
-            }
+            check_schema(&transaction)?;
             options.translations = koha_types::read(&transaction)?;
             preview_page(input, Some(&Snapshot(&transaction)), &options, from)
         })
+    }
+}
+
+fn check_schema(connection: &Connection) -> Result<(), CatalogReadError> {
+    let version: i64 = connection
+        .pragma_query_value(None, "user_version", |row| row.get(0))
+        .map_err(read_error)?;
+    if version == schema::latest_version() {
+        Ok(())
+    } else {
+        Err(CatalogReadError(
+            "preview requires the current catalog schema".into(),
+        ))
     }
 }
 

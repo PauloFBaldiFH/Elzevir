@@ -144,7 +144,7 @@ fn record(title: &str, hub: Option<HubId>) -> NewRecord {
             },
         ],
         subjects: Vec::new(),
-        items: Vec::new(),
+        items: elzevir_app::catalog::RecordItems::default(),
         source: None,
         instance: NewInstance {
             title: title.to_owned(),
@@ -292,7 +292,7 @@ fn pills_carry_the_signal_of_each_item() {
         lost: 1,
         ..ItemStatus::default()
     };
-    with_items.items = vec![item("0002", lost), item("0001", ItemStatus::default())];
+    with_items.items = vec![item("0002", lost), item("0001", ItemStatus::default())].into();
     add(&store, with_items);
     let page = browse(&store, None).unwrap();
     let instance = &page.rows[0].works[0].instances[0];
