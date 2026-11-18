@@ -21,7 +21,7 @@ use elzevir_app::matching::{ItemAction, Matching, OnMatch};
 use elzevir_app::staff::{Permission, StaffId};
 use elzevir_web_templates::{
     I18n, I18nError, ImportBatchLink, ImportDraft, ImportPage, ImportPreview, ImportReceipt,
-    ImportSample, ImportView,
+    ImportSample, ImportUpload, ImportView,
 };
 use serde::Deserialize;
 use tokio::sync::mpsc;
@@ -255,7 +255,13 @@ async fn home(
                 ImportView::Home(
                     batches,
                     session.imports.recent(session.active.identity.id),
-                    page.tabular,
+                    if page.koha_sql {
+                        ImportUpload::KohaSql
+                    } else if page.tabular {
+                        ImportUpload::Table
+                    } else {
+                        ImportUpload::Auto
+                    },
                 ),
                 StatusCode::OK,
                 None,
@@ -421,6 +427,8 @@ struct Page {
     download: bool,
     #[serde(default)]
     tabular: bool,
+    #[serde(default)]
+    koha_sql: bool,
 }
 
 async fn batch(
@@ -548,6 +556,7 @@ fn parse_format(value: &str) -> Result<Option<ImportFormat>, BatchError> {
         "xml" => Ok(Some(ImportFormat::MarcXml)),
         "mrk" => Ok(Some(ImportFormat::MarcText)),
         "table" => Ok(Some(ImportFormat::Delimited)),
+        "sql" => Ok(Some(ImportFormat::KohaSqlDump)),
         _ => Err(BatchError::Invalid("invalid source format".into())),
     }
 }
@@ -606,7 +615,9 @@ fn show_batch(
         Some(ImportFormat::MarcXml) => "xml",
         Some(ImportFormat::MarcText) => "mrk",
         Some(ImportFormat::Delimited) => "table",
+        Some(ImportFormat::KohaSqlDump) => "sql",
         _ if batch.format == "Delimited" => "table",
+        _ if batch.format == "KohaSqlDump" => "sql",
         _ => "auto",
     };
     let link = batch_link(t, batch);
@@ -648,6 +659,7 @@ fn batch_link(t: &I18n, batch: BatchSummary) -> ImportBatchLink {
         "MarcXml" => "import-xml",
         "MarcText" => "import-mrk",
         "Delimited" => "import-table",
+        "KohaSqlDump" => "import-sql",
         _ => "import-unknown",
     };
     let state = match batch.state {
@@ -677,6 +689,7 @@ fn preview_page(
         Evidence::MarcXmlNamespace => "import-evidence-xml",
         Evidence::MarcTextLeader => "import-evidence-mrk",
         Evidence::DelimitedRows => "import-evidence-table",
+        Evidence::KohaCatalogTables => "import-evidence-sql",
         Evidence::EmptyInput => "import-evidence-empty",
         _ => "import-evidence-unknown",
     };

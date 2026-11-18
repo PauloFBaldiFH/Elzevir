@@ -7,6 +7,7 @@
 
 pub mod batches;
 pub mod edits;
+pub mod koha_sql;
 pub mod preview;
 pub mod sheet;
 pub mod table;
@@ -189,6 +190,9 @@ pub enum ImportError {
     /// A malformed or oversized `MarcEdit` input stopped its stream.
     #[error(transparent)]
     MarcText(#[from] elzevir_marc::MarcTextError),
+    /// A Koha dump failed complete validation before any submission.
+    #[error(transparent)]
+    KohaSql(#[from] koha_sql::DumpError),
 }
 
 /// A record read from the file, with its place in it.
@@ -266,6 +270,19 @@ pub fn import_marc_text<R: BufRead, S: RecordSink>(
         sink,
         options,
     )
+}
+
+/// Imports a validated partial Koha dump through the existing MARC writer path.
+///
+/// # Errors
+/// Reports an invalid dump before submitting records, or a stopped writer.
+pub fn import_koha_sql<R: BufRead, S: RecordSink>(
+    input: R,
+    sink: &S,
+    options: &ImportOptions,
+) -> Result<ImportReport, ImportError> {
+    let mut records = koha_sql::prepare(input)?.into_iter();
+    import_converted(|| Ok(records.next()), sink, options)
 }
 
 fn import_converted<S: RecordSink>(

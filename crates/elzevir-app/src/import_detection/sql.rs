@@ -3,6 +3,39 @@
 
 use super::{Detection, Evidence, ImportFormat};
 
+#[derive(Default)]
+pub(crate) struct Inventory(u8);
+
+impl Inventory {
+    pub(crate) fn observe(&mut self, name: &[u8]) {
+        for (bit, table) in [
+            b"biblio_metadata".as_slice(),
+            b"items",
+            b"borrowers",
+            b"issues",
+            b"systempreferences",
+        ]
+        .iter()
+        .enumerate()
+        {
+            if name.eq_ignore_ascii_case(table) {
+                self.0 |= 1 << bit;
+            }
+        }
+    }
+
+    pub(crate) const fn detection(&self) -> Detection {
+        let (format, evidence) = if self.0 == 0b1_1111 {
+            (ImportFormat::KohaFullBackup, Evidence::KohaSchemaTables)
+        } else if self.0 & 0b11 != 0 {
+            (ImportFormat::KohaSqlDump, Evidence::KohaCatalogTables)
+        } else {
+            (ImportFormat::Unknown, Evidence::Inconclusive)
+        };
+        Detection { format, evidence }
+    }
+}
+
 /// Returns `None` only when the prefix does not begin as SQL.
 pub(super) fn detect(input: &[u8]) -> Option<Detection> {
     let mut tokens = Tokens(input);
@@ -23,7 +56,7 @@ pub(super) fn detect(input: &[u8]) -> Option<Detection> {
         return None;
     }
     let mut tokens = Tokens(input);
-    let mut tables = 0u8;
+    let mut tables = Inventory::default();
     while let Some(token) = tokens.next() {
         let clause = if token.is(b"CREATE") {
             b"TABLE".as_slice()
@@ -38,29 +71,9 @@ pub(super) fn detect(input: &[u8]) -> Option<Detection> {
         let Some(name) = table_name(&mut tokens) else {
             continue;
         };
-        for (bit, table) in [
-            b"biblio_metadata".as_slice(),
-            b"items",
-            b"borrowers",
-            b"issues",
-            b"systempreferences",
-        ]
-        .iter()
-        .enumerate()
-        {
-            if name.eq_ignore_ascii_case(table) {
-                tables |= 1 << bit;
-            }
-        }
+        tables.observe(name);
     }
-    let (format, evidence) = if tables == 0b1_1111 {
-        (ImportFormat::KohaFullBackup, Evidence::KohaSchemaTables)
-    } else if tables & 0b11 != 0 {
-        (ImportFormat::KohaSqlDump, Evidence::KohaCatalogTables)
-    } else {
-        (ImportFormat::Unknown, Evidence::Inconclusive)
-    };
-    Some(Detection { format, evidence })
+    Some(tables.detection())
 }
 
 fn table_name<'a>(tokens: &mut Tokens<'a>) -> Option<&'a [u8]> {

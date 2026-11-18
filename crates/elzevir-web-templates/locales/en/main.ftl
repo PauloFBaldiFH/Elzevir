@@ -501,3 +501,7 @@ import-evidence-table = The spreadsheet was read with its selected separator.
 import-model-csv = Download the BIBFRAME CSV model
 import-model-tsv = Download the BIBFRAME TSV model
 import-table-recipe = Save a versioned TOML mapping or keep the generated model header. Save a new revision to change the separator, encoding, grouping or matching.
+import-sql-link = Import a Koha catalog dump
+import-sql = Partial Koha SQL
+import-sql-limit = Partial UTF-8 Koha dump with catalog records and items, up to 512 MiB.
+import-evidence-sql = The dump contains Koha catalog table declarations.

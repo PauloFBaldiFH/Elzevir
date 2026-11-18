@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use clap::{Args, Subcommand};
 use elzevir_app::import::batches::BatchPreview;
 use elzevir_app::import::batches::{BatchCommand, BatchReply, FormatChoice};
+use elzevir_app::import_detection::ImportFormat;
 
 use crate::import_batches::{open_path, read_recipe};
 
@@ -29,6 +30,9 @@ enum Action {
         /// Choose the tabular reader when the sample is inconclusive.
         #[arg(long)]
         table: bool,
+        /// Choose the partial Koha SQL reader when the sample is inconclusive.
+        #[arg(long, conflicts_with = "table")]
+        koha_sql: bool,
     },
     /// Save a complete recipe for an existing revision.
     Edit {
@@ -51,9 +55,15 @@ enum Action {
 
 pub(crate) fn run(args: BatchArgs) -> Result<(), String> {
     let command = match args.action {
-        Action::Stage { file, table } => BatchCommand::Stage(
+        Action::Stage {
+            file,
+            table,
+            koha_sql,
+        } => BatchCommand::Stage(
             Box::new(open_path(&file)?),
-            table.then_some(elzevir_app::import_detection::ImportFormat::Delimited),
+            table
+                .then_some(ImportFormat::Delimited)
+                .or(koha_sql.then_some(ImportFormat::KohaSqlDump)),
         ),
         Action::Edit {
             id,

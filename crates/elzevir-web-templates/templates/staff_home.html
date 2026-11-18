@@ -5,7 +5,8 @@
 <p>{{ t.get("staff-home-signed-in-as") }} <strong id="signed-in-as">{{ login }}</strong></p>
 <p><a href="/equipe/acervo">{{ t.get("staff-home-catalog") }}</a></p>{% if can_import %}
 <p><a href="/equipe/acervo/importar">{{ t.get("import-title") }}</a></p>
-<p><a href="/equipe/acervo/importar?tabular=true">{{ t.get("import-table") }}</a></p>{% endif %}
+<p><a href="/equipe/acervo/importar?tabular=true">{{ t.get("import-table") }}</a></p>
+<p><a href="/equipe/acervo/importar?koha_sql=true">{{ t.get("import-sql-link") }}</a></p>{% endif %}
 {% if can_catalogue %}
 <p><a href="/equipe/admin/cadastros">{{ t.get("registries-title") }}</a></p>
 {% endif %}
