@@ -5,6 +5,8 @@
 > MarcEdit `.mrk`. I5 entrega a preparação integral MARC por `--preview`.
 > I6 acrescenta lotes MARC privados, edições e confirmação por revisão.
 > I7 oferece a revisão desses lotes na interface autenticada da equipe.
+> I8 acrescenta preparação e confirmação de CSV e TSV nativos pela CLI e
+> pela interface da equipe, com um modelo BIBFRAME gerado pela aplicação.
 > A importação direta pela CLI mantém o contrato de I2.
 > Base: [importação atual](importacao.md), [casamento](casamento.md),
 > [BIBFRAME completo](bibframe-completo.md),
@@ -158,13 +160,24 @@ CSV/TSV aceita UTF-8 com ou sem BOM e Latin-1. Bytes válidos como UTF-8 usam
 UTF-8; outra interpretação, separador empatado ou cabeçalho incerto exige
 conferência. Não se tenta corrigir codificação silenciosamente.
 
-O mapeamento é TOML versionado: identidade da coluna, destino BIBFRAME
-qualificado pela entidade ou campo de exemplar, e transformações declaradas.
+O leitor tabular recebe separador e codificação explícitos. Aceita aspas
+duplas, aspas duplicadas dentro de campos citados e quebras de linha dentro
+desses campos. Linhas físicas vazias entre registros são ignoradas.
+Campos vazios e colunas repetidas conservam suas posições. Erros informam
+a linha lógica, a coluna e o byte inicial da linha no arquivo.
+
+O gerador produz um cabeçalho UTF-8 em CSV ou TSV, com a versão do modelo
+e a identidade da ontologia no início. Cada coluna de descrição qualifica
+a propriedade pela entidade, seguindo as tabelas geradas da LC na ordem
+das tabelas geradas para a ontologia vendorizada.
+
+O mapeamento é um perfil TOML versionado. Cada entrada declara a posição
+e o cabeçalho exato da coluna, o destino e se deve aparar espaços.
 Colunas com cabeçalhos iguais são identificadas separadamente. A versão é
 obrigatória; versão desconhecida e destino inválido bloqueiam a preparação.
-Sinônimos de cabeçalho vivem em arquivo de dados. Cabeçalhos, distribuições,
-anos e ISBN com dígito verificador só sugerem destinos; o catalogador aprova
-o que for incerto. Coluna não usada é excluída por escolha visível.
+Sem um perfil, a revisão de uma planilha própria oferece sugestões por
+posição a partir dos [sinônimos publicados](../../../crates/elzevir-app/data/import-header-aliases.tsv).
+O catalogador declara cada destino ou usa `target = "ignore"`.
 
 Unidade de origem e atual, localização, coleção e política são resolvidas
 por **nome** nos cadastros genéricos. Localização e coleção pertencem à
@@ -173,28 +186,79 @@ nunca cria código, tipo de item ou padrão institucional. Classes, conteúdo,
 mídia e suporte vêm das listas oficiais da LC, sem inferência por política.
 Códigos e `koha_type_statements` permanecem exclusivamente na borda MARC.
 
-O modelo BIBFRAME para baixar tem cabeçalhos derivados da ontologia
-vendorizada em `reference/bibframe`, com entidade para distinguir propriedades
-homônimas. Células estruturadas ou repetidas usam uma lista JSON dos valores
-`Value` existentes (literal, conceito, IRI, entidade ou recurso), sem achatar
-o grafo. Texto simples só vale quando o destino admite interpretação única;
-relações exigem identidade resolvida. A versão do modelo e a ontologia são
-identificáveis. O modelo válido entra sem mapear colunas manualmente;
-propriedades e valores são validados como na criação.
+O modelo usa cabeçalhos qualificados como `Work.title` e
+`Instance.identifiedBy`. As duas colunas de identidade do modelo ficam
+vazias nas linhas de dados. Use `Work.@type`, `Instance.@type` e
+`Item.@type` para as classes. Células de propriedades repetidas e
+estruturadas usam listas JSON dos valores `Value` existentes. O título,
+o resumo, o público-alvo, a edição e a série aceitam texto simples.
+O destino `Instance.catalog.isbn` de um perfil aceita o ISBN em texto.
+Algumas propriedades normalizadas exigem uma forma específica ou uma
+identidade existente. O preparador recusa valores sem representação
+compatível e a associação de Hub usa um identificador já cadastrado.
+Os validadores de criação e descrição BIBFRAME conferem os valores.
 
-Cada linha descreve uma Instância com seus exemplares. Agrupar linhas por
-ISBN/título só ocorre após escolha explícita, exibindo grupos e conflitos.
+Cada linha descreve uma Instância e pode levar um exemplar. O agrupamento
+explícito por ISBN ou título reúne os exemplares e exige que todas as
+linhas no grupo tenham a mesma descrição.
 ISBN ou título coincidente não funde Obras silenciosamente. Mapeamento salvo
 contém regras e cabeçalhos, nunca linhas, amostras ou valores extraídos do
 arquivo. Reaplicá-lo exige conferir colunas ausentes ou incompatíveis.
 
-**Dependência antes de I8:** hoje `NewRecord.items` é `Vec<ItemData>`, com
-códigos MARC, enquanto `ItemFields` usa identificadores dos cadastros nativos.
-Não existe nessa porta uma entrada equivalente para exemplares nativos.
-Essa diferença exige uma decisão revisada antes de implementar planilhas
-com exemplares. Não se resolve criando códigos artificiais, passando por
-MARC, usando `SaveItems` depois de importar ou abrindo outra escritora.
-I0 não autoriza alteração desse contrato nem dos arquivos protegidos.
+Cada exemplar exige `Item.catalog.home_branch`,
+`Item.catalog.holding_branch` e `Item.catalog.policy` por nome.
+`Item.catalog.barcode` é obrigatório por padrão. Para aceitar ausência,
+liste a posição da linha de dados em `accept_missing_barcodes`. A primeira
+linha de dados vale 1 nessa lista e em `exclude`. Diagnósticos de planilha
+contam o cabeçalho como linha lógica 1, inclusive se houver células
+multilinha. A preparação rejeita um código de barras repetido entre as
+linhas selecionadas, com as duas posições e o código. Se o catálogo mudar
+depois da revisão, a escritora pode recusar o exemplar com sua posição e
+seu código. O [ADR 0007](../../adr/0007-exemplares-nativos-na-importacao.md)
+define a entrada nativa da escritora e a compatibilidade das gravações MARC.
+
+#### Preparar um CSV ou TSV
+
+Na interface autenticada da equipe, abra **Importar CSV ou TSV**,
+baixe um modelo ou envie uma planilha própria. Para planilha própria,
+salve o perfil no campo da receita. Revise a prévia antes de confirmar.
+
+Na CLI, gere o cabeçalho ou prepare diretamente o arquivo preenchido.
+Use `--tsv` para gerar o modelo TSV. A etapa `stage` imprime o ID do lote.
+
+```sh
+elzevir import-model > modelo.csv
+elzevir import-batch --data-dir DIR --operator 1 stage preenchido.csv --table
+elzevir import-batch --data-dir DIR --operator 1 preview ID
+elzevir import-batch --data-dir DIR --operator 1 confirm ID 1
+```
+
+Para um arquivo próprio com a coluna `Título`, salve a receita abaixo.
+Cada coluna adicional exige uma entrada `[[table.profile.columns]]`.
+Os separadores são `comma`, `semicolon` e `tab`. Declare `latin1`
+quando a origem usar ISO-8859-1. Para agrupar, declare `group_by = "isbn"`
+ou `group_by = "title"` em `[table]`.
+
+```toml
+[table]
+delimiter = "comma"
+encoding = "utf8"
+
+[table.profile]
+version = 1
+
+[[table.profile.columns]]
+position = 1
+header = "Título"
+target = "Work.title"
+trim = true
+```
+
+```sh
+elzevir import-batch --data-dir DIR --operator 1 edit ID 1 receita.toml
+elzevir import-batch --data-dir DIR --operator 1 preview ID
+elzevir import-batch --data-dir DIR --operator 1 confirm ID 2
+```
 
 ### 1.5 Editar antes da confirmação
 
@@ -451,7 +515,7 @@ exportação, criação, CLI e cobertura BIBFRAME permanecem sem alteração.
 | I5 | Preparação integral e CLI `--preview`; digest antes/depois igual e erros equivalentes à confirmação. |
 | I6 | Lote fora do banco e edição; sem edição mantém digest I1; editar um campo muda só esse campo na exportação. |
 | I7 | Tela autenticada, permissão/CSRF, Fluent en/pt-BR, novos snapshots HTML e prova da função compartilhada com CLI. |
-| I8 | CSV/TSV, fuzzing e modelo gerado; 20 livros sintéticos, reimportação ISBN sem duplicar, MARC válido e cadastros por nome. |
+| I8 | CSV/TSV, fuzzing e modelo gerado. Vinte livros sintéticos, reimportação por ISBN sem duplicar, MARC válido, cadastros por nome, recusa transacional por exemplar e bloqueio de códigos de barras repetidos no lote. |
 | I9 | SQL como dados, fuzzing e dump sintético gerado dos 200 registros, com digest I1 e tabelas privadas ignoradas. |
 | I10 | `calamine` para `.xlsx`/`.ods`, ZIP/gzip e fuzzing; provas de I8 e recusa de bomba de compressão. |
 

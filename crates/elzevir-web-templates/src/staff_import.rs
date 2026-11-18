@@ -24,7 +24,7 @@ pub struct ImportPage<'a> {
 /// Contents of the import workspace.
 pub enum ImportView {
     /// Upload and list of the operator's drafts.
-    Home(Vec<ImportBatchLink>, Vec<String>),
+    Home(Vec<ImportBatchLink>, Vec<String>, bool),
     /// A draft or review page.
     Draft(Box<ImportDraft>),
     /// The writer's outcome.

@@ -12,6 +12,7 @@ use super::preview::{
     IssueKind, MAX_IMPORT_FILE_BYTES, MAX_IMPORT_RECORDS, MAX_PREVIEW_RECORDS, PreviewError,
     PreviewReport, batch_match_reason, scan_as,
 };
+use super::sheet::{PreparedTable, TableSettings};
 use super::{ImportError, RawPlace, RecordFailure};
 use crate::import_detection::{Detection, ImportFormat};
 use crate::matching::Matching;
@@ -34,6 +35,9 @@ pub struct Recipe {
     pub accept_missing_barcodes: BTreeSet<u64>,
     /// Existing import matching options.
     pub matching: Option<Matching>,
+    /// Settings of a native CSV or TSV revision.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub table: Option<TableSettings>,
 }
 
 /// A change to one tag, on one record or the entire batch.
@@ -185,15 +189,47 @@ impl FieldValue {
 }
 
 impl Recipe {
+    /// Reads the revision's recipe, including versioned TOML spreadsheet mappings.
+    ///
+    /// # Errors
+    /// Reports a malformed or invalid recipe.
+    pub fn parse(input: &str) -> Result<Self, PreviewError> {
+        let recipe: Self = if input.trim_start().starts_with('{') {
+            serde_json::from_str(input).map_err(|error| {
+                PreviewError::Edit(format!(
+                    "invalid recipe JSON at line {}, column {}",
+                    error.line(),
+                    error.column()
+                ))
+            })?
+        } else {
+            toml::from_str(input).map_err(|error| {
+                PreviewError::Edit(format!("invalid recipe TOML: {}", error.message()))
+            })?
+        };
+        recipe.validate()?;
+        Ok(recipe)
+    }
+
     /// Validates the syntax and limits of the stored recipe.
     ///
     /// # Errors
     /// Returns a located error for invalid selectors, fields or operations.
     pub fn validate(&self) -> Result<(), PreviewError> {
+        if self.table.is_some() && !self.edits.is_empty() {
+            return Err(PreviewError::Edit(
+                "MARC edit rules do not apply to a spreadsheet".into(),
+            ));
+        }
         if self.edits.len() > MAX_IMPORT_EDITS {
             return Err(PreviewError::Limit("edit count"));
         }
-        let in_range = |index| (1..=MAX_IMPORT_RECORDS).contains(&index);
+        let limit = if self.table.is_some() {
+            super::table::MAX_TABLE_ROWS
+        } else {
+            MAX_IMPORT_RECORDS
+        };
+        let in_range = |index| (1..=limit).contains(&index);
         if !self
             .exclude
             .iter()
@@ -450,6 +486,45 @@ pub struct SourceSample {
 }
 
 impl RenderReport {
+    /// Positions and one page of review metadata from a prepared spreadsheet.
+    #[must_use]
+    pub fn for_table(table: &PreparedTable, from: Option<u64>) -> Self {
+        let positions = table
+            .records()
+            .iter()
+            .map(|row| RawPlace {
+                index: row.row - 1,
+                offset: row.offset,
+            })
+            .collect();
+        let start = from
+            .and_then(|start| usize::try_from(start).ok())
+            .unwrap_or_default();
+        let source = table
+            .records()
+            .iter()
+            .skip(start)
+            .take(MAX_PREVIEW_RECORDS)
+            .map(|row| SourceSample {
+                record: row.row,
+                before: String::new(),
+                after: None,
+            })
+            .collect();
+        Self {
+            detection: Detection {
+                format: ImportFormat::Delimited,
+                evidence: crate::import_detection::Evidence::DelimitedRows,
+            },
+            read: table.read,
+            excluded: table.excluded,
+            changed: 0,
+            samples: Vec::new(),
+            source,
+            positions,
+        }
+    }
+
     /// Finds a record by its original position for a diagnostic link.
     #[must_use]
     pub fn selected_index(&self, index: u64) -> Option<usize> {

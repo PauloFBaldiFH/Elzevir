@@ -6,14 +6,18 @@ use std::io::{BufReader, Seek};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use elzevir_app::catalog::CatalogRefusal;
 use elzevir_app::import::batches::{
     BatchCommand, BatchError, BatchPort, BatchPreview, BatchReply, BatchState as State, BatchView,
     Completion, FormatChoice, Receipt, Refusal,
 };
-use elzevir_app::import::edits::Recipe;
+use elzevir_app::import::edits::{Recipe, RenderReport};
+use elzevir_app::import::sheet::PreparedTable;
 use elzevir_app::import::{
-    ImportOptions, ImportReport, RecordFailure, RecordRejected, import_marc21,
+    ImportError, ImportOptions, ImportReport, RecordFailure, RecordRejected, RecordSink,
+    import_marc21,
 };
+use elzevir_app::import_detection::ImportFormat;
 use elzevir_app::koha_types::TypeTranslationSource;
 use elzevir_app::staff::StaffId;
 use elzevir_store::ElzevirStore;
@@ -81,6 +85,13 @@ pub(crate) fn execute(
                 FormatChoice::Use(format) => batches.choose_format(&mut batch, Some(format)),
             };
             selection.map_err(BatchError::Invalid)?;
+            if (batch.is_table() && !recipe.edits.is_empty())
+                || (!batch.is_table() && recipe.table.is_some())
+            {
+                return Err(BatchError::Invalid(
+                    "recipe is incompatible with the selected source format".into(),
+                ));
+            }
             batch.recipe = recipe;
             batch.revision = batch
                 .revision
@@ -160,9 +171,37 @@ fn options(batch: &Batch) -> ImportOptions {
 }
 
 struct Prepared {
-    file: File,
+    input: PreparedInput,
     preview: BatchPreview,
     stamp: String,
+}
+
+enum PreparedInput {
+    Marc(File),
+    Table(PreparedTable),
+}
+
+impl PreparedInput {
+    fn reserved(&self) -> Result<u64, BatchError> {
+        match self {
+            Self::Marc(file) => file
+                .metadata()
+                .map(|metadata| metadata.len())
+                .map_err(|error| BatchError::Unavailable(error.to_string())),
+            Self::Table(_) => Ok(0),
+        }
+    }
+
+    fn submit<S: RecordSink>(
+        self,
+        sink: &S,
+        options: &ImportOptions,
+    ) -> Result<ImportReport, ImportError> {
+        match self {
+            Self::Marc(file) => import_marc21(BufReader::new(file), sink, options),
+            Self::Table(table) => table.submit(sink, options.matching),
+        }
+    }
 }
 
 fn prepare(
@@ -172,6 +211,37 @@ fn prepare(
     batch: &Batch,
     from: Option<u64>,
 ) -> Result<Prepared, BatchError> {
+    if batch.is_table() {
+        let settings = batch.table_settings().map_err(BatchError::Invalid)?;
+        let (table, mut report) = batches
+            .with_source(batch, |input| {
+                match live {
+                    Some((store, _)) => store.readers().preview_sheet(
+                        input,
+                        &settings,
+                        &batch.recipe,
+                        from.unwrap_or_default(),
+                    ),
+                    None => elzevir_store::preview_sheet(
+                        &data_dir.join("elzevir.db"),
+                        input,
+                        &settings,
+                        &batch.recipe,
+                        from.unwrap_or_default(),
+                    ),
+                }
+                .map_err(|error| error.to_string())
+            })
+            .map_err(BatchError::Invalid)?;
+        let stamp = Batches::table_stamp(batch, &table).map_err(BatchError::Invalid)?;
+        let rendered = RenderReport::for_table(&table, from);
+        rendered.review(&mut report, &batch.recipe);
+        return Ok(Prepared {
+            input: PreparedInput::Table(table),
+            preview: BatchPreview { rendered, report },
+            stamp,
+        });
+    }
     let (mut file, rendered, stamp) = batches.render(batch, from).map_err(BatchError::Invalid)?;
     let input = BufReader::new(&mut file);
     let mut report = match live {
@@ -187,7 +257,7 @@ fn prepare(
         .map_err(|error| BatchError::Unavailable(error.to_string()))?;
     rendered.review(&mut report, &batch.recipe);
     Ok(Prepared {
-        file,
+        input: PreparedInput::Marc(file),
         preview: BatchPreview { rendered, report },
         stamp,
     })
@@ -206,7 +276,7 @@ fn confirm(
         )));
     }
     let Prepared {
-        file,
+        input,
         preview,
         stamp,
     } = prepare(data_dir, live, batches, &batch, None)?;
@@ -231,21 +301,19 @@ fn confirm(
             (&local.store, None)
         };
         let mut options = options(&batch);
-        options.translations = store
-            .type_translations()
-            .map_err(|error| BatchError::Unavailable(error.to_string()))?;
-        let reserved = file
-            .metadata()
-            .map_err(|error| BatchError::Unavailable(error.to_string()))?
-            .len();
+        if matches!(input, PreparedInput::Marc(_)) {
+            options.translations = store
+                .type_translations()
+                .map_err(|error| BatchError::Unavailable(error.to_string()))?;
+        }
+        let reserved = input.reserved()?;
         batch.state = State::Confirming;
         batches
             .save_reserved(&batch, reserved)
             .map_err(BatchError::Unavailable)?;
-        let reader = BufReader::new(file);
         match actor {
-            Some(actor) => import_marc21(reader, &store.import_as(actor), &options),
-            None => import_marc21(reader, store, &options),
+            Some(actor) => input.submit(&store.import_as(actor), &options),
+            None => input.submit(store, &options),
         }
     };
     let report = match report {
@@ -293,26 +361,57 @@ fn outcome(preview: &BatchPreview, report: &ImportReport) -> Completion {
         failed: report.failures.len(),
         items_stored: report.items,
         items_replaced: report.replaced_items,
-        items_refused: report.item_failures.len(),
+        items_refused: report.item_failures.len()
+            + report
+                .failures
+                .iter()
+                .filter(|failure| {
+                    matches!(
+                        failure.failure,
+                        RecordFailure::Rejected(RecordRejected::Refused(
+                            CatalogRefusal::NativeItem { .. }
+                        ))
+                    )
+                })
+                .count(),
     };
-    let records = report
-        .failures
-        .iter()
-        .map(|failure| (failure.index, failure.offset, None));
-    let items = report
-        .item_failures
-        .iter()
-        .map(|failure| (failure.index, 0, Some(failure.position + 1)));
+    let records = report.failures.iter().map(|failure| {
+        let target = match &failure.failure {
+            RecordFailure::Rejected(RecordRejected::Refused(refusal)) => native_detail(refusal),
+            _ => None,
+        };
+        let (item, detail) =
+            target.map_or((None, None), |(item, detail)| (Some(item), Some(detail)));
+        (failure.index, failure.offset, item, detail)
+    });
+    let items = report.item_failures.iter().map(|failure| {
+        (
+            failure.index,
+            0,
+            Some(failure.position + 1),
+            native_detail(&failure.refusal).map(|(_, detail)| detail),
+        )
+    });
     let mut failures: Vec<_> = records.chain(items).collect();
     failures.sort_unstable();
     let refusals = failures
         .into_iter()
-        .map(|(index, offset, item)| {
-            let (index, offset) = preview.rendered.source_position(index, offset);
+        .map(|(index, offset, item, detail)| {
+            let (index, offset) = if preview.rendered.detection.format == ImportFormat::Delimited {
+                preview
+                    .rendered
+                    .selected_index(index)
+                    .map_or((index, offset), |selected| {
+                        preview.rendered.source_position(selected as u64, offset)
+                    })
+            } else {
+                preview.rendered.source_position(index, offset)
+            };
             Refusal {
                 record: index + 1,
                 offset,
                 item,
+                detail,
             }
         })
         .collect();
@@ -320,5 +419,13 @@ fn outcome(preview: &BatchPreview, report: &ImportReport) -> Completion {
         receipt: Some(receipt),
         refusals,
         error: None,
+    }
+}
+
+fn native_detail(refusal: &CatalogRefusal) -> Option<(usize, String)> {
+    if let CatalogRefusal::NativeItem { position, .. } = refusal {
+        Some((*position, refusal.to_string()))
+    } else {
+        None
     }
 }

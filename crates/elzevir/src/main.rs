@@ -129,6 +129,12 @@ enum Command {
     Import(catalog_cli::ImportArgs),
     /// Prepare, edit and explicitly confirm a private MARC import batch.
     ImportBatch(import_batch_cli::BatchArgs),
+    /// Writes the versioned BIBFRAME spreadsheet header.
+    ImportModel {
+        /// Use tab-separated values.
+        #[arg(long)]
+        tsv: bool,
+    },
     /// Exports the catalog as MARC21 (ISO 2709, UTF-8).
     Export(catalog_cli::ExportArgs),
     /// Names branches, item types, locations and collections as a Koha names them.
@@ -186,6 +192,7 @@ fn main() -> ExitCode {
         }) => add_staff(&data_dir, &login, admin, cataloguing),
         Command::Import(args) => catalog_cli::import(&args),
         Command::ImportBatch(args) => import_batch_cli::run(args),
+        Command::ImportModel { tsv } => import_batch_cli::model(tsv),
         Command::Export(args) => catalog_cli::export(&args),
         Command::KohaCodes(args) => koha_codes::koha_codes(&args),
         Command::KohaTypes(args) => catalog_cli::koha_types(&args),

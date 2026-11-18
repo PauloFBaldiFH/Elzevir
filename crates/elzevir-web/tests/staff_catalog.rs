@@ -155,7 +155,8 @@ fn stored(instance: i64) -> StoredRecord {
                 copy_number: None,
                 status: ItemStatus::default(),
                 acquired_on: None,
-            }],
+            }]
+            .into(),
             source: None,
         },
     }

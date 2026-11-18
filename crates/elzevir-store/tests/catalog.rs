@@ -109,7 +109,7 @@ fn record(title: &str) -> NewRecord {
             contribution("Bosi, Alfredo", false),
         ],
         subjects: vec![subject("Ficção brasileira"), subject("Rio de Janeiro (RJ)")],
-        items: Vec::new(),
+        items: elzevir_app::catalog::RecordItems::default(),
         source: None,
         instance: NewInstance {
             title: title.to_owned(),
@@ -429,7 +429,7 @@ fn a_record_brings_its_items_and_source_or_nothing() {
     let store = open(&dir);
     setup(&store);
     let mut new = record("Dom Casmurro");
-    new.items = vec![item_data("0001"), item_data("0002")];
+    new.items = vec![item_data("0001"), item_data("0002")].into();
     new.source = Some(b"00026nam a2200025 a 4500\x1e\x1d".to_vec());
     let CatalogOutput::Record {
         instance, items, ..

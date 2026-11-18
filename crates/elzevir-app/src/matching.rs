@@ -225,7 +225,7 @@ mod tests {
                     .collect(),
                 ..NewInstance::default()
             },
-            items: Vec::new(),
+            items: crate::catalog::RecordItems::default(),
             source,
         }
     }

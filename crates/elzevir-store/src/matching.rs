@@ -5,7 +5,8 @@
 use std::collections::BTreeSet;
 
 use elzevir_app::catalog::{
-    CatalogRefusal, ImportOutcome, ImportRecord, ImportedItems, ItemData, NewRecord, RefusedItem,
+    CatalogRefusal, ImportOutcome, ImportRecord, ImportedItems, ItemData, NewRecord, RecordItem,
+    RecordItems, RefusedItem,
 };
 use elzevir_app::commands::WriteRefusal;
 use elzevir_app::matching::{ItemsDecision, RecordAction, decide, match_keys};
@@ -13,10 +14,11 @@ use elzevir_domain::catalog::{InstanceId, ItemId, Vocabulary};
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::catalog::{
-    Places, add_item, add_work_and_instance, insert_identifiers, insert_notes, item_codes,
+    Places, add_work_and_instance, insert_identifiers, insert_notes, item_codes,
     link_contributions, link_languages, link_subjects, optional_term, record_changed, reindex,
     store_source_and_keys,
 };
+use crate::native_items;
 use crate::statements::store_record_descriptions;
 use crate::{CommandFailed, StoreError, WriteTx};
 
@@ -26,6 +28,7 @@ pub(crate) fn import_record(
     tx: &WriteTx<'_>,
     import: &ImportRecord,
 ) -> Result<ImportOutcome, CommandFailed<WriteRefusal>> {
+    native_items::check_record(&import.record)?;
     let connection = tx.connection();
     let matched = find_match(connection, import)?;
     let decision = decide(&import.matching, matched.is_some());
@@ -85,7 +88,7 @@ fn find_match(
 fn import_items(
     tx: &WriteTx<'_>,
     instance: InstanceId,
-    items: &[ItemData],
+    items: &RecordItems,
     decision: ItemsDecision,
     fresh: Option<InstanceId>,
 ) -> Result<ImportedItems, CommandFailed<WriteRefusal>> {
@@ -95,8 +98,8 @@ fn import_items(
         return Ok(done);
     }
     let mut changed = BTreeSet::new();
-    for (position, item) in items.iter().enumerate() {
-        let stored = match (&item.barcode, decision) {
+    for (position, item) in items.entries().enumerate() {
+        let stored = match (item.barcode(), decision) {
             (Some(barcode), ItemsDecision::Replace) => item_by_barcode(connection, barcode)?,
             _ => None,
         };
@@ -104,11 +107,19 @@ fn import_items(
         // created just before its barcode was found taken, for instance).
         savepoint(connection, "SAVEPOINT import_item")?;
         let result = match stored {
-            Some((id, owner)) => replace_item(connection, id, item).map(|()| {
-                done.replaced.push(id);
-                owner
-            }),
-            None => add_item(connection, instance, item).map(|id| {
+            Some((id, owner)) => {
+                let replacement = match item {
+                    RecordItem::Marc(item) => replace_item(connection, id, item),
+                    RecordItem::Native(item) => {
+                        native_items::write(connection, owner, Some(id), position, item).map(|_| ())
+                    }
+                };
+                replacement.map(|()| {
+                    done.replaced.push(id);
+                    owner
+                })
+            }
+            None => native_items::add(connection, instance, position, item).map(|id| {
                 done.added.push(id);
                 instance
             }),

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Local operator interface to staged MARC imports.
+//! Local operator interface to staged catalog imports.
 
 use std::path::PathBuf;
 
@@ -24,7 +24,12 @@ pub(crate) struct BatchArgs {
 #[derive(Subcommand)]
 enum Action {
     /// Capture the original file into a new batch.
-    Stage { file: PathBuf },
+    Stage {
+        file: PathBuf,
+        /// Choose the tabular reader when the sample is inconclusive.
+        #[arg(long)]
+        table: bool,
+    },
     /// Save a complete recipe for an existing revision.
     Edit {
         id: String,
@@ -46,7 +51,10 @@ enum Action {
 
 pub(crate) fn run(args: BatchArgs) -> Result<(), String> {
     let command = match args.action {
-        Action::Stage { file } => BatchCommand::Stage(Box::new(open_path(&file)?), None),
+        Action::Stage { file, table } => BatchCommand::Stage(
+            Box::new(open_path(&file)?),
+            table.then_some(elzevir_app::import_detection::ImportFormat::Delimited),
+        ),
         Action::Edit {
             id,
             revision,
@@ -75,7 +83,9 @@ pub(crate) fn run(args: BatchArgs) -> Result<(), String> {
         BatchReply::Completed(completion) => {
             for refusal in completion.refusals {
                 let (record, offset) = (refusal.record, refusal.offset);
-                if let Some(item) = refusal.item {
+                if let Some(detail) = refusal.detail {
+                    eprintln!("elzevir: record {record} (byte {offset}), {detail}");
+                } else if let Some(item) = refusal.item {
                     eprintln!("elzevir: record {record} (byte {offset}), item {item} refused");
                 } else {
                     eprintln!("elzevir: record {record} (byte {offset}) refused");
@@ -91,6 +101,16 @@ pub(crate) fn run(args: BatchArgs) -> Result<(), String> {
         }
         BatchReply::Cancelled | BatchReply::List(_) => Ok(()),
     }
+}
+
+pub(crate) fn model(tsv: bool) -> Result<(), String> {
+    use elzevir_app::import::table::{Delimiter, write_model_header};
+    let delimiter = if tsv {
+        Delimiter::Tab
+    } else {
+        Delimiter::Comma
+    };
+    write_model_header(std::io::stdout().lock(), delimiter).map_err(|error| error.to_string())
 }
 
 fn print_preview(

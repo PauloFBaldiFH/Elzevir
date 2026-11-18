@@ -111,7 +111,7 @@ impl Reader<'_> {
             contributions: Vec::new(),
             subjects: Vec::new(),
             instance: NewInstance::default(),
-            items: Vec::new(),
+            items: crate::catalog::RecordItems::default(),
             source: None,
         };
         let mut titled = false;

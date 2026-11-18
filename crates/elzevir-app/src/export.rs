@@ -361,7 +361,7 @@ pub fn item_codes<R: BufRead>(input: R, limits: Limits) -> Result<ItemCodes, std
         let Ok(mapped) = marc_to_bibframe(&record, None) else {
             continue;
         };
-        for item in mapped.items {
+        for item in mapped.items.into_marc() {
             codes.branches.insert(item.home_branch);
             codes.branches.insert(item.holding_branch);
             codes.item_types.insert(item.item_type);

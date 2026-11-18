@@ -178,11 +178,13 @@ fn add_record(
     connection: &Connection,
     record: &NewRecord,
 ) -> Result<CatalogOutput, CommandFailed<WriteRefusal>> {
+    crate::native_items::check_record(record)?;
     let (work, instance) = add_work_and_instance(connection, record)?;
     let items = record
         .items
-        .iter()
-        .map(|item| add_item(connection, instance, item))
+        .entries()
+        .enumerate()
+        .map(|(position, item)| crate::native_items::add(connection, instance, position, item))
         .collect::<Result<Vec<_>, _>>()?;
     Ok(CatalogOutput::Record {
         work,

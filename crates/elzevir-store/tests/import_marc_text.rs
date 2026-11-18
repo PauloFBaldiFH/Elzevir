@@ -96,7 +96,7 @@ fn open(directory: &tempfile::TempDir) -> ElzevirStore {
 fn register_fixture_codes(store: &ElzevirStore, source: &[Record]) {
     let (mut branches, mut types) = (BTreeSet::new(), BTreeSet::new());
     for record in source {
-        for item in marc_to_bibframe(record, None).unwrap().items {
+        for item in marc_to_bibframe(record, None).unwrap().items.into_marc() {
             branches.insert(item.home_branch);
             branches.insert(item.holding_branch);
             types.insert(item.item_type);

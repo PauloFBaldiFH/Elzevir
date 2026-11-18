@@ -46,7 +46,7 @@ fn items_follow_koha_952_conventions() {
     let records = records();
     let items: Vec<_> = records
         .iter()
-        .flat_map(|(_, record)| marc_to_bibframe(record, None).unwrap().items)
+        .flat_map(|(_, record)| marc_to_bibframe(record, None).unwrap().items.into_marc())
         .collect();
     assert_eq!(items.len(), 253, "one Item per 952");
     assert!(items.iter().all(|item| item.home_branch == "MAIN"));

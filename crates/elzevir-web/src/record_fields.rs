@@ -83,6 +83,7 @@ pub(crate) async fn record_fields(
             groups: vec![instance_group(t, &record)],
             items: record
                 .items
+                .marc()
                 .iter()
                 .map(|item| item_fields(item, &codes))
                 .collect(),

@@ -327,7 +327,7 @@ pub fn marc_to_bibframe(
         contributions: work.contributions,
         subjects: work.subjects,
         instance,
-        items,
+        items: items.into(),
         source,
     })
 }

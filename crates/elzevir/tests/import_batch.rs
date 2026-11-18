@@ -106,6 +106,106 @@ fn recipe(dir: &Path, value: &str) -> String {
 }
 
 #[test]
+fn positional_toml_prepares_a_sheet_and_refuses_duplicate_barcodes_in_a_new_batch() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path();
+    let database = data.join("elzevir.db");
+    let store = ElzevirStore::open(&database, &StoreConfig::default(), ElzevirHandler).unwrap();
+    for setup in [
+        CatalogCommand::CreateBranch {
+            name: "Reading room".into(),
+        },
+        CatalogCommand::CreatePolicy {
+            name: "Standard loan".into(),
+        },
+    ] {
+        store
+            .submit(WriteCommand::Catalog(setup))
+            .unwrap()
+            .wait()
+            .unwrap();
+    }
+    drop(store);
+    let profile = data.join("profile.toml");
+    fs::write(
+        &profile,
+        r#"
+[table]
+delimiter = "comma"
+encoding = "utf8"
+[table.profile]
+version = 1
+[[table.profile.columns]]
+position = 1
+header = "Title"
+target = "Work.title"
+[[table.profile.columns]]
+position = 2
+header = "Title"
+target = "ignore"
+[[table.profile.columns]]
+position = 3
+header = "Barcode"
+target = "Item.catalog.barcode"
+[[table.profile.columns]]
+position = 4
+header = "Home"
+target = "Item.catalog.home_branch"
+[[table.profile.columns]]
+position = 5
+header = "Current"
+target = "Item.catalog.holding_branch"
+[[table.profile.columns]]
+position = 6
+header = "Policy"
+target = "Item.catalog.policy"
+"#,
+    )
+    .unwrap();
+    let input = data.join("sheet.csv");
+    let stage_sheet = |second_barcode: &str| {
+        fs::write(
+            &input,
+            format!(
+                "Title,Title,Barcode,Home,Current,Policy\n\
+                 One,Ignored,native-01,Reading room,Reading room,Standard loan\n\
+                 Two,Ignored,{second_barcode},Reading room,Reading room,Standard loan\n"
+            ),
+        )
+        .unwrap();
+        stage(data, &input)
+    };
+    let id = stage_sheet("native-02");
+    refusal(
+        &run(data, &["preview", &id]),
+        "column 3 -> Item.catalog.barcode",
+    );
+    let edit = |id: &str| success(run(data, &["edit", id, "1", profile.to_str().unwrap()]));
+    edit(&id);
+    let preview = success(run(data, &["preview", &id]));
+    assert!(preview.contains("One") && preview.contains("Two"));
+    assert!(!preview.contains("Ignored"));
+    refusal(&run(data, &["confirm", &id, "1"]), "stale batch revision");
+    let receipt: serde_json::Value =
+        serde_json::from_str(&success(run(data, &["confirm", &id, "2"]))).unwrap();
+    assert_eq!(receipt["stored"], 2);
+    assert_eq!(receipt["items_stored"], 2);
+    let marc = export(data);
+
+    let duplicate = stage_sheet("native-01");
+    edit(&duplicate);
+    refusal(
+        &run(data, &["preview", &duplicate]),
+        "row 3: item barcode \"native-01\" is repeated from row 2",
+    );
+    refusal(
+        &run(data, &["confirm", &duplicate, "2"]),
+        "cannot be confirmed",
+    );
+    assert_eq!(export(data), marc);
+}
+
+#[test]
 fn preview_revision_and_original_are_required_then_only_the_edited_field_changes() {
     let dir = tempfile::tempdir().unwrap();
     let data = dir.path();
@@ -383,7 +483,7 @@ fn register_fixture_codes(store: &ElzevirStore) {
     while let Some(record) = input.next_record() {
         let mut record = Record::from_ref(&record.unwrap());
         record.marc21_to_utf8();
-        for item in marc_to_bibframe(&record, None).unwrap().items {
+        for item in marc_to_bibframe(&record, None).unwrap().items.into_marc() {
             branches.insert(item.home_branch);
             branches.insert(item.holding_branch);
             types.insert(item.item_type);

@@ -14,7 +14,7 @@ use elzevir_domain::catalog::{
 use serde::{Deserialize, Serialize};
 
 use crate::codes::{CodeTable, NamedCode, NamingCount};
-use crate::items::{ItemsUpdate, RowRefusal};
+use crate::items::{ItemColumn, ItemFields, ItemsUpdate, RowProblem, RowRefusal};
 use crate::koha_types::TypeTranslations;
 use crate::matching::Matching;
 use crate::material::Material;
@@ -420,9 +420,132 @@ pub struct NewRecord {
     /// The Instance.
     pub instance: NewInstance,
     /// Items of the Instance, in order.
-    pub items: Vec<ItemData>,
+    pub items: RecordItems,
     /// The record as it arrived (MARC21 ISO 2709, UTF-8), kept byte for byte.
     pub source: Option<Vec<u8>>,
+}
+
+/// Items in one submitted record. The legacy JSON array is kept for MARC commands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RecordItems {
+    /// Items from the MARC edge, in their original order.
+    Marc(Vec<ItemData>),
+    /// Native Items with catalog identifiers.
+    Native {
+        /// Items in sheet order.
+        native: Vec<NativeItem>,
+    },
+}
+
+impl Default for RecordItems {
+    fn default() -> Self {
+        Self::Marc(Vec::new())
+    }
+}
+
+impl From<Vec<ItemData>> for RecordItems {
+    fn from(items: Vec<ItemData>) -> Self {
+        Self::Marc(items)
+    }
+}
+
+/// An Item from a native input, without MARC codes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeItem {
+    /// Native catalog fields.
+    pub fields: ItemFields,
+    /// BIBFRAME classes and statements for this Item.
+    pub description: Description,
+}
+
+/// One item borrowed from the submitted record.
+#[derive(Clone, Copy)]
+pub enum RecordItem<'a> {
+    /// Item from the MARC edge.
+    Marc(&'a ItemData),
+    /// Native Item.
+    Native(&'a NativeItem),
+}
+
+impl RecordItem<'_> {
+    /// Barcode supplied for the item.
+    #[must_use]
+    pub fn barcode(&self) -> Option<&str> {
+        match self {
+            Self::Marc(item) => item.barcode.as_deref(),
+            Self::Native(item) => item.fields.barcode.as_deref(),
+        }
+    }
+}
+
+impl RecordItems {
+    /// Total items in the submitted record.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        match self {
+            Self::Marc(items) => items.len(),
+            Self::Native { native } => native.len(),
+        }
+    }
+
+    /// Whether this record carries no items.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// MARC items, when the record originates at the MARC edge.
+    #[must_use]
+    pub fn marc(&self) -> &[ItemData] {
+        match self {
+            Self::Marc(items) => items,
+            Self::Native { .. } => &[],
+        }
+    }
+
+    /// Takes ownership of the MARC entries, if this record carries them.
+    #[must_use]
+    pub fn into_marc(self) -> Vec<ItemData> {
+        match self {
+            Self::Marc(items) => items,
+            Self::Native { .. } => Vec::new(),
+        }
+    }
+
+    /// Ordered items with their source-specific representation.
+    pub fn entries(&self) -> impl Iterator<Item = RecordItem<'_>> {
+        let native = match self {
+            Self::Native { native } => native.as_slice(),
+            Self::Marc(_) => &[],
+        };
+        self.marc()
+            .iter()
+            .map(RecordItem::Marc)
+            .chain(native.iter().map(RecordItem::Native))
+    }
+}
+
+/// Why the writer refused a particular native item.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum NativeItemProblem {
+    /// A field failed transactional validation.
+    #[error("{column:?}: {problem:?}")]
+    Field {
+        /// Field that failed.
+        column: ItemColumn,
+        /// Reason for refusal.
+        problem: RowProblem,
+    },
+    /// An earlier item in the same command used the barcode.
+    #[error("duplicate of item {first}")]
+    Duplicate {
+        /// One-based position of the first item.
+        first: usize,
+    },
+    /// A description or other catalog rule refused the item.
+    #[error(transparent)]
+    Catalog(Box<CatalogRefusal>),
 }
 
 /// A relation from the new Work to an existing one.
@@ -774,6 +897,19 @@ pub enum CatalogRefusal {
     /// Cells of an Item batch that cannot be stored, all of them.
     #[error("{} cells of the item batch were refused", .0.len())]
     ItemRows(Vec<RowRefusal>),
+    /// A native Item failed revalidation in the writer.
+    #[error("item {position}{barcode}: {problem}", barcode = barcode_label(.barcode.as_deref()))]
+    NativeItem {
+        /// One-based item position within the submitted record.
+        position: usize,
+        /// Exact barcode from the refused row, when supplied.
+        barcode: Option<String>,
+        /// The refused field or condition.
+        problem: NativeItemProblem,
+    },
+    /// Native items cannot carry an original MARC blob.
+    #[error("a native record cannot carry a MARC source")]
+    NativeItemSource,
     /// No agent has this id.
     #[error("unknown agent {}", .0.0)]
     UnknownAgent(AgentId),
@@ -802,6 +938,10 @@ pub enum CatalogRefusal {
         /// The version stored now.
         current: i64,
     },
+}
+
+fn barcode_label(barcode: Option<&str>) -> String {
+    barcode.map_or_else(String::new, |code| format!(" (barcode {code:?})"))
 }
 
 /// An Instance as the catalog shows it.

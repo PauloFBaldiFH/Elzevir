@@ -139,6 +139,42 @@ fn iso_leader(bytes: &[u8]) -> bool {
         && (leader.get(10..12) == Some(b"22") || bytes.contains(&0x1e))
 }
 
+/// Returns the unique tabular separator supported by the detection sample.
+#[must_use]
+pub fn table_delimiter(prefix: &[u8]) -> Option<crate::import::table::Delimiter> {
+    use crate::import::table::Delimiter;
+    let prefix = prefix.get(..MAX_DETECTION_BYTES).unwrap_or(prefix);
+    let input = prefix
+        .strip_prefix(b"\xef\xbb\xbf")
+        .unwrap_or(prefix)
+        .trim_ascii_start();
+    let mut candidates = [Delimiter::Comma, Delimiter::Semicolon, Delimiter::Tab]
+        .into_iter()
+        .filter(|delimiter| {
+            let separator = delimiter.byte();
+            delimited_rows(input, separator).is_some()
+                || input.contains(&separator)
+                    && input
+                        .iter()
+                        .all(|byte| *byte == separator || byte.is_ascii_whitespace())
+                || model_header(input, *delimiter)
+        });
+    match (candidates.next(), candidates.next()) {
+        (Some(separator), None) => Some(separator),
+        _ => None,
+    }
+}
+
+fn model_header(input: &[u8], delimiter: crate::import::table::Delimiter) -> bool {
+    if !input.starts_with(b"elzevir-model:") {
+        return false;
+    }
+    let line = input.split(|byte| matches!(byte, b'\r' | b'\n')).next();
+    let mut header = Vec::new();
+    crate::import::table::write_model_header(&mut header, delimiter).is_ok()
+        && line == header.strip_suffix(b"\n")
+}
+
 fn marcxml_root(mut input: &[u8]) -> Option<()> {
     loop {
         input = input.trim_ascii_start();

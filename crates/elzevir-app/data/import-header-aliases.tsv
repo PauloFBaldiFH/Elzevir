@@ -1,0 +1,23 @@
+título	Work.title
+titulo	Work.title
+title	Work.title
+isbn	Instance.catalog.isbn
+edição	Instance.editionStatement
+edition	Instance.editionStatement
+resumo	Work.summary
+summary	Work.summary
+código de barras	Item.catalog.barcode
+codigo de barras	Item.catalog.barcode
+barcode	Item.catalog.barcode
+tombo	Item.catalog.inventory_number
+inventory number	Item.catalog.inventory_number
+unidade de origem	Item.catalog.home_branch
+home branch	Item.catalog.home_branch
+unidade atual	Item.catalog.holding_branch
+holding branch	Item.catalog.holding_branch
+política de circulação	Item.catalog.policy
+circulation policy	Item.catalog.policy
+localização	Item.catalog.location
+shelving location	Item.catalog.location
+coleção	Item.catalog.collection
+collection	Item.catalog.collection

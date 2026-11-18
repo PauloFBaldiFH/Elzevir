@@ -5,7 +5,8 @@
     <option value="auto"{% if selection == "auto" %} selected{% endif %}>{{ t.get("import-format-auto") }}</option>
     <option value="iso"{% if selection == "iso" %} selected{% endif %}>{{ t.get("import-iso") }}</option>
     <option value="xml"{% if selection == "xml" %} selected{% endif %}>{{ t.get("import-xml") }}</option>
-    <option value="mrk"{% if selection == "mrk" %} selected{% endif %}>{{ t.get("import-mrk") }}</option>
+    <option value="mrk"{% if selection == "mrk" %} selected{% endif %}>{{ t.get("import-mrk") }}</option>{% if selection == "table" %}
+    <option value="table" selected>{{ t.get("import-table") }}</option>{% endif %}
   </select>
 {% endmacro %}
 {% block title %}{{ t.get("import-title") }}{% endblock %}
@@ -17,15 +18,16 @@
   {% if let Some(key) = notice %}<p role="alert">{{ t.get(key) }}</p>{% endif %}
   {% if let Some(text) = detail %}<details><summary>{{ t.get("import-details") }}</summary><pre>{{ text }}</pre></details>{% endif %}
   {% match view %}
-  {% when ImportView::Home with (batches, receipts) %}
+  {% when ImportView::Home with (batches, receipts, tabular) %}{% if tabular %}
+    <p><a href="/equipe/acervo/importar/modelo/csv">{{ t.get("import-model-csv") }}</a> · <a href="/equipe/acervo/importar/modelo/tsv">{{ t.get("import-model-tsv") }}</a></p>{% endif %}
     <form action="/equipe/acervo/importar" method="post" enctype="multipart/form-data"
           hx-post="/equipe/acervo/importar" hx-encoding="multipart/form-data" hx-select="#import-workspace"
           hx-target="#import-workspace" hx-swap="outerHTML" hx-push-url="true" data-import-upload>
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      {% call source_format("upload-format", "auto") %}{% endcall %}
+      {% if tabular %}{% call source_format("upload-format", "table") %}{% endcall %}{% else %}{% call source_format("upload-format", "auto") %}{% endcall %}{% endif %}
       <label for="import-file">{{ t.get("import-file") }}</label>
       <input id="import-file" name="file" type="file" required aria-describedby="import-limit">
-      <p id="import-limit">{{ t.get("import-limit") }}</p>
+      <p id="import-limit">{% if tabular %}{{ t.get("import-table-limit") }}{% else %}{{ t.get("import-limit") }}{% endif %}</p>
       <button type="submit">{{ t.get("import-upload") }}</button>
       <progress max="100" value="0" aria-label="{{ t.get("import-progress") }}" hidden></progress>
     </form>
@@ -51,8 +53,8 @@
         {% call source_format("edit-format", draft.format) %}{% endcall %}
         <label for="import-recipe">{{ t.get("import-recipe") }}</label>
         <textarea id="import-recipe" name="recipe" rows="7" spellcheck="false" aria-describedby="import-recipe-help">{{ draft.recipe }}</textarea>
-        <p id="import-recipe-help">{{ t.get("import-recipe-help") }}</p>
-        <details><summary>{{ t.get("import-recipe-example") }}</summary><pre>{"edits":[{"record":1,"tag":"245","change":{"op":"replace_subfield","code":"a","value":""}}]}</pre></details>
+        <p id="import-recipe-help">{% if draft.format == "table" %}{{ t.get("import-table-recipe") }}{% else %}{{ t.get("import-recipe-help") }}{% endif %}</p>
+        {% if draft.format != "table" %}<details><summary>{{ t.get("import-recipe-example") }}</summary><pre>{"edits":[{"record":1,"tag":"245","change":{"op":"replace_subfield","code":"a","value":""}}]}</pre></details>{% endif %}
         <button type="submit">{{ t.get("import-save") }}</button>
       </form>
       <form action="/equipe/acervo/importar/{{ draft.link.id }}/prever" method="post">
@@ -81,13 +83,13 @@
               {% endif %}
             </dl>
             {% endif %}
-            <details>
+            {% if !entry.before.is_empty() %}<details>
               <summary>{{ t.get("import-source") }}</summary>
               <pre>{{ entry.before }}</pre>
               {% if let Some(after) = entry.after %}
               <h4>{{ t.get("import-edited") }}</h4><pre>{{ after }}</pre>
               {% endif %}
-            </details>
+            </details>{% endif %}
           </div>
         </article>
         {% endfor %}

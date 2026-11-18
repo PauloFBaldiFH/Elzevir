@@ -181,7 +181,7 @@ fn stored(c: &Connection, head: Head) -> Result<StoredRecord, ReadFailure> {
             notes: notes(c, head.instance)?,
             opac_hidden: head.opac_hidden,
         },
-        items: items(c, head.instance)?,
+        items: items(c, head.instance)?.into(),
         source: c
             .query_row(
                 "SELECT record FROM source_records WHERE instance_id = ?1",

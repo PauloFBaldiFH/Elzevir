@@ -8,6 +8,8 @@
 pub mod batches;
 pub mod edits;
 pub mod preview;
+pub mod sheet;
+pub mod table;
 
 use std::collections::VecDeque;
 use std::io::BufRead;
