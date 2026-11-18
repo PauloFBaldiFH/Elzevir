@@ -42,5 +42,12 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "marc_text"
+path = "fuzz_targets/marc_text.rs"
+test = false
+doc = false
+bench = false
+
 # Not part of the main workspace: it needs the nightly toolchain.
 [workspace]

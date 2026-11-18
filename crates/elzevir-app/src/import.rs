@@ -180,6 +180,9 @@ pub enum ImportError {
     /// A malformed or oversized XML input stopped its stream.
     #[error(transparent)]
     Xml(#[from] elzevir_marc::MarcXmlError),
+    /// A malformed or oversized `MarcEdit` input stopped its stream.
+    #[error(transparent)]
+    MarcText(#[from] elzevir_marc::MarcTextError),
 }
 
 /// A record read from the file, with its place in it.
@@ -223,15 +226,57 @@ pub fn import_marcxml<R: BufRead, S: RecordSink>(
     options: &ImportOptions,
 ) -> Result<ImportReport, ImportError> {
     let mut reader = elzevir_marc::MarcXmlReader::new(input, elzevir_marc::XmlLimits::default());
+    import_converted(
+        || {
+            reader
+                .next()
+                .map(|record| Ok((record?, reader.record_offset())))
+                .transpose()
+        },
+        sink,
+        options,
+    )
+}
+
+/// Imports UTF-8 `MarcEdit` mnemonic records through the ISO mapping, queue and matching.
+/// Converted ISO bytes are retained as source.
+///
+/// # Errors
+/// [`ImportError`] when the text stream fails or the writer stops. Records already
+/// committed stay.
+pub fn import_marc_text<R: BufRead, S: RecordSink>(
+    input: R,
+    sink: &S,
+    options: &ImportOptions,
+) -> Result<ImportReport, ImportError> {
+    let mut reader = elzevir_marc::MarcTextReader::new(input, elzevir_marc::MrkLimits::default());
+    import_converted(
+        || {
+            reader
+                .next()
+                .map(|record| Ok((record?, reader.record_offset())))
+                .transpose()
+        },
+        sink,
+        options,
+    )
+}
+
+fn import_converted<S: RecordSink>(
+    mut next: impl FnMut() -> Result<Option<(Record, u64)>, ImportError>,
+    sink: &S,
+    options: &ImportOptions,
+) -> Result<ImportReport, ImportError> {
     import_chunks(
         |report| {
             let mut chunk = Vec::with_capacity(options.chunk.get());
             while chunk.len() < options.chunk.get() {
-                let Some(record) = reader.next() else { break };
-                let record = record?;
+                let Some((record, offset)) = next()? else {
+                    break;
+                };
                 let place = RawPlace {
                     index: report.read,
-                    offset: reader.record_offset(),
+                    offset,
                 };
                 report.read = report.read.saturating_add(1);
                 let mut bytes = Vec::new();
