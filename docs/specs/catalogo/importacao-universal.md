@@ -3,6 +3,7 @@
 > Status: implementação incremental I0–I10; I2 acrescenta detecção à CLI,
 > preservando ISO 2709. I3 acrescenta MARCXML à aplicação e I4 acrescenta
 > MarcEdit `.mrk`. I5 entrega a preparação integral MARC por `--preview`.
+> I6 acrescenta lotes MARC privados, edições e confirmação por revisão.
 > A importação direta pela CLI mantém o contrato de I2.
 > Base: [importação atual](importacao.md), [casamento](casamento.md),
 > [BIBFRAME completo](bibframe-completo.md),
@@ -266,6 +267,43 @@ opaco, gerado pelo sistema; não é um caminho enviado pelo navegador.
 Permissões privadas e vínculo com instituição e operador restringem acesso.
 Não se segue link simbólico nem se reutiliza nome de arquivo como caminho.
 
+A I6 oferece `elzevir import-batch --data-dir DIR --operator ID` com
+`stage ARQUIVO`, `edit LOTE REVISAO RECEITA.json`, `preview LOTE`,
+`confirm LOTE REVISAO` e `cancel LOTE`. O diretório da instituição já
+deve existir. A identidade do operador nessa CLI local é fornecida pelo
+operador do sistema. No Windows, o diretório de dados precisa ter a ACL
+privada da instalação. A CLI confirma pelo mesmo bloqueio de escritora de
+`elzevir import`, com `elzevir serve` parado. A interface autenticada fica
+na I7.
+
+A revisão inicial é 1. A receita JSON substitui a receita anterior e
+contém `edits`, `exclude`, `accept_missing_barcodes` e `matching` opcionais.
+Os números de registros começam em 1. `accept_missing_barcodes` aceita
+exemplares sem código de barras nos registros indicados. Cada regra tem uma
+etiqueta, um registro opcional e uma operação `change` com `op` e seus
+parâmetros. O exemplo edita o título do primeiro registro usando `245$a`.
+
+```json
+{
+  "edits": [{"record": 1, "tag": "245", "change": {"op": "replace_subfield", "code": "a", "value": "Título corrigido"}}]
+}
+```
+
+As regras são aplicadas em ordem. A adição de campo põe o campo no fim.
+Remoção, substituição e edição de subcampos ou texto atingem as ocorrências
+selecionadas. `999 $c/$d` e `952 $9` de origem devem permanecer intactos.
+A edição só publica a nova receita e exige uma nova prévia.
+
+O manifesto vincula revisão, operador, instituição, formato e SHA-256 do
+original. A prévia de lote verifica essa identidade, renderiza uma cópia
+temporária limitada e registra a revisão como pronta se a validação
+integral passar. A confirmação refaz essa validação antes de submeter
+registros. ISO 2709 que não sofreu edição passa pela cópia byte a byte.
+As amostras de revisão informam quais registros mudaram e exibem os campos
+alterados antes e depois. Um manifesto persistido como confirmando bloqueia
+reenvio após interrupção. O cancelamento desse estado exige
+`--acknowledge-interrupted`.
+
 O estado distingue preparando, em revisão, pronto, confirmando e encerrado.
 Revisão do lote e identidade do original vinculam a confirmação à prévia
 vista; alteração ou versão incompatível obriga nova revisão. Só uma
@@ -334,6 +372,7 @@ reduzem os limites nem a capacidade do importador ISO direto existente.
 | `MAX_STAGED_BATCH_BYTES` | 1 GiB por lote, incluindo original, edições e relatórios. |
 | `MAX_STAGED_TOTAL_BYTES` | 4 GiB por instituição, reservados antes de aceitar trabalho concorrente. |
 | `MAX_IMPORT_EDITS` | 10.000 operações por lote. |
+| `MAX_BATCH_MANIFEST_BYTES` | 1 MiB de metadados e receita JSON por lote. |
 | `MAX_IMPORT_PROFILE_BYTES` | 1 MiB por TOML de mapeamento. |
 | `MAX_XML_DEPTH` | 32 níveis; DTD e entidades externas proibidas. |
 | `MAX_XML_ELEMENT_BYTES` | 1 MiB de conteúdo direto acumulado por elemento; descendentes contam no registro. |
@@ -357,6 +396,8 @@ reduzem os limites nem a capacidade do importador ISO direto existente.
 MARC convertido também obedece a `Limits` e à escrita ISO 2709 existentes
 (99.999 bytes por registro, 5.000 campos). Descrições e valores BIBFRAME
 obedecem aos limites e validadores atuais de [BIBFRAME completo](bibframe-completo.md).
+Cada lote reserva espaço para duas versões do manifesto, para permitir
+atualização atômica e cancelamento mesmo perto da cota.
 Arquivos absolutos, caminhos com travessia, links, dispositivos e entradas
 duplicadas que sobrescreveriam conteúdo são recusados na extração.
 Limite atingido é erro explícito; nunca validação incompleta apresentada

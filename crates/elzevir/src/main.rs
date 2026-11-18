@@ -27,6 +27,8 @@ mod file_owner;
 mod health;
 mod host_jobs;
 mod http_client;
+mod import_batch_cli;
+mod import_batches;
 mod init;
 mod installation;
 mod koha_codes;
@@ -124,6 +126,8 @@ enum Command {
     Staff(StaffAction),
     /// Imports a MARC21 file (ISO 2709) into the catalog.
     Import(catalog_cli::ImportArgs),
+    /// Prepare, edit and explicitly confirm a private MARC import batch.
+    ImportBatch(import_batch_cli::BatchArgs),
     /// Exports the catalog as MARC21 (ISO 2709, UTF-8).
     Export(catalog_cli::ExportArgs),
     /// Names branches, item types, locations and collections as a Koha names them.
@@ -180,6 +184,7 @@ fn main() -> ExitCode {
             cataloguing,
         }) => add_staff(&data_dir, &login, admin, cataloguing),
         Command::Import(args) => catalog_cli::import(&args),
+        Command::ImportBatch(args) => import_batch_cli::run(args),
         Command::Export(args) => catalog_cli::export(&args),
         Command::KohaCodes(args) => koha_codes::koha_codes(&args),
         Command::KohaTypes(args) => catalog_cli::koha_types(&args),

@@ -177,6 +177,15 @@ fn preview(args: &ImportArgs, input: BufReader<File>) -> Result<(), String> {
     };
     let report = elzevir_store::preview_import(&args.data_dir.join("elzevir.db"), input, options)
         .map_err(|error| error.to_string())?;
+    print_preview(&report);
+    if report.issues.is_empty() {
+        Ok(())
+    } else {
+        Err("preview requires review".into())
+    }
+}
+
+pub(crate) fn print_preview(report: &elzevir_app::import::preview::PreviewReport) {
     println!(
         "elzevir: {:?} ({:?}) preview: {} records read, {} prepared, {} blocking diagnostics",
         report.detection.format,
@@ -185,7 +194,7 @@ fn preview(args: &ImportArgs, input: BufReader<File>) -> Result<(), String> {
         report.prepared,
         report.issues.len()
     );
-    for sample in report.samples {
+    for sample in &report.samples {
         println!(
             "record {}: Work: {:?} | Instance: {:?} | Items: {}",
             sample.index + 1,
@@ -194,7 +203,7 @@ fn preview(args: &ImportArgs, input: BufReader<File>) -> Result<(), String> {
             sample.items
         );
     }
-    for (index, instance) in report.matches {
+    for (index, instance) in &report.matches {
         println!(
             "record {}: possible match with instance {}",
             index + 1,
@@ -211,11 +220,6 @@ fn preview(args: &ImportArgs, input: BufReader<File>) -> Result<(), String> {
             issue.offset,
             issue.reason
         );
-    }
-    if report.issues.is_empty() {
-        Ok(())
-    } else {
-        Err("preview requires review".into())
     }
 }
 
