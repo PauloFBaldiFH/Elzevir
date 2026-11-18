@@ -1,6 +1,7 @@
 # Importação universal: preparação, revisão e confirmação
 
-> Status: proposta I0; este documento não disponibiliza novos formatos ou telas.
+> Status: implementação incremental I0–I10; I2 acrescenta detecção à CLI,
+> preservando ISO 2709. Novos leitores, prévia e tela entram nas etapas abaixo.
 > Base: [importação atual](importacao.md), [casamento](casamento.md),
 > [BIBFRAME completo](bibframe-completo.md),
 > [ADR da importação universal](../../adr/0004-importacao-universal.md) e
@@ -54,6 +55,26 @@ uma base nova, criar códigos ou enviar comandos; a CLI termina com saída 1.
 O detector não promete distinguir qualquer formato a partir de um prefixo.
 No fluxo preparado, a validação integral confirma ou recusa a hipótese antes
 de gravar; o ISO direto mantém a leitura e as recusas por registro atuais.
+
+**Entrega I2:** `detect_format` em `elzevir-app` examina no máximo
+`MAX_DETECTION_BYTES` (8 KiB), sem I/O, alocação proporcional ao arquivo ou
+trechos da origem no resultado. A evidência é tipada. A CLI usa `fill_buf`
+do mesmo `BufReader` entregue à importação, antes de abrir a base ou criar
+códigos. A opção existente `--create-codes` mantém sua própria leitura prévia.
+Arquivo vazio ou somente espaço conserva o relatório ISO zerado; líder
+numérico e registros danificados continuam sob a validação do leitor atual.
+
+MARCXML exige raiz `record`/`collection` ligada ao namespace MARC21; `.mrk`,
+`=LDR`; CSV/TSV, duas linhas lógicas completas com quantidade consistente
+de colunas, respeitando aspas. Empate de separadores retorna `Unknown`.
+SQL exige declarações `CREATE TABLE`/`INSERT INTO`, não nomes dentro de
+comentários ou valores. O conjunto `biblio_metadata`, `items`, `borrowers`,
+`issues` e `systempreferences` é evidência de backup completo neste prefixo;
+uma tabela privada isolada não é. Prefixo incompleto não prova o inventário
+inteiro. ZIP/gzip retornam `Unknown` com evidência de contêiner reconhecido.
+Demais formatos, prefixos inconclusivos e contêineres são recusados com saída
+1, sem alterar a instituição. A classificação não substitui a validação do
+arquivo inteiro; um futuro leitor SQL deve conferir seu inventário completo.
 
 ### 1.3 Preparar e preservar a origem
 

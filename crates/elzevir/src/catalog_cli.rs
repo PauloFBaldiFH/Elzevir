@@ -3,7 +3,7 @@
 
 use elzevir_app::codes::{CodeTable, NamedCode};
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
@@ -12,6 +12,7 @@ use elzevir_app::catalog::{CatalogCommand, CatalogOutput, CatalogReader};
 use elzevir_app::commands::{WriteCommand, WriteOutput};
 use elzevir_app::export::{ExportOptions, export_marc21, item_codes};
 use elzevir_app::import::{ImportOptions, ImportReport, Parallelism, import_marc21};
+use elzevir_app::import_detection::{Evidence, ImportFormat, MAX_DETECTION_BYTES, detect_format};
 use elzevir_app::koha_types::{self, TypeTranslationSource};
 use elzevir_app::matching::{self, Matching, OnMatch, OnNoMatch};
 use elzevir_app::rdf::{IriBase, RdfFormat, export_rdf_catalog};
@@ -133,11 +134,13 @@ impl ImportArgs {
 
 fn open_input(path: &Path) -> Result<BufReader<File>, String> {
     File::open(path)
-        .map(BufReader::new)
+        .map(|file| BufReader::with_capacity(MAX_DETECTION_BYTES, file))
         .map_err(|e| format!("cannot open {}: {e}", path.display()))
 }
 
 pub(crate) fn import(args: &ImportArgs) -> Result<(), String> {
+    let mut input = open_input(&args.file)?;
+    require_iso2709(&mut input)?;
     let data = open_store(&args.data_dir)?;
     if args.create_codes {
         create_codes(&data.store, &args.file)?;
@@ -150,10 +153,76 @@ pub(crate) fn import(args: &ImportArgs) -> Result<(), String> {
         translations: data.store.type_translations().map_err(|e| e.to_string())?,
         ..ImportOptions::default()
     };
-    let report =
-        import_marc21(open_input(&args.file)?, &data.store, &options).map_err(|e| e.to_string())?;
+    let report = import_marc21(input, &data.store, &options).map_err(|e| e.to_string())?;
     print_import(&report);
     Ok(())
+}
+
+fn require_iso2709(input: &mut impl BufRead) -> Result<(), String> {
+    let detected = detect_format(
+        input
+            .fill_buf()
+            .map_err(|error| format!("cannot inspect input: {error}"))?,
+    );
+    let format = match (detected.format, detected.evidence) {
+        (ImportFormat::Iso2709, _) => return Ok(()),
+        (ImportFormat::KohaFullBackup, _) => {
+            return Err(
+                "complete Koha backup: use a database restoration workflow, not catalog import"
+                    .to_owned(),
+            );
+        }
+        (ImportFormat::MarcXml, _) => "MARCXML",
+        (ImportFormat::MarcText, _) => "MarcEdit",
+        (ImportFormat::Delimited, _) => "CSV/TSV",
+        (ImportFormat::KohaSqlDump, _) => "Koha SQL",
+        (ImportFormat::Unknown, Evidence::ZipSignature) => "ZIP",
+        (ImportFormat::Unknown, Evidence::GzipSignature) => "gzip",
+        (ImportFormat::Unknown, _) => "unknown or ambiguous",
+    };
+    Err(format!(
+        "{format} input is not supported yet; only MARC21 ISO 2709 can be imported"
+    ))
+}
+
+#[cfg(test)]
+mod detection_tests {
+    use std::cell::Cell;
+    use std::io::{self, Cursor, Read};
+    use std::rc::Rc;
+
+    use super::{BufReader, MAX_DETECTION_BYTES, require_iso2709};
+
+    struct Counted<R> {
+        input: R,
+        bytes: Rc<Cell<usize>>,
+    }
+
+    impl<R: Read> Read for Counted<R> {
+        fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+            let count = self.input.read(output)?;
+            self.bytes.set(self.bytes.get() + count);
+            Ok(count)
+        }
+    }
+
+    #[test]
+    fn detection_reads_only_the_prefix_and_leaves_every_byte_for_import() {
+        let mut source = b"00080nam a2200037 a 4500".to_vec();
+        source.resize(MAX_DETECTION_BYTES * 2, b'x');
+        let count = Rc::new(Cell::new(0));
+        let counted = Counted {
+            input: Cursor::new(&source),
+            bytes: Rc::clone(&count),
+        };
+        let mut input = BufReader::with_capacity(MAX_DETECTION_BYTES, counted);
+        require_iso2709(&mut input).unwrap();
+        assert_eq!(count.get(), MAX_DETECTION_BYTES);
+        let mut imported = Vec::new();
+        input.read_to_end(&mut imported).unwrap();
+        assert_eq!(imported, source);
+        assert_eq!(count.get(), source.len());
+    }
 }
 
 /// `elzevir koha-types`.
