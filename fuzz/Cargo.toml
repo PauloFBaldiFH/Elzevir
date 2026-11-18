@@ -35,5 +35,12 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "marcxml"
+path = "fuzz_targets/marcxml.rs"
+test = false
+doc = false
+bench = false
+
 # Not part of the main workspace: it needs the nightly toolchain.
 [workspace]

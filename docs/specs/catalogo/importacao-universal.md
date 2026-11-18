@@ -1,7 +1,8 @@
 # Importação universal: preparação, revisão e confirmação
 
 > Status: implementação incremental I0–I10; I2 acrescenta detecção à CLI,
-> preservando ISO 2709. Novos leitores, prévia e tela entram nas etapas abaixo.
+> preservando ISO 2709. I3 acrescenta leitura e importação MARCXML à aplicação;
+> a CLI mantém o contrato de I2. Prévia e tela entram nas etapas abaixo.
 > Base: [importação atual](importacao.md), [casamento](casamento.md),
 > [BIBFRAME completo](bibframe-completo.md),
 > [ADR da importação universal](../../adr/0004-importacao-universal.md) e
@@ -77,6 +78,28 @@ Demais formatos, prefixos inconclusivos e contêineres são recusados com saída
 arquivo inteiro; um futuro leitor SQL deve conferir seu inventário completo.
 
 ### 1.3 Preparar e preservar a origem
+
+**Entrega I3:** `MarcXmlReader` lê documentos XML 1.0 UTF-8 com raiz `record` ou
+`collection` no namespace MARC21, inclusive prefixado. Preserva ordem,
+repetições, indicadores, espaços e texto de campos; referências XML e CDATA
+viram texto UTF-8. O líder convertido declara UTF-8. DTD, entidades externas,
+codificações diferentes e registros de autoridade são recusados, sem buscar
+recursos pela rede ou colocar valores da origem nos diagnósticos do leitor.
+
+Os limites de `XmlLimits` são aplicados durante a leitura, inclusive antes
+de um evento XML ultrapassar seu orçamento de bytes. Além dos limites de
+XML abaixo, `MAX_XML_INPUT_BYTES` = 512 MiB e `MAX_XML_RECORDS` = 100.000
+reproduzem as cotas do fluxo novo; não restringem ISO 2709. Campos ausentes,
+estrutura inválida ou XML truncado interrompem esse fluxo, com índice e
+posição; lotes anteriormente confirmados permanecem. Falha de conversão
+ISO, mapeamento ou recusa da escritora continua no relatório por registro.
+
+`import_marcxml` usa a mesma função interna de lotes de `import_marc21`,
+sem mudar sua assinatura, relatório ou decisões. O digest I1 e a exportação
+byte a byte dos 200 registros são os critérios dessa extração interna.
+I3 não habilita MARCXML na CLI: os testes de capacidade de I2 continuam
+exigindo recusa. A exposição no comando precisa resolver esse contrato
+explicitamente, preservando os testes de regressão do importador.
 
 Preparar percorre o arquivo inteiro na ordem de entrada, aplica somente as
 escolhas explícitas do lote e executa o mesmo mapeamento e validação usados
