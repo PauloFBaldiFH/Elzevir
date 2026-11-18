@@ -1,8 +1,9 @@
 # Importação universal: preparação, revisão e confirmação
 
 > Status: implementação incremental I0–I10; I2 acrescenta detecção à CLI,
-> preservando ISO 2709. I3 acrescenta leitura e importação MARCXML à aplicação;
-> a CLI mantém o contrato de I2. Prévia e tela entram nas etapas abaixo.
+> preservando ISO 2709. I3 acrescenta MARCXML à aplicação e I4 acrescenta
+> MarcEdit `.mrk`. A CLI mantém o contrato de I2. Prévia e tela entram nas
+> etapas abaixo.
 > Base: [importação atual](importacao.md), [casamento](casamento.md),
 > [BIBFRAME completo](bibframe-completo.md),
 > [ADR da importação universal](../../adr/0004-importacao-universal.md) e
@@ -100,6 +101,38 @@ byte a byte dos 200 registros são os critérios dessa extração interna.
 I3 não habilita MARCXML na CLI: os testes de capacidade de I2 continuam
 exigindo recusa. A exposição no comando precisa resolver esse contrato
 explicitamente, preservando os testes de regressão do importador.
+
+**Entrega I4** — `MarcTextReader` lê o mnemônico bibliográfico UTF-8 do
+MarcEdit, com BOM opcional, linhas LF ou CRLF e uma linha vazia entre
+registros. O último campo pode terminar no fim do arquivo sem quebra de
+linha. Cada linha de dados começa com `=TAG` e dois espaços. `=LDR` inicia
+um registro e fornece um líder de 24 bytes. Campos `001`–`009` trazem um
+valor. Os demais trazem dois indicadores ASCII e subcampos delimitados por
+`$`, cada um com um código alfanumérico ASCII. Espaços, ordem, campos e
+subcampos repetidos são preservados. Entradas só com separadores ficam vazias.
+
+No líder, nos campos de controle e nos indicadores, a barra invertida
+representa um espaço. No texto de subcampos, ela é literal. Os valores
+decodificam `{dollar}` como `$`, `{bsol}` como barra invertida e
+`{lcub}`/`{rcub}` como chaves literais, em uma passagem após separar os
+subcampos. Chaves fora desses escapes, bytes inválidos e linhas de
+continuação são recusados. A etapa cobre UTF-8 e esse conjunto de escapes
+ASCII. Formato `.mrk8` e mnemônicos de outros conjuntos de caracteres
+ficam fora do escopo.
+[Exemplos de MarcEdit](https://github.com/reeset/MarcEdit_tasks/blob/001c1f1d6061b38d4afb0d8693511d1f9a84c8e4/tests/m-020fixes_input.mrk)
+· [Sintaxe no Library Carpentry](https://github.com/LibraryCarpentry/lc-marcedit/blob/9df4a60266a792f3a7077bb18a4d45ff11d0e606/episodes/03-working-with-MARC-files.md)
+· [Tabela mnemônica MARCMaker](https://metacpan.org/release/EIJABB/MARC-File-MARCMaker-0.05/source/lib/MARC/File/MARCMaker.pm).
+
+`MrkLimits` aplica os limites durante a leitura em fluxo. Bytes de linha
+incluem o terminador. Bytes e linhas do registro incluem o líder e os
+campos. O orçamento de entrada inclui os separadores e o BOM. Erro de
+sintaxe, codificação, E/S ou limite interrompe a leitura com índice do
+registro, linha física e byte, sem ecoar valores da origem. A API
+`import_marc_text` serializa a origem em ISO 2709 UTF-8 e compartilha os
+lotes, o mapeamento e a escritora usados por `import_marc21`. Falhas na
+conversão ISO, no mapeamento ou na escritora seguem o relatório por
+registro. Lotes já confirmados permanecem após interrupção. Os testes
+de capacidade da CLI continuam a exigir recusa de `.mrk`.
 
 Preparar percorre o arquivo inteiro na ordem de entrada, aplica somente as
 escolhas explícitas do lote e executa o mesmo mapeamento e validação usados
@@ -295,6 +328,8 @@ reduzem os limites nem a capacidade do importador ISO direto existente.
 | `MAX_MRK_LINE_BYTES` | 1 MiB por linha. |
 | `MAX_MRK_RECORD_BYTES` | 1 MiB por registro textual. |
 | `MAX_MRK_LINES_PER_RECORD` | 20.000 linhas por registro. |
+| `MAX_MRK_INPUT_BYTES` | 512 MiB de entrada `.mrk`. |
+| `MAX_MRK_RECORDS` | 100.000 registros por entrada `.mrk`. |
 | `MAX_SQL_STATEMENT_BYTES` | 16 MiB por instrução, inclusive ao ignorar uma tabela. |
 | `MAX_ARCHIVE_MEMBERS` | 1.000 membros, contando diretórios e pacotes de planilha. |
 | `MAX_ARCHIVE_EXPANDED_BYTES` | 512 MiB no total expandido de um lote. |
@@ -335,7 +370,7 @@ exportação, criação, CLI e cobertura BIBFRAME permanecem sem alteração.
 | I1 | Digest constante dos 200 registros com a configuração de `the_staff_export_imports_whole`; só teste. |
 | I2 | Detector puro, fixtures sintéticas e recusa dos formatos ainda não suportados antes de gravar. |
 | I3 | MARCXML com `quick-xml`, fuzzing, digest I1 e exportação byte a byte dos 200 registros convertidos no teste. |
-| I4 | `.mrk`, escapes e fuzzing; gerar a versão textual no teste e obter digest I1. |
+| I4 | Leitor e importação de `.mrk`, escapes e fuzzing. Gerar a versão textual no teste e obter o digest I1 e a exportação ISO byte a byte. |
 | I5 | Preparação integral e CLI `--preview`; digest antes/depois igual e erros equivalentes à confirmação. |
 | I6 | Lote fora do banco e edição; sem edição mantém digest I1; editar um campo muda só esse campo na exportação. |
 | I7 | Tela autenticada, permissão/CSRF, Fluent en/pt-BR, novos snapshots HTML e prova da função compartilhada com CLI. |
