@@ -58,7 +58,7 @@
     - listagem, a partir de cursores espalhados pelo catálogo: p50 1,56 ms, p95 2,41 ms, p99 2,85 ms;
     - busca: p50 2,37 ms, p95 6,42 ms, p99 8,61 ms.
 
-    O critério da tarefa é p95 abaixo de 50 ms no servidor.
+    O critério da tarefa é p95 abaixo de 50 ms no servidor. Em 2026-11-19, já com a faixa de facetas, as listas salvas e a seleção na página, a navegação deu p95 de 18,4 ms e a busca, 21,7 ms ([facetas](facetas.md), desempenho).
 
 ### Lista compacta e foco (tarefa 2.4, parte 1)
 

@@ -137,25 +137,21 @@ impl<'a> Readers<'a> {
     }
 }
 
-/// Reads one page of the listing and, unless only rows are asked for, a code was scanned
-/// or the page is a work list, the facets of what it shows (facetas.md, items 11 and 17).
-/// `list` is the work list asked for, as the store reads it. Blocking.
-fn read_page(
+/// The rows of one page: a work list, a stretch of the catalog or a search. Blocking.
+fn read_rows(
     readers: &Readers<'_>,
-    params: CatalogParams,
+    params: &CatalogParams,
     list: Option<(WorkList, WorkListQuery)>,
-    rows_only: bool,
-) -> Result<Read, ()> {
+    plain: bool,
+) -> Result<Page, ()> {
     let Readers {
         listing,
         index,
-        catalog,
         work_lists,
+        ..
     } = *readers;
-    let codes = catalog.codes().map_err(drop)?;
     let filters = &params.filters;
-    let plain = params.q.trim().is_empty() && filters.is_empty();
-    let page = if let Some((list, query)) = list.filter(|_| plain) {
+    if let Some((list, query)) = list.filter(|_| plain) {
         // A malformed offset is read as the first page.
         let from = params.from.as_deref().and_then(|from| from.parse().ok());
         worklist::page(work_lists, listing, query, from.unwrap_or(0))
@@ -188,18 +184,47 @@ fn read_page(
             }
         }
         .map(|page| Page::Search(page, scan))
-    }?;
-    // A scanned code's page is that family alone, and a list is not narrowed.
-    let unfaceted = matches!(&page, Page::Search(_, Scan::Known(_)) | Page::List(..));
-    let counts = if rows_only || unfaceted {
-        None
-    } else {
-        let asked = SearchQuery {
-            text: &params.q,
-            filters,
-        };
-        Some(index.facets(&asked, SearchScope::Staff).map_err(drop)?)
+    }
+}
+
+/// Reads one page of the listing and, unless only rows are asked for, a code was scanned
+/// or the page is a work list, the facets of what it shows (facetas.md, items 11 and 17).
+/// `list` is the work list asked for, as the store reads it. Blocking.
+fn read_page(
+    readers: &Readers<'_>,
+    params: CatalogParams,
+    list: Option<(WorkList, WorkListQuery)>,
+    rows_only: bool,
+) -> Result<Read, ()> {
+    let Readers {
+        index,
+        catalog,
+        work_lists,
+        ..
+    } = *readers;
+    let codes = catalog.codes().map_err(drop)?;
+    let filters = &params.filters;
+    let plain = params.q.trim().is_empty() && filters.is_empty();
+    // The facets are counted on other cores while the page is read: over a filter that
+    // matches most of a large catalog they take as long as the rest of the page
+    // (facetas.md, item 12). A work list has none; a scanned code's are dropped.
+    let faceted = !(rows_only || plain && list.is_some());
+    let asked = SearchQuery {
+        text: &params.q,
+        filters,
     };
+    let (page, counts) = std::thread::scope(|scope| {
+        let counting = faceted.then(|| scope.spawn(|| index.facets(&asked, SearchScope::Staff)));
+        let page = read_rows(readers, &params, list, plain);
+        let counts = match counting.map(std::thread::ScopedJoinHandle::join) {
+            Some(Ok(Ok(counts))) => Some(counts),
+            Some(_) => return Err(()),
+            None => None,
+        };
+        Ok((page?, counts))
+    })?;
+    // A scanned code's page is that family alone.
+    let counts = counts.filter(|_| !matches!(&page, Page::Search(_, Scan::Known(_))));
     let saved = if rows_only {
         Vec::new()
     } else {

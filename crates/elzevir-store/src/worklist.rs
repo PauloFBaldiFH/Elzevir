@@ -38,22 +38,17 @@ const CHOSEN_BY_ACTOR: &str = "
 
 /// The latest imports from a file since an instant: `catalog.import_record`, and
 /// `catalog.add_record` with its source record (a record made on the screen has none).
-/// Each kind is read newest first through `audit_by_kind`, so a day of a million imports
-/// still reads at most `?4` of each.
+/// Read newest first through the partial index `audit_imports` (migration 43), whose
+/// condition this one repeats, so a day of a million imports reads at most `?4` entries
+/// and parses no command.
 const CHOSEN_IMPORTS: &str = "
     WITH chosen AS (
-        SELECT seq FROM (
-            SELECT seq FROM (
-                SELECT seq FROM audit_log
-                WHERE kind = 'catalog.import_record' AND at >= ?1
-                ORDER BY at DESC, seq DESC LIMIT ?4)
-            UNION ALL
-            SELECT seq FROM (
-                SELECT seq FROM audit_log
-                WHERE kind = 'catalog.add_record' AND at >= ?1
-                  AND json_extract(command, '$.Catalog.AddRecord.source') IS NOT NULL
-                ORDER BY at DESC, seq DESC LIMIT ?4))
-        ORDER BY seq DESC LIMIT ?4
+        SELECT seq FROM audit_log INDEXED BY audit_imports
+        WHERE (kind = 'catalog.import_record'
+               OR (kind = 'catalog.add_record'
+                   AND json_extract(command, '$.Catalog.AddRecord.source') IS NOT NULL))
+          AND at >= ?1
+        ORDER BY at DESC, seq DESC LIMIT ?4
     )";
 
 impl WorkListReader for ElzevirStore {

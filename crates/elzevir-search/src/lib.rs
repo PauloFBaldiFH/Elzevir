@@ -8,6 +8,7 @@
 //! documents and the cursor can never disagree after a crash.
 
 mod facets;
+mod merge;
 mod schema;
 
 use std::collections::HashSet;
@@ -112,6 +113,7 @@ impl TantivyIndex {
         let writer = index
             .writer_with_num_threads(threads, threads.saturating_mul(MEMORY_PER_THREAD))
             .map_err(error)?;
+        writer.set_merge_policy(Box::new(merge::CappedMergePolicy::default()));
         let reader = index
             .reader_builder()
             .reload_policy(ReloadPolicy::Manual)

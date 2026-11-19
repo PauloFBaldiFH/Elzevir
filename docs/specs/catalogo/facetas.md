@@ -65,4 +65,21 @@ O Koha mostra facetas na busca do OPAC e da equipe (`C4::Search::getRecords` com
 - `elzevir-search`: as contagens guardadas do acervo inteiro mudam depois de um commit.
 - `elzevir-store` (unidade): "meus recentes" agrupa por família, na ordem do último toque, só da pessoa; "importados hoje" pega importação de arquivo depois do instante dado e deixa de fora o que foi criado na tela. `elzevir-app::worklist`: páginas sem buraco nem repetição. `crates/elzevir-web/tests/staff_catalog.rs`: botões das listas, lista marcada, lista com a pessoa logada, página seguinte com `list=`.
 
-Desempenho (critério da 2.10: p95 < 50 ms em 1 milhão de registros): `cargo bench -p elzevir --bench opac` mede a página de navegação e a de busca já com a faixa, e uma página filtrada (só `language:por`, e palavras com `language:por`).
+Desempenho (critério da 2.10: p95 < 50 ms em 1 milhão de registros): `cargo bench -p elzevir --bench opac` mede a página de navegação e a de busca já com a faixa, e uma página filtrada (só `language:por`, e palavras com `language:por`), e a primeira a décima página de "Importados hoje". `ELZEVIR_BENCH_DIR` guarda o acervo montado e mede de novo sem importar.
+
+Medida de 2026-11-19, numa máquina de 4 núcleos, 1 milhão de registros, 2.000 páginas cada, com o cache do sistema já quente:
+
+| Página | p50 | p95 | p99 |
+|---|---|---|---|
+| Navegação | 12,6 ms | **18,4 ms** | 31,4 ms |
+| Busca | 13,5 ms | **21,7 ms** | 115,0 ms |
+| Filtrada | 30,8 ms | **48,0 ms** | 54,7 ms |
+| "Importados hoje" | 15,0 ms | **19,8 ms** | 24,8 ms |
+
+Antes desta medida a página filtrada dava p95 de 120 ms e "Importados hoje", 78 ms. Três mudanças trouxeram as duas para baixo do critério:
+
+- **Segmentos de até 64 mil documentos.** As facetas de um filtro que casa com quase todo o acervo (985 mil famílias) contam cada documento. O executor espalha os segmentos do índice pelos núcleos, mas a política de junção do Tantivy fazia um segmento de 800 mil, trabalho de um núcleo só. A política do Elzevir é a mesma, cortando cada junção em 64 mil documentos: a contagem caiu de 90 ms para 43 ms, e a busca por palavras não ficou mais lenta. Um índice já montado só ganha segmentos menores quando é reconstruído.
+- **Facetas contadas ao mesmo tempo que a página.** A contagem roda numa thread própria enquanto a busca e as famílias da página são lidas.
+- **Índice parcial das importações** (`audit_imports`, migração 43). "Importados hoje" lia o JSON de cada um dos 2.000 comandos mais recentes para saber se tinha registro de origem: 50 ms. O índice guarda essa condição, e a consulta caiu para 0,6 ms.
+
+A página filtrada fica a 2 ms do limite. Um índice frio, logo depois de ligar o servidor, é mais lento nos primeiros pedidos.
