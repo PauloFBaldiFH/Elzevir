@@ -12,8 +12,8 @@ mod model;
 mod replay;
 
 pub use koha_tests::{
-    Case, CaseError, EventSpec, Expect, KohaTestScenario, StateSpec, load_koha_test, run_case,
-    run_koha_test,
+    CalendarRoute, Case, CaseError, EventSpec, Expect, KohaTestScenario, StateSpec, load_koha_test,
+    run_case, run_case_through, run_koha_test, run_koha_test_through,
 };
 pub use model::{
     CalendarSnapshot, Checkout, Expected, Given, ItemGiven, LoanRecorded, PatronGiven,

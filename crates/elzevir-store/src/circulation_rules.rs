@@ -2,8 +2,8 @@
 //! `circ.set_rules` and the rule book (docs/specs/circulacao/regras.md).
 
 use elzevir_app::circulation_rules::{
-    CirculationCommand, CirculationOutput, CirculationRefusal, RuleBook, RuleBookError, RuleChange,
-    RuleKind, checked_rules,
+    CirculationCommand, CirculationDeskError, CirculationOutput, CirculationRefusal, RuleBook,
+    RuleChange, RuleKind, checked_rules,
 };
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::staff::StaffId;
@@ -25,6 +25,9 @@ const fn refused(refusal: CirculationRefusal) -> CommandFailed<WriteRefusal> {
 pub(crate) fn apply(tx: &WriteTx<'_>, command: &CirculationCommand) -> Applied {
     match command {
         CirculationCommand::SetRules(change) => set_rules(tx.connection(), change),
+        CirculationCommand::ChangeCalendar(change) => {
+            crate::calendar::change(tx.connection(), change)
+        }
     }
 }
 
@@ -100,7 +103,7 @@ fn set_rules(connection: &Connection, change: &RuleChange) -> Applied {
 }
 
 impl RuleBook for ElzevirStore {
-    fn rules(&self) -> Result<Vec<CirculationRule>, RuleBookError> {
+    fn rules(&self) -> Result<Vec<CirculationRule>, CirculationDeskError> {
         self.readers()
             .read(|c| {
                 let mut statement = c.prepare_cached(
@@ -120,11 +123,11 @@ impl RuleBook for ElzevirStore {
                 })?;
                 rows.collect::<rusqlite::Result<Vec<_>>>()
             })
-            .map_err(|error| RuleBookError::Unavailable(error.to_string()))?
+            .map_err(|error| CirculationDeskError::Unavailable(error.to_string()))?
             .into_iter()
             .map(|(name, scope, value)| {
                 let kind = RuleKind::from_koha_name(&name).ok_or_else(|| {
-                    RuleBookError::Unavailable(format!("unknown stored rule `{name}`"))
+                    CirculationDeskError::Unavailable(format!("unknown stored rule `{name}`"))
                 })?;
                 Ok(CirculationRule { kind, scope, value })
             })
@@ -135,23 +138,23 @@ impl RuleBook for ElzevirStore {
         &self,
         actor: StaffId,
         change: RuleChange,
-    ) -> Result<CirculationOutput, RuleBookError> {
+    ) -> Result<CirculationOutput, CirculationDeskError> {
         let unavailable =
-            |error: &dyn std::fmt::Display| RuleBookError::Unavailable(error.to_string());
+            |error: &dyn std::fmt::Display| CirculationDeskError::Unavailable(error.to_string());
         let pending = self
             .submit_as(
                 actor.0,
                 WriteCommand::Circulation(CirculationCommand::SetRules(change)),
             )
             .map_err(|error| match error {
-                SubmitError::Busy => RuleBookError::Busy,
+                SubmitError::Busy => CirculationDeskError::Busy,
                 SubmitError::Closed => unavailable(&error),
             })?;
         match pending.wait() {
             Ok(WriteOutput::Circulation(output)) => Ok(output),
             Ok(_) => Err(unavailable(&"the writer answered with another result")),
             Err(CommandFailed::Rejected(WriteRefusal::Circulation(refusal))) => {
-                Err(RuleBookError::Refused(refusal))
+                Err(CirculationDeskError::Refused(refusal))
             }
             Err(failure) => Err(unavailable(&failure)),
         }
