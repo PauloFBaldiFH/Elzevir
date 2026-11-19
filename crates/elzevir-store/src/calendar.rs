@@ -106,10 +106,40 @@ pub(crate) fn change(connection: &Connection, change: &CalendarChange) -> Applie
                 params![branch, first.to_string(), last.to_string()],
             ))?
         }
+        CalendarAction::CopyTo { to, after } => copy(connection, branch, to.0, *after)?,
     };
     Ok(WriteOutput::Circulation(
         CirculationOutput::CalendarChanged { entries },
     ))
+}
+
+/// Copies what `to` does not have yet: `OR IGNORE` keeps the receiving branch's entries.
+fn copy(
+    connection: &Connection,
+    from: i64,
+    to: i64,
+    after: Date,
+) -> Result<usize, CommandFailed<WriteRefusal>> {
+    if !exists(connection, "SELECT 1 FROM branches WHERE id = ?1", to)? {
+        return Err(refused(CirculationRefusal::UnknownBranch));
+    }
+    let weekly = written(connection.execute(
+        "INSERT OR IGNORE INTO calendar_weekly (branch_id, weekday, title, description)
+         SELECT ?2, weekday, title, description FROM calendar_weekly WHERE branch_id = ?1",
+        params![from, to],
+    ))?;
+    let annual = written(connection.execute(
+        "INSERT OR IGNORE INTO calendar_annual (branch_id, month, day, title, description)
+         SELECT ?2, month, day, title, description FROM calendar_annual WHERE branch_id = ?1",
+        params![from, to],
+    ))?;
+    let dated = written(connection.execute(
+        "INSERT OR IGNORE INTO calendar_dates (branch_id, day, open, title, description)
+         SELECT ?2, day, open, title, description FROM calendar_dates
+         WHERE branch_id = ?1 AND day > ?3",
+        params![from, to, after.to_string()],
+    ))?;
+    Ok(weekly + annual + dated)
 }
 
 /// A stored date; a malformed one is a storage failure, never a guess.

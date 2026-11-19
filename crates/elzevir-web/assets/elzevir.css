@@ -646,3 +646,12 @@ main:has(.import-workspace) { max-width: 90rem; }
 .rules-overview tr[aria-current] { background: var(--elzevir-color-border); }
 .rules-chooser { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: end; margin-bottom: 12px; }
 .rules-blank { font-size: 0.8rem; white-space: nowrap; }
+.calendar { max-width: 56rem; }
+.calendar-grid { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 0.85rem; }
+.calendar-grid th, .calendar-grid td { border: 1px solid var(--elzevir-color-border); padding: 4px; vertical-align: top; height: 3.6rem; }
+.calendar-grid td.calendar-closed { background: var(--elzevir-color-border); }
+.calendar-grid td.calendar-exception { outline: 2px dashed var(--elzevir-color-border); outline-offset: -3px; }
+.calendar-grid td.calendar-today .calendar-day { font-weight: 700; text-decoration: underline; }
+.calendar-day { display: block; }
+.calendar-state, .calendar-title { display: block; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calendar h2 a { text-decoration: none; padding: 0 8px; }
