@@ -134,6 +134,8 @@ pub enum PatronField {
     Surname,
     /// First name.
     FirstName,
+    /// CPF, when the typed text is not one.
+    Cpf,
     /// Date of birth.
     DateOfBirth,
     /// E-mail address.
@@ -191,6 +193,7 @@ impl PatronRefusal {
             Self::BadField(PatronField::Cardnumber) => "patron-error-cardnumber",
             Self::BadField(PatronField::Surname) => "patron-error-surname",
             Self::BadField(PatronField::FirstName) => "patron-error-first-name",
+            Self::BadField(PatronField::Cpf) => "patron-error-cpf",
             Self::BadField(PatronField::DateOfBirth) => "patron-error-date-of-birth",
             Self::BadField(PatronField::Email) => "patron-error-email",
             Self::BadField(PatronField::Phone) => "patron-error-phone",

@@ -51,6 +51,8 @@ pub struct StaffPatron<'a> {
     pub rows: Vec<(&'static str, String)>,
     /// Whether the enrolment is over.
     pub expired: bool,
+    /// The edit form, for who manages patrons.
+    pub edit_url: Option<String>,
 }
 
 /// The patron categories.
@@ -82,4 +84,61 @@ pub struct CategoryLine {
     pub until: String,
     /// How many patrons it has, as a sentence.
     pub patrons: String,
+}
+
+/// The form that enrols or edits a patron.
+#[derive(Template)]
+#[template(path = "staff_patron_form.html")]
+pub struct StaffPatronForm<'a> {
+    /// Interface texts.
+    pub t: &'a I18n,
+    /// Anti-forgery token of the session.
+    pub csrf: &'a str,
+    /// Where the form posts.
+    pub action: String,
+    /// Fluent key of the title.
+    pub title: &'static str,
+    /// Version of the patron read, 0 for a new one.
+    pub row_version: i64,
+    /// The values in the fields.
+    pub values: PatronFormValues,
+    /// Branches to choose from: id and name.
+    pub branches: Vec<(i64, String)>,
+    /// Categories to choose from: id and name.
+    pub categories: Vec<(i64, String)>,
+    /// Whether the last change was stored.
+    pub saved: bool,
+    /// Message key of why the last change was refused.
+    pub refused: Option<&'static str>,
+}
+
+/// The texts of the patron form, as typed or as stored.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PatronFormValues {
+    /// Library card number.
+    pub cardnumber: String,
+    /// Surname.
+    pub surname: String,
+    /// First name.
+    pub first_name: String,
+    /// CPF, whole: only this form shows it.
+    pub cpf: String,
+    /// Date of birth, `YYYY-MM-DD`.
+    pub date_of_birth: String,
+    /// E-mail address.
+    pub email: String,
+    /// Phone number.
+    pub phone: String,
+    /// Postal address.
+    pub address: String,
+    /// Chosen branch id.
+    pub branch: i64,
+    /// Chosen category id.
+    pub category: i64,
+    /// Expiry date, `YYYY-MM-DD`; empty takes it from the category.
+    pub expires: String,
+    /// Internal note.
+    pub staff_note: String,
+    /// Whether the reading history is kept.
+    pub history_kept: bool,
 }

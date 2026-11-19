@@ -166,6 +166,12 @@ enum StaffAction {
         /// Also grant cataloguing: adding and editing records and Items.
         #[arg(long)]
         cataloguing: bool,
+        /// Also grant circulation: opening patron records and lending.
+        #[arg(long)]
+        circulation: bool,
+        /// Also grant patron management: enrolling and editing patrons.
+        #[arg(long)]
+        patrons: bool,
     },
 }
 
@@ -197,7 +203,18 @@ fn main() -> ExitCode {
             login,
             admin,
             cataloguing,
-        }) => add_staff(&data_dir, &login, admin, cataloguing),
+            circulation,
+            patrons,
+        }) => add_staff(
+            &data_dir,
+            &login,
+            [
+                (admin, Permission::Administration),
+                (cataloguing, Permission::Cataloguing),
+                (circulation, Permission::Circulation),
+                (patrons, Permission::Patrons),
+            ],
+        ),
         Command::Import(args) => import_batch_cli::run(args),
         Command::ImportModel { tsv } => import_batch_cli::model(tsv),
         Command::Export(args) => catalog_cli::export(&args),
@@ -613,7 +630,7 @@ async fn wait_shutdown(receiver: tokio::sync::watch::Receiver<bool>) {
     shutdown::wait(receiver).await;
 }
 
-fn add_staff(data_dir: &Path, login: &str, admin: bool, cataloguing: bool) -> Result<(), String> {
+fn add_staff(data_dir: &Path, login: &str, granted: [(bool, Permission); 4]) -> Result<(), String> {
     let password = if let Ok(password) = std::env::var("ELZEVIR_STAFF_PASSWORD") {
         password
     } else {
@@ -630,12 +647,11 @@ fn add_staff(data_dir: &Path, login: &str, admin: bool, cataloguing: bool) -> Re
     let mut permissions = [Permission::StaffInterface]
         .into_iter()
         .collect::<std::collections::BTreeSet<_>>();
-    if admin {
-        permissions.insert(Permission::Administration);
-    }
-    if cataloguing {
-        permissions.insert(Permission::Cataloguing);
-    }
+    permissions.extend(
+        granted
+            .into_iter()
+            .filter_map(|(asked, permission)| asked.then_some(permission)),
+    );
     let password_hash = hash_password(&password).map_err(|e| e.to_string())?;
     let data = open_store(data_dir)?;
     let outcome = data

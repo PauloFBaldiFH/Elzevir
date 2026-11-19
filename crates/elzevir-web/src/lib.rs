@@ -24,6 +24,7 @@ mod importing;
 mod items;
 mod new_record;
 mod opac;
+mod patron_form;
 mod patrons;
 mod record_fields;
 mod record_form;
@@ -172,7 +173,15 @@ pub fn router(state: AppState) -> Router {
             "/equipe/leitores/categorias",
             get(patrons::categories).post(patrons::change_category),
         )
+        .route(
+            "/equipe/leitores/novo",
+            get(patron_form::new_patron).post(patron_form::add_patron),
+        )
         .route("/equipe/leitores/{id}", get(patrons::record))
+        .route(
+            "/equipe/leitores/{id}/editar",
+            get(patron_form::edit_patron).post(patron_form::update_patron),
+        )
         .route("/equipe/acervo/lote/marc", get(batch::export_marc))
         .route("/equipe/acervo/lote/exemplares", post(batch::change_items))
         .route("/equipe/acervo/listas", post(batch::change_list))

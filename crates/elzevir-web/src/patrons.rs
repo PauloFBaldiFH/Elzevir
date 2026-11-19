@@ -28,7 +28,7 @@ use crate::{AppState, render};
 const CATEGORIES: &str = "/equipe/leitores/categorias";
 
 /// The session and the desk, or the response that stops the request.
-fn open(
+pub(crate) fn open(
     state: &AppState,
     headers: &HeaderMap,
     allowed: impl Fn(&ActiveSession) -> bool,
@@ -49,7 +49,7 @@ fn sees_patrons(session: &ActiveSession) -> bool {
     session.identity.can(Permission::Circulation) || session.identity.can(Permission::Patrons)
 }
 
-fn failed(error: &PatronDeskError) -> Response {
+pub(crate) fn failed(error: &PatronDeskError) -> Response {
     match error {
         PatronDeskError::Refused(PatronRefusal::UnknownPatron) => {
             StatusCode::NOT_FOUND.into_response()
@@ -64,7 +64,7 @@ fn failed(error: &PatronDeskError) -> Response {
 }
 
 /// A date as the language writes it.
-fn shown(t: &I18n, day: Date) -> String {
+pub(crate) fn shown(t: &I18n, day: Date) -> String {
     if t.lang().starts_with("pt") {
         day.strftime("%d/%m/%Y").to_string()
     } else {
@@ -73,13 +73,13 @@ fn shown(t: &I18n, day: Date) -> String {
 }
 
 /// Today in the library's time zone.
-fn today(state: &AppState) -> Date {
+pub(crate) fn today(state: &AppState) -> Date {
     jiff::Timestamp::now()
         .to_zoned(state.inner.config.time_zone.clone())
         .date()
 }
 
-fn full_name(surname: &str, first_name: Option<&str>) -> String {
+pub(crate) fn full_name(surname: &str, first_name: Option<&str>) -> String {
     match first_name {
         Some(first) => format!("{surname}, {first}"),
         None => surname.to_owned(),
@@ -174,6 +174,10 @@ pub(crate) async fn record(
         name: full_name(&patron.fields.surname, patron.fields.first_name.as_deref()),
         rows: record_rows(t, &patron),
         expired,
+        edit_url: session
+            .identity
+            .can(Permission::Patrons)
+            .then(|| format!("/equipe/leitores/{id}/editar")),
     })
 }
 

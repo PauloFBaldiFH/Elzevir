@@ -31,7 +31,7 @@
 
 ### Permissão
 
-15. Todo comando de catálogo exige a permissão `cataloguing` (`WriteCommand::permission`); contas de equipe exigem `administration`. A checagem é feita onde o pedido da pessoa vira comando (rotas da equipe, tarefa 2.5); a escritora confia no que recebe. `elzevir staff add --cataloguing` concede a permissão.
+15. Todo comando de catálogo exige a permissão `cataloguing` (`WriteCommand::permission`); contas de equipe exigem `administration`. A checagem é feita onde o pedido da pessoa vira comando (rotas da equipe, tarefa 2.5); a escritora confia no que recebe. `elzevir staff add --cataloguing` concede a permissão (e `--circulation` e `--patrons` as de leitores, [leitores](../circulacao/leitores.md)).
 
 ### Edição pela tela (tarefa 2.5)
 

@@ -21,6 +21,7 @@
 {% else if searched %}
 <p role="status">{{ t.get("patrons-none") }}</p>
 {% endif %}
-{% if can_manage %}<p><a href="/equipe/leitores/categorias">{{ t.get("patron-categories-title") }}</a></p>{% endif %}
+{% if can_manage %}<p><a href="/equipe/leitores/novo">{{ t.get("patron-new") }}</a></p>
+<p><a href="/equipe/leitores/categorias">{{ t.get("patron-categories-title") }}</a></p>{% endif %}
 </div>
 {% endblock %}
