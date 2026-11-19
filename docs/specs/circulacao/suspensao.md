@@ -1,6 +1,6 @@
 # Suspensão na devolução atrasada
 
-> Status: tarefa 3.5, parte c. A gravação do oráculo vem com a da devolução e da renovação (parte d). Base: Koha 26.05.05.
+> Status: tarefa 3.5, partes c e d. Base: Koha 26.05.05.
 
 ## 1. Comportamento
 
@@ -24,7 +24,7 @@
 
 ## 3. Paridade
 
-`exigida`. Prova, por enquanto: `crates/elzevir-domain/src/suspension.rs` (cálculo: carência, período, máximo, cumulativa, calendário) e `crates/elzevir-store/tests/checkout.rs` (devolução atrasada suspende, empréstimo recusado até o fim, nova suspensão não encurta a atual). A gravação do oráculo vem na parte d.
+`exigida`. Prova, por enquanto: `crates/elzevir-domain/src/suspension.rs` (cálculo: carência, período, máximo, cumulativa, calendário) e `crates/elzevir-store/tests/checkout.rs` (devolução atrasada suspende, empréstimo recusado até o fim, nova suspensão não encurta a atual) e `crates/elzevir/tests/checkin_oracle.rs`, que reproduz `scenarios/circulacao/devolucao-renovacao.koha.json`: devolução quatro dias depois do vencimento, com fim de semana e feriados no atraso e na suspensão, dá o mesmo fim que o Koha, e o empréstimo seguinte é recusado com `DEBARRED` e `USERBLOCKEDWITHENDDATE`.
 
 ## 4. Casos de borda
 

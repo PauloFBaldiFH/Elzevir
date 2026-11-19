@@ -1,6 +1,6 @@
 # Devolução
 
-> Status: tarefa 3.5, partes a e c (devolução sem multa; a suspensão está em [suspensao.md](suspensao.md)). A gravação do oráculo vem na parte d; a multa vem com a conta do leitor (3.7) e a reserva encontrada na devolução com as reservas (3.8). Base: Koha 26.05.05.
+> Status: tarefa 3.5, partes a, c e d (devolução sem multa; a suspensão está em [suspensao.md](suspensao.md)). A multa vem com a conta do leitor (3.7) e a reserva encontrada na devolução com as reservas (3.8). Base: Koha 26.05.05.
 
 ## 1. Comportamento
 
@@ -28,7 +28,7 @@
 
 ## 3. Paridade
 
-`exigida`. Prova, por enquanto: `crates/elzevir-domain/src/checkin.rs` (decisão pura) e `crates/elzevir-store/tests/checkout.rs` (devolução pelo comando: volta para a origem, chegada da transferência, regra `noreturn`, atraso, retirado, perdido). A gravação do oráculo vem na parte seguinte.
+`exigida`. Prova, por enquanto: `crates/elzevir-domain/src/checkin.rs` (decisão pura) e `crates/elzevir-store/tests/checkout.rs` (devolução pelo comando: volta para a origem, chegada da transferência, regra `noreturn`, atraso, retirado, perdido). A gravação do oráculo (`scenarios/circulacao/devolucao-renovacao.koha.json`) cobre a devolução atrasada na própria unidade e a suspensão que ela dá; as transferências entre unidades ainda não foram gravadas.
 
 ## 4. Casos de borda
 
