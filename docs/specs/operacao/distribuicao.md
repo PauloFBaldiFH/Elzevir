@@ -13,6 +13,9 @@ executa o binário extraído fora do checkout e verifica o catálogo, a busca
 e a saúde do banco e do indexador. O job de publicação calcula `SHA256SUMS`
 dos pacotes e dos instaladores, anexa os arquivos ao release e publica.
 Tags com sufixo de pré-lançamento são publicadas como pré-releases.
+A release também pode ser publicada pela interface web do GitHub, que cria a
+tag: o job encontra a release publicada sem `SHA256SUMS` e anexa os pacotes.
+Uma release que já tem `SHA256SUMS` nunca é alterada.
 
 Os instaladores Linux e PowerShell consultam `releases/latest` e fixam a tag
 resolvida antes de baixar pacote e somas por HTTPS. Como `releases/latest`
