@@ -18,6 +18,7 @@ impl CatalogEditor for ElzevirStore {
             Edit::NewInstance(new) => CatalogCommand::AddInstance(new),
             Edit::Items(update) => CatalogCommand::SaveItems(update),
             Edit::BatchItems(change) => CatalogCommand::ChangeItems(change),
+            Edit::SavedList(change) => CatalogCommand::ChangeSavedList(change),
             Edit::Registry(change) => CatalogCommand::ChangeRegistry(change),
             Edit::Statements(edit) => CatalogCommand::EditStatements(edit),
             Edit::Agent(update) => CatalogCommand::UpdateAgent(update),

@@ -5,11 +5,11 @@
 use elzevir_app::catalog::CodeLists;
 use elzevir_app::material::{CarrierKind, ContentKind};
 use elzevir_app::search::{Facet, FacetCounts, Filter};
-use elzevir_app::worklist::WorkList;
+use elzevir_app::worklist::{SavedList, WorkList};
 use elzevir_data::vocabulary;
 use elzevir_domain::catalog::BranchId;
 use elzevir_web_templates::{
-    ActiveFilter, FacetMenu, FacetOption, FacetStrip, I18n, WorkListLink, url_encode,
+    ActiveFilter, FacetMenu, FacetOption, FacetStrip, I18n, SavedListLink, WorkListLink, url_encode,
 };
 
 use crate::icons::{carrier_badge, content_badge};
@@ -42,16 +42,20 @@ fn lists(current: Option<WorkList>) -> Vec<WorkListLink> {
         url: "/equipe/acervo".to_owned(),
         current: current.is_none(),
     };
-    std::iter::once(whole)
-        .chain(WorkList::ALL.into_iter().map(|list| WorkListLink {
-            label_key: match list {
-                WorkList::Recent => "list-recent",
-                WorkList::ImportedToday => "list-imported-today",
-            },
+    let fixed = WorkList::ALL.into_iter().filter_map(|list| {
+        let label_key = match list {
+            WorkList::Recent => "list-recent",
+            WorkList::ImportedToday => "list-imported-today",
+            // Saved lists have their own menu, not a button.
+            WorkList::Saved(_) => return None,
+        };
+        Some(WorkListLink {
+            label_key,
             url: list_url(list),
             current: current == Some(list),
-        }))
-        .collect()
+        })
+    });
+    std::iter::once(whole).chain(fixed).collect()
 }
 
 /// The strip of a work list's page: its buttons alone (facetas.md, item 17).
@@ -61,6 +65,31 @@ pub(crate) fn list_strip(list: WorkList, empty: bool) -> FacetStrip {
         list_empty: empty,
         ..FacetStrip::default()
     }
+}
+
+/// `strip` with the menu of the saved lists, `current` marked; a cataloguer may delete
+/// the one shown (docs/specs/catalogo/lote.md, items 18 and 20).
+pub(crate) fn with_saved(
+    strip: &mut FacetStrip,
+    saved: &[SavedList],
+    current: Option<WorkList>,
+    can_catalogue: bool,
+) {
+    strip.saved = saved
+        .iter()
+        .map(|list| SavedListLink {
+            name: list.name.clone(),
+            url: list_url(WorkList::Saved(list.id)),
+            families: list.families,
+            current: current == Some(WorkList::Saved(list.id)),
+        })
+        .collect();
+    strip.deletable = match current {
+        Some(WorkList::Saved(list)) if can_catalogue && strip.saved_current().is_some() => {
+            Some(list.0)
+        }
+        _ => None,
+    };
 }
 
 /// The listing address for `query` and `filters`.
@@ -171,6 +200,7 @@ pub(crate) fn strip(
         kept: filters.iter().map(written).collect(),
         clear_url: (!filters.is_empty()).then(|| listing_url(query, &[])),
         menus,
+        ..FacetStrip::default()
     }
 }
 

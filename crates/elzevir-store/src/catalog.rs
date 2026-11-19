@@ -79,6 +79,9 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CatalogCommand) -> Applied {
         CatalogCommand::AddInstance(new) => add_instance_of_work(tx, new)?,
         CatalogCommand::SaveItems(update) => crate::items::save_items(tx, update)?,
         CatalogCommand::ChangeItems(change) => crate::batch::change_items(tx, change)?,
+        CatalogCommand::ChangeSavedList(change) => {
+            crate::saved_lists::change_saved_list(tx, change)?
+        }
         CatalogCommand::NameCodes(codes) => crate::codes::name_codes(tx, codes)?,
         CatalogCommand::ChangeRegistry(change) => crate::registries::change_registry(tx, change)?,
         CatalogCommand::SetTypeTranslations(translations) => {

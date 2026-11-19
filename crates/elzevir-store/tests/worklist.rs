@@ -12,6 +12,7 @@ use std::num::NonZeroUsize;
 use elzevir_app::catalog::{
     CatalogCommand, CatalogReader, InstanceChange, InstanceUpdate, WorkChange, WorkUpdate,
 };
+use elzevir_app::catalog::{CatalogOutput, CatalogRefusal};
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{StaffCommand, WriteCommand, WriteOutput};
 use elzevir_app::editing::{CatalogEditor, Edit};
@@ -19,7 +20,11 @@ use elzevir_app::export::item_codes;
 use elzevir_app::import::{ImportOptions, import_marc21};
 use elzevir_app::listing::FamilyHead;
 use elzevir_app::staff::StaffId;
-use elzevir_app::worklist::{WorkListQuery, WorkListReader};
+use elzevir_app::worklist::{
+    MAX_LIST_FAMILIES, SavedList, SavedListChange, SavedListId, SavedListRefusal, WorkListQuery,
+    WorkListReader,
+};
+
 use elzevir_domain::catalog::{HubId, InstanceId, WorkId};
 use elzevir_marc::Limits;
 use elzevir_store::{ElzevirHandler, ElzevirStore, StoreConfig};
@@ -193,4 +198,145 @@ fn imported_today_lists_the_families_a_file_brought_since_the_instant() {
         "the instant counts"
     );
     assert_eq!(since("2026-11-17T03:00:00Z"), []);
+}
+
+fn change_list(
+    store: &ElzevirStore,
+    staff: StaffId,
+    change: SavedListChange,
+) -> Result<SavedListId, SavedListRefusal> {
+    match store.apply(staff, Edit::SavedList(change)) {
+        Ok(CatalogOutput::SavedListChanged(list)) => Ok(list),
+        Err(elzevir_app::editing::EditFailed::Refused(CatalogRefusal::SavedList(refusal))) => {
+            Err(refusal)
+        }
+        other => panic!("unexpected {other:?}"),
+    }
+}
+
+fn work(n: i64) -> FamilyHead {
+    FamilyHead::Work(WorkId(n))
+}
+
+#[test]
+fn a_saved_list_keeps_families_once_the_last_added_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = imported(&dir);
+    let ana = account(&store, "ana");
+    let heads = |list| store.heads(WorkListQuery::Saved(list), 0, PAGE).unwrap();
+    let list = change_list(
+        &store,
+        ana,
+        SavedListChange::Create {
+            name: "  Doações de 2026 ".to_owned(),
+            heads: vec![work(1), work(2), work(1)],
+        },
+    )
+    .unwrap();
+    assert_eq!(heads(list), [work(2), work(1)]);
+    // A family already there stays where it is.
+    change_list(
+        &store,
+        ana,
+        SavedListChange::Add {
+            list,
+            heads: vec![work(3), work(1)],
+        },
+    )
+    .unwrap();
+    assert_eq!(heads(list), [work(3), work(2), work(1)]);
+    change_list(
+        &store,
+        ana,
+        SavedListChange::Remove {
+            list,
+            heads: vec![work(2)],
+        },
+    )
+    .unwrap();
+    assert_eq!(heads(list), [work(3), work(1)]);
+    assert_eq!(
+        store.heads(WorkListQuery::Saved(list), 1, PAGE).unwrap(),
+        [work(1)]
+    );
+    let other = change_list(
+        &store,
+        ana,
+        SavedListChange::Create {
+            name: "Avaliar".to_owned(),
+            heads: Vec::new(),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        store.saved_lists().unwrap(),
+        [
+            SavedList {
+                id: other,
+                name: "Avaliar".to_owned(),
+                families: 0
+            },
+            SavedList {
+                id: list,
+                name: "Doações de 2026".to_owned(),
+                families: 2
+            },
+        ]
+    );
+    // Saving lists does not touch the records, so it is not a recent family.
+    assert_eq!(
+        store.heads(WorkListQuery::TouchedBy(ana), 0, PAGE).unwrap(),
+        []
+    );
+    change_list(&store, ana, SavedListChange::Delete { list }).unwrap();
+    assert_eq!(heads(list), []);
+    assert_eq!(store.saved_lists().unwrap().len(), 1);
+}
+
+#[test]
+fn a_taken_name_a_full_list_or_an_unknown_one_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = imported(&dir);
+    let ana = account(&store, "ana");
+    let create = |name: &str, heads: Vec<FamilyHead>| {
+        change_list(
+            &store,
+            ana,
+            SavedListChange::Create {
+                name: name.to_owned(),
+                heads,
+            },
+        )
+    };
+    let list = create("Doações", Vec::new()).unwrap();
+    assert_eq!(
+        create("DOAÇÕES", Vec::new()),
+        Err(SavedListRefusal::NameTaken)
+    );
+    assert_eq!(create(" ", Vec::new()), Err(SavedListRefusal::BadName));
+    let full: Vec<FamilyHead> = (1..=i64::try_from(MAX_LIST_FAMILIES).unwrap())
+        .map(work)
+        .collect();
+    change_list(&store, ana, SavedListChange::Add { list, heads: full }).unwrap();
+    assert_eq!(
+        change_list(
+            &store,
+            ana,
+            SavedListChange::Add {
+                list,
+                heads: vec![work(1), work(999_999)]
+            }
+        ),
+        Err(SavedListRefusal::TooManyFamilies)
+    );
+    assert_eq!(
+        change_list(
+            &store,
+            ana,
+            SavedListChange::Delete {
+                list: SavedListId(404)
+            }
+        ),
+        Err(SavedListRefusal::Unknown)
+    );
 }

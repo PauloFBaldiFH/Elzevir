@@ -11,6 +11,7 @@ use elzevir_app::batch::{ItemSet, ItemsChange, instances_of, selection};
 use elzevir_app::catalog::{CodeLists, Place};
 use elzevir_app::editing::Edit;
 use elzevir_app::export::{ExportOptions, RecordFormat, export_selection};
+use elzevir_app::worklist::{SavedList, SavedListChange, SavedListId, WorkList};
 use elzevir_domain::catalog::{BranchId, CollectionId, PolicyId, SublocationId};
 use elzevir_web_templates::{BatchChoices, GridOption};
 use serde::Deserialize;
@@ -176,7 +177,11 @@ pub(crate) async fn change_items(
 
 /// What the batch dialog offers (lote.md, item 9): shelving places and collections carry
 /// the name of their branch.
-pub(crate) fn choices(codes: &CodeLists) -> BatchChoices {
+pub(crate) fn choices(
+    codes: &CodeLists,
+    saved: &[SavedList],
+    shown: Option<SavedListId>,
+) -> BatchChoices {
     let named = |id: i64, name: &str| GridOption {
         key: id.to_string(),
         name: name.to_owned(),
@@ -200,6 +205,11 @@ pub(crate) fn choices(codes: &CodeLists) -> BatchChoices {
             .collect(),
         locations: places(&codes.locations, |id| id.0, &placed),
         collections: places(&codes.collections, |id| id.0, &placed),
+        lists: saved
+            .iter()
+            .map(|list| named(list.id.0, &list.name))
+            .collect(),
+        current_list: shown.map(|list| list.0),
     }
 }
 
@@ -211,6 +221,65 @@ fn places<Id: Copy>(
     rows.iter()
         .map(|place| placed(key(place.id), place.branch, &place.name))
         .collect()
+}
+
+/// The body of a change of the saved lists (lote.md, item 22).
+#[derive(Debug, Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub(crate) enum ListBody {
+    Create { name: String, heads: Vec<String> },
+    Add { list: i64, heads: Vec<String> },
+    Remove { list: i64, heads: Vec<String> },
+    Delete { list: i64 },
+}
+
+impl ListBody {
+    /// The change, its families read as a selection is; `None` when it names none.
+    fn change(self) -> Option<SavedListChange> {
+        let heads = |names: &[String]| selection(names.iter().map(String::as_str));
+        Some(match self {
+            Self::Create { name, heads: names } => SavedListChange::Create {
+                name,
+                heads: heads(&names),
+            },
+            Self::Add { list, heads: names } => SavedListChange::Add {
+                list: SavedListId(list),
+                heads: Some(heads(&names)).filter(|heads| !heads.is_empty())?,
+            },
+            Self::Remove { list, heads: names } => SavedListChange::Remove {
+                list: SavedListId(list),
+                heads: Some(heads(&names)).filter(|heads| !heads.is_empty())?,
+            },
+            Self::Delete { list } => SavedListChange::Delete {
+                list: SavedListId(list),
+            },
+        })
+    }
+}
+
+/// `POST /equipe/acervo/listas`: a saved list created, filled, emptied or deleted
+/// (lote.md, items 15 to 22).
+pub(crate) async fn change_list(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<ListBody>,
+) -> Response {
+    let session = match authorize(&state, &headers) {
+        Ok(session) => session,
+        Err(status) => return status.into_response(),
+    };
+    let Some(change) = body.change() else {
+        return (StatusCode::BAD_REQUEST, "no family selected").into_response();
+    };
+    apply(&state, &session, Edit::SavedList(change)).await
+}
+
+/// The answer to a stored change of a saved list: where the list is now.
+pub(crate) fn list_answer(list: SavedListId) -> serde_json::Value {
+    serde_json::json!({
+        "list": list.0,
+        "url": crate::facets::list_url(WorkList::Saved(list)),
+    })
 }
 
 #[cfg(test)]

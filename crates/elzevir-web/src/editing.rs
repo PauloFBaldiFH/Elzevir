@@ -23,6 +23,7 @@ use elzevir_app::listing::{FamilyCursor, FamilyHead, sort_key};
 use elzevir_app::staff::Permission;
 use elzevir_app::statement_rows::{StatementRows, statements_of};
 use elzevir_app::suggestions::{AuthoritySuggestions, SUGGESTION_LIMIT, lookup_prefix};
+use elzevir_app::worklist::SavedListRefusal;
 use elzevir_domain::catalog::{InstanceId, WorkId};
 use elzevir_domain::statement::{EntityKind, EntityRef, Statement};
 use elzevir_web_templates::url_encode;
@@ -438,6 +439,9 @@ fn accepted(output: CatalogOutput, new_title: Option<String>) -> Response {
             ids: items.into_iter().map(|item| item.0).collect(),
         })
         .into_response(),
+        CatalogOutput::SavedListChanged(list) => {
+            Json(crate::batch::list_answer(list)).into_response()
+        }
         CatalogOutput::ItemsChanged { instances, items } => Json(ChangedItems {
             instances: instances.len(),
             items,
@@ -471,6 +475,16 @@ pub(crate) async fn apply(state: &AppState, session: &ActiveSession, edit: Edit)
         Ok(Err(EditFailed::Refused(CatalogRefusal::ItemRows(refusals)))) => {
             invalid_cells(state, &refusals)
         }
+        Ok(Err(EditFailed::Refused(CatalogRefusal::SavedList(SavedListRefusal::Unknown)))) => {
+            StatusCode::NOT_FOUND.into_response()
+        }
+        Ok(Err(EditFailed::Refused(CatalogRefusal::SavedList(refusal)))) => invalid(
+            state,
+            &[FieldError {
+                field: "name",
+                message_key: refusal.message_key(),
+            }],
+        ),
         Ok(Err(EditFailed::Refused(CatalogRefusal::BatchItems(refusals)))) => {
             invalid_items(state, &refusals)
         }

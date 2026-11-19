@@ -70,6 +70,9 @@ pub enum CatalogCommand {
     /// Changes every Item of some Instances, all or nothing (docs/specs/catalogo/lote.md,
     /// part b).
     ChangeItems(Box<crate::batch::ItemsChange>),
+    /// Creates, fills, empties or deletes a saved list of families
+    /// (docs/specs/catalogo/lote.md, part c).
+    ChangeSavedList(crate::worklist::SavedListChange),
     /// Gives codes of the code tables their names, creating the missing ones
     /// (docs/specs/catalogo/tabelas-de-codigos.md).
     NameCodes(Vec<NamedCode>),
@@ -833,6 +836,8 @@ pub enum CatalogOutput {
         /// Items changed.
         items: usize,
     },
+    /// A saved list changed (docs/specs/catalogo/lote.md, item 21).
+    SavedListChanged(crate::worklist::SavedListId),
     /// Codes were named, counted per table in [`crate::codes::CodeTable::ALL`] order.
     CodesNamed([NamingCount; 4]),
     /// A registry changed; the row, when it was created, renamed or given contact data.
@@ -922,6 +927,9 @@ pub enum CatalogRefusal {
         /// Most allowed.
         max: usize,
     },
+    /// A change of the saved lists was refused.
+    #[error("saved list change refused: {0:?}")]
+    SavedList(crate::worklist::SavedListRefusal),
     /// A native Item failed revalidation in the writer.
     #[error("item {position}{barcode}: {problem}", barcode = barcode_label(.barcode.as_deref()))]
     NativeItem {

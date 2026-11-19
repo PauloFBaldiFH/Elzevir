@@ -24,7 +24,17 @@
   <span class="selection-full muted" hidden>{{ t.get("selection-full") }}</span>
   <a class="selection-export" data-format="marc21" href="/equipe/acervo/lote/marc" download>{{ t.get("selection-export-marc21") }}</a>
   <a class="selection-export" data-format="marcxml" href="/equipe/acervo/lote/marc" download>{{ t.get("selection-export-marcxml") }}</a>
-  {% if batch.is_some() %}<button type="button" class="selection-items">{{ t.get("batch-items-open") }}</button>{% endif %}
+  {% if let Some(batch) = batch %}
+  <button type="button" class="selection-items">{{ t.get("batch-items-open") }}</button>
+  <span class="selection-list">
+    <label class="visually-hidden" for="selection-list">{{ t.get("saved-list-choose") }}</label>
+    <select id="selection-list">{% for option in batch.lists %}<option value="{{ option.key }}">{{ option.name }}</option>{% endfor %}<option value="new">{{ t.get("saved-list-new") }}</option></select>
+    <input type="text" class="selection-list-name" maxlength="100" placeholder="{{ t.get("saved-list-name") }}" aria-label="{{ t.get("saved-list-name") }}"{% if !batch.lists.is_empty() %} hidden{% endif %}>
+    <button type="button" class="selection-list-add">{{ t.get("saved-list-add") }}</button>
+  </span>
+  {% if let Some(list) = batch.current_list %}<button type="button" class="selection-list-remove" data-list="{{ list }}">{{ t.get("saved-list-remove") }}</button>{% endif %}
+  <span class="selection-list-error" role="alert"></span>
+  {% endif %}
   <button type="button" class="selection-clear">{{ t.get("selection-clear") }}</button>
 </div>
 {% if let Some(batch) = batch %}
@@ -55,6 +65,16 @@
   {% if let Some(strip) = strip %}
   <div class="facet-strip" role="group" aria-label="{{ t.get("facet-strip-label") }}">
     <nav class="work-lists" aria-label="{{ t.get("list-label") }}">{% for list in strip.lists %}<a href="{{ list.url }}"{% if list.current %} aria-current="page"{% endif %}>{{ t.get(list.label_key) }}</a>{% endfor %}</nav>
+    <details class="facet-menu saved-lists">
+      <summary>{% if let Some(name) = strip.saved_current() %}{{ name }}{% else %}{{ t.get("saved-list-menu") }}{% endif %}</summary>
+      <ul class="facet-options">
+        {% for list in strip.saved %}
+        <li>{% if list.current %}<strong>{{ list.name }}</strong>{% else %}<a href="{{ list.url }}">{{ list.name }}</a>{% endif %} <span class="facet-count">{{ list.families }}</span></li>
+        {% endfor %}
+        {% if strip.saved.is_empty() %}<li class="muted">{{ t.get("saved-list-none") }}</li>{% endif %}
+      </ul>
+    </details>
+    {% if let Some(list) = strip.deletable %}<button type="button" class="saved-list-delete" data-list="{{ list }}" data-confirm="{{ t.get("saved-list-delete-confirm") }}">{{ t.get("saved-list-delete") }}</button>{% endif %}
     {% if let Some(text) = strip.families_text(t) %}<span class="facet-families muted">{{ text }}</span>{% endif %}
     {% for menu in strip.menus %}
     <details class="facet-menu" data-facet="{{ menu.name }}">

@@ -475,7 +475,8 @@ async fn the_work_lists_show_what_the_person_touched_and_imported_today() {
         recent
             .contains(r#"<a href="/equipe/acervo?list=recent" aria-current="page">My recent</a>"#)
     );
-    assert!(!recent.contains("facet-menu") && !recent.contains("facet-families"));
+    // Only the saved lists' menu, no facet.
+    assert!(!recent.contains("data-facet=") && !recent.contains("facet-families"));
     let first = recent.find("Dom Casmurro").unwrap();
     assert!(recent.find("Livro 035").is_some_and(|next| first < next));
     assert!(recent.contains("/equipe/acervo?list=recent&#38;from=30"));
@@ -607,6 +608,86 @@ async fn the_items_of_the_selection_change_at_once_or_come_back_refused() {
         let response = send(&app, post_json(uri, Some(&ana), Some(&token), bad)).await;
         assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{bad}");
     }
+}
+
+#[tokio::test]
+async fn the_selection_goes_to_a_saved_list_that_the_strip_opens() {
+    let app = app();
+    let ana = signed_in(&app).await;
+    // The strip's menu names each saved list; the selection bar can add to it.
+    let page = body(send(&app, get("/equipe/acervo", Some(&ana), None)).await).await;
+    assert!(page.contains(
+        r#"<a href="/equipe/acervo?list=s3">Doações</a> <span class="facet-count">2</span>"#
+    ));
+    assert!(
+        page.contains(
+            r#"<option value="3">Doações</option><option value="new">New list…</option>"#
+        )
+    );
+    assert!(!page.contains("selection-list-remove") && !page.contains("saved-list-delete"));
+    // The list's page shows its families and lets a cataloguer take some out or delete it.
+    let list = body(send(&app, get("/equipe/acervo?list=s3", Some(&ana), None)).await).await;
+    assert!(list.contains("<summary>Doações</summary>"));
+    assert!(list.contains(r#"id="f-w2""#) && list.contains(r#"id="f-w1""#));
+    assert!(!list.contains(r#"id="f-w3""#));
+    assert!(list.contains(r#"class="selection-list-remove" data-list="3""#));
+    assert!(list.contains(r#"class="saved-list-delete" data-list="3""#));
+    // Someone who only reads sees the list but cannot change it.
+    let bia = signed_in_as(&app, "bia").await;
+    let read_only = body(send(&app, get("/equipe/acervo?list=s3", Some(&bia), None)).await).await;
+    assert!(read_only.contains(r#"id="f-w2""#) && !read_only.contains("saved-list-delete"));
+    let uri = "/equipe/acervo/listas";
+    let create = r#"{"action": "create", "name": "Para revisar", "heads": ["w1", "w4"]}"#;
+    let bia_token = page_token(&app, &bia).await;
+    let reader = send(&app, post_json(uri, Some(&bia), Some(&bia_token), create)).await;
+    assert_eq!(reader.status(), StatusCode::FORBIDDEN);
+    let no_token = send(&app, post_json(uri, Some(&ana), None, create)).await;
+    assert_eq!(no_token.status(), StatusCode::FORBIDDEN);
+    let token = page_token(&app, &ana).await;
+    let created = send(&app, post_json(uri, Some(&ana), Some(&token), create)).await;
+    assert_eq!(created.status(), StatusCode::OK);
+    assert_eq!(
+        body(created).await,
+        r#"{"list":9,"url":"/equipe/acervo?list=s9"}"#
+    );
+    let name_refused = send(
+        &app,
+        post_json(
+            uri,
+            Some(&ana),
+            Some(&token),
+            r#"{"action": "create", "name": "Taken", "heads": []}"#,
+        ),
+    )
+    .await;
+    assert_eq!(name_refused.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(
+        body(name_refused)
+            .await
+            .contains(r#""field":"name","key":"saved-list-error-taken""#)
+    );
+    let gone = send(
+        &app,
+        post_json(
+            uri,
+            Some(&ana),
+            Some(&token),
+            r#"{"action": "delete", "list": 404}"#,
+        ),
+    )
+    .await;
+    assert_eq!(gone.status(), StatusCode::NOT_FOUND);
+    let empty = send(
+        &app,
+        post_json(
+            uri,
+            Some(&ana),
+            Some(&token),
+            r#"{"action": "add", "list": 3, "heads": ["x1"]}"#,
+        ),
+    )
+    .await;
+    assert_eq!(empty.status(), StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]

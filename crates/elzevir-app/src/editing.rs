@@ -32,6 +32,8 @@ pub enum Edit {
     /// Every Item of the selected families' Instances (docs/specs/catalogo/lote.md,
     /// part b).
     BatchItems(Box<ItemsChange>),
+    /// A saved list of families (docs/specs/catalogo/lote.md, part c).
+    SavedList(crate::worklist::SavedListChange),
     /// A change to the registries (docs/specs/catalogo/bibframe-completo.md, item 23d).
     Registry(RegistryChange),
     /// The statements of some properties of a Hub or an Item (bibframe-completo.md,
