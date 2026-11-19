@@ -403,6 +403,7 @@ checkout-error-impossible = Este exemplar não pode ser emprestado a este leitor
 checkout-error-needs-confirmation = Este empréstimo precisa da sua confirmação.
 checkout-error-on-loan = Este exemplar está emprestado. Devolva-o primeiro.
 checkout-error-no-due-date = Não há data de devolução: o calendário não tem dia aberto.
+checkin-error-withdrawn = Este exemplar foi retirado do acervo e não pode ser devolvido.
 
 ## Calendário (docs/specs/circulacao/calendario.md)
 calendar-title = Calendário

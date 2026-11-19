@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Lending an Item to a patron (docs/specs/circulacao/emprestimo.md).
+//! Lending an Item to a patron and taking it back (docs/specs/circulacao/emprestimo.md,
+//! docs/specs/circulacao/devolucao.md).
 
 use elzevir_domain::catalog::BranchId;
+use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome};
 use elzevir_domain::checkout::{Alert, Confirm, Impossible};
 use elzevir_domain::patron::PatronId;
 use jiff::Zoned;
@@ -87,4 +89,50 @@ impl CheckoutRefusal {
 pub fn checked_barcode(barcode: &str) -> Option<&str> {
     let barcode = barcode.trim();
     (!barcode.is_empty() && barcode.chars().count() <= MAX_BARCODE_LENGTH).then_some(barcode)
+}
+
+/// A checkin at the desk.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CheckinRequest {
+    /// The Item's barcode, as typed or scanned.
+    pub barcode: String,
+    /// The branch of the desk (Koha: the logged-in library).
+    pub desk: BranchId,
+    /// When, in the library's time zone.
+    pub at: Zoned,
+}
+
+/// A checkin that happened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CheckedIn {
+    /// Who had the Item, when its loan ended.
+    pub patron: Option<PatronId>,
+    /// What happened to the loan.
+    pub loan: LoanOutcome,
+    /// What happened to a lost Item.
+    pub lost: LostOutcome,
+    /// Where the Item goes next.
+    pub destination: Destination,
+}
+
+/// Why a checkin did not happen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum CheckinRefusal {
+    /// No Item has this barcode (Koha: `BadBarcode`).
+    #[error("no item has this barcode")]
+    UnknownBarcode,
+    /// The Item is withdrawn (Koha: `withdrawn` with `BlockReturnOfWithdrawnItems`).
+    #[error("the item is withdrawn")]
+    Withdrawn,
+}
+
+impl CheckinRefusal {
+    /// Fluent key of the message.
+    #[must_use]
+    pub const fn message_key(&self) -> &'static str {
+        match self {
+            Self::UnknownBarcode => "checkout-error-unknown-barcode",
+            Self::Withdrawn => "checkin-error-withdrawn",
+        }
+    }
 }

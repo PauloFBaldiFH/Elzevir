@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Checkouts through the real store (docs/specs/circulacao/emprestimo.md).
+//! Checkouts and checkins through the real store (docs/specs/circulacao/emprestimo.md,
+//! docs/specs/circulacao/devolucao.md).
 #![expect(
     clippy::unwrap_used,
     clippy::panic,
@@ -16,11 +17,14 @@ use elzevir_app::circulation_rules::{
 };
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
-use elzevir_app::loans::{CheckedOut, CheckoutRefusal, CheckoutRequest};
+use elzevir_app::loans::{
+    CheckedIn, CheckedOut, CheckinRefusal, CheckinRequest, CheckoutRefusal, CheckoutRequest,
+};
 use elzevir_app::patrons::{
     CategoryChange, PatronCommand, PatronFields, PatronOutput, ReadingHistory,
 };
 use elzevir_domain::catalog::{BranchId, InstanceId};
+use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome, TransferReason};
 use elzevir_domain::checkout::{Alert, Confirm, Impossible, TooManyReason};
 use elzevir_domain::circulation_rules::RuleScopeKey;
 use elzevir_domain::patron::{Enrolment, PatronId};
@@ -215,6 +219,29 @@ impl Library {
         }
     }
 
+    fn give_back(
+        &self,
+        barcode: &str,
+        desk: BranchId,
+        at: &str,
+    ) -> Result<CheckedIn, CheckinRefusal> {
+        let at: Zoned = format!("{at}[America/Sao_Paulo]").parse().unwrap();
+        match submit(
+            &self.store,
+            WriteCommand::Circulation(CirculationCommand::Checkin(CheckinRequest {
+                barcode: barcode.to_owned(),
+                desk,
+                at,
+            })),
+        ) {
+            Ok(WriteOutput::Circulation(CirculationOutput::CheckedIn(done))) => Ok(done),
+            Err(CommandFailed::Rejected(WriteRefusal::Circulation(
+                CirculationRefusal::Checkin(refusal),
+            ))) => Err(refusal),
+            other => panic!("{other:?}"),
+        }
+    }
+
     fn read<T: rusqlite::types::FromSql>(&self, sql: &str) -> T {
         self.store
             .readers()
@@ -369,6 +396,111 @@ fn the_patron_and_the_item_can_stop_a_checkout() {
     assert_eq!(done.alerts, [Alert::Lost(1)]);
     assert_eq!(
         library.read::<i64>("SELECT lost FROM items WHERE barcode = '0002'"),
+        0
+    );
+}
+
+#[test]
+fn a_returned_item_goes_home_and_its_transfer_arrives() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(&dir);
+    library.item("0001", ItemStatus::default());
+    library.rules(&[("maxissueqty", "5"), ("issuelength", "7")]);
+    // Lent at the annex desk, so the Item is held there.
+    library
+        .lend("0001", "2026-11-19T10:00:00-03:00", false)
+        .unwrap();
+    let back = library
+        .give_back("0001", library.annex, "2026-11-20T10:00:00-03:00")
+        .unwrap();
+    assert_eq!(
+        back,
+        CheckedIn {
+            patron: Some(library.patron),
+            loan: LoanOutcome::Ended { overdue: false },
+            lost: LostOutcome::NotLost,
+            destination: Destination::Sent {
+                to: library.central,
+                reason: TransferReason::ReturnToHome,
+            },
+        }
+    );
+    assert_eq!(library.read::<i64>("SELECT count(*) FROM loans"), 0);
+    // The patron keeps no reading history, so the ended loan forgets who borrowed.
+    assert_eq!(
+        library.read::<i64>("SELECT count(*) FROM returned_loans WHERE patron_id IS NULL"),
+        1
+    );
+    let arrived = library
+        .give_back("0001", library.central, "2026-11-21T10:00:00-03:00")
+        .unwrap();
+    assert_eq!(arrived.loan, LoanOutcome::NotOnLoan);
+    assert_eq!(
+        arrived.destination,
+        Destination::Arrived {
+            from: library.annex
+        }
+    );
+    assert_eq!(
+        library.read::<i64>("SELECT count(*) FROM transfers WHERE arrived_at IS NULL"),
+        0
+    );
+    assert_eq!(
+        library.read::<i64>("SELECT holding_branch FROM items WHERE barcode = '0001'"),
+        library.central.0
+    );
+}
+
+#[test]
+fn checkins_follow_the_return_rule_and_the_item_status() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(&dir);
+    library.rules(&[
+        ("maxissueqty", "5"),
+        ("issuelength", "7"),
+        ("returnbranch", "noreturn"),
+    ]);
+    library.item("0001", ItemStatus::default());
+    library.item(
+        "0002",
+        ItemStatus {
+            withdrawn: 1,
+            ..ItemStatus::default()
+        },
+    );
+    library.item(
+        "0003",
+        ItemStatus {
+            lost: 2,
+            ..ItemStatus::default()
+        },
+    );
+    library
+        .lend("0001", "2026-11-19T10:00:00-03:00", false)
+        .unwrap();
+    // Due on 2026-11-26 at 23:59; returned a week later, where it stays.
+    let late = library
+        .give_back("0001", library.annex, "2026-12-03T10:00:00-03:00")
+        .unwrap();
+    assert_eq!(late.loan, LoanOutcome::Ended { overdue: true });
+    assert_eq!(late.destination, Destination::Stays);
+    assert_eq!(
+        library.give_back("0002", library.central, "2026-12-03T10:00:00-03:00"),
+        Err(CheckinRefusal::Withdrawn)
+    );
+    assert_eq!(
+        library.give_back("9999", library.central, "2026-12-03T10:00:00-03:00"),
+        Err(CheckinRefusal::UnknownBarcode)
+    );
+    let found = library
+        .give_back("0003", library.central, "2026-12-03T10:00:00-03:00")
+        .unwrap();
+    assert_eq!(
+        (found.loan, found.lost),
+        (LoanOutcome::NotOnLoan, LostOutcome::Found)
+    );
+    assert_eq!(
+        library.read::<i64>("SELECT lost FROM items WHERE barcode = '0003'"),
         0
     );
 }

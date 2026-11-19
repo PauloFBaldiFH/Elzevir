@@ -807,6 +807,7 @@ checkout-error-impossible = This item cannot be lent to this patron.
 checkout-error-needs-confirmation = This checkout needs your confirmation.
 checkout-error-on-loan = This item is on loan. Return it first.
 checkout-error-no-due-date = No due date can be found: the calendar has no open day.
+checkin-error-withdrawn = This item is withdrawn and cannot be checked in.
 
 ## Calendar (docs/specs/circulacao/calendario.md)
 calendar-title = Calendar

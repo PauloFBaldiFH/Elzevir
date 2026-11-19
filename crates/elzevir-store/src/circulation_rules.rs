@@ -29,6 +29,7 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CirculationCommand) -> Applied {
             crate::calendar::change(tx.connection(), change)
         }
         CirculationCommand::Checkout(request) => crate::loans::checkout(tx.connection(), request),
+        CirculationCommand::Checkin(request) => crate::returns::checkin(tx.connection(), request),
     }
 }
 
