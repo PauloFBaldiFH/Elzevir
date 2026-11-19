@@ -1,0 +1,715 @@
+{
+ "koha_version": "26.05.05.000",
+ "spec": "docs/specs/circulacao/emprestimo.md",
+ "recorder": "tools/checkout-recorder/record.py",
+ "patron": {
+  "category": "B",
+  "library": "MAIN"
+ },
+ "checks": [
+  {
+   "name": "sem-emprestimos",
+   "rules": [
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "daysmode": "Datedue",
+      "hardduedate": "",
+      "hardduedatecompare": "-1",
+      "issuelength": "14",
+      "lengthunit": "days",
+      "maxissueqty": "4",
+      "maxonsiteissueqty": "4",
+      "renewalperiod": "14"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "AL",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "maxissueqty": "0"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "DV",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "maxissueqty": "1"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "B"
+     },
+     "rules": {
+      "patron_maxissueqty": "6",
+      "patron_maxonsiteissueqty": ""
+     }
+    }
+   ],
+   "loans": [],
+   "item": {
+    "barcode": "1511",
+    "item_type": "BK",
+    "home_library": "MAIN",
+    "holding_library": "MAIN",
+    "withdrawn": 0,
+    "not_for_loan": 0,
+    "lost": 0,
+    "restricted": 0
+   },
+   "answer": {
+    "blockers": {},
+    "confirms": {},
+    "warnings": {}
+   }
+  },
+  {
+   "name": "limite-zero",
+   "rules": [
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "daysmode": "Datedue",
+      "hardduedate": "",
+      "hardduedatecompare": "-1",
+      "issuelength": "14",
+      "lengthunit": "days",
+      "maxissueqty": "4",
+      "maxonsiteissueqty": "4",
+      "renewalperiod": "14"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "AL",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "maxissueqty": "0"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "DV",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "maxissueqty": "1"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "B"
+     },
+     "rules": {
+      "patron_maxissueqty": "6",
+      "patron_maxonsiteissueqty": ""
+     }
+    }
+   ],
+   "loans": [],
+   "item": {
+    "barcode": "A1",
+    "item_type": "AL",
+    "home_library": "MAIN",
+    "holding_library": "MAIN",
+    "withdrawn": 0,
+    "not_for_loan": 0,
+    "lost": 0,
+    "restricted": 0
+   },
+   "answer": {
+    "blockers": {},
+    "confirms": {
+     "PATRON_CANT": 1,
+     "TOO_MANY": "TOO_MANY_CHECKOUTS",
+     "circulation_rule_PATRON_CANT": {
+      "branchcode": "MAIN",
+      "categorycode": null,
+      "id": 100,
+      "itemtype": "AL",
+      "rule_name": "maxissueqty",
+      "rule_value": "0"
+     },
+     "circulation_rule_TOO_MANY": {
+      "branchcode": "MAIN",
+      "categorycode": null,
+      "id": 100,
+      "itemtype": "AL",
+      "rule_name": "maxissueqty",
+      "rule_value": "0"
+     },
+     "current_loan_count": 0,
+     "max_loans_allowed": 0
+    },
+    "warnings": {}
+   }
+  },
+  {
+   "name": "retirado",
+   "rules": [
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "daysmode": "Datedue",
+      "hardduedate": "",
+      "hardduedatecompare": "-1",
+      "issuelength": "14",
+      "lengthunit": "days",
+      "maxissueqty": "4",
+      "maxonsiteissueqty": "4",
+      "renewalperiod": "14"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "AL",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "maxissueqty": "0"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "DV",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "maxissueqty": "1"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "B"
+     },
+     "rules": {
+      "patron_maxissueqty": "6",
+      "patron_maxonsiteissueqty": ""
+     }
+    }
+   ],
+   "loans": [],
+   "item": {
+    "barcode": "933",
+    "item_type": "BK",
+    "home_library": "MAIN",
+    "holding_library": "MAIN",
+    "withdrawn": 2,
+    "not_for_loan": 0,
+    "lost": 0,
+    "restricted": 0
+   },
+   "answer": {
+    "blockers": {
+     "WTHDRAWN": 1
+    },
+    "confirms": {},
+    "warnings": {}
+   }
+  },
+  {
+   "name": "limite-da-politica",
+   "rules": [
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "daysmode": "Datedue",
+      "hardduedate": "",
+      "hardduedatecompare": "-1",
+      "issuelength": "14",
+      "lengthunit": "days",
+      "maxissueqty": "4",
+      "maxonsiteissueqty": "4",
+      "renewalperiod": "14"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "AL",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "maxissueqty": "0"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "DV",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "maxissueqty": "1"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "B"
+     },
+     "rules": {
+      "patron_maxissueqty": "6",
+      "patron_maxonsiteissueqty": ""
+     }
+    }
+   ],
+   "loans": [
+    {
+     "barcode": "D01",
+     "item_type": "DV",
+     "home_library": "MAIN",
+     "holding_library": "MAIN",
+     "withdrawn": 0,
+     "not_for_loan": 0,
+     "lost": 0,
+     "restricted": 0
+    }
+   ],
+   "item": {
+    "barcode": "D02",
+    "item_type": "DV",
+    "home_library": "MAIN",
+    "holding_library": "MAIN",
+    "withdrawn": 0,
+    "not_for_loan": 0,
+    "lost": 0,
+    "restricted": 0
+   },
+   "answer": {
+    "blockers": {},
+    "confirms": {
+     "TOO_MANY": "TOO_MANY_CHECKOUTS",
+     "circulation_rule_TOO_MANY": {
+      "branchcode": "MAIN",
+      "categorycode": null,
+      "id": 99,
+      "itemtype": "DV",
+      "rule_name": "maxissueqty",
+      "rule_value": "1"
+     },
+     "current_loan_count": 1,
+     "max_loans_allowed": 1
+    },
+    "warnings": {}
+   }
+  },
+  {
+   "name": "politica-com-limite-proprio-nao-conta",
+   "rules": [
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "daysmode": "Datedue",
+      "hardduedate": "",
+      "hardduedatecompare": "-1",
+      "issuelength": "14",
+      "lengthunit": "days",
+      "maxissueqty": "4",
+      "maxonsiteissueqty": "4",
+      "renewalperiod": "14"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "AL",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "maxissueqty": "0"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "DV",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "maxissueqty": "1"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "B"
+     },
+     "rules": {
+      "patron_maxissueqty": "6",
+      "patron_maxonsiteissueqty": ""
+     }
+    }
+   ],
+   "loans": [
+    {
+     "barcode": "D01",
+     "item_type": "DV",
+     "home_library": "MAIN",
+     "holding_library": "MAIN",
+     "withdrawn": 0,
+     "not_for_loan": 0,
+     "lost": 0,
+     "restricted": 0
+    }
+   ],
+   "item": {
+    "barcode": "1511",
+    "item_type": "BK",
+    "home_library": "MAIN",
+    "holding_library": "MAIN",
+    "withdrawn": 0,
+    "not_for_loan": 0,
+    "lost": 0,
+    "restricted": 0
+   },
+   "answer": {
+    "blockers": {},
+    "confirms": {},
+    "warnings": {}
+   }
+  },
+  {
+   "name": "renovacao",
+   "rules": [
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "daysmode": "Datedue",
+      "hardduedate": "",
+      "hardduedatecompare": "-1",
+      "issuelength": "14",
+      "lengthunit": "days",
+      "maxissueqty": "4",
+      "maxonsiteissueqty": "4",
+      "renewalperiod": "14"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "AL",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "maxissueqty": "0"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "DV",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "maxissueqty": "1"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "B"
+     },
+     "rules": {
+      "patron_maxissueqty": "6",
+      "patron_maxonsiteissueqty": ""
+     }
+    }
+   ],
+   "loans": [
+    {
+     "barcode": "D01",
+     "item_type": "DV",
+     "home_library": "MAIN",
+     "holding_library": "MAIN",
+     "withdrawn": 0,
+     "not_for_loan": 0,
+     "lost": 0,
+     "restricted": 0
+    }
+   ],
+   "item": {
+    "barcode": "D01",
+    "item_type": "DV",
+    "home_library": "MAIN",
+    "holding_library": "MAIN",
+    "withdrawn": 0,
+    "not_for_loan": 0,
+    "lost": 0,
+    "restricted": 0
+   },
+   "answer": {
+    "blockers": {},
+    "confirms": {
+     "RENEW_ISSUE": 1
+    },
+    "warnings": {}
+   }
+  },
+  {
+   "name": "limite-do-leitor",
+   "rules": [
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "daysmode": "Datedue",
+      "hardduedate": "",
+      "hardduedatecompare": "-1",
+      "issuelength": "14",
+      "lengthunit": "days",
+      "maxissueqty": "4",
+      "maxonsiteissueqty": "4",
+      "renewalperiod": "14"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "AL",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "maxissueqty": "0"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "DV",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "maxissueqty": "1"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "B"
+     },
+     "rules": {
+      "patron_maxissueqty": "1",
+      "patron_maxonsiteissueqty": ""
+     }
+    }
+   ],
+   "loans": [
+    {
+     "barcode": "D01",
+     "item_type": "DV",
+     "home_library": "MAIN",
+     "holding_library": "MAIN",
+     "withdrawn": 0,
+     "not_for_loan": 0,
+     "lost": 0,
+     "restricted": 0
+    }
+   ],
+   "item": {
+    "barcode": "1511",
+    "item_type": "BK",
+    "home_library": "MAIN",
+    "holding_library": "MAIN",
+    "withdrawn": 0,
+    "not_for_loan": 0,
+    "lost": 0,
+    "restricted": 0
+   },
+   "answer": {
+    "blockers": {},
+    "confirms": {
+     "TOO_MANY": "TOO_MANY_CHECKOUTS",
+     "circulation_rule_TOO_MANY": {
+      "patron_maxissueqty": "1",
+      "patron_maxonsiteissueqty": ""
+     },
+     "current_loan_count": 1,
+     "max_loans_allowed": 1
+    },
+    "warnings": {}
+   }
+  },
+  {
+   "name": "limite-geral",
+   "rules": [
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "daysmode": "Datedue",
+      "hardduedate": "",
+      "hardduedatecompare": "-1",
+      "issuelength": "14",
+      "lengthunit": "days",
+      "maxissueqty": "4",
+      "maxonsiteissueqty": "4",
+      "renewalperiod": "14"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "AL",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "maxissueqty": "0"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "DV",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "maxissueqty": "1"
+     }
+    },
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "B"
+     },
+     "rules": {
+      "patron_maxissueqty": "6",
+      "patron_maxonsiteissueqty": ""
+     }
+    }
+   ],
+   "loans": [
+    {
+     "barcode": "D01",
+     "item_type": "DV",
+     "home_library": "MAIN",
+     "holding_library": "MAIN",
+     "withdrawn": 0,
+     "not_for_loan": 0,
+     "lost": 0,
+     "restricted": 0
+    },
+    {
+     "barcode": "1511",
+     "item_type": "BK",
+     "home_library": "MAIN",
+     "holding_library": "MAIN",
+     "withdrawn": 0,
+     "not_for_loan": 0,
+     "lost": 0,
+     "restricted": 0
+    },
+    {
+     "barcode": "13443",
+     "item_type": "BK",
+     "home_library": "MAIN",
+     "holding_library": "MAIN",
+     "withdrawn": 0,
+     "not_for_loan": 0,
+     "lost": 0,
+     "restricted": 0
+    },
+    {
+     "barcode": "11217",
+     "item_type": "BK",
+     "home_library": "MAIN",
+     "holding_library": "MAIN",
+     "withdrawn": 0,
+     "not_for_loan": 0,
+     "lost": 0,
+     "restricted": 0
+    },
+    {
+     "barcode": "4246",
+     "item_type": "BK",
+     "home_library": "MAIN",
+     "holding_library": "MAIN",
+     "withdrawn": 0,
+     "not_for_loan": 0,
+     "lost": 0,
+     "restricted": 0
+    }
+   ],
+   "item": {
+    "barcode": "13308",
+    "item_type": "BK",
+    "home_library": "MAIN",
+    "holding_library": "MAIN",
+    "withdrawn": 0,
+    "not_for_loan": 0,
+    "lost": 0,
+    "restricted": 0
+   },
+   "answer": {
+    "blockers": {},
+    "confirms": {
+     "TOO_MANY": "TOO_MANY_CHECKOUTS",
+     "circulation_rule_TOO_MANY": {
+      "branchcode": "MAIN",
+      "categorycode": null,
+      "id": 58,
+      "itemtype": null,
+      "rule_name": "maxissueqty",
+      "rule_value": "4"
+     },
+     "current_loan_count": 4,
+     "max_loans_allowed": 4
+    },
+    "warnings": {}
+   }
+  }
+ ]
+}

@@ -1,6 +1,6 @@
 # Empréstimo
 
-> Status: tarefa 3.4, partes a (a decisão, pura, no domínio) e b (o comando `circ.checkout` e a tabela de empréstimos). Falta a gravação do oráculo. Base: Koha 26.05.05.
+> Status: tarefa 3.4, partes a (a decisão, pura, no domínio) e b (o comando `circ.checkout` e a tabela de empréstimos). Com a gravação do oráculo. Base: Koha 26.05.05.
 
 ## 1. Comportamento
 
@@ -66,7 +66,7 @@
 
 ## 3. Paridade
 
-`exigida`. Prova: os testes de `crates/elzevir-domain/src/checkout.rs` portam os casos de `TooMany.t` (sem regras; limites 0; local sem limite; empréstimo local enchendo o limite local; limite vazio; regra geral e específica; limite do leitor; números do Perl) e a ordem de `CanBookBeIssued`. `crates/elzevir-store/tests/checkout.rs` empresta pelo comando contra o banco: data de devolução com o calendário, renovação pedida, limite, nenhuma regra, recusas do leitor e do exemplar, exemplar perdido. Em seguida, as respostas do oráculo gravadas por `GET /api/v1/checkouts/availability` rodam contra o comando.
+`exigida`. Prova: os testes de `crates/elzevir-domain/src/checkout.rs` portam os casos de `TooMany.t` (sem regras; limites 0; local sem limite; empréstimo local enchendo o limite local; limite vazio; regra geral e específica; limite do leitor; números do Perl) e a ordem de `CanBookBeIssued`. `crates/elzevir-store/tests/checkout.rs` empresta pelo comando contra o banco: data de devolução com o calendário, renovação pedida, limite, nenhuma regra, recusas do leitor e do exemplar, exemplar perdido. `crates/elzevir/tests/checkout_oracle.rs` repete pelo comando cada resposta do oráculo em `scenarios/circulacao/emprestimo.koha.json` (sem empréstimos, limite 0, exemplar retirado, limite da política, política com limite próprio que não conta no geral, renovação, limite do leitor, limite geral) e compara as chaves de `blockers`, `confirms` e `warnings`, a contagem, o máximo e a regra. A gravação vem de `tools/checkout-recorder/record.py`, que empresta ao leitor de exemplo da VM descartável, pergunta a `GET /api/v1/checkouts/availability`, devolve tudo e confere que regras e empréstimos voltaram ao que eram.
 
 ## 4. Casos de borda
 
