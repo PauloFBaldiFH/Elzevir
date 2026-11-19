@@ -3,7 +3,7 @@
 
 use askama::Template;
 
-use crate::{Badge, I18n};
+use crate::{Badge, GridOption, I18n};
 
 /// The listing page, or only its rows for the next page.
 #[derive(Template)]
@@ -29,6 +29,22 @@ pub struct StaffCatalog<'a> {
     /// The facets and filters strip (docs/specs/catalogo/facetas.md, part b), absent on a
     /// scanned code's page.
     pub strip: Option<FacetStrip>,
+    /// What the batch change of Items offers, for a viewer who may catalogue
+    /// (docs/specs/catalogo/lote.md, item 9).
+    pub batch: Option<BatchChoices>,
+}
+
+/// The rows the batch change of Items chooses from, each list in name order.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BatchChoices {
+    /// Branches.
+    pub branches: Vec<GridOption>,
+    /// Circulation policies.
+    pub policies: Vec<GridOption>,
+    /// Shelving places, each with its branch's name.
+    pub locations: Vec<GridOption>,
+    /// Collections, each with its branch's name.
+    pub collections: Vec<GridOption>,
 }
 
 /// The strip under the search: active filters as removable chips and a menu per facet.

@@ -233,6 +233,8 @@ pub(crate) async fn catalog(
         _ => None,
     };
     let can_catalogue = session.identity.can(Permission::Cataloguing);
+    // The batch dialog is only built on a full page: the next rows do not carry it.
+    let batch = (can_catalogue && !rows_only).then(|| crate::batch::choices(&codes));
     let lines = |rows: &[FamilyRow]| -> Vec<FamilyLine> {
         rows.iter().map(|row| family_line(row, &codes)).collect()
     };
@@ -250,6 +252,7 @@ pub(crate) async fn catalog(
                 .as_ref()
                 .map(|next| format!("/equipe/acervo?after={}", url_encode(&next.token()))),
             strip,
+            batch,
         },
         Page::Search(page, scan) => StaffCatalog {
             t: &state.inner.i18n,
@@ -266,6 +269,7 @@ pub(crate) async fn catalog(
                 )
             }),
             strip,
+            batch,
         },
         Page::List(page, list) => StaffCatalog {
             t: &state.inner.i18n,
@@ -279,6 +283,7 @@ pub(crate) async fn catalog(
                 .next
                 .map(|from| format!("{}&from={from}", facets::list_url(*list))),
             strip,
+            batch,
         },
     };
     // The search form swaps the whole list and picks it from a full page; the next-page

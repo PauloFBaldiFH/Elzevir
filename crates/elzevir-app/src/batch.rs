@@ -1,13 +1,71 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Families selected in the listing, for the batch actions (docs/specs/catalogo/lote.md).
 
-use elzevir_domain::catalog::InstanceId;
+use elzevir_domain::catalog::{
+    BranchId, CollectionId, InstanceId, ItemId, PolicyId, SublocationId,
+};
+use serde::{Deserialize, Serialize};
 
 use crate::catalog::CatalogReadError;
+use crate::items::{ItemColumn, ItemFields, RowProblem};
 use crate::listing::{CatalogListing, FamilyHead};
 
 /// Most families one selection holds (lote.md, item 4).
 pub const MAX_SELECTION: usize = 500;
+
+/// Most Items one batch change reaches (lote.md, item 12).
+pub const MAX_BATCH_ITEMS: usize = 5_000;
+
+/// A change of every Item of some Instances, all or nothing (lote.md, items 10 to 13).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ItemsChange {
+    /// The Instances whose Items change.
+    pub instances: Vec<InstanceId>,
+    /// What changes, in order; a later change of the same column wins.
+    pub set: Vec<ItemSet>,
+}
+
+/// One column set on every Item of a batch change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ItemSet {
+    /// The home branch.
+    HomeBranch(BranchId),
+    /// The holding branch.
+    HoldingBranch(BranchId),
+    /// The circulation policy.
+    Policy(PolicyId),
+    /// The shelving place, or none.
+    Location(Option<SublocationId>),
+    /// The collection, or none.
+    Collection(Option<CollectionId>),
+}
+
+impl ItemSet {
+    /// `fields` with this change made.
+    pub fn apply(self, fields: &mut ItemFields) {
+        match self {
+            Self::HomeBranch(branch) => fields.home_branch = branch,
+            Self::HoldingBranch(branch) => fields.holding_branch = branch,
+            Self::Policy(policy) => fields.policy = policy,
+            Self::Location(location) => fields.location = location,
+            Self::Collection(collection) => fields.collection = collection,
+        }
+    }
+}
+
+/// One Item a batch change cannot make, and why (lote.md, item 11).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ItemRefusal {
+    /// The Item.
+    pub item: ItemId,
+    /// How a person finds it: its barcode, else its inventory number, else its number.
+    pub label: String,
+    /// The column.
+    pub column: ItemColumn,
+    /// Why.
+    pub problem: RowProblem,
+}
 
 /// The families named in `names`, in order, each once, up to [`MAX_SELECTION`];
 /// malformed names are left out (lote.md, item 6).

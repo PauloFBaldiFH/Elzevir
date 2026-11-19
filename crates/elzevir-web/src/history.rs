@@ -95,6 +95,7 @@ fn what(t: &I18n, sections: &[FormSection], change: &Change) -> String {
             "history-items",
             &[("count", u64::try_from(*count).unwrap_or(u64::MAX))],
         ),
+        Change::BatchItems => t.get("history-batch-items"),
         Change::Other => t.get("history-other"),
     }
 }

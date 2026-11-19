@@ -67,6 +67,9 @@ pub enum CatalogCommand {
     /// Saves an Instance's Items in one batch, all or nothing
     /// (docs/specs/catalogo/exemplares.md).
     SaveItems(Box<ItemsUpdate>),
+    /// Changes every Item of some Instances, all or nothing (docs/specs/catalogo/lote.md,
+    /// part b).
+    ChangeItems(Box<crate::batch::ItemsChange>),
     /// Gives codes of the code tables their names, creating the missing ones
     /// (docs/specs/catalogo/tabelas-de-codigos.md).
     NameCodes(Vec<NamedCode>),
@@ -823,6 +826,13 @@ pub enum CatalogOutput {
         /// The Items of the batch's rows, in the batch's order.
         items: Vec<ItemId>,
     },
+    /// A batch change was made (docs/specs/catalogo/lote.md, item 13).
+    ItemsChanged {
+        /// The Instances whose Items changed, each once.
+        instances: Vec<InstanceId>,
+        /// Items changed.
+        items: usize,
+    },
     /// Codes were named, counted per table in [`crate::codes::CodeTable::ALL`] order.
     CodesNamed([NamingCount; 4]),
     /// A registry changed; the row, when it was created, renamed or given contact data.
@@ -897,6 +907,21 @@ pub enum CatalogRefusal {
     /// Cells of an Item batch that cannot be stored, all of them.
     #[error("{} cells of the item batch were refused", .0.len())]
     ItemRows(Vec<RowRefusal>),
+    /// Items a batch change cannot make, all of them (docs/specs/catalogo/lote.md,
+    /// item 11).
+    #[error("{} items of the batch change were refused", .0.len())]
+    BatchItems(Vec<crate::batch::ItemRefusal>),
+    /// A batch change with nothing to change, or no Instance.
+    #[error("the batch change names no change or no instance")]
+    NothingToChange,
+    /// A batch change reaches more Items than it may.
+    #[error("the batch reaches {count} items, more than {max}")]
+    TooManyItems {
+        /// Items reached.
+        count: usize,
+        /// Most allowed.
+        max: usize,
+    },
     /// A native Item failed revalidation in the writer.
     #[error("item {position}{barcode}: {problem}", barcode = barcode_label(.barcode.as_deref()))]
     NativeItem {
