@@ -28,6 +28,113 @@
     <p><a href="/equipe/acervo/importar">Back to your batches</a></p>
     <p>MarcEdit · Ready for confirmation · Revision 3</p>
 
+      <section id="import-rules" class="import-rules" aria-labelledby="import-rules-heading">
+        <h2 id="import-rules-heading">Edit rules</h2>
+
+
+        <table>
+          <thead><tr>
+            <th scope="col">Applies to</th>
+            <th scope="col">MARC field</th>
+            <th scope="col">Change</th>
+            <th scope="col">Details</th>
+            <th scope="col"><span class="visually-hidden">Remove rule</span></th>
+          </tr></thead>
+          <tbody>
+            <tr>
+              <td>Record 1</td>
+              <td><code>245</code></td>
+              <td>Replace subfield</td>
+              <td><code>$aRevised title</code></td>
+              <td>
+                <form action="/equipe/acervo/importar/BATCH-ID/regra" method="post">
+                  <input type="hidden" name="csrf" value="SESSION-CSRF">
+                  <input type="hidden" name="revision" value="3">
+                  <input type="hidden" name="action" value="remove">
+                  <input type="hidden" name="index" value="0">
+                  <button type="submit">Remove rule</button>
+                </form>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <form class="import-rule-form" action="/equipe/acervo/importar/BATCH-ID/regra" method="post" data-import-edit>
+          <input type="hidden" name="csrf" value="SESSION-CSRF">
+          <input type="hidden" name="revision" value="3">
+          <input type="hidden" name="action" value="add">
+          <fieldset>
+            <legend>New rule</legend>
+            <label>Record number
+              <input name="record" inputmode="numeric" pattern="[0-9]*" size="6" aria-describedby="import-rule-record-help"></label>
+            <p id="import-rule-record-help">Leave empty to apply the rule to every record in the batch.</p>
+            <label>MARC field
+              <input name="tag" required inputmode="numeric" pattern="[0-9]{3}" maxlength="3" size="4"></label>
+            <label>Change
+              <select name="op" required>
+                <option value="replace_subfield">Replace subfield</option>
+                <option value="add_subfield">Add subfield</option>
+                <option value="remove_subfield">Remove subfield</option>
+                <option value="replace_text">Replace text in field</option>
+                <option value="add_field">Add field</option>
+                <option value="replace_field">Replace field</option>
+                <option value="remove_field">Remove field</option>
+              </select></label>
+            <label>Subfield
+              <input name="code" maxlength="1" size="2"></label>
+            <label>Value
+              <input name="value" size="40"></label>
+            <label>Replace text
+              <input name="from" size="20"></label>
+            <label>With
+              <input name="to" size="20"></label>
+            <label>Indicators
+              <input name="indicators" maxlength="2" size="3" placeholder="##"></label>
+            <label>Subfields
+              <input name="subfields" size="40" placeholder="$a…$b…" aria-describedby="import-rule-subfields-help"></label>
+            <p id="import-rule-subfields-help">For a new or replaced field, write each subfield as $ plus its code and text, as in $aDonation$bMain building. Use # for a blank indicator. Write {dollar} for a dollar sign inside a value.</p>
+          </fieldset>
+          <button type="submit">Add rule</button>
+        </form>
+
+
+        <form class="import-matching" action="/equipe/acervo/importar/BATCH-ID/regra" method="post">
+          <input type="hidden" name="csrf" value="SESSION-CSRF">
+          <input type="hidden" name="revision" value="3">
+          <input type="hidden" name="action" value="matching">
+          <fieldset>
+            <legend>Matching with the catalog</legend>
+            <label>Find existing records by
+              <select name="rule">
+                <option value="none" selected>Do not look for matches</option>
+                <option value="isbn">ISBN</option>
+                <option value="issn">ISSN</option>
+                <option value="koha">Koha biblionumber</option>
+              </select></label>
+            <label>When a match is found
+              <select name="on_match">
+                <option value="ignore" selected>Keep the catalog record</option>
+                <option value="replace">Replace the catalog record</option>
+                <option value="create">Create a new record</option>
+              </select></label>
+            <label>When no match is found
+              <select name="on_no_match">
+                <option value="create" selected>Create a new record</option>
+                <option value="ignore">Skip the record</option>
+              </select></label>
+            <label>Items from the file
+              <select name="items">
+                <option value="always" selected>Always add</option>
+                <option value="matches">Add only to matched records</option>
+                <option value="new">Add only to new records</option>
+                <option value="replace">Replace the items of matched records</option>
+                <option value="ignore">Do not import items</option>
+              </select></label>
+          </fieldset>
+          <button type="submit">Save matching</button>
+        </form>
+      </section>
+      <details class="import-advanced">
+      <summary>Advanced: edit the recipe as JSON</summary>
       <form action="/equipe/acervo/importar/BATCH-ID/editar" method="post" data-import-edit>
         <input type="hidden" name="csrf" value="SESSION-CSRF">
         <input type="hidden" name="revision" value="3">
@@ -61,6 +168,7 @@
         <details><summary>Example recipe for editing a title</summary><pre>{"edits":[{"record":1,"tag":"245","change":{"op":"replace_subfield","code":"a","value":""}}]}</pre></details>
         <button type="submit">Save choices</button>
       </form>
+      </details>
       <form action="/equipe/acervo/importar/BATCH-ID/prever" method="post">
         <input type="hidden" name="csrf" value="SESSION-CSRF">
         <input type="hidden" name="revision" value="3">
@@ -119,6 +227,15 @@
 
 </section></section>
 
+
+
+              <form class="import-exclude" action="/equipe/acervo/importar/BATCH-ID/regra" method="post">
+                <input type="hidden" name="csrf" value="SESSION-CSRF">
+                <input type="hidden" name="revision" value="3">
+                <input type="hidden" name="action" value="exclude">
+                <input type="hidden" name="record" value="1">
+                <button type="submit">Exclude from import</button>
+              </form>
 
 
             </div>
@@ -188,6 +305,15 @@
 
 
 
+              <form class="import-exclude" action="/equipe/acervo/importar/BATCH-ID/regra" method="post">
+                <input type="hidden" name="csrf" value="SESSION-CSRF">
+                <input type="hidden" name="revision" value="3">
+                <input type="hidden" name="action" value="exclude">
+                <input type="hidden" name="record" value="2">
+                <button type="submit">Exclude from import</button>
+              </form>
+
+
             </div>
             <aside class="import-source">
               <details open>
@@ -246,6 +372,15 @@
 
 </section></section>
 
+
+
+              <form class="import-exclude" action="/equipe/acervo/importar/BATCH-ID/regra" method="post">
+                <input type="hidden" name="csrf" value="SESSION-CSRF">
+                <input type="hidden" name="revision" value="3">
+                <input type="hidden" name="action" value="exclude">
+                <input type="hidden" name="record" value="3">
+                <button type="submit">Exclude from import</button>
+              </form>
 
 
             </div>
