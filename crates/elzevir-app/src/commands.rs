@@ -10,6 +10,7 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::{CatalogCommand, CatalogOutput, CatalogRefusal};
+use crate::patrons::{CategoryChange, PatronCommand, PatronOutput, PatronRefusal};
 use crate::staff::{Permission, StaffId};
 
 /// Every write the application can make.
@@ -19,6 +20,8 @@ pub enum WriteCommand {
     Staff(StaffCommand),
     /// Catalog: records, items and their vocabularies.
     Catalog(CatalogCommand),
+    /// Patrons and their categories.
+    Patrons(PatronCommand),
 }
 
 /// Staff account commands.
@@ -42,6 +45,8 @@ pub enum WriteOutput {
     StaffCreated(StaffId),
     /// A catalog command succeeded.
     Catalog(CatalogOutput),
+    /// A patron command succeeded.
+    Patrons(PatronOutput),
 }
 
 /// Why a command was refused.
@@ -53,6 +58,9 @@ pub enum WriteRefusal {
     /// A catalog command was refused.
     #[error(transparent)]
     Catalog(#[from] CatalogRefusal),
+    /// A patron command was refused.
+    #[error(transparent)]
+    Patrons(#[from] PatronRefusal),
 }
 
 impl WriteCommand {
@@ -84,6 +92,17 @@ impl WriteCommand {
             Self::Catalog(CatalogCommand::UpdateAgent(_)) => "catalog.update_agent",
             Self::Catalog(CatalogCommand::LinkAuthority(_)) => "catalog.link_authority",
             Self::Catalog(CatalogCommand::UpdateSubject(_)) => "catalog.update_subject",
+            Self::Patrons(PatronCommand::ChangeCategory(CategoryChange::Create { .. })) => {
+                "patrons.create_category"
+            }
+            Self::Patrons(PatronCommand::ChangeCategory(CategoryChange::Update { .. })) => {
+                "patrons.update_category"
+            }
+            Self::Patrons(PatronCommand::ChangeCategory(CategoryChange::Delete(_))) => {
+                "patrons.delete_category"
+            }
+            Self::Patrons(PatronCommand::Add(_)) => "patrons.add",
+            Self::Patrons(PatronCommand::Update(_)) => "patrons.update",
         }
     }
 
@@ -94,6 +113,7 @@ impl WriteCommand {
         match self {
             Self::Staff(_) => Permission::Administration,
             Self::Catalog(_) => Permission::Cataloguing,
+            Self::Patrons(_) => Permission::Patrons,
         }
     }
 }
@@ -127,6 +147,8 @@ mod tests {
             Permission::StaffInterface,
             Permission::Administration,
             Permission::Cataloguing,
+            Permission::Circulation,
+            Permission::Patrons,
         ] {
             assert_eq!(Permission::from_name(permission.as_str()), Some(permission));
         }

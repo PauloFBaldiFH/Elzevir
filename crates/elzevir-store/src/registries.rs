@@ -37,7 +37,8 @@ const BRANCHES: Table = Table {
     rename: "UPDATE branches SET name = ?2, row_version = row_version + 1 WHERE id = ?1",
     users: "SELECT (SELECT count(*) FROM items WHERE home_branch = ?1 OR holding_branch = ?1)
                  + (SELECT count(*) FROM sublocations WHERE branch_id = ?1)
-                 + (SELECT count(*) FROM collections WHERE branch_id = ?1)",
+                 + (SELECT count(*) FROM collections WHERE branch_id = ?1)
+                 + (SELECT count(*) FROM patrons WHERE branch_id = ?1)",
     delete: "DELETE FROM branches WHERE id = ?1",
 };
 

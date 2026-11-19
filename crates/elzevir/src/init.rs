@@ -391,6 +391,8 @@ fn populate(
                 Permission::StaffInterface,
                 Permission::Administration,
                 Permission::Cataloguing,
+                Permission::Circulation,
+                Permission::Patrons,
             ]
             .into_iter()
             .collect(),

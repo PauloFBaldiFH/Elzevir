@@ -9,4 +9,5 @@ pub mod catalog;
 pub mod circulation;
 pub mod due_date;
 pub mod fine;
+pub mod patron;
 pub mod statement;

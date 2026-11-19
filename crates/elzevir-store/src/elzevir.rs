@@ -37,6 +37,7 @@ impl CommandHandler for ElzevirHandler {
                 permissions,
             }) => create_staff(tx, login, password_hash, permissions),
             WriteCommand::Catalog(command) => crate::catalog::apply(tx, command),
+            WriteCommand::Patrons(command) => crate::patrons::apply(tx, command),
         }
     }
 }
