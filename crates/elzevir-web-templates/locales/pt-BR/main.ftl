@@ -397,6 +397,13 @@ rule-kind-waiting_hold_cancellation = Cancelar reservas aguardando retirada
 calendar-error-title = Dê ao fechamento um título de até 50 caracteres.
 calendar-error-dates = Essas datas não formam um intervalo: o último dia vem antes do primeiro, o dia não existe ou o intervalo passa de um ano.
 
+checkout-error-unknown-barcode = Nenhum exemplar tem este código de barras.
+checkout-error-unknown-patron = Este leitor não existe.
+checkout-error-impossible = Este exemplar não pode ser emprestado a este leitor.
+checkout-error-needs-confirmation = Este empréstimo precisa da sua confirmação.
+checkout-error-on-loan = Este exemplar está emprestado. Devolva-o primeiro.
+checkout-error-no-due-date = Não há data de devolução: o calendário não tem dia aberto.
+
 ## Calendário (docs/specs/circulacao/calendario.md)
 calendar-title = Calendário
 calendar-intro = Dias em que a unidade fecha: toda semana, todo ano ou em datas marcadas. Uma data aberta por exceção vale mais que os fechamentos semanais e anuais. Vencimentos e multas pulam os dias fechados.

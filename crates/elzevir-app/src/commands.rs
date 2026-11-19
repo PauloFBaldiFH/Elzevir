@@ -114,6 +114,7 @@ impl WriteCommand {
             Self::Patrons(PatronCommand::View(_)) => "patrons.view",
             Self::Circulation(CirculationCommand::SetRules(_)) => "circ.set_rules",
             Self::Circulation(CirculationCommand::ChangeCalendar(_)) => "circ.change_calendar",
+            Self::Circulation(CirculationCommand::Checkout(_)) => "circ.checkout",
         }
     }
 
@@ -123,10 +124,12 @@ impl WriteCommand {
     pub const fn permission(&self) -> Permission {
         match self {
             // Koha: `parameters.manage_circ_rules` for the rules, `tools.edit_calendar` for
-            // the calendar; both are the administrators' here.
+            // the calendar; both are the administrators' here. A checkout is the desk's
+            // (Koha: `circulate_remaining_permissions`).
+            Self::Circulation(CirculationCommand::Checkout(_))
+            | Self::Patrons(PatronCommand::View(_)) => Permission::Circulation,
             Self::Staff(_) | Self::Circulation(_) => Permission::Administration,
             Self::Catalog(_) => Permission::Cataloguing,
-            Self::Patrons(PatronCommand::View(_)) => Permission::Circulation,
             Self::Patrons(_) => Permission::Patrons,
         }
     }

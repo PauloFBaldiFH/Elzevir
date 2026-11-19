@@ -9,6 +9,7 @@ use elzevir_data::RuleKind;
 
 use crate::catalog::{BranchId, PolicyId};
 use crate::circulation_rules::{CirculationRule, RuleScopeKey, effective_rule};
+use crate::due_date::{DaysMode, HardDueDate, HardDueDateCompare, LengthUnit, LoanRule};
 use crate::patron::PatronCategoryId;
 
 /// One loan the patron has now, as the limits count it.
@@ -458,6 +459,78 @@ pub fn check_checkout(facts: &CheckoutFacts, settings: &CheckoutSettings) -> Che
     check
 }
 
+/// The loan period of the rules that apply at `at`.
+///
+/// Like Koha, a missing `issuelength` is 0 days, a missing `renewalperiod` is 0 (an empty
+/// one means "use `issuelength`"), any `lengthunit` but `hours` is days, an empty or
+/// missing `daysmode` falls back to `use_days_mode`, and a missing `hardduedatecompare`
+/// is 0, so a hard due date then fixes every due date. A `hardduedatecompare` other than
+/// -1, 0 or 1 never matches, and a hard due date that is not a day is ignored.
+///
+/// Koha: `C4::Circulation::GetLoanLength`, `C4::Circulation::GetHardDueDate`,
+/// `Koha::CirculationRules::get_effective_daysmode`.
+#[must_use]
+pub fn loan_rule(rules: &[CirculationRule], at: &RuleScopeKey, use_days_mode: &str) -> LoanRule {
+    let value = |kind| effective_rule(rules, kind, at).map(|rule| rule.value.as_str());
+    let renewal_period = match value(RuleKind::Renewalperiod) {
+        None => Some(0),
+        Some("") => None,
+        Some(period) => Some(perl_whole(period)),
+    };
+    let days_mode = value(RuleKind::Daysmode)
+        .filter(|mode| !mode.is_empty())
+        .unwrap_or(use_days_mode);
+    let compare = match value(RuleKind::Hardduedatecompare).map_or(0, perl_integer) {
+        -1 => Some(HardDueDateCompare::Before),
+        0 => Some(HardDueDateCompare::Exactly),
+        1 => Some(HardDueDateCompare::After),
+        _ => None,
+    };
+    let hard_due_date = value(RuleKind::Hardduedate)
+        .and_then(|text| text.get(..10))
+        .and_then(|day| day.parse().ok())
+        .zip(compare)
+        .map(|(date, compare)| HardDueDate { date, compare });
+    LoanRule {
+        issue_length: value(RuleKind::Issuelength).map_or(0, perl_whole),
+        renewal_period,
+        unit: if value(RuleKind::Lengthunit) == Some("hours") {
+            LengthUnit::Hours
+        } else {
+            LengthUnit::Days
+        },
+        days_mode: DaysMode::from_koha(days_mode),
+        hard_due_date,
+    }
+}
+
+/// Perl's numeric reading of a whole count: the leading digits, or 0.
+fn perl_whole(value: &str) -> u32 {
+    let text = value.trim_start();
+    let end = text
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(text.len());
+    text.get(..end)
+        .and_then(|digits| digits.parse().ok())
+        .unwrap_or(if end == 0 { 0 } else { u32::MAX })
+}
+
+/// Perl's numeric reading of a signed whole number: an optional sign and the leading
+/// digits, or 0.
+fn perl_integer(value: &str) -> i64 {
+    let text = value.trim_start();
+    let (sign, rest) = match text.strip_prefix('-') {
+        Some(rest) => (-1, rest),
+        None => (1, text.strip_prefix('+').unwrap_or(text)),
+    };
+    let end = rest
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(rest.len());
+    rest.get(..end)
+        .and_then(|digits| digits.parse::<i64>().ok())
+        .map_or(0, |number| sign * number)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -731,5 +804,48 @@ mod tests {
             check_checkout(&new, &CheckoutSettings::default()).confirm,
             [Confirm::PatronCannotBorrow, Confirm::TooMany(zero)]
         );
+    }
+
+    #[test]
+    fn the_loan_period_reads_rules_like_koha() {
+        let at = RuleScopeKey {
+            branch: Some(BRANCH),
+            category: Some(CATEGORY),
+            policy: Some(BOOK),
+        };
+        let none = loan_rule(&[], &at, "Calendar");
+        assert_eq!(none.issue_length, 0);
+        assert_eq!(none.renewal_period, Some(0));
+        assert_eq!(none.unit, LengthUnit::Days);
+        assert_eq!(none.days_mode, DaysMode::Calendar);
+        assert_eq!(none.hard_due_date, None);
+        let rules = [
+            rule(RuleKind::Issuelength, None, "14"),
+            rule(RuleKind::Renewalperiod, None, ""),
+            rule(RuleKind::Lengthunit, None, "hours"),
+            rule(RuleKind::Daysmode, Some(BOOK), ""),
+            rule(RuleKind::Hardduedate, None, "2026-12-31"),
+        ];
+        let read = loan_rule(&rules, &at, "Days");
+        assert_eq!(read.issue_length, 14);
+        assert_eq!(read.renewal_period, None);
+        assert_eq!(read.unit, LengthUnit::Hours);
+        assert_eq!(read.days_mode, DaysMode::Days);
+        let hard = read.hard_due_date.unwrap();
+        assert_eq!(hard.compare, HardDueDateCompare::Exactly);
+        assert_eq!(hard.date, jiff::civil::date(2026, 12, 31));
+        let before = [
+            rule(RuleKind::Hardduedate, None, "2026-12-31"),
+            rule(RuleKind::Hardduedatecompare, None, "-1"),
+        ];
+        let ceiling = loan_rule(&before, &at, "Days").hard_due_date.unwrap();
+        assert_eq!(ceiling.compare, HardDueDateCompare::Before);
+        let never = [
+            rule(RuleKind::Hardduedate, None, "2026-12-31"),
+            rule(RuleKind::Hardduedatecompare, None, "2"),
+        ];
+        assert_eq!(loan_rule(&never, &at, "Days").hard_due_date, None);
+        assert_eq!(perl_whole("7 days"), 7);
+        assert_eq!(perl_integer(" -1x"), -1);
     }
 }

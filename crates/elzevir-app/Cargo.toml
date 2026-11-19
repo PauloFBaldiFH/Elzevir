@@ -24,7 +24,7 @@ oxrdf.workspace = true
 oxttl.workspace = true
 thiserror.workspace = true
 unicode-normalization.workspace = true
-jiff.workspace = true
+jiff = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
 insta.workspace = true

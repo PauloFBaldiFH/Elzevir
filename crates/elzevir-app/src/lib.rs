@@ -19,6 +19,7 @@ pub mod import_detection;
 pub mod items;
 pub mod koha_types;
 pub mod listing;
+pub mod loans;
 pub mod marc_mapping;
 pub mod matching;
 pub mod material;
