@@ -4,8 +4,9 @@
 //! staff listing, browsing or searching; task 2.10: the same with the facets strip and a
 //! filter; all over one million records). Run with
 //! `cargo bench -p elzevir --bench opac`; `ELZEVIR_BENCH_RECORDS` sets the catalog size
-//! (default 1 000 000). Prints numbers; it asserts nothing, because speed depends on the
-//! machine.
+//! (default 1 000 000). `ELZEVIR_BENCH_DIR` keeps the catalog in that directory and, when
+//! one is already there, measures it again without importing. Prints numbers; it asserts
+//! nothing, because speed depends on the machine.
 //!
 //! The catalog is the staff export repeated, without barcodes so the copies do not
 //! collide: a word query matches thousands of records, which is the hard case for ranking
@@ -68,8 +69,16 @@ fn main() {
         .ok()
         .and_then(|value| value.parse().ok())
         .unwrap_or(1_000_000);
-    let directory = tempfile::tempdir().unwrap();
-    let (store, index) = catalog(directory.path(), records);
+    // A kept directory saves the half hour a million records take to import and index.
+    let temporary = tempfile::tempdir().unwrap();
+    let kept = std::env::var_os("ELZEVIR_BENCH_DIR").map(std::path::PathBuf::from);
+    let directory = kept.as_deref().unwrap_or(temporary.path());
+    let reused = directory.join("elzevir.db").exists();
+    let (store, index) = if reused {
+        reopened(directory)
+    } else {
+        catalog(directory, records)
+    };
     let store = Arc::new(store);
     let index = Arc::new(index);
     let app = router(AppState::new(
@@ -95,7 +104,9 @@ fn main() {
     ));
     let runtime = tokio::runtime::Runtime::new().unwrap();
     runtime.block_on(measure(&app, records));
-    create_account(&store);
+    if !reused {
+        create_account(&store);
+    }
     let session = runtime.block_on(sign_in(&app));
     runtime.block_on(measure_listing(&app, &session, records));
 }
@@ -209,6 +220,20 @@ async fn measure_listing(app: &Router, session: &str, records: usize) {
         filtered.push(time_as(app, &uri, session).await);
     }
     report("staff listing, filtered page", filtered);
+    // Work lists (facetas.md, item 16): what the import brought today, its first pages.
+    let mut listed = Vec::with_capacity(REQUESTS);
+    for n in 0..REQUESTS {
+        let from = n % 10 * 30;
+        listed.push(
+            time_as(
+                app,
+                &format!("/equipe/acervo?list=imported-today&from={from}"),
+                session,
+            )
+            .await,
+        );
+    }
+    report("staff listing, work list page", listed);
 }
 
 /// The Work titles (`245 $a`) of the export.
@@ -224,6 +249,27 @@ fn titles(file: &[u8]) -> Vec<String> {
 }
 
 /// A store and an index with `records` records.
+/// A catalog a previous run kept, as it was left.
+fn reopened(directory: &std::path::Path) -> (ElzevirStore, TantivyIndex) {
+    let store = ElzevirStore::open(
+        &directory.join("elzevir.db"),
+        &StoreConfig::default(),
+        ElzevirHandler,
+    )
+    .unwrap();
+    let cores = std::thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
+    // A removed index is built again from the kept database.
+    let fresh = !directory.join("index").exists();
+    if fresh {
+        std::fs::create_dir(directory.join("index")).unwrap();
+    }
+    let index = TantivyIndex::open(&directory.join("index"), Parallelism::Threads(cores)).unwrap();
+    if fresh {
+        index_all(&store, &index, cores);
+    }
+    (store, index)
+}
+
 fn catalog(directory: &std::path::Path, records: usize) -> (ElzevirStore, TantivyIndex) {
     let store = ElzevirStore::open(
         &directory.join("elzevir.db"),
@@ -254,11 +300,17 @@ fn catalog(directory: &std::path::Path, records: usize) -> (ElzevirStore, Tantiv
     );
     std::fs::create_dir(directory.join("index")).unwrap();
     let index = TantivyIndex::open(&directory.join("index"), Parallelism::Threads(cores)).unwrap();
+    index_all(&store, &index, cores);
+    (store, index)
+}
+
+/// Indexes what the store holds and the index lacks.
+fn index_all(store: &ElzevirStore, index: &TantivyIndex, cores: NonZeroUsize) {
     let started = Instant::now();
     let report = index_pending(
-        &store,
-        &store,
-        &index,
+        store,
+        store,
+        index,
         &IndexOptions {
             parallelism: Parallelism::Threads(cores),
             batch: NonZeroUsize::new(50_000).unwrap(),
@@ -270,7 +322,6 @@ fn catalog(directory: &std::path::Path, records: usize) -> (ElzevirStore, Tantiv
         report.indexed,
         started.elapsed().as_secs_f64()
     );
-    (store, index)
 }
 
 async fn measure(app: &Router, records: usize) {
