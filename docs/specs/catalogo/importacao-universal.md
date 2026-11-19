@@ -324,6 +324,13 @@ sem leitura dos cadastros, a tela mostra só a contagem. Origem MARC aparece
 ao lado dos blocos (original e, se houver, editado); em tela estreita, abaixo.
 A prévia carrega o próprio `NewRecord` que a escritora receberia, de modo que
 o que aparece nos blocos é o que a confirmação grava.
+Recusas com causa fixa (receita incompatível com a origem, membro ou aba
+não escolhidos, mapeamento de colunas ausente ou desatualizado, regras
+MARC numa planilha, receita grande demais, formato fora da lista) são
+variantes de `BatchRefusal` e aparecem na tela com mensagem própria do
+Fluent, sem detalhe em inglês; a CLI imprime o texto técnico, com as
+sugestões de colunas. Os demais erros de leitura mostram a mensagem geral
+traduzida e o detalhe técnico com a posição, recolhido.
 Cada problema identifica posição, campo/célula, gravidade e motivo. Não
 confunde linha física de CSV multilinha com o número do registro lógico.
 

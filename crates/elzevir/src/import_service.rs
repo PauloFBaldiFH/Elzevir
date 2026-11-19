@@ -8,11 +8,12 @@ use std::sync::Arc;
 
 use elzevir_app::catalog::{CatalogReader, CatalogRefusal, CodeLists};
 use elzevir_app::import::batches::{
-    BatchCommand, BatchError, BatchPort, BatchPreview, BatchReply, BatchState as State, BatchView,
-    Completion, FormatChoice, Receipt, Refusal, TableSource,
+    BatchCommand, BatchError, BatchPort, BatchPreview, BatchRefusal, BatchReply,
+    BatchState as State, BatchView, Completion, FormatChoice, Receipt, Refusal, TableSource,
 };
 use elzevir_app::import::containers::{self, Selected};
 use elzevir_app::import::edits::{Recipe, RenderReport};
+use elzevir_app::import::preview::PreviewError;
 use elzevir_app::import::sheet::{self, PreparedTable, SheetError, TableSettings};
 use elzevir_app::import::table::{Delimiter, TableReader};
 use elzevir_app::import::{
@@ -93,9 +94,7 @@ pub(crate) fn execute(
                     || (batch.is_table() && !recipe.edits.is_empty())
                     || (!batch.is_table() && recipe.table.is_some()))
             {
-                return Err(BatchError::Invalid(
-                    "recipe is incompatible with the selected source format".into(),
-                ));
+                return Err(BatchError::Refused(BatchRefusal::IncompatibleRecipe));
             }
             batch.recipe = recipe;
             batch.revision = batch
@@ -268,9 +267,10 @@ fn prepare(
     }
     if batch.is_table() {
         let settings = batch.table_settings().map_err(BatchError::Invalid)?;
+        // The outer result is the source read; the inner one keeps the typed refusal.
         return batches
             .with_source(batch, |input| {
-                prepare_table(
+                Ok(prepare_table(
                     data_dir,
                     live,
                     batch,
@@ -285,10 +285,9 @@ fn prepare(
                             &batch.recipe.accept_missing_barcodes,
                         )
                     },
-                )
-                .map_err(|error| error.to_string())
+                ))
             })
-            .map_err(BatchError::Invalid);
+            .map_err(BatchError::Invalid)?;
     }
     let rendered = batches.render(batch, from).map_err(BatchError::Invalid)?;
     prepare_marc(data_dir, live, batch, from, rendered)
@@ -302,9 +301,10 @@ fn prepare_archive(
     from: Option<u64>,
 ) -> Result<Prepared, BatchError> {
     let recipe = &batch.recipe;
-    let selection = recipe.archive.as_ref().ok_or_else(|| {
-        BatchError::Invalid("choose a member from the inventory and a sheet for XLSX or ODS".into())
-    })?;
+    let selection = recipe
+        .archive
+        .as_ref()
+        .ok_or(BatchError::Refused(BatchRefusal::ChooseMember))?;
     let source = batches.archive_source(batch).map_err(BatchError::Invalid)?;
     let selected = containers::select(&source, selection)
         .map_err(|error| BatchError::Invalid(error.to_string()))?;
@@ -357,9 +357,7 @@ fn prepare_archive(
         }
         Selected::File(bytes, _) => {
             if recipe.table.is_some() {
-                return Err(BatchError::Invalid(
-                    "table mapping does not apply to this member".into(),
-                ));
+                return Err(BatchError::Refused(BatchRefusal::MappingNotForMember));
             }
             let rendered = batches
                 .render_member(batch, from, Cursor::new(bytes), selection.format)
@@ -371,9 +369,7 @@ fn prepare_archive(
 
 fn check_table_recipe(recipe: &Recipe) -> Result<(), BatchError> {
     if !recipe.edits.is_empty() {
-        return Err(BatchError::Invalid(
-            "MARC edits do not apply to a spreadsheet".into(),
-        ));
+        return Err(BatchError::Refused(BatchRefusal::EditsNotForSpreadsheet));
     }
     Ok(())
 }
@@ -398,7 +394,14 @@ fn prepare_table(
             source,
         ),
     }
-    .map_err(|error| BatchError::Invalid(error.to_string()))?;
+    .map_err(|error| match error {
+        // The header needs a mapping, or the saved one no longer matches it: both
+        // are fixed in the column form, which the refusal points to.
+        PreviewError::Sheet(SheetError::Profile(detail)) => {
+            BatchError::Refused(BatchRefusal::ColumnMapping { detail })
+        }
+        error => BatchError::Invalid(error.to_string()),
+    })?;
     let stamp = Batches::table_stamp(batch, &table).map_err(BatchError::Invalid)?;
     let mut rendered = RenderReport::for_table(&table, from);
     rendered.detection.evidence = evidence;
