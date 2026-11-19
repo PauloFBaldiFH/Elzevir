@@ -355,9 +355,9 @@ fn staff_import_reviews_private_revisions_and_commits_with_the_session_actor() {
     assert!(!get("/equipe/acervo", &ana).contains("Revised title"));
 
     let cli = Command::new(env!("CARGO_BIN_EXE_elzevir"))
-        .args(["import-batch", "--data-dir"])
+        .args(["import", "preview", "--data-dir"])
         .arg(data.path())
-        .args(["--operator", &operator.0.to_string(), "preview", id])
+        .args(["--operator", &operator.0.to_string(), id])
         .output()
         .unwrap();
     assert!(cli.status.success(), "{cli:?}");
