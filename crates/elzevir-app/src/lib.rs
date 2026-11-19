@@ -5,6 +5,7 @@ pub mod authorities;
 pub mod batch;
 pub mod call_number;
 pub mod catalog;
+pub mod circulation_rules;
 pub mod codes;
 pub mod commands;
 pub mod creating;

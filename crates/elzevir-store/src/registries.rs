@@ -38,7 +38,8 @@ const BRANCHES: Table = Table {
     users: "SELECT (SELECT count(*) FROM items WHERE home_branch = ?1 OR holding_branch = ?1)
                  + (SELECT count(*) FROM sublocations WHERE branch_id = ?1)
                  + (SELECT count(*) FROM collections WHERE branch_id = ?1)
-                 + (SELECT count(*) FROM patrons WHERE branch_id = ?1)",
+                 + (SELECT count(*) FROM patrons WHERE branch_id = ?1)
+                 + (SELECT count(*) FROM circulation_rules WHERE branch_id = ?1)",
     delete: "DELETE FROM branches WHERE id = ?1",
 };
 
@@ -68,7 +69,8 @@ const POLICIES: Table = Table {
     taken: "SELECT 1 FROM circulation_policies WHERE name = ?1 AND id <> ?2 AND ?3 IS NULL",
     rename: "UPDATE circulation_policies SET name = ?2, row_version = row_version + 1
              WHERE id = ?1",
-    users: "SELECT count(*) FROM items WHERE policy_id = ?1",
+    users: "SELECT (SELECT count(*) FROM items WHERE policy_id = ?1)
+                 + (SELECT count(*) FROM circulation_rules WHERE policy_id = ?1)",
     delete: "DELETE FROM circulation_policies WHERE id = ?1",
 };
 

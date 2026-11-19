@@ -7,6 +7,7 @@ pub mod calendar;
 pub mod call_number;
 pub mod catalog;
 pub mod circulation;
+pub mod circulation_rules;
 pub mod due_date;
 pub mod fine;
 pub mod patron;

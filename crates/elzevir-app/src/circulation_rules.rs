@@ -1,0 +1,178 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Setting and reading circulation rules (docs/specs/circulacao/regras.md).
+
+pub use elzevir_data::RuleKind;
+use elzevir_domain::circulation_rules::{
+    CirculationRule, RuleScopeKey, RuleValueError, checked_value,
+};
+use serde::{Deserialize, Serialize};
+
+/// Most rules one change may set.
+pub const MAX_RULES_PER_CHANGE: usize = RuleKind::ALL.len();
+
+/// Circulation commands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CirculationCommand {
+    /// Sets or removes rules at one scope.
+    SetRules(RuleChange),
+}
+
+/// New values for some rules at one scope.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuleChange {
+    /// Where the rules apply.
+    pub scope: RuleScopeKey,
+    /// Each rule by its name (Koha's `rule_name`) with its value; `None` removes it.
+    pub values: Vec<(String, Option<String>)>,
+}
+
+/// What a circulation command returns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CirculationOutput {
+    /// How many rules were stored and how many removed.
+    RulesSet {
+        /// Stored or changed.
+        stored: usize,
+        /// Removed.
+        removed: usize,
+    },
+}
+
+/// Why a circulation command was refused.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum CirculationRefusal {
+    /// No rule has this name.
+    #[error("no rule is named `{0}`")]
+    UnknownRule(String),
+    /// The value does not fit the rule.
+    #[error("rule `{rule}`: {error}")]
+    BadValue {
+        /// The rule's name.
+        rule: String,
+        /// What is wrong.
+        error: RuleValueError,
+    },
+    /// The same rule twice, or more rules than there are kinds.
+    #[error("each rule may appear once")]
+    Repeated,
+    /// The scope names a branch that does not exist.
+    #[error("no such branch")]
+    UnknownBranch,
+    /// The scope names a patron category that does not exist.
+    #[error("no such patron category")]
+    UnknownCategory,
+    /// The scope names a circulation policy that does not exist.
+    #[error("no such circulation policy")]
+    UnknownPolicy,
+}
+
+impl CirculationRefusal {
+    /// Fluent key of the message.
+    #[must_use]
+    pub const fn message_key(&self) -> &'static str {
+        match self {
+            Self::UnknownRule(_) => "rules-error-unknown-rule",
+            Self::BadValue {
+                error: RuleValueError::OutOfScope(_),
+                ..
+            } => "rules-error-out-of-scope",
+            Self::BadValue {
+                error: RuleValueError::NotDecimal,
+                ..
+            } => "rules-error-not-decimal",
+            Self::BadValue {
+                error: RuleValueError::TooLong,
+                ..
+            } => "rules-error-too-long",
+            Self::Repeated => "rules-error-repeated",
+            Self::UnknownBranch => "rules-error-unknown-branch",
+            Self::UnknownCategory => "rules-error-unknown-category",
+            Self::UnknownPolicy => "rules-error-unknown-policy",
+        }
+    }
+}
+
+/// The change as stored: each rule with its kind and the value to keep (`None` removes).
+///
+/// # Errors
+///
+/// [`CirculationRefusal`] for an unknown or repeated rule or a value that does not fit.
+pub fn checked_rules(
+    change: &RuleChange,
+) -> Result<Vec<(RuleKind, Option<String>)>, CirculationRefusal> {
+    if change.values.len() > MAX_RULES_PER_CHANGE {
+        return Err(CirculationRefusal::Repeated);
+    }
+    let mut checked: Vec<(RuleKind, Option<String>)> = Vec::with_capacity(change.values.len());
+    for (name, value) in &change.values {
+        let kind = RuleKind::from_koha_name(name)
+            .ok_or_else(|| CirculationRefusal::UnknownRule(name.clone()))?;
+        if checked.iter().any(|(seen, _)| *seen == kind) {
+            return Err(CirculationRefusal::Repeated);
+        }
+        let value = checked_value(kind, &change.scope, value.as_deref()).map_err(|error| {
+            CirculationRefusal::BadValue {
+                rule: name.clone(),
+                error,
+            }
+        })?;
+        checked.push((kind, value));
+    }
+    Ok(checked)
+}
+
+/// Why the rules could not be read.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("cannot read the circulation rules: {0}")]
+pub struct RuleBookError(pub String);
+
+/// Every stored circulation rule, for the one function that resolves them.
+pub trait RuleBook: Send + Sync {
+    /// Every rule.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn rules(&self) -> Result<Vec<CirculationRule>, RuleBookError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use elzevir_domain::catalog::PolicyId;
+
+    fn change(values: &[(&str, Option<&str>)]) -> RuleChange {
+        RuleChange {
+            scope: RuleScopeKey::default(),
+            values: values
+                .iter()
+                .map(|(name, value)| ((*name).to_owned(), value.map(str::to_owned)))
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn rules_are_known_once_and_fit_their_kind() {
+        assert_eq!(
+            checked_rules(&change(&[("issuelength", Some("14")), ("fine", None)])),
+            Ok(vec![
+                (RuleKind::Issuelength, Some("14".to_owned())),
+                (RuleKind::Fine, None)
+            ])
+        );
+        assert_eq!(
+            checked_rules(&change(&[("itemtype", Some("BK"))])),
+            Err(CirculationRefusal::UnknownRule("itemtype".to_owned()))
+        );
+        assert_eq!(
+            checked_rules(&change(&[("fine", Some("1")), ("fine", Some("2"))])),
+            Err(CirculationRefusal::Repeated)
+        );
+        let mut per_policy = change(&[("max_holds", Some("2"))]);
+        per_policy.scope.policy = Some(PolicyId(1));
+        assert!(matches!(
+            checked_rules(&per_policy),
+            Err(CirculationRefusal::BadValue { .. })
+        ));
+    }
+}

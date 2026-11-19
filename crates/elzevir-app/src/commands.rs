@@ -10,6 +10,7 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::{CatalogCommand, CatalogOutput, CatalogRefusal};
+use crate::circulation_rules::{CirculationCommand, CirculationOutput, CirculationRefusal};
 use crate::patrons::{CategoryChange, PatronCommand, PatronOutput, PatronRefusal};
 use crate::staff::{Permission, StaffId};
 
@@ -22,6 +23,8 @@ pub enum WriteCommand {
     Catalog(CatalogCommand),
     /// Patrons and their categories.
     Patrons(PatronCommand),
+    /// Circulation: rules, and later loans.
+    Circulation(CirculationCommand),
 }
 
 /// Staff account commands.
@@ -47,6 +50,8 @@ pub enum WriteOutput {
     Catalog(CatalogOutput),
     /// A patron command succeeded.
     Patrons(PatronOutput),
+    /// A circulation command succeeded.
+    Circulation(CirculationOutput),
 }
 
 /// Why a command was refused.
@@ -61,6 +66,9 @@ pub enum WriteRefusal {
     /// A patron command was refused.
     #[error(transparent)]
     Patrons(#[from] PatronRefusal),
+    /// A circulation command was refused.
+    #[error(transparent)]
+    Circulation(#[from] CirculationRefusal),
 }
 
 impl WriteCommand {
@@ -104,6 +112,7 @@ impl WriteCommand {
             Self::Patrons(PatronCommand::Add(_)) => "patrons.add",
             Self::Patrons(PatronCommand::Update(_)) => "patrons.update",
             Self::Patrons(PatronCommand::View(_)) => "patrons.view",
+            Self::Circulation(CirculationCommand::SetRules(_)) => "circ.set_rules",
         }
     }
 
@@ -112,7 +121,10 @@ impl WriteCommand {
     #[must_use]
     pub const fn permission(&self) -> Permission {
         match self {
-            Self::Staff(_) => Permission::Administration,
+            // Koha: `parameters.manage_circ_rules` for the rules.
+            Self::Staff(_) | Self::Circulation(CirculationCommand::SetRules(_)) => {
+                Permission::Administration
+            }
             Self::Catalog(_) => Permission::Cataloguing,
             Self::Patrons(PatronCommand::View(_)) => Permission::Circulation,
             Self::Patrons(_) => Permission::Patrons,
