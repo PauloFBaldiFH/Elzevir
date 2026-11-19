@@ -35,7 +35,7 @@ class InstallerTests(unittest.TestCase):
             fixture = directory / "fixture"
             fixture.mkdir()
             target = "x86_64" if os.uname().machine == "x86_64" else "aarch64"
-            tag = (latest or "v0.1.0-alpha.1") if quick_install else "v1.2.3"
+            tag = (latest or "v0.1.0-alpha.2") if quick_install else "v1.2.3"
             name = f"elzevir-{tag}-{target}-unknown-linux-musl.tar.gz"
             binary = b"fictional executable; never run"
             if quick_install:
@@ -66,13 +66,16 @@ esac
             mock.mkdir()
             curl = mock / "curl"
             curl.write_text("""#!/usr/bin/env python3
-import os, shutil, sys
+import json, os, shutil, sys
 from pathlib import Path
 args = sys.argv[1:]
 fixture = Path(os.environ['ELZEVIR_TEST_FIXTURE'])
 destination = args[args.index('--output') + 1]
 url = args[-1]
-if url.endswith('/releases/latest'):
+if url.endswith('/releases?per_page=1'):
+    assert url.startswith('https://api.github.com/repos/'), url
+    print(json.dumps([{"url": "x", "tag_name": os.environ['ELZEVIR_TEST_TAG'], "prerelease": True}], indent=2))
+elif url.endswith('/releases/latest'):
     latest = os.environ['ELZEVIR_TEST_LATEST']
     print(url.removesuffix('/latest') + (f'/tag/{latest}' if latest else ''), end='')
 else:
@@ -97,6 +100,7 @@ else:
                     result = subprocess.run(["bash"], input=script, env=environment, capture_output=True, text=True)
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertIn(f"elzevir {tag[1:]}", result.stdout)
+                    self.assertIn("Next step", result.stdout)
                     self.assertTrue(data.is_dir())
                     sentinel = data / "preserve"
                     if sentinel.exists():
@@ -127,7 +131,7 @@ else:
     def test_matching_hash_does_not_authorize_archive_symlinks(self):
         self.download(symlink=True)
 
-    def test_quick_install_from_stdin_falls_back_to_the_initial_alpha(self):
+    def test_quick_install_without_stable_release_takes_the_newest_prerelease(self):
         self.download(quick_install=True)
 
     def test_quick_install_prefers_the_stable_latest_release(self):

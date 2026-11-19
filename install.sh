@@ -13,6 +13,7 @@ firewall=false
 download_only=
 managed=false
 repository=https://github.com/PauloFBaldiFH/Elzevir
+api=https://api.github.com/repos/PauloFBaldiFH/Elzevir
 version_pattern='^v(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
 fail() { printf 'elzevir: %s\n' "$*" >&2; exit 1; }
 value() { [[ $# -ge 2 && -n $2 ]] || fail "missing value for $1"; }
@@ -125,7 +126,12 @@ if [[ $version == latest ]]; then
     resolved=$(curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location --max-redirs 5 --max-time 60 --output /dev/null --write-out '%{url_effective}' "$repository/releases/latest")
     case $resolved in
         "$repository/releases/tag/"*) version=${resolved#"$repository/releases/tag/"} ;;
-        "$repository/releases") version=v0.1.0-alpha.1 ;;
+        "$repository/releases")
+            # No stable release yet: GitHub's /latest skips pre-releases, so ask the
+            # API for the newest published one instead of pinning an old tag.
+            version=$(curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location --max-redirs 5 --max-time 60 --max-filesize 1048576 --output - "$api/releases?per_page=1" |
+                awk 'match($0, /"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"/) { value = substr($0, RSTART, RLENGTH); sub(/^"tag_name"[[:space:]]*:[[:space:]]*"/, "", value); sub(/"$/, "", value); print value; exit }') ||
+                fail 'cannot list releases; pass --version vX.Y.Z' ;;
         *) fail 'cannot resolve an official release' ;;
     esac
     valid_version "$version" || fail 'invalid official release tag'
@@ -168,14 +174,27 @@ if ! $managed; then
     install -m 755 -- "$temporary/payload/elzevir" "$staged_binary"
     mv -fT -- "$staged_binary" "$binary"
     staged_binary=
+    on_path=false
+    [[ ":$PATH:" != *":$program_parent:"* ]] || on_path=true
     add_user_path
     elzevir --version
     elzevir panel --help >/dev/null
-    printf 'Installed: %s\nData: %s\nOpen a new Bash shell or run: export PATH="$HOME/.local/bin:$PATH"\n' "$binary" "$data"
+    printf 'Installed: %s\nData: %s\n' "$binary" "$data"
+    command=elzevir
+    if ! $on_path; then
+        # A piped installer cannot change the PATH of the shell that started it.
+        printf '\nThis terminal does not know the elzevir command yet. Run once:\n    source ~/.bashrc\n'
+        printf 'or open a new terminal. Until then, use the full path below.\n'
+        command=$binary
+    fi
     if "$binary" start --help >/dev/null 2>&1; then
-        printf 'Run: elzevir start\n'
+        printf '\nNext step:\n    %s start\n' "$command"
+        printf 'The first start asks for the library name and the administrator password,\n'
+        printf 'then serves the catalog at http://127.0.0.1:8080 and opens the panel.\n'
     else
-        printf 'Run: elzevir serve --data-dir %q\n' "$data"
+        printf '\nThis release has no start command. Next steps:\n'
+        printf '    %s init --name "My library" --data-dir %q --config %q\n' "$command" "$data/institution" "$data/elzevir.toml"
+        printf '    %s serve --config %q\n' "$command" "$data/elzevir.toml"
     fi
     exit 0
 fi

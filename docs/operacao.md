@@ -28,8 +28,10 @@ No PowerShell elevado:
 A senha do administrador é pedida pelo próprio Elzevir. Não a coloque em
 argumentos. Os instaladores verificam a release antes de executar o binário,
 criam conta limitada para o serviço e preservam instalações existentes.
-A primeira criação verifica se a porta está disponível. Firewall e exclusão
-do Defender são opções explícitas. Reexecutar o instalador usa o fluxo de
+A primeira criação verifica se a porta está disponível. Firewall é opção
+explícita. O instalador não cria exclusão do Defender; o atalho do painel no
+menu Iniciar precisa ser aberto com "Executar como administrador" para
+controlar o serviço. Reexecutar o instalador usa o fluxo de
 atualização com backup; não recria o banco ou o administrador.
 
 Na instituição padrão, Linux usa /etc/elzevir/library.toml e

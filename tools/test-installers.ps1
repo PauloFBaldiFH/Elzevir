@@ -27,7 +27,14 @@ $official = 'https://github.com/PauloFBaldiFH/Elzevir'
 $originalResponse = (Get-Item Function:Get-ElzevirResponse).ScriptBlock
 try {
     function Get-ElzevirResponse([uri] $Uri, [switch] $Head) {
-        Assert-True ($Head -and $Uri.AbsoluteUri -ceq "$official/releases/latest") 'Unexpected release lookup'
+        if (-not $Head) {
+            Assert-True ($Uri.AbsoluteUri -ceq 'https://api.github.com/repos/PauloFBaldiFH/Elzevir/releases?per_page=1') 'Unexpected release listing'
+            $response = New-Object PSObject -Property @{ ContentLength=-1 }
+            $response | Add-Member ScriptMethod GetResponseStream { return [IO.MemoryStream]::new([Text.Encoding]::UTF8.GetBytes('[{"tag_name":"v0.1.0-alpha.2","prerelease":true}]'), $false) }
+            $response | Add-Member ScriptMethod Dispose {}
+            return $response
+        }
+        Assert-True ($Uri.AbsoluteUri -ceq "$official/releases/latest") 'Unexpected release lookup'
         $response = New-Object PSObject -Property @{ ResponseUri=[uri]$script:releaseUri }
         $response | Add-Member ScriptMethod Dispose {}
         return $response
@@ -35,7 +42,7 @@ try {
     $script:releaseUri = "$official/releases/tag/v2.0.0"
     Assert-True ((Get-ElzevirLatest $official) -ceq 'v2.0.0') 'Stable latest release was not preferred'
     $script:releaseUri = "$official/releases"
-    Assert-True ((Get-ElzevirLatest $official) -ceq 'v0.1.0-alpha.1') 'Initial preview was not selected without a stable release'
+    Assert-True ((Get-ElzevirLatest $official) -ceq 'v0.1.0-alpha.2') 'Newest preview was not selected without a stable release'
 } finally { Set-Item Function:Get-ElzevirResponse $originalResponse }
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -77,4 +84,8 @@ try {
     Assert-Throws { Expand-ElzevirPackage $package $output }
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $temporary 'outside'))) 'ZIP escaped the output directory'
 } finally { Remove-Item -LiteralPath $temporary -Recurse -Force }
+# The whole script must survive the antivirus scan that blocked `irm | iex`;
+# -Plan stops before any download or change.
+$plan = & ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $root 'install.ps1')))) -Plan -Version 'v1.2.3' | ConvertFrom-Json
+Assert-True ($plan.version -ceq 'v1.2.3') 'Installer plan did not run'
 Write-Output 'Windows bootstrap parser, checksum and extraction checks passed.'

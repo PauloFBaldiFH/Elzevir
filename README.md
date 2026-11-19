@@ -12,12 +12,22 @@ curl -fsSL https://raw.githubusercontent.com/PauloFBaldiFH/Elzevir/main/install.
 **Windows (PowerShell)**
 
 ```powershell
-irm https://raw.githubusercontent.com/PauloFBaldiFH/Elzevir/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/PauloFBaldiFH/Elzevir/main/install.ps1 -OutFile "$env:TEMP\elzevir-install.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\elzevir-install.ps1"
 ```
 
+Se o antivírus bloquear o script, não desative a proteção. Instale sem
+script: baixe `elzevir-windows-x86_64.zip` e `SHA256SUMS` da
+[release mais recente](https://github.com/PauloFBaldiFH/Elzevir/releases),
+confira o hash com `Get-FileHash elzevir-windows-x86_64.zip` (deve ser
+igual à linha do arquivo em `SHA256SUMS`), extraia e rode
+`.\elzevir.exe start` na pasta extraída.
+
 Os instaladores verificam o SHA-256 do pacote e adicionam `elzevir` ao PATH
-do usuário. Eles consultam a release estável mais recente. Enquanto ela
-estiver indisponível, usam o pré-lançamento `v0.1.0-alpha.1`.
+do usuário. Eles consultam a release estável mais recente. Enquanto não
+houver release estável, usam o pré-lançamento mais novo. O terminal em que
+o instalador rodou no Linux ainda não conhece o comando: rode
+`source ~/.bashrc` ou abra outro terminal, como o instalador indica.
 
 Abra o Elzevir pelo terminal. No primeiro uso, informe o nome da
 biblioteca, crie a senha do administrador e selecione um perfil inicial

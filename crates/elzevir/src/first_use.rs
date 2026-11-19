@@ -59,7 +59,21 @@ pub(crate) fn resolve(mut args: ServeArgs) -> Result<(Settings, Option<PathBuf>)
     let directory = data_dir()?;
     let config = directory.join(CONFIG);
     match std::fs::symlink_metadata(directory.join("elzevir.db")) {
-        Ok(meta) if meta.is_file() => {}
+        Ok(meta) if meta.is_file() => {
+            // `serve --data-dir` in 0.1.0-alpha.1 created a database with no
+            // administrator and no server.toml; point that user to recovery.
+            if !config.exists() {
+                let messages = elzevir_panel::Messages::new(language(args.lang.as_deref()))
+                    .map_err(|error| error.to_string())?;
+                eprintln!(
+                    "elzevir: {}",
+                    messages.values(
+                        "setup-no-admin",
+                        &[("dir", directory.display().to_string())]
+                    )
+                );
+            }
+        }
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             if !interactive() {
                 return Err("run elzevir init first, or use an interactive terminal (panel --demo is also available)".into());
@@ -69,11 +83,22 @@ pub(crate) fn resolve(mut args: ServeArgs) -> Result<(Settings, Option<PathBuf>)
             if !crate::init::confirm_setup(&messages)? {
                 return Err(messages.get("setup-cancelled"));
             }
-            crate::init::run(&crate::init::InitArgs::first_use(
+            let init = crate::init::InitArgs::first_use(
                 args.lang.clone(),
                 args.listen,
                 args.insecure_cookies,
-            ))?;
+            );
+            crate::init::run(&init)?;
+            println!(
+                "elzevir: {}",
+                messages.values(
+                    "setup-done",
+                    &[
+                        ("listen", init.listen.to_string()),
+                        ("login", init.login.clone()),
+                    ]
+                )
+            );
         }
         _ => return Err("cannot inspect default institution database".into()),
     }

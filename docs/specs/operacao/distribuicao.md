@@ -15,14 +15,19 @@ dos pacotes e dos instaladores, anexa os arquivos ao release e publica.
 Tags com sufixo de pré-lançamento são publicadas como pré-releases.
 
 Os instaladores Linux e PowerShell consultam `releases/latest` e fixam a tag
-resolvida antes de baixar pacote e somas por HTTPS. Enquanto o repositório
-ainda não tiver uma release estável, usam a tag inicial `v0.1.0-alpha.1`.
+resolvida antes de baixar pacote e somas por HTTPS. Como `releases/latest`
+ignora pré-releases, enquanto o repositório não tiver uma release estável os
+instaladores pedem à API do GitHub a release publicada mais nova
+(`releases?per_page=1`), sem tag fixa no script.
 `--version`/`-Version` permite fixar outra tag. O SHA-256 é verificado
 antes da extração segura e da execução.
 
 Sem opções de serviço, a instalação rápida grava o binário no PATH do
 usuário, cria o diretório de dados local, verifica a versão e o subcomando
-`panel` e exibe os caminhos. Reinstalar preserva os dados da instituição.
+`panel` e exibe os caminhos e o próximo passo (`elzevir start`, que no
+primeiro uso pede o nome da biblioteca e a senha do administrador). No
+Linux, o script executado por `curl | bash` não altera o PATH do terminal
+que o chamou; a mensagem final diz isso e mostra o caminho completo. Reinstalar preserva os dados da instituição.
 Com as opções de serviço, o fluxo gerenciado exige o gerenciador suportado
 e recusa destinos ambíguos e configurações incompletas. O administrador
 informa nome e login. A senha é solicitada pelo próprio `elzevir init`.
@@ -31,8 +36,11 @@ informa nome e login. A senha é solicitada pelo próprio `elzevir init`.
 Linux usa conta dedicada não-root e diretório local privado; Windows usa a
 conta virtual do serviço com ACL explícita. A segunda execução preserva banco
 e configuração, faz backup antes de substituir o binário e restaura o anterior
-se o serviço novo não ficar saudável. Firewall e exclusão do Defender são
-opções explícitas, nunca padrão. Dependências cloudflared/rclone são instaladas
+se o serviço novo não ficar saudável. Firewall é opção explícita, nunca
+padrão. O instalador PowerShell não cria exclusão do Defender nem altera
+atalhos para elevação: são comportamentos típicos de malware e levam o
+antivírus a bloquear o script. Quem quiser excluir o diretório de dados da
+varredura faz isso manualmente. Dependências cloudflared/rclone são instaladas
 somente por ação correspondente do painel. Nenhum teste instala serviço real.
 
 Cada executável instalado fica vinculado a uma instituição e serviço por
