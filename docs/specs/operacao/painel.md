@@ -68,9 +68,7 @@ As áreas clicáveis acompanham a geometria do quadro e o modal ativo.
 Atalhos e cliques enviam as mesmas intenções ao controlador. Confirmações
 continuam exigindo ação explícita. A demonstração permanece isolada.
 
-A aba Acervo usa o canal administrativo privado do sistema operacional
-e as portas do catálogo para busca, criação mínima e edição de título
-com a versão exibida. Excluir aparece na lista de políticas, onde a
-escritora já recusa políticas em uso. Os exemplares usam os sinais
-atuais de disponibilidade. A consulta apresenta até dez instâncias ou
-vinte políticas por seleção. A busca usa a listagem do Tantivy.
+O painel não lê nem altera o catálogo nem os cadastros. Registros,
+exemplares e políticas de circulação mudam só pela interface da equipe,
+com permissão e autor no `audit_log`; o canal administrativo não tem
+comando de catálogo.

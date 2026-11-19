@@ -1,7 +1,7 @@
 # ADR 0007 — Exemplares nativos na importação
 
 - **Status:** aprovado para a implementação da I8.
-- **Referências:** [Importação universal](0004-importacao-universal.md),
+- **Referências:** [Importação universal](0008-importacao-universal.md),
   [BIBFRAME completo](0003-bibframe-completo.md) e
   [grade de exemplares](../specs/catalogo/exemplares.md).
 

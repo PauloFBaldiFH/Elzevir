@@ -44,7 +44,6 @@ mod memory;
 mod operations;
 mod operations_cli;
 mod operations_config;
-mod panel_catalog;
 mod panel_cli;
 mod personal_update;
 mod private_temp;
@@ -345,7 +344,6 @@ impl Drop for Indexer {
 struct WebRuntime {
     router: axum::Router,
     state: AppState,
-    catalog: panel_catalog::Catalog,
 }
 
 fn web_app(
@@ -361,10 +359,6 @@ fn web_app(
         I18n::english()
     }
     .map_err(|error| error.to_string())?;
-    let catalog = panel_catalog::Catalog {
-        store: Arc::clone(store),
-        index: Arc::clone(&index),
-    };
     let opac = OpacPorts {
         catalog: Arc::clone(store) as _,
         index,
@@ -396,7 +390,6 @@ fn web_app(
     Ok(WebRuntime {
         router: elzevir_web::router(state.clone()),
         state,
-        catalog,
     })
 }
 
@@ -543,7 +536,6 @@ async fn run_http(
         Arc::clone(&probe),
         operations,
         web.state,
-        web.catalog,
         receiver.clone(),
     );
     let health_server = axum::serve(health_listener, health_app)

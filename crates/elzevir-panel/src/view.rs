@@ -167,11 +167,7 @@ pub(crate) fn interactive(
     );
     menu(frame, panel, messages, navigation, ascii, scene);
     if let Mode::Live(state) = &panel.mode {
-        if panel.section == Section::Catalog {
-            crate::catalog::draw(frame, panel, messages, work, context, ascii, scene);
-        } else {
-            crate::dashboard::draw(frame, panel, state, messages, work, context, ascii);
-        }
+        crate::dashboard::draw(frame, panel, state, messages, work, context, ascii);
         if panel.section == Section::Addresses && panel.tunnel_tab == crate::TunnelTab::Share {
             crate::sharing::draw(
                 frame,
@@ -203,8 +199,6 @@ pub(crate) fn interactive(
         scene.clear();
         ui::dim(frame);
         crate::operation_view::form(frame, panel, messages, ascii, scene);
-    } else if panel.catalog_details.is_some() {
-        crate::catalog::popup(frame, panel, messages, ascii, scene);
     } else if panel.palette {
         scene.clear();
         ui::dim(frame);
@@ -231,12 +225,11 @@ fn draw_tabs(frame: &mut Frame, tabs: Rect, panel: &Panel, messages: &Messages, 
                             "tab-access",
                             "tab-backup",
                             "tab-updates",
-                            "tab-catalog",
                             "tab-restart",
                         ];
                         let label = names
                             .get(index)
-                            .filter(|_| tabs.width / 7 >= 10)
+                            .filter(|_| tabs.width / 6 >= 10)
                             .map_or_else(String::new, |name| messages.get(name));
                         format!("{} {label}", index + 1)
                     },
