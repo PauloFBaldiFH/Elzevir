@@ -86,23 +86,32 @@
         <article id="record-{{ entry.record }}">
           <h3>{{ t.get("import-record") }} {{ entry.record }}</h3>
           <div class="import-record">
-            {% if let Some(mapped) = entry.mapped %}
-            <dl>
-              <dt>{{ t.get("import-work") }}</dt><dd>{{ mapped.0 }}</dd>
-              <dt>{{ t.get("import-instance") }}</dt><dd>{{ mapped.1 }}</dd>
-              <dt>{{ t.get("import-items") }}</dt><dd>{{ mapped.2 }}</dd>
-              {% if let Some(candidate) = entry.candidate %}
-              <dt>{{ t.get("import-candidate") }}</dt><dd>{{ candidate }}</dd>
+            <div class="import-blocks">
+            {% if let Some(blocks) = entry.blocks %}
+              <section class="import-block import-block-work">{{ blocks.work|safe }}</section>
+              <section class="import-block import-block-instance">{{ blocks.instance|safe }}</section>
+              {% if let Some(items) = blocks.items %}
+              <section class="import-block import-block-items">{{ items|safe }}</section>
+              {% else if blocks.item_count > 0 %}
+              <p>{{ t.get("import-items") }}: {{ blocks.item_count }}</p>
               {% endif %}
-            </dl>
             {% endif %}
-            {% if !entry.before.is_empty() %}<details>
-              <summary>{{ t.get("import-source") }}</summary>
-              <pre>{{ entry.before }}</pre>
+            {% if let Some(candidate) = entry.candidate %}
+              <p class="import-candidate">{{ t.get("import-candidate") }}: {{ candidate }}</p>
+            {% endif %}
+            </div>
+            {% if !entry.before.is_empty() %}<aside class="import-source">
+              <details open>
+                <summary>{{ t.get("import-source") }}</summary>
+                <pre>{{ entry.before }}</pre>
+              </details>
               {% if let Some(after) = entry.after %}
-              <h4>{{ t.get("import-edited") }}</h4><pre>{{ after }}</pre>
+              <details open>
+                <summary>{{ t.get("import-edited") }}</summary>
+                <pre>{{ after }}</pre>
+              </details>
               {% endif %}
-            </details>{% endif %}
+            </aside>{% endif %}
           </div>
         </article>
         {% endfor %}

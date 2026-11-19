@@ -5,12 +5,14 @@ use std::collections::VecDeque;
 use std::io::{self, Read};
 use std::sync::{Arc, Mutex, PoisonError};
 
+use askama::Template;
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, FromRequestParts, Multipart, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header, request::Parts};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Form, Json, Router};
+use elzevir_app::catalog::{CodeLists, NewRecord, RecordItem};
 use elzevir_app::import::batches::{
     BatchCommand, BatchError, BatchPort, BatchPreview, BatchReply, BatchState, BatchSummary,
     BatchView, Completion, FormatChoice, MAX_BATCH_MANIFEST_BYTES,
@@ -22,11 +24,12 @@ use elzevir_app::matching::{ItemAction, Matching, OnMatch};
 use elzevir_app::staff::{Permission, StaffId};
 use elzevir_web_templates::{
     I18n, I18nError, ImportBatchLink, ImportDraft, ImportMember, ImportPage, ImportPreview,
-    ImportReceipt, ImportSample, ImportUpload, ImportView,
+    ImportReceipt, ImportSample, ImportUpload, ImportView, RecordBlocks, RecordFields,
 };
 use serde::Deserialize;
 use tokio::sync::mpsc;
 
+use crate::record_fields::{instance_group, item_fields, native_item_fields, work_group};
 use crate::security::tokens_match;
 use crate::session::ActiveSession;
 use crate::{AppState, render, staff::current_session};
@@ -726,7 +729,9 @@ fn preview_page(
     preview: &BatchPreview,
     matching: Option<Matching>,
 ) -> ImportPreview {
-    let BatchPreview { rendered, report } = preview;
+    let BatchPreview {
+        rendered, report, ..
+    } = preview;
     let from = page.from.unwrap_or(0);
     let evidence = match report.detection.evidence {
         Evidence::IsoLeader => "import-evidence-iso",
@@ -802,25 +807,29 @@ fn preview_page(
         ),
         evidence: t.get(evidence),
         replace_items: matching.is_some_and(|rules| rules.items == ItemAction::Replace),
-        records: record_samples(preview),
+        records: record_samples(t, preview),
         diagnostics,
         record_pages,
         diagnostic_pages,
     }
 }
 
-fn record_samples(preview: &BatchPreview) -> Vec<ImportSample> {
-    let BatchPreview { rendered, report } = preview;
+fn record_samples(t: &I18n, preview: &BatchPreview) -> Vec<ImportSample> {
+    let BatchPreview {
+        rendered,
+        report,
+        codes,
+    } = preview;
     rendered
         .source
         .iter()
         .map(|entry| {
             let index = entry.record - 1;
-            let mapped = report
+            let blocks = report
                 .samples
                 .iter()
                 .find(|sample| sample.index == index)
-                .map(|sample| (sample.work.clone(), sample.instance.clone(), sample.items));
+                .map(|sample| record_blocks(t, &sample.record, codes.as_ref()));
             let candidate = report
                 .matches
                 .iter()
@@ -828,13 +837,54 @@ fn record_samples(preview: &BatchPreview) -> Vec<ImportSample> {
                 .map(|(_, id)| id.0);
             ImportSample {
                 record: entry.record,
-                mapped,
+                blocks,
                 candidate,
                 before: entry.before.clone(),
                 after: entry.after.clone(),
             }
         })
         .collect()
+}
+
+/// The Work, Instance and Item blocks of a prepared record, with the same markup as
+/// the focused block of the catalog (listagem.md, items 42 to 45), so the cataloguer
+/// sees the record as it will be catalogued (UI spec §21.1, step 4).
+fn record_blocks(t: &I18n, record: &NewRecord, codes: Option<&CodeLists>) -> RecordBlocks {
+    let fields = |group| {
+        render_fragment(&RecordFields {
+            t,
+            groups: vec![group],
+            items: Vec::new(),
+        })
+    };
+    let items = codes.map_or_else(Vec::new, |codes| {
+        record
+            .items
+            .entries()
+            .map(|item| match item {
+                RecordItem::Marc(item) => item_fields(item, codes),
+                RecordItem::Native(item) => native_item_fields(item, codes),
+            })
+            .collect()
+    });
+    RecordBlocks {
+        work: fields(work_group(t, record)),
+        instance: fields(instance_group(t, record)),
+        items: (!items.is_empty()).then(|| {
+            render_fragment(&RecordFields {
+                t,
+                groups: Vec::new(),
+                items,
+            })
+        }),
+        item_count: record.items.len(),
+    }
+}
+
+/// Renders a fragment that the page embeds as markup. Askama escapes every value inside
+/// it; a failed render shows an empty block rather than the raw record.
+fn render_fragment(fragment: &impl Template) -> String {
+    fragment.render().unwrap_or_default()
 }
 
 fn pages(

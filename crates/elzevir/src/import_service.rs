@@ -6,7 +6,7 @@ use std::io::{BufReader, Cursor, Seek};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use elzevir_app::catalog::{CatalogRefusal, CodeLists};
+use elzevir_app::catalog::{CatalogReader, CatalogRefusal, CodeLists};
 use elzevir_app::import::batches::{
     BatchCommand, BatchError, BatchPort, BatchPreview, BatchReply, BatchState as State, BatchView,
     Completion, FormatChoice, Receipt, Refusal,
@@ -358,9 +358,19 @@ fn prepare_table(
     rendered.review(&mut report, &batch.recipe);
     Ok(Prepared {
         input: PreparedInput::Table(table),
-        preview: BatchPreview { rendered, report },
+        preview: BatchPreview {
+            rendered,
+            report,
+            codes: registry_names(live),
+        },
         stamp,
     })
+}
+
+/// The registries the review screen shows by name. A failed read only costs the
+/// names: the blocks then show identifiers and edge codes, and the preview stays valid.
+fn registry_names(live: LiveStore<'_>) -> Option<CodeLists> {
+    live.and_then(|(store, _)| store.codes().ok())
 }
 
 fn prepare_marc(
@@ -385,7 +395,11 @@ fn prepare_marc(
     rendered.review(&mut report, &batch.recipe);
     Ok(Prepared {
         input: PreparedInput::Marc(file),
-        preview: BatchPreview { rendered, report },
+        preview: BatchPreview {
+            rendered,
+            report,
+            codes: registry_names(live),
+        },
         stamp,
     })
 }

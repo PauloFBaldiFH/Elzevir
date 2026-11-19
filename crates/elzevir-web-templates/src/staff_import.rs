@@ -134,14 +134,26 @@ pub struct ImportPreview {
 pub struct ImportSample {
     /// One-based source position.
     pub record: u64,
-    /// Titles of the Work and Instance and item count.
-    pub mapped: Option<(String, String, usize)>,
+    /// The prepared Work, Instance and Items.
+    pub blocks: Option<RecordBlocks>,
     /// Possible stored match.
     pub candidate: Option<i64>,
     /// Original MARC.
     pub before: String,
     /// MARC after an edit.
     pub after: Option<String>,
+}
+
+/// A prepared record in the blocks of the catalog (UI spec §21.1, step 4).
+pub struct RecordBlocks {
+    /// The Work's filled fields, rendered with the catalog's field markup.
+    pub work: String,
+    /// The Instance's filled fields, rendered with the same markup.
+    pub instance: String,
+    /// The Items table, when the record has Items and the registries were read.
+    pub items: Option<String>,
+    /// How many Items the record carries.
+    pub item_count: usize,
 }
 
 /// Actual write report for the operator.

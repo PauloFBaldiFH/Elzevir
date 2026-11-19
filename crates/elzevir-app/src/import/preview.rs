@@ -74,6 +74,9 @@ pub struct PreviewSample {
     pub instance: String,
     /// Items described by this record.
     pub items: usize,
+    /// The prepared record, as the writer would receive it, for the Work, Instance
+    /// and Item blocks of the review screen.
+    pub record: Box<NewRecord>,
 }
 
 /// A blocking diagnostic in source order.
@@ -422,6 +425,7 @@ impl Inspection<'_> {
                 work: record.work_title.clone(),
                 instance: record.instance.title.clone(),
                 items: record.items.len(),
+                record: Box::new(record.clone()),
             });
         }
         let decision = self.predict(place, record)?;
