@@ -402,7 +402,8 @@ fn web_app(
         store: Arc::clone(store),
     }))
     .map_err(|error| error.to_string())?
-    .with_patrons(Arc::clone(store) as _);
+    .with_patrons(Arc::clone(store) as _)
+    .with_rules(Arc::clone(store) as _);
     Ok(WebRuntime {
         router: elzevir_web::router(state.clone()),
         state,

@@ -637,3 +637,12 @@ main:has(.import-workspace) { max-width: 90rem; }
 .import-columns th, .import-columns td { text-align: start; padding: .25rem .5rem; border-block-end: 1px solid var(--elzevir-color-border); }
 .import-columns th[scope="row"] label { display: inline; margin: 0; }
 .import-columns select, .import-sheet select { display: block; max-inline-size: 100%; }
+.circulation-rules { max-width: 64rem; }
+.rules-scroll { overflow-x: auto; }
+.rules-overview, .rules-grid { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.rules-overview th, .rules-overview td, .rules-grid th, .rules-grid td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--elzevir-color-border); vertical-align: middle; }
+.rules-grid th[scope=row] { font-weight: normal; width: 40%; }
+.rules-grid input[type=text] { font: inherit; width: 8rem; padding: 2px 6px; border: 1px solid var(--elzevir-color-border); border-radius: 6px; }
+.rules-overview tr[aria-current] { background: var(--elzevir-color-border); }
+.rules-chooser { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: end; margin-bottom: 12px; }
+.rules-blank { font-size: 0.8rem; white-space: nowrap; }

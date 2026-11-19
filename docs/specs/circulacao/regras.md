@@ -1,6 +1,6 @@
 # Regras de circulação
 
-> Status: tarefa 3.2, parte a (resolução, comando e gravação). A tela em grade vem na parte b. Base: Koha 26.05.05 e [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (tabela da Fase 3, linha 3.2; §3.4, "uma função de resolução que explica de onde veio cada valor").
+> Status: tarefa 3.2, partes a (resolução, comando e gravação) e b (tela). Base: Koha 26.05.05 e [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (tabela da Fase 3, linha 3.2; §3.4, "uma função de resolução que explica de onde veio cada valor").
 
 ## 1. Comportamento
 
@@ -19,6 +19,17 @@
 6. Unidade, categoria de leitor e política usadas por alguma regra não podem ser apagadas.
 7. As regras não entram no resumo da importação (não são conteúdo do catálogo).
 
+### Tela (`/equipe/admin/regras`)
+
+8. A tela pede a permissão de administração, a mesma do comando. Sem ela, 403.
+9. **Visão geral.** Uma linha por escopo que tem regras, em ordem de unidade, categoria e política (o "qualquer" primeiro), com os nomes dos cadastros, cinco tipos principais (prazo do empréstimo, empréstimos simultâneos, renovações, multa, reservas) e quantas regras o escopo tem. Cada linha abre o escopo.
+10. **Escopo.** Três listas escolhem a unidade, a categoria de leitor e a política, cada uma com "qualquer". Para o escopo escolhido, cada tipo aparece numa linha, nos grupos empréstimo, renovação, multas e suspensão, reservas, devolução, chamadas de volta, agendamentos e pedidos de artigo, com:
+    - o valor guardado neste escopo, que se edita;
+    - o valor que vale aqui, resolvido por `effective_rule`, e de onde veio: "este escopo", o escopo de outra regra com os nomes dos cadastros, ou "sem regra".
+11. Um tipo que o escopo não admite (por exemplo, `max_holds` com uma política escolhida) aparece sem campo, só com o valor que vale e a dimensão que o tipo não usa.
+12. **Gravar** manda num único `circ.set_rules` só os tipos que mudaram em relação ao que está guardado. Campo vazio apaga a regra. Para guardar um texto vazio de propósito (que esconde a regra menos específica), marca-se "vazio" ao lado do campo; nos tipos que não podem ficar vazios a marca não aparece.
+13. Uma recusa mostra a mensagem do motivo e devolve a tela com o que foi digitado, sem gravar nada. O nome de cada tipo e de cada recusa vem do Fluent.
+
 ## 2. Origem no Koha
 
 - `Koha::CirculationRules::get_effective_rule`: busca com `branchcode`, `categorycode` e `itemtype` iguais ao pedido ou `NULL`, ordenada pelas três colunas de forma descendente, primeira linha. No MySQL, `NULL` fica por último numa ordem descendente.
@@ -32,6 +43,7 @@
 - `scenarios/circulacao/regras-efetivas.koha.json`: as regras do oráculo e as efetivas que o Koha devolveu (`GET /api/v1/circulation_rules?effective=true`) para 24 combinações (unidade ou qualquer; duas categorias ou qualquer; três tipos de item ou qualquer). `crates/elzevir-scenarios/tests/rules.rs` resolve as mesmas regras no Elzevir: as 24 × 57 = 1.368 respostas são iguais. Os códigos do Koha viram ids genéricos dentro do teste e não chegam ao domínio.
 - O gravador é `tools/circ-rules-recorder/record.py`. As regras reais do oráculo são poucas, então ele acrescenta seis conjuntos temporários (unidade contra categoria, categoria contra tipo, vazio que esconde número, regra geral), grava e os remove, conferindo que as regras voltaram a ser as de antes.
 - Testes de unidade da resolução e dos valores; `crates/elzevir-store/tests/circulation_rules.rs`: gravar, trocar, apagar, vazio mantido, vazio que apaga, recusas sem gravar nada, política em uso.
+- `crates/elzevir/tests/circulation_rules.rs`, contra o servidor real: permissão, gravar pela tela só o que mudou, vazio marcado, origem do valor, recusa que mantém o digitado.
 
 ## 4. Casos de borda
 

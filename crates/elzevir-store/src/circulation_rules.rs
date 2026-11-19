@@ -5,14 +5,15 @@ use elzevir_app::circulation_rules::{
     CirculationCommand, CirculationOutput, CirculationRefusal, RuleBook, RuleBookError, RuleChange,
     RuleKind, checked_rules,
 };
-use elzevir_app::commands::{WriteOutput, WriteRefusal};
+use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
+use elzevir_app::staff::StaffId;
 use elzevir_domain::catalog::{BranchId, PolicyId};
 use elzevir_domain::circulation_rules::{CirculationRule, RuleScopeKey};
 use elzevir_domain::patron::PatronCategoryId;
 use rusqlite::{Connection, params};
 
 use crate::catalog::exists;
-use crate::{CommandFailed, ElzevirStore, StoreError, WriteTx};
+use crate::{CommandFailed, ElzevirStore, StoreError, SubmitError, WriteTx};
 
 type Applied = Result<WriteOutput, CommandFailed<WriteRefusal>>;
 
@@ -119,13 +120,40 @@ impl RuleBook for ElzevirStore {
                 })?;
                 rows.collect::<rusqlite::Result<Vec<_>>>()
             })
-            .map_err(|error| RuleBookError(error.to_string()))?
+            .map_err(|error| RuleBookError::Unavailable(error.to_string()))?
             .into_iter()
             .map(|(name, scope, value)| {
-                let kind = RuleKind::from_koha_name(&name)
-                    .ok_or_else(|| RuleBookError(format!("unknown stored rule `{name}`")))?;
+                let kind = RuleKind::from_koha_name(&name).ok_or_else(|| {
+                    RuleBookError::Unavailable(format!("unknown stored rule `{name}`"))
+                })?;
                 Ok(CirculationRule { kind, scope, value })
             })
             .collect()
+    }
+
+    fn set_rules(
+        &self,
+        actor: StaffId,
+        change: RuleChange,
+    ) -> Result<CirculationOutput, RuleBookError> {
+        let unavailable =
+            |error: &dyn std::fmt::Display| RuleBookError::Unavailable(error.to_string());
+        let pending = self
+            .submit_as(
+                actor.0,
+                WriteCommand::Circulation(CirculationCommand::SetRules(change)),
+            )
+            .map_err(|error| match error {
+                SubmitError::Busy => RuleBookError::Busy,
+                SubmitError::Closed => unavailable(&error),
+            })?;
+        match pending.wait() {
+            Ok(WriteOutput::Circulation(output)) => Ok(output),
+            Ok(_) => Err(unavailable(&"the writer answered with another result")),
+            Err(CommandFailed::Rejected(WriteRefusal::Circulation(refusal))) => {
+                Err(RuleBookError::Refused(refusal))
+            }
+            Err(failure) => Err(unavailable(&failure)),
+        }
     }
 }

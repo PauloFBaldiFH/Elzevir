@@ -7,6 +7,8 @@ use elzevir_domain::circulation_rules::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::staff::StaffId;
+
 /// Most rules one change may set.
 pub const MAX_RULES_PER_CHANGE: usize = RuleKind::ALL.len();
 
@@ -121,12 +123,22 @@ pub fn checked_rules(
     Ok(checked)
 }
 
-/// Why the rules could not be read.
+/// Why the rule book could not answer.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("cannot read the circulation rules: {0}")]
-pub struct RuleBookError(pub String);
+pub enum RuleBookError {
+    /// The change was refused.
+    #[error(transparent)]
+    Refused(#[from] CirculationRefusal),
+    /// The writer queue is full; try again.
+    #[error("the writer is busy")]
+    Busy,
+    /// Storage failed.
+    #[error("cannot read or write the circulation rules: {0}")]
+    Unavailable(String),
+}
 
-/// Every stored circulation rule, for the one function that resolves them.
+/// The stored circulation rules, for the one function that resolves them and for the
+/// screen that changes them.
 pub trait RuleBook: Send + Sync {
     /// Every rule.
     ///
@@ -134,6 +146,17 @@ pub trait RuleBook: Send + Sync {
     ///
     /// When storage fails.
     fn rules(&self) -> Result<Vec<CirculationRule>, RuleBookError>;
+
+    /// Runs `circ.set_rules` as `actor`.
+    ///
+    /// # Errors
+    ///
+    /// [`RuleBookError::Refused`] with the refusal, or why storage failed.
+    fn set_rules(
+        &self,
+        actor: StaffId,
+        change: RuleChange,
+    ) -> Result<CirculationOutput, RuleBookError>;
 }
 
 #[cfg(test)]
