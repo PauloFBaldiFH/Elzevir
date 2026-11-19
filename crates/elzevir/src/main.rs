@@ -132,10 +132,9 @@ enum Command {
     /// Manages staff accounts.
     #[command(subcommand)]
     Staff(StaffAction),
-    /// Imports a MARC21 file (ISO 2709) into the catalog.
-    Import(catalog_cli::ImportArgs),
-    /// Prepare, edit and explicitly confirm a private MARC import batch.
-    ImportBatch(import_batch_cli::BatchArgs),
+    /// Imports a MARC21 file (ISO 2709) into the catalog, or stages, edits, previews
+    /// and confirms a private import batch of any supported format.
+    Import(import_batch_cli::ImportCommand),
     /// Writes the versioned BIBFRAME spreadsheet header.
     ImportModel {
         /// Use tab-separated values.
@@ -199,8 +198,7 @@ fn main() -> ExitCode {
             admin,
             cataloguing,
         }) => add_staff(&data_dir, &login, admin, cataloguing),
-        Command::Import(args) => catalog_cli::import(&args),
-        Command::ImportBatch(args) => import_batch_cli::run(args),
+        Command::Import(args) => import_batch_cli::run(args),
         Command::ImportModel { tsv } => import_batch_cli::model(tsv),
         Command::Export(args) => catalog_cli::export(&args),
         Command::KohaCodes(args) => koha_codes::koha_codes(&args),

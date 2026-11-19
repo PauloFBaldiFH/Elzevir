@@ -21,17 +21,18 @@ use elzevir_store::{ElzevirHandler, ElzevirStore, StoreConfig};
 
 const FIXTURE: &[u8] = include_bytes!("../../elzevir-app/tests/data/koha-staff-bibs-1-200.mrc");
 
-fn command(data: &Path, operator: &str) -> Command {
+fn command(data: &Path, operator: &str, step: &str) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_elzevir"));
     command
-        .args(["import-batch", "--data-dir"])
+        .args(["import", step, "--data-dir"])
         .arg(data)
         .args(["--operator", operator]);
     command
 }
 
 fn run(data: &Path, args: &[&str]) -> Output {
-    command(data, "1").args(args).output().unwrap()
+    let (step, rest) = args.split_first().unwrap();
+    command(data, "1", step).args(rest).output().unwrap()
 }
 
 fn success(output: Output) -> String {
@@ -48,7 +49,7 @@ fn refusal(output: &Output, message: &str) {
 }
 
 fn stage(dir: &Path, input: &Path) -> String {
-    let output = success(command(dir, "1").arg("stage").arg(input).output().unwrap());
+    let output = success(command(dir, "1", "stage").arg(input).output().unwrap());
     let id = output.split_ascii_whitespace().nth(1).unwrap().to_owned();
     assert_eq!(id.len(), 32);
     id
@@ -131,7 +132,7 @@ fn a_zip_member_uses_the_same_marc_revision_and_source_identity() {
     let other = record("Unselected archive title");
     let source = container(&[("other.mrc", &other), ("shelf/catalog.mrc", &selected)]);
     fs::write(&path, &source).unwrap();
-    let staged = success(command(data, "1").arg("stage").arg(&path).output().unwrap());
+    let staged = success(command(data, "1", "stage").arg(&path).output().unwrap());
     assert!(staged.contains("shelf/catalog.mrc"));
     let id = staged.split_ascii_whitespace().nth(1).unwrap();
     refusal(&run(data, &["preview", id]), "choose a member");
@@ -334,8 +335,8 @@ fn partial_koha_sql_uses_preview_revision_and_the_same_iso_writer() {
     // The first SQL declaration falls outside the automatic detection sample.
     fs::write(&path, format!("# {}\n{source}", "x".repeat(8192))).unwrap();
     let staged = success(
-        command(data, "1")
-            .args(["stage", "--koha-sql"])
+        command(data, "1", "stage")
+            .arg("--koha-sql")
             .arg(&path)
             .output()
             .unwrap(),
@@ -470,7 +471,7 @@ fn preview_revision_and_original_are_required_then_only_the_edited_field_changes
     let batch = data.join("imports").join(&id);
     refusal(&run(data, &["confirm", &id, "1"]), "cannot be confirmed");
     refusal(
-        &command(data, "2").args(["preview", &id]).output().unwrap(),
+        &command(data, "2", "preview").arg(&id).output().unwrap(),
         "operator",
     );
     success(run(data, &["preview", &id]));
@@ -620,11 +621,7 @@ fn batch_count_limit_preserves_existing_batches_until_explicit_cancel() {
     fs::write(&input, record("Limited batch count")).unwrap();
     let ids: Vec<_> = (0..10).map(|_| stage(data, &input)).collect();
     refusal(
-        &command(data, "2")
-            .arg("stage")
-            .arg(&input)
-            .output()
-            .unwrap(),
+        &command(data, "2", "stage").arg(&input).output().unwrap(),
         "batch count limit exceeded",
     );
     for id in &ids {
@@ -698,11 +695,7 @@ fn staging_and_batch_access_refuse_symlinks() {
     let alias = data.join("alias");
     symlink(&input, &alias).unwrap();
     refusal(
-        &command(data, "1")
-            .arg("stage")
-            .arg(&alias)
-            .output()
-            .unwrap(),
+        &command(data, "1", "stage").arg(&alias).output().unwrap(),
         "regular file",
     );
     let id = stage(data, &input);
@@ -791,4 +784,37 @@ fn an_unedited_batch_keeps_the_i1_digest_and_the_original_iso_records() {
         export(data) == FIXTURE,
         "the export must match the original ISO byte for byte"
     );
+}
+
+#[test]
+fn the_direct_import_and_the_batch_steps_share_one_command() {
+    let help = success(
+        Command::new(env!("CARGO_BIN_EXE_elzevir"))
+            .args(["import", "--help"])
+            .output()
+            .unwrap(),
+    );
+    for step in ["stage", "edit", "preview", "confirm", "cancel", "<FILE>"] {
+        assert!(help.contains(step), "{help}");
+    }
+    let old = Command::new(env!("CARGO_BIN_EXE_elzevir"))
+        .args(["import-batch", "--help"])
+        .output()
+        .unwrap();
+    assert!(!old.status.success());
+    let mixed = Command::new(env!("CARGO_BIN_EXE_elzevir"))
+        .args([
+            "import",
+            "--match",
+            "isbn",
+            "stage",
+            "--data-dir",
+            ".",
+            "--operator",
+            "1",
+            "x",
+        ])
+        .output()
+        .unwrap();
+    assert!(!mixed.status.success(), "{mixed:?}");
 }

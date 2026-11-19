@@ -10,22 +10,35 @@ use elzevir_app::import_detection::ImportFormat;
 
 use crate::import_batches::{open_path, read_recipe};
 
+/// `elzevir import`: either a direct ISO 2709 import of `FILE`, or one step of a
+/// private batch that is staged, edited, previewed and only then confirmed.
 #[derive(Args)]
-pub(crate) struct BatchArgs {
+#[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
+pub(crate) struct ImportCommand {
+    #[command(subcommand)]
+    step: Option<Step>,
+    // `None` only when a step is given: the direct arguments are required otherwise.
+    #[command(flatten)]
+    direct: Option<crate::catalog_cli::ImportArgs>,
+}
+
+/// The institution and operator that own a batch.
+#[derive(Args)]
+struct Owner {
     /// Existing institution data directory.
     #[arg(long)]
     data_dir: PathBuf,
     /// Operator identity supplied by the local administrator.
     #[arg(long)]
     operator: u64,
-    #[command(subcommand)]
-    action: Action,
 }
 
 #[derive(Subcommand)]
-enum Action {
-    /// Capture the original file into a new batch.
+enum Step {
+    /// Capture the original file into a new private batch.
     Stage {
+        #[command(flatten)]
+        owner: Owner,
         file: PathBuf,
         /// Choose the tabular reader when the sample is inconclusive.
         #[arg(long)]
@@ -34,18 +47,31 @@ enum Action {
         #[arg(long, conflicts_with = "table")]
         koha_sql: bool,
     },
-    /// Save a complete recipe for an existing revision.
+    /// Save a complete recipe for an existing revision of a batch.
     Edit {
+        #[command(flatten)]
+        owner: Owner,
         id: String,
         revision: u64,
         recipe: PathBuf,
     },
-    /// Preview the current revision and mark it ready when it passes validation.
-    Preview { id: String },
-    /// Explicitly confirm a previously previewed revision.
-    Confirm { id: String, revision: u64 },
-    /// Remove the private batch and its source.
+    /// Preview the current revision of a batch and mark it ready when it passes.
+    Preview {
+        #[command(flatten)]
+        owner: Owner,
+        id: String,
+    },
+    /// Explicitly confirm a previously previewed revision of a batch.
+    Confirm {
+        #[command(flatten)]
+        owner: Owner,
+        id: String,
+        revision: u64,
+    },
+    /// Remove a private batch and its source.
     Cancel {
+        #[command(flatten)]
+        owner: Owner,
         id: String,
         /// Confirm that the catalog was checked after a possibly partial import.
         #[arg(long)]
@@ -53,31 +79,59 @@ enum Action {
     },
 }
 
-pub(crate) fn run(args: BatchArgs) -> Result<(), String> {
-    let command = match args.action {
-        Action::Stage {
+/// Runs a direct import, or the requested batch step.
+pub(crate) fn run(args: ImportCommand) -> Result<(), String> {
+    match (args.step, args.direct) {
+        (Some(step), _) => run_step(step),
+        (None, Some(direct)) => crate::catalog_cli::import(&direct),
+        (None, None) => Err("give a MARC file to import or a batch step".into()),
+    }
+}
+
+fn run_step(step: Step) -> Result<(), String> {
+    let (owner, command) = match step {
+        Step::Stage {
+            owner,
             file,
             table,
             koha_sql,
-        } => BatchCommand::Stage(
-            Box::new(open_path(&file)?),
-            table
-                .then_some(ImportFormat::Delimited)
-                .or(koha_sql.then_some(ImportFormat::KohaSqlDump)),
+        } => (
+            owner,
+            BatchCommand::Stage(
+                Box::new(open_path(&file)?),
+                table
+                    .then_some(ImportFormat::Delimited)
+                    .or(koha_sql.then_some(ImportFormat::KohaSqlDump)),
+            ),
         ),
-        Action::Edit {
+        Step::Edit {
+            owner,
             id,
             revision,
             recipe,
-        } => BatchCommand::Edit(id, revision, read_recipe(&recipe)?, FormatChoice::Keep),
-        Action::Preview { id } => BatchCommand::Preview(id, None, None),
-        Action::Confirm { id, revision } => BatchCommand::Confirm(id, revision),
-        Action::Cancel {
+        } => {
+            let recipe = read_recipe(&recipe)?;
+            (
+                owner,
+                BatchCommand::Edit(id, revision, recipe, FormatChoice::Keep),
+            )
+        }
+        Step::Preview { owner, id } => (owner, BatchCommand::Preview(id, None, None)),
+        Step::Confirm {
+            owner,
+            id,
+            revision,
+        } => (owner, BatchCommand::Confirm(id, revision)),
+        Step::Cancel {
+            owner,
             id,
             acknowledge_interrupted,
-        } => BatchCommand::Cancel(id, None, acknowledge_interrupted),
+        } => (
+            owner,
+            BatchCommand::Cancel(id, None, acknowledge_interrupted),
+        ),
     };
-    match crate::import_service::execute(&args.data_dir, args.operator, None, command)
+    match crate::import_service::execute(&owner.data_dir, owner.operator, None, command)
         .map_err(|error| error.to_string())?
     {
         BatchReply::Batch(view) => {

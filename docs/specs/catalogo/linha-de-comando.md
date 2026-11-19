@@ -21,6 +21,10 @@
 4. **Relatório**: na saída padrão, duas linhas com lidos, gravados, casados, substituídos, pulados e com falha; exemplares gravados, substituídos e recusados. Na saída de erro, uma linha por registro recusado (posição contada a partir de 1 e deslocamento em bytes) e por exemplar recusado.
 5. A saída é **0** quando a importação chega ao fim, mesmo com registros recusados (eles estão no relatório). É **1** quando não dá para abrir o arquivo ou a base, ou a leitura para no meio.
 
+### `elzevir import ETAPA --data-dir DIR --operator ID ...`
+
+5a. O mesmo comando reúne as etapas do lote privado da [importação universal](importacao-universal.md): `stage`, `edit`, `preview`, `confirm` e `cancel`. Com uma etapa, as opções da importação direta não valem e a etapa vem logo depois de `import`. Sem etapa, vale a importação direta acima, sem mudança. Os scripts de migração do Koha continuam com a gravação direta; o lote serve para revisar e editar antes de gravar, como na tela da equipe.
+
 ### `elzevir export --data-dir DIR [--output ARQUIVO] [--format marc21|turtle|rdfxml] [--iri-base URL]`
 
 6. Escreve todo o acervo em MARC21 ISO 2709, UTF-8, em ordem de Instância, num arquivo ou na saída padrão. A contagem vai para a saída de erro, para não se misturar ao MARC.

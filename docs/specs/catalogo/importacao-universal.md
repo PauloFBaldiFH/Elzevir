@@ -239,9 +239,9 @@ Use `--tsv` para gerar o modelo TSV. A etapa `stage` imprime o ID do lote.
 
 ```sh
 elzevir import-model > modelo.csv
-elzevir import-batch --data-dir DIR --operator 1 stage preenchido.csv --table
-elzevir import-batch --data-dir DIR --operator 1 preview ID
-elzevir import-batch --data-dir DIR --operator 1 confirm ID 1
+elzevir import stage --data-dir DIR --operator 1 preenchido.csv --table
+elzevir import preview --data-dir DIR --operator 1 ID
+elzevir import confirm --data-dir DIR --operator 1 ID 1
 ```
 
 Para um arquivo próprio com a coluna `Título`, salve a receita abaixo.
@@ -266,9 +266,9 @@ trim = true
 ```
 
 ```sh
-elzevir import-batch --data-dir DIR --operator 1 edit ID 1 receita.toml
-elzevir import-batch --data-dir DIR --operator 1 preview ID
-elzevir import-batch --data-dir DIR --operator 1 confirm ID 2
+elzevir import edit --data-dir DIR --operator 1 ID 1 receita.toml
+elzevir import preview --data-dir DIR --operator 1 ID
+elzevir import confirm --data-dir DIR --operator 1 ID 2
 ```
 
 ### 1.5 Editar antes da confirmação
@@ -352,9 +352,13 @@ opaco, gerado pelo sistema; não é um caminho enviado pelo navegador.
 Permissões privadas e vínculo com instituição e operador restringem acesso.
 Não se segue link simbólico nem se reutiliza nome de arquivo como caminho.
 
-A I6 oferece `elzevir import-batch --data-dir DIR --operator ID` com
-`stage ARQUIVO`, `edit LOTE REVISAO RECEITA.json`, `preview LOTE`,
-`confirm LOTE REVISAO` e `cancel LOTE`. O diretório da instituição já
+A I6 oferece as etapas `stage ARQUIVO`, `edit LOTE REVISAO RECEITA.json`,
+`preview LOTE`, `confirm LOTE REVISAO` e `cancel LOTE` como subcomandos de
+`elzevir import`, cada uma com `--data-dir DIR --operator ID` depois do nome
+da etapa (`elzevir import stage --data-dir DIR --operator ID ARQUIVO`).
+Sem etapa, `elzevir import --data-dir DIR ARQUIVO` continua sendo a
+importação direta de ISO 2709. Até 2026-11-19 as etapas ficavam num comando
+separado, `elzevir import-batch`. O diretório da instituição já
 deve existir. A identidade do operador nessa CLI local é fornecida pelo
 operador do sistema. No Windows, o diretório de dados precisa ter a ACL
 privada da instalação. A CLI confirma pelo mesmo bloqueio de escritora de
@@ -494,7 +498,7 @@ backup completo. A combinação `biblio_metadata`, `items`, `borrowers`,
 as declarações aparecem depois da amostra de detecção.
 
 `elzevir import --preview` e o fluxo de lotes aceitam a entrada SQL
-parcial. A etapa `import-batch stage` também admite a escolha explícita
+parcial. A etapa `import stage` também admite a escolha explícita
 `--koha-sql` quando o prefixo é inconclusivo. Na área da equipe, use
 **Importar dump de catálogo do Koha**. O leitor converte o
 catálogo selecionado em ISO 2709 UTF-8 na borda. As receitas e a
@@ -523,10 +527,10 @@ mapeamento de colunas salvo, que descrevia o cabeçalho anterior. Pela CLI, salv
 identificador apresentado por `stage` no lugar de `ID_DO_LOTE`.
 
 ```sh
-elzevir import-batch --data-dir ./dados --operator 1 stage lote.zip
-elzevir import-batch --data-dir ./dados --operator 1 edit ID_DO_LOTE 1 receita.json
-elzevir import-batch --data-dir ./dados --operator 1 preview ID_DO_LOTE
-elzevir import-batch --data-dir ./dados --operator 1 confirm ID_DO_LOTE 2
+elzevir import stage --data-dir ./dados --operator 1 lote.zip
+elzevir import edit --data-dir ./dados --operator 1 ID_DO_LOTE 1 receita.json
+elzevir import preview --data-dir ./dados --operator 1 ID_DO_LOTE
+elzevir import confirm --data-dir ./dados --operator 1 ID_DO_LOTE 2
 ```
 
 Confirme a revisão indicada pela prévia. Para um membro de detecção
