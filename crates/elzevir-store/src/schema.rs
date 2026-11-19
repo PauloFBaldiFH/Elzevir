@@ -619,6 +619,10 @@ const MIGRATIONS: &[&str] = &[
          arrived_at  TEXT
      );
      CREATE UNIQUE INDEX transfers_open ON transfers (item_id) WHERE arrived_at IS NULL;",
+    // 49: renewals (docs/specs/circulacao/renovacao.md); an ended loan keeps its count.
+    "ALTER TABLE loans ADD COLUMN renewals INTEGER NOT NULL DEFAULT 0;
+     ALTER TABLE loans ADD COLUMN renewed_at TEXT;
+     ALTER TABLE returned_loans ADD COLUMN renewals INTEGER NOT NULL DEFAULT 0;",
 ];
 
 /// The migration that creates `match_keys`.

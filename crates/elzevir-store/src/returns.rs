@@ -138,10 +138,10 @@ fn end_loan(
 ) -> rusqlite::Result<()> {
     connection.execute(
         "INSERT INTO returned_loans (item_id, patron_id, branch_id, issued_at, due, on_site,
-                                     returned_at, return_branch_id)
+                                     returned_at, return_branch_id, renewals)
          SELECT l.item_id,
                 CASE WHEN p.reading_history = 1 THEN l.patron_id END,
-                l.branch_id, l.issued_at, l.due, l.on_site, ?2, ?3
+                l.branch_id, l.issued_at, l.due, l.on_site, ?2, ?3, l.renewals
          FROM loans l JOIN patrons p ON p.id = l.patron_id
          WHERE l.id = ?1",
         params![loan.id, request.at.to_string(), request.desk.0],

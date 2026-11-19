@@ -77,7 +77,7 @@ impl TooMany {
 
 /// Perl's numeric reading of a rule value, rounded up, for comparing it with a count:
 /// the leading decimal number, or 0 when there is none.
-fn perl_number_ceiling(value: &str) -> u64 {
+pub(crate) fn perl_number_ceiling(value: &str) -> u64 {
     let text = value.trim_start();
     let whole_end = text
         .find(|c: char| !c.is_ascii_digit())
@@ -505,7 +505,7 @@ pub fn loan_rule(rules: &[CirculationRule], at: &RuleScopeKey, use_days_mode: &s
 }
 
 /// Perl's numeric reading of a whole count: the leading digits, or 0.
-fn perl_whole(value: &str) -> u32 {
+pub(crate) fn perl_whole(value: &str) -> u32 {
     let text = value.trim_start();
     let end = text
         .find(|c: char| !c.is_ascii_digit())

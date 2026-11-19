@@ -116,6 +116,7 @@ impl WriteCommand {
             Self::Circulation(CirculationCommand::ChangeCalendar(_)) => "circ.change_calendar",
             Self::Circulation(CirculationCommand::Checkout(_)) => "circ.checkout",
             Self::Circulation(CirculationCommand::Checkin(_)) => "circ.checkin",
+            Self::Circulation(CirculationCommand::Renew(_)) => "circ.renew",
         }
     }
 
@@ -127,7 +128,11 @@ impl WriteCommand {
             // Koha: `parameters.manage_circ_rules` for the rules, `tools.edit_calendar` for
             // the calendar; both are the administrators' here. A checkout is the desk's
             // (Koha: `circulate_remaining_permissions`).
-            Self::Circulation(CirculationCommand::Checkout(_) | CirculationCommand::Checkin(_))
+            Self::Circulation(
+                CirculationCommand::Checkout(_)
+                | CirculationCommand::Checkin(_)
+                | CirculationCommand::Renew(_),
+            )
             | Self::Patrons(PatronCommand::View(_)) => Permission::Circulation,
             Self::Staff(_) | Self::Circulation(_) => Permission::Administration,
             Self::Catalog(_) => Permission::Cataloguing,

@@ -145,6 +145,28 @@ pub fn checkout_due(at: &Zoned, context: &DueDateContext<'_>) -> Result<Zoned, D
     to_minute(&calc_date_due(at, false, context)?)
 }
 
+/// When a loan due at `due` and renewed at `now` is due again, from the base the library
+/// chose, to the minute.
+///
+/// # Errors
+///
+/// [`DueDateError`] when the calendar has no open day or the date is out of range.
+///
+/// Koha: `C4::Circulation::AddRenewal` (`CalcDateDue` with "is a renewal", stored with
+/// `strftime('%Y-%m-%d %H:%M')`)
+pub fn renewal_due(
+    due: &Zoned,
+    now: &Zoned,
+    base: RenewalBase,
+    context: &DueDateContext<'_>,
+) -> Result<Zoned, DueDateError> {
+    let start = match base {
+        RenewalBase::DueDate => due,
+        RenewalBase::Now => now,
+    };
+    to_minute(&calc_date_due(start, true, context)?)
+}
+
 /// `due` without seconds: a checkout's due date is kept to the minute, while a renewal
 /// from "now" keeps the seconds of the moment it happened.
 ///

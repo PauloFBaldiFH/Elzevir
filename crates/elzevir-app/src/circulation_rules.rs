@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::calendar::CalendarChange;
 use crate::loans::{
     CheckedIn, CheckedOut, CheckinRefusal, CheckinRequest, CheckoutRefusal, CheckoutRequest,
+    RenewRefusal, RenewRequest, Renewed,
 };
 use crate::staff::StaffId;
 
@@ -27,6 +28,8 @@ pub enum CirculationCommand {
     Checkout(CheckoutRequest),
     /// Takes an Item back (docs/specs/circulacao/devolucao.md).
     Checkin(CheckinRequest),
+    /// Renews a loan (docs/specs/circulacao/renovacao.md).
+    Renew(RenewRequest),
 }
 
 /// New values for some rules at one scope.
@@ -57,6 +60,8 @@ pub enum CirculationOutput {
     CheckedOut(CheckedOut),
     /// An Item was checked in.
     CheckedIn(CheckedIn),
+    /// A loan was renewed.
+    Renewed(Renewed),
 }
 
 /// Why a circulation command was refused.
@@ -100,6 +105,9 @@ pub enum CirculationRefusal {
     /// A checkin was refused.
     #[error(transparent)]
     Checkin(#[from] CheckinRefusal),
+    /// A renewal was refused.
+    #[error(transparent)]
+    Renew(#[from] RenewRefusal),
 }
 
 impl CirculationRefusal {
@@ -128,6 +136,7 @@ impl CirculationRefusal {
             Self::BadWeekday | Self::BadDates => "calendar-error-dates",
             Self::Checkout(refusal) => refusal.message_key(),
             Self::Checkin(refusal) => refusal.message_key(),
+            Self::Renew(refusal) => refusal.message_key(),
         }
     }
 }
