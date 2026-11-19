@@ -9,6 +9,7 @@ mod access;
 mod assets;
 mod authorities;
 mod batch;
+mod calendar;
 mod catalog;
 mod circulation_rules;
 mod creating;
@@ -90,6 +91,7 @@ pub struct AppState {
     imports: Option<Arc<importing::Imports>>,
     patrons: Option<Arc<dyn elzevir_app::patrons::PatronDesk>>,
     rules: Option<Arc<dyn elzevir_app::circulation_rules::RuleBook>>,
+    calendar: Option<Arc<dyn elzevir_app::calendar::CalendarBook>>,
 }
 
 struct Inner {
@@ -124,6 +126,7 @@ impl AppState {
             imports: None,
             patrons: None,
             rules: None,
+            calendar: None,
             inner: Arc::new(Inner {
                 staff,
                 memory,
@@ -162,6 +165,14 @@ impl AppState {
     #[must_use]
     pub fn with_rules(mut self, book: Arc<dyn elzevir_app::circulation_rules::RuleBook>) -> Self {
         self.rules = Some(book);
+        self
+    }
+
+    /// Connects the branch calendars (docs/specs/circulacao/calendario.md). Without them
+    /// the calendar screen answers 404.
+    #[must_use]
+    pub fn with_calendar(mut self, book: Arc<dyn elzevir_app::calendar::CalendarBook>) -> Self {
+        self.calendar = Some(book);
         self
     }
 }
@@ -265,10 +276,14 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-/// Administration: memory report, registries and circulation rules.
+/// Administration: memory report, registries, circulation rules and calendars.
 fn admin_routes() -> Router<AppState> {
     Router::new()
         .route("/equipe/admin/memory", get(staff::memory))
+        .route(
+            "/equipe/admin/calendario",
+            get(calendar::calendar).post(calendar::change_calendar),
+        )
         .route(
             "/equipe/admin/regras",
             get(circulation_rules::rules).post(circulation_rules::set_rules),

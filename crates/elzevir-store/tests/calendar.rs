@@ -277,3 +277,73 @@ fn a_change_that_does_not_fit_is_refused_and_stores_nothing() {
     );
     assert!(store.holidays(central).unwrap().is_empty());
 }
+
+#[test]
+fn a_copy_keeps_what_the_other_branch_has_and_the_past() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = open(&dir);
+    let central = december(&store);
+    let other = branch(&store, "Bairro");
+    // The other branch already closes on Sundays under another title, and on 30 December.
+    change(
+        &store,
+        other,
+        CalendarAction::CloseWeekday {
+            weekday: 0,
+            text: text("Domingo"),
+        },
+    )
+    .unwrap();
+    change(
+        &store,
+        other,
+        CalendarAction::SetDates {
+            first: date(2026, 12, 30),
+            last: date(2026, 12, 30),
+            entry: DatedEntry::Closed,
+            text: text("Inventário"),
+        },
+    )
+    .unwrap();
+    // Copied "today" on 28 December: that day and before stay behind.
+    assert_eq!(
+        change(
+            &store,
+            central,
+            CalendarAction::CopyTo {
+                to: other,
+                after: date(2026, 12, 28),
+            }
+        ),
+        // Saturday, Christmas, 29 and 31 December.
+        Ok(4)
+    );
+    assert_eq!(
+        store.calendar(other).unwrap(),
+        Calendar::always_open()
+            .closed_every(Weekday::Sunday)
+            .closed_every(Weekday::Saturday)
+            .closed_annually(AnnualHoliday { month: 12, day: 25 })
+            .on(date(2026, 12, 29), DatedEntry::Closed)
+            .on(date(2026, 12, 30), DatedEntry::Closed)
+            .on(date(2026, 12, 31), DatedEntry::Closed)
+    );
+    let titles: Vec<String> = store
+        .holidays(other)
+        .unwrap()
+        .into_iter()
+        .map(|holiday| holiday.text.title)
+        .collect();
+    assert!(titles.contains(&"Domingo".to_owned()) && titles.contains(&"Inventário".to_owned()));
+    assert_eq!(
+        change(
+            &store,
+            central,
+            CalendarAction::CopyTo {
+                to: BranchId(999),
+                after: date(2026, 12, 28),
+            }
+        ),
+        Err(CirculationRefusal::UnknownBranch)
+    );
+}

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{{ t.get("calendar-title") }}{% endblock %}
+{% macro hidden() %}<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="branch" value="{{ branch }}"><input type="hidden" name="month" value="{{ month }}">{% endmacro %}
+{% macro title_fields() %}
+<label>{{ t.get("calendar-entry-title") }} <input type="text" name="title" maxlength="50" required></label>
+<label>{{ t.get("calendar-entry-description") }} <input type="text" name="description" maxlength="2000"></label>
+{% endmacro %}
+{% macro entries(list, action) %}
+<ul class="code-rows calendar-entries">
+{% for entry in list %}
+  <li>
+    <form method="post" action="/equipe/admin/calendario" class="registry-row">
+      {% call hidden() %}{% endcall %}
+      {% for pair in entry.key %}<input type="hidden" name="{{ pair.0 }}" value="{{ pair.1 }}">{% endfor %}
+      <span><strong>{{ entry.when }}</strong> {{ entry.title }}{% if entry.exception %} <em>({{ t.get("calendar-exception") }})</em>{% endif %}{% if !entry.description.is_empty() %} <span class="form-hint">{{ entry.description }}</span>{% endif %}</span>
+      <button type="submit" name="action" value="{{ action }}">{{ t.get("calendar-remove") }}</button>
+    </form>
+  </li>
+{% endfor %}
+</ul>
+{% endmacro %}
+{% block content %}
+<div class="registries calendar">
+<h1>{{ t.get("calendar-title") }}</h1>
+<p class="form-hint">{{ t.get("calendar-intro") }}</p>
+{% if saved %}<p class="codes-alert codes-saved" role="status">{{ t.get("rules-saved") }}</p>{% endif %}
+{% if let Some(message) = refused %}<p class="codes-alert codes-refused" role="alert">{{ message }}</p>{% endif %}
+{% if branches.is_empty() %}<p class="form-hint">{{ t.get("calendar-no-branch") }}</p>{% else %}
+<form method="get" action="/equipe/admin/calendario" class="rules-chooser">
+  <label>{{ t.get("rules-branch") }} <select name="branch">{% for choice in branches %}<option value="{{ choice.id }}"{% if choice.chosen %} selected{% endif %}>{{ choice.name }}</option>{% endfor %}</select></label>
+  <label>{{ t.get("calendar-month") }} <input type="month" name="month" value="{{ month }}"></label>
+  <button type="submit">{{ t.get("rules-open") }}</button>
+</form>
+<h2 id="calendar-month"><a href="{{ previous_url }}" aria-label="{{ t.get("calendar-previous") }}">‹</a> {{ month_title }} <a href="{{ next_url }}" aria-label="{{ t.get("calendar-next") }}">›</a></h2>
+<table class="calendar-grid">
+  <thead><tr>{% for name in weekdays %}<th scope="col">{{ name }}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for week in weeks %}<tr>
+    {% for cell in week %}{% if cell.day == 0 %}<td></td>{% else %}<td class="{% if cell.closed %}calendar-closed{% else if cell.exception %}calendar-exception{% else %}calendar-open{% endif %}{% if cell.today %} calendar-today{% endif %}"{% if !cell.title.is_empty() %} title="{{ cell.title }}"{% endif %}>
+      <span class="calendar-day">{{ cell.day }}</span>{% if cell.closed %} <span class="calendar-state">{{ t.get("calendar-closed") }}</span>{% else if cell.exception %} <span class="calendar-state">{{ t.get("calendar-exception") }}</span>{% endif %}
+      {% if !cell.title.is_empty() %}<span class="calendar-title">{{ cell.title }}</span>{% endif %}
+    </td>{% endif %}{% endfor %}
+  </tr>{% endfor %}
+  </tbody>
+</table>
+
+<h2>{{ t.get("calendar-add") }}</h2>
+<form method="post" action="/equipe/admin/calendario" class="rules-chooser">
+  {% call hidden() %}{% endcall %}
+  <label>{{ t.get("calendar-first") }} <input type="date" name="first" required></label>
+  <label>{{ t.get("calendar-last") }} <input type="date" name="last"></label>
+  <label><input type="checkbox" name="open" value="1"> {{ t.get("calendar-open-exception") }}</label>
+  {% call title_fields() %}{% endcall %}
+  <button type="submit" name="action" value="dates">{{ t.get("calendar-add-dates") }}</button>
+</form>
+<form method="post" action="/equipe/admin/calendario" class="rules-chooser">
+  {% call hidden() %}{% endcall %}
+  <label>{{ t.get("calendar-weekday") }} <select name="weekday">{% for name in weekdays %}<option value="{{ loop.index0 }}">{{ name }}</option>{% endfor %}</select></label>
+  {% call title_fields() %}{% endcall %}
+  <button type="submit" name="action" value="weekly">{{ t.get("calendar-add-weekly") }}</button>
+</form>
+<form method="post" action="/equipe/admin/calendario" class="rules-chooser">
+  {% call hidden() %}{% endcall %}
+  <label>{{ t.get("calendar-day") }} <input type="number" name="day" min="1" max="31" required></label>
+  <label>{{ t.get("calendar-month") }} <select name="annual_month">{% for name in months %}<option value="{{ loop.index }}">{{ name }}</option>{% endfor %}</select></label>
+  {% call title_fields() %}{% endcall %}
+  <button type="submit" name="action" value="annual">{{ t.get("calendar-add-annual") }}</button>
+</form>
+
+<h2>{{ t.get("calendar-weekly") }}</h2>
+{% if weekly.is_empty() %}<p class="form-hint">{{ t.get("calendar-none") }}</p>{% else %}{% call entries(weekly, "reopen_weekday") %}{% endcall %}{% endif %}
+<h2>{{ t.get("calendar-annual") }}</h2>
+{% if annual.is_empty() %}<p class="form-hint">{{ t.get("calendar-none") }}</p>{% else %}{% call entries(annual, "remove_annual") %}{% endcall %}{% endif %}
+<h2>{{ t.get("calendar-dated") }}</h2>
+{% if dated.is_empty() %}<p class="form-hint">{{ t.get("calendar-none") }}</p>{% else %}{% call entries(dated, "remove_dates") %}{% endcall %}{% endif %}
+
+{% if branches.len() > 1 %}
+<h2>{{ t.get("calendar-copy") }}</h2>
+<p class="form-hint">{{ t.get("calendar-copy-hint") }}</p>
+<form method="post" action="/equipe/admin/calendario" class="rules-chooser">
+  {% call hidden() %}{% endcall %}
+  <label>{{ t.get("calendar-copy-to") }} <select name="to">{% for choice in branches %}{% if !choice.chosen %}<option value="{{ choice.id }}">{{ choice.name }}</option>{% endif %}{% endfor %}</select></label>
+  <button type="submit" name="action" value="copy">{{ t.get("calendar-copy") }}</button>
+</form>
+{% endif %}
+{% endif %}
+</div>
+{% endblock %}

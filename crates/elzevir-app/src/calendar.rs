@@ -77,6 +77,16 @@ pub enum CalendarAction {
         /// Last date.
         last: Date,
     },
+    /// Copies the calendar to another branch: every weekly and annual entry, and the dated
+    /// entries after `after`, each one the other branch does not have yet.
+    ///
+    /// Koha: `C4::Calendar::copy_to_branch`, with `after` as today.
+    CopyTo {
+        /// The branch that receives the entries.
+        to: BranchId,
+        /// Dated entries on or before this date stay behind.
+        after: Date,
+    },
 }
 
 /// When a closing applies, as listed.
