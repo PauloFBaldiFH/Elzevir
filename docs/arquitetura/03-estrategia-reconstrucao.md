@@ -381,6 +381,27 @@ Ordem daqui em diante: etapas 1 a 8 do BIBFRAME completo (a 2.11 é a etapa 8), 
 
 Fica para depois da Fase 2: etiqueta de lombada, Z39.50/SRU (Fase 4), estação de IA, circulação no muro (Fase 3) e a Onda 2 (mesclagem e quarentena pela tela).
 
+Fase 2 fechada em 2026-11-19 (PR #161): o critério de desempenho da 2.3 e da 2.10 passa em 1 milhão de registros ([facetas](../specs/catalogo/facetas.md), §3).
+
+### Fase 3: leitores e circulação
+
+> Status: **em andamento**, autorizada por Paulo em 2026-11-19, começando pela 3.1. Escopo do doc 01, §5.2 (leitores, regras de circulação, calendário, empréstimo, devolução, renovação, reservas, multas, avisos), com o muro Acervo ↔ Leitores da [interface](../UI_BIBFRAME_INTERACTION_SPEC.md), §18. Marco: biblioteca pequena já pode operar.
+
+| # | Tarefa | Base | Pronto quando |
+|---|---|---|---|
+| 3.1 | Leitores: categorias de leitor (cadastro genérico com nome e período de inscrição), cadastro do leitor (carteirinha, nome, CPF guardado inteiro e mostrado mascarado, nascimento, contatos, unidade, categoria, validade, consentimento do histórico), busca de leitores e ficha em `/equipe/leitores/{id}`, com permissão própria e cada abertura no `audit_log` | Koha: `categories`, `borrowers`, `Koha::Patron`; interface §18.4 | Leitor criado pela tela aparece na busca; o HTML do acervo não tem dado de leitor; cada abertura da ficha fica no `audit_log` |
+| 3.2 | Regras de circulação por unidade × categoria de leitor × política, com os tipos de `$RULE_KINDS` já gerados, e **uma** função que resolve e diz de onde veio cada valor; tela em grade | Koha: `Koha::CirculationRules::get_effective_rule`, `smart-rules.pl` | A resolução bate com a do Koha em todas as combinações das regras do oráculo |
+| 3.3 | Calendário: feriados por unidade (únicos, repetidos por dia da semana e por data, exceções) e tela; `calendar.rs` lê do banco | Koha: `Koha::Calendar`, `special_holidays`, `repeatable_holidays` | Os cenários de `CalcDateDue` rodam com o calendário salvo pela tela |
+| 3.4 | Empréstimo: tabela de empréstimos e comando `circ.checkout` com as recusas do Koha (limite da regra, leitor vencido ou bloqueado, exemplar indisponível, débito acima do limite, reserva de outro leitor) | Koha: `CanBookBeIssued`, `AddIssue`, `TooMany.t` | Cenários de empréstimo e de limite passando contra o oráculo gravado |
+| 3.5 | Devolução e renovação: `circ.checkin` (multa e suspensão na devolução, volta à unidade de origem) e `circ.renew` (limite de renovações, "não antes de", recusa por reserva) | Koha: `AddReturn`, `CanBookBeRenewed`, `AddRenewal`; `Returns.t` | Cenários de devolução e renovação passando contra o oráculo |
+| 3.6 | Muro na tela: "⇄ Emprestar" na pílula, minicaixinha, lado do leitor com cordinhas laranja, renovar e devolver; pílula amarela; devolução por bipe | Interface §18 | Fluxos 1 e 2 só por teclado; vencimento igual ao do Koha; nenhum dado de leitor no HTML do acervo |
+| 3.7 | Multas e contas: débitos e créditos do leitor, multa diária de atraso pelo agendador (com teto), exemplar perdido por atraso longo, pagamento e abono | Koha: `accountlines`, `fines.pl`, `longoverdue.pl`, `Koha::Account::pay`; `CalcFine.t` | Multas diárias iguais às do oráculo; pagamento parcial quita na mesma ordem do Koha |
+| 3.8 | Reservas: pedido por registro ou por exemplar, fila, atendimento na devolução (aguardando retirada), fim da espera, cancelamento; o OPAC mostra disponibilidade | Koha: `C4::Reserves`, `HoldsQueue`; `Holds.t` | Ordem da fila e escolha do exemplar iguais às do oráculo |
+| 3.9 | Avisos por e-mail: atraso, reserva disponível e recibo, com modelos editáveis e fila de envio pelo agendador; WhatsApp, Telegram e SMS depois, com o estudo dos avisos do Koha | Koha: `overdue_notices.pl`, `letter`, `message_queue` | Aviso de atraso gerado nos mesmos dias do Koha; envio por SMTP configurado no `elzevir.toml` |
+| 3.10 | OPAC do leitor: entrar com carteirinha e senha, ver empréstimos e débitos, renovar, pedir e cancelar reserva, consentir no histórico | Koha: `opac-user.pl`, `opac-reserve.pl` | O leitor renova e reserva pelo OPAC com as mesmas recusas do balcão |
+
+Ordem: 3.1 a 3.5 em sequência (cada uma usa a anterior), 3.6 logo depois da 3.5, e 3.7 a 3.10 em seguida.
+
 ### Ordem e trilha crítica
 
 ```mermaid

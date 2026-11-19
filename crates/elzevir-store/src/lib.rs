@@ -33,6 +33,7 @@ mod koha_types;
 mod listing;
 mod matching;
 mod native_items;
+mod patrons;
 mod places;
 mod preview;
 mod readers;

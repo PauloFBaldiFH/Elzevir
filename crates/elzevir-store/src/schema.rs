@@ -516,6 +516,35 @@ const MIGRATIONS: &[&str] = &[
      WHERE kind = 'catalog.import_record'
         OR (kind = 'catalog.add_record'
             AND json_extract(command, '$.Catalog.AddRecord.source') IS NOT NULL);",
+    // 44: patrons and their categories (docs/specs/circulacao/leitores.md). A category
+    // has exactly one of the two periods. Dates are ISO text, as everywhere else.
+    "CREATE TABLE patron_categories (
+         id               INTEGER PRIMARY KEY,
+         name             TEXT NOT NULL UNIQUE,
+         enrolment_months INTEGER,
+         enrolment_until  TEXT,
+         row_version      INTEGER NOT NULL DEFAULT 1,
+         CHECK ((enrolment_months IS NULL) <> (enrolment_until IS NULL))
+     );
+     CREATE TABLE patrons (
+         id              INTEGER PRIMARY KEY,
+         cardnumber      TEXT NOT NULL UNIQUE,
+         surname         TEXT NOT NULL,
+         first_name      TEXT,
+         cpf             TEXT UNIQUE,
+         date_of_birth   TEXT,
+         email           TEXT,
+         phone           TEXT,
+         address         TEXT,
+         branch_id       INTEGER NOT NULL REFERENCES branches (id),
+         category_id     INTEGER NOT NULL REFERENCES patron_categories (id),
+         enrolled        TEXT NOT NULL,
+         expires         TEXT NOT NULL,
+         staff_note      TEXT,
+         reading_history INTEGER NOT NULL DEFAULT 0,
+         row_version     INTEGER NOT NULL DEFAULT 1
+     );
+     CREATE INDEX patrons_by_name ON patrons (surname, first_name);",
 ];
 
 /// The migration that creates `match_keys`.
@@ -1346,7 +1375,7 @@ mod catalog_tests {
             .unwrap();
         connection
             .execute_batch(
-                "DROP INDEX audit_imports; DROP TABLE saved_list_families; DROP TABLE saved_lists; DROP INDEX audit_by_actor; DROP INDEX audit_by_kind; DROP INDEX audit_entities_by_seq; DROP TABLE instance_notes; ALTER TABLE works DROP COLUMN audience;
+                "DROP TABLE patrons; DROP TABLE patron_categories; DROP INDEX audit_imports; DROP TABLE saved_list_families; DROP TABLE saved_lists; DROP INDEX audit_by_actor; DROP INDEX audit_by_kind; DROP INDEX audit_entities_by_seq; DROP TABLE instance_notes; ALTER TABLE works DROP COLUMN audience;
                  DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; DROP TABLE koha_type_statements; ALTER TABLE circulation_policies ADD COLUMN code TEXT; UPDATE circulation_policies SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 4 AND local_id = circulation_policies.id), 'P' || id); ALTER TABLE circulation_policies RENAME COLUMN name TO description; ALTER TABLE circulation_policies RENAME TO item_types; ALTER TABLE items RENAME COLUMN policy_id TO item_type; DELETE FROM koha_codes WHERE kind = 4; ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id), 'B' || id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id; ALTER TABLE items DROP COLUMN collection_id; DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes; ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone; ALTER TABLE branches DROP COLUMN email; ALTER TABLE branches DROP COLUMN url; ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; DROP TABLE subject_identifiers; ALTER TABLE subjects DROP COLUMN name_parts; DROP TABLE contribution_identifiers; ALTER TABLE contributions DROP COLUMN role_term; ALTER TABLE agents DROP COLUMN name_parts; DROP INDEX subjects_identity; ALTER TABLE subjects DROP COLUMN subdivisions; CREATE UNIQUE INDEX subjects_identity ON subjects (kind, heading, coalesce(thesaurus, 0)); ALTER TABLE works ADD COLUMN material_type INTEGER; ALTER TABLE instances ADD COLUMN material_type INTEGER; ALTER TABLE subjects DROP COLUMN row_version; ALTER TABLE agents DROP COLUMN row_version; ALTER TABLE instances DROP COLUMN opac_hidden; DROP TABLE audit_entities; ALTER TABLE audit_log DROP COLUMN at; PRAGMA user_version = 5;",
             )
             .unwrap();
@@ -2338,7 +2367,7 @@ mod catalog_tests {
         if version < WORK_LISTS_VERSION {
             connection
                 .execute_batch(
-                    "DROP INDEX audit_imports; DROP TABLE saved_list_families; DROP TABLE saved_lists; DROP INDEX audit_by_actor; DROP INDEX audit_by_kind;
+                    "DROP TABLE patrons; DROP TABLE patron_categories; DROP INDEX audit_imports; DROP TABLE saved_list_families; DROP TABLE saved_lists; DROP INDEX audit_by_actor; DROP INDEX audit_by_kind;
                      DROP INDEX audit_entities_by_seq;",
                 )
                 .unwrap();

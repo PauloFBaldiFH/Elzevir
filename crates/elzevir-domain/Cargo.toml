@@ -10,7 +10,7 @@ publish.workspace = true
 
 [dependencies]
 elzevir-data.workspace = true
-jiff.workspace = true
+jiff = { workspace = true, features = ["serde"] }
 serde.workspace = true
 thiserror.workspace = true
 

@@ -34,6 +34,14 @@ pub enum Permission {
     ///
     /// Koha: the `editcatalogue` permission.
     Cataloguing,
+    /// May open a patron's record, lend, renew and take Items back.
+    ///
+    /// Koha: the `circulate` permission.
+    Circulation,
+    /// May enrol and edit patrons and their categories.
+    ///
+    /// Koha: the `borrowers` permission.
+    Patrons,
 }
 
 impl Permission {
@@ -44,6 +52,8 @@ impl Permission {
             Self::StaffInterface => "staff_interface",
             Self::Administration => "administration",
             Self::Cataloguing => "cataloguing",
+            Self::Circulation => "circulation",
+            Self::Patrons => "patrons",
         }
     }
 
@@ -54,6 +64,8 @@ impl Permission {
             "staff_interface" => Some(Self::StaffInterface),
             "administration" => Some(Self::Administration),
             "cataloguing" => Some(Self::Cataloguing),
+            "circulation" => Some(Self::Circulation),
+            "patrons" => Some(Self::Patrons),
             _ => None,
         }
     }

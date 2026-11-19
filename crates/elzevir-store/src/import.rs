@@ -68,8 +68,8 @@ impl PendingRecord for PendingAdd {
     fn wait(self) -> Result<CatalogOutput, RecordRejected> {
         match self.0.wait() {
             Ok(WriteOutput::Catalog(output)) => Ok(output),
-            Ok(WriteOutput::StaffCreated(_)) => Err(RecordRejected::Storage(
-                "the writer answered a record with a staff result".to_owned(),
+            Ok(_) => Err(RecordRejected::Storage(
+                "the writer answered a record with another result".to_owned(),
             )),
             Err(CommandFailed::Rejected(WriteRefusal::Catalog(refusal))) => {
                 Err(RecordRejected::Refused(refusal))

@@ -88,6 +88,8 @@ fn initializes_a_private_config_and_a_usable_admin_without_plaintext_password() 
         Permission::StaffInterface,
         Permission::Administration,
         Permission::Cataloguing,
+        Permission::Circulation,
+        Permission::Patrons,
     ] {
         assert!(identity.can(permission));
     }

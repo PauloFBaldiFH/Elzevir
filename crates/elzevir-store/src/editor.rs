@@ -33,8 +33,8 @@ impl CatalogEditor for ElzevirStore {
             })?;
         match pending.wait() {
             Ok(WriteOutput::Catalog(output)) => Ok(output),
-            Ok(WriteOutput::StaffCreated(_)) => Err(EditFailed::Unavailable(
-                "the writer answered an edit with a staff result".to_owned(),
+            Ok(_) => Err(EditFailed::Unavailable(
+                "the writer answered an edit with another result".to_owned(),
             )),
             Err(CommandFailed::Rejected(WriteRefusal::Catalog(refusal))) => {
                 Err(EditFailed::Refused(refusal))
