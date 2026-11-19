@@ -237,7 +237,8 @@ impl elzevir_app::export::RecordSource for Records {
 /// Records edits from the screen. An edit read at version 1 is accepted and moves to 2;
 /// any other version is stale, as if someone else had edited first. Creations are
 /// accepted, except a new Instance of Work 404, which does not exist; a link of an
-/// authority named `Linked` is refused as already there.
+/// authority named `Linked` is refused as already there; a batch change that sets
+/// shelving place 404 is refused for one Item, and otherwise reaches two Items an Instance.
 #[derive(Default)]
 pub(crate) struct Editor(
     pub(crate) Mutex<Vec<(elzevir_app::staff::StaffId, elzevir_app::editing::Edit)>>,
@@ -249,7 +250,7 @@ impl elzevir_app::editing::CatalogEditor for Editor {
         actor: elzevir_app::staff::StaffId,
         edit: elzevir_app::editing::Edit,
     ) -> Result<elzevir_app::catalog::CatalogOutput, elzevir_app::editing::EditFailed> {
-        use elzevir_app::catalog::{CatalogOutput, CatalogRefusal};
+        use elzevir_app::catalog::CatalogRefusal;
         use elzevir_app::editing::{Edit, EditFailed};
         let read = match &edit {
             Edit::Work(update) => update.row_version,
@@ -293,6 +294,12 @@ impl elzevir_app::editing::CatalogEditor for Editor {
                 }
                 1
             }
+            Edit::BatchItems(change) => {
+                if let Some(refusal) = batch_refusal(change) {
+                    return Err(EditFailed::Refused(refusal));
+                }
+                1
+            }
             Edit::NewRecord(_) | Edit::NewInstance(_) => 1,
         };
         if read != 1 {
@@ -301,50 +308,7 @@ impl elzevir_app::editing::CatalogEditor for Editor {
                 current: 2,
             }));
         }
-        let output = match &edit {
-            Edit::Work(update) => CatalogOutput::WorkUpdated {
-                work: update.work,
-                row_version: 2,
-            },
-            Edit::Instance(update) => CatalogOutput::InstanceUpdated {
-                instance: update.instance,
-                row_version: 2,
-            },
-            Edit::NewRecord(_) => CatalogOutput::Record {
-                work: WorkId(900),
-                instance: InstanceId(901),
-                items: Vec::new(),
-            },
-            Edit::Items(update) => CatalogOutput::ItemsSaved {
-                instance: update.instance,
-                row_version: 2,
-                items: (500..)
-                    .zip(&update.rows)
-                    .map(|(new, row)| row.id.unwrap_or(elzevir_domain::catalog::ItemId(new)))
-                    .collect(),
-            },
-            Edit::Registry(_) => CatalogOutput::RegistryChanged(None),
-            Edit::Statements(edit) => CatalogOutput::StatementsSet {
-                subject: edit.subject,
-                row_version: 2,
-            },
-            Edit::Subject(update) => CatalogOutput::SubjectUpdated {
-                subject: update.subject,
-                row_version: 2,
-            },
-            Edit::Link(link) => CatalogOutput::WorkUpdated {
-                work: link.work,
-                row_version: 2,
-            },
-            Edit::Agent(update) => CatalogOutput::AgentUpdated {
-                agent: update.agent,
-                row_version: 2,
-            },
-            Edit::NewInstance(new) => CatalogOutput::InstanceAdded {
-                work: new.work,
-                instance: InstanceId(902),
-            },
-        };
+        let output = output_of(&edit);
         self.0.lock().unwrap().push((actor, edit));
         Ok(output)
     }
@@ -577,5 +541,79 @@ impl elzevir_app::worklist::WorkListReader for WorkLists {
             .take(limit.get())
             .map(|n| FamilyHead::Work(WorkId(n)))
             .collect())
+    }
+}
+
+/// A batch change that sets shelving place 404 is refused for one Item.
+fn batch_refusal(
+    change: &elzevir_app::batch::ItemsChange,
+) -> Option<elzevir_app::catalog::CatalogRefusal> {
+    use elzevir_app::batch::{ItemRefusal, ItemSet};
+    use elzevir_app::items::{ItemColumn, RowProblem};
+    use elzevir_domain::catalog::{ItemId, SublocationId};
+    change
+        .set
+        .contains(&ItemSet::Location(Some(SublocationId(404))))
+        .then(|| {
+            elzevir_app::catalog::CatalogRefusal::BatchItems(vec![ItemRefusal {
+                item: ItemId(7),
+                label: "0001234".to_owned(),
+                column: ItemColumn::Location,
+                problem: RowProblem::NotInBranch,
+            }])
+        })
+}
+
+/// What the fake editor answers to an accepted edit.
+fn output_of(edit: &elzevir_app::editing::Edit) -> elzevir_app::catalog::CatalogOutput {
+    use elzevir_app::catalog::CatalogOutput;
+    use elzevir_app::editing::Edit;
+    match edit {
+        Edit::Work(update) => CatalogOutput::WorkUpdated {
+            work: update.work,
+            row_version: 2,
+        },
+        Edit::Instance(update) => CatalogOutput::InstanceUpdated {
+            instance: update.instance,
+            row_version: 2,
+        },
+        Edit::NewRecord(_) => CatalogOutput::Record {
+            work: WorkId(900),
+            instance: InstanceId(901),
+            items: Vec::new(),
+        },
+        Edit::Items(update) => CatalogOutput::ItemsSaved {
+            instance: update.instance,
+            row_version: 2,
+            items: (500..)
+                .zip(&update.rows)
+                .map(|(new, row)| row.id.unwrap_or(elzevir_domain::catalog::ItemId(new)))
+                .collect(),
+        },
+        Edit::BatchItems(change) => CatalogOutput::ItemsChanged {
+            instances: change.instances.clone(),
+            items: change.instances.len() * 2,
+        },
+        Edit::Registry(_) => CatalogOutput::RegistryChanged(None),
+        Edit::Statements(edit) => CatalogOutput::StatementsSet {
+            subject: edit.subject,
+            row_version: 2,
+        },
+        Edit::Subject(update) => CatalogOutput::SubjectUpdated {
+            subject: update.subject,
+            row_version: 2,
+        },
+        Edit::Link(link) => CatalogOutput::WorkUpdated {
+            work: link.work,
+            row_version: 2,
+        },
+        Edit::Agent(update) => CatalogOutput::AgentUpdated {
+            agent: update.agent,
+            row_version: 2,
+        },
+        Edit::NewInstance(new) => CatalogOutput::InstanceAdded {
+            work: new.work,
+            instance: InstanceId(902),
+        },
     }
 }

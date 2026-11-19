@@ -117,6 +117,14 @@ selection-full = The limit is 500 families.
 selection-export-marc21 = Export MARC21
 selection-export-marcxml = Export MARCXML
 selection-clear = Clear selection
+batch-items-open = Change items
+batch-items-title = Change the items of the selected families
+batch-items-hint = Every item of every record of the selected families changes at once, or none does.
+batch-items-keep = Do not change
+batch-items-none = None
+batch-items-cancel = Cancel
+batch-items-apply = Apply
+batch-items-failed = The items were not changed:
 facet-branch = Branch
 facet-content = Content
 facet-carrier = Carrier
@@ -291,6 +299,7 @@ history-items = { $count ->
     [one] One Item saved
    *[other] { $count } Items saved
 }
+history-batch-items = Items changed in a batch
 history-other = Other change
 edit-done-hint = Ctrl+Enter
 edit-saved = Saved

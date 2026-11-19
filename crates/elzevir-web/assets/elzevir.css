@@ -214,6 +214,14 @@ main:has(.wide) { max-width: none; padding: 0; }
 .selection-bar { position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 10px 0 0; padding: 8px 12px; border: 1px solid var(--elzevir-color-primary); border-radius: 10px; background: var(--card-bg); font-size: 0.85rem; }
 .selection-bar[hidden] { display: none; }
 .selection-bar button { padding: 3px 10px; font-size: 0.82rem; }
+.batch-items { max-width: min(560px, calc(100vw - 32px)); padding: 20px; border: 1px solid var(--elzevir-color-border); border-radius: 12px; background: var(--card-bg); color: var(--text-main); }
+.batch-items::backdrop { background: rgb(0 0 0 / 0.35); }
+.batch-items h2 { margin: 0 0 6px; font-size: 1.05rem; }
+.batch-items label { display: grid; gap: 4px; margin: 10px 0; font-size: 0.85rem; }
+.batch-items select { width: 100%; }
+.batch-items-errors { max-height: 12rem; overflow: auto; margin: 6px 0; padding-left: 18px; color: var(--elzevir-color-error); font-size: 0.82rem; }
+.batch-items-errors:empty { display: none; }
+.batch-items-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .row-icon { width: 18px; height: 18px; color: var(--text-muted); }
 .row-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .row-shape { color: var(--text-muted); font-size: 0.82rem; }

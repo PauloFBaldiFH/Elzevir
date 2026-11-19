@@ -15,6 +15,7 @@
 
 mod authorities;
 mod backup;
+mod batch;
 mod catalog;
 mod codes;
 mod config;

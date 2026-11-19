@@ -6,6 +6,7 @@
 use elzevir_domain::catalog::{IdentifierKind, isbn10, isbn13};
 use elzevir_domain::statement::{Description, EntityKind, check_description};
 
+use crate::batch::ItemsChange;
 use crate::catalog::{
     AgentUpdate, CatalogOutput, CatalogRefusal, ClassChoice, InstanceChange, InstanceUpdate,
     NewIdentifier, NewInstanceOfWork, NewRecord, PropertyEdit, SubjectUpdate, WorkAuthority,
@@ -28,6 +29,9 @@ pub enum Edit {
     NewInstance(Box<NewInstanceOfWork>),
     /// A batch of an Instance's Items (docs/specs/catalogo/exemplares.md).
     Items(Box<ItemsUpdate>),
+    /// Every Item of the selected families' Instances (docs/specs/catalogo/lote.md,
+    /// part b).
+    BatchItems(Box<ItemsChange>),
     /// A change to the registries (docs/specs/catalogo/bibframe-completo.md, item 23d).
     Registry(RegistryChange),
     /// The statements of some properties of a Hub or an Item (bibframe-completo.md,

@@ -3,13 +3,20 @@
 
 use std::sync::Arc;
 
+use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Redirect, Response};
-use elzevir_app::batch::{instances_of, selection};
+use elzevir_app::batch::{ItemSet, ItemsChange, instances_of, selection};
+use elzevir_app::catalog::{CodeLists, Place};
+use elzevir_app::editing::Edit;
 use elzevir_app::export::{ExportOptions, RecordFormat, export_selection};
+use elzevir_domain::catalog::{BranchId, CollectionId, PolicyId, SublocationId};
+use elzevir_web_templates::{BatchChoices, GridOption};
+use serde::Deserialize;
 
 use crate::AppState;
+use crate::editing::{apply, authorize};
 use crate::staff::current_session;
 
 /// Response header naming the Instances left out of an export (lote.md, item 8).
@@ -86,4 +93,151 @@ pub(crate) async fn export_marc(
         response.headers_mut().insert(NOT_EXPORTED, value);
     }
     response
+}
+
+/// The body of a batch change: the selected families and, per column, `""` to leave it,
+/// an id to set it, or `"none"` to clear a shelving place or collection (lote.md, item 14).
+#[derive(Debug, Deserialize)]
+pub(crate) struct ChangeBody {
+    heads: Vec<String>,
+    set: SetBody,
+}
+
+/// The columns of a batch change, as the dialog sends them.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct SetBody {
+    home_branch: String,
+    holding_branch: String,
+    policy: String,
+    location: String,
+    collection: String,
+}
+
+/// What clears a shelving place or collection.
+const NONE: &str = "none";
+
+impl SetBody {
+    /// The changes chosen, in column order; `None` when a value is not an id.
+    fn item_sets(&self) -> Option<Vec<ItemSet>> {
+        let id = |value: &str| value.parse::<i64>().ok();
+        let place = |value: &str| match value {
+            NONE => Some(None),
+            value => id(value).map(Some),
+        };
+        let mut sets = Vec::new();
+        if !self.home_branch.is_empty() {
+            sets.push(ItemSet::HomeBranch(BranchId(id(&self.home_branch)?)));
+        }
+        if !self.holding_branch.is_empty() {
+            sets.push(ItemSet::HoldingBranch(BranchId(id(&self.holding_branch)?)));
+        }
+        if !self.policy.is_empty() {
+            sets.push(ItemSet::Policy(PolicyId(id(&self.policy)?)));
+        }
+        if !self.location.is_empty() {
+            sets.push(ItemSet::Location(place(&self.location)?.map(SublocationId)));
+        }
+        if !self.collection.is_empty() {
+            sets.push(ItemSet::Collection(
+                place(&self.collection)?.map(CollectionId),
+            ));
+        }
+        Some(sets)
+    }
+}
+
+/// `POST /equipe/acervo/lote/exemplares`: every Item of the selected families changed at
+/// once (lote.md, items 9 to 14).
+pub(crate) async fn change_items(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<ChangeBody>,
+) -> Response {
+    let session = match authorize(&state, &headers) {
+        Ok(session) => session,
+        Err(status) => return status.into_response(),
+    };
+    let Some(set) = body.set.item_sets() else {
+        return (StatusCode::BAD_REQUEST, "malformed change").into_response();
+    };
+    let heads = selection(body.heads.iter().map(String::as_str));
+    if heads.is_empty() {
+        return (StatusCode::BAD_REQUEST, "no family selected").into_response();
+    }
+    let listing = Arc::clone(&state.inner.staff_ports.listing);
+    let read = tokio::task::spawn_blocking(move || instances_of(&*listing, &heads)).await;
+    let Ok(Ok(instances)) = read else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "catalog unavailable").into_response();
+    };
+    let change = ItemsChange { instances, set };
+    apply(&state, &session, Edit::BatchItems(Box::new(change))).await
+}
+
+/// What the batch dialog offers (lote.md, item 9): shelving places and collections carry
+/// the name of their branch.
+pub(crate) fn choices(codes: &CodeLists) -> BatchChoices {
+    let named = |id: i64, name: &str| GridOption {
+        key: id.to_string(),
+        name: name.to_owned(),
+        branch: None,
+    };
+    let placed = |id: i64, place_branch: BranchId, name: &str| GridOption {
+        key: id.to_string(),
+        name: name.to_owned(),
+        branch: Some(codes.branch(place_branch).to_owned()),
+    };
+    BatchChoices {
+        branches: codes
+            .branches
+            .iter()
+            .map(|branch| named(branch.id.0, &branch.name))
+            .collect(),
+        policies: codes
+            .policies
+            .iter()
+            .map(|policy| named(policy.id.0, &policy.name))
+            .collect(),
+        locations: places(&codes.locations, |id| id.0, &placed),
+        collections: places(&codes.collections, |id| id.0, &placed),
+    }
+}
+
+fn places<Id: Copy>(
+    rows: &[Place<Id>],
+    key: fn(Id) -> i64,
+    placed: &impl Fn(i64, BranchId, &str) -> GridOption,
+) -> Vec<GridOption> {
+    rows.iter()
+        .map(|place| placed(key(place.id), place.branch, &place.name))
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_dialog_values_become_changes_in_column_order() {
+        let body = SetBody {
+            home_branch: "2".to_owned(),
+            location: NONE.to_owned(),
+            collection: "9".to_owned(),
+            ..SetBody::default()
+        };
+        assert_eq!(
+            body.item_sets(),
+            Some(vec![
+                ItemSet::HomeBranch(BranchId(2)),
+                ItemSet::Location(None),
+                ItemSet::Collection(Some(CollectionId(9))),
+            ])
+        );
+        assert_eq!(SetBody::default().item_sets(), Some(Vec::new()));
+        let bad = SetBody {
+            policy: NONE.to_owned(),
+            ..SetBody::default()
+        };
+        assert_eq!(bad.item_sets(), None, "a policy cannot be cleared");
+    }
 }

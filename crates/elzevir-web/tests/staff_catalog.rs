@@ -557,6 +557,59 @@ async fn the_selected_families_are_exported_as_one_file() {
 }
 
 #[tokio::test]
+async fn the_items_of_the_selection_change_at_once_or_come_back_refused() {
+    let app = app();
+    let uri = "/equipe/acervo/lote/exemplares";
+    let change =
+        r#"{"heads": ["w1", "w2", "w1"], "set": {"holding_branch": "1", "collection": "none"}}"#;
+    let anonymous = send(&app, post_json(uri, None, None, change)).await;
+    assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
+    // Only who may catalogue sees the dialog and may apply it.
+    let bia = signed_in_as(&app, "bia").await;
+    let page = body(send(&app, get("/equipe/acervo", Some(&bia), None)).await).await;
+    assert!(!page.contains("selection-items") && !page.contains("<dialog"));
+    let bia_token = page_token(&app, &bia).await;
+    let reader = send(&app, post_json(uri, Some(&bia), Some(&bia_token), change)).await;
+    assert_eq!(reader.status(), StatusCode::FORBIDDEN);
+    let ana = signed_in(&app).await;
+    let page = body(send(&app, get("/equipe/acervo", Some(&ana), None)).await).await;
+    assert!(
+        page.contains(r#"<button type="button" class="selection-items">Change items</button>"#)
+    );
+    assert!(page.contains(r#"<option value="none">None</option>"#));
+    let no_token = send(&app, post_json(uri, Some(&ana), None, change)).await;
+    assert_eq!(no_token.status(), StatusCode::FORBIDDEN);
+    let token = page_token(&app, &ana).await;
+    let changed = send(&app, post_json(uri, Some(&ana), Some(&token), change)).await;
+    assert_eq!(changed.status(), StatusCode::OK);
+    assert_eq!(body(changed).await, r#"{"instances":2,"items":4}"#);
+    // Each refused Item comes back with its barcode, column and reason.
+    let refused = send(
+        &app,
+        post_json(
+            uri,
+            Some(&ana),
+            Some(&token),
+            r#"{"heads": ["w1"], "set": {"location": "404"}}"#,
+        ),
+    )
+    .await;
+    assert_eq!(refused.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let refused = body(refused).await;
+    assert!(
+        refused.contains(r#""item":"0001234","field":"location","column":"Location""#),
+        "{refused}"
+    );
+    for bad in [
+        r#"{"heads": ["w1"], "set": {"policy": "none"}}"#,
+        r#"{"heads": ["x9"], "set": {"policy": "1"}}"#,
+    ] {
+        let response = send(&app, post_json(uri, Some(&ana), Some(&token), bad)).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{bad}");
+    }
+}
+
+#[tokio::test]
 async fn one_record_is_exported_as_marc21_or_marcxml() {
     let app = app();
     let refused = send(&app, get("/equipe/acervo/instancia/10/marc", None, None)).await;
