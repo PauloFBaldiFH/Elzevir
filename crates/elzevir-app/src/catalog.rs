@@ -11,6 +11,7 @@ use elzevir_domain::catalog::{
     InstanceId, ItemId, Money, NamePartKind, NoteKind, PolicyId, SubjectId, SubjectKind,
     SublocationId, WorkId, WorkRelationKind,
 };
+use jiff::civil::Date;
 use serde::{Deserialize, Serialize};
 
 use crate::codes::{CodeTable, NamedCode, NamingCount};
@@ -725,11 +726,13 @@ impl ItemStatus {
 }
 
 /// The counter signal of an Item in the staff listing (UI spec
-/// §2). Loans, transit and holds arrive with circulation (Phase 3) and add variants.
+/// §2). Transit and holds arrive with their tasks and add variants.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ShelfSignal {
-    /// Every status is 0: it can be lent.
+    /// Every status is 0 and it is not on loan: it can be lent.
     Available,
+    /// On loan (interface §18.2: the yellow pill).
+    OnLoan,
     /// Not for loan or restricted, but on the shelf.
     NotForLoan,
     /// Withdrawn, lost or damaged.
@@ -1049,6 +1052,20 @@ pub struct ItemView {
     pub location: Option<SublocationId>,
     /// Circulation status numbers.
     pub status: ItemStatus,
+    /// The day it is due, while it is on loan; never who has it.
+    pub due: Option<Date>,
+}
+
+impl ItemView {
+    /// The signal shown: on loan wins over its status, which the loan keeps.
+    #[must_use]
+    pub const fn signal(&self) -> ShelfSignal {
+        if self.due.is_some() {
+            ShelfSignal::OnLoan
+        } else {
+            self.status.signal()
+        }
+    }
 }
 
 /// One row of a registry an Item refers to, with the name people read

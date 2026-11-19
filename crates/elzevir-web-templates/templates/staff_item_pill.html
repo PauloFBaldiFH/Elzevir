@@ -1,0 +1,11 @@
+<svg class="item-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ instance.icon }}"></use></svg><svg class="signal-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ pill.signal_icon }}"></use></svg><span class="item-signal">{{ t.get(pill.signal_key) }}</span> <span class="item-pill-text">{{ pill.text }}</span>
+{%- if let Some(due) = pill.due %} <span class="pill-due">{{ t.get_with("loans-due", "date", due) }}</span>{% if can_circulate %} <a class="pill-arrow" href="/equipe/circulacao/exemplar/{{ pill.item }}" title="{{ t.get("pill-to-patron") }}" aria-label="{{ t.get("pill-to-patron") }}">→</a>{% endif %}
+{%- else if pill.lendable && can_circulate %}
+<details class="lend-box"{% if !pill.refused.is_empty() %} open{% endif %}><summary>⇄ {{ t.get("checkout-lend") }}</summary>
+<form method="post" action="/equipe/acervo/emprestar" hx-post="/equipe/acervo/emprestar" hx-target="closest li" hx-swap="innerHTML">
+<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="instance" value="{{ instance.id }}"><input type="hidden" name="item" value="{{ pill.item }}">
+<label>{{ t.get("pill-cardnumber") }} <input type="text" name="cardnumber" maxlength="32" autocomplete="off" required{% if !pill.refused.is_empty() %} autofocus{% endif %}></label>
+{% for reason in pill.refused %}<p class="lend-refused" role="alert">{{ reason }}</p>{% endfor %}
+</form>
+</details>
+{%- endif %}

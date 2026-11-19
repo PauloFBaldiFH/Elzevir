@@ -6,9 +6,11 @@ use elzevir_app::circulation_rules::{CirculationCommand, CirculationDeskError, C
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::loans::{LoanDesk, PatronLoan};
 use elzevir_app::staff::StaffId;
+use elzevir_domain::catalog::{BranchId, ItemId};
 use elzevir_domain::patron::PatronId;
 use elzevir_domain::suspension::SuspensionEnd;
 use jiff::civil::Date;
+use rusqlite::OptionalExtension;
 
 use crate::restrictions::suspension;
 use crate::{CommandFailed, ElzevirStore, SubmitError};
@@ -71,6 +73,32 @@ impl LoanDesk for ElzevirStore {
                     .filter(|suspension| suspension.holds_on(today))
                     .map(crate::restrictions::Suspension::end)
             })
+    }
+
+    fn holding_branch(&self, item: ItemId) -> Result<Option<BranchId>, CirculationDeskError> {
+        self.readers()
+            .read(|c| {
+                c.query_row(
+                    "SELECT holding_branch FROM items WHERE id = ?1",
+                    [item.0],
+                    |row| row.get(0).map(BranchId),
+                )
+                .optional()
+            })
+            .map_err(|error| unavailable(&error))
+    }
+
+    fn borrower(&self, item: ItemId) -> Result<Option<PatronId>, CirculationDeskError> {
+        self.readers()
+            .read(|c| {
+                c.query_row(
+                    "SELECT patron_id FROM loans WHERE item_id = ?1",
+                    [item.0],
+                    |row| row.get(0).map(PatronId),
+                )
+                .optional()
+            })
+            .map_err(|error| unavailable(&error))
     }
 
     fn circulate(

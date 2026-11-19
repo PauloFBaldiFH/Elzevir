@@ -566,3 +566,73 @@ fn an_item_is_lent_renewed_and_returned_from_the_patrons_side_of_the_wall() {
     assert_status(&unknown, 422);
     drop(server);
 }
+
+/// The value of the first hidden field `name` in a page.
+fn hidden<'a>(page: &'a str, name: &str) -> &'a str {
+    page.split_once(&format!("name=\"{name}\" value=\""))
+        .unwrap()
+        .1
+        .split_once('"')
+        .unwrap()
+        .0
+}
+
+#[test]
+fn an_item_is_lent_from_its_pill_and_the_arrow_crosses_the_wall() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    stock(data.path());
+    let (server, address) = start(data.path());
+    let cir = sign_in(address, "cir");
+    let cat = sign_in(address, "cat");
+    let catalog = request(address, "GET", "/equipe/acervo", &cir, "");
+    assert_status(&catalog, 200);
+    assert!(catalog.contains("class=\"lend-box\""), "{catalog}");
+    // Without the circulation permission there is nothing to lend.
+    let browsing = request(address, "GET", "/equipe/acervo", &cat, "");
+    assert!(!browsing.contains("lend-box"));
+    let (token, instance, item) = (
+        csrf(&catalog).to_owned(),
+        hidden(&catalog, "instance").to_owned(),
+        hidden(&catalog, "item").to_owned(),
+    );
+    let form =
+        format!("{cir}Content-Type: application/x-www-form-urlencoded\r\nHX-Request: true\r\n");
+    let check_out = |cardnumber: &str| {
+        request(
+            address,
+            "POST",
+            "/equipe/acervo/emprestar",
+            &form,
+            &format!("csrf={token}&instance={instance}&item={item}&cardnumber={cardnumber}"),
+        )
+    };
+    let unknown = check_out("999999");
+    assert_status(&unknown, 200);
+    assert!(unknown.contains("No patron has this card number.") && unknown.contains(" open>"));
+
+    let lent = check_out("000123");
+    assert_status(&lent, 200);
+    assert!(lent.contains("class=\"pill-due\""), "{lent}");
+    let arrow = format!("/equipe/circulacao/exemplar/{item}");
+    assert!(lent.contains(&format!("href=\"{arrow}\"")));
+    // The catalog shows the loan and its due date, and nothing of the patron.
+    let browsing = request(address, "GET", "/equipe/acervo", &cat, "");
+    assert!(browsing.contains("On loan") && browsing.contains("pill-due"));
+    assert!(
+        !browsing.contains(&arrow) && !browsing.contains("Silva") && !browsing.contains("000123")
+    );
+    assert!(!request(address, "GET", "/equipe/acervo", &cir, "").contains("Silva"));
+    // The arrow asks the server who has the Item, with the circulation permission only.
+    let crossed = request(address, "GET", &arrow, &cir, "");
+    assert_status(&crossed, 303);
+    assert!(
+        crossed.contains(&format!("location: /equipe/leitores/{ana}")),
+        "{crossed}"
+    );
+    assert_status(&request(address, "GET", &arrow, &cat, ""), 403);
+    // Lent already: the pill stays yellow and offers no box.
+    let again = check_out("000123");
+    assert!(!again.contains("lend-box"));
+    drop(server);
+}

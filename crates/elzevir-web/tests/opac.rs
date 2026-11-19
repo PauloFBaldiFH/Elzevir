@@ -92,6 +92,7 @@ fn item(id: i64, status: ItemStatus) -> ItemView {
         call_number: Some("310.62 P94".to_owned()),
         location: Some(SublocationId(1)),
         status,
+        due: None,
     }
 }
 

@@ -103,10 +103,12 @@ pub(crate) const fn subject_icon(kind: SubjectKind) -> &'static str {
     }
 }
 
-/// The icon of an Item's place on the shelf: a padlock when it is only for use there.
+/// The icon of an Item's place on the shelf: a padlock when it is only for use there, a
+/// clock while it is on loan.
 pub(crate) const fn signal_icon(signal: ShelfSignal) -> &'static str {
     match signal {
         ShelfSignal::Available => "status-available",
+        ShelfSignal::OnLoan => "status-on-loan",
         ShelfSignal::NotForLoan => "status-local-use",
         ShelfSignal::OutOfCirculation => "status-unavailable",
     }
@@ -167,6 +169,7 @@ mod tests {
         .map(agent_icon);
         let signals = [
             ShelfSignal::Available,
+            ShelfSignal::OnLoan,
             ShelfSignal::NotForLoan,
             ShelfSignal::OutOfCirculation,
         ]

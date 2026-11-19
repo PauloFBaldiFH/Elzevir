@@ -43,7 +43,7 @@ struct Outcome {
     lent: Option<String>,
 }
 
-fn now(state: &AppState) -> Zoned {
+pub(crate) fn now(state: &AppState) -> Zoned {
     jiff::Timestamp::now().to_zoned(state.inner.config.time_zone.clone())
 }
 
@@ -116,7 +116,7 @@ fn confirm_text(t: &I18n, reason: &Confirm) -> String {
 }
 
 /// The notices of a refused command.
-fn refusal_notices(t: &I18n, refusal: &CirculationRefusal) -> Vec<Notice> {
+pub(crate) fn refusal_notices(t: &I18n, refusal: &CirculationRefusal) -> Vec<Notice> {
     match refusal {
         CirculationRefusal::Checkout(CheckoutRefusal::Impossible(reasons)) => reasons
             .iter()
@@ -195,7 +195,7 @@ async fn desks(state: &AppState, at: Option<BranchId>) -> Result<Vec<DeskOption>
 }
 
 /// The session, the patron desk and the loan desk.
-type Opened = (ActiveSession, Arc<dyn PatronDesk>, Arc<dyn LoanDesk>);
+pub(crate) type Opened = (ActiveSession, Arc<dyn PatronDesk>, Arc<dyn LoanDesk>);
 
 /// The circulation routes.
 pub(crate) fn routes() -> axum::Router<AppState> {
@@ -207,10 +207,15 @@ pub(crate) fn routes() -> axum::Router<AppState> {
             "/equipe/circulacao/devolucao",
             get(checkin_desk).post(check_in),
         )
+        .route("/equipe/acervo/emprestar", post(crate::pill_loans::lend))
+        .route(
+            "/equipe/circulacao/exemplar/{id}",
+            get(crate::pill_loans::to_patron),
+        )
 }
 
 /// The desks, for who has the circulation permission.
-fn open(state: &AppState, headers: &HeaderMap) -> Result<Opened, Box<Response>> {
+pub(crate) fn open(state: &AppState, headers: &HeaderMap) -> Result<Opened, Box<Response>> {
     let (session, patrons) = crate::patrons::open(state, headers, |session| {
         session.identity.can(Permission::Circulation)
     })?;

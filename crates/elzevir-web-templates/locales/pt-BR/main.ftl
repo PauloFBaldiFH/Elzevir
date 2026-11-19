@@ -509,3 +509,6 @@ checkin-needs = Ele é de { $branch }: envie para lá.
 checkin-arrived = A transferência de { $branch } chegou.
 checkin-wrong-branch = Está em trânsito para { $branch }: envie para lá.
 circulation-busy = O sistema está ocupado. Tente de novo.
+pill-cardnumber = Carteirinha
+pill-to-patron = Abrir o leitor que está com ele
+pill-unknown-patron = Nenhum leitor tem esta carteirinha.

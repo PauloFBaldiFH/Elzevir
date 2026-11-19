@@ -59,6 +59,9 @@
 21. Cada empréstimo tem **Renovar** e **Devolver** ([renovacao.md](renovacao.md), [devolucao.md](devolucao.md)); a devolução diz para onde o exemplar vai e se o leitor ficou suspenso.
 22. **Devolução por bipe** em `/equipe/circulacao/devolucao`, com a permissão de circulação: o código e o balcão, que continua o mesmo entre bipes. A resposta diz o que aconteceu com o exemplar (devolvido, não estava emprestado, encontrado, para onde vai, suspensão aplicada), sem nome nem carteirinha do leitor.
 23. Toda ação de circulação pede a permissão de circulação e o token da sessão. Uma recusa responde 422; uma ação que aconteceu responde 200, mesmo quando pede atenção (enviar a outra unidade).
+24. **Emprestar pela pílula do acervo.** Com a permissão de circulação, a pílula verde de um exemplar com código de barras mostra "⇄ Emprestar", que abre uma caixinha com o número da carteirinha. Só a carteirinha exata identifica o leitor (nunca nome ou CPF). O balcão é a unidade onde o exemplar está. As regras são as mesmas do lado do leitor; uma recusa aparece dentro da caixinha, que continua aberta. `Esc` fecha a caixinha antes de qualquer outra coisa.
+25. **Pílula amarela.** Um exemplar emprestado aparece como "Emprestado" com a data de devolução ("Dev. DD/MM"), no acervo, sem nenhum dado do leitor no HTML.
+26. **A seta atravessa o muro.** Na pílula amarela, quem tem a permissão de circulação vê uma seta para `/equipe/circulacao/exemplar/{id}`; o servidor descobre quem está com o exemplar e redireciona (303) para a ficha do leitor, que registra a abertura no `audit_log`. Sem a permissão, 403 e nenhuma seta.
 
 ## 2. Origem no Koha
 

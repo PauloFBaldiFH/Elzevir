@@ -439,8 +439,8 @@ fn items_of(
     let sql = format!(
         "SELECT items.instance_id, items.id, barcode, inventory_number, items.home_branch,
                 items.policy_id, call_number, items.sublocation_id, not_for_loan, damaged,
-                lost, withdrawn, restricted
-         FROM items
+                lost, withdrawn, restricted, loans.due
+         FROM items LEFT JOIN loans ON loans.item_id = items.id
          WHERE items.instance_id IN ({}) ORDER BY items.id",
         placeholders(instances.len())
     );
@@ -456,6 +456,7 @@ fn items_of(
             call_number: row.get(6)?,
             location: row.get::<_, Option<i64>>(7)?.map(SublocationId),
             status: status_at(row, 8)?,
+            due: crate::catalog::due_day(row, 13)?,
         });
     }
     Ok(grouped)
