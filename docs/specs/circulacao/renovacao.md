@@ -1,6 +1,6 @@
 # Renovação
 
-> Status: tarefa 3.5, parte b (renovação sem reservas, multas e bloqueios). A gravação do oráculo vem na parte seguinte; reservas (3.8), multas (3.7) e bloqueios (suspensão, 3.5) entram com suas tarefas. Base: Koha 26.05.05.
+> Status: tarefa 3.5, partes b e d (renovação sem reservas e multas; a suspensão não bloqueia, `RestrictionBlockRenewing` desligado). Reservas (3.8) e multas (3.7) entram com suas tarefas. Base: Koha 26.05.05.
 
 ## 1. Comportamento
 
@@ -23,7 +23,7 @@
 
 ## 3. Paridade
 
-`exigida`. Prova, por enquanto: `crates/elzevir-domain/src/renewal.rs` (decisão pura) e `crates/elzevir-store/tests/checkout.rs` (renovação pelo comando: cedo demais, renovação a partir do vencimento, contagem, passar por cima, sem empréstimo, contagem no empréstimo encerrado). A gravação do oráculo vem na parte seguinte.
+`exigida`. Prova, por enquanto: `crates/elzevir-domain/src/renewal.rs` (decisão pura) e `crates/elzevir-store/tests/checkout.rs` (renovação pelo comando: cedo demais, renovação a partir do vencimento, contagem, passar por cima, sem empréstimo, contagem no empréstimo encerrado) e `crates/elzevir/tests/checkin_oracle.rs`, que reproduz `scenarios/circulacao/devolucao-renovacao.koha.json` (gravado por `tools/checkin-recorder/record.py`): cedo demais (`too_soon`), renovação com o calendário da unidade (nova data igual à do Koha) e limite de renovações (`too_many`).
 
 ## 4. Casos de borda
 

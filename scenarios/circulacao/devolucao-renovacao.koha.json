@@ -1,0 +1,245 @@
+{
+ "koha_version": "26.05.05.000",
+ "spec": [
+  "docs/specs/circulacao/renovacao.md",
+  "docs/specs/circulacao/suspensao.md"
+ ],
+ "recorder": "tools/checkin-recorder/record.py",
+ "patron": {
+  "category": "B",
+  "library": "MAIN"
+ },
+ "preferences": {
+  "CircControl": "ItemHomeLibrary",
+  "HomeOrHoldingBranch": "holdingbranch",
+  "useDaysMode": "Calendar",
+  "NoRenewalBeforePrecision": "exact_time",
+  "OverduesBlockRenewing": "allow",
+  "RestrictionBlockRenewing": "0",
+  "SuspensionsCalendar": "noSuspensionsWhenClosed",
+  "finesCalendar": "noFinesWhenClosed",
+  "CumulativeRestrictionPeriods": "0",
+  "SpecifyReturnDate": "1",
+  "ManualRenewalPeriodBase": "date_due"
+ },
+ "item": {
+  "barcode": "D01",
+  "item_type": "DV",
+  "home_library": "MAIN",
+  "holding_library": "MAIN"
+ },
+ "other_item": {
+  "barcode": "D02",
+  "item_type": "DV",
+  "home_library": "MAIN",
+  "holding_library": "MAIN"
+ },
+ "rules": [
+  {
+   "context": {
+    "item_type_id": "*",
+    "library_id": "MAIN",
+    "patron_category_id": "*"
+   },
+   "rules": {
+    "daysmode": "Datedue",
+    "finedays": "",
+    "firstremind": "0",
+    "hardduedate": "",
+    "hardduedatecompare": "-1",
+    "issuelength": "14",
+    "lengthunit": "days",
+    "maxissueqty": "4",
+    "maxonsiteissueqty": "4",
+    "maxsuspensiondays": "",
+    "norenewalbefore": "",
+    "renewalperiod": "14",
+    "renewalsallowed": "5",
+    "suspension_chargeperiod": "1"
+   }
+  },
+  {
+   "context": {
+    "item_type_id": "DV",
+    "library_id": "MAIN",
+    "patron_category_id": "*"
+   },
+   "rules": {
+    "finedays": "2",
+    "norenewalbefore": "3",
+    "renewalsallowed": "1"
+   }
+  }
+ ],
+ "calendar": {
+  "weekly_closed": [
+   0,
+   6
+  ],
+  "annual": [
+   [
+    1,
+    1
+   ],
+   [
+    1,
+    22
+   ],
+   [
+    2,
+    16
+   ],
+   [
+    2,
+    17
+   ],
+   [
+    2,
+    18
+   ],
+   [
+    3,
+    21
+   ],
+   [
+    4,
+    3
+   ],
+   [
+    4,
+    21
+   ],
+   [
+    5,
+    1
+   ],
+   [
+    6,
+    4
+   ],
+   [
+    6,
+    5
+   ],
+   [
+    9,
+    7
+   ],
+   [
+    10,
+    12
+   ],
+   [
+    11,
+    2
+   ],
+   [
+    11,
+    15
+   ],
+   [
+    11,
+    20
+   ],
+   [
+    12,
+    25
+   ]
+  ],
+  "closed": [
+   "2026-04-20",
+   "2026-04-30",
+   "2026-06-26",
+   "2026-08-21",
+   "2026-09-25",
+   "2026-10-13",
+   "2026-10-23",
+   "2026-11-23",
+   "2026-11-24",
+   "2026-12-24",
+   "2026-12-31"
+  ],
+  "open": []
+ },
+ "checkout": {
+  "at": "2026-11-19T18:06:30-03:00",
+  "due": "2026-12-03T23:59:00-03:00",
+  "library": "MAIN"
+ },
+ "too_soon": {
+  "at": "2026-11-19T21:06:32+00:00",
+  "answer": {
+   "allows_renewal": false,
+   "current_renewals": 0,
+   "error": "too_soon",
+   "max_renewals": 1,
+   "unseen_renewals": 0
+  }
+ },
+ "renewal_rules": [
+  {
+   "context": {
+    "item_type_id": "*",
+    "library_id": "MAIN",
+    "patron_category_id": "*"
+   },
+   "rules": {
+    "daysmode": "Datedue",
+    "finedays": "",
+    "firstremind": "0",
+    "hardduedate": "",
+    "hardduedatecompare": "-1",
+    "issuelength": "14",
+    "lengthunit": "days",
+    "maxissueqty": "4",
+    "maxonsiteissueqty": "4",
+    "maxsuspensiondays": "",
+    "norenewalbefore": "",
+    "renewalperiod": "14",
+    "renewalsallowed": "5",
+    "suspension_chargeperiod": "1"
+   }
+  },
+  {
+   "context": {
+    "item_type_id": "DV",
+    "library_id": "MAIN",
+    "patron_category_id": "*"
+   },
+   "rules": {
+    "finedays": "2",
+    "norenewalbefore": "",
+    "renewalsallowed": "1"
+   }
+  }
+ ],
+ "renewal": {
+  "due": "2026-12-17T23:59:00-03:00",
+  "at": "2026-11-19T18:06:34-03:00"
+ },
+ "too_many": {
+  "at": "2026-11-19T21:06:35+00:00",
+  "answer": {
+   "allows_renewal": false,
+   "current_renewals": 1,
+   "error": "too_many",
+   "max_renewals": 1,
+   "unseen_renewals": 0
+  }
+ },
+ "checkin": {
+  "at": "2026-12-21T10:00:00-03:00",
+  "library": "MAIN"
+ },
+ "suspended": {
+  "at": "2026-11-19T21:06:38+00:00",
+  "answer": {
+   "blockers": {
+    "DEBARRED": 1,
+    "USERBLOCKEDWITHENDDATE": "2026-12-29"
+   },
+   "confirms": {},
+   "warnings": {}
+  }
+ }
+}
