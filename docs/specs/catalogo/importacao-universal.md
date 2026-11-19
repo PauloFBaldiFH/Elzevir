@@ -329,8 +329,14 @@ não escolhidos, mapeamento de colunas ausente ou desatualizado, regras
 MARC numa planilha, receita grande demais, formato fora da lista) são
 variantes de `BatchRefusal` e aparecem na tela com mensagem própria do
 Fluent, sem detalhe em inglês; a CLI imprime o texto técnico, com as
-sugestões de colunas. Os demais erros de leitura mostram a mensagem geral
-traduzida e o detalhe técnico com a posição, recolhido.
+sugestões de colunas. Célula de planilha recusada (nome de unidade,
+política, localização ou coleção desconhecido ou ambíguo, campo de exemplar
+inválido, título ou identificador malformado, conflito de agrupamento etc.)
+e código de barras repetido também são variantes tipadas (`CellReason`): a
+tela diz em Fluent "Linha N, coluna M:" seguido do motivo, e a coluna é a do
+campo do exemplar recusado quando a planilha o mapeia. Os demais erros de
+leitura mostram a mensagem geral traduzida e o detalhe técnico com a
+posição, recolhido.
 Cada problema identifica posição, campo/célula, gravidade e motivo. Não
 confunde linha física de CSV multilinha com o número do registro lógico.
 

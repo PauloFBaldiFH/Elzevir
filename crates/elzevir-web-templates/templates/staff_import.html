@@ -18,7 +18,7 @@
   <a href="/equipe/acervo">{{ t.get("staff-home-catalog") }}</a>
   <h1>{{ t.get("import-title") }}</h1>
   {% if let Some(key) = notice %}<p role="alert">{{ t.get(key) }}</p>{% endif %}
-  {% if let Some(text) = detail %}<details><summary>{{ t.get("import-details") }}</summary><pre>{{ text }}</pre></details>{% endif %}
+  {% match detail %}{% when Some(ImportDetail::Explained(text)) %}<p role="alert">{{ text }}</p>{% when Some(ImportDetail::Technical(text)) %}<details><summary>{{ t.get("import-details") }}</summary><pre>{{ text }}</pre></details>{% when None %}{% endmatch %}
   {% match view %}
   {% when ImportView::Home with (batches, receipts, format) %}{% if format.value() == "table" %}
     <p><a href="/equipe/acervo/importar/modelo/csv">{{ t.get("import-model-csv") }}</a> · <a href="/equipe/acervo/importar/modelo/tsv">{{ t.get("import-model-tsv") }}</a></p>{% endif %}

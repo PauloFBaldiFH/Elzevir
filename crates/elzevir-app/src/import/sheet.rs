@@ -19,7 +19,7 @@ use crate::catalog::{
     RecordItems, WorkChange,
 };
 use crate::creating::new_record;
-use crate::items::{TypedRow, item_rows};
+use crate::items::{ItemColumn, RowProblem, TypedRow, item_rows};
 use crate::matching::{Matching, identifier_key};
 
 /// Delimiter, encoding and mapping agreed for this revision.
@@ -90,7 +90,7 @@ pub enum SheetError {
         /// Byte offset of the row.
         offset: u64,
         /// Validation or mapping reason.
-        reason: String,
+        reason: CellReason,
     },
     /// Duplicate barcode somewhere in the selected sheet.
     #[error("row {row}: item barcode {barcode:?} is repeated from row {first}")]
@@ -102,6 +102,144 @@ pub enum SheetError {
         /// The exact duplicated barcode.
         barcode: String,
     },
+}
+
+/// Why a row or cell of the sheet was refused, so that each cause has its own message.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum CellReason {
+    /// A data row came before an earlier one.
+    #[error("rows must follow source order")]
+    OutOfOrder,
+    /// The sheet has data rows but an empty header.
+    #[error("the sheet has data but no column headers")]
+    NoHeader,
+    /// The row has more or fewer cells than the header.
+    #[error("column count differs from the header")]
+    ColumnCount,
+    /// A version column of the generated model has a value on a data row.
+    #[error("model metadata columns must be empty on data rows")]
+    ModelMarker,
+    /// Two columns of the row fill a field that takes one value.
+    #[error("more than one value for {field}")]
+    Repeated {
+        /// The qualified destination.
+        field: String,
+    },
+    /// A cell that holds JSON values could not be read.
+    #[error("{detail}")]
+    Json {
+        /// The parser message, with the position in the cell.
+        detail: String,
+    },
+    /// `expressionOf` does not name exactly one existing Hub.
+    #[error("expressionOf requires one resolved Hub")]
+    ExpressionNeedsHub,
+    /// A Hub description has no stored Hub to describe.
+    #[error("Hub descriptions require an existing identity")]
+    HubNeedsIdentity,
+    /// The prepared record fails the catalog validation.
+    #[error("{detail}")]
+    Description {
+        /// Field and message key of each failure.
+        detail: String,
+    },
+    /// A JSON title has more than one `mainTitle` or qualifiers.
+    #[error("a title requires one mainTitle without additional qualifiers")]
+    TitleShape,
+    /// An identifier is not an ISBN, ISSN or DOI with one value.
+    #[error("identifier requires a typed ISBN, ISSN or DOI resource with one value")]
+    Identifier,
+    /// An item without a barcode was not accepted explicitly.
+    #[error("an item without a barcode requires explicit acceptance")]
+    MissingBarcode,
+    /// A registry name is empty.
+    #[error("{field} name is required")]
+    NameRequired {
+        /// Which registry.
+        field: Registry,
+    },
+    /// No registry entry has this name.
+    #[error("unknown {field} {name:?}")]
+    UnknownName {
+        /// Which registry.
+        field: Registry,
+        /// The name in the cell.
+        name: String,
+    },
+    /// More than one registry entry has this name.
+    #[error("ambiguous {field} {name:?}")]
+    AmbiguousName {
+        /// Which registry.
+        field: Registry,
+        /// The name in the cell.
+        name: String,
+    },
+    /// An item field cannot be stored as typed.
+    #[error("item field {} refused: {problem:?}", column.name())]
+    Item {
+        /// The refused field.
+        column: ItemColumn,
+        /// Why.
+        problem: RowProblem,
+    },
+    /// Grouping by ISBN needs exactly one normalized ISBN in the row.
+    #[error("ISBN grouping requires one normalized ISBN per row")]
+    IsbnGrouping,
+    /// The row describes the record of its group differently.
+    #[error("descriptions conflict with grouped row {row}")]
+    GroupConflict {
+        /// First row of the group.
+        row: u64,
+    },
+    /// The sheet has more records than one batch accepts.
+    #[error("prepared record count limit exceeded")]
+    RecordLimit,
+}
+
+impl CellReason {
+    /// The `Item.catalog` field the refusal is about, when one is.
+    fn item_field(&self) -> Option<&'static str> {
+        match self {
+            Self::NameRequired { field }
+            | Self::UnknownName { field, .. }
+            | Self::AmbiguousName { field, .. } => Some(field.item_field()),
+            Self::Item { column, .. } => Some(column.name()),
+            Self::MissingBarcode => Some("barcode"),
+            _ => None,
+        }
+    }
+}
+
+/// The registries an item names by their readable name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum Registry {
+    /// Home branch of the item.
+    #[error("home branch")]
+    HomeBranch,
+    /// Branch that currently holds the item.
+    #[error("holding branch")]
+    HoldingBranch,
+    /// Circulation policy.
+    #[error("circulation policy")]
+    Policy,
+    /// Shelving location of the home branch.
+    #[error("shelving location")]
+    Location,
+    /// Collection of the home branch.
+    #[error("collection")]
+    Collection,
+}
+
+impl Registry {
+    const fn item_field(self) -> &'static str {
+        match self {
+            Self::HomeBranch => "home_branch",
+            Self::HoldingBranch => "holding_branch",
+            Self::Policy => "policy",
+            Self::Location => "location",
+            Self::Collection => "collection",
+        }
+    }
 }
 
 /// One prepared native record.
@@ -200,7 +338,7 @@ pub fn prepare_rows(
                 .number
                 .checked_sub(header.number)
                 .filter(|position| *position > last)
-                .ok_or_else(|| cell(&row, 1, "rows must follow source order"))?;
+                .ok_or_else(|| cell(&row, 1, CellReason::OutOfOrder))?;
             last = data_position;
             if empty(&row) {
                 continue;
@@ -212,10 +350,10 @@ pub fn prepare_rows(
                 continue;
             }
             let Some(bindings) = &bindings else {
-                return Err(cell(&header, 1, "the sheet has data but no column headers"));
+                return Err(cell(&header, 1, CellReason::NoHeader));
             };
             if row.cells.len() != bindings.len() {
-                return Err(cell(&row, 1, "column count differs from the header"));
+                return Err(cell(&row, 1, CellReason::ColumnCount));
             }
             let mut draft = Draft::default();
             for (position, (binding, value)) in bindings.iter().zip(&row.cells).enumerate() {
@@ -228,7 +366,19 @@ pub fn prepare_rows(
             }
             let (record, item) = draft
                 .finish(codes, accept_missing_barcodes.contains(&data_position))
-                .map_err(|reason| cell(&row, 1, reason))?;
+                .map_err(|reason| {
+                    // Point at the column of the refused item field, when the
+                    // sheet maps one; record-level refusals stay on column 1.
+                    let column = reason
+                        .item_field()
+                        .and_then(|field| {
+                            bindings.iter().position(
+                                |binding| matches!(binding.target, Target::Item(item) if item == field),
+                            )
+                        })
+                        .map_or(1, |index| index + 1);
+                    cell(&row, column, reason)
+                })?;
             groups.push(&row, record, item, settings.group_by)?;
         }
     }
@@ -252,12 +402,12 @@ fn empty(row: &TableRow) -> bool {
     row.cells.iter().all(|cell| cell.trim().is_empty())
 }
 
-fn cell(row: &TableRow, column: usize, reason: impl Into<String>) -> SheetError {
+fn cell(row: &TableRow, column: usize, reason: CellReason) -> SheetError {
     SheetError::Cell {
         row: row.number,
         column,
         offset: row.offset,
-        reason: reason.into(),
+        reason,
     }
 }
 
@@ -416,15 +566,17 @@ struct Draft {
 }
 
 impl Draft {
-    fn apply(&mut self, target: Target, value: &str) -> Result<(), String> {
+    fn apply(&mut self, target: Target, value: &str) -> Result<(), CellReason> {
         match target {
             Target::Ignore => {}
             Target::Marker => {
-                return Err("model metadata columns must be empty on data rows".into());
+                return Err(CellReason::ModelMarker);
             }
             Target::Item(field) => {
                 if self.item.insert(field, value.to_owned()).is_some() {
-                    return Err(format!("more than one value for {field}"));
+                    return Err(CellReason::Repeated {
+                        field: format!("Item.catalog.{field}"),
+                    });
                 }
             }
             Target::Isbn => self
@@ -432,7 +584,7 @@ impl Draft {
                 .push(identifier(IdentifierKind::Isbn, value.to_owned())),
             Target::Classes(entity) => {
                 let classes: Vec<String> = if value.trim_start().starts_with('[') {
-                    serde_json::from_str(value).map_err(|error| error.to_string())?
+                    serde_json::from_str(value).map_err(json_error)?
                 } else {
                     vec![value.to_owned()]
                 };
@@ -452,7 +604,7 @@ impl Draft {
         entity: EntityKind,
         property: &'static Property,
         input: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), CellReason> {
         match (entity, property.name) {
             (EntityKind::Work, "title") => {
                 self.once(entity, property.name)?;
@@ -479,7 +631,7 @@ impl Draft {
                 {
                     self.hub = Some(HubId(entity.id));
                 } else {
-                    return Err("expressionOf requires one resolved Hub".into());
+                    return Err(CellReason::ExpressionNeedsHub);
                 }
             }
             (EntityKind::Instance, "identifiedBy") => {
@@ -521,20 +673,22 @@ impl Draft {
         Ok(())
     }
 
-    fn once(&mut self, entity: EntityKind, property: &'static str) -> Result<(), String> {
+    fn once(&mut self, entity: EntityKind, property: &'static str) -> Result<(), CellReason> {
         self.single
             .insert((entity, property))
             .then_some(())
-            .ok_or_else(|| format!("more than one value for {entity:?}.{property}"))
+            .ok_or_else(|| CellReason::Repeated {
+                field: format!("{entity:?}.{property}"),
+            })
     }
 
     fn finish(
         mut self,
         codes: &CodeLists,
         allow_missing: bool,
-    ) -> Result<(NewRecord, Option<NativeItem>), String> {
+    ) -> Result<(NewRecord, Option<NativeItem>), CellReason> {
         if self.descriptions.contains_key(&EntityKind::Hub) {
-            return Err("Hub descriptions require an existing identity".into());
+            return Err(CellReason::HubNeedsIdentity);
         }
         let work = self
             .descriptions
@@ -561,13 +715,14 @@ impl Draft {
             .push(InstanceChange::Classes(classes(&instance)));
         self.instance
             .push(InstanceChange::Identifiers(self.identifiers));
-        let mut record = new_record(self.work, self.instance).map_err(|errors| {
-            errors
-                .iter()
-                .map(|error| format!("{}: {}", error.field, error.message_key))
-                .collect::<Vec<_>>()
-                .join(", ")
-        })?;
+        let mut record =
+            new_record(self.work, self.instance).map_err(|errors| CellReason::Description {
+                detail: errors
+                    .iter()
+                    .map(|error| format!("{}: {}", error.field, error.message_key))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            })?;
         record.work_description.statements = work.statements;
         record.instance.description.statements = instance.statements;
         record.hub = self.hub;
@@ -576,14 +731,16 @@ impl Draft {
             (EntityKind::Instance, &record.instance.description),
             (EntityKind::Item, &item),
         ] {
-            check_description(kind, description).map_err(|error| error.to_string())?;
+            check_description(kind, description).map_err(|error| CellReason::Description {
+                detail: error.to_string(),
+            })?;
         }
         if self.item.is_empty() && item == Description::default() {
             return Ok((record, None));
         }
         let fields = resolve_item(&self.item, codes)?;
         if fields.barcode.is_none() && !allow_missing {
-            return Err("an item without a barcode requires explicit acceptance".into());
+            return Err(CellReason::MissingBarcode);
         }
         Ok((
             record,
@@ -595,11 +752,21 @@ impl Draft {
     }
 }
 
-fn json_values(input: &str) -> Result<Vec<Value>, String> {
-    serde_json::from_str(input).map_err(|error| error.to_string())
+fn json_values(input: &str) -> Result<Vec<Value>, CellReason> {
+    serde_json::from_str(input).map_err(json_error)
 }
 
-fn title(input: &str) -> Result<String, String> {
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "used directly as the error mapper of serde_json results"
+)]
+fn json_error(error: serde_json::Error) -> CellReason {
+    CellReason::Json {
+        detail: error.to_string(),
+    }
+}
+
+fn title(input: &str) -> Result<String, CellReason> {
     if !input.trim_start().starts_with('[') {
         return Ok(input.to_owned());
     }
@@ -622,7 +789,7 @@ fn title(input: &str) -> Result<String, String> {
     {
         return Ok(text.clone());
     }
-    Err("a title requires one mainTitle without additional qualifiers".into())
+    Err(CellReason::TitleShape)
 }
 
 fn identifier(kind: IdentifierKind, value: String) -> NewIdentifier {
@@ -633,13 +800,13 @@ fn identifier(kind: IdentifierKind, value: String) -> NewIdentifier {
     }
 }
 
-fn from_identifier(value: Value) -> Result<NewIdentifier, String> {
+fn from_identifier(value: Value) -> Result<NewIdentifier, CellReason> {
     if let Value::Resource(resource) = value {
         let kind = match resource.class.as_str() {
             "Isbn" => IdentifierKind::Isbn,
             "Issn" => IdentifierKind::Issn,
             "Doi" => IdentifierKind::Doi,
-            _ => return Err(format!("unsupported identifier class {:?}", resource.class)),
+            _ => return Err(CellReason::Identifier),
         };
         if resource.statements.is_empty()
             && let Some(value) = resource.label
@@ -662,20 +829,29 @@ fn from_identifier(value: Value) -> Result<NewIdentifier, String> {
             return Ok(identifier(kind, text.clone()));
         }
     }
-    Err("identifier requires a typed resource with one value".into())
+    Err(CellReason::Identifier)
 }
 
 fn resolve_item(
     values: &BTreeMap<&str, String>,
     codes: &CodeLists,
-) -> Result<crate::items::ItemFields, String> {
+) -> Result<crate::items::ItemFields, CellReason> {
     let get = |key| values.get(key).map_or("", |value| value.trim());
     let own = |key| get(key).to_owned();
-    let home = named(&codes.branches, get("home_branch"), "home branch")?;
-    let holding = named(&codes.branches, get("holding_branch"), "holding branch")?;
-    let policy = named(&codes.policies, get("policy"), "circulation policy")?;
-    let location = place(&codes.locations, home, get("location"), "shelving location")?;
-    let collection = place(&codes.collections, home, get("collection"), "collection")?;
+    let home = named(&codes.branches, get("home_branch"), Registry::HomeBranch)?;
+    let holding = named(
+        &codes.branches,
+        get("holding_branch"),
+        Registry::HoldingBranch,
+    )?;
+    let policy = named(&codes.policies, get("policy"), Registry::Policy)?;
+    let location = place(&codes.locations, home, get("location"), Registry::Location)?;
+    let collection = place(
+        &codes.collections,
+        home,
+        get("collection"),
+        Registry::Collection,
+    )?;
     let typed = TypedRow {
         id: None,
         barcode: own("barcode"),
@@ -689,14 +865,26 @@ fn resolve_item(
         copy_number: own("copy_number"),
         price: own("price"),
     };
-    item_rows(vec![typed])
-        .map_err(|errors| format!("item fields refused: {errors:?}"))?
-        .pop()
-        .map(|row| row.fields)
-        .ok_or_else(|| "missing prepared item".into())
+    // One row in gives one row or at least one refusal out; the first names the cause.
+    let mut rows = item_rows(vec![typed]).map_err(|errors| {
+        errors.first().map_or(
+            CellReason::Item {
+                column: ItemColumn::Row,
+                problem: RowProblem::Required,
+            },
+            |refusal| CellReason::Item {
+                column: refusal.column,
+                problem: refusal.problem,
+            },
+        )
+    })?;
+    rows.pop().map(|row| row.fields).ok_or(CellReason::Item {
+        column: ItemColumn::Row,
+        problem: RowProblem::Required,
+    })
 }
 
-fn named<Id: Copy>(rows: &[Named<Id>], name: &str, field: &str) -> Result<Id, String> {
+fn named<Id: Copy>(rows: &[Named<Id>], name: &str, field: Registry) -> Result<Id, CellReason> {
     one(
         rows.iter().filter(|row| row.name == name).map(|row| row.id),
         field,
@@ -708,8 +896,8 @@ fn place<Id: Copy>(
     rows: &[Place<Id>],
     home: BranchId,
     name: &str,
-    field: &str,
-) -> Result<Option<Id>, String> {
+    field: Registry,
+) -> Result<Option<Id>, CellReason> {
     if name.is_empty() {
         return Ok(None);
     }
@@ -723,12 +911,22 @@ fn place<Id: Copy>(
     .map(Some)
 }
 
-fn one<T>(mut candidates: impl Iterator<Item = T>, field: &str, name: &str) -> Result<T, String> {
+fn one<T>(
+    mut candidates: impl Iterator<Item = T>,
+    field: Registry,
+    name: &str,
+) -> Result<T, CellReason> {
     match (name.is_empty(), candidates.next(), candidates.next()) {
         (false, Some(id), None) => Ok(id),
-        (true, _, _) => Err(format!("{field} name is required")),
-        (_, None, _) => Err(format!("unknown {field} {name:?}")),
-        _ => Err(format!("ambiguous {field} {name:?}")),
+        (true, _, _) => Err(CellReason::NameRequired { field }),
+        (_, None, _) => Err(CellReason::UnknownName {
+            field,
+            name: name.to_owned(),
+        }),
+        _ => Err(CellReason::AmbiguousName {
+            field,
+            name: name.to_owned(),
+        }),
     }
 }
 
@@ -767,11 +965,7 @@ impl Groups {
                     .filter_map(|id| identifier_key(id.kind, &id.value))
                     .collect();
                 if keys.len() != 1 {
-                    return Err(cell(
-                        row,
-                        1,
-                        "ISBN grouping requires one normalized ISBN per row",
-                    ));
+                    return Err(cell(row, 1, CellReason::IsbnGrouping));
                 }
                 keys.into_iter().next().map(|key| key.key)
             }
@@ -784,14 +978,14 @@ impl Groups {
                 return Err(cell(
                     row,
                     1,
-                    format!("descriptions conflict with grouped row {}", previous.row),
+                    CellReason::GroupConflict { row: previous.row },
                 ));
             }
             items.extend(item);
             return Ok(());
         }
         if self.records.len() as u64 == MAX_IMPORT_RECORDS {
-            return Err(cell(row, 1, "prepared record count limit exceeded"));
+            return Err(cell(row, 1, CellReason::RecordLimit));
         }
         if let Some(key) = key {
             self.keys.insert(key, self.records.len());

@@ -17,8 +17,16 @@ pub struct ImportPage<'a> {
     pub view: ImportView,
     /// Message key for a failed request, when applicable.
     pub notice: Option<&'static str>,
-    /// Technical detail for the operator, escaped as text.
-    pub detail: Option<String>,
+    /// What else the operator needs to know about the failure.
+    pub detail: Option<ImportDetail>,
+}
+
+/// More about a failed request, escaped as text.
+pub enum ImportDetail {
+    /// A translated sentence, such as the row and column of a refused cell.
+    Explained(String),
+    /// A located technical message from a reader, shown collapsed.
+    Technical(String),
 }
 
 /// Contents of the import workspace.
