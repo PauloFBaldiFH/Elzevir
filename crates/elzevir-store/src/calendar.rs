@@ -209,24 +209,36 @@ fn read_holidays(connection: &Connection, branch: i64) -> rusqlite::Result<Vec<H
     Ok(holidays)
 }
 
+/// The calendar of `branch`, for the calendar book and for the writer's own decisions.
+pub(crate) fn read_calendar(connection: &Connection, branch: i64) -> rusqlite::Result<Calendar> {
+    let mut calendar = Calendar::always_open();
+    for holiday in read_holidays(connection, branch)? {
+        calendar = match holiday.when {
+            HolidayWhen::Weekly(offset) => {
+                let weekday = i8::try_from(offset)
+                    .ok()
+                    .and_then(|offset| Weekday::from_sunday_zero_offset(offset).ok())
+                    .ok_or_else(|| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            0,
+                            rusqlite::types::Type::Integer,
+                            format!("stored weekday {offset}").into(),
+                        )
+                    })?;
+                calendar.closed_every(weekday)
+            }
+            HolidayWhen::Annual(holiday) => calendar.closed_annually(holiday),
+            HolidayWhen::Dated(date, entry) => calendar.on(date, entry),
+        };
+    }
+    Ok(calendar)
+}
+
 impl CalendarBook for ElzevirStore {
     fn calendar(&self, branch: BranchId) -> Result<Calendar, CirculationDeskError> {
-        let holidays = self.holidays(branch)?;
-        let mut calendar = Calendar::always_open();
-        for holiday in holidays {
-            calendar = match holiday.when {
-                HolidayWhen::Weekly(offset) => {
-                    let weekday = i8::try_from(offset)
-                        .ok()
-                        .and_then(|offset| Weekday::from_sunday_zero_offset(offset).ok())
-                        .ok_or_else(|| unavailable(format!("stored weekday {offset}")))?;
-                    calendar.closed_every(weekday)
-                }
-                HolidayWhen::Annual(holiday) => calendar.closed_annually(holiday),
-                HolidayWhen::Dated(date, entry) => calendar.on(date, entry),
-            };
-        }
-        Ok(calendar)
+        self.readers()
+            .read(|c| read_calendar(c, branch.0))
+            .map_err(unavailable)
     }
 
     fn holidays(&self, branch: BranchId) -> Result<Vec<Holiday>, CirculationDeskError> {

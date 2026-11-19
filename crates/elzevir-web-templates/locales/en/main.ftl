@@ -801,6 +801,13 @@ rule-kind-waiting_hold_cancellation = Cancel waiting holds
 calendar-error-title = Give the closing a title of at most 50 characters.
 calendar-error-dates = These dates do not make a range: the last day comes before the first, the day does not exist, or the range is longer than a year.
 
+checkout-error-unknown-barcode = No item has this barcode.
+checkout-error-unknown-patron = This patron does not exist.
+checkout-error-impossible = This item cannot be lent to this patron.
+checkout-error-needs-confirmation = This checkout needs your confirmation.
+checkout-error-on-loan = This item is on loan. Return it first.
+checkout-error-no-due-date = No due date can be found: the calendar has no open day.
+
 ## Calendar (docs/specs/circulacao/calendario.md)
 calendar-title = Calendar
 calendar-intro = Days a branch is closed: every week, every year or on given dates. A date open as an exception wins over the weekly and yearly closings. Due dates and fines skip closed days.

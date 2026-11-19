@@ -1,6 +1,6 @@
 # Empréstimo
 
-> Status: tarefa 3.4, parte a (a decisão, pura, no domínio). A parte b traz a tabela de empréstimos, o comando `circ.checkout` e a gravação do oráculo. Base: Koha 26.05.05.
+> Status: tarefa 3.4, partes a (a decisão, pura, no domínio) e b (o comando `circ.checkout` e a tabela de empréstimos). Falta a gravação do oráculo. Base: Koha 26.05.05.
 
 ## 1. Comportamento
 
@@ -34,20 +34,39 @@
    - exemplar perdido: segundo `IssueLostItem`, pede confirmação, avisa (padrão) ou nada.
 9. As preferências do Koha entram como `CheckoutSettings`, com os padrões do Koha.
 
+### O período (`loan_rule`)
+
+10. O período do empréstimo vem das regras que valem para a unidade, a categoria e a política, como no Koha:
+    - `issuelength` ausente é 0 dias; `renewalperiod` ausente é 0, e vazio quer dizer "use `issuelength`";
+    - `lengthunit` diferente de `hours` é dias;
+    - `daysmode` vazio ou ausente cai na preferência `useDaysMode` (padrão `Calendar`);
+    - `hardduedate` com `hardduedatecompare` ausente é 0: toda devolução cai na data fixa. Um `hardduedatecompare` fora de -1, 0 e 1 nunca se aplica.
+
+### O comando (`circ.checkout`)
+
+11. Pede a permissão de circulação. Recebe o leitor, o código de barras, a unidade do balcão, se é empréstimo local, se a equipe já confirmou e o momento, no fuso da biblioteca.
+12. O código de barras é lido sem espaços nas pontas (Koha: `barcodedecode` sem filtro). Código desconhecido, leitor desconhecido ou unidade do balcão desconhecida são recusados.
+13. A unidade de controle é a unidade em que o exemplar está (Koha: `CircControl` = `ItemHomeLibrary` com `HomeOrHoldingBranch` = `holdingbranch`, os padrões). Os empréstimos atuais do leitor contam pela unidade em que cada exemplar está. A data de devolução usa as regras e o calendário dessa unidade, sem horário de funcionamento e sem `ReturnBeforeExpiry` (os padrões), e é truncada no minuto.
+14. O que impede recusa com a lista. O que pede confirmação recusa com a lista até a equipe confirmar. Os avisos voltam com o empréstimo.
+15. Um exemplar já emprestado é recusado mesmo com confirmação: devolver e renovar chegam com a tarefa 3.5.
+16. O empréstimo grava o leitor, o exemplar, a unidade do balcão, o momento, a data de devolução e se é local. O exemplar passa para a unidade do balcão e deixa de estar perdido (Koha: `AddIssue`).
+17. Os empréstimos não entram no resumo da importação.
+
 ### Fora desta parte
 
-10. Ficam para as tarefas que os trazem: dívidas (3.7), bloqueios, suspensões e atrasos (3.5), reservas (3.8). Cartão perdido e endereço inválido (`GNA`, `LOST`) chegam com o cadastro que os grava. O Elzevir não tem tipos de item pais, então a regra de limite do tipo pai do Koha não existe aqui.
+18. Ficam para as tarefas que os trazem: dívidas (3.7), bloqueios, suspensões e atrasos (3.5), reservas (3.8). Cartão perdido e endereço inválido (`GNA`, `LOST`) chegam com o cadastro que os grava. O Elzevir não tem tipos de item pais, então a regra de limite do tipo pai do Koha não existe aqui.
 
 ## 2. Origem no Koha
 
 - `C4::Circulation::CanBookBeIssued` (ordem das recusas, preferências).
 - `C4::Circulation::TooMany` e `_check_max_qty`.
 - `C4::Circulation::GetBranchBorrowerCircRule` (`patron_maxissueqty`).
+- `C4::Circulation::AddIssue`, `GetLoanLength`, `GetHardDueDate`, `_GetCircControlBranch`; `Koha::CirculationRules::get_effective_daysmode`.
 - Testes: `t/db_dependent/Circulation/TooMany.t`.
 
 ## 3. Paridade
 
-`exigida`. Prova: os testes de `crates/elzevir-domain/src/checkout.rs` portam os casos de `TooMany.t` (sem regras; limites 0; local sem limite; empréstimo local enchendo o limite local; limite vazio; regra geral e específica; limite do leitor; números do Perl) e a ordem de `CanBookBeIssued`. Na parte b, as respostas do oráculo gravadas por `GET /api/v1/checkouts/availability` rodam contra o comando.
+`exigida`. Prova: os testes de `crates/elzevir-domain/src/checkout.rs` portam os casos de `TooMany.t` (sem regras; limites 0; local sem limite; empréstimo local enchendo o limite local; limite vazio; regra geral e específica; limite do leitor; números do Perl) e a ordem de `CanBookBeIssued`. `crates/elzevir-store/tests/checkout.rs` empresta pelo comando contra o banco: data de devolução com o calendário, renovação pedida, limite, nenhuma regra, recusas do leitor e do exemplar, exemplar perdido. Em seguida, as respostas do oráculo gravadas por `GET /api/v1/checkouts/availability` rodam contra o comando.
 
 ## 4. Casos de borda
 

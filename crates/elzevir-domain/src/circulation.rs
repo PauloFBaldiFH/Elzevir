@@ -105,7 +105,7 @@ pub fn transition(
     match (state, event) {
         (ItemState::Available, CircEvent::Checkout { at }) => Ok(Transition {
             state: ItemState::OnLoan {
-                due: to_minute(&calc_date_due(at, false, &context.due_date)?)?,
+                due: checkout_due(at, &context.due_date)?,
             },
             fine: None,
         }),
@@ -132,6 +132,17 @@ pub fn transition(
             Err(Refusal::NotOnLoan)
         }
     }
+}
+
+/// When a checkout at `at` is due, to the minute.
+///
+/// # Errors
+///
+/// [`DueDateError`] when the calendar has no open day or the date is out of range.
+///
+/// Koha: `C4::Circulation::AddIssue` (`CalcDateDue`, then `truncate( to => 'minute' )`)
+pub fn checkout_due(at: &Zoned, context: &DueDateContext<'_>) -> Result<Zoned, DueDateError> {
+    to_minute(&calc_date_due(at, false, context)?)
 }
 
 /// `due` without seconds: a checkout's due date is kept to the minute, while a renewal

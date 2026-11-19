@@ -8,6 +8,7 @@ use elzevir_domain::circulation_rules::{
 use serde::{Deserialize, Serialize};
 
 use crate::calendar::CalendarChange;
+use crate::loans::{CheckedOut, CheckoutRefusal, CheckoutRequest};
 use crate::staff::StaffId;
 
 /// Most rules one change may set.
@@ -20,6 +21,8 @@ pub enum CirculationCommand {
     SetRules(RuleChange),
     /// Changes one branch's calendar (docs/specs/circulacao/calendario.md).
     ChangeCalendar(CalendarChange),
+    /// Lends an Item to a patron (docs/specs/circulacao/emprestimo.md).
+    Checkout(CheckoutRequest),
 }
 
 /// New values for some rules at one scope.
@@ -32,7 +35,7 @@ pub struct RuleChange {
 }
 
 /// What a circulation command returns.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CirculationOutput {
     /// How many rules were stored and how many removed.
     RulesSet {
@@ -46,6 +49,8 @@ pub enum CirculationOutput {
         /// Entries stored, replaced or removed.
         entries: usize,
     },
+    /// An Item was lent.
+    CheckedOut(CheckedOut),
 }
 
 /// Why a circulation command was refused.
@@ -83,6 +88,9 @@ pub enum CirculationRefusal {
     /// A day that does not exist, or a range that runs backwards or is too long.
     #[error("these dates do not make a range")]
     BadDates,
+    /// A checkout was refused.
+    #[error(transparent)]
+    Checkout(#[from] CheckoutRefusal),
 }
 
 impl CirculationRefusal {
@@ -109,6 +117,7 @@ impl CirculationRefusal {
             Self::UnknownPolicy => "rules-error-unknown-policy",
             Self::BadHolidayTitle => "calendar-error-title",
             Self::BadWeekday | Self::BadDates => "calendar-error-dates",
+            Self::Checkout(refusal) => refusal.message_key(),
         }
     }
 }

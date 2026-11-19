@@ -80,7 +80,8 @@ pub struct HardDueDate {
 pub struct LoanRule {
     /// `issuelength`.
     pub issue_length: u32,
-    /// `renewalperiod`; `None` when unset or empty, so renewals use `issue_length`.
+    /// `renewalperiod`; `None` when empty, so renewals use `issue_length` (Koha reads an
+    /// unset one as 0).
     pub renewal_period: Option<u32>,
     /// `lengthunit`.
     pub unit: LengthUnit,

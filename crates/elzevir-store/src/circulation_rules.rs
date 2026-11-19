@@ -28,6 +28,7 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CirculationCommand) -> Applied {
         CirculationCommand::ChangeCalendar(change) => {
             crate::calendar::change(tx.connection(), change)
         }
+        CirculationCommand::Checkout(request) => crate::loans::checkout(tx.connection(), request),
     }
 }
 
@@ -102,36 +103,39 @@ fn set_rules(connection: &Connection, change: &RuleChange) -> Applied {
     }))
 }
 
+/// Every stored rule, for the rule book and for the writer's own decisions.
+pub(crate) fn read_rules(connection: &Connection) -> rusqlite::Result<Vec<CirculationRule>> {
+    let mut statement = connection.prepare_cached(
+        "SELECT kind, branch_id, category_id, policy_id, value FROM circulation_rules
+         ORDER BY kind, branch_id, category_id, policy_id",
+    )?;
+    let rows = statement.query_map([], |row| {
+        let name: String = row.get(0)?;
+        let kind = RuleKind::from_koha_name(&name).ok_or_else(|| {
+            rusqlite::Error::FromSqlConversionFailure(
+                0,
+                rusqlite::types::Type::Text,
+                format!("unknown stored rule `{name}`").into(),
+            )
+        })?;
+        Ok(CirculationRule {
+            kind,
+            scope: RuleScopeKey {
+                branch: row.get::<_, Option<i64>>(1)?.map(BranchId),
+                category: row.get::<_, Option<i64>>(2)?.map(PatronCategoryId),
+                policy: row.get::<_, Option<i64>>(3)?.map(PolicyId),
+            },
+            value: row.get(4)?,
+        })
+    })?;
+    rows.collect()
+}
+
 impl RuleBook for ElzevirStore {
     fn rules(&self) -> Result<Vec<CirculationRule>, CirculationDeskError> {
         self.readers()
-            .read(|c| {
-                let mut statement = c.prepare_cached(
-                    "SELECT kind, branch_id, category_id, policy_id, value FROM circulation_rules
-                     ORDER BY kind, branch_id, category_id, policy_id",
-                )?;
-                let rows = statement.query_map([], |row| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        RuleScopeKey {
-                            branch: row.get::<_, Option<i64>>(1)?.map(BranchId),
-                            category: row.get::<_, Option<i64>>(2)?.map(PatronCategoryId),
-                            policy: row.get::<_, Option<i64>>(3)?.map(PolicyId),
-                        },
-                        row.get::<_, String>(4)?,
-                    ))
-                })?;
-                rows.collect::<rusqlite::Result<Vec<_>>>()
-            })
-            .map_err(|error| CirculationDeskError::Unavailable(error.to_string()))?
-            .into_iter()
-            .map(|(name, scope, value)| {
-                let kind = RuleKind::from_koha_name(&name).ok_or_else(|| {
-                    CirculationDeskError::Unavailable(format!("unknown stored rule `{name}`"))
-                })?;
-                Ok(CirculationRule { kind, scope, value })
-            })
-            .collect()
+            .read(read_rules)
+            .map_err(|error| CirculationDeskError::Unavailable(error.to_string()))
     }
 
     fn set_rules(
