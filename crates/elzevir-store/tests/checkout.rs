@@ -19,6 +19,7 @@ use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::loans::{
     CheckedIn, CheckedOut, CheckinRefusal, CheckinRequest, CheckoutRefusal, CheckoutRequest,
+    RenewRefusal, RenewRequest, Renewed,
 };
 use elzevir_app::patrons::{
     CategoryChange, PatronCommand, PatronFields, PatronOutput, ReadingHistory,
@@ -28,6 +29,7 @@ use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome, TransferRea
 use elzevir_domain::checkout::{Alert, Confirm, Impossible, TooManyReason};
 use elzevir_domain::circulation_rules::RuleScopeKey;
 use elzevir_domain::patron::{Enrolment, PatronId};
+use elzevir_domain::renewal::RenewalRefusal;
 use elzevir_store::{CommandFailed, ElzevirHandler, ElzevirStore, StoreConfig};
 use jiff::Zoned;
 use jiff::civil::date;
@@ -238,6 +240,29 @@ impl Library {
             Err(CommandFailed::Rejected(WriteRefusal::Circulation(
                 CirculationRefusal::Checkin(refusal),
             ))) => Err(refusal),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    fn renew(
+        &self,
+        barcode: &str,
+        at: &str,
+        override_limit: bool,
+    ) -> Result<Renewed, RenewRefusal> {
+        let at: Zoned = format!("{at}[America/Sao_Paulo]").parse().unwrap();
+        match submit(
+            &self.store,
+            WriteCommand::Circulation(CirculationCommand::Renew(RenewRequest {
+                barcode: barcode.to_owned(),
+                override_limit,
+                at,
+            })),
+        ) {
+            Ok(WriteOutput::Circulation(CirculationOutput::Renewed(done))) => Ok(done),
+            Err(CommandFailed::Rejected(WriteRefusal::Circulation(CirculationRefusal::Renew(
+                refusal,
+            )))) => Err(refusal),
             other => panic!("{other:?}"),
         }
     }
@@ -502,5 +527,69 @@ fn checkins_follow_the_return_rule_and_the_item_status() {
     assert_eq!(
         library.read::<i64>("SELECT lost FROM items WHERE barcode = '0003'"),
         0
+    );
+}
+
+#[test]
+fn a_loan_is_renewed_within_its_count_and_not_too_soon() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(&dir);
+    library.item("0001", ItemStatus::default());
+    library.item("0002", ItemStatus::default());
+    library.rules(&[
+        ("maxissueqty", "5"),
+        ("issuelength", "7"),
+        ("renewalperiod", "7"),
+        ("renewalsallowed", "1"),
+        ("norenewalbefore", "3"),
+    ]);
+    let lent = library
+        .lend("0001", "2026-11-19T10:00:00-03:00", false)
+        .unwrap();
+    let due = |text: &str| -> Zoned { format!("{text}[America/Sao_Paulo]").parse().unwrap() };
+    assert_eq!(lent.due, due("2026-11-26T23:59:00-03:00"));
+    assert_eq!(
+        library.renew("0001", "2026-11-20T10:00:00-03:00", false),
+        Err(RenewRefusal::Refused(RenewalRefusal::TooSoon {
+            soonest: due("2026-11-23T23:59:00-03:00")
+        }))
+    );
+    // The new period starts at the due date.
+    let renewed = library
+        .renew("0001", "2026-11-24T10:00:00-03:00", false)
+        .unwrap();
+    assert_eq!(
+        renewed,
+        Renewed {
+            patron: library.patron,
+            due: due("2026-12-03T23:59:00-03:00"),
+            renewals: 1,
+        }
+    );
+    assert_eq!(
+        library.renew("0001", "2026-12-01T10:00:00-03:00", false),
+        Err(RenewRefusal::Refused(RenewalRefusal::TooMany))
+    );
+    let forced = library
+        .renew("0001", "2026-12-01T10:00:00-03:00", true)
+        .unwrap();
+    assert_eq!(
+        (forced.due, forced.renewals),
+        (due("2026-12-10T23:59:00-03:00"), 2)
+    );
+    assert_eq!(
+        library.renew("0002", "2026-12-01T10:00:00-03:00", false),
+        Err(RenewRefusal::NotOnLoan)
+    );
+    assert_eq!(
+        library.renew("9999", "2026-12-01T10:00:00-03:00", false),
+        Err(RenewRefusal::UnknownBarcode)
+    );
+    library
+        .give_back("0001", library.annex, "2026-12-02T10:00:00-03:00")
+        .unwrap();
+    assert_eq!(
+        library.read::<i64>("SELECT renewals FROM returned_loans"),
+        2
     );
 }

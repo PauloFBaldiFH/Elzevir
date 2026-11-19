@@ -6,6 +6,7 @@ use elzevir_domain::catalog::BranchId;
 use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome};
 use elzevir_domain::checkout::{Alert, Confirm, Impossible};
 use elzevir_domain::patron::PatronId;
+use elzevir_domain::renewal::RenewalRefusal;
 use jiff::Zoned;
 use serde::{Deserialize, Serialize};
 
@@ -133,6 +134,62 @@ impl CheckinRefusal {
         match self {
             Self::UnknownBarcode => "checkout-error-unknown-barcode",
             Self::Withdrawn => "checkin-error-withdrawn",
+        }
+    }
+}
+
+/// A renewal at the desk.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RenewRequest {
+    /// The Item's barcode, as typed or scanned.
+    pub barcode: String,
+    /// The staff override the renewal count, the overdue block and the earliest date
+    /// (Koha: `override_limit`).
+    pub override_limit: bool,
+    /// When, in the library's time zone.
+    pub at: Zoned,
+}
+
+/// A renewal that happened.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Renewed {
+    /// Who has the Item.
+    pub patron: PatronId,
+    /// When it is due now.
+    pub due: Zoned,
+    /// How many times the loan was renewed, this one included.
+    pub renewals: u32,
+}
+
+/// Why a renewal did not happen.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum RenewRefusal {
+    /// No Item has this barcode.
+    #[error("no item has this barcode")]
+    UnknownBarcode,
+    /// The Item is not on loan (Koha: `no_checkout`).
+    #[error("the item is not on loan")]
+    NotOnLoan,
+    /// The loan may not be renewed.
+    #[error(transparent)]
+    Refused(#[from] RenewalRefusal),
+    /// The rules give no due date (the calendar has no open day).
+    #[error("no due date can be found")]
+    NoDueDate,
+}
+
+impl RenewRefusal {
+    /// Fluent key of the message.
+    #[must_use]
+    pub const fn message_key(&self) -> &'static str {
+        match self {
+            Self::UnknownBarcode => "checkout-error-unknown-barcode",
+            Self::NotOnLoan => "renew-error-not-on-loan",
+            Self::Refused(RenewalRefusal::OnSite) => "renew-error-on-site",
+            Self::Refused(RenewalRefusal::TooMany) => "renew-error-too-many",
+            Self::Refused(RenewalRefusal::Overdue) => "renew-error-overdue",
+            Self::Refused(RenewalRefusal::TooSoon { .. }) => "renew-error-too-soon",
+            Self::NoDueDate => "checkout-error-no-due-date",
         }
     }
 }

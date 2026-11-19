@@ -404,6 +404,11 @@ checkout-error-needs-confirmation = Este empréstimo precisa da sua confirmaçã
 checkout-error-on-loan = Este exemplar está emprestado. Devolva-o primeiro.
 checkout-error-no-due-date = Não há data de devolução: o calendário não tem dia aberto.
 checkin-error-withdrawn = Este exemplar foi retirado do acervo e não pode ser devolvido.
+renew-error-not-on-loan = Este exemplar não está emprestado.
+renew-error-on-site = Empréstimo para uso local não é renovado.
+renew-error-too-many = Este empréstimo não tem mais renovações.
+renew-error-overdue = Um empréstimo atrasado impede a renovação.
+renew-error-too-soon = Ainda é cedo para renovar este empréstimo.
 
 ## Calendário (docs/specs/circulacao/calendario.md)
 calendar-title = Calendário

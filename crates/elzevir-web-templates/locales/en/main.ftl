@@ -808,6 +808,11 @@ checkout-error-needs-confirmation = This checkout needs your confirmation.
 checkout-error-on-loan = This item is on loan. Return it first.
 checkout-error-no-due-date = No due date can be found: the calendar has no open day.
 checkin-error-withdrawn = This item is withdrawn and cannot be checked in.
+renew-error-not-on-loan = This item is not on loan.
+renew-error-on-site = A loan inside the library is not renewed.
+renew-error-too-many = This loan has no renewals left.
+renew-error-overdue = An overdue loan blocks the renewal.
+renew-error-too-soon = It is too soon to renew this loan.
 
 ## Calendar (docs/specs/circulacao/calendario.md)
 calendar-title = Calendar

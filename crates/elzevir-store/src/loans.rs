@@ -24,7 +24,7 @@ use crate::{CommandFailed, StoreError};
 type Applied = Result<WriteOutput, CommandFailed<WriteRefusal>>;
 
 /// Koha's default `useDaysMode`.
-const USE_DAYS_MODE: &str = "Calendar";
+pub(crate) const USE_DAYS_MODE: &str = "Calendar";
 
 fn refused(refusal: CheckoutRefusal) -> CommandFailed<WriteRefusal> {
     CommandFailed::Rejected(WriteRefusal::Circulation(CirculationRefusal::Checkout(
@@ -67,7 +67,7 @@ fn find_item(connection: &Connection, barcode: &str) -> rusqlite::Result<Option<
         .optional()
 }
 
-fn find_patron(
+pub(crate) fn find_patron(
     connection: &Connection,
     patron: PatronId,
 ) -> rusqlite::Result<Option<(PatronCategoryId, Date)>> {

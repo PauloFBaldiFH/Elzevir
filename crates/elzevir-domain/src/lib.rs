@@ -13,4 +13,5 @@ pub mod circulation_rules;
 pub mod due_date;
 pub mod fine;
 pub mod patron;
+pub mod renewal;
 pub mod statement;
