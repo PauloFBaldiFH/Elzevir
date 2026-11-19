@@ -59,3 +59,16 @@ Nenhum: não há área de paridade nesta entrega.
 Estado real do servidor, canal administrativo, backups, serviços, instalação,
 releases, túnel, broker, rclone e reinício real. Dependem das etapas A/P
 posteriores da análise. Não há alegação de validação em Windows nesta máquina.
+
+## Navegação interativa
+
+A apresentação interativa usa cores consistentes, barra superior com
+versão, estado observado do SQLite e Tantivy e navegação por números.
+As áreas clicáveis acompanham a geometria do quadro e o modal ativo.
+Atalhos e cliques enviam as mesmas intenções ao controlador. Confirmações
+continuam exigindo ação explícita. A demonstração permanece isolada.
+
+O painel não lê nem altera o catálogo nem os cadastros. Registros,
+exemplares e políticas de circulação mudam só pela interface da equipe,
+com permissão e autor no `audit_log`; o canal administrativo não tem
+comando de catálogo.

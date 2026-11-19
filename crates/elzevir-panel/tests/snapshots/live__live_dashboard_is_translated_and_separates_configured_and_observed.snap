@@ -2,14 +2,15 @@
 source: crates/elzevir-panel/tests/live.rs
 expression: "screen(&panel, \"en\")"
 ---
-Elzevir administration
-+Sections------------------++Dashboard-----------------------------------------------------------------------++Selected institution--------+
-|> d Dashboard             ||Running                                                                         ||Biblioteca de teste         |
-|  x Diagnostics           ||                                                                                ||                            |
-|  a Addresses and access  ||Version: 0.0.0                                                                  ||Configured listener         |
-|  b Backups and schedules ||PID: 42                                                                         ||127.0.0.1:0                 |
-|  u Updates               ||Uptime (seconds): 123                                                           ||                            |
-|  r Restart               ||Database: OK                                                                    ||Observed listener           |
+Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
++Sections------------------+      1 Home            2 Health          3 Access           4 Backup           5 Updates         6 Restart
+|> d Dashboard             |+Dashboard-----------------------------------------------------------------------++Selected institution--------+
+|  x Diagnostics           ||Running                                                                         ||Biblioteca de teste         |
+|  a Addresses and access  ||                                                                                ||                            |
+|  b Backups and schedules ||Version: 0.0.0                                                                  ||Configured listener         |
+|  u Updates               ||PID: 42                                                                         ||127.0.0.1:0                 |
+|  r Restart               ||Uptime (seconds): 123                                                           ||                            |
+|                          ||Database: OK                                                                    ||Observed listener           |
 |                          ||Indexer: OK                                                                     ||127.0.0.1:8080              |
 |                          ||                                                                                ||                            |
 |                          ||Host CPU (%): 12.5                                                              ||Last check: 0 seconds ago   |
@@ -27,7 +28,6 @@ Elzevir administration
 |                          ||                                                                                ||                            |
 |                          ||                                                                                ||                            |
 |                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-+--------------------------++--------------------------------------------------------------------------------++----------------------------+
+|                          |+--------------------------------------------------------------------------------++----------------------------+
++--------------------------+                                                   Refresh [F]
 Tab/arrows: navigate | f: refresh | PgUp/PgDn: scroll | Ctrl+P: palette | q/Ctrl+C: quit

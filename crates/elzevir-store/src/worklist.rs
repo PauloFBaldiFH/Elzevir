@@ -6,7 +6,7 @@ use std::num::NonZeroUsize;
 
 use elzevir_app::catalog::CatalogReadError;
 use elzevir_app::listing::FamilyHead;
-use elzevir_app::worklist::{LIST_COMMANDS, WorkListQuery, WorkListReader};
+use elzevir_app::worklist::{LIST_COMMANDS, SavedList, SavedListId, WorkListQuery, WorkListReader};
 use elzevir_domain::catalog::{HubId, WorkId};
 use rusqlite::{Connection, ToSql, params};
 
@@ -67,6 +67,51 @@ impl WorkListReader for ElzevirStore {
             .read(|c| heads(c, query, offset, limit))
             .map_err(|e| CatalogReadError(e.to_string()))
     }
+
+    fn saved_lists(&self) -> Result<Vec<SavedList>, CatalogReadError> {
+        self.readers()
+            .read(saved_lists)
+            .map_err(|e| CatalogReadError(e.to_string()))
+    }
+}
+
+fn saved_lists(c: &Connection) -> Result<Vec<SavedList>, rusqlite::Error> {
+    let mut statement = c.prepare_cached(
+        "SELECT l.id, l.name, count(f.head) FROM saved_lists l
+         LEFT JOIN saved_list_families f ON f.list_id = l.id
+         GROUP BY l.id ORDER BY l.name COLLATE NOCASE, l.id",
+    )?;
+    statement
+        .query_map([], |row| {
+            Ok(SavedList {
+                id: SavedListId(row.get(0)?),
+                name: row.get(1)?,
+                families: usize::try_from(row.get::<_, i64>(2)?).unwrap_or(usize::MAX),
+            })
+        })?
+        .collect()
+}
+
+/// A saved list's heads, the last added first.
+fn saved_heads(
+    c: &Connection,
+    list: SavedListId,
+    offset: i64,
+    limit: i64,
+) -> Result<Vec<FamilyHead>, rusqlite::Error> {
+    let mut statement = c.prepare_cached(
+        "SELECT head FROM saved_list_families WHERE list_id = ?1
+         ORDER BY added DESC LIMIT ?2 OFFSET ?3",
+    )?;
+    let names = statement.query_map(params![list.0, limit, offset], |row| {
+        row.get::<_, String>(0)
+    })?;
+    let mut heads = Vec::new();
+    for name in names {
+        // Every stored head was written by `FamilyHead::name`.
+        heads.extend(FamilyHead::from_name(&name?));
+    }
+    Ok(heads)
 }
 
 fn heads(
@@ -78,6 +123,7 @@ fn heads(
     let limit = i64::try_from(limit.get()).unwrap_or(i64::MAX);
     let offset = i64::try_from(offset).unwrap_or(i64::MAX);
     let commands = i64::try_from(LIST_COMMANDS).unwrap_or(i64::MAX);
+
     // Only constant fragments are joined; every value is a parameter.
     let (chosen, first): (&str, Box<dyn ToSql>) = match query {
         WorkListQuery::TouchedBy(staff) => (CHOSEN_BY_ACTOR, Box::new(staff.0)),
@@ -85,6 +131,8 @@ fn heads(
             CHOSEN_IMPORTS,
             Box::new(since.strftime("%Y-%m-%dT%H:%M:%SZ").to_string()),
         ),
+        // A saved list is read in the order of its own table, not from the log.
+        WorkListQuery::Saved(list) => return saved_heads(c, list, offset, limit),
     };
     let sql = format!("{chosen}{FAMILIES_OF_CHOSEN}");
     let mut statement = c.prepare_cached(&sql)?;

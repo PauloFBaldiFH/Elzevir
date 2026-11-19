@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Instance-bound, bounded read-only administrative protocol.
+//! Instance-bound, bounded administrative protocol on the OS-private transport.
 
 pub(crate) mod transport;
 

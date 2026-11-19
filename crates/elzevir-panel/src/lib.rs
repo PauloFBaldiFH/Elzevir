@@ -17,8 +17,11 @@ mod messages;
 mod operation_view;
 mod operations;
 mod runtime;
+mod setup;
+pub use setup::{Setup, SetupProfile, setup};
 mod sharing;
 mod tunnel_view;
+mod ui;
 mod view;
 mod worker;
 
@@ -34,7 +37,7 @@ pub use live::{
 };
 pub use messages::Messages;
 pub use operations::{Form, Job, Operation, Operations};
-pub use runtime::{run, run_live};
+pub use runtime::{run, run_live, run_live_until};
 pub use view::draw;
 
 use ratatui::crossterm::event::{
@@ -206,6 +209,14 @@ impl Panel {
                         KeyCode::BackTab | KeyCode::Up | KeyCode::Left => {
                             self.section = self.section.adjacent(false);
                         }
+                        KeyCode::Char(c @ '1'..='9') => {
+                            if let Some(section) = c
+                                .to_digit(10)
+                                .and_then(|n| Section::ALL.get(n as usize - 1))
+                            {
+                                self.select(*section);
+                            }
+                        }
                         KeyCode::Char(c) => {
                             if let Some(section) =
                                 Section::ALL.into_iter().find(|s| s.shortcut() == c)
@@ -217,26 +228,40 @@ impl Panel {
                     }
                 }
             }
-            Event::Mouse(mouse)
-                if mouse.kind == MouseEventKind::Down(MouseButton::Left)
-                    && width >= 80
-                    && height >= 18 =>
-            {
-                let area = ratatui::layout::Rect::new(0, 0, width, height);
-                let menu =
-                    view::menu_area(area, self.palette).inner(ratatui::layout::Margin::new(1, 1));
-                if menu.contains((mouse.column, mouse.row).into())
-                    && let Some(section) = Section::ALL.get(usize::from(mouse.row - menu.y))
-                {
-                    self.section = *section;
-                    self.palette = false;
-                }
+            Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
+                self.handle_legacy_click(mouse.column, mouse.row, width, height);
             }
             _ => {}
         }
         if previous != self.section {
-            self.scroll = 0;
+            self.enter_section();
         }
+    }
+
+    fn handle_legacy_click(&mut self, column: u16, row: u16, width: u16, height: u16) {
+        if width < 80 || height < 18 {
+            return;
+        }
+        let area = ratatui::layout::Rect::new(0, 0, width, height);
+        let menu = view::menu_area(area, self.palette).inner(ratatui::layout::Margin::new(1, 1));
+        if menu.contains((column, row).into())
+            && let Some(section) = Section::ALL.get(usize::from(row - menu.y))
+        {
+            self.section = *section;
+            self.palette = false;
+        }
+    }
+
+    pub(crate) fn select(&mut self, section: Section) {
+        if self.section != section {
+            self.section = section;
+            self.enter_section();
+        }
+        self.palette = false;
+    }
+
+    fn enter_section(&mut self) {
+        self.scroll = 0;
     }
 
     fn live_diagnostics(&self) -> bool {

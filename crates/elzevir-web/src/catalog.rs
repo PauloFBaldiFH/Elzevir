@@ -25,11 +25,11 @@ use elzevir_app::rdf::{IriBase, RdfFormat, export_rdf};
 use elzevir_app::search::{FacetCounts, Filter, SearchIndex, SearchQuery, SearchScope};
 use elzevir_app::staff::Permission;
 use elzevir_app::suggestions::AuthoritySuggestions;
-use elzevir_app::worklist::{self, WorkList, WorkListQuery, WorkListReader};
+use elzevir_app::worklist::{self, SavedList, WorkList, WorkListQuery, WorkListReader};
 use elzevir_domain::catalog::InstanceId;
 use elzevir_web_templates::{
-    AuthorityLine, Cord, FamilyLine, HubLine, InstanceLine, PillLine, ScanLine, StaffCatalog,
-    WorkLine, url_encode,
+    AuthorityLine, BatchChoices, Cord, FacetStrip, FamilyLine, HubLine, InstanceLine, PillLine,
+    ScanLine, StaffCatalog, WorkLine, url_encode,
 };
 use serde::Deserialize;
 
@@ -99,6 +99,16 @@ impl CatalogParams {
     }
 }
 
+/// What one request of the listing reads.
+struct Read {
+    page: Page,
+    codes: CodeLists,
+    counts: Option<FacetCounts>,
+    /// The saved lists, for the strip and the selection bar; empty for rows alone.
+    saved: Vec<SavedList>,
+    params: CatalogParams,
+}
+
 /// One page, as read.
 enum Page {
     Browse(listing::ListingPage),
@@ -135,7 +145,7 @@ fn read_page(
     params: CatalogParams,
     list: Option<(WorkList, WorkListQuery)>,
     rows_only: bool,
-) -> Result<(Page, CodeLists, Option<FacetCounts>, CatalogParams), ()> {
+) -> Result<Read, ()> {
     let Readers {
         listing,
         index,
@@ -190,7 +200,18 @@ fn read_page(
         };
         Some(index.facets(&asked, SearchScope::Staff).map_err(drop)?)
     };
-    Ok((page, codes, counts, params))
+    let saved = if rows_only {
+        Vec::new()
+    } else {
+        work_lists.saved_lists().map_err(drop)?
+    };
+    Ok(Read {
+        page,
+        codes,
+        counts,
+        saved,
+        params,
+    })
 }
 
 /// `GET /equipe/acervo?q=&after=&from=&f=`: the listing, or a search when `q` or a filter
@@ -212,15 +233,19 @@ pub(crate) async fn catalog(
     }
     let list = list.flatten();
     let reading = state.clone();
-    let rows_only = headers.contains_key("hx-request")
-        && headers
-            .get("hx-target")
-            .is_none_or(|target| target != "families");
+    let rows_only = rows_only(&headers);
     let read = tokio::task::spawn_blocking(move || {
         read_page(&Readers::of(&reading), params, list, rows_only)
     })
     .await;
-    let Ok(Ok((page, codes, counts, params))) = read else {
+    let Ok(Ok(Read {
+        page,
+        codes,
+        counts,
+        saved,
+        params,
+    })) = read
+    else {
         return (StatusCode::SERVICE_UNAVAILABLE, "catalog unavailable").into_response();
     };
     let t = &state.inner.i18n;
@@ -233,6 +258,7 @@ pub(crate) async fn catalog(
         _ => None,
     };
     let can_catalogue = session.identity.can(Permission::Cataloguing);
+    let (strip, batch) = with_saved(strip, &page, &saved, &codes, can_catalogue, rows_only);
     let lines = |rows: &[FamilyRow]| -> Vec<FamilyLine> {
         rows.iter().map(|row| family_line(row, &codes)).collect()
     };
@@ -250,6 +276,7 @@ pub(crate) async fn catalog(
                 .as_ref()
                 .map(|next| format!("/equipe/acervo?after={}", url_encode(&next.token()))),
             strip,
+            batch,
         },
         Page::Search(page, scan) => StaffCatalog {
             t: &state.inner.i18n,
@@ -266,6 +293,7 @@ pub(crate) async fn catalog(
                 )
             }),
             strip,
+            batch,
         },
         Page::List(page, list) => StaffCatalog {
             t: &state.inner.i18n,
@@ -279,6 +307,7 @@ pub(crate) async fn catalog(
                 .next
                 .map(|from| format!("{}&from={from}", facets::list_url(*list))),
             strip,
+            batch,
         },
     };
     // The search form swaps the whole list and picks it from a full page; the next-page
@@ -293,6 +322,44 @@ pub(crate) async fn catalog(
     }
 }
 
+/// The strip with the saved lists' menu, and the batch actions of a cataloguer on a full
+/// page (docs/specs/catalogo/lote.md, items 16, 18 and 20).
+fn with_saved(
+    strip: Option<FacetStrip>,
+    page: &Page,
+    saved: &[SavedList],
+    codes: &CodeLists,
+    can_catalogue: bool,
+    rows_only: bool,
+) -> (Option<FacetStrip>, Option<BatchChoices>) {
+    let shown = match page {
+        Page::List(_, list) => Some(*list),
+        _ => None,
+    };
+    let strip = strip.map(|mut strip| {
+        facets::with_saved(&mut strip, saved, shown, can_catalogue);
+        strip
+    });
+    // The saved list shown, if it still exists.
+    let shown_saved = saved
+        .iter()
+        .find(|list| shown == Some(WorkList::Saved(list.id)))
+        .map(|list| list.id);
+    // The batch actions are only built on a full page: the next rows do not carry them.
+    let batch =
+        (can_catalogue && !rows_only).then(|| crate::batch::choices(codes, saved, shown_saved));
+    (strip, batch)
+}
+
+/// Whether the request is the next-page loader's, which asks for the rows alone: the
+/// search form swaps the whole list and targets `#families`.
+fn rows_only(headers: &HeaderMap) -> bool {
+    headers.contains_key("hx-request")
+        && headers
+            .get("hx-target")
+            .is_none_or(|target| target != "families")
+}
+
 /// What the store reads for `list`, asked by `staff`; `None` only if the clock is out of
 /// the calendar's range.
 fn list_query(
@@ -303,6 +370,7 @@ fn list_query(
     let query = match list {
         WorkList::Recent => WorkListQuery::TouchedBy(staff),
         WorkList::ImportedToday => WorkListQuery::ImportedSince(today_began(time_zone)?),
+        WorkList::Saved(saved) => WorkListQuery::Saved(saved),
     };
     Some((list, query))
 }

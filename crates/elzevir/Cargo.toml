@@ -9,6 +9,8 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+sys-locale = "0.3.2"
+semver = "1"
 elzevir-app.workspace = true
 elzevir-domain.workspace = true
 elzevir-marc.workspace = true

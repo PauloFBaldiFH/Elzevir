@@ -12,7 +12,7 @@
 > A importação direta pela CLI mantém o contrato de I2.
 > Base: [importação atual](importacao.md), [casamento](casamento.md),
 > [BIBFRAME completo](bibframe-completo.md),
-> [ADR da importação universal](../../adr/0004-importacao-universal.md) e
+> [ADR da importação universal](../../adr/0008-importacao-universal.md) e
 > [contrato da tela](../../UI_BIBFRAME_INTERACTION_SPEC.md#21-importação-universal-na-interface-da-equipe).
 > Cada PR I0–I10 depende da mesclagem do anterior por Paulo.
 

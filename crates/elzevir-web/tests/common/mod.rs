@@ -237,7 +237,8 @@ impl elzevir_app::export::RecordSource for Records {
 /// Records edits from the screen. An edit read at version 1 is accepted and moves to 2;
 /// any other version is stale, as if someone else had edited first. Creations are
 /// accepted, except a new Instance of Work 404, which does not exist; a link of an
-/// authority named `Linked` is refused as already there.
+/// authority named `Linked` is refused as already there; a batch change that sets
+/// shelving place 404 is refused for one Item, and otherwise reaches two Items an Instance.
 #[derive(Default)]
 pub(crate) struct Editor(
     pub(crate) Mutex<Vec<(elzevir_app::staff::StaffId, elzevir_app::editing::Edit)>>,
@@ -249,7 +250,7 @@ impl elzevir_app::editing::CatalogEditor for Editor {
         actor: elzevir_app::staff::StaffId,
         edit: elzevir_app::editing::Edit,
     ) -> Result<elzevir_app::catalog::CatalogOutput, elzevir_app::editing::EditFailed> {
-        use elzevir_app::catalog::{CatalogOutput, CatalogRefusal};
+        use elzevir_app::catalog::CatalogRefusal;
         use elzevir_app::editing::{Edit, EditFailed};
         let read = match &edit {
             Edit::Work(update) => update.row_version,
@@ -293,6 +294,18 @@ impl elzevir_app::editing::CatalogEditor for Editor {
                 }
                 1
             }
+            Edit::BatchItems(change) => {
+                if let Some(refusal) = batch_refusal(change) {
+                    return Err(EditFailed::Refused(refusal));
+                }
+                1
+            }
+            Edit::SavedList(change) => {
+                if let Some(refusal) = saved_list_refusal(change) {
+                    return Err(EditFailed::Refused(CatalogRefusal::SavedList(refusal)));
+                }
+                1
+            }
             Edit::NewRecord(_) | Edit::NewInstance(_) => 1,
         };
         if read != 1 {
@@ -301,50 +314,7 @@ impl elzevir_app::editing::CatalogEditor for Editor {
                 current: 2,
             }));
         }
-        let output = match &edit {
-            Edit::Work(update) => CatalogOutput::WorkUpdated {
-                work: update.work,
-                row_version: 2,
-            },
-            Edit::Instance(update) => CatalogOutput::InstanceUpdated {
-                instance: update.instance,
-                row_version: 2,
-            },
-            Edit::NewRecord(_) => CatalogOutput::Record {
-                work: WorkId(900),
-                instance: InstanceId(901),
-                items: Vec::new(),
-            },
-            Edit::Items(update) => CatalogOutput::ItemsSaved {
-                instance: update.instance,
-                row_version: 2,
-                items: (500..)
-                    .zip(&update.rows)
-                    .map(|(new, row)| row.id.unwrap_or(elzevir_domain::catalog::ItemId(new)))
-                    .collect(),
-            },
-            Edit::Registry(_) => CatalogOutput::RegistryChanged(None),
-            Edit::Statements(edit) => CatalogOutput::StatementsSet {
-                subject: edit.subject,
-                row_version: 2,
-            },
-            Edit::Subject(update) => CatalogOutput::SubjectUpdated {
-                subject: update.subject,
-                row_version: 2,
-            },
-            Edit::Link(link) => CatalogOutput::WorkUpdated {
-                work: link.work,
-                row_version: 2,
-            },
-            Edit::Agent(update) => CatalogOutput::AgentUpdated {
-                agent: update.agent,
-                row_version: 2,
-            },
-            Edit::NewInstance(new) => CatalogOutput::InstanceAdded {
-                work: new.work,
-                instance: InstanceId(902),
-            },
-        };
+        let output = output_of(&edit);
         self.0.lock().unwrap().push((actor, edit));
         Ok(output)
     }
@@ -557,7 +527,7 @@ impl elzevir_app::history::HistoryReader for History {
 }
 
 /// The staff account `n` last touched Work `n`, and before it Works 35 down to 1; nothing
-/// was imported today.
+/// was imported today. Saved list 3, "Doações", holds Works 2 and 1.
 pub(crate) struct WorkLists;
 
 impl elzevir_app::worklist::WorkListReader for WorkLists {
@@ -568,8 +538,15 @@ impl elzevir_app::worklist::WorkListReader for WorkLists {
         limit: NonZeroUsize,
     ) -> Result<Vec<FamilyHead>, CatalogReadError> {
         use elzevir_app::worklist::WorkListQuery;
-        let WorkListQuery::TouchedBy(staff) = query else {
-            return Ok(Vec::new());
+        let staff = match query {
+            WorkListQuery::TouchedBy(staff) => staff,
+            WorkListQuery::Saved(list) if list.0 == 3 => {
+                return Ok(vec![
+                    FamilyHead::Work(WorkId(2)),
+                    FamilyHead::Work(WorkId(1)),
+                ]);
+            }
+            _ => return Ok(Vec::new()),
         };
         Ok(std::iter::once(staff.0)
             .chain((1..=35).rev().filter(|n| *n != staff.0))
@@ -577,5 +554,117 @@ impl elzevir_app::worklist::WorkListReader for WorkLists {
             .take(limit.get())
             .map(|n| FamilyHead::Work(WorkId(n)))
             .collect())
+    }
+
+    fn saved_lists(&self) -> Result<Vec<elzevir_app::worklist::SavedList>, CatalogReadError> {
+        use elzevir_app::worklist::{SavedList, SavedListId};
+        Ok(vec![SavedList {
+            id: SavedListId(3),
+            name: "Doações".to_owned(),
+            families: 2,
+        }])
+    }
+}
+
+/// A new list named `Taken` repeats a name; list 404 does not exist.
+fn saved_list_refusal(
+    change: &elzevir_app::worklist::SavedListChange,
+) -> Option<elzevir_app::worklist::SavedListRefusal> {
+    use elzevir_app::worklist::{SavedListChange, SavedListRefusal};
+    match change {
+        SavedListChange::Create { name, .. } if name == "Taken" => {
+            Some(SavedListRefusal::NameTaken)
+        }
+        SavedListChange::Add { list, .. }
+        | SavedListChange::Remove { list, .. }
+        | SavedListChange::Delete { list }
+            if list.0 == 404 =>
+        {
+            Some(SavedListRefusal::Unknown)
+        }
+        _ => None,
+    }
+}
+
+/// A batch change that sets shelving place 404 is refused for one Item.
+fn batch_refusal(
+    change: &elzevir_app::batch::ItemsChange,
+) -> Option<elzevir_app::catalog::CatalogRefusal> {
+    use elzevir_app::batch::{ItemRefusal, ItemSet};
+    use elzevir_app::items::{ItemColumn, RowProblem};
+    use elzevir_domain::catalog::{ItemId, SublocationId};
+    change
+        .set
+        .contains(&ItemSet::Location(Some(SublocationId(404))))
+        .then(|| {
+            elzevir_app::catalog::CatalogRefusal::BatchItems(vec![ItemRefusal {
+                item: ItemId(7),
+                label: "0001234".to_owned(),
+                column: ItemColumn::Location,
+                problem: RowProblem::NotInBranch,
+            }])
+        })
+}
+
+/// What the fake editor answers to an accepted edit.
+fn output_of(edit: &elzevir_app::editing::Edit) -> elzevir_app::catalog::CatalogOutput {
+    use elzevir_app::catalog::CatalogOutput;
+    use elzevir_app::editing::Edit;
+    match edit {
+        Edit::SavedList(change) => {
+            use elzevir_app::worklist::{SavedListChange, SavedListId};
+            CatalogOutput::SavedListChanged(match change {
+                SavedListChange::Create { .. } => SavedListId(9),
+                SavedListChange::Add { list, .. }
+                | SavedListChange::Remove { list, .. }
+                | SavedListChange::Delete { list } => *list,
+            })
+        }
+        Edit::Work(update) => CatalogOutput::WorkUpdated {
+            work: update.work,
+            row_version: 2,
+        },
+        Edit::Instance(update) => CatalogOutput::InstanceUpdated {
+            instance: update.instance,
+            row_version: 2,
+        },
+        Edit::NewRecord(_) => CatalogOutput::Record {
+            work: WorkId(900),
+            instance: InstanceId(901),
+            items: Vec::new(),
+        },
+        Edit::Items(update) => CatalogOutput::ItemsSaved {
+            instance: update.instance,
+            row_version: 2,
+            items: (500..)
+                .zip(&update.rows)
+                .map(|(new, row)| row.id.unwrap_or(elzevir_domain::catalog::ItemId(new)))
+                .collect(),
+        },
+        Edit::BatchItems(change) => CatalogOutput::ItemsChanged {
+            instances: change.instances.clone(),
+            items: change.instances.len() * 2,
+        },
+        Edit::Registry(_) => CatalogOutput::RegistryChanged(None),
+        Edit::Statements(edit) => CatalogOutput::StatementsSet {
+            subject: edit.subject,
+            row_version: 2,
+        },
+        Edit::Subject(update) => CatalogOutput::SubjectUpdated {
+            subject: update.subject,
+            row_version: 2,
+        },
+        Edit::Link(link) => CatalogOutput::WorkUpdated {
+            work: link.work,
+            row_version: 2,
+        },
+        Edit::Agent(update) => CatalogOutput::AgentUpdated {
+            agent: update.agent,
+            row_version: 2,
+        },
+        Edit::NewInstance(new) => CatalogOutput::InstanceAdded {
+            work: new.work,
+            instance: InstanceId(902),
+        },
     }
 }

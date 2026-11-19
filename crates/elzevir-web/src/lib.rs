@@ -154,6 +154,8 @@ pub fn router(state: AppState) -> Router {
         .route("/equipe", get(staff::home))
         .route("/equipe/acervo", get(catalog::catalog))
         .route("/equipe/acervo/lote/marc", get(batch::export_marc))
+        .route("/equipe/acervo/lote/exemplares", post(batch::change_items))
+        .route("/equipe/acervo/listas", post(batch::change_list))
         .route(
             "/equipe/acervo/instancia/{id}/marc",
             get(catalog::export_marc),

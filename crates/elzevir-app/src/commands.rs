@@ -72,6 +72,8 @@ impl WriteCommand {
             Self::Catalog(CatalogCommand::UpdateInstance(_)) => "catalog.update_instance",
             Self::Catalog(CatalogCommand::AddInstance(_)) => "catalog.add_instance",
             Self::Catalog(CatalogCommand::SaveItems(_)) => "catalog.save_items",
+            Self::Catalog(CatalogCommand::ChangeItems(_)) => "catalog.change_items",
+            Self::Catalog(CatalogCommand::ChangeSavedList(_)) => "catalog.change_saved_list",
             Self::Catalog(CatalogCommand::NameCodes(_)) => "catalog.name_codes",
             Self::Catalog(CatalogCommand::ChangeRegistry(_)) => "catalog.change_registry",
             Self::Catalog(CatalogCommand::SetTypeTranslations(_)) => {

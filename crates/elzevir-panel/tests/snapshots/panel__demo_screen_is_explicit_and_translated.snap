@@ -2,14 +2,15 @@
 source: crates/elzevir-panel/tests/panel.rs
 expression: "screen(&panel, \"en\", 120, 24)"
 ---
-Elzevir administration | DEMO
-┌Sections──────────────────┐┌Dashboard───────────────────────────────────────────────────┐┌Selected institution────────┐
-│> d Dashboard             ││DEMONSTRATION - simulated data                              ││Demonstration library       │
-│  x Diagnostics           ││                                                            ││                            │
-│  a Addresses and access  ││Service status, addresses and health will appear here when  ││Fictitious institution      │
-│  b Backups and schedules ││connected.                                                  ││                            │
-│  u Updates               ││                                                            ││Server status: not read     │
-│  r Restart               ││Demo only. No operation is available and no system changes  ││                            │
+🦀  Elzevir TUI  0.1.0-alpha.1  ·  Fictitious institution
+╭Sections──────────────────╮    1 Home         2 Health       3 Access       4 Backup        5 Updates      6 Restart
+│▌ d Dashboard             │╭Dashboard───────────────────────────────────────────────────╮╭Selected institution────────╮
+│  x Diagnostics           ││DEMONSTRATION - simulated data                              ││Demonstration library       │
+│  a Addresses and access  ││                                                            ││                            │
+│  b Backups and schedules ││Service status, addresses and health will appear here when  ││Fictitious institution      │
+│  u Updates               ││connected.                                                  ││                            │
+│  r Restart               ││                                                            ││Server status: not read     │
+│                          ││Demo only. No operation is available and no system changes  ││                            │
 │                          ││are made.                                                   ││| Demo animation            │
 │                          ││                                                            ││                            │
 │                          ││                                                            ││                            │
@@ -21,7 +22,6 @@ Elzevir administration | DEMO
 │                          ││                                                            ││                            │
 │                          ││                                                            ││                            │
 │                          ││                                                            ││                            │
-│                          ││                                                            ││                            │
-│                          ││                                                            ││                            │
-└──────────────────────────┘└────────────────────────────────────────────────────────────┘└────────────────────────────┘
-Tab/arrows: navigate | d/x/a/b/u/r: section | Ctrl+P: palette | Enter/Esc: close palette | q/Ctrl+C: quit
+│                          │╰────────────────────────────────────────────────────────────╯╰────────────────────────────╯
+╰──────────────────────────╯
+Tab/arrows: navigate | 1-7: section | Ctrl+P: palette | Enter/Esc: close palette | q/Ctrl+C: quit

@@ -52,7 +52,9 @@ pub fn sort_key(title: &str) -> String {
 }
 
 /// What a family is built around.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum FamilyHead {
     /// A Hub and all its Works.
     Hub(HubId),

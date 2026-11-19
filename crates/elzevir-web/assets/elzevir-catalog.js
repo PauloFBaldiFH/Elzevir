@@ -1778,3 +1778,116 @@ document.addEventListener("change", (event) => {
 
 showSelection();
 document.addEventListener("htmx:afterSettle", showSelection);
+
+// The items of the selected families changed at once (lote.md, items 9 to 14): the
+// server checks every Item and answers all refusals together.
+document.addEventListener("click", async (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  const dialog = document.querySelector("dialog.batch-items");
+  if (!dialog) return;
+  if (target?.closest(".selection-items")) {
+    dialog.querySelector(".batch-items-errors").replaceChildren();
+    dialog.querySelector(".batch-items-status").textContent = "";
+    dialog.showModal();
+    return;
+  }
+  const apply = target?.closest(".batch-items-apply");
+  if (!apply) return;
+  const form = dialog.querySelector("form");
+  const set = Object.fromEntries(
+    [...form.querySelectorAll("select")].map((select) => [select.name, select.value]),
+  );
+  const status = dialog.querySelector(".batch-items-status");
+  const list = dialog.querySelector(".batch-items-errors");
+  list.replaceChildren();
+  status.textContent = "";
+  apply.disabled = true;
+  try {
+    const token = document.querySelector(".catalog")?.dataset.csrf ?? "";
+    const response = await fetch("/equipe/acervo/lote/exemplares", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-elzevir-csrf": token },
+      body: JSON.stringify({ heads: [...selected], set }),
+    });
+    if (response.ok) {
+      // The selection stays: it lives in the tab.
+      location.reload();
+      return;
+    }
+    status.textContent = dialog.dataset.failed ?? "";
+    const answer = response.headers.get("content-type")?.includes("json")
+      ? await response.json()
+      : { text: await response.text() };
+    for (const error of answer.errors ?? []) {
+      const line = document.createElement("li");
+      line.textContent = `${error.item}: ${error.column}, ${error.message}`;
+      list.append(line);
+    }
+    if (answer.text) {
+      const line = document.createElement("li");
+      line.textContent = answer.text;
+      list.append(line);
+    }
+  } finally {
+    apply.disabled = false;
+  }
+});
+
+// Saved lists (lote.md, items 15 to 22): the selection joins or leaves a list, and a
+// list is deleted with a second click.
+async function changeList(change) {
+  const token = document.querySelector(".catalog")?.dataset.csrf ?? "";
+  const response = await fetch("/equipe/acervo/listas", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-elzevir-csrf": token },
+    body: JSON.stringify(change),
+  });
+  if (response.ok) return response.json();
+  const problem = document.querySelector(".selection-list-error");
+  const answer = response.headers.get("content-type")?.includes("json")
+    ? await response.json()
+    : { errors: [{ message: await response.text() }] };
+  if (problem) problem.textContent = (answer.errors ?? []).map((error) => error.message).join(" ");
+  return null;
+}
+
+document.addEventListener("change", (event) => {
+  const choice = event.target;
+  if (!(choice instanceof HTMLSelectElement) || choice.id !== "selection-list") return;
+  const name = document.querySelector(".selection-list-name");
+  if (name) name.hidden = choice.value !== "new";
+});
+
+document.addEventListener("click", async (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  const heads = [...selected];
+  if (target?.closest(".selection-list-add")) {
+    const choice = document.getElementById("selection-list")?.value ?? "new";
+    const change = choice === "new"
+      ? { action: "create", name: document.querySelector(".selection-list-name")?.value ?? "", heads }
+      : { action: "add", list: Number(choice), heads };
+    const answer = await changeList(change);
+    if (answer) location.assign(answer.url);
+    return;
+  }
+  const remove = target?.closest(".selection-list-remove");
+  if (remove) {
+    const answer = await changeList({ action: "remove", list: Number(remove.dataset.list), heads });
+    if (answer) {
+      selected.clear();
+      saveSelection();
+      location.reload();
+    }
+    return;
+  }
+  const drop = target?.closest(".saved-list-delete");
+  if (!drop) return;
+  // The first click asks; the second deletes.
+  if (!drop.dataset.armed) {
+    drop.dataset.armed = "1";
+    drop.textContent = drop.dataset.confirm ?? drop.textContent;
+    return;
+  }
+  const answer = await changeList({ action: "delete", list: Number(drop.dataset.list) });
+  if (answer) location.assign("/equipe/acervo");
+});

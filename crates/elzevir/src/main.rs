@@ -24,6 +24,7 @@ mod config;
 mod diagnostic_logs;
 mod diagnostics;
 mod file_owner;
+mod first_use;
 mod health;
 mod host_jobs;
 mod http_client;
@@ -44,6 +45,7 @@ mod operations;
 mod operations_cli;
 mod operations_config;
 mod panel_cli;
+mod personal_update;
 mod private_temp;
 mod process_runner;
 mod release;
@@ -84,6 +86,9 @@ use elzevir_web_templates::I18n;
 #[derive(Parser)]
 #[command(version, about)]
 struct Cli {
+    /// Keep update ownership with the installer or package manager.
+    #[arg(long, global = true)]
+    no_self_update: bool,
     #[command(subcommand)]
     command: Command,
 }
@@ -106,6 +111,8 @@ enum Command {
     RecoverUpdate(update_recovery::Args),
     /// Serves the OPAC and the staff interface.
     Serve(server_config::ServeArgs),
+    /// Runs the local web server and the terminal panel together.
+    Start(server_config::ServeArgs),
     /// Initializes a new institution and its first administrator.
     Init(init::InitArgs),
     /// Reports local server status without opening its database.
@@ -164,21 +171,23 @@ enum StaffAction {
 }
 
 fn main() -> ExitCode {
-    let result = match Cli::parse().command {
+    let Cli {
+        command,
+        no_self_update,
+    } = Cli::parse();
+    let result = match command {
         Command::HostJob(args) => host_jobs::run(&args),
         Command::Tools(args) => tools_cli::run(args),
         Command::Address(args) => broker_cli::run(args),
         Command::Cloud(args) => cloud_cli::run(args),
         Command::Tunnel(args) => tunnel_cli::run(args),
-        Command::Update(args) => update::run(args),
+        Command::Update(args) => update::run(args, no_self_update),
         Command::RecoverUpdate(args) => update_recovery::run(&args),
-        Command::Serve(args) => args
-            .resolve()
-            .map_err(|error| error.to_string())
-            .and_then(|settings| serve(&settings)),
+        Command::Serve(args) => first_use::resolve(args).and_then(|(settings, _)| serve(&settings)),
+        Command::Start(args) => first_use::start(args, no_self_update),
         Command::Init(args) => init::run(&args),
         Command::Status(args) => status::run(args),
-        Command::Panel(args) => panel_cli::run(args),
+        Command::Panel(args) => panel_cli::run(args, no_self_update),
         Command::Diagnose(args) => diagnostics::run(args),
         Command::Addresses(args) => addresses::run(args),
         Command::Service(args) => service::run(args),
@@ -222,6 +231,17 @@ pub(crate) fn open_store(data_dir: &Path) -> Result<DataDir, String> {
     }
     std::fs::create_dir_all(data_dir)
         .map_err(|e| format!("cannot create {}: {e}", data_dir.display()))?;
+    let lock = lock_data(data_dir)?;
+    let store = ElzevirStore::open(
+        &data_dir.join("elzevir.db"),
+        &StoreConfig::default(),
+        ElzevirHandler,
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(DataDir { store, _lock: lock })
+}
+
+fn lock_data(data_dir: &Path) -> Result<std::fs::File, String> {
     let lock_path = data_dir.join("elzevir.lock");
     let lock = std::fs::OpenOptions::new()
         .create(true)
@@ -236,13 +256,7 @@ pub(crate) fn open_store(data_dir: &Path) -> Result<DataDir, String> {
         ),
         std::fs::TryLockError::Error(e) => format!("cannot lock {}: {e}", lock_path.display()),
     })?;
-    let store = ElzevirStore::open(
-        &data_dir.join("elzevir.db"),
-        &StoreConfig::default(),
-        ElzevirHandler,
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(DataDir { store, _lock: lock })
+    Ok(lock)
 }
 
 /// How often the indexer looks for new effects in the outbox.
@@ -337,8 +351,14 @@ fn web_app(
     index: Arc<TantivyIndex>,
     data_dir: &Path,
     config: WebConfig,
+    language: &str,
 ) -> Result<WebRuntime, String> {
-    let i18n = I18n::english().map_err(|error| error.to_string())?;
+    let i18n = if language == "pt-BR" {
+        I18n::portuguese()
+    } else {
+        I18n::english()
+    }
+    .map_err(|error| error.to_string())?;
     let opac = OpacPorts {
         catalog: Arc::clone(store) as _,
         index,
@@ -422,6 +442,7 @@ fn serve_controlled(
                 time_zone: loaded.time_zone,
                 ..WebConfig::default()
             },
+            &settings.lang,
         )?;
         let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
         let result = runtime.block_on(run_http(
@@ -466,7 +487,7 @@ async fn run_http(
     probe: Arc<health::Probe>,
     operations: operations::Client,
 ) -> Result<(), String> {
-    let WebRuntime { router: app, state } = web;
+    let app = web.router;
     let data_dir = &settings.data_dir;
     let listen = settings.listen;
     let catalog_policy = settings
@@ -514,7 +535,7 @@ async fn run_http(
         admin_listener,
         Arc::clone(&probe),
         operations,
-        state,
+        web.state,
         receiver.clone(),
     );
     let health_server = axum::serve(health_listener, health_app)

@@ -35,6 +35,11 @@ pub(crate) enum Task {
         executable: PathBuf,
         config: PathBuf,
     },
+    PersonalUpdate {
+        config: PathBuf,
+        version: String,
+        executable: PathBuf,
+    },
     Update {
         config: PathBuf,
         name: String,
@@ -91,7 +96,7 @@ fn action(task: &Task) -> &'static str {
             crate::managed_tools::Tool::Cloudflared => "install_cloudflared",
             crate::managed_tools::Tool::Rclone => "install_rclone",
         },
-        Task::Update { .. } => "update",
+        Task::Update { .. } | Task::PersonalUpdate { .. } => "update",
         Task::RecoverUpdate { .. } => "recover_update",
     }
 }
@@ -215,7 +220,7 @@ pub(crate) fn launch(directory: &Path, task: Task) -> Result<String, String> {
     let executable = std::env::current_exe().map_err(|_| "cannot locate host executable")?;
     let helper = if matches!(
         ticket.task,
-        Task::Update { .. } | Task::RecoverUpdate { .. }
+        Task::Update { .. } | Task::RecoverUpdate { .. } | Task::PersonalUpdate { .. }
     ) {
         let helper = temporary.path().join(if cfg!(windows) {
             "helper.exe"
@@ -413,6 +418,11 @@ fn execute(
         Task::RecoverUpdate { executable, config } => {
             crate::update_recovery::execute(directory, &executable, &config)
         }
+        Task::PersonalUpdate {
+            config,
+            version,
+            executable,
+        } => crate::personal_update::execute(directory, &config, &version, &executable),
         Task::Update {
             config,
             name,

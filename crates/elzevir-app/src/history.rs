@@ -44,6 +44,9 @@ pub fn touched(command: &CatalogCommand, output: &CatalogOutput) -> Vec<EntityRe
         | CatalogOutput::InstanceUpdated { instance: i, .. }
         | CatalogOutput::ItemsSaved { instance: i, .. } => vec![instance(i.0)],
         CatalogOutput::WorkUpdated { work: w, .. } => vec![work(w.0)],
+        CatalogOutput::ItemsChanged { instances, .. } => {
+            instances.iter().map(|i| instance(i.0)).collect()
+        }
         CatalogOutput::StatementsSet { subject, .. } => vec![*subject],
         CatalogOutput::Item(_) => match command {
             CatalogCommand::AddItem(new) => vec![instance(new.instance.0)],
@@ -99,6 +102,9 @@ pub enum Change {
     Edited(Vec<Part>),
     /// It saved this many rows of the Items grid, or added one Item.
     Items(usize),
+    /// It changed the Items of a selection in one batch (docs/specs/catalogo/lote.md,
+    /// item 13).
+    BatchItems,
     /// Something this build does not describe.
     Other,
 }
@@ -158,6 +164,7 @@ fn change_of(command: &WriteCommand) -> Change {
         )]),
         CatalogCommand::SaveItems(update) => Change::Items(update.rows.len()),
         CatalogCommand::AddItem(_) => Change::Items(1),
+        CatalogCommand::ChangeItems(_) => Change::BatchItems,
         _ => Change::Other,
     }
 }

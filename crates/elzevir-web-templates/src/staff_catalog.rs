@@ -3,7 +3,7 @@
 
 use askama::Template;
 
-use crate::{Badge, I18n};
+use crate::{Badge, GridOption, I18n};
 
 /// The listing page, or only its rows for the next page.
 #[derive(Template)]
@@ -29,6 +29,26 @@ pub struct StaffCatalog<'a> {
     /// The facets and filters strip (docs/specs/catalogo/facetas.md, part b), absent on a
     /// scanned code's page.
     pub strip: Option<FacetStrip>,
+    /// What the batch change of Items offers, for a viewer who may catalogue
+    /// (docs/specs/catalogo/lote.md, item 9).
+    pub batch: Option<BatchChoices>,
+}
+
+/// The rows the batch change of Items chooses from, each list in name order.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BatchChoices {
+    /// Branches.
+    pub branches: Vec<GridOption>,
+    /// Circulation policies.
+    pub policies: Vec<GridOption>,
+    /// Shelving places, each with its branch's name.
+    pub locations: Vec<GridOption>,
+    /// Collections, each with its branch's name.
+    pub collections: Vec<GridOption>,
+    /// The saved lists the selection can join (lote.md, item 16).
+    pub lists: Vec<GridOption>,
+    /// The saved list shown, which the selection can leave (lote.md, item 20).
+    pub current_list: Option<i64>,
 }
 
 /// The strip under the search: active filters as removable chips and a menu per facet.
@@ -48,9 +68,35 @@ pub struct FacetStrip {
     pub clear_url: Option<String>,
     /// One menu per facet that has values.
     pub menus: Vec<FacetMenu>,
+    /// The lists the team saved, in name order (docs/specs/catalogo/lote.md, item 18).
+    pub saved: Vec<SavedListLink>,
+    /// The saved list shown, which a cataloguer may delete (lote.md, item 20).
+    pub deletable: Option<i64>,
+}
+
+/// One saved list in the strip's menu.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SavedListLink {
+    /// Its name.
+    pub name: String,
+    /// Its address.
+    pub url: String,
+    /// Families it holds.
+    pub families: usize,
+    /// Whether it is the one shown.
+    pub current: bool,
 }
 
 impl FacetStrip {
+    /// The name of the saved list shown, which titles the menu.
+    #[must_use]
+    pub fn saved_current(&self) -> Option<&str> {
+        self.saved
+            .iter()
+            .find(|list| list.current)
+            .map(|list| list.name.as_str())
+    }
+
     /// How many families match, as a sentence.
     #[must_use]
     pub fn families_text(&self, t: &I18n) -> Option<String> {

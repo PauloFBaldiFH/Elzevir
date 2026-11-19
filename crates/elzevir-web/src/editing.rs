@@ -8,6 +8,7 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
+use elzevir_app::batch::ItemRefusal;
 use elzevir_app::catalog::CatalogReadError;
 use elzevir_app::catalog::{
     CatalogOutput, CatalogRefusal, InstanceChange, InstanceUpdate, PropertyEdit,
@@ -22,6 +23,7 @@ use elzevir_app::listing::{FamilyCursor, FamilyHead, sort_key};
 use elzevir_app::staff::Permission;
 use elzevir_app::statement_rows::{StatementRows, statements_of};
 use elzevir_app::suggestions::{AuthoritySuggestions, SUGGESTION_LIMIT, lookup_prefix};
+use elzevir_app::worklist::SavedListRefusal;
 use elzevir_domain::catalog::{InstanceId, WorkId};
 use elzevir_domain::statement::{EntityKind, EntityRef, Statement};
 use elzevir_web_templates::url_encode;
@@ -191,6 +193,51 @@ pub(crate) fn invalid_cells(state: &AppState, refusals: &[RowRefusal]) -> Respon
         Json(InvalidCells { errors }),
     )
         .into_response()
+}
+
+/// The answer to a batch change of Items (docs/specs/catalogo/lote.md, item 14).
+#[derive(Serialize)]
+struct ChangedItems {
+    instances: usize,
+    items: usize,
+}
+
+/// One Item a batch change refused, with its column and message in the interface
+/// language.
+#[derive(Serialize)]
+struct ItemMessage {
+    item: String,
+    field: &'static str,
+    column: String,
+    message: String,
+}
+
+/// 422 with every Item a batch change refused (lote.md, item 11).
+fn invalid_items(state: &AppState, refusals: &[ItemRefusal]) -> Response {
+    let t = &state.inner.i18n;
+    let errors: Vec<ItemMessage> = refusals
+        .iter()
+        .map(|refusal| ItemMessage {
+            item: refusal.label.clone(),
+            field: refusal.column.name(),
+            column: t.get(&format!(
+                "items-column-{}",
+                refusal.column.name().replace('_', "-")
+            )),
+            message: t.get(refusal.problem.message_key()),
+        })
+        .collect();
+    (
+        StatusCode::UNPROCESSABLE_ENTITY,
+        Json(InvalidItems { errors }),
+    )
+        .into_response()
+}
+
+/// The answer to a batch change with refused Items.
+#[derive(Serialize)]
+struct InvalidItems {
+    errors: Vec<ItemMessage>,
 }
 
 /// The answer to a stale edit: the version stored now.
@@ -366,6 +413,52 @@ pub(crate) fn invalid(state: &AppState, errors: &[FieldError]) -> Response {
     (StatusCode::UNPROCESSABLE_ENTITY, Json(Invalid { errors })).into_response()
 }
 
+/// The answer to a stored edit; `new_title` is the title of a new family, if any.
+fn accepted(output: CatalogOutput, new_title: Option<String>) -> Response {
+    match output {
+        CatalogOutput::WorkUpdated { row_version, .. }
+        | CatalogOutput::InstanceUpdated { row_version, .. }
+        | CatalogOutput::StatementsSet { row_version, .. }
+        | CatalogOutput::AgentUpdated { row_version, .. }
+        | CatalogOutput::SubjectUpdated { row_version, .. } => Json(Accepted {
+            version: row_version,
+        })
+        .into_response(),
+        CatalogOutput::Record { work, instance, .. } => (
+            StatusCode::CREATED,
+            Json(Created {
+                instance: instance.0,
+                family: new_title.map(|title| family_page(&title, work)),
+            }),
+        )
+            .into_response(),
+        CatalogOutput::ItemsSaved {
+            row_version, items, ..
+        } => Json(SavedItems {
+            version: row_version,
+            ids: items.into_iter().map(|item| item.0).collect(),
+        })
+        .into_response(),
+        CatalogOutput::SavedListChanged(list) => {
+            Json(crate::batch::list_answer(list)).into_response()
+        }
+        CatalogOutput::ItemsChanged { instances, items } => Json(ChangedItems {
+            instances: instances.len(),
+            items,
+        })
+        .into_response(),
+        CatalogOutput::InstanceAdded { instance, .. } => (
+            StatusCode::CREATED,
+            Json(Created {
+                instance: instance.0,
+                family: None,
+            }),
+        )
+            .into_response(),
+        _ => (StatusCode::INTERNAL_SERVER_ERROR, "unexpected answer").into_response(),
+    }
+}
+
 pub(crate) async fn apply(state: &AppState, session: &ActiveSession, edit: Edit) -> Response {
     let editor = Arc::clone(&state.inner.staff_ports.editor);
     let actor = session.identity.id;
@@ -375,45 +468,25 @@ pub(crate) async fn apply(state: &AppState, session: &ActiveSession, edit: Edit)
     };
     let outcome = tokio::task::spawn_blocking(move || editor.apply(actor, edit)).await;
     match outcome {
-        Ok(Ok(
-            CatalogOutput::WorkUpdated { row_version, .. }
-            | CatalogOutput::InstanceUpdated { row_version, .. }
-            | CatalogOutput::StatementsSet { row_version, .. }
-            | CatalogOutput::AgentUpdated { row_version, .. }
-            | CatalogOutput::SubjectUpdated { row_version, .. },
-        )) => Json(Accepted {
-            version: row_version,
-        })
-        .into_response(),
-        Ok(Ok(CatalogOutput::Record { work, instance, .. })) => (
-            StatusCode::CREATED,
-            Json(Created {
-                instance: instance.0,
-                family: new_title.map(|title| family_page(&title, work)),
-            }),
-        )
-            .into_response(),
-        Ok(Ok(CatalogOutput::ItemsSaved {
-            row_version, items, ..
-        })) => Json(SavedItems {
-            version: row_version,
-            ids: items.into_iter().map(|item| item.0).collect(),
-        })
-        .into_response(),
-        Ok(Ok(CatalogOutput::InstanceAdded { instance, .. })) => (
-            StatusCode::CREATED,
-            Json(Created {
-                instance: instance.0,
-                family: None,
-            }),
-        )
-            .into_response(),
-        Ok(Ok(_)) => (StatusCode::INTERNAL_SERVER_ERROR, "unexpected answer").into_response(),
+        Ok(Ok(output)) => accepted(output, new_title),
         Ok(Err(EditFailed::Refused(CatalogRefusal::Stale { current, .. }))) => {
             (StatusCode::CONFLICT, Json(Conflict { current })).into_response()
         }
         Ok(Err(EditFailed::Refused(CatalogRefusal::ItemRows(refusals)))) => {
             invalid_cells(state, &refusals)
+        }
+        Ok(Err(EditFailed::Refused(CatalogRefusal::SavedList(SavedListRefusal::Unknown)))) => {
+            StatusCode::NOT_FOUND.into_response()
+        }
+        Ok(Err(EditFailed::Refused(CatalogRefusal::SavedList(refusal)))) => invalid(
+            state,
+            &[FieldError {
+                field: "name",
+                message_key: refusal.message_key(),
+            }],
+        ),
+        Ok(Err(EditFailed::Refused(CatalogRefusal::BatchItems(refusals)))) => {
+            invalid_items(state, &refusals)
         }
         Ok(Err(EditFailed::Refused(
             CatalogRefusal::UnknownWork(_)

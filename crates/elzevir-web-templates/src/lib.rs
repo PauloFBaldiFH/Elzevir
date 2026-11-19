@@ -12,8 +12,9 @@ mod staff_record_form;
 mod staff_registries;
 
 pub use staff_catalog::{
-    ActiveFilter, AuthorityLine, Cord, FacetMenu, FacetOption, FacetStrip, FamilyLine, HubLine,
-    InstanceLine, PillLine, ScanLine, StaffCatalog, WorkLine, WorkListLink,
+    ActiveFilter, AuthorityLine, BatchChoices, Cord, FacetMenu, FacetOption, FacetStrip,
+    FamilyLine, HubLine, InstanceLine, PillLine, SavedListLink, ScanLine, StaffCatalog, WorkLine,
+    WorkListLink,
 };
 pub use staff_import::{
     ImportBatchLink, ImportDraft, ImportMember, ImportPage, ImportPreview, ImportReceipt,
@@ -68,6 +69,21 @@ impl I18n {
     /// Fails if the embedded Fluent resource is invalid.
     pub fn import_portuguese() -> Result<Self, I18nError> {
         Self::load(langid!("pt-BR"), PT_BR_IMPORT)
+    }
+
+    /// Brazilian Portuguese, with English for keys awaiting translation.
+    ///
+    /// # Errors
+    /// Reports invalid embedded Fluent resources.
+    pub fn portuguese() -> Result<Self, I18nError> {
+        let mut localized = Self::load(langid!("pt-BR"), EN_MESSAGES)?;
+        let resource =
+            FluentResource::try_new(PT_BR_IMPORT.to_owned()).map_err(|(_, errors)| I18nError {
+                lang: "pt-BR".into(),
+                detail: format!("{errors:?}"),
+            })?;
+        localized.bundle.add_resource_overriding(resource);
+        Ok(localized)
     }
 
     fn load(lang: LanguageIdentifier, source: &str) -> Result<Self, I18nError> {

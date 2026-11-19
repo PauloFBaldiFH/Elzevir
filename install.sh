@@ -172,6 +172,11 @@ if ! $managed; then
     elzevir --version
     elzevir panel --help >/dev/null
     printf 'Installed: %s\nData: %s\nOpen a new Bash shell or run: export PATH="$HOME/.local/bin:$PATH"\n' "$binary" "$data"
+    if "$binary" start --help >/dev/null 2>&1; then
+        printf 'Run: elzevir start\n'
+    else
+        printf 'Run: elzevir serve --data-dir %q\n' "$data"
+    fi
     exit 0
 fi
 if ! id elzevir >/dev/null 2>&1; then

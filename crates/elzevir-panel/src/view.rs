@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Pure rendering; terminal I/O is confined to the runtime.
 
-use crate::{Messages, Mode, Panel, Section};
+use crate::{
+    Messages, Mode, Panel, Section,
+    ui::{self, Action, Scene, theme},
+};
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout, Rect},
-    style::{Color, Style},
+    layout::{Constraint, Layout, Margin, Rect},
+    style::Style,
     symbols::border,
     text::Line,
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
@@ -27,7 +30,7 @@ fn columns(area: Rect) -> [Rect; 3] {
     let areas = Layout::horizontal([
         Constraint::Length(if area.width < 110 { 22 } else { 28 }),
         Constraint::Min(1),
-        Constraint::Length(if area.width < 110 { 0 } else { 30 }),
+        Constraint::Length(if area.width < 83 { 0 } else { 30 }),
     ])
     .split(body(area));
     std::array::from_fn(|i| areas.get(i).copied().unwrap_or_default())
@@ -59,22 +62,52 @@ pub(crate) fn block(title: String, ascii: bool) -> Block<'static> {
             horizontal_bottom: "-",
         }
     } else {
-        border::PLAIN
+        border::ROUNDED
     };
     Block::default()
         .borders(Borders::ALL)
         .border_set(border)
+        .style(theme::surface())
+        .border_style(Style::new().fg(theme::BORDER))
         .title(title)
 }
 
-fn menu(frame: &mut Frame, panel: &Panel, messages: &Messages, area: Rect, ascii: bool) {
-    let items = Section::ALL.into_iter().map(|section| {
-        ListItem::new(format!(
-            "{} {}",
-            section.shortcut(),
-            messages.get(section.key())
-        ))
-    });
+fn menu(
+    frame: &mut Frame,
+    panel: &Panel,
+    messages: &Messages,
+    area: Rect,
+    ascii: bool,
+    scene: &mut Scene,
+) {
+    let inner = area.inner(Margin::new(1, 1));
+    let items = Section::ALL
+        .into_iter()
+        .enumerate()
+        .map(|(index, section)| {
+            let visible = u16::try_from(index)
+                .ok()
+                .filter(|index| *index < inner.height);
+            let hover = visible.is_some_and(|index| {
+                scene.add(
+                    Rect::new(inner.x, inner.y + index, inner.width, 1),
+                    Action::Section(section),
+                )
+            });
+            let style = if hover {
+                theme::selected()
+            } else if index % 2 == 0 {
+                theme::surface()
+            } else {
+                Style::new().fg(theme::TEXT).bg(theme::BACKGROUND)
+            };
+            ListItem::new(format!(
+                "{} {}",
+                section.shortcut(),
+                messages.get(section.key())
+            ))
+            .style(style)
+        });
     let mut selection = ListState::default().with_selected(
         Section::ALL
             .iter()
@@ -82,14 +115,26 @@ fn menu(frame: &mut Frame, panel: &Panel, messages: &Messages, area: Rect, ascii
     );
     let list = List::new(items)
         .block(block(messages.get("panel-menu"), ascii))
-        .highlight_symbol("> ")
-        .highlight_style(Style::default().fg(Color::Black).bg(Color::Cyan));
+        .highlight_symbol(if ascii { "> " } else { "▌ " })
+        .highlight_style(theme::selected());
     frame.render_stateful_widget(list, area, &mut selection);
 }
 
 /// Draws a frame without reading external state or executing operations.
 pub fn draw(frame: &mut Frame, panel: &Panel, messages: &Messages, ascii: bool) {
+    interactive(frame, panel, messages, ascii, &mut Scene::default());
+}
+
+pub(crate) fn interactive(
+    frame: &mut Frame,
+    panel: &Panel,
+    messages: &Messages,
+    ascii: bool,
+    scene: &mut Scene,
+) {
+    scene.clear();
     let area = frame.area();
+    ui::fill(frame, area, theme::muted());
     if area.width < 80 || area.height < 18 {
         frame.render_widget(
             Paragraph::new(messages.get("panel-small")).wrap(Wrap { trim: true }),
@@ -97,23 +142,30 @@ pub fn draw(frame: &mut Frame, panel: &Panel, messages: &Messages, ascii: bool) 
         );
         return;
     }
-    let rows = Layout::vertical([
-        Constraint::Length(1),
-        Constraint::Min(1),
-        Constraint::Length(2),
-    ])
-    .split(area);
-    frame.render_widget(
-        Paragraph::new(messages.get(if matches!(&panel.mode, Mode::Demo) {
-            "panel-title"
-        } else {
-            "panel-title-live"
-        }))
-        .style(Style::default().fg(Color::Cyan)),
-        rows.first().copied().unwrap_or_default(),
-    );
+    let header = Rect::new(area.x, area.y, area.width, 1);
+    ui::header(frame, header, panel, messages, ascii);
     let [navigation, work, context] = columns(area);
-    menu(frame, panel, messages, navigation, ascii);
+    let tabs = Rect::new(work.x, work.y, work.width + context.width, 1);
+    draw_tabs(frame, tabs, panel, messages, scene);
+    let action_rows = if matches!(&panel.mode, Mode::Live(_)) && area.width < 115 {
+        2
+    } else {
+        1
+    };
+    let work = Rect::new(
+        work.x,
+        work.y + 1,
+        work.width,
+        work.height.saturating_sub(1 + action_rows),
+    );
+    let context = Rect::new(context.x, work.y, context.width, work.height);
+    let actions = Rect::new(
+        work.x,
+        work.bottom(),
+        work.width + context.width,
+        action_rows,
+    );
+    menu(frame, panel, messages, navigation, ascii, scene);
     if let Mode::Live(state) = &panel.mode {
         crate::dashboard::draw(frame, panel, state, messages, work, context, ascii);
         if panel.section == Section::Addresses && panel.tunnel_tab == crate::TunnelTab::Share {
@@ -125,52 +177,107 @@ pub fn draw(frame: &mut Frame, panel: &Panel, messages: &Messages, ascii: bool) 
             );
         }
     } else {
-        let description = vec![
-            Line::from(messages.get("panel-demo")),
-            Line::default(),
-            Line::from(messages.get(&format!("{}-body", panel.section.key()))),
-            Line::default(),
-            Line::from(messages.get("panel-no-actions")),
-        ];
-        frame.render_widget(
-            Paragraph::new(description)
-                .wrap(Wrap { trim: true })
-                .block(block(messages.get(panel.section.key()), ascii)),
-            work,
-        );
-        let spinner = ["|", "/", "-", "\\"]
-            .get(panel.tick % 4)
-            .copied()
-            .unwrap_or("|");
-        let context_text = vec![
-            Line::from(messages.get("panel-institution")),
-            Line::default(),
-            Line::from(messages.get("panel-simulated")),
-            Line::default(),
-            Line::from(messages.get("panel-unread")),
-            Line::default(),
-            Line::from(format!("{spinner} {}", messages.get("panel-animation"))),
-        ];
-        frame.render_widget(
-            Paragraph::new(context_text)
-                .wrap(Wrap { trim: true })
-                .block(block(messages.get("panel-context"), ascii)),
-            context,
-        );
+        draw_demo(frame, panel, messages, ascii, work, context);
     }
-    frame.render_widget(
-        Paragraph::new(messages.get(if matches!(&panel.mode, Mode::Demo) {
-            "panel-help"
-        } else {
-            "panel-help-live"
-        }))
-        .wrap(Wrap { trim: true }),
-        rows.last().copied().unwrap_or_default(),
-    );
-    crate::operation_view::form(frame, panel, messages, ascii);
-    if panel.palette {
-        let popup = menu_area(area, true);
+    ui::action_bar(frame, actions, panel, messages, scene, ascii);
+    let footer = Rect::new(area.x, area.bottom().saturating_sub(2), area.width, 2);
+    let mut help = messages.get(if matches!(panel.mode, Mode::Demo) {
+        "panel-help"
+    } else {
+        "panel-help-live"
+    });
+    if let Mode::Live(state) = &panel.mode
+        && let Some(result) = state
+            .snapshot
+            .as_ref()
+            .and_then(|sample| sample.operations.result)
+    {
+        help = format!("{}  |  {help}", messages.get(result));
+    }
+    frame.render_widget(Paragraph::new(help).wrap(Wrap { trim: true }), footer);
+    if panel.form.is_some() {
+        scene.clear();
+        ui::dim(frame);
+        crate::operation_view::form(frame, panel, messages, ascii, scene);
+    } else if panel.palette {
+        scene.clear();
+        ui::dim(frame);
+        let mut popup = menu_area(area, true);
+        popup.height = popup.height.saturating_add(1).min(area.bottom() - popup.y);
         frame.render_widget(Clear, popup);
-        menu(frame, panel, messages, popup, ascii);
+        menu(frame, panel, messages, popup, ascii, scene);
     }
+}
+
+fn draw_tabs(frame: &mut Frame, tabs: Rect, panel: &Panel, messages: &Messages, scene: &mut Scene) {
+    scene.buttons(
+        frame,
+        tabs,
+        Section::ALL
+            .into_iter()
+            .enumerate()
+            .map(|(index, section)| {
+                (
+                    {
+                        let names = [
+                            "tab-overview",
+                            "tab-health",
+                            "tab-access",
+                            "tab-backup",
+                            "tab-updates",
+                            "tab-restart",
+                        ];
+                        let label = names
+                            .get(index)
+                            .filter(|_| tabs.width / 6 >= 10)
+                            .map_or_else(String::new, |name| messages.get(name));
+                        format!("{} {label}", index + 1)
+                    },
+                    Action::Section(section),
+                    panel.section == section,
+                )
+            }),
+    );
+}
+
+fn draw_demo(
+    frame: &mut Frame,
+    panel: &Panel,
+    messages: &Messages,
+    ascii: bool,
+    work: Rect,
+    context: Rect,
+) {
+    let description = vec![
+        Line::from(messages.get("panel-demo")),
+        Line::default(),
+        Line::from(messages.get(&format!("{}-body", panel.section.key()))),
+        Line::default(),
+        Line::from(messages.get("panel-no-actions")),
+    ];
+    frame.render_widget(
+        Paragraph::new(description)
+            .wrap(Wrap { trim: true })
+            .block(block(messages.get(panel.section.key()), ascii)),
+        work,
+    );
+    let spinner = ["|", "/", "-", "\\"]
+        .get(panel.tick % 4)
+        .copied()
+        .unwrap_or("|");
+    let context_text = vec![
+        Line::from(messages.get("panel-institution")),
+        Line::default(),
+        Line::from(messages.get("panel-simulated")),
+        Line::default(),
+        Line::from(messages.get("panel-unread")),
+        Line::default(),
+        Line::from(format!("{spinner} {}", messages.get("panel-animation"))),
+    ];
+    frame.render_widget(
+        Paragraph::new(context_text)
+            .wrap(Wrap { trim: true })
+            .block(block(messages.get("panel-context"), ascii)),
+        context,
+    );
 }

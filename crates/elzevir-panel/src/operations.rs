@@ -137,6 +137,8 @@ pub struct Operations {
     pub sessions: Option<usize>,
     /// Latest version, only after a successful explicit metadata check.
     pub latest: Option<String>,
+    /// The available release is newer than the installed program.
+    pub update_available: bool,
     /// Bounded plain-text official release notes.
     pub release_notes: Option<String>,
     /// Allowlisted sign-in URLs for pending interactive jobs.

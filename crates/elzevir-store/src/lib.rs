@@ -15,6 +15,7 @@
 
 mod authorities;
 mod backup;
+mod batch;
 mod catalog;
 mod codes;
 mod config;
@@ -36,6 +37,7 @@ mod places;
 mod preview;
 mod readers;
 mod registries;
+mod saved_lists;
 mod schema;
 mod statements;
 mod suggestions;

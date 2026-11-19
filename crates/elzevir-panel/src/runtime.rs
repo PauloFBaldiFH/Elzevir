@@ -2,11 +2,10 @@
 //! Interactive terminal boundary. The demo never opens institution data.
 
 use crate::{
-    Institution, Messages, Mode, ObservationRequest, Panel, PanelError, Snapshot, draw,
-    worker::Worker,
+    Institution, Messages, Mode, ObservationRequest, Panel, PanelError, Snapshot, worker::Worker,
 };
 use ratatui::crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, MouseButton, MouseEventKind},
     execute,
 };
 use std::io::{self, IsTerminal};
@@ -18,7 +17,7 @@ use std::time::{Duration, Instant};
 /// Fails if translations cannot load or the terminal cannot be used or restored.
 pub fn run(language: &str, ascii: bool) -> Result<(), PanelError> {
     let messages = prepare(language)?;
-    terminal(&messages, ascii, Panel::default(), None)
+    terminal(&messages, ascii, Panel::default(), None, || false)
 }
 
 /// Runs the read-only dashboard with one background observation source.
@@ -31,12 +30,32 @@ pub fn run_live(
     institution: Institution,
     source: impl FnMut(ObservationRequest) -> Snapshot + Send + 'static,
 ) -> Result<(), PanelError> {
-    let messages = prepare(language)?;
-    let worker = Worker::start(source)?;
-    terminal(&messages, ascii, Panel::live(institution), Some(&worker))
+    run_live_until(language, ascii, institution, source, || false)
 }
 
-fn prepare(language: &str) -> Result<Messages, PanelError> {
+/// Runs the connected panel until the caller requests shutdown or the operator exits.
+///
+/// # Errors
+/// Reports failures initializing the terminal, messages or observation worker.
+pub fn run_live_until(
+    language: &str,
+    ascii: bool,
+    institution: Institution,
+    source: impl FnMut(ObservationRequest) -> Snapshot + Send + 'static,
+    stopping: impl Fn() -> bool,
+) -> Result<(), PanelError> {
+    let messages = prepare(language)?;
+    let worker = Worker::start(source)?;
+    terminal(
+        &messages,
+        ascii,
+        Panel::live(institution),
+        Some(&worker),
+        stopping,
+    )
+}
+
+pub(crate) fn prepare(language: &str) -> Result<Messages, PanelError> {
     let messages = Messages::new(language)?;
     if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
         return Err(io::Error::other(messages.get("panel-tty")).into());
@@ -49,36 +68,66 @@ fn terminal(
     ascii: bool,
     panel: Panel,
     worker: Option<&Worker>,
+    stopping: impl Fn() -> bool,
 ) -> Result<(), PanelError> {
-    // Also restore partial initialization if entering the alternate screen fails.
-    let result = interact(messages, ascii, panel, worker);
-    let mouse = execute!(io::stdout(), DisableMouseCapture);
-    let terminal = ratatui::try_restore();
-    result?;
-    mouse?;
-    terminal?;
-    Ok(())
+    with_terminal(|terminal| interact(terminal, messages, ascii, panel, worker, stopping))
 }
 
-fn interact(
-    messages: &Messages,
-    ascii: bool,
-    mut panel: Panel,
-    worker: Option<&Worker>,
-) -> io::Result<()> {
-    let mut terminal = ratatui::try_init()?;
+pub(crate) fn with_terminal<T>(
+    action: impl FnOnce(ratatui::DefaultTerminal) -> io::Result<T>,
+) -> Result<T, PanelError> {
+    let guard = TerminalGuard { active: true };
+    let terminal = ratatui::try_init()?;
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        // Best effort during panic; ratatui's previous hook restores raw mode and screen.
         drop(execute!(io::stdout(), DisableMouseCapture));
         previous(info);
     }));
     execute!(io::stdout(), EnableMouseCapture)?;
+    let result = action(terminal);
+    let restored = guard.restore();
+    let value = result?;
+    restored?;
+    Ok(value)
+}
+
+struct TerminalGuard {
+    active: bool,
+}
+
+impl TerminalGuard {
+    fn restore(mut self) -> io::Result<()> {
+        let mouse = execute!(io::stdout(), DisableMouseCapture);
+        let terminal = ratatui::try_restore();
+        self.active = false;
+        mouse.and(terminal)
+    }
+}
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        // Emergency restoration also covers partial terminal initialization.
+        if self.active {
+            drop(execute!(io::stdout(), DisableMouseCapture));
+            drop(ratatui::try_restore());
+        }
+    }
+}
+
+fn interact(
+    mut terminal: ratatui::DefaultTerminal,
+    messages: &Messages,
+    ascii: bool,
+    mut panel: Panel,
+    worker: Option<&Worker>,
+    stopping: impl Fn() -> bool,
+) -> io::Result<()> {
+    let mut scene = crate::ui::Scene::default();
     let mut observed_at: Option<Instant> = None;
     let mut action_sequence = None;
     let tick = Duration::from_millis(150);
     let mut last_tick = Instant::now();
-    while !panel.quit {
+    while !panel.quit && !stopping() {
         if let Some(worker) = worker {
             if let Some((snapshot, at, completed)) = worker.take()
                 && let Mode::Live(state) = &mut panel.mode
@@ -103,10 +152,36 @@ fn interact(
             }
             panel.refresh_requested = false;
         }
-        terminal.draw(|frame| draw(frame, &panel, messages, ascii))?;
+        let drawn = terminal
+            .draw(|frame| crate::view::interactive(frame, &panel, messages, ascii, &mut scene))?
+            .area;
         if event::poll(tick.saturating_sub(last_tick.elapsed()))? {
-            let size = terminal.size()?;
-            panel.handle(&event::read()?, size.width, size.height);
+            let input = event::read()?;
+            match input {
+                Event::Mouse(mouse) => {
+                    let point = (mouse.column, mouse.row).into();
+                    scene.pointer = Some(point);
+                    match mouse.kind {
+                        MouseEventKind::Down(MouseButton::Left)
+                            if terminal.size()?
+                                == ratatui::layout::Size::new(drawn.width, drawn.height) =>
+                        {
+                            if let Some(action) = scene.hit(point) {
+                                action.apply(&mut panel, drawn);
+                            }
+                        }
+                        MouseEventKind::ScrollDown if panel.form.is_none() => {
+                            panel.scroll = panel.scroll.saturating_add(3).min(500);
+                        }
+                        MouseEventKind::ScrollUp if panel.form.is_none() => {
+                            panel.scroll = panel.scroll.saturating_sub(3);
+                        }
+                        _ => {}
+                    }
+                }
+                Event::Resize(_, _) => scene.pointer = None,
+                other => panel.handle(&other, drawn.width, drawn.height),
+            }
         }
         if last_tick.elapsed() >= tick {
             panel.tick = panel.tick.wrapping_add(1) % 4;
