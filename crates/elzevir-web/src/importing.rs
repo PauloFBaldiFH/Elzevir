@@ -14,8 +14,8 @@ use axum::routing::{get, post};
 use axum::{Form, Json, Router};
 use elzevir_app::catalog::{CodeLists, NewRecord, RecordItem};
 use elzevir_app::import::batches::{
-    BatchCommand, BatchError, BatchPort, BatchPreview, BatchReply, BatchState, BatchSummary,
-    BatchView, Completion, FormatChoice, MAX_BATCH_MANIFEST_BYTES,
+    BatchCommand, BatchError, BatchPort, BatchPreview, BatchRefusal, BatchReply, BatchState,
+    BatchSummary, BatchView, Completion, FormatChoice, MAX_BATCH_MANIFEST_BYTES,
 };
 use elzevir_app::import::containers::{Inventory, Kind, Selection};
 use elzevir_app::import::edits::Recipe;
@@ -214,12 +214,29 @@ fn error_view(error: BatchError) -> (StatusCode, &'static str, Option<String>) {
     match error {
         BatchError::Missing(_) => (StatusCode::NOT_FOUND, "import-missing", None),
         BatchError::Conflict(_) => (StatusCode::CONFLICT, "import-stale", None),
+        BatchError::Refused(refusal) => (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            refusal_key(&refusal),
+            None,
+        ),
         BatchError::Invalid(detail) => (
             StatusCode::UNPROCESSABLE_ENTITY,
             "import-invalid",
             Some(detail),
         ),
         BatchError::Unavailable(_) => (StatusCode::SERVICE_UNAVAILABLE, "import-unavailable", None),
+    }
+}
+
+fn refusal_key(refusal: &BatchRefusal) -> &'static str {
+    match refusal {
+        BatchRefusal::IncompatibleRecipe => "import-refused-incompatible",
+        BatchRefusal::ChooseMember => "import-refused-member",
+        BatchRefusal::MappingNotForMember => "import-refused-mapping",
+        BatchRefusal::EditsNotForSpreadsheet => "import-refused-edits",
+        BatchRefusal::RecipeTooLarge => "import-refused-size",
+        BatchRefusal::UnknownFormat => "import-refused-format",
+        BatchRefusal::ColumnMapping { .. } => "import-refused-columns",
     }
 }
 
@@ -569,13 +586,13 @@ fn parse_format(value: &str) -> Result<Option<ImportFormat>, BatchError> {
         "table" => Ok(Some(ImportFormat::Delimited)),
         "sql" => Ok(Some(ImportFormat::KohaSqlDump)),
         "archive" => Ok(Some(ImportFormat::Archive)),
-        _ => Err(BatchError::Invalid("invalid source format".into())),
+        _ => Err(BatchRefusal::UnknownFormat.into()),
     }
 }
 
 fn parse_recipe(value: &str) -> Result<Recipe, BatchError> {
     if value.len() as u64 > MAX_BATCH_MANIFEST_BYTES {
-        return Err(BatchError::Invalid("recipe exceeds its byte limit".into()));
+        return Err(BatchRefusal::RecipeTooLarge.into());
     }
     Recipe::parse(value).map_err(|error| BatchError::Invalid(error.to_string()))
 }

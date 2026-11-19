@@ -178,12 +178,45 @@ pub enum BatchError {
     /// The current state does not allow this action.
     #[error("{0}")]
     Conflict(String),
-    /// Invalid source or recipe.
+    /// A recipe or choice the operator can correct on the batch screen.
+    #[error(transparent)]
+    Refused(#[from] BatchRefusal),
+    /// Invalid source or recipe, with a located technical detail.
     #[error("{0}")]
     Invalid(String),
     /// The service could not perform the operation.
     #[error("{0}")]
     Unavailable(String),
+}
+
+/// A refusal with a fixed cause, so that each one has its own translated message.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum BatchRefusal {
+    /// The recipe names an archive member, MARC edits or a table mapping that the
+    /// detected source cannot use.
+    #[error("recipe is incompatible with the selected source format")]
+    IncompatibleRecipe,
+    /// An archive needs a member, and a worksheet for XLSX or ODS, before preview.
+    #[error("choose a member from the inventory and a sheet for XLSX or ODS")]
+    ChooseMember,
+    /// A table mapping was saved for a member that is not a spreadsheet.
+    #[error("table mapping does not apply to this member")]
+    MappingNotForMember,
+    /// MARC edit rules were saved for a spreadsheet.
+    #[error("MARC edits do not apply to a spreadsheet")]
+    EditsNotForSpreadsheet,
+    /// The recipe is larger than its manifest limit.
+    #[error("recipe exceeds its byte limit")]
+    RecipeTooLarge,
+    /// The spreadsheet header needs a column mapping, or no longer matches the saved one.
+    #[error("{detail}")]
+    ColumnMapping {
+        /// What differs, with suggested destinations for the command line.
+        detail: String,
+    },
+    /// The requested source format is not one of the offered choices.
+    #[error("invalid source format")]
+    UnknownFormat,
 }
 
 /// A prepared-import service bound to one institution.

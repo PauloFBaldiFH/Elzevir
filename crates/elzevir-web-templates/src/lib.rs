@@ -38,7 +38,7 @@ use unic_langid::{LanguageIdentifier, langid};
 
 /// English messages, compiled into the binary.
 const EN_MESSAGES: &str = include_str!("../locales/en/main.ftl");
-const PT_BR_IMPORT: &str = include_str!("../locales/pt-BR/import.ftl");
+const PT_BR_MAIN: &str = include_str!("../locales/pt-BR/main.ftl");
 
 /// Interface texts for one language.
 pub struct I18n {
@@ -69,7 +69,7 @@ impl I18n {
     /// # Errors
     /// Fails if the embedded Fluent resource is invalid.
     pub fn import_portuguese() -> Result<Self, I18nError> {
-        Self::load(langid!("pt-BR"), PT_BR_IMPORT)
+        Self::load(langid!("pt-BR"), PT_BR_MAIN)
     }
 
     /// Brazilian Portuguese, with English for keys awaiting translation.
@@ -79,7 +79,7 @@ impl I18n {
     pub fn portuguese() -> Result<Self, I18nError> {
         let mut localized = Self::load(langid!("pt-BR"), EN_MESSAGES)?;
         let resource =
-            FluentResource::try_new(PT_BR_IMPORT.to_owned()).map_err(|(_, errors)| I18nError {
+            FluentResource::try_new(PT_BR_MAIN.to_owned()).map_err(|(_, errors)| I18nError {
                 lang: "pt-BR".into(),
                 detail: format!("{errors:?}"),
             })?;

@@ -60,6 +60,7 @@ pub(crate) fn connected(
     let mut collector = Collector::new(settings.data_dir.clone());
     collector.config = config;
     collector.no_self_update = no_self_update;
+    // Without a thread the panel shows no release news; the panel itself still works.
     collector.release_check = std::thread::Builder::new()
         .name("elzevir-release-check".into())
         .spawn(|| crate::release::latest(&crate::release::Metadata))
@@ -209,6 +210,7 @@ impl Collector {
                 .and_then(|release| release.body.clone()),
             ..elzevir_panel::Operations::default()
         };
+        // Unreadable cloud or broker state is shown as unknown in the panel, not as an error.
         result.cloud = crate::cloud::view(&self.directory).ok();
         result.remote_address = crate::broker::observe(&self.directory).ok().flatten();
         // Invalid private configuration becomes unavailable, never a successful registration.
@@ -271,6 +273,7 @@ impl Collector {
             .policy
             .daily
             .map(|daily| format!("{:02}:{:02} {}", daily.hour, daily.minute, daily.time_zone));
+        // Unreadable sessions leave the list empty; the rest of the panel stays usable.
         result.sessions = crate::admin::sessions(&info).ok();
         result.jobs.extend(
             view.jobs

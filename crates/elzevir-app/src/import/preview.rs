@@ -62,6 +62,9 @@ pub enum PreviewError {
     /// A recipe is invalid or cannot be applied to its selected record.
     #[error("{0}")]
     Edit(String),
+    /// The selected spreadsheet could not be prepared.
+    #[error(transparent)]
+    Sheet(#[from] super::sheet::SheetError),
 }
 
 /// A mapped record sample, without the raw source.

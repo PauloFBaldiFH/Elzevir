@@ -492,6 +492,18 @@ fn staff_import_maps_custom_spreadsheet_columns_by_form() {
     assert!(page.contains(r#"name="target-3" list="import-targets" value="""#));
     assert!(!page.contains("New rule"));
 
+    let unmapped = form(
+        address,
+        &format!("{url}/prever"),
+        &ana,
+        &format!("csrf={token}&revision=1"),
+    );
+    assert_status(&unmapped, 422);
+    assert!(
+        unmapped.contains("Choose a destination for each spreadsheet column"),
+        "{unmapped}"
+    );
+    assert!(!unmapped.contains("select a versioned column mapping"));
     let sheet = format!("{url}/planilha");
     let base = format!(
         "csrf={token}&revision=1&action=columns&target-1=Work.title&target-2=Instance.editionStatement"

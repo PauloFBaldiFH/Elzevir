@@ -89,7 +89,7 @@ fn sheet(
         .transpose()
         .map_err(read_error)?
         .unwrap_or_default();
-    let table = source(&codes).map_err(|error| PreviewError::Edit(error.to_string()))?;
+    let table = source(&codes)?;
     let snapshot = connection.map(Snapshot);
     let catalog = snapshot
         .as_ref()
