@@ -798,3 +798,5 @@ rule-kind-returnbranch = Return policy
 rule-kind-suspension_chargeperiod = Suspension charging interval
 rule-kind-unseen_renewals_allowed = Unseen renewals allowed
 rule-kind-waiting_hold_cancellation = Cancel waiting holds
+calendar-error-title = Give the closing a title of at most 50 characters.
+calendar-error-dates = These dates do not make a range: the last day comes before the first, the day does not exist, or the range is longer than a year.

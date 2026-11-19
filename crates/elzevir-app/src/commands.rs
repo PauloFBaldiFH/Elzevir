@@ -113,6 +113,7 @@ impl WriteCommand {
             Self::Patrons(PatronCommand::Update(_)) => "patrons.update",
             Self::Patrons(PatronCommand::View(_)) => "patrons.view",
             Self::Circulation(CirculationCommand::SetRules(_)) => "circ.set_rules",
+            Self::Circulation(CirculationCommand::ChangeCalendar(_)) => "circ.change_calendar",
         }
     }
 
@@ -121,10 +122,9 @@ impl WriteCommand {
     #[must_use]
     pub const fn permission(&self) -> Permission {
         match self {
-            // Koha: `parameters.manage_circ_rules` for the rules.
-            Self::Staff(_) | Self::Circulation(CirculationCommand::SetRules(_)) => {
-                Permission::Administration
-            }
+            // Koha: `parameters.manage_circ_rules` for the rules, `tools.edit_calendar` for
+            // the calendar; both are the administrators' here.
+            Self::Staff(_) | Self::Circulation(_) => Permission::Administration,
             Self::Catalog(_) => Permission::Cataloguing,
             Self::Patrons(PatronCommand::View(_)) => Permission::Circulation,
             Self::Patrons(_) => Permission::Patrons,

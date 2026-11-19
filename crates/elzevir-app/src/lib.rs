@@ -3,6 +3,7 @@
 
 pub mod authorities;
 pub mod batch;
+pub mod calendar;
 pub mod call_number;
 pub mod catalog;
 pub mod circulation_rules;

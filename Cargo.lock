@@ -1030,6 +1030,7 @@ dependencies = [
  "elzevir-domain",
  "elzevir-marc",
  "elzevir-panel",
+ "elzevir-scenarios",
  "elzevir-search",
  "elzevir-sip2",
  "elzevir-store",

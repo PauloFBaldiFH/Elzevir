@@ -12,7 +12,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
 use elzevir_app::catalog::Named;
 use elzevir_app::circulation_rules::{
-    CirculationRefusal, RuleBook, RuleBookError, RuleChange, RuleKind,
+    CirculationDeskError, CirculationRefusal, RuleBook, RuleChange, RuleKind,
 };
 use elzevir_app::staff::Permission;
 use elzevir_data::RuleScope;
@@ -316,7 +316,7 @@ pub(crate) async fn set_rules(
         Ok(Ok(())) => {
             Redirect::to(&format!("{}&saved=1#rules-scope", url_of(&scope))).into_response()
         }
-        Ok(Err(RuleBookError::Refused(refusal))) => {
+        Ok(Err(CirculationDeskError::Refused(refusal))) => {
             let message = refusal_text(&state.inner.i18n, &refusal);
             let shown = Shown {
                 scope,
@@ -333,7 +333,7 @@ pub(crate) async fn set_rules(
             )
             .await
         }
-        Ok(Err(RuleBookError::Busy | RuleBookError::Unavailable(_))) | Err(_) => {
+        Ok(Err(CirculationDeskError::Busy | CirculationDeskError::Unavailable(_))) | Err(_) => {
             StatusCode::SERVICE_UNAVAILABLE.into_response()
         }
     }
@@ -684,6 +684,9 @@ mod tests {
             CirculationRefusal::UnknownBranch,
             CirculationRefusal::UnknownCategory,
             CirculationRefusal::UnknownPolicy,
+            CirculationRefusal::BadHolidayTitle,
+            CirculationRefusal::BadWeekday,
+            CirculationRefusal::BadDates,
         ] {
             assert!(t.has(refusal.message_key()), "{refusal:?}");
         }

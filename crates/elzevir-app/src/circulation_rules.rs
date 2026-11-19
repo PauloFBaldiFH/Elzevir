@@ -7,6 +7,7 @@ use elzevir_domain::circulation_rules::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::calendar::CalendarChange;
 use crate::staff::StaffId;
 
 /// Most rules one change may set.
@@ -17,6 +18,8 @@ pub const MAX_RULES_PER_CHANGE: usize = RuleKind::ALL.len();
 pub enum CirculationCommand {
     /// Sets or removes rules at one scope.
     SetRules(RuleChange),
+    /// Changes one branch's calendar (docs/specs/circulacao/calendario.md).
+    ChangeCalendar(CalendarChange),
 }
 
 /// New values for some rules at one scope.
@@ -37,6 +40,11 @@ pub enum CirculationOutput {
         stored: usize,
         /// Removed.
         removed: usize,
+    },
+    /// How many calendar entries were stored or removed.
+    CalendarChanged {
+        /// Entries stored, replaced or removed.
+        entries: usize,
     },
 }
 
@@ -66,6 +74,15 @@ pub enum CirculationRefusal {
     /// The scope names a circulation policy that does not exist.
     #[error("no such circulation policy")]
     UnknownPolicy,
+    /// A closing without a title, or with a title or description too long.
+    #[error("a closing needs a title of at most 50 characters")]
+    BadHolidayTitle,
+    /// A weekday past Saturday.
+    #[error("no such weekday")]
+    BadWeekday,
+    /// A day that does not exist, or a range that runs backwards or is too long.
+    #[error("these dates do not make a range")]
+    BadDates,
 }
 
 impl CirculationRefusal {
@@ -90,6 +107,8 @@ impl CirculationRefusal {
             Self::UnknownBranch => "rules-error-unknown-branch",
             Self::UnknownCategory => "rules-error-unknown-category",
             Self::UnknownPolicy => "rules-error-unknown-policy",
+            Self::BadHolidayTitle => "calendar-error-title",
+            Self::BadWeekday | Self::BadDates => "calendar-error-dates",
         }
     }
 }
@@ -123,9 +142,9 @@ pub fn checked_rules(
     Ok(checked)
 }
 
-/// Why the rule book could not answer.
+/// Why the rule book or the calendar could not answer.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum RuleBookError {
+pub enum CirculationDeskError {
     /// The change was refused.
     #[error(transparent)]
     Refused(#[from] CirculationRefusal),
@@ -133,7 +152,7 @@ pub enum RuleBookError {
     #[error("the writer is busy")]
     Busy,
     /// Storage failed.
-    #[error("cannot read or write the circulation rules: {0}")]
+    #[error("circulation storage unavailable: {0}")]
     Unavailable(String),
 }
 
@@ -145,18 +164,18 @@ pub trait RuleBook: Send + Sync {
     /// # Errors
     ///
     /// When storage fails.
-    fn rules(&self) -> Result<Vec<CirculationRule>, RuleBookError>;
+    fn rules(&self) -> Result<Vec<CirculationRule>, CirculationDeskError>;
 
     /// Runs `circ.set_rules` as `actor`.
     ///
     /// # Errors
     ///
-    /// [`RuleBookError::Refused`] with the refusal, or why storage failed.
+    /// [`CirculationDeskError::Refused`] with the refusal, or why storage failed.
     fn set_rules(
         &self,
         actor: StaffId,
         change: RuleChange,
-    ) -> Result<CirculationOutput, RuleBookError>;
+    ) -> Result<CirculationOutput, CirculationDeskError>;
 }
 
 #[cfg(test)]

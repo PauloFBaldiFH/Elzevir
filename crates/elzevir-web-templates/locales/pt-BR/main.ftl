@@ -394,3 +394,5 @@ rule-kind-returnbranch = Destino na devolução
 rule-kind-suspension_chargeperiod = Intervalo de cobrança da suspensão
 rule-kind-unseen_renewals_allowed = Renovações sem o exemplar em mãos
 rule-kind-waiting_hold_cancellation = Cancelar reservas aguardando retirada
+calendar-error-title = Dê ao fechamento um título de até 50 caracteres.
+calendar-error-dates = Essas datas não formam um intervalo: o último dia vem antes do primeiro, o dia não existe ou o intervalo passa de um ano.

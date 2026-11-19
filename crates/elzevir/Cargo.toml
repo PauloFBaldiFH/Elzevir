@@ -55,6 +55,7 @@ stats_alloc = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "net", "signal", "macros", "sync", "io-util", "time"] }
 
 [dev-dependencies]
+elzevir-scenarios.workspace = true
 http-body-util.workspace = true
 tower.workspace = true
 

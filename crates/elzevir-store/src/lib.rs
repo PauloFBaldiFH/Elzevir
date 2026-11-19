@@ -16,6 +16,7 @@
 mod authorities;
 mod backup;
 mod batch;
+mod calendar;
 mod catalog;
 mod circulation_rules;
 mod codes;

@@ -13,7 +13,7 @@ use jiff::civil::{Date, Weekday};
 pub const OPEN_DAY_SEARCH_LIMIT: u32 = 5000;
 
 /// A dated calendar entry, which wins over the weekly and annual rules.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum DatedEntry {
     /// Closed on this date only.
     Closed,
@@ -22,12 +22,25 @@ pub enum DatedEntry {
 }
 
 /// A fixed annual holiday, such as 25 December.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub struct AnnualHoliday {
     /// Month, 1 to 12.
     pub month: i8,
     /// Day of the month, 1 to 31.
     pub day: i8,
+}
+
+impl AnnualHoliday {
+    /// The holiday on `day` of `month`, when that day exists in some year (29 February
+    /// does, in leap years).
+    #[must_use]
+    pub fn new(month: i8, day: i8) -> Option<Self> {
+        Date::new(2000, month, day)
+            .ok()
+            .map(|_| Self { month, day })
+    }
 }
 
 /// When one library is open.
@@ -83,6 +96,23 @@ impl Calendar {
     pub fn on(mut self, date: Date, entry: DatedEntry) -> Self {
         self.dated.insert(date, entry);
         self
+    }
+
+    /// The weekdays closed every week, Sunday first.
+    pub fn closed_weekdays(&self) -> impl Iterator<Item = Weekday> + '_ {
+        (0..7_i8)
+            .filter_map(|offset| Weekday::from_sunday_zero_offset(offset).ok())
+            .filter(|weekday| self.closed_weekly(*weekday))
+    }
+
+    /// The fixed annual holidays, by month and day.
+    pub fn annual_holidays(&self) -> impl Iterator<Item = AnnualHoliday> + '_ {
+        self.annual.iter().copied()
+    }
+
+    /// The dated entries, by date.
+    pub fn dated_entries(&self) -> impl Iterator<Item = (Date, DatedEntry)> + '_ {
+        self.dated.iter().map(|(date, entry)| (*date, *entry))
     }
 
     fn closed_weekly(&self, weekday: Weekday) -> bool {
@@ -220,6 +250,31 @@ mod tests {
         );
         assert!(calendar.is_closed(date(2026, 11, 23)), "single holiday");
         assert!(!calendar.is_closed(date(2026, 11, 24)));
+    }
+
+    #[test]
+    fn a_calendar_lists_what_it_was_built_from() {
+        let calendar = weekends_closed()
+            .closed_annually(AnnualHoliday { month: 12, day: 25 })
+            .on(date(2026, 11, 20), DatedEntry::Closed);
+        assert_eq!(
+            calendar.closed_weekdays().collect::<Vec<_>>(),
+            [Weekday::Sunday, Weekday::Saturday]
+        );
+        assert_eq!(
+            calendar.annual_holidays().collect::<Vec<_>>(),
+            [AnnualHoliday { month: 12, day: 25 }]
+        );
+        assert_eq!(
+            calendar.dated_entries().collect::<Vec<_>>(),
+            [(date(2026, 11, 20), DatedEntry::Closed)]
+        );
+        assert_eq!(
+            AnnualHoliday::new(2, 29),
+            Some(AnnualHoliday { month: 2, day: 29 })
+        );
+        assert_eq!(AnnualHoliday::new(2, 30), None);
+        assert_eq!(AnnualHoliday::new(13, 1), None);
     }
 
     #[test]

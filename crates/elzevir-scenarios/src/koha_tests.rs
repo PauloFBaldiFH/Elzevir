@@ -253,11 +253,25 @@ pub fn load_koha_test(path: &Path) -> Result<KohaTestScenario, String> {
 /// Runs every case; each failing case comes back with its name.
 #[must_use]
 pub fn run_koha_test(scenario: &KohaTestScenario) -> Vec<(String, CaseError)> {
+    run_koha_test_through(scenario, &Ok)
+}
+
+/// What a case's calendar goes through before the case runs, such as being saved and read
+/// back by the store.
+pub type CalendarRoute<'a> = &'a dyn Fn(Calendar) -> Result<Calendar, String>;
+
+/// Runs every case with its calendar sent through `route`; each failing case comes back
+/// with its name.
+#[must_use]
+pub fn run_koha_test_through(
+    scenario: &KohaTestScenario,
+    route: CalendarRoute<'_>,
+) -> Vec<(String, CaseError)> {
     scenario
         .cases
         .iter()
         .filter_map(|case| {
-            run_case(&scenario.defaults, case)
+            run_case_through(&scenario.defaults, case, route)
                 .err()
                 .map(|error| (case.name.clone(), error))
         })
@@ -274,6 +288,19 @@ fn invalid(what: impl std::fmt::Display) -> CaseError {
 ///
 /// See [`CaseError`].
 pub fn run_case(defaults: &Value, case: &Case) -> Result<(), CaseError> {
+    run_case_through(defaults, case, &Ok)
+}
+
+/// Runs one case with its calendar sent through `route`.
+///
+/// # Errors
+///
+/// See [`CaseError`]; a failing route is [`CaseError::Invalid`].
+pub fn run_case_through(
+    defaults: &Value,
+    case: &Case,
+    route: CalendarRoute<'_>,
+) -> Result<(), CaseError> {
     let mut merged = defaults.clone();
     merge(&mut merged, &case.context);
     let context: Context = if merged.is_null() {
@@ -300,7 +327,8 @@ pub fn run_case(defaults: &Value, case: &Case) -> Result<(), CaseError> {
         EventSpec::Renew { at } => CircEvent::Renew { at: instant(at)? },
         EventSpec::Checkin { at } => CircEvent::Checkin { at: instant(at)? },
     };
-    let parts = Parts::from_context(&context)?;
+    let mut parts = Parts::from_context(&context)?;
+    parts.calendar = route(parts.calendar).map_err(invalid)?;
     let circ = parts.circ_context();
     let result =
         transition(&state, &event, &circ).map_err(|e| CaseError::Refused(e.to_string()))?;
