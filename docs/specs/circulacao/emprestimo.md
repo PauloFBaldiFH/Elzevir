@@ -24,6 +24,7 @@
 
 7. A verificação devolve três listas, cada uma na ordem do Koha: o que impede, o que pede confirmação e o que só avisa. O empréstimo é possível quando a primeira lista está vazia.
 8. Ordem e efeito:
+   - leitor suspenso: impede ([suspensao.md](suspensao.md));
    - leitor com cadastro vencido: impede;
    - exemplar emprestado ao mesmo leitor: pede confirmação de renovação, e os limites não contam;
    - exemplar emprestado a outro: pede confirmação, ou só avisa que será devolvido quando `AutoReturnCheckedOutItems` está ligado (padrão desligado);
@@ -54,7 +55,7 @@
 
 ### Fora desta parte
 
-18. Ficam para as tarefas que os trazem: dívidas (3.7), bloqueios, suspensões e atrasos (3.5), reservas (3.8). Cartão perdido e endereço inválido (`GNA`, `LOST`) chegam com o cadastro que os grava. O Elzevir não tem tipos de item pais, então a regra de limite do tipo pai do Koha não existe aqui.
+18. Ficam para as tarefas que os trazem: dívidas (3.7), restrições manuais e atrasos em curso (com a ficha do leitor), reservas (3.8). Cartão perdido e endereço inválido (`GNA`, `LOST`) chegam com o cadastro que os grava. O Elzevir não tem tipos de item pais, então a regra de limite do tipo pai do Koha não existe aqui.
 
 ## 2. Origem no Koha
 

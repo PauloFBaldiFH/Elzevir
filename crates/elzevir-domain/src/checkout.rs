@@ -11,6 +11,7 @@ use crate::catalog::{BranchId, PolicyId};
 use crate::circulation_rules::{CirculationRule, RuleScopeKey, effective_rule};
 use crate::due_date::{DaysMode, HardDueDate, HardDueDateCompare, LengthUnit, LoanRule};
 use crate::patron::PatronCategoryId;
+use crate::suspension::SuspensionEnd;
 
 /// One loan the patron has now, as the limits count it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -335,6 +336,9 @@ impl Default for CheckoutSettings {
 /// A reason the checkout cannot happen.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Impossible {
+    /// The patron is suspended (`DEBARRED`, with `USERBLOCKEDWITHENDDATE` or
+    /// `USERBLOCKEDNOENDDATE`).
+    Suspended(SuspensionEnd),
     /// The patron's registration has expired (`EXPIRED`).
     PatronExpired,
     /// A loan limit, when it cannot be overridden (`TOO_MANY`).
@@ -395,6 +399,8 @@ impl CheckoutCheck {
 /// What the check reads.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckoutFacts {
+    /// The patron's suspension, while it holds today.
+    pub suspended: Option<SuspensionEnd>,
     /// Whether the patron's registration has expired today.
     pub patron_expired: bool,
     /// The Item.
@@ -405,12 +411,15 @@ pub struct CheckoutFacts {
 
 /// Whether a checkout may happen.
 ///
-/// Koha: `C4::Circulation::CanBookBeIssued`, for the patron's expiry, the Item's current
-/// loan, the loan limits and the Item's status. Debts, restrictions, overdues and holds come
-/// with their tasks (doc 03, tasks 3.5, 3.7 and 3.8).
+/// Koha: `C4::Circulation::CanBookBeIssued`, for the patron's suspension and expiry, the
+/// Item's current loan, the loan limits and the Item's status. Debts, overdues and holds
+/// come with their tasks (doc 03, tasks 3.7 and 3.8).
 #[must_use]
 pub fn check_checkout(facts: &CheckoutFacts, settings: &CheckoutSettings) -> CheckoutCheck {
     let mut check = CheckoutCheck::default();
+    if let Some(end) = facts.suspended {
+        check.impossible.push(Impossible::Suspended(end));
+    }
     if facts.patron_expired {
         check.impossible.push(Impossible::PatronExpired);
     }
@@ -731,6 +740,7 @@ mod tests {
             rule: None,
         };
         let facts = CheckoutFacts {
+            suspended: Some(SuspensionEnd::Day(jiff::civil::date(2026, 12, 1))),
             patron_expired: true,
             item: ItemFacts {
                 not_for_loan: -1,
@@ -745,6 +755,7 @@ mod tests {
         assert_eq!(
             check.impossible,
             [
+                Impossible::Suspended(SuspensionEnd::Day(jiff::civil::date(2026, 12, 1))),
                 Impossible::PatronExpired,
                 Impossible::NotForLoan(-1),
                 Impossible::Withdrawn
@@ -767,6 +778,7 @@ mod tests {
         assert_eq!(
             check.impossible,
             [
+                Impossible::Suspended(SuspensionEnd::Day(jiff::civil::date(2026, 12, 1))),
                 Impossible::PatronExpired,
                 Impossible::TooMany(limit),
                 Impossible::Withdrawn
@@ -785,6 +797,7 @@ mod tests {
             rule: None,
         };
         let renewing = CheckoutFacts {
+            suspended: None,
             patron_expired: false,
             item: ItemFacts {
                 on_loan: Some(LoanHolder::ThisPatron),

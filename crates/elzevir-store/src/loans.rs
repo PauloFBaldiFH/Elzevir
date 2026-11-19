@@ -19,6 +19,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use crate::calendar::read_calendar;
 use crate::catalog::exists;
 use crate::circulation_rules::read_rules;
+use crate::restrictions::{Suspension, suspension};
 use crate::{CommandFailed, StoreError};
 
 type Applied = Result<WriteOutput, CommandFailed<WriteRefusal>>;
@@ -156,6 +157,10 @@ pub(crate) fn checkout(connection: &Connection, request: &CheckoutRequest) -> Ap
     item.facts.on_loan = holder(connection, item.id, request.patron).map_err(storage)?;
     let rules = read_rules(connection).map_err(storage)?;
     let loans = current_loans(connection, request.patron).map_err(storage)?;
+    let suspended = suspension(connection, request.patron)
+        .map_err(storage)?
+        .filter(|suspension| suspension.holds_on(request.at.date()))
+        .map(Suspension::end);
     let query = LimitQuery {
         branch: item.holding_branch,
         category,
@@ -166,6 +171,7 @@ pub(crate) fn checkout(connection: &Connection, request: &CheckoutRequest) -> Ap
     };
     let check = check_checkout(
         &CheckoutFacts {
+            suspended,
             patron_expired: expires < request.at.date(),
             item: item.facts,
             too_many: too_many(&rules, &query, &loans),

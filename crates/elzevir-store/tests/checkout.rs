@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Checkouts and checkins through the real store (docs/specs/circulacao/emprestimo.md,
-//! docs/specs/circulacao/devolucao.md).
+//! docs/specs/circulacao/devolucao.md, docs/specs/circulacao/suspensao.md).
 #![expect(
     clippy::unwrap_used,
     clippy::panic,
@@ -30,6 +30,7 @@ use elzevir_domain::checkout::{Alert, Confirm, Impossible, TooManyReason};
 use elzevir_domain::circulation_rules::RuleScopeKey;
 use elzevir_domain::patron::{Enrolment, PatronId};
 use elzevir_domain::renewal::RenewalRefusal;
+use elzevir_domain::suspension::SuspensionEnd;
 use elzevir_store::{CommandFailed, ElzevirHandler, ElzevirStore, StoreConfig};
 use jiff::Zoned;
 use jiff::civil::date;
@@ -448,6 +449,7 @@ fn a_returned_item_goes_home_and_its_transfer_arrives() {
                 to: library.central,
                 reason: TransferReason::ReturnToHome,
             },
+            suspended_until: None,
         }
     );
     assert_eq!(library.read::<i64>("SELECT count(*) FROM loans"), 0);
@@ -591,5 +593,59 @@ fn a_loan_is_renewed_within_its_count_and_not_too_soon() {
     assert_eq!(
         library.read::<i64>("SELECT renewals FROM returned_loans"),
         2
+    );
+}
+
+#[test]
+fn a_late_return_suspends_the_patron_from_borrowing() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(&dir);
+    for barcode in ["0001", "0002", "0003"] {
+        library.item(barcode, ItemStatus::default());
+    }
+    library.rules(&[
+        ("maxissueqty", "5"),
+        ("issuelength", "7"),
+        ("finedays", "2"),
+    ]);
+    library
+        .lend("0001", "2026-11-19T10:00:00-03:00", false)
+        .unwrap();
+    // Due on the 26th, back on the 30th: four days late, two days each.
+    let back = library
+        .give_back("0001", library.central, "2026-11-30T10:00:00-03:00")
+        .unwrap();
+    assert_eq!(back.loan, LoanOutcome::Ended { overdue: true });
+    assert_eq!(back.suspended_until, Some(date(2026, 12, 8)));
+    assert_eq!(
+        library.lend("0002", "2026-12-01T10:00:00-03:00", true),
+        Err(CheckoutRefusal::Impossible(vec![Impossible::Suspended(
+            SuspensionEnd::Day(date(2026, 12, 8))
+        )]))
+    );
+    // On the day it ends the patron borrows again.
+    library
+        .lend("0002", "2026-12-08T10:00:00-03:00", false)
+        .unwrap();
+    library
+        .lend("0003", "2026-12-10T10:00:00-03:00", false)
+        .unwrap();
+    // Five days late: ten days. Then three days late: six days, which do not shorten the
+    // suspension the patron already has.
+    let first = library
+        .give_back("0002", library.central, "2026-12-20T10:00:00-03:00")
+        .unwrap();
+    assert_eq!(first.suspended_until, Some(date(2026, 12, 30)));
+    let second = library
+        .give_back("0003", library.central, "2026-12-20T11:00:00-03:00")
+        .unwrap();
+    assert_eq!(second.suspended_until, Some(date(2026, 12, 30)));
+    assert_eq!(
+        library.read::<i64>("SELECT count(*) FROM patron_restrictions"),
+        1
+    );
+    assert_eq!(
+        library.read::<String>("SELECT expires FROM patron_restrictions"),
+        "2026-12-30"
     );
 }

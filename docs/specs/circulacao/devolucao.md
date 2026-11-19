@@ -1,12 +1,12 @@
 # Devolução
 
-> Status: tarefa 3.5, parte a (devolução sem multa e sem suspensão). Renovação, suspensão na devolução e a gravação do oráculo vêm nas próximas partes; a multa vem com a conta do leitor (3.7) e a reserva encontrada na devolução com as reservas (3.8). Base: Koha 26.05.05.
+> Status: tarefa 3.5, partes a e c (devolução sem multa; a suspensão está em [suspensao.md](suspensao.md)). A gravação do oráculo vem na parte d; a multa vem com a conta do leitor (3.7) e a reserva encontrada na devolução com as reservas (3.8). Base: Koha 26.05.05.
 
 ## 1. Comportamento
 
 1. O comando `circ.checkin`, com a permissão de circulação, recebe o código de barras, a unidade do balcão e o momento, no fuso da biblioteca. O código é lido sem espaços nas pontas.
 2. São recusados, sem gravar nada: código desconhecido (Koha: `BadBarcode`) e exemplar retirado (`withdrawn` diferente de 0, com `BlockReturnOfWithdrawnItems` ligado, o padrão).
-3. Com empréstimo, ele termina e passa para os empréstimos encerrados com a data da devolução e a unidade do balcão. O leitor fica gravado só quando o histórico de leitura dele é guardado ([leitores.md](leitores.md), §5). A resposta diz quem tinha o exemplar e se ele estava atrasado (vencimento antes do momento da devolução, Koha: `is_overdue`).
+3. Com empréstimo, ele termina e passa para os empréstimos encerrados com a data da devolução e a unidade do balcão. O leitor fica gravado só quando o histórico de leitura dele é guardado ([leitores.md](leitores.md), §5). A resposta diz quem tinha o exemplar e se ele estava atrasado (vencimento antes do momento da devolução, Koha: `is_overdue`). Um atraso pode suspender o leitor ([suspensao.md](suspensao.md)).
 4. Sem empréstimo, a devolução ainda acontece (Koha: `NotIssued`): o exemplar vai para a unidade do balcão e segue as regras de transferência.
 5. Um exemplar perdido é encontrado (perdido volta a 0, Koha: `WasLost`). Com `BlockReturnOfLostItems` ligado (padrão desligado), ele continua perdido, o empréstimo continua e não há transferência.
 6. O exemplar passa a estar na unidade do balcão.

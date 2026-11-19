@@ -9,12 +9,18 @@ use elzevir_domain::checkin::{
     CheckinFacts, CheckinSettings, Destination, LoanOutcome, LostOutcome, OpenTransfer,
     ReturnPolicy, TransferReason, checkin as decide,
 };
+use elzevir_domain::circulation_rules::CirculationRule;
 use elzevir_domain::circulation_rules::{RuleScopeKey, effective_rule};
 use elzevir_domain::patron::PatronId;
+use elzevir_domain::suspension::{LateReturn, SuspensionSettings, suspension_until};
 use jiff::Zoned;
+use jiff::civil::Date;
 use rusqlite::{Connection, OptionalExtension, params};
 
+use crate::calendar::read_calendar;
 use crate::circulation_rules::read_rules;
+use crate::loans::find_patron;
+use crate::restrictions::{suspend, suspension};
 use crate::{CommandFailed, StoreError};
 
 type Applied = Result<WriteOutput, CommandFailed<WriteRefusal>>;
@@ -114,17 +120,52 @@ fn open_transfer(
 ///
 /// Koha: `Koha::CirculationRules::get_return_branch_policy`, with `CircControlReturnsBranch`
 /// `ItemHomeLibrary` (the default).
-fn return_policy(connection: &Connection, item: &Item) -> rusqlite::Result<ReturnPolicy> {
-    let rules = read_rules(connection)?;
+fn return_policy(rules: &[CirculationRule], item: &Item) -> ReturnPolicy {
     let at = RuleScopeKey {
         branch: Some(item.home),
         category: None,
         policy: Some(item.policy),
     };
-    let rule = effective_rule(&rules, RuleKind::Returnbranch, &at);
-    Ok(ReturnPolicy::from_rule(
-        rule.map(|rule| rule.value.as_str()),
-    ))
+    let rule = effective_rule(rules, RuleKind::Returnbranch, &at);
+    ReturnPolicy::from_rule(rule.map(|rule| rule.value.as_str()))
+}
+
+/// Suspends the patron of a late return, and returns when their suspension ends.
+///
+/// The control branch is the desk's: the Item is already there when Koha suspends.
+///
+/// Koha: `C4::Circulation::_debar_user_on_return`.
+fn suspend_late(
+    connection: &Connection,
+    rules: &[CirculationRule],
+    item: &Item,
+    loan: &Loan,
+    request: &CheckinRequest,
+) -> rusqlite::Result<Option<Date>> {
+    let Some((category, _)) = find_patron(connection, loan.patron)? else {
+        return Ok(None);
+    };
+    let calendar = read_calendar(connection, request.desk.0)?;
+    let returned = request.at.date();
+    let current = suspension(connection, loan.patron)?
+        .filter(|current| current.holds_on(returned))
+        .and_then(|current| current.expires);
+    let late = LateReturn {
+        rules,
+        at: RuleScopeKey {
+            branch: Some(request.desk),
+            category: Some(category),
+            policy: Some(item.policy),
+        },
+        due: &loan.due,
+        returned: &request.at,
+        calendar: &calendar,
+        suspended_until: current,
+    };
+    match suspension_until(&late, &SuspensionSettings::default()) {
+        Some(until) => suspend(connection, loan.patron, until, &request.at.to_string()).map(Some),
+        None => Ok(None),
+    }
 }
 
 /// Moves the loan to the returned loans, without its patron unless the patron keeps a
@@ -168,6 +209,7 @@ pub(crate) fn checkin(connection: &Connection, request: &CheckinRequest) -> Appl
         .ok_or_else(|| refused(CheckinRefusal::UnknownBarcode))?;
     let loan = find_loan(connection, item.id).map_err(storage)?;
     let transfer = open_transfer(connection, item.id).map_err(storage)?;
+    let rules = read_rules(connection).map_err(storage)?;
     let facts = CheckinFacts {
         desk: request.desk,
         home: item.home,
@@ -176,15 +218,20 @@ pub(crate) fn checkin(connection: &Connection, request: &CheckinRequest) -> Appl
         lost: item.lost,
         due: loan.as_ref().map(|loan| loan.due.clone()),
         transfer: transfer.map(|(_, transfer)| transfer),
-        policy: return_policy(connection, &item).map_err(storage)?,
+        policy: return_policy(&rules, &item),
         at: request.at.clone(),
     };
     let done = decide(&facts, &CheckinSettings::default())
         .map_err(|_| refused(CheckinRefusal::Withdrawn))?;
     let mut patron = None;
-    if let (LoanOutcome::Ended { .. }, Some(loan)) = (done.loan, &loan) {
+    let mut suspended_until = None;
+    if let (LoanOutcome::Ended { overdue }, Some(loan)) = (done.loan, &loan) {
         end_loan(connection, loan, request).map_err(storage)?;
         patron = Some(loan.patron);
+        if overdue {
+            suspended_until =
+                suspend_late(connection, &rules, &item, loan, request).map_err(storage)?;
+        }
     }
     let found = done.lost == LostOutcome::Found;
     connection
@@ -227,6 +274,7 @@ pub(crate) fn checkin(connection: &Connection, request: &CheckinRequest) -> Appl
             loan: done.loan,
             lost: done.lost,
             destination: done.destination,
+            suspended_until,
         },
     )))
 }

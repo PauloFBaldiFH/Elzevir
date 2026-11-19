@@ -136,13 +136,25 @@ pub fn calc_fine(due: &Zoned, end: &Zoned, context: &FineContext<'_>) -> Fine {
 }
 
 /// Overdue units between `due` and `end`.
+fn chargeable_units(unit: LengthUnit, due: &Zoned, end: &Zoned, context: &FineContext<'_>) -> i64 {
+    overdue_units(unit, due, end, context.calendar, context.fines_calendar)
+}
+
+/// Overdue units between `due` and `end`, without the closed days of `calendar` when
+/// `fines_calendar` says so; for fines and for suspensions.
 ///
 /// Koha: `C4::Overdues::get_chargeable_units`, `Koha::Calendar::days_between` and
 /// `hours_between`.
-fn chargeable_units(unit: LengthUnit, due: &Zoned, end: &Zoned, context: &FineContext<'_>) -> i64 {
-    let closed = || match context.fines_calendar {
+pub(crate) fn overdue_units(
+    unit: LengthUnit,
+    due: &Zoned,
+    end: &Zoned,
+    calendar: &Calendar,
+    fines_calendar: FinesCalendar,
+) -> i64 {
+    let closed = || match fines_calendar {
         FinesCalendar::Ignore => 0,
-        FinesCalendar::NoFinesWhenClosed => context.calendar.closed_days(due.date(), end.date()),
+        FinesCalendar::NoFinesWhenClosed => calendar.closed_days(due.date(), end.date()),
     };
     match unit {
         LengthUnit::Days => {

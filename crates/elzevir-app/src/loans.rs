@@ -8,6 +8,7 @@ use elzevir_domain::checkout::{Alert, Confirm, Impossible};
 use elzevir_domain::patron::PatronId;
 use elzevir_domain::renewal::RenewalRefusal;
 use jiff::Zoned;
+use jiff::civil::Date;
 use serde::{Deserialize, Serialize};
 
 /// Most characters of a barcode the checkout reads.
@@ -114,6 +115,8 @@ pub struct CheckedIn {
     pub lost: LostOutcome,
     /// Where the Item goes next.
     pub destination: Destination,
+    /// When the patron's suspension ends, when a late return suspended them.
+    pub suspended_until: Option<Date>,
 }
 
 /// Why a checkin did not happen.

@@ -32,6 +32,7 @@ use elzevir_domain::catalog::{BranchId, InstanceId, PolicyId};
 use elzevir_domain::checkout::{Confirm, Impossible, TooMany, TooManyReason};
 use elzevir_domain::circulation_rules::RuleScopeKey;
 use elzevir_domain::patron::{Enrolment, PatronCategoryId, PatronId};
+use elzevir_domain::suspension::SuspensionEnd;
 use elzevir_store::{CommandFailed, ElzevirHandler, ElzevirStore, StoreConfig};
 use jiff::civil::date;
 use serde::Deserialize;
@@ -344,6 +345,13 @@ fn elzevir_keys(outcome: &Result<CheckedOut, CheckoutRefusal>) -> Keys {
         Err(CheckoutRefusal::Impossible(reasons)) => {
             for reason in reasons {
                 let key = match reason {
+                    Impossible::Suspended(end) => {
+                        keys.blockers.insert("DEBARRED".to_owned());
+                        match end {
+                            SuspensionEnd::Day(_) => "USERBLOCKEDWITHENDDATE",
+                            SuspensionEnd::WhenLifted => "USERBLOCKEDNOENDDATE",
+                        }
+                    }
                     Impossible::PatronExpired => "EXPIRED",
                     Impossible::TooMany(too_many) => {
                         keys.too_many = Some(limit(too_many));

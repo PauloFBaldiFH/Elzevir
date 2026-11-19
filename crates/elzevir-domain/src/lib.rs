@@ -15,3 +15,4 @@ pub mod fine;
 pub mod patron;
 pub mod renewal;
 pub mod statement;
+pub mod suspension;
