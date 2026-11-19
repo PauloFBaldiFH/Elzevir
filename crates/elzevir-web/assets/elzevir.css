@@ -588,7 +588,8 @@ a.chip-identifier:hover { text-decoration: underline; }
 .codes-refused { border-color: var(--elzevir-color-signal-out); background: var(--elzevir-color-out-bg); color: var(--elzevir-color-out-text); }
 
 /* Prepared imports use the same spacing and colour tokens as the staff catalog. */
-.import-workspace { max-inline-size: 68rem; margin-inline: auto; }
+main:has(.import-workspace) { max-width: 90rem; }
+.import-workspace { max-inline-size: 90rem; margin-inline: auto; }
 .import-workspace form, .import-workspace > details, .import-workspace article {
   margin-block: var(--elzevir-space);
   padding: var(--elzevir-space);
@@ -607,7 +608,15 @@ a.chip-identifier:hover { text-decoration: underline; }
 .import-workspace form button { margin-block-start: .5rem; }
 .import-workspace [role="alert"] { color: var(--elzevir-color-error); }
 .import-workspace nav a { margin-inline-end: var(--elzevir-space); }
-.import-record { display: grid; gap: var(--elzevir-space); grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); }
+.import-record { display: grid; gap: var(--elzevir-space); grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
+.import-record:not(:has(.import-source)) { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 52rem) { .import-record { grid-template-columns: minmax(0, 1fr); } }
+.import-blocks { display: grid; gap: var(--elzevir-space); min-inline-size: 0; }
+.import-block { border: 1px solid var(--elzevir-color-border); border-radius: .5rem; padding: .5rem .75rem; min-inline-size: 0; }
+.import-block .all-fields { margin-top: 0; border-top: 0; padding-top: 0; }
+.import-workspace .import-block .all-fields-list { grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); }
+.import-source { position: sticky; inset-block-start: var(--elzevir-space); min-inline-size: 0; }
+.import-source pre { max-block-size: 70vh; }
 .import-workspace pre { max-block-size: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .import-workspace dl { display: grid; grid-template-columns: max-content 1fr; gap: .35rem 1rem; }
 .import-workspace dd { margin: 0; overflow-wrap: anywhere; }

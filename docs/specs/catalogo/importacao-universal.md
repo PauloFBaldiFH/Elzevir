@@ -306,6 +306,15 @@ explícita de substituição.
 
 A amostra inicial tem três registros em blocos Obra / Instância / Exemplar;
 todos os demais e todos os diagnósticos são acessíveis por paginação.
+Cada bloco mostra todos os campos preenchidos do registro preparado, com os
+mesmos rótulos e a mesma marcação do bloco focado do acervo
+([listagem](listagem.md), itens 42 a 45): o catalogador vê o registro como
+ele será catalogado, não um resumo. Exemplares aparecem na tabela da grade,
+com unidade, localização, coleção e política pelo **nome** do cadastro;
+sem leitura dos cadastros, a tela mostra só a contagem. Origem MARC aparece
+ao lado dos blocos (original e, se houver, editado); em tela estreita, abaixo.
+A prévia carrega o próprio `NewRecord` que a escritora receberia, de modo que
+o que aparece nos blocos é o que a confirmação grava.
 Cada problema identifica posição, campo/célula, gravidade e motivo. Não
 confunde linha física de CSV multilinha com o número do registro lógico.
 

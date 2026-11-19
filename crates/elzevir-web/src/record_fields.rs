@@ -7,7 +7,7 @@ use std::sync::Arc;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
-use elzevir_app::catalog::{CodeLists, ItemData, NewRecord};
+use elzevir_app::catalog::{CodeLists, ItemData, ItemStatus, NativeItem, NewRecord};
 use elzevir_app::codes::CodeTable;
 use elzevir_app::export::stored_record;
 use elzevir_app::material::material_of;
@@ -111,7 +111,7 @@ fn joined(parts: impl IntoIterator<Item = String>) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
-fn work_group(t: &I18n, record: &NewRecord) -> FieldGroup {
+pub(crate) fn work_group(t: &I18n, record: &NewRecord) -> FieldGroup {
     let mut fields = Vec::new();
     push(
         &mut fields,
@@ -214,7 +214,7 @@ fn work_group(t: &I18n, record: &NewRecord) -> FieldGroup {
     }
 }
 
-fn instance_group(t: &I18n, record: &NewRecord) -> FieldGroup {
+pub(crate) fn instance_group(t: &I18n, record: &NewRecord) -> FieldGroup {
     let instance = &record.instance;
     let optional = |value: &Option<String>| value.iter().map(|text| plain(text)).collect();
     let mut fields = Vec::new();
@@ -300,7 +300,7 @@ fn instance_group(t: &I18n, record: &NewRecord) -> FieldGroup {
 }
 
 /// One Item, with names in place of codes (exemplares.md, item 29).
-fn item_fields(item: &ItemData, codes: &CodeLists) -> ItemFields {
+pub(crate) fn item_fields(item: &ItemData, codes: &CodeLists) -> ItemFields {
     let (signal_class, signal_key) = signal(item.status.signal());
     ItemFields {
         barcode: item.barcode.clone(),
@@ -330,6 +330,30 @@ fn item_fields(item: &ItemData, codes: &CodeLists) -> ItemFields {
         signal_class,
         signal_key,
         signal_icon: signal_icon(item.status.signal()),
+    }
+}
+
+/// One Item of a native source (a sheet), with the registry names in place of the
+/// identifiers the preparation resolved. A new Item has every status at 0.
+pub(crate) fn native_item_fields(item: &NativeItem, codes: &CodeLists) -> ItemFields {
+    let fields = &item.fields;
+    let signal_of = ItemStatus::default().signal();
+    let (signal_class, signal_key) = signal(signal_of);
+    ItemFields {
+        barcode: fields.barcode.clone(),
+        inventory_number: fields.inventory_number.clone(),
+        home_branch: codes.branch(fields.home_branch).to_owned(),
+        holding_branch: (fields.holding_branch != fields.home_branch)
+            .then(|| codes.branch(fields.holding_branch).to_owned()),
+        policy: codes.policy(fields.policy).to_owned(),
+        call_number: fields.call_number.clone(),
+        location: fields.location.map(|id| codes.location(id).to_owned()),
+        collection: fields.collection.map(|id| codes.collection(id).to_owned()),
+        copy_number: fields.copy_number.clone(),
+        acquired_on: None,
+        signal_class,
+        signal_key,
+        signal_icon: signal_icon(signal_of),
     }
 }
 
@@ -403,5 +427,71 @@ async fn form(
     match level {
         Level::Work => render(&work_form(t, record, view.work.0, view.work_version)),
         Level::Instance => render(&instance_form(t, record, instance.0, view.version)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use elzevir_app::catalog::{Named, Place};
+    use elzevir_app::items::ItemFields as Fields;
+    use elzevir_domain::catalog::{BranchId, CollectionId, PolicyId, SublocationId};
+
+    use super::*;
+
+    #[test]
+    fn a_native_item_shows_registry_names_and_a_new_item_signal() {
+        let codes = CodeLists {
+            branches: vec![
+                Named {
+                    id: BranchId(1),
+                    name: "Central branch".into(),
+                },
+                Named {
+                    id: BranchId(2),
+                    name: "North branch".into(),
+                },
+            ],
+            policies: vec![Named {
+                id: PolicyId(3),
+                name: "Two weeks".into(),
+            }],
+            locations: vec![Place {
+                id: SublocationId(4),
+                branch: BranchId(1),
+                name: "Reading room".into(),
+            }],
+            collections: vec![Place {
+                id: CollectionId(5),
+                branch: BranchId(1),
+                name: "Local authors".into(),
+            }],
+            ..CodeLists::default()
+        };
+        let item = NativeItem {
+            fields: Fields {
+                barcode: Some("000123".into()),
+                inventory_number: None,
+                home_branch: BranchId(1),
+                holding_branch: BranchId(2),
+                policy: PolicyId(3),
+                call_number: Some("869.3 A123".into()),
+                location: Some(SublocationId(4)),
+                collection: Some(CollectionId(5)),
+                copy_number: None,
+                price: None,
+            },
+            description: elzevir_domain::statement::Description::default(),
+        };
+        let shown = native_item_fields(&item, &codes);
+        assert_eq!(shown.home_branch, "Central branch");
+        assert_eq!(shown.holding_branch.as_deref(), Some("North branch"));
+        assert_eq!(shown.policy, "Two weeks");
+        assert_eq!(shown.location.as_deref(), Some("Reading room"));
+        assert_eq!(shown.collection.as_deref(), Some("Local authors"));
+        assert_eq!(shown.barcode.as_deref(), Some("000123"));
+        assert_eq!(
+            (shown.signal_class, shown.signal_key),
+            signal(ItemStatus::default().signal())
+        );
     }
 }

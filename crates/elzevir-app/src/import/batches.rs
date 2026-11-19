@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use super::edits::{Recipe, RenderReport};
 use super::preview::PreviewReport;
+use crate::catalog::CodeLists;
 use crate::import_detection::ImportFormat;
 use crate::staff::StaffId;
 
@@ -49,6 +50,9 @@ pub struct BatchPreview {
     pub rendered: RenderReport,
     /// Validation and matching predictions.
     pub report: PreviewReport,
+    /// The registries read with the preview, to show names in place of identifiers
+    /// and edge codes. `None` when the catalog could not be read.
+    pub codes: Option<CodeLists>,
 }
 
 /// The operator's prepared revision.

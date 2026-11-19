@@ -135,7 +135,9 @@ fn print_preview(
     preview: &BatchPreview,
     matching: Option<elzevir_app::matching::Matching>,
 ) -> Result<(), String> {
-    let BatchPreview { rendered, report } = preview;
+    let BatchPreview {
+        rendered, report, ..
+    } = preview;
     println!(
         "{} original records, {} excluded, {} edited, {} items to submit, matching {:?}",
         rendered.read, rendered.excluded, rendered.changed, report.items, matching
