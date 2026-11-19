@@ -6,6 +6,7 @@
 pub mod calendar;
 pub mod call_number;
 pub mod catalog;
+pub mod checkin;
 pub mod checkout;
 pub mod circulation;
 pub mod circulation_rules;

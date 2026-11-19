@@ -42,6 +42,7 @@ mod places;
 mod preview;
 mod readers;
 mod registries;
+mod returns;
 mod saved_lists;
 mod schema;
 mod statements;

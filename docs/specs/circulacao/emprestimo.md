@@ -48,7 +48,7 @@
 12. O código de barras é lido sem espaços nas pontas (Koha: `barcodedecode` sem filtro). Código desconhecido, leitor desconhecido ou unidade do balcão desconhecida são recusados.
 13. A unidade de controle é a unidade em que o exemplar está (Koha: `CircControl` = `ItemHomeLibrary` com `HomeOrHoldingBranch` = `holdingbranch`, os padrões). Os empréstimos atuais do leitor contam pela unidade em que cada exemplar está. A data de devolução usa as regras e o calendário dessa unidade, sem horário de funcionamento e sem `ReturnBeforeExpiry` (os padrões), e é truncada no minuto.
 14. O que impede recusa com a lista. O que pede confirmação recusa com a lista até a equipe confirmar. Os avisos voltam com o empréstimo.
-15. Um exemplar já emprestado é recusado mesmo com confirmação: devolver e renovar chegam com a tarefa 3.5.
+15. Um exemplar já emprestado é recusado mesmo com confirmação: a equipe o devolve antes ([devolucao.md](devolucao.md)), e a renovação chega na tarefa 3.5.
 16. O empréstimo grava o leitor, o exemplar, a unidade do balcão, o momento, a data de devolução e se é local. O exemplar passa para a unidade do balcão e deixa de estar perdido (Koha: `AddIssue`).
 17. Os empréstimos não entram no resumo da importação.
 

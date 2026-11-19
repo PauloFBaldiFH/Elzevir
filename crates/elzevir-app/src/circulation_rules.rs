@@ -8,7 +8,9 @@ use elzevir_domain::circulation_rules::{
 use serde::{Deserialize, Serialize};
 
 use crate::calendar::CalendarChange;
-use crate::loans::{CheckedOut, CheckoutRefusal, CheckoutRequest};
+use crate::loans::{
+    CheckedIn, CheckedOut, CheckinRefusal, CheckinRequest, CheckoutRefusal, CheckoutRequest,
+};
 use crate::staff::StaffId;
 
 /// Most rules one change may set.
@@ -23,6 +25,8 @@ pub enum CirculationCommand {
     ChangeCalendar(CalendarChange),
     /// Lends an Item to a patron (docs/specs/circulacao/emprestimo.md).
     Checkout(CheckoutRequest),
+    /// Takes an Item back (docs/specs/circulacao/devolucao.md).
+    Checkin(CheckinRequest),
 }
 
 /// New values for some rules at one scope.
@@ -51,6 +55,8 @@ pub enum CirculationOutput {
     },
     /// An Item was lent.
     CheckedOut(CheckedOut),
+    /// An Item was checked in.
+    CheckedIn(CheckedIn),
 }
 
 /// Why a circulation command was refused.
@@ -91,6 +97,9 @@ pub enum CirculationRefusal {
     /// A checkout was refused.
     #[error(transparent)]
     Checkout(#[from] CheckoutRefusal),
+    /// A checkin was refused.
+    #[error(transparent)]
+    Checkin(#[from] CheckinRefusal),
 }
 
 impl CirculationRefusal {
@@ -118,6 +127,7 @@ impl CirculationRefusal {
             Self::BadHolidayTitle => "calendar-error-title",
             Self::BadWeekday | Self::BadDates => "calendar-error-dates",
             Self::Checkout(refusal) => refusal.message_key(),
+            Self::Checkin(refusal) => refusal.message_key(),
         }
     }
 }
