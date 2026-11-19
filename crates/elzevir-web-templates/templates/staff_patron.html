@@ -1,15 +1,46 @@
 {% extends "base.html" %}
 {% block title %}{{ name }}{% endblock %}
 {% block content %}
-<article class="patron-record">
-<p><a href="/equipe/leitores">{{ t.get("patrons-back") }}</a></p>
+<form method="post" action="/equipe/leitores/{{ id }}/circulacao" class="wall">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<article class="patron-record wall-patron">
+<p><a href="/equipe/leitores">{{ t.get("patrons-back") }}</a> · <a href="/equipe/circulacao/devolucao">{{ t.get("checkin-title") }}</a></p>
 <h1>{{ name }}</h1>
 {% if let Some(url) = edit_url %}<p><a href="{{ url }}">{{ t.get("patron-edit") }}</a></p>{% endif %}
 {% if expired %}<p class="codes-alert codes-refused" role="alert">{{ t.get("patron-expired-alert") }}</p>{% endif %}
+{% if let Some(suspended) = suspended %}<p class="codes-alert codes-refused" role="alert">{{ suspended }}</p>{% endif %}
+<fieldset class="checkout-box">
+  <legend>{{ t.get("checkout-title") }}</legend>
+  <label for="checkout-barcode">{{ t.get("checkout-barcode") }}</label>
+  <input type="text" id="checkout-barcode" name="barcode" value="{{ barcode }}" maxlength="64" autocomplete="off" autofocus>
+  <button type="submit" name="op" value="lend">{{ t.get("checkout-lend") }}</button>
+  {% if confirm %}<button type="submit" name="op" value="confirm">{{ t.get("checkout-confirm") }}</button>{% endif %}
+  <label for="checkout-desk">{{ t.get("circulation-desk") }}</label>
+  <select id="checkout-desk" name="desk">{% for desk in desks %}<option value="{{ desk.id }}"{% if desk.selected %} selected{% endif %}>{{ desk.name }}</option>{% endfor %}</select>
+</fieldset>
+{% for notice in notices %}<p class="codes-alert{% if notice.refused %} codes-refused{% endif %}" role="{% if notice.refused %}alert{% else %}status{% endif %}">{{ notice.text }}</p>{% endfor %}
 <dl class="patron-fields">
 {% for (label, value) in rows %}
   <dt>{{ t.get(label) }}</dt><dd>{{ value }}</dd>
 {% endfor %}
 </dl>
 </article>
+{# After the record, so Enter in the barcode box lends; the stylesheet puts it on the left. #}
+<section class="wall-loans" aria-labelledby="loans-title">
+  <h2 id="loans-title">{{ t.get_numbers("loans-title", [("count", loans.len() as u64)]) }}</h2>
+  {% if loans.is_empty() %}<p class="form-hint">{{ t.get("loans-none") }}</p>{% endif %}
+  <ol class="loan-list">
+  {% for loan in loans %}
+    <li class="loan{% if loan.overdue %} loan-overdue{% endif %}{% if loan.new %} loan-new{% endif %}">
+      <span class="loan-title">{{ loan.title }}</span>
+      <span class="loan-meta"><code>{{ loan.barcode }}</code> · {{ t.get_with("loans-due", "date", loan.due) }}{% if loan.overdue %} <strong>{{ t.get("loans-overdue") }}</strong>{% endif %}{% if let Some(renewals) = loan.renewals %} · {{ renewals }}{% endif %}</span>
+      <span class="loan-actions">
+        <button type="submit" name="op" value="renew:{{ loan.barcode }}">{{ t.get("loans-renew") }}</button>
+        <button type="submit" name="op" value="return:{{ loan.barcode }}">{{ t.get("loans-return") }}</button>
+      </span>
+    </li>
+  {% endfor %}
+  </ol>
+</section>
+</form>
 {% endblock %}

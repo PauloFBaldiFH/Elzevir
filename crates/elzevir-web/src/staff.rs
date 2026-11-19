@@ -31,6 +31,9 @@ pub(crate) async fn home(State(state): State<AppState>, headers: HeaderMap) -> R
                 && (session.identity.can(Permission::Circulation)
                     || session.identity.can(Permission::Patrons)),
         ),
+        circulation: Visibility::when(
+            state.loans.is_some() && session.identity.can(Permission::Circulation),
+        ),
         can_import: state.imports.is_some() && session.identity.can(Permission::Cataloguing),
         csrf: &session.csrf,
     })

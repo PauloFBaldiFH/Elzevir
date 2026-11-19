@@ -32,8 +32,8 @@ pub use staff_item_grid::{
     GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid, SuggestedCallNumber,
 };
 pub use staff_patrons::{
-    CategoryLine, PatronFormValues, PatronLine, StaffPatron, StaffPatronCategories,
-    StaffPatronForm, StaffPatrons,
+    CategoryLine, DeskOption, LoanLine, Notice, PatronFormValues, PatronLine, StaffCheckin,
+    StaffPatron, StaffPatronCategories, StaffPatronForm, StaffPatrons,
 };
 pub use staff_record_fields::{FieldEntry, FieldGroup, FieldValue, ItemFields, RecordFields};
 pub use staff_record_form::{
@@ -413,6 +413,8 @@ pub struct StaffHome<'a> {
     pub can_catalogue: bool,
     /// The patrons link, for circulation or patron management.
     pub patrons: Visibility,
+    /// Whether the checkin desk is shown (the circulation permission).
+    pub circulation: Visibility,
     /// Whether prepared imports are available to this operator.
     pub can_import: bool,
     /// Anti-forgery token for the sign-out form.

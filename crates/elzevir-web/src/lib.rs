@@ -11,6 +11,7 @@ mod authorities;
 mod batch;
 mod calendar;
 mod catalog;
+mod circulation;
 mod circulation_rules;
 mod creating;
 mod described;
@@ -90,6 +91,7 @@ pub struct AppState {
     inner: Arc<Inner>,
     imports: Option<Arc<importing::Imports>>,
     patrons: Option<Arc<dyn elzevir_app::patrons::PatronDesk>>,
+    loans: Option<Arc<dyn elzevir_app::loans::LoanDesk>>,
     rules: Option<Arc<dyn elzevir_app::circulation_rules::RuleBook>>,
     calendar: Option<Arc<dyn elzevir_app::calendar::CalendarBook>>,
 }
@@ -125,6 +127,7 @@ impl AppState {
         Self {
             imports: None,
             patrons: None,
+            loans: None,
             rules: None,
             calendar: None,
             inner: Arc::new(Inner {
@@ -157,6 +160,14 @@ impl AppState {
     #[must_use]
     pub fn with_patrons(mut self, desk: Arc<dyn elzevir_app::patrons::PatronDesk>) -> Self {
         self.patrons = Some(desk);
+        self
+    }
+
+    /// Connects the circulation desk (interface §18.3). Without it the patron's record and
+    /// the checkin desk answer 404.
+    #[must_use]
+    pub fn with_loans(mut self, desk: Arc<dyn elzevir_app::loans::LoanDesk>) -> Self {
+        self.loans = Some(desk);
         self
     }
 
@@ -199,7 +210,6 @@ pub fn router(state: AppState) -> Router {
             "/equipe/leitores/novo",
             get(patron_form::new_patron).post(patron_form::add_patron),
         )
-        .route("/equipe/leitores/{id}", get(patrons::record))
         .route(
             "/equipe/leitores/{id}/editar",
             get(patron_form::edit_patron).post(patron_form::update_patron),
@@ -272,6 +282,7 @@ pub fn router(state: AppState) -> Router {
         .merge(admin_routes())
         .merge(authority_routes())
         .merge(importing::routes())
+        .merge(circulation::routes())
         .layer(axum::middleware::map_response(security::headers))
         .with_state(state)
 }

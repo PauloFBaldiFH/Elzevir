@@ -33,6 +33,7 @@ mod import;
 mod items;
 mod koha_types;
 mod listing;
+mod loan_desk;
 mod loans;
 mod matching;
 mod native_items;

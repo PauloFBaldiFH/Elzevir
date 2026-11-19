@@ -862,3 +862,54 @@ calendar-month-10 = October
 calendar-month-11 = November
 calendar-month-12 = December
 calendar-month-title = { $month } { $year }
+loans-title = { $count ->
+    [0] Loans
+    [one] One loan
+   *[other] { $count } loans
+}
+loans-none = No loans.
+loans-due = Due { $date }
+loans-overdue = overdue
+loans-renewals = { $count ->
+    [one] renewed once
+   *[other] renewed { $count } times
+}
+loans-renew = Renew
+loans-return = Return
+checkout-title = Lend
+checkout-barcode = Item barcode
+checkout-lend = Lend
+checkout-confirm = Confirm and lend
+circulation-desk = Desk at
+checkout-done = Lent until { $date }: { $barcode }.
+checkout-alert-lost = The item was lost; it is found now.
+checkout-alert-returned = Another patron had this item; it was returned first.
+checkout-impossible-suspended = The patron is suspended until { $date }.
+checkout-impossible-suspended-lifted = The patron is suspended until the staff lift it.
+checkout-impossible-expired = The patron's enrolment is over.
+checkout-impossible-too-many = The loan limit is reached: { $count } of { $max }.
+checkout-impossible-not-for-loan = The item is not for loan.
+checkout-impossible-withdrawn = The item is withdrawn.
+checkout-impossible-restricted = The item is restricted.
+checkout-confirm-renew = The patron already has this item.
+checkout-confirm-issued-to-another = Another patron has this item; it will be returned first.
+checkout-confirm-cannot-borrow = The rules let this patron borrow none of these.
+checkout-confirm-too-many = The loan limit is reached: { $count } of { $max }.
+checkout-confirm-not-for-loan = The item is not for loan.
+checkout-confirm-lost = The item is lost.
+patron-suspended = Suspended until { $date }.
+patron-suspended-lifted = Suspended until the staff lift it.
+renew-done = Renewed until { $date }.
+checkin-title = Return
+checkin-hint = Scan each item; the desk stays the same until you change it.
+checkin-done = Returned: { $barcode }.
+checkin-not-on-loan = { $barcode } was not on loan.
+checkin-overdue = It was overdue.
+checkin-suspended = The patron is suspended until { $date }.
+checkin-found = It was lost; it is found now.
+checkin-kept-lost = It stays lost and on loan.
+checkin-send = Send it to { $branch }.
+checkin-needs = It belongs at { $branch }: send it there.
+checkin-arrived = Its transfer from { $branch } has arrived.
+checkin-wrong-branch = It is in transit to { $branch }: send it there.
+circulation-busy = The system is busy. Try again.

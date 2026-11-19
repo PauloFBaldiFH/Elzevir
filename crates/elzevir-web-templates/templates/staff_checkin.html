@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ t.get("checkin-title") }}{% endblock %}
+{% block content %}
+<div class="patrons">
+<h1>{{ t.get("checkin-title") }}</h1>
+<form method="post" action="/equipe/circulacao/devolucao" class="checkout-box">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label for="checkin-barcode">{{ t.get("checkout-barcode") }}</label>
+  <input type="text" id="checkin-barcode" name="barcode" maxlength="64" autocomplete="off" autofocus>
+  <button type="submit">{{ t.get("loans-return") }}</button>
+  <label for="checkin-desk">{{ t.get("circulation-desk") }}</label>
+  <select id="checkin-desk" name="desk">{% for desk in desks %}<option value="{{ desk.id }}"{% if desk.selected %} selected{% endif %}>{{ desk.name }}</option>{% endfor %}</select>
+</form>
+<p class="form-hint">{{ t.get("checkin-hint") }}</p>
+{% for notice in notices %}<p class="codes-alert{% if notice.refused %} codes-refused{% endif %}" role="{% if notice.refused %}alert{% else %}status{% endif %}">{{ notice.text }}</p>{% endfor %}
+</div>
+{% endblock %}
