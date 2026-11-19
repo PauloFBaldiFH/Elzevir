@@ -407,3 +407,66 @@ fn staff_import_reviews_private_revisions_and_commits_with_the_session_actor() {
     drop(server);
     assert_eq!(records(data.path()), vec![Some(operator.0); 4]);
 }
+
+#[test]
+fn staff_import_rules_form_edits_the_saved_recipe() {
+    const SOURCE: &str = concat!(
+        "=LDR  00000nam a2200000 a 4500\n=245  10$aFirst synthetic record\n\n",
+        "=LDR  00000nam a2200000 a 4500\n=245  10$aSecond synthetic record\n",
+    );
+    let data = tempfile::tempdir().unwrap();
+    account(data.path());
+    let (server, address) = start(data.path());
+    let (ana, bia) = (sign_in(address, "ana"), sign_in(address, "bia"));
+    let get = |url: &str, cookie: &str| {
+        request(address, "GET", url, &format!("Cookie: {cookie}\r\n"), "")
+    };
+    let token = csrf(&get(IMPORT, &ana)).to_owned();
+    let created = upload(address, &ana, &token, SOURCE, false);
+    assert_status(&created, 303);
+    let url = header(&created, "location").to_owned();
+    let rule = format!("{url}/regra");
+    let post = |cookie: &str, body: &str| form(address, &rule, cookie, body);
+
+    let add =
+        "action=add&record=&tag=500&op=add_field&indicators=%23%23&subfields=%24aDonated+copy";
+    assert_status(&post(&ana, &format!("csrf=invalid&revision=1&{add}")), 403);
+    let other = csrf(&get(IMPORT, &bia)).to_owned();
+    assert_status(&post(&bia, &format!("csrf={other}&revision=1&{add}")), 404);
+    let refused = post(
+        &ana,
+        &format!("csrf={token}&revision=1&action=add&tag=24&op=remove_field"),
+    );
+    assert_status(&refused, 422);
+    assert!(refused.contains("three digits"));
+
+    assert_status(&post(&ana, &format!("csrf={token}&revision=1&{add}")), 303);
+    let page = get(&url, &ana);
+    assert!(page.contains("Every record") && page.contains("$aDonated copy"));
+    assert_status(&post(&ana, &format!("csrf={token}&revision=1&{add}")), 409);
+
+    let exclude = format!("csrf={token}&revision=2&action=exclude&record=2");
+    assert_status(&post(&ana, &exclude), 303);
+    let matching = format!(
+        "csrf={token}&revision=3&action=matching&rule=isbn&on_match=replace&on_no_match=create&items=new"
+    );
+    assert_status(&post(&ana, &matching), 303);
+    let page = get(&url, &ana);
+    assert!(page.contains("Include again"));
+    assert!(page.contains(r#"<option value="isbn" selected>"#));
+
+    let remove = format!("csrf={token}&revision=4&action=remove&index=0");
+    assert_status(&post(&ana, &remove), 303);
+    let page = get(&url, &ana);
+    assert!(page.contains("No edit rules yet") && !page.contains("$aDonated copy"));
+    let preview = form(
+        address,
+        &format!("{url}/prever"),
+        &ana,
+        &format!("csrf={token}&revision=5"),
+    );
+    assert_status(&preview, 200);
+    assert!(preview.contains("First synthetic record"));
+    assert!(!preview.contains("Second synthetic record"));
+    drop(server);
+}

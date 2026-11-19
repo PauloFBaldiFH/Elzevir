@@ -620,3 +620,16 @@ main:has(.import-workspace) { max-width: 90rem; }
 .import-workspace pre { max-block-size: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .import-workspace dl { display: grid; grid-template-columns: max-content 1fr; gap: .35rem 1rem; }
 .import-workspace dd { margin: 0; overflow-wrap: anywhere; }
+/* One-button forms (remove, include, exclude) sit inline instead of in a framed card. */
+.import-rules td form, .import-excluded form, .import-workspace form.import-exclude {
+  display: inline; margin: 0; padding: 0; border: 0;
+}
+.import-workspace td form button, .import-excluded form button { margin-block-start: 0; }
+.import-rules table { inline-size: 100%; border-collapse: collapse; }
+.import-rules th, .import-rules td { text-align: start; padding: .25rem .5rem; border-block-end: 1px solid var(--elzevir-color-border); }
+.import-rules td code { overflow-wrap: anywhere; }
+.import-rules fieldset { display: grid; gap: 0 var(--elzevir-space); grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); border: 0; padding: 0; margin: 0; }
+.import-rules fieldset legend { font-weight: 600; margin-block-end: .5rem; }
+.import-rules fieldset p { grid-column: 1 / -1; margin-block: 0 .5rem; color: var(--elzevir-color-muted); }
+.import-rules fieldset input, .import-rules fieldset select { display: block; max-inline-size: 100%; }
+.import-excluded { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: .5rem var(--elzevir-space); }

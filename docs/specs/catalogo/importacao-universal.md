@@ -387,6 +387,24 @@ Remoção, substituição e edição de subcampos ou texto atingem as ocorrênci
 selecionadas. `999 $c/$d` e `952 $9` de origem devem permanecer intactos.
 A edição só publica a nova receita e exige uma nova prévia.
 
+Na tela, a receita é editada por formulário, sem JSON. A seção **Regras de
+edição** lista as regras salvas (alcance, campo, alteração e detalhe) com
+um botão de remover em cada uma, e um formulário de regra nova: número do
+registro (vazio vale para o lote todo), campo MARC de três dígitos, a
+alteração escolhida numa lista com as sete operações, subcampo, valor,
+texto a trocar e, para campo novo ou substituído, indicadores (`#` ou `\`
+para branco) e subcampos no formato mnemônico `$aTexto$bMais`, com
+`{dollar}` para um cifrão literal. Campos de controle (001 a 009) não
+aceitam subcampo nem indicador. Cada registro da prévia tem o botão
+**Excluir da importação**; excluídos aparecem numa lista com **Incluir de
+novo**. O casamento com o acervo usa quatro listas (chave, ação quando
+encontra, ação quando não encontra e exemplares). Cada envio grava uma
+nova revisão pela mesma operação da receita JSON, confere CSRF e a
+revisão recebida, e recusa entrada inválida com a mensagem traduzida sem
+alterar a receita. A receita JSON continua disponível em **Avançado** para
+`accept_missing_barcodes`, `table` e `archive`. Planilhas não mostram as
+regras de edição MARC.
+
 O manifesto vincula revisão, operador, instituição, formato e SHA-256 do
 original. A prévia de lote verifica essa identidade, renderiza uma cópia
 temporária limitada e registra a revisão como pronta se a validação

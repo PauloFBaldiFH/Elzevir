@@ -525,6 +525,8 @@ Não é uma tela do TUI. Usa Askama + HTMX e Fluent (en antes de pt-BR).
    em blocos Obra / Instância / Exemplar. Origem MARC tem inspeção ao lado,
    comparação antes/depois e edição individual ou regras em lote.
    Planilha é editada diretamente em BIBFRAME. Aplicar regra mostra alcance.
+   Regras, exclusões e casamento são formulários com listas; o JSON da
+   receita fica recolhido em **Avançado**.
 5. **Rever problemas e casamento:** erros e avisos do arquivo inteiro,
    navegáveis até o registro/campo; códigos de barras ausentes ou repetidos
    vão para revisão. Mesmas regras e ações da CLI. Alterar uma escolha

@@ -60,6 +60,125 @@
       {% if let Some(selection) = draft.archive_selection %}<p>{{ t.get("import-archive-selected") }} <code>{{ selection }}</code></p>{% endif %}
     </details>{% endif %}
     {% if draft.editable %}
+      <section id="import-rules" class="import-rules" aria-labelledby="import-rules-heading">
+        <h2 id="import-rules-heading">{{ t.get("import-rules") }}</h2>
+        {% if let Some(rules) = draft.rules %}
+        {% if rules.is_empty() %}<p>{{ t.get("import-rules-none") }}</p>{% else %}
+        <table>
+          <thead><tr>
+            <th scope="col">{{ t.get("import-rule-scope") }}</th>
+            <th scope="col">{{ t.get("import-rule-tag-label") }}</th>
+            <th scope="col">{{ t.get("import-rule-op-label") }}</th>
+            <th scope="col">{{ t.get("import-rule-detail") }}</th>
+            <th scope="col"><span class="visually-hidden">{{ t.get("import-rule-remove") }}</span></th>
+          </tr></thead>
+          <tbody>{% for rule in rules %}
+            <tr>
+              <td>{% if let Some(record) = rule.record %}{{ t.get("import-record") }} {{ record }}{% else %}{{ t.get("import-rule-batch") }}{% endif %}</td>
+              <td><code>{{ rule.tag }}</code></td>
+              <td>{{ t.get(rule.op_key) }}</td>
+              <td><code>{{ rule.detail }}</code></td>
+              <td>
+                <form action="/equipe/acervo/importar/{{ draft.link.id }}/regra" method="post">
+                  <input type="hidden" name="csrf" value="{{ csrf }}">
+                  <input type="hidden" name="revision" value="{{ draft.revision }}">
+                  <input type="hidden" name="action" value="remove">
+                  <input type="hidden" name="index" value="{{ rule.index }}">
+                  <button type="submit">{{ t.get("import-rule-remove") }}</button>
+                </form>
+              </td>
+            </tr>{% endfor %}
+          </tbody>
+        </table>{% endif %}
+        <form class="import-rule-form" action="/equipe/acervo/importar/{{ draft.link.id }}/regra" method="post" data-import-edit>
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="revision" value="{{ draft.revision }}">
+          <input type="hidden" name="action" value="add">
+          <fieldset>
+            <legend>{{ t.get("import-rule-new") }}</legend>
+            <label>{{ t.get("import-rule-record-label") }}
+              <input name="record" inputmode="numeric" pattern="[0-9]*" size="6" aria-describedby="import-rule-record-help"></label>
+            <p id="import-rule-record-help">{{ t.get("import-rule-record-help") }}</p>
+            <label>{{ t.get("import-rule-tag-label") }}
+              <input name="tag" required inputmode="numeric" pattern="[0-9]{3}" maxlength="3" size="4"></label>
+            <label>{{ t.get("import-rule-op-label") }}
+              <select name="op" required>
+                <option value="replace_subfield">{{ t.get("import-op-replace-subfield") }}</option>
+                <option value="add_subfield">{{ t.get("import-op-add-subfield") }}</option>
+                <option value="remove_subfield">{{ t.get("import-op-remove-subfield") }}</option>
+                <option value="replace_text">{{ t.get("import-op-replace-text") }}</option>
+                <option value="add_field">{{ t.get("import-op-add-field") }}</option>
+                <option value="replace_field">{{ t.get("import-op-replace-field") }}</option>
+                <option value="remove_field">{{ t.get("import-op-remove-field") }}</option>
+              </select></label>
+            <label>{{ t.get("import-rule-code-label") }}
+              <input name="code" maxlength="1" size="2"></label>
+            <label>{{ t.get("import-rule-value-label") }}
+              <input name="value" size="40"></label>
+            <label>{{ t.get("import-rule-from-label") }}
+              <input name="from" size="20"></label>
+            <label>{{ t.get("import-rule-to-label") }}
+              <input name="to" size="20"></label>
+            <label>{{ t.get("import-rule-indicators-label") }}
+              <input name="indicators" maxlength="2" size="3" placeholder="##"></label>
+            <label>{{ t.get("import-rule-subfields-label") }}
+              <input name="subfields" size="40" placeholder="$a…$b…" aria-describedby="import-rule-subfields-help"></label>
+            <p id="import-rule-subfields-help">{{ t.get("import-rule-subfields-help") }}</p>
+          </fieldset>
+          <button type="submit">{{ t.get("import-rule-add") }}</button>
+        </form>
+        {% endif %}
+        {% if !draft.excluded.is_empty() %}
+        <h3>{{ t.get("import-excluded") }}</h3>
+        <ul class="import-excluded">{% for record in draft.excluded %}
+          <li>{{ t.get("import-record") }} {{ record }}
+            <form action="/equipe/acervo/importar/{{ draft.link.id }}/regra" method="post">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <input type="hidden" name="revision" value="{{ draft.revision }}">
+              <input type="hidden" name="action" value="include">
+              <input type="hidden" name="record" value="{{ record }}">
+              <button type="submit">{{ t.get("import-include") }}</button>
+            </form>
+          </li>{% endfor %}
+        </ul>{% endif %}
+        <form class="import-matching" action="/equipe/acervo/importar/{{ draft.link.id }}/regra" method="post">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="revision" value="{{ draft.revision }}">
+          <input type="hidden" name="action" value="matching">
+          <fieldset>
+            <legend>{{ t.get("import-matching") }}</legend>
+            <label>{{ t.get("import-matching-rule") }}
+              <select name="rule">
+                <option value="none"{% if draft.matching.rule == "none" %} selected{% endif %}>{{ t.get("import-matching-none") }}</option>
+                <option value="isbn"{% if draft.matching.rule == "isbn" %} selected{% endif %}>ISBN</option>
+                <option value="issn"{% if draft.matching.rule == "issn" %} selected{% endif %}>ISSN</option>
+                <option value="koha"{% if draft.matching.rule == "koha" %} selected{% endif %}>{{ t.get("import-matching-koha") }}</option>
+              </select></label>
+            <label>{{ t.get("import-matching-found") }}
+              <select name="on_match">
+                <option value="ignore"{% if draft.matching.on_match == "ignore" %} selected{% endif %}>{{ t.get("import-matching-keep") }}</option>
+                <option value="replace"{% if draft.matching.on_match == "replace" %} selected{% endif %}>{{ t.get("import-matching-replace") }}</option>
+                <option value="create"{% if draft.matching.on_match == "create" %} selected{% endif %}>{{ t.get("import-matching-create") }}</option>
+              </select></label>
+            <label>{{ t.get("import-matching-not-found") }}
+              <select name="on_no_match">
+                <option value="create"{% if draft.matching.on_no_match == "create" %} selected{% endif %}>{{ t.get("import-matching-create") }}</option>
+                <option value="ignore"{% if draft.matching.on_no_match == "ignore" %} selected{% endif %}>{{ t.get("import-matching-skip") }}</option>
+              </select></label>
+            <label>{{ t.get("import-matching-items") }}
+              <select name="items">
+                <option value="always"{% if draft.matching.items == "always" %} selected{% endif %}>{{ t.get("import-items-always") }}</option>
+                <option value="matches"{% if draft.matching.items == "matches" %} selected{% endif %}>{{ t.get("import-items-matches") }}</option>
+                <option value="new"{% if draft.matching.items == "new" %} selected{% endif %}>{{ t.get("import-items-new") }}</option>
+                <option value="replace"{% if draft.matching.items == "replace" %} selected{% endif %}>{{ t.get("import-items-replace") }}</option>
+                <option value="ignore"{% if draft.matching.items == "ignore" %} selected{% endif %}>{{ t.get("import-items-ignore") }}</option>
+              </select></label>
+          </fieldset>
+          <button type="submit">{{ t.get("import-matching-save") }}</button>
+        </form>
+      </section>
+      <details class="import-advanced"{% if notice.is_some() && draft.rules.is_none() %} open{% endif %}>
+      <summary>{{ t.get("import-advanced") }}</summary>
       <form action="/equipe/acervo/importar/{{ draft.link.id }}/editar" method="post" data-import-edit>
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <input type="hidden" name="revision" value="{{ draft.revision }}">
@@ -70,6 +189,7 @@
         {% if draft.format != "table" %}<details><summary>{{ t.get("import-recipe-example") }}</summary><pre>{"edits":[{"record":1,"tag":"245","change":{"op":"replace_subfield","code":"a","value":""}}]}</pre></details>{% endif %}
         <button type="submit">{{ t.get("import-save") }}</button>
       </form>
+      </details>
       <form action="/equipe/acervo/importar/{{ draft.link.id }}/prever" method="post">
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <input type="hidden" name="revision" value="{{ draft.revision }}">
@@ -95,6 +215,15 @@
               {% else if blocks.item_count > 0 %}
               <p>{{ t.get("import-items") }}: {{ blocks.item_count }}</p>
               {% endif %}
+            {% endif %}
+            {% if draft.editable %}
+              <form class="import-exclude" action="/equipe/acervo/importar/{{ draft.link.id }}/regra" method="post">
+                <input type="hidden" name="csrf" value="{{ csrf }}">
+                <input type="hidden" name="revision" value="{{ draft.revision }}">
+                <input type="hidden" name="action" value="exclude">
+                <input type="hidden" name="record" value="{{ entry.record }}">
+                <button type="submit">{{ t.get("import-exclude") }}</button>
+              </form>
             {% endif %}
             {% if let Some(candidate) = entry.candidate %}
               <p class="import-candidate">{{ t.get("import-candidate") }}: {{ candidate }}</p>

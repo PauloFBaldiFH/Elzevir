@@ -100,6 +100,39 @@ pub struct ImportDraft {
     pub archive: Option<Vec<ImportMember>>,
     /// Selected path and worksheet for the saved revision.
     pub archive_selection: Option<String>,
+    /// Saved MARC edit rules, in application order, or `None` when the source is
+    /// a spreadsheet and edit rules do not apply.
+    pub rules: Option<Vec<ImportRule>>,
+    /// Saved matching choices.
+    pub matching: ImportMatching,
+    /// One-based records excluded from the batch.
+    pub excluded: Vec<u64>,
+}
+
+/// One saved MARC edit rule.
+pub struct ImportRule {
+    /// Position in the recipe, used to remove it.
+    pub index: usize,
+    /// One-based record, or the whole batch.
+    pub record: Option<u64>,
+    /// MARC tag, such as `245`.
+    pub tag: String,
+    /// Message key of the operation.
+    pub op_key: &'static str,
+    /// Subfields or text the rule writes, in the mnemonic form cataloguers type, such as `$aTitle`.
+    pub detail: String,
+}
+
+/// The saved matching choices, as select values.
+pub struct ImportMatching {
+    /// `none`, `isbn`, `issn` or `koha`.
+    pub rule: &'static str,
+    /// `ignore`, `create` or `replace`.
+    pub on_match: &'static str,
+    /// `create` or `ignore`.
+    pub on_no_match: &'static str,
+    /// `always`, `matches`, `new`, `replace` or `ignore`.
+    pub items: &'static str,
 }
 
 /// One file in a container inventory.

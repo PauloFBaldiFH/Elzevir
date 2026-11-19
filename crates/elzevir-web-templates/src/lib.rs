@@ -17,8 +17,8 @@ pub use staff_catalog::{
     WorkListLink,
 };
 pub use staff_import::{
-    ImportBatchLink, ImportDraft, ImportMember, ImportPage, ImportPreview, ImportReceipt,
-    ImportSample, ImportUpload, ImportView, RecordBlocks,
+    ImportBatchLink, ImportDraft, ImportMatching, ImportMember, ImportPage, ImportPreview,
+    ImportReceipt, ImportRule, ImportSample, ImportUpload, ImportView, RecordBlocks,
 };
 pub use staff_item_grid::{
     GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid, SuggestedCallNumber,

@@ -17,6 +17,7 @@ mod facets;
 mod form_sections;
 mod history;
 mod icons;
+mod import_rules;
 mod importing;
 mod items;
 mod new_record;

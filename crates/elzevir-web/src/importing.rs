@@ -29,6 +29,7 @@ use elzevir_web_templates::{
 use serde::Deserialize;
 use tokio::sync::mpsc;
 
+use crate::import_rules::RuleForm;
 use crate::record_fields::{instance_group, item_fields, native_item_fields, work_group};
 use crate::security::tokens_match;
 use crate::session::ActiveSession;
@@ -230,6 +231,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/equipe/acervo/importar/{id}", get(batch))
         .route("/equipe/acervo/importar/modelo/{format}", get(model))
         .route("/equipe/acervo/importar/{id}/resultado", get(result))
+        .route("/equipe/acervo/importar/{id}/regra", post(rule))
         .route("/equipe/acervo/importar/{id}/{action}", post(change))
         .layer(axum::middleware::map_response(private))
 }
@@ -590,9 +592,70 @@ async fn edit_failure(
             session,
             *view,
             &Page::default(),
-            Some((recipe, error)),
+            Some((recipe, Failure::Batch(error))),
         ),
         _ => session.failure(state, error),
+    }
+}
+
+/// Why a change to the recipe was not saved.
+enum Failure {
+    /// The service refused the revision.
+    Batch(BatchError),
+    /// A box of the structured form is wrong; the key names it.
+    Rule(&'static str),
+}
+
+/// `POST /equipe/acervo/importar/{id}/regra`: one change through the structured form,
+/// saved as a new revision of the same recipe the CLI reads.
+async fn rule(
+    State(state): State<AppState>,
+    session: ImportSession,
+    Path(id): Path<String>,
+    form: Result<Form<RuleForm>, axum::extract::rejection::FormRejection>,
+) -> Response {
+    let Ok(Form(form)) = form else {
+        return session.error(&state, StatusCode::BAD_REQUEST, "import-invalid", None);
+    };
+    if !tokens_match(&session.active.csrf, &form.csrf) {
+        return session.error(&state, StatusCode::FORBIDDEN, "import-forbidden", None);
+    }
+    let view = match session.run(BatchCommand::View(id.clone(), None)).await {
+        Ok(BatchReply::Batch(view)) => view,
+        Ok(_) => {
+            return session.error(
+                &state,
+                StatusCode::SERVICE_UNAVAILABLE,
+                "import-unavailable",
+                None,
+            );
+        }
+        Err(error) => return session.failure(&state, error),
+    };
+    let mut recipe = view.recipe.clone();
+    if let Err(key) = crate::import_rules::apply(&mut recipe, &form) {
+        let text = serde_json::to_string_pretty(&view.recipe).unwrap_or_default();
+        return show_batch(
+            &state,
+            &session,
+            *view,
+            &Page::default(),
+            Some((text, Failure::Rule(key))),
+        );
+    }
+    let text = serde_json::to_string_pretty(&recipe).unwrap_or_default();
+    let command = BatchCommand::Edit(id.clone(), form.revision, recipe, FormatChoice::Keep);
+    match session.run(command).await {
+        Ok(BatchReply::Batch(view)) => {
+            Redirect::to(&format!("{ROOT}/{}#import-rules", view.batch.id)).into_response()
+        }
+        Ok(_) => session.error(
+            &state,
+            StatusCode::SERVICE_UNAVAILABLE,
+            "import-unavailable",
+            None,
+        ),
+        Err(error) => edit_failure(&state, &session, id, text, error).await,
     }
 }
 
@@ -601,7 +664,7 @@ fn show_batch(
     session: &ImportSession,
     view: BatchView,
     page: &Page,
-    failed: Option<(String, BatchError)>,
+    failed: Option<(String, Failure)>,
 ) -> Response {
     let t = session.translations(state);
     let BatchView {
@@ -650,8 +713,15 @@ fn show_batch(
         .as_ref()
         .and_then(|selected| serde_json::to_string(selected).ok());
     let link = batch_link(t, batch);
+    let rules =
+        (recipe.table.is_none() && format != "table").then(|| crate::import_rules::rules(&recipe));
+    let matching = crate::import_rules::matching_view(recipe.matching);
+    let excluded = recipe.exclude.iter().copied().collect();
     let (recipe, status, notice, detail) = if let Some((recipe, failure)) = failed {
-        let (status, key, detail) = error_view(failure);
+        let (status, key, detail) = match failure {
+            Failure::Batch(error) => error_view(error),
+            Failure::Rule(key) => (StatusCode::UNPROCESSABLE_ENTITY, key, None),
+        };
         (recipe, status, Some(key), detail)
     } else {
         let Ok(recipe) = serde_json::to_string_pretty(&recipe) else {
@@ -677,6 +747,9 @@ fn show_batch(
             preview,
             archive,
             archive_selection,
+            rules,
+            matching,
+            excluded,
         })),
         status,
         notice,
