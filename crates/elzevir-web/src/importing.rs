@@ -17,13 +17,14 @@ use elzevir_app::import::batches::{
     BatchCommand, BatchError, BatchPort, BatchPreview, BatchReply, BatchState, BatchSummary,
     BatchView, Completion, FormatChoice, MAX_BATCH_MANIFEST_BYTES,
 };
-use elzevir_app::import::containers::Kind;
+use elzevir_app::import::containers::{Inventory, Kind, Selection};
+use elzevir_app::import::edits::Recipe;
 use elzevir_app::import::preview::{IssueKind, MAX_IMPORT_FILE_BYTES, MAX_PREVIEW_RECORDS};
 use elzevir_app::import_detection::{Evidence, ImportFormat};
 use elzevir_app::matching::{ItemAction, Matching, OnMatch};
 use elzevir_app::staff::{Permission, StaffId};
 use elzevir_web_templates::{
-    I18n, I18nError, ImportBatchLink, ImportDraft, ImportMember, ImportPage, ImportPreview,
+    I18n, I18nError, ImportBatchLink, ImportChoice, ImportDraft, ImportPage, ImportPreview,
     ImportReceipt, ImportSample, ImportUpload, ImportView, RecordBlocks, RecordFields,
 };
 use serde::Deserialize;
@@ -232,6 +233,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/equipe/acervo/importar/modelo/{format}", get(model))
         .route("/equipe/acervo/importar/{id}/resultado", get(result))
         .route("/equipe/acervo/importar/{id}/regra", post(rule))
+        .route("/equipe/acervo/importar/{id}/planilha", post(sheet))
         .route("/equipe/acervo/importar/{id}/{action}", post(change))
         .layer(axum::middleware::map_response(private))
 }
@@ -571,12 +573,11 @@ fn parse_format(value: &str) -> Result<Option<ImportFormat>, BatchError> {
     }
 }
 
-fn parse_recipe(value: &str) -> Result<elzevir_app::import::edits::Recipe, BatchError> {
+fn parse_recipe(value: &str) -> Result<Recipe, BatchError> {
     if value.len() as u64 > MAX_BATCH_MANIFEST_BYTES {
         return Err(BatchError::Invalid("recipe exceeds its byte limit".into()));
     }
-    elzevir_app::import::edits::Recipe::parse(value)
-        .map_err(|error| BatchError::Invalid(error.to_string()))
+    Recipe::parse(value).map_err(|error| BatchError::Invalid(error.to_string()))
 }
 
 async fn edit_failure(
@@ -608,6 +609,35 @@ enum Failure {
 
 /// `POST /equipe/acervo/importar/{id}/regra`: one change through the structured form,
 /// saved as a new revision of the same recipe the CLI reads.
+/// Archive member choice and column mapping, posted as plain pairs because the
+/// number of columns depends on the sheet.
+async fn sheet(
+    State(state): State<AppState>,
+    session: ImportSession,
+    Path(id): Path<String>,
+    form: Result<Form<Vec<(String, String)>>, axum::extract::rejection::FormRejection>,
+) -> Response {
+    let Ok(Form(form)) = form else {
+        return session.error(&state, StatusCode::BAD_REQUEST, "import-invalid", None);
+    };
+    let field = |name| crate::import_sheets::field(&form, name).unwrap_or_default();
+    if !tokens_match(&session.active.csrf, field("csrf")) {
+        return session.error(&state, StatusCode::FORBIDDEN, "import-forbidden", None);
+    }
+    let Ok(revision) = field("revision").parse::<u64>() else {
+        return session.error(&state, StatusCode::BAD_REQUEST, "import-invalid", None);
+    };
+    let anchor = if field("action") == "archive" {
+        "import-archive"
+    } else {
+        "import-columns"
+    };
+    save_change(&state, &session, id, revision, anchor, |view, recipe| {
+        crate::import_sheets::apply(recipe, view.archive.as_ref(), view.table.as_ref(), &form)
+    })
+    .await
+}
+
 async fn rule(
     State(state): State<AppState>,
     session: ImportSession,
@@ -620,42 +650,64 @@ async fn rule(
     if !tokens_match(&session.active.csrf, &form.csrf) {
         return session.error(&state, StatusCode::FORBIDDEN, "import-forbidden", None);
     }
+    let revision = form.revision;
+    save_change(
+        &state,
+        &session,
+        id,
+        revision,
+        "import-rules",
+        |_, recipe| crate::import_rules::apply(recipe, &form),
+    )
+    .await
+}
+
+/// Applies one form change to the current recipe and saves it as the next
+/// revision; a refused change re-renders the batch with its message.
+async fn save_change(
+    state: &AppState,
+    session: &ImportSession,
+    id: String,
+    revision: u64,
+    anchor: &str,
+    apply: impl FnOnce(&BatchView, &mut Recipe) -> Result<(), &'static str>,
+) -> Response {
     let view = match session.run(BatchCommand::View(id.clone(), None)).await {
         Ok(BatchReply::Batch(view)) => view,
         Ok(_) => {
             return session.error(
-                &state,
+                state,
                 StatusCode::SERVICE_UNAVAILABLE,
                 "import-unavailable",
                 None,
             );
         }
-        Err(error) => return session.failure(&state, error),
+        Err(error) => return session.failure(state, error),
     };
     let mut recipe = view.recipe.clone();
-    if let Err(key) = crate::import_rules::apply(&mut recipe, &form) {
+    if let Err(key) = apply(&view, &mut recipe) {
         let text = serde_json::to_string_pretty(&view.recipe).unwrap_or_default();
         return show_batch(
-            &state,
-            &session,
+            state,
+            session,
             *view,
             &Page::default(),
             Some((text, Failure::Rule(key))),
         );
     }
     let text = serde_json::to_string_pretty(&recipe).unwrap_or_default();
-    let command = BatchCommand::Edit(id.clone(), form.revision, recipe, FormatChoice::Keep);
+    let command = BatchCommand::Edit(id.clone(), revision, recipe, FormatChoice::Keep);
     match session.run(command).await {
         Ok(BatchReply::Batch(view)) => {
-            Redirect::to(&format!("{ROOT}/{}#import-rules", view.batch.id)).into_response()
+            Redirect::to(&format!("{ROOT}/{}#{anchor}", view.batch.id)).into_response()
         }
         Ok(_) => session.error(
-            &state,
+            state,
             StatusCode::SERVICE_UNAVAILABLE,
             "import-unavailable",
             None,
         ),
-        Err(error) => edit_failure(&state, &session, id, text, error).await,
+        Err(error) => edit_failure(state, session, id, text, error).await,
     }
 }
 
@@ -672,6 +724,7 @@ fn show_batch(
         recipe,
         preview,
         archive,
+        table,
     } = view;
     let editable = matches!(batch.state, BatchState::Review | BatchState::Ready);
     let ready = batch.state == BatchState::Ready
@@ -694,27 +747,14 @@ fn show_batch(
         _ if batch.format == "KohaSqlDump" => "sql",
         _ => "auto",
     };
-    let archive = archive.map(|inventory| {
-        inventory
-            .entries
-            .into_iter()
-            .map(|entry| {
-                let path = serde_json::to_string(&entry.member).unwrap_or_default();
-                ImportMember {
-                    path,
-                    format: archive_kind(t, entry.kind),
-                    sheets: entry.sheets,
-                }
-            })
-            .collect()
-    });
-    let archive_selection = recipe
-        .archive
+    let archive = archive
         .as_ref()
-        .and_then(|selected| serde_json::to_string(selected).ok());
+        .map(|inventory| archive_choices(t, inventory, recipe.archive.as_ref()));
+    let columns = table.as_ref().and_then(crate::import_sheets::columns_view);
     let link = batch_link(t, batch);
-    let rules =
-        (recipe.table.is_none() && format != "table").then(|| crate::import_rules::rules(&recipe));
+    // MARC edit rules apply only when no spreadsheet is selected.
+    let rules = (table.is_none() && recipe.table.is_none() && format != "table")
+        .then(|| crate::import_rules::rules(&recipe));
     let matching = crate::import_rules::matching_view(recipe.matching);
     let excluded = recipe.exclude.iter().copied().collect();
     let (recipe, status, notice, detail) = if let Some((recipe, failure)) = failed {
@@ -746,7 +786,7 @@ fn show_batch(
             interrupted,
             preview,
             archive,
-            archive_selection,
+            columns,
             rules,
             matching,
             excluded,
@@ -755,6 +795,44 @@ fn show_batch(
         notice,
         detail,
     )
+}
+
+/// One choice per plain member and per worksheet of a workbook, in inventory order.
+fn archive_choices(
+    t: &I18n,
+    inventory: &Inventory,
+    selected: Option<&Selection>,
+) -> Vec<ImportChoice> {
+    let mut choices = Vec::new();
+    for (index, entry) in inventory.entries.iter().enumerate() {
+        let path = entry.member.join(" / ");
+        let kind = archive_kind(t, entry.kind);
+        let chosen = |sheet: Option<&String>| {
+            selected.is_some_and(|selected| {
+                selected.member == entry.member && selected.sheet.as_ref() == sheet
+            })
+        };
+        if entry.sheets.is_empty() {
+            choices.push(ImportChoice {
+                value: index.to_string(),
+                label: format!("{path} ({kind})"),
+                selected: chosen(None),
+            });
+        }
+        for (position, sheet) in entry.sheets.iter().enumerate() {
+            let label = if path.is_empty() {
+                format!("{sheet} ({kind})")
+            } else {
+                format!("{path} › {sheet} ({kind})")
+            };
+            choices.push(ImportChoice {
+                value: format!("{index}/{position}"),
+                label,
+                selected: chosen(Some(sheet)),
+            });
+        }
+    }
+    choices
 }
 
 fn archive_kind(t: &I18n, kind: Kind) -> String {

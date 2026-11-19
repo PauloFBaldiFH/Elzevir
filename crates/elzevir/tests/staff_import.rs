@@ -470,3 +470,58 @@ fn staff_import_rules_form_edits_the_saved_recipe() {
     assert!(!preview.contains("Second synthetic record"));
     drop(server);
 }
+
+#[test]
+fn staff_import_maps_custom_spreadsheet_columns_by_form() {
+    const SOURCE: &str = "Título;Edição;Observação\nPrimeiro livro fictício;1. ed.;sem uso\nSegundo livro fictício;2. ed. revista;sem uso\n";
+    let data = tempfile::tempdir().unwrap();
+    account(data.path());
+    let (server, address) = start(data.path());
+    let ana = sign_in(address, "ana");
+    let get = |url: &str| request(address, "GET", url, &format!("Cookie: {ana}\r\n"), "");
+    let token = csrf(&get(IMPORT)).to_owned();
+    let created = upload(address, &ana, &token, SOURCE, false);
+    assert_status(&created, 303);
+    let url = header(&created, "location").to_owned();
+    let page = get(&url);
+    assert!(page.contains("Spreadsheet columns"));
+    assert!(page.contains(r#"name="target-1" list="import-targets" value="Work.title""#));
+    assert!(
+        page.contains(r#"name="target-2" list="import-targets" value="Instance.editionStatement""#)
+    );
+    assert!(page.contains(r#"name="target-3" list="import-targets" value="""#));
+    assert!(!page.contains("New rule"));
+
+    let sheet = format!("{url}/planilha");
+    let base = format!(
+        "csrf={token}&revision=1&action=columns&target-1=Work.title&target-2=Instance.editionStatement"
+    );
+    let refused = form(
+        address,
+        &sheet,
+        &ana,
+        &format!("{base}&target-3=Item.catalog.item_type"),
+    );
+    assert_status(&refused, 422);
+    assert!(refused.contains("Choose a destination from the list for every column."));
+    assert_status(
+        &form(
+            address,
+            &sheet,
+            &ana,
+            &format!("{base}&target-3=ignore&trim-1=on"),
+        ),
+        303,
+    );
+    let page = get(&url);
+    assert!(page.contains(r#"name="trim-1" aria-label="Trim spaces Título" checked"#));
+    let preview = form(
+        address,
+        &format!("{url}/prever"),
+        &ana,
+        &format!("csrf={token}&revision=2"),
+    );
+    assert_status(&preview, 200);
+    assert!(preview.contains("Primeiro livro fictício") && preview.contains("2. ed. revista"));
+    drop(server);
+}

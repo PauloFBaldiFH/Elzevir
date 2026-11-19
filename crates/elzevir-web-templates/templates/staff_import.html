@@ -47,22 +47,56 @@
     {% endif %}
   {% when ImportView::Draft with (draft) %}
     <p><a href="/equipe/acervo/importar">{{ t.get("import-drafts-back") }}</a></p>
-    <p>{{ draft.link.label }} · {{ t.get("import-revision") }} {{ draft.revision }}</p>{% if let Some(members) = draft.archive %}
-    <details open>
-      <summary>{{ t.get("import-archive-inventory") }}</summary>
-      <p>{{ t.get("import-archive-recipe") }}</p>
-      <pre>{"archive":{"member":["catalog.xlsx"],"sheet":"Books"}}</pre>
-      <ul>{% for member in members %}
-        <li><code>{{ member.path }}</code> · {{ member.format }}{% if !member.sheets.is_empty() %}
-          <ul>{% for sheet in member.sheets %}<li>{{ sheet }}</li>{% endfor %}</ul>{% endif %}
-        </li>{% endfor %}
-      </ul>
-      {% if let Some(selection) = draft.archive_selection %}<p>{{ t.get("import-archive-selected") }} <code>{{ selection }}</code></p>{% endif %}
-    </details>{% endif %}
+    <p>{{ draft.link.label }} · {{ t.get("import-revision") }} {{ draft.revision }}</p>
+    {% if let Some(choices) = draft.archive %}
+    <form id="import-archive" class="import-sheet" action="/equipe/acervo/importar/{{ draft.link.id }}/planilha" method="post">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="revision" value="{{ draft.revision }}">
+      <input type="hidden" name="action" value="archive">
+      <label for="import-archive-choice">{{ t.get("import-archive-choice") }}</label>
+      <select id="import-archive-choice" name="choice" required{% if !draft.editable %} disabled{% endif %}>
+        <option value="">{{ t.get("import-archive-choose") }}</option>{% for choice in choices %}
+        <option value="{{ choice.value }}"{% if choice.selected %} selected{% endif %}>{{ choice.label }}</option>{% endfor %}
+      </select>
+      {% if draft.editable %}<button type="submit">{{ t.get("import-archive-use") }}</button>{% endif %}
+    </form>{% endif %}
     {% if draft.editable %}
-      <section id="import-rules" class="import-rules" aria-labelledby="import-rules-heading">
-        <h2 id="import-rules-heading">{{ t.get("import-rules") }}</h2>
+      {% if let Some(mapping) = draft.columns %}
+      <form id="import-columns" class="import-columns" action="/equipe/acervo/importar/{{ draft.link.id }}/planilha" method="post">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="revision" value="{{ draft.revision }}">
+        <input type="hidden" name="action" value="columns">
+        <h2>{{ t.get("import-columns") }}</h2>
+        <p id="import-columns-help">{{ t.get("import-columns-help") }}</p>
+        <datalist id="import-targets">{% for target in mapping.targets %}<option value="{{ target }}">{% endfor %}</datalist>
+        <table>
+          <thead><tr>
+            <th scope="col">#</th>
+            <th scope="col">{{ t.get("import-columns-header") }}</th>
+            <th scope="col">{{ t.get("import-columns-target") }}</th>
+            <th scope="col">{{ t.get("import-columns-trim") }}</th>
+          </tr></thead>
+          <tbody>{% for column in mapping.columns %}
+            <tr>
+              <td>{{ column.position }}</td>
+              <th scope="row"><label for="import-target-{{ column.position }}">{{ column.header }}</label></th>
+              <td><input id="import-target-{{ column.position }}" name="target-{{ column.position }}" list="import-targets" value="{{ column.target }}" required size="32" aria-describedby="import-columns-help"></td>
+              <td><input type="checkbox" name="trim-{{ column.position }}" aria-label="{{ t.get("import-columns-trim") }} {{ column.header }}"{% if column.trim %} checked{% endif %}></td>
+            </tr>{% endfor %}
+          </tbody>
+        </table>
+        <label for="import-group-by">{{ t.get("import-columns-group-label") }}</label>
+        <select id="import-group-by" name="group_by">
+          <option value="none"{% if mapping.group_by == "none" %} selected{% endif %}>{{ t.get("import-columns-group-none") }}</option>
+          <option value="isbn"{% if mapping.group_by == "isbn" %} selected{% endif %}>ISBN</option>
+          <option value="title"{% if mapping.group_by == "title" %} selected{% endif %}>{{ t.get("import-columns-group-title") }}</option>
+        </select>
+        <button type="submit">{{ t.get("import-columns-save") }}</button>
+      </form>
+      {% endif %}
+      <section id="import-rules" class="import-rules" aria-label="{{ t.get("import-rules") }}">
         {% if let Some(rules) = draft.rules %}
+        <h2>{{ t.get("import-rules") }}</h2>
         {% if rules.is_empty() %}<p>{{ t.get("import-rules-none") }}</p>{% else %}
         <table>
           <thead><tr>

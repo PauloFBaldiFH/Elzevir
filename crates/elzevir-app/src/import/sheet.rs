@@ -328,22 +328,40 @@ fn bindings(header: &[String], profile: Option<&Profile>) -> Result<Vec<Binding>
         .collect()
 }
 
-fn mapping_help(header: &[String]) -> String {
+/// Every destination a custom column can map to: `ignore`, the ISBN shortcut and
+/// the qualified columns of the generated model, in model order.
+#[must_use]
+pub fn mapping_targets() -> Vec<String> {
+    let mut targets = vec!["ignore".to_owned(), "Instance.catalog.isbn".to_owned()];
+    // The first two model columns are version markers, not destinations.
+    targets.extend(model_columns().into_iter().skip(2));
+    targets
+}
+
+/// The destination of a header that already names one, or of a known alias
+/// such as `Título` or `código de barras`.
+#[must_use]
+pub fn suggested_target(header: &str) -> Option<String> {
     const ALIASES: &str = include_str!("../../data/import-header-aliases.tsv");
+    let name = header.trim();
+    if name.len() > 128 {
+        return None;
+    }
+    if target(name).is_ok() {
+        return Some(name.to_owned());
+    }
+    let lower = name.to_lowercase();
+    ALIASES
+        .lines()
+        .filter_map(|line| line.split_once('\t'))
+        .find_map(|(alias, destination)| (alias == lower).then(|| destination.to_owned()))
+}
+
+fn mapping_help(header: &[String]) -> String {
     let mut message =
         "select a versioned column mapping or use the generated BIBFRAME model".to_owned();
     let suggestions = header.iter().enumerate().filter_map(|(index, name)| {
-        let name = name.trim();
-        if name.len() > 128 {
-            return None;
-        }
-        let lower = name.to_lowercase();
-        let destination = target(name).ok().map(|_| name).or_else(|| {
-            ALIASES
-                .lines()
-                .filter_map(|line| line.split_once('\t'))
-                .find_map(|(alias, dest)| (alias == lower).then_some(dest))
-        })?;
+        let destination = suggested_target(name)?;
         Some(format!("column {} -> {destination}", index + 1))
     });
     for suggestion in suggestions.take(8) {

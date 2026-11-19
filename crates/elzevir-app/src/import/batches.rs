@@ -63,8 +63,19 @@ pub struct BatchView {
     pub recipe: Recipe,
     /// Validated archive leaves and worksheet names, when applicable.
     pub archive: Option<super::containers::Inventory>,
+    /// The selected spreadsheet's header, when the source is a readable sheet.
+    pub table: Option<TableSource>,
     /// Preview when requested.
     pub preview: Option<BatchPreview>,
+}
+
+/// The header of the selected spreadsheet and the settings that read it, so that
+/// a column mapping can be offered for exactly these columns.
+pub struct TableSource {
+    /// Header cells, in column order.
+    pub header: Vec<String>,
+    /// Delimiter, encoding, mapping and grouping in effect for this revision.
+    pub settings: super::sheet::TableSettings,
 }
 
 /// The location of a refusal in the original file.
