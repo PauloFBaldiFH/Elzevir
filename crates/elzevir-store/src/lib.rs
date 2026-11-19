@@ -43,6 +43,7 @@ mod preview;
 mod readers;
 mod registries;
 mod renewals;
+mod restrictions;
 mod returns;
 mod saved_lists;
 mod schema;

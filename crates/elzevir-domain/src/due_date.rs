@@ -193,7 +193,7 @@ pub fn calc_date_due(
 /// The calendar day a loan in days is due.
 ///
 /// Koha: `Koha::Calendar::addDays`
-fn due_day(
+pub(crate) fn due_day(
     start: Date,
     days: u32,
     mode: DaysMode,
