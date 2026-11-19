@@ -4,7 +4,7 @@
 <h1>{{ t.get("staff-home-title") }}</h1>
 <p>{{ t.get("staff-home-signed-in-as") }} <strong id="signed-in-as">{{ login }}</strong></p>
 <p><a href="/equipe/acervo">{{ t.get("staff-home-catalog") }}</a></p>
-{% if patrons.is_shown() %}<p><a href="/equipe/leitores">{{ t.get("patrons-title") }}</a></p>{% endif %}{% if can_import %}
+{% if patrons.is_shown() %}<p><a href="/equipe/leitores">{{ t.get("patrons-title") }}</a></p>{% endif %}{% if circulation.is_shown() %}<p><a href="/equipe/circulacao/devolucao">{{ t.get("checkin-title") }}</a></p>{% endif %}{% if can_import %}
 <p><a href="/equipe/acervo/importar">{{ t.get("import-title") }}</a></p>
 <p><a href="/equipe/acervo/importar?tabular=true">{{ t.get("import-table") }}</a></p>
 <p><a href="/equipe/acervo/importar?koha_sql=true">{{ t.get("import-sql-link") }}</a></p>

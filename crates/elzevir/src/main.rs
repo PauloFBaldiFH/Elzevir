@@ -403,6 +403,7 @@ fn web_app(
     }))
     .map_err(|error| error.to_string())?
     .with_patrons(Arc::clone(store) as _)
+    .with_loans(Arc::clone(store) as _)
     .with_rules(Arc::clone(store) as _)
     .with_calendar(Arc::clone(store) as _);
     Ok(WebRuntime {

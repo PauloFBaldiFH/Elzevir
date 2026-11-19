@@ -20,6 +20,7 @@
   --elzevir-color-out-bg: #fee2e2;
   --elzevir-color-out-text: #7f1d1d;
   --elzevir-color-found: #fde68a;
+  --elzevir-color-loan-cord: #ea580c;
   --elzevir-color-cord: #64748b;
   --elzevir-color-cord-port: #2563eb;
   --elzevir-color-canvas: #f8fafc;
@@ -56,6 +57,7 @@
     --elzevir-color-out-bg: #3b1717;
     --elzevir-color-out-text: #fecaca;
     --elzevir-color-found: #a16207;
+    --elzevir-color-loan-cord: #fb923c;
     --elzevir-color-cord: #64748b;
     --elzevir-color-cord-port: #60a5fa;
     --elzevir-color-canvas: #0d1118;
@@ -655,3 +657,28 @@ main:has(.import-workspace) { max-width: 90rem; }
 .calendar-day { display: block; }
 .calendar-state, .calendar-title { display: block; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .calendar h2 a { text-decoration: none; padding: 0 8px; }
+
+/* The wall (interface §18): the patron's loans on the left, tied to the record by orange cords. */
+.wall { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 3rem; align-items: start; }
+.wall-loans { order: -1; }
+.wall-patron { padding: var(--elzevir-space); border: 2px solid var(--elzevir-color-loan-cord); border-radius: var(--elzevir-radius); }
+.loan-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .75rem; }
+.loan { position: relative; display: grid; gap: .25rem; padding: .5rem .75rem; border: 1px solid var(--elzevir-color-border); border-left: 4px solid var(--elzevir-color-loan-cord); border-radius: var(--elzevir-radius); }
+.loan::after { content: ""; position: absolute; top: 50%; right: -3rem; width: 3rem; border-top: 2px solid var(--elzevir-color-loan-cord); }
+.loan-overdue { border-left-color: var(--elzevir-color-signal-out); }
+.loan-title { font-weight: 600; }
+.loan-meta { color: var(--elzevir-color-muted); }
+.loan-actions { display: flex; gap: .5rem; }
+.loan-actions button, .checkout-box button, .checkout-box select, .checkout-box input { font: inherit; padding: 4px 10px; border: 1px solid var(--elzevir-color-border); border-radius: 6px; }
+.checkout-box { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-block: var(--elzevir-space); border: 1px solid var(--elzevir-color-border); border-radius: var(--elzevir-radius); }
+@media (max-width: 48rem) {
+  .wall { grid-template-columns: 1fr; }
+  .wall-loans { order: 1; }
+  .loan::after { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .loan-new { animation: loan-in .3s ease-out; }
+  .loan-new::after { animation: cord-in .4s ease-out; transform-origin: left; }
+}
+@keyframes loan-in { from { opacity: 0; transform: translateX(-1rem); } }
+@keyframes cord-in { from { transform: scaleX(0); } }

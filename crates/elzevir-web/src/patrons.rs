@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use axum::Form;
-use axum::extract::{Path, Query, State};
+use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
 use elzevir_app::patrons::{
@@ -13,10 +13,8 @@ use elzevir_app::patrons::{
     ReadingHistory,
 };
 use elzevir_app::staff::Permission;
-use elzevir_domain::patron::{Cpf, Enrolment, PatronCategoryId, PatronId, is_expired};
-use elzevir_web_templates::{
-    CategoryLine, I18n, PatronLine, StaffPatron, StaffPatronCategories, StaffPatrons,
-};
+use elzevir_domain::patron::{Cpf, Enrolment, PatronCategoryId, is_expired};
+use elzevir_web_templates::{CategoryLine, I18n, PatronLine, StaffPatronCategories, StaffPatrons};
 use jiff::civil::Date;
 use serde::Deserialize;
 
@@ -138,51 +136,8 @@ pub(crate) async fn search(
     })
 }
 
-/// `GET /equipe/leitores/{id}`: the record, only with the circulation permission, and every
-/// opening in the audit log (interface §18.1).
-pub(crate) async fn record(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Path(id): Path<i64>,
-) -> Response {
-    let (session, desk) = match open(&state, &headers, |session| {
-        session.identity.can(Permission::Circulation)
-    }) {
-        Ok(opened) => opened,
-        Err(response) => return *response,
-    };
-    let actor = session.identity.id;
-    let read = tokio::task::spawn_blocking(move || {
-        // The opening is logged before the data leaves the server.
-        desk.apply(actor, PatronCommand::View(PatronId(id)))?;
-        desk.patron(PatronId(id))
-    })
-    .await;
-    let patron = match read {
-        Ok(Ok(Some(patron))) => patron,
-        Ok(Ok(None)) => return StatusCode::NOT_FOUND.into_response(),
-        Ok(Err(error)) => return failed(&error),
-        Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
-    };
-    let t = &state.inner.i18n;
-    let expired = patron
-        .fields
-        .expires
-        .is_some_and(|day| is_expired(day, today(&state)));
-    render(&StaffPatron {
-        t,
-        name: full_name(&patron.fields.surname, patron.fields.first_name.as_deref()),
-        rows: record_rows(t, &patron),
-        expired,
-        edit_url: session
-            .identity
-            .can(Permission::Patrons)
-            .then(|| format!("/equipe/leitores/{id}/editar")),
-    })
-}
-
 /// The rows of the record; the CPF only masked (spec, item 8).
-fn record_rows(t: &I18n, patron: &Patron) -> Vec<(&'static str, String)> {
+pub(crate) fn record_rows(t: &I18n, patron: &Patron) -> Vec<(&'static str, String)> {
     let fields = &patron.fields;
     let mut rows = vec![
         ("patron-cardnumber", fields.cardnumber.clone()),

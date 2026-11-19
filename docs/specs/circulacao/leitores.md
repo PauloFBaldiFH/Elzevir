@@ -52,6 +52,14 @@
 17. O formulário de edição é o único lugar que mostra o CPF inteiro (item 8); abri-lo também vai para o `audit_log` como abertura (`patrons.view`). CPF inválido, data malformada e cada regra do item 4 voltam ao formulário com o que foi digitado e o motivo (422); carteirinha ou CPF repetidos e edição concorrente, com 409.
 18. Salvar volta ao formulário de edição com "Salvo". `elzevir staff add --circulation --patrons` concede as duas permissões novas; o primeiro administrador criado pelo `init` já tem as duas.
 
+### Circulação na ficha (tarefa 3.6, parte a; interface §18.3)
+
+19. A ficha mostra, à esquerda, os empréstimos do leitor, o primeiro a vencer primeiro, ligados à ficha por cordinhas laranja: título, código de barras, data de devolução (com a hora só quando não é o fim do dia), "atrasado" e quantas renovações. À direita, a ficha, a suspensão em curso ([suspensao.md](suspensao.md)) e a caixa de empréstimo por código de barras, com o balcão (lista das unidades, começando pela unidade do leitor).
+20. `Enter` na caixa empresta pelos comandos de circulação ([emprestimo.md](emprestimo.md)); a data vem do servidor, no fuso da biblioteca. No sucesso, o exemplar entra na lista com a cordinha desenhada (sem animação com `prefers-reduced-motion`). Cada motivo de recusa aparece na ficha, e o que pede confirmação traz "Confirmar e emprestar", com o código mantido na caixa.
+21. Cada empréstimo tem **Renovar** e **Devolver** ([renovacao.md](renovacao.md), [devolucao.md](devolucao.md)); a devolução diz para onde o exemplar vai e se o leitor ficou suspenso.
+22. **Devolução por bipe** em `/equipe/circulacao/devolucao`, com a permissão de circulação: o código e o balcão, que continua o mesmo entre bipes. A resposta diz o que aconteceu com o exemplar (devolvido, não estava emprestado, encontrado, para onde vai, suspensão aplicada), sem nome nem carteirinha do leitor.
+23. Toda ação de circulação pede a permissão de circulação e o token da sessão. Uma recusa responde 422; uma ação que aconteceu responde 200, mesmo quando pede atenção (enviar a outra unidade).
+
 ## 2. Origem no Koha
 
 - Tabelas `categories` e `borrowers` (`reference/koha/installer/data/mysql/kohastructure.sql`).

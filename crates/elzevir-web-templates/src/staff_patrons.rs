@@ -53,6 +53,73 @@ pub struct StaffPatron<'a> {
     pub expired: bool,
     /// The edit form, for who manages patrons.
     pub edit_url: Option<String>,
+    /// The patron's id, for the circulation form.
+    pub id: i64,
+    /// Anti-forgery token of the session.
+    pub csrf: &'a str,
+    /// The text of the suspension, while it holds.
+    pub suspended: Option<String>,
+    /// The patron's loans, the first due first.
+    pub loans: Vec<LoanLine>,
+    /// The branches the desk may be at, and the one it is at.
+    pub desks: Vec<DeskOption>,
+    /// The barcode to keep in the box, when a checkout asks for confirmation.
+    pub barcode: String,
+    /// What the last circulation action did.
+    pub notices: Vec<Notice>,
+    /// Whether the last checkout waits for the staff's confirmation.
+    pub confirm: bool,
+}
+
+/// One loan on the patron's side of the wall.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoanLine {
+    /// The Item's barcode.
+    pub barcode: String,
+    /// The Instance's title.
+    pub title: String,
+    /// The due date as shown.
+    pub due: String,
+    /// Whether it is overdue now.
+    pub overdue: bool,
+    /// The renewals, as shown, when there were some.
+    pub renewals: Option<String>,
+    /// Whether it was just lent, so its cord is drawn.
+    pub new: bool,
+}
+
+/// A branch the desk may be at.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeskOption {
+    /// Branch id.
+    pub id: i64,
+    /// Its name.
+    pub name: String,
+    /// Whether the desk is there.
+    pub selected: bool,
+}
+
+/// A message about a circulation action.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Notice {
+    /// Whether the action was refused or needs attention.
+    pub refused: bool,
+    /// The text, already formatted.
+    pub text: String,
+}
+
+/// The checkin desk: return by scanning (interface §18.3).
+#[derive(Template)]
+#[template(path = "staff_checkin.html")]
+pub struct StaffCheckin<'a> {
+    /// Interface texts.
+    pub t: &'a I18n,
+    /// Anti-forgery token of the session.
+    pub csrf: &'a str,
+    /// The branches the desk may be at, and the one it is at.
+    pub desks: Vec<DeskOption>,
+    /// What the last checkin did.
+    pub notices: Vec<Notice>,
 }
 
 /// The patron categories.

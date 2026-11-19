@@ -7,9 +7,13 @@ use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome};
 use elzevir_domain::checkout::{Alert, Confirm, Impossible};
 use elzevir_domain::patron::PatronId;
 use elzevir_domain::renewal::RenewalRefusal;
+use elzevir_domain::suspension::SuspensionEnd;
 use jiff::Zoned;
 use jiff::civil::Date;
 use serde::{Deserialize, Serialize};
+
+use crate::circulation_rules::{CirculationCommand, CirculationDeskError, CirculationOutput};
+use crate::staff::StaffId;
 
 /// Most characters of a barcode the checkout reads.
 pub const MAX_BARCODE_LENGTH: usize = 64;
@@ -195,4 +199,52 @@ impl RenewRefusal {
             Self::NoDueDate => "checkout-error-no-due-date",
         }
     }
+}
+
+/// A loan as the patron's record lists it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PatronLoan {
+    /// The Item's barcode.
+    pub barcode: String,
+    /// The title of the Item's Instance.
+    pub title: String,
+    /// When it is due.
+    pub due: Zoned,
+    /// How many times it was renewed.
+    pub renewals: u32,
+    /// A loan to be used inside the library.
+    pub on_site: bool,
+}
+
+/// The circulation desk: the patron's loans and suspension, and the circulation commands
+/// (interface §18.3).
+pub trait LoanDesk: Send + Sync {
+    /// The patron's loans, the first due first.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn loans(&self, patron: PatronId) -> Result<Vec<PatronLoan>, CirculationDeskError>;
+
+    /// The patron's suspension, while it holds on `today`.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn suspension(
+        &self,
+        patron: PatronId,
+        today: Date,
+    ) -> Result<Option<SuspensionEnd>, CirculationDeskError>;
+
+    /// Runs one circulation command as `actor`.
+    ///
+    /// # Errors
+    ///
+    /// [`CirculationDeskError::Refused`] with the refusal, or why storage failed.
+    fn circulate(
+        &self,
+        actor: StaffId,
+        command: CirculationCommand,
+    ) -> Result<CirculationOutput, CirculationDeskError>;
 }

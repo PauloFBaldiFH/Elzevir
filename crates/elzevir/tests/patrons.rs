@@ -13,12 +13,18 @@ use std::path::Path;
 use std::process::{Child, Command};
 use std::time::{Duration, Instant};
 
-use elzevir_app::catalog::{CatalogCommand, CatalogOutput};
+use elzevir_app::catalog::{
+    CatalogCommand, CatalogOutput, ItemData, ItemStatus, NewInstance, NewItem, NewRecord,
+    RecordItems,
+};
+use elzevir_app::circulation_rules::{CirculationCommand, RuleChange};
+use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{StaffCommand, WriteCommand, WriteOutput};
 use elzevir_app::patrons::{
     CategoryChange, PatronCommand, PatronFields, PatronOutput, ReadingHistory,
 };
 use elzevir_app::staff::{Permission, hash_password};
+use elzevir_domain::circulation_rules::RuleScopeKey;
 use elzevir_domain::patron::{Cpf, Enrolment};
 use elzevir_store::{ElzevirHandler, ElzevirStore, StoreConfig};
 use jiff::civil::date;
@@ -390,4 +396,173 @@ fn a_patron_is_enrolled_and_edited_on_the_form() {
         })
         .unwrap();
     assert_eq!(views, 1);
+}
+
+/// An Item "0001" of "Dom Casmurro" at the Anexo branch, and rules that lend for a week.
+fn stock(data: &Path) {
+    let store = open(data);
+    for (table, code, name) in [
+        (CodeTable::Branch, "B2", "Anexo"),
+        (CodeTable::ItemType, "P1", "Livros"),
+    ] {
+        submit(
+            &store,
+            WriteCommand::Catalog(CatalogCommand::NameCodes(vec![NamedCode {
+                table,
+                code: code.to_owned(),
+                name: name.to_owned(),
+            }])),
+        );
+    }
+    let WriteOutput::Catalog(CatalogOutput::Record { instance, .. }) = submit(
+        &store,
+        WriteCommand::Catalog(CatalogCommand::AddRecord(Box::new(NewRecord {
+            work_title: "Dom Casmurro".to_owned(),
+            work_description: elzevir_domain::statement::Description::default(),
+            hub: None,
+            relations: Vec::new(),
+            classification: None,
+            classification_scheme: None,
+            summary: None,
+            audience: None,
+            languages: Vec::new(),
+            contributions: Vec::new(),
+            subjects: Vec::new(),
+            items: RecordItems::default(),
+            source: None,
+            instance: NewInstance {
+                title: "Dom Casmurro".to_owned(),
+                ..NewInstance::default()
+            },
+        }))),
+    ) else {
+        panic!("no record");
+    };
+    submit(
+        &store,
+        WriteCommand::Catalog(CatalogCommand::AddItem(Box::new(NewItem {
+            instance,
+            item: ItemData {
+                barcode: Some("0001".to_owned()),
+                inventory_number: None,
+                home_branch: "B2".to_owned(),
+                holding_branch: "B2".to_owned(),
+                item_type: "P1".to_owned(),
+                call_number: None,
+                location: None,
+                collection: None,
+                price: None,
+                replacement_price: None,
+                copy_number: None,
+                status: ItemStatus::default(),
+                acquired_on: None,
+            },
+        }))),
+    );
+    submit(
+        &store,
+        WriteCommand::Circulation(CirculationCommand::SetRules(RuleChange {
+            scope: RuleScopeKey::default(),
+            values: vec![
+                ("maxissueqty".to_owned(), Some("5".to_owned())),
+                ("issuelength".to_owned(), Some("7".to_owned())),
+            ],
+        })),
+    );
+    store.shutdown().unwrap();
+}
+
+/// The branch the desk select starts at.
+fn selected_desk(page: &str) -> &str {
+    page.split_once("\" selected>")
+        .unwrap()
+        .0
+        .rsplit_once("value=\"")
+        .unwrap()
+        .1
+}
+
+#[test]
+fn an_item_is_lent_renewed_and_returned_from_the_patrons_side_of_the_wall() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    stock(data.path());
+    let (server, address) = start(data.path());
+    let cir = sign_in(address, "cir");
+    let lei = sign_in(address, "lei");
+    let record = format!("/equipe/leitores/{ana}");
+    let action = format!("{record}/circulacao");
+    let page = request(address, "GET", &record, &cir, "");
+    assert_status(&page, 200);
+    assert!(page.contains("No loans."));
+    let (token, desk) = (csrf(&page).to_owned(), selected_desk(&page).to_owned());
+    let form = format!("{cir}Content-Type: application/x-www-form-urlencoded\r\n");
+    let post = |op: &str, barcode: &str| {
+        request(
+            address,
+            "POST",
+            &action,
+            &form,
+            &format!("csrf={token}&op={op}&barcode={barcode}&desk={desk}"),
+        )
+    };
+
+    let lent = post("lend", "0001");
+    assert_status(&lent, 200);
+    assert!(lent.contains("Lent until"), "{lent}");
+    assert!(lent.contains("loan-new") && lent.contains("Dom Casmurro"));
+    // No rule gives renewals.
+    let renewed = post("renew%3A0001", "");
+    assert_status(&renewed, 422);
+    assert!(renewed.contains("This loan has no renewals left."));
+    let again = post("lend", "0001");
+    assert_status(&again, 422);
+    // The Item belongs at the annex, so the desk sends it there.
+    let back = post("return%3A0001", "");
+    assert_status(&back, 200);
+    assert!(back.contains("Returned: 0001.") && back.contains("Send it to Anexo."));
+    assert!(back.contains("No loans."));
+    // The circulation permission and the session's token are both needed.
+    let forged = request(
+        address,
+        "POST",
+        &action,
+        &form,
+        &format!("csrf=forged&op=lend&barcode=0001&desk={desk}"),
+    );
+    assert_status(&forged, 403);
+    assert_status(
+        &request(
+            address,
+            "POST",
+            &action,
+            &format!("{lei}Content-Type: application/x-www-form-urlencoded\r\n"),
+            "csrf=x&op=lend&desk=1",
+        ),
+        403,
+    );
+
+    // The checkin desk shows what happened, and nothing about the patron.
+    let desk_page = request(address, "GET", "/equipe/circulacao/devolucao", &cir, "");
+    assert_status(&desk_page, 200);
+    post("lend", "0001");
+    let scanned = request(
+        address,
+        "POST",
+        "/equipe/circulacao/devolucao",
+        &form,
+        &format!("csrf={token}&barcode=0001&desk={desk}"),
+    );
+    assert_status(&scanned, 200);
+    assert!(scanned.contains("Returned: 0001."));
+    assert!(!scanned.contains("Silva") && !scanned.contains("000123"));
+    let unknown = request(
+        address,
+        "POST",
+        "/equipe/circulacao/devolucao",
+        &form,
+        &format!("csrf={token}&barcode=9999&desk={desk}"),
+    );
+    assert_status(&unknown, 422);
+    drop(server);
 }

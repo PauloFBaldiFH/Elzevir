@@ -458,3 +458,54 @@ calendar-month-10 = outubro
 calendar-month-11 = novembro
 calendar-month-12 = dezembro
 calendar-month-title = { $month } de { $year }
+loans-title = { $count ->
+    [0] Empréstimos
+    [one] Um empréstimo
+   *[other] { $count } empréstimos
+}
+loans-none = Nenhum empréstimo.
+loans-due = Dev. { $date }
+loans-overdue = atrasado
+loans-renewals = { $count ->
+    [one] renovado uma vez
+   *[other] renovado { $count } vezes
+}
+loans-renew = Renovar
+loans-return = Devolver
+checkout-title = Emprestar
+checkout-barcode = Código de barras do exemplar
+checkout-lend = Emprestar
+checkout-confirm = Confirmar e emprestar
+circulation-desk = Balcão em
+checkout-done = Emprestado até { $date }: { $barcode }.
+checkout-alert-lost = O exemplar estava perdido; agora foi encontrado.
+checkout-alert-returned = Outro leitor tinha este exemplar; ele foi devolvido antes.
+checkout-impossible-suspended = O leitor está suspenso até { $date }.
+checkout-impossible-suspended-lifted = O leitor está suspenso até a equipe retirar a suspensão.
+checkout-impossible-expired = O cadastro do leitor venceu.
+checkout-impossible-too-many = O limite de empréstimos foi atingido: { $count } de { $max }.
+checkout-impossible-not-for-loan = O exemplar não é emprestável.
+checkout-impossible-withdrawn = O exemplar foi retirado do acervo.
+checkout-impossible-restricted = O exemplar é restrito.
+checkout-confirm-renew = O leitor já está com este exemplar.
+checkout-confirm-issued-to-another = Outro leitor está com este exemplar; ele será devolvido antes.
+checkout-confirm-cannot-borrow = As regras não deixam este leitor emprestar este tipo de exemplar.
+checkout-confirm-too-many = O limite de empréstimos foi atingido: { $count } de { $max }.
+checkout-confirm-not-for-loan = O exemplar não é emprestável.
+checkout-confirm-lost = O exemplar está perdido.
+patron-suspended = Suspenso até { $date }.
+patron-suspended-lifted = Suspenso até a equipe retirar a suspensão.
+renew-done = Renovado até { $date }.
+checkin-title = Devolução
+checkin-hint = Bipe cada exemplar; o balcão fica o mesmo até você trocar.
+checkin-done = Devolvido: { $barcode }.
+checkin-not-on-loan = { $barcode } não estava emprestado.
+checkin-overdue = Estava atrasado.
+checkin-suspended = O leitor está suspenso até { $date }.
+checkin-found = Estava perdido; agora foi encontrado.
+checkin-kept-lost = Continua perdido e emprestado.
+checkin-send = Envie para { $branch }.
+checkin-needs = Ele é de { $branch }: envie para lá.
+checkin-arrived = A transferência de { $branch } chegou.
+checkin-wrong-branch = Está em trânsito para { $branch }: envie para lá.
+circulation-busy = O sistema está ocupado. Tente de novo.
