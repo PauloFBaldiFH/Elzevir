@@ -535,5 +535,28 @@ fn staff_import_maps_custom_spreadsheet_columns_by_form() {
     );
     assert_status(&preview, 200);
     assert!(preview.contains("Primeiro livro fictício") && preview.contains("2. ed. revista"));
+
+    assert_status(
+        &form(
+            address,
+            &sheet,
+            &ana,
+            &format!(
+                "csrf={token}&revision=2&action=columns&target-1=Work.title&target-2=Instance.editionStatement&target-3=Item.catalog.home_branch"
+            ),
+        ),
+        303,
+    );
+    let cell = form(
+        address,
+        &format!("{url}/prever"),
+        &ana,
+        &format!("csrf={token}&revision=3"),
+    );
+    assert_status(&cell, 422);
+    assert!(
+        cell.contains("Row 2, column 3: there is no home branch named &#34;sem uso&#34;."),
+        "{cell}"
+    );
     drop(server);
 }

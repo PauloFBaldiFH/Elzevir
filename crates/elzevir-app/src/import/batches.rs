@@ -214,6 +214,26 @@ pub enum BatchRefusal {
         /// What differs, with suggested destinations for the command line.
         detail: String,
     },
+    /// A row or cell of the selected spreadsheet was refused.
+    #[error("row {row}, column {column}: {reason}")]
+    Cell {
+        /// One-based logical spreadsheet row.
+        row: u64,
+        /// One-based column, or 1 for a row-wide problem.
+        column: usize,
+        /// Why.
+        reason: super::sheet::CellReason,
+    },
+    /// A barcode appears in more than one row of the spreadsheet.
+    #[error("row {row}: item barcode {barcode:?} is repeated from row {first}")]
+    RepeatedBarcode {
+        /// The repeated row.
+        row: u64,
+        /// The first row with the barcode.
+        first: u64,
+        /// The exact barcode.
+        barcode: String,
+    },
     /// The requested source format is not one of the offered choices.
     #[error("invalid source format")]
     UnknownFormat,

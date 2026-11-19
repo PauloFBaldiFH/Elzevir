@@ -17,9 +17,9 @@ pub use staff_catalog::{
     WorkListLink,
 };
 pub use staff_import::{
-    ImportBatchLink, ImportChoice, ImportColumn, ImportColumns, ImportDraft, ImportMatching,
-    ImportPage, ImportPreview, ImportReceipt, ImportRule, ImportSample, ImportUpload, ImportView,
-    RecordBlocks,
+    ImportBatchLink, ImportChoice, ImportColumn, ImportColumns, ImportDetail, ImportDraft,
+    ImportMatching, ImportPage, ImportPreview, ImportReceipt, ImportRule, ImportSample,
+    ImportUpload, ImportView, RecordBlocks,
 };
 pub use staff_item_grid::{
     GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid, SuggestedCallNumber,
@@ -137,6 +137,16 @@ impl I18n {
     pub fn get_with(&self, key: &str, name: &str, value: &str) -> String {
         let mut args = fluent_bundle::FluentArgs::new();
         args.set(name, FluentValue::from(value));
+        self.format(key, Some(&args))
+    }
+
+    /// Formats `key` with several named text arguments.
+    #[must_use]
+    pub fn get_texts(&self, key: &str, texts: &[(&str, &str)]) -> String {
+        let mut args = fluent_bundle::FluentArgs::new();
+        for (name, value) in texts {
+            args.set(*name, FluentValue::from(*value));
+        }
         self.format(key, Some(&args))
     }
 

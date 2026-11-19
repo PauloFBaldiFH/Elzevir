@@ -400,6 +400,25 @@ fn prepare_table(
         PreviewError::Sheet(SheetError::Profile(detail)) => {
             BatchError::Refused(BatchRefusal::ColumnMapping { detail })
         }
+        PreviewError::Sheet(SheetError::Cell {
+            row,
+            column,
+            reason,
+            ..
+        }) => BatchError::Refused(BatchRefusal::Cell {
+            row,
+            column,
+            reason,
+        }),
+        PreviewError::Sheet(SheetError::DuplicateBarcode {
+            row,
+            first,
+            barcode,
+        }) => BatchError::Refused(BatchRefusal::RepeatedBarcode {
+            row,
+            first,
+            barcode,
+        }),
         error => BatchError::Invalid(error.to_string()),
     })?;
     let stamp = Batches::table_stamp(batch, &table).map_err(BatchError::Invalid)?;

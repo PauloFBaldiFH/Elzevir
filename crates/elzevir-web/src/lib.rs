@@ -17,6 +17,7 @@ mod facets;
 mod form_sections;
 mod history;
 mod icons;
+mod import_cells;
 mod import_rules;
 mod import_sheets;
 mod importing;

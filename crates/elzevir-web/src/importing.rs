@@ -24,8 +24,9 @@ use elzevir_app::import_detection::{Evidence, ImportFormat};
 use elzevir_app::matching::{ItemAction, Matching, OnMatch};
 use elzevir_app::staff::{Permission, StaffId};
 use elzevir_web_templates::{
-    I18n, I18nError, ImportBatchLink, ImportChoice, ImportDraft, ImportPage, ImportPreview,
-    ImportReceipt, ImportSample, ImportUpload, ImportView, RecordBlocks, RecordFields,
+    I18n, I18nError, ImportBatchLink, ImportChoice, ImportDetail, ImportDraft, ImportPage,
+    ImportPreview, ImportReceipt, ImportSample, ImportUpload, ImportView, RecordBlocks,
+    RecordFields,
 };
 use serde::Deserialize;
 use tokio::sync::mpsc;
@@ -159,7 +160,7 @@ impl ImportSession {
         view: ImportView,
         status: StatusCode,
         notice: Option<&'static str>,
-        detail: Option<String>,
+        detail: Option<ImportDetail>,
     ) -> Response {
         let mut response = render(&ImportPage {
             t: self.translations(state),
@@ -179,13 +180,13 @@ impl ImportSession {
         state: &AppState,
         status: StatusCode,
         key: &'static str,
-        detail: Option<String>,
+        detail: Option<ImportDetail>,
     ) -> Response {
         self.page(state, ImportView::Error, status, Some(key), detail)
     }
 
     fn failure(&self, state: &AppState, error: BatchError) -> Response {
-        let (status, key, detail) = error_view(error);
+        let (status, key, detail) = error_view(self.translations(state), error);
         self.error(state, status, key, detail)
     }
 
@@ -210,19 +211,19 @@ async fn join(
         .map_err(|error| BatchError::Unavailable(error.to_string()))?
 }
 
-fn error_view(error: BatchError) -> (StatusCode, &'static str, Option<String>) {
+fn error_view(t: &I18n, error: BatchError) -> (StatusCode, &'static str, Option<ImportDetail>) {
     match error {
         BatchError::Missing(_) => (StatusCode::NOT_FOUND, "import-missing", None),
         BatchError::Conflict(_) => (StatusCode::CONFLICT, "import-stale", None),
         BatchError::Refused(refusal) => (
             StatusCode::UNPROCESSABLE_ENTITY,
             refusal_key(&refusal),
-            None,
+            crate::import_cells::explain(t, &refusal).map(ImportDetail::Explained),
         ),
         BatchError::Invalid(detail) => (
             StatusCode::UNPROCESSABLE_ENTITY,
             "import-invalid",
-            Some(detail),
+            Some(ImportDetail::Technical(detail)),
         ),
         BatchError::Unavailable(_) => (StatusCode::SERVICE_UNAVAILABLE, "import-unavailable", None),
     }
@@ -237,6 +238,7 @@ fn refusal_key(refusal: &BatchRefusal) -> &'static str {
         BatchRefusal::RecipeTooLarge => "import-refused-size",
         BatchRefusal::UnknownFormat => "import-refused-format",
         BatchRefusal::ColumnMapping { .. } => "import-refused-columns",
+        BatchRefusal::Cell { .. } | BatchRefusal::RepeatedBarcode { .. } => "import-refused-cell",
     }
 }
 
@@ -776,7 +778,7 @@ fn show_batch(
     let excluded = recipe.exclude.iter().copied().collect();
     let (recipe, status, notice, detail) = if let Some((recipe, failure)) = failed {
         let (status, key, detail) = match failure {
-            Failure::Batch(error) => error_view(error),
+            Failure::Batch(error) => error_view(t, error),
             Failure::Rule(key) => (StatusCode::UNPROCESSABLE_ENTITY, key, None),
         };
         (recipe, status, Some(key), detail)
