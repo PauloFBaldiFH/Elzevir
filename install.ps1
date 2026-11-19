@@ -9,7 +9,6 @@ param(
     [string] $Listen = '127.0.0.1:8080',
     [switch] $Plan,
     [switch] $OpenFirewall,
-    [switch] $DefenderExclusion,
     [string] $DownloadOnly
 )
 & {
@@ -64,7 +63,19 @@ function Get-ElzevirLatest([string] $Repository) {
     if ($resolved.StartsWith($prefix, [StringComparison]::Ordinal)) {
         $tag = $resolved.Substring($prefix.Length)
     } elseif ($resolved -ceq "$Repository/releases") {
-        $tag = 'v0.1.0-alpha.1'
+        # No stable release yet: /latest skips pre-releases, so ask the API for
+        # the newest published one instead of pinning an old tag.
+        $api = $Repository.Replace('https://github.com/', 'https://api.github.com/repos/')
+        $listing = Get-ElzevirResponse -Uri "$api/releases?per_page=1"
+        try {
+            if ($listing.ContentLength -gt 1048576) { throw 'Release listing exceeds size limit' }
+            $reader = New-Object IO.StreamReader($listing.GetResponseStream())
+            try { $json = $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
+        } finally { $listing.Dispose() }
+        # Windows PowerShell 5.1 emits a JSON array as one object; enumerate it.
+        $newest = @($json | ForEach-Object { $_ }) | Select-Object -First 1
+        if (-not $newest) { throw 'No published release; pass -Version vX.Y.Z' }
+        $tag = [string]$newest.tag_name
     } else {
         throw 'Cannot resolve an official release'
     }
@@ -189,11 +200,20 @@ function Install-ElzevirForUser([string] $Payload, [string] $BinDirectory, [stri
     Invoke-ElzevirNative $destination @('panel','--help') | Out-Null
     Write-Output "Installed: $destination"
     Write-Output "Data: $Data"
+    Write-Output 'Other terminals opened before this installation need to be reopened to find elzevir.'
     & $destination start --help *> $null
     if ($LASTEXITCODE -eq 0) {
-        Write-Output 'Run: elzevir start'
+        Write-Output ''
+        Write-Output 'Next step:'
+        Write-Output '    elzevir start'
+        Write-Output 'The first start asks for the library name and the administrator password,'
+        Write-Output 'then serves the catalog at http://127.0.0.1:8080 and opens the panel.'
     } else {
-        Write-Output "Run: elzevir serve --data-dir '$Data'"
+        $config = Join-Path $Data 'elzevir.toml'
+        Write-Output ''
+        Write-Output 'This release has no start command. Next steps:'
+        Write-Output "    elzevir init --name 'My library' --data-dir '$(Join-Path $Data 'institution')' --config '$config'"
+        Write-Output "    elzevir serve --config '$config'"
         $global:LASTEXITCODE = 0
     }
 }
@@ -218,7 +238,7 @@ switch ($architecture) {
 }
 if ($Id.EndsWith('-')) { throw 'Invalid institution identifier' }
 if ($Version -cne 'latest' -and -not (Test-ElzevirVersion $Version)) { throw 'Version must be latest or a SemVer tag' }
-$managed = [bool]($InstallerParameters.Keys | Where-Object { $_ -in @('Name','Id','Login','Listen','OpenFirewall','DefenderExclusion') })
+$managed = [bool]($InstallerParameters.Keys | Where-Object { $_ -in @('Name','Id','Login','Listen','OpenFirewall') })
 if ($managed) {
     $programFiles = if ($env:ProgramW6432) { $env:ProgramW6432 } else { $env:ProgramFiles }
     $installRoot = Join-Path $programFiles $(if ($Id -ceq 'library') { 'Elzevir' } else { 'Elzevir-' + $Id })
@@ -234,7 +254,7 @@ if ($managed) {
 }
 $binary = Join-Path $installRoot 'elzevir.exe'
 if ($Plan) {
-    [ordered]@{ target=$target; version=$Version; binary=$binary; config=$config; data=$data; service=$service; firewall=[bool]$OpenFirewall; defender=[bool]$DefenderExclusion } | ConvertTo-Json -Compress
+    [ordered]@{ target=$target; version=$Version; binary=$binary; config=$config; data=$data; service=$service; firewall=[bool]$OpenFirewall } | ConvertTo-Json -Compress
     return
 }
 if ($managed -and -not $DownloadOnly) {
@@ -320,7 +340,6 @@ try {
         $port = [int]($Listen.Substring($Listen.LastIndexOf(':') + 1))
         New-NetFirewallRule -DisplayName "Elzevir ($Id)" -Direction Inbound -Action Allow -Protocol TCP -LocalPort $port | Out-Null
     }
-    if ($DefenderExclusion) { Add-MpPreference -ExclusionPath $data }
     $shortcutDirectory = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut((Join-Path $shortcutDirectory "Painel do Elzevir ($Id).lnk"))
@@ -328,12 +347,7 @@ try {
     $shortcut.Arguments = 'panel --config "' + $config + '" --lang pt-BR'
     $shortcut.WorkingDirectory = $institutionRoot
     $shortcut.Save()
-    $shortcutPath = Join-Path $shortcutDirectory "Painel do Elzevir ($Id).lnk"
-    $shortcutBytes = [IO.File]::ReadAllBytes($shortcutPath)
-    if ($shortcutBytes.Length -lt 76) { throw 'Invalid panel shortcut' }
-    $shortcutBytes[21] = $shortcutBytes[21] -bor 0x20
-    [IO.File]::WriteAllBytes($shortcutPath, $shortcutBytes)
-    Write-Output "Elzevir ready. Open the Start menu shortcut, or: & '$binary' panel --config '$config' --lang pt-BR"
+    Write-Output "Elzevir ready. Open the Start menu shortcut with Run as administrator, or: & '$binary' panel --config '$config' --lang pt-BR"
 } finally {
     Remove-Item -LiteralPath $temporary -Recurse -Force
 }

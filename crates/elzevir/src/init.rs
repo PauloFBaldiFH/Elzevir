@@ -21,10 +21,10 @@ pub(crate) struct InitArgs {
     data_dir: Option<PathBuf>,
     /// First administrator's login.
     #[arg(long, default_value = "admin")]
-    login: String,
+    pub(crate) login: String,
     /// Server IP and port.
     #[arg(long, default_value = "127.0.0.1:8080")]
-    listen: SocketAddr,
+    pub(crate) listen: SocketAddr,
     /// Allow plain-HTTP cookies for local development.
     #[arg(long, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
     insecure_cookies: Option<bool>,
