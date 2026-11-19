@@ -103,6 +103,7 @@ impl WriteCommand {
             }
             Self::Patrons(PatronCommand::Add(_)) => "patrons.add",
             Self::Patrons(PatronCommand::Update(_)) => "patrons.update",
+            Self::Patrons(PatronCommand::View(_)) => "patrons.view",
         }
     }
 
@@ -113,6 +114,7 @@ impl WriteCommand {
         match self {
             Self::Staff(_) => Permission::Administration,
             Self::Catalog(_) => Permission::Cataloguing,
+            Self::Patrons(PatronCommand::View(_)) => Permission::Circulation,
             Self::Patrons(_) => Permission::Patrons,
         }
     }

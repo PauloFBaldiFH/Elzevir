@@ -637,3 +637,54 @@ import-items-replace = Replace the items of matched records
 import-items-ignore = Do not import items
 import-matching-save = Save matching
 import-advanced = Advanced: edit the recipe as JSON
+
+## Patrons (docs/specs/circulacao/leitores.md)
+patrons-title = Patrons
+patrons-search-label = Card number, CPF or name
+patrons-search = Search
+patrons-search-hint = A card number or a CPF finds the patron exactly; two letters or more search inside names.
+patrons-none = No patron found.
+patrons-back = Back to patrons
+patron-cardnumber = Card number
+patron-name = Name
+patron-category = Category
+patron-branch = Home branch
+patron-expires = Enrolled until
+patron-enrolled = Enrolled on
+patron-expired = expired
+patron-expired-alert = This patron's enrolment is over.
+patron-cpf = CPF
+patron-date-of-birth = Date of birth
+patron-email = E-mail
+patron-phone = Phone
+patron-address = Address
+patron-staff-note = Staff note
+patron-reading-history = Reading history
+patron-history-kept = Kept, with the patron's consent
+patron-history-not-kept = Not kept
+patron-categories-title = Patron categories
+patron-categories-intro = Each category says how long its patrons stay enrolled: a number of months, or until a fixed date. Fill in one of the two.
+patron-category-months = Months
+patron-category-until = or until
+patron-category-patrons = { $count ->
+    [one] 1 patron
+   *[other] { $count } patrons
+}
+patron-error-cardnumber = Give a card number of at most 32 characters.
+patron-error-surname = Give a surname of at most 256 characters.
+patron-error-first-name = The first name takes at most 256 characters.
+patron-error-date-of-birth = The date of birth cannot come after the enrolment.
+patron-error-email = Give an e-mail address like name@example.org, of at most 254 characters.
+patron-error-phone = The phone takes at most 50 characters.
+patron-error-address = The address takes at most 512 characters.
+patron-error-expires = The expiry cannot come before the enrolment.
+patron-error-staff-note = The staff note takes at most 1,000 characters.
+patron-error-category = Give the category a name of at most 256 characters and either 1 to 999 months or a fixed date.
+patron-error-category-taken = Another category already has this name.
+patron-error-category-in-use = This category has patrons, so it stays. Move them first.
+patron-error-cardnumber-taken = Another patron already has this card number.
+patron-error-cpf-taken = Another patron already has this CPF.
+patron-error-unknown-category = That category no longer exists.
+patron-error-unknown-branch = That branch no longer exists.
+patron-error-unknown = That patron no longer exists.
+patron-error-stale = Someone changed this patron while you were editing. Open it again.

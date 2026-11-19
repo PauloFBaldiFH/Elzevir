@@ -6,6 +6,8 @@ use elzevir_domain::patron::{Cpf, Enrolment, MAX_ENROLMENT_MONTHS, PatronCategor
 use jiff::civil::Date;
 use serde::{Deserialize, Serialize};
 
+use crate::staff::StaffId;
+
 /// Longest category name, surname or first name.
 pub const MAX_NAME: usize = 256;
 /// Longest library card number (Koha: `borrowers.cardnumber`, `varchar(32)`).
@@ -28,6 +30,9 @@ pub enum PatronCommand {
     Add(Box<PatronFields>),
     /// Replaces every field of a patron.
     Update(Box<PatronUpdate>),
+    /// Records that a staff member opened the patron's record; changes nothing else
+    /// (interface §18.1: who saw which patron, and when).
+    View(PatronId),
 }
 
 /// One change to the patron categories.
@@ -116,6 +121,8 @@ pub enum PatronOutput {
     Added(PatronId),
     /// The patron changed.
     Updated(PatronId),
+    /// The opening of the record was logged.
+    Viewed(PatronId),
 }
 
 /// A field of the patron form, to name the one refused.
@@ -285,6 +292,134 @@ pub fn checked_patron(fields: PatronFields) -> Result<PatronFields, PatronRefusa
     })
 }
 
+/// Most patrons a search returns.
+pub const MAX_SEARCH_ROWS: usize = 50;
+/// Fewest characters a search by name needs.
+pub const MIN_NAME_SEARCH: usize = 2;
+
+/// A patron as the record shows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Patron {
+    /// The patron.
+    pub id: PatronId,
+    /// Version to send back with an edit.
+    pub row_version: i64,
+    /// Every field, with the expiry filled in.
+    pub fields: PatronFields,
+    /// Name of the home branch.
+    pub branch_name: String,
+    /// Name of the category.
+    pub category_name: String,
+}
+
+/// One line of a patron search.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PatronRow {
+    /// The patron.
+    pub id: PatronId,
+    /// Library card number.
+    pub cardnumber: String,
+    /// Surname.
+    pub surname: String,
+    /// First name.
+    pub first_name: Option<String>,
+    /// Name of the category.
+    pub category_name: String,
+    /// Last day of the enrolment.
+    pub expires: Date,
+}
+
+/// A patron category with how many patrons it has.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PatronCategory {
+    /// The category.
+    pub id: PatronCategoryId,
+    /// Its name.
+    pub name: String,
+    /// Its period.
+    pub enrolment: Enrolment,
+    /// How many patrons are in it.
+    pub patrons: u64,
+}
+
+/// What a patron search looks for: a card number or a CPF exactly, and a name in part.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PatronQuery {
+    /// The text trimmed, compared whole to the card number.
+    pub cardnumber: String,
+    /// The CPF, when the text is one.
+    pub cpf: Option<Cpf>,
+    /// The text to find inside names, when it is long enough.
+    pub name: Option<String>,
+}
+
+impl PatronQuery {
+    /// Reads what was typed; `None` when nothing was.
+    #[must_use]
+    pub fn parse(text: &str) -> Option<Self> {
+        let text = text.trim();
+        if text.is_empty() {
+            return None;
+        }
+        Some(Self {
+            cardnumber: text.to_owned(),
+            cpf: Cpf::parse(text).ok(),
+            name: (text.chars().count() >= MIN_NAME_SEARCH).then(|| text.to_owned()),
+        })
+    }
+}
+
+/// Why the patron desk could not answer.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum PatronDeskError {
+    /// The command was refused.
+    #[error(transparent)]
+    Refused(#[from] PatronRefusal),
+    /// The writer queue is full; try again.
+    #[error("the writer is busy")]
+    Busy,
+    /// Storage failed.
+    #[error("patrons unavailable: {0}")]
+    Unavailable(String),
+}
+
+/// What the staff screens read and write about patrons. The web layer reaches patrons only
+/// through this port.
+pub trait PatronDesk: Send + Sync {
+    /// Runs one command as `actor`.
+    ///
+    /// # Errors
+    ///
+    /// [`PatronDeskError::Refused`] with the refusal, or why storage failed.
+    fn apply(
+        &self,
+        actor: StaffId,
+        command: PatronCommand,
+    ) -> Result<PatronOutput, PatronDeskError>;
+
+    /// One patron.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn patron(&self, id: PatronId) -> Result<Option<Patron>, PatronDeskError>;
+
+    /// The patrons whose card number or CPF is the query, or whose name holds it, by
+    /// surname, at most [`MAX_SEARCH_ROWS`].
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn search(&self, query: &PatronQuery) -> Result<Vec<PatronRow>, PatronDeskError>;
+
+    /// Every category, by name.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn categories(&self) -> Result<Vec<PatronCategory>, PatronDeskError>;
+}
+
 /// `text` trimmed, when it is not empty and fits in `max` characters.
 fn required(text: &str, max: usize) -> Option<String> {
     let trimmed = text.trim();
@@ -369,6 +504,20 @@ mod tests {
             refused(|f| f.staff_note = Some("x".repeat(1001))),
             bad(PatronField::StaffNote)
         );
+    }
+
+    #[test]
+    fn a_query_finds_a_cpf_and_names_of_two_characters_or_more() {
+        assert_eq!(PatronQuery::parse("  "), None);
+        let short = PatronQuery::parse("7").unwrap();
+        assert_eq!(short.name, None);
+        assert_eq!(short.cardnumber, "7");
+        let cpf = PatronQuery::parse(" 529.982.247-25 ").unwrap();
+        assert_eq!(
+            cpf.cpf.map(|cpf| cpf.digits().to_owned()).as_deref(),
+            Some("52998224725")
+        );
+        assert_eq!(PatronQuery::parse("Silva").unwrap().cpf, None);
     }
 
     #[test]

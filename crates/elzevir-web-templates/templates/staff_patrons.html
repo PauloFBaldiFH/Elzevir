@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ t.get("patrons-title") }}{% endblock %}
+{% block content %}
+<div class="patrons">
+<h1>{{ t.get("patrons-title") }}</h1>
+<form method="get" action="/equipe/leitores" role="search" class="patron-search">
+  <label for="patron-query">{{ t.get("patrons-search-label") }}</label>
+  <input type="search" id="patron-query" name="q" value="{{ query }}" maxlength="256" autofocus autocomplete="off">
+  <button type="submit">{{ t.get("patrons-search") }}</button>
+</form>
+<p class="form-hint">{{ t.get("patrons-search-hint") }}</p>
+{% if !rows.is_empty() %}
+<table class="patron-results">
+  <thead><tr><th>{{ t.get("patron-cardnumber") }}</th><th>{{ t.get("patron-name") }}</th><th>{{ t.get("patron-category") }}</th><th>{{ t.get("patron-expires") }}</th></tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr><td>{{ row.cardnumber }}</td><td><a href="/equipe/leitores/{{ row.id }}">{{ row.name }}</a></td><td>{{ row.category }}</td><td>{{ row.expires }}{% if row.expired %} <strong class="patron-expired">{{ t.get("patron-expired") }}</strong>{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else if searched %}
+<p role="status">{{ t.get("patrons-none") }}</p>
+{% endif %}
+{% if can_manage %}<p><a href="/equipe/leitores/categorias">{{ t.get("patron-categories-title") }}</a></p>{% endif %}
+</div>
+{% endblock %}

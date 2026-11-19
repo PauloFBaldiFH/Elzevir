@@ -7,6 +7,7 @@
 mod staff_catalog;
 mod staff_import;
 mod staff_item_grid;
+mod staff_patrons;
 mod staff_record_fields;
 mod staff_record_form;
 mod staff_registries;
@@ -23,6 +24,9 @@ pub use staff_import::{
 };
 pub use staff_item_grid::{
     GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid, SuggestedCallNumber,
+};
+pub use staff_patrons::{
+    CategoryLine, PatronLine, StaffPatron, StaffPatronCategories, StaffPatrons,
 };
 pub use staff_record_fields::{FieldEntry, FieldGroup, FieldValue, ItemFields, RecordFields};
 pub use staff_record_form::{
@@ -400,10 +404,35 @@ pub struct StaffHome<'a> {
     pub is_admin: bool,
     /// Whether to show what cataloguers may change.
     pub can_catalogue: bool,
+    /// The patrons link, for circulation or patron management.
+    pub patrons: Visibility,
     /// Whether prepared imports are available to this operator.
     pub can_import: bool,
     /// Anti-forgery token for the sign-out form.
     pub csrf: &'a str,
+}
+
+/// Whether a part of a page shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Visibility {
+    /// It shows.
+    Shown,
+    /// It is left out.
+    Hidden,
+}
+
+impl Visibility {
+    /// [`Visibility::Shown`] when `shown`.
+    #[must_use]
+    pub const fn when(shown: bool) -> Self {
+        if shown { Self::Shown } else { Self::Hidden }
+    }
+
+    /// Whether it shows.
+    #[must_use]
+    pub fn is_shown(self) -> bool {
+        self == Self::Shown
+    }
 }
 
 #[cfg(test)]
@@ -431,6 +460,10 @@ mod tests {
             include_str!("../templates/staff_new_record.html"),
             include_str!("../templates/staff_item_grid.html"),
             include_str!("../templates/staff_form_field.html"),
+            include_str!("../templates/staff_registries.html"),
+            include_str!("../templates/staff_patrons.html"),
+            include_str!("../templates/staff_patron.html"),
+            include_str!("../templates/staff_patron_categories.html"),
         ];
         let mut missing = Vec::new();
         for source in templates {

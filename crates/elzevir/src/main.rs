@@ -384,7 +384,8 @@ fn web_app(
         data_dir: data_dir.to_owned(),
         store: Arc::clone(store),
     }))
-    .map_err(|error| error.to_string())?;
+    .map_err(|error| error.to_string())?
+    .with_patrons(Arc::clone(store) as _);
     Ok(WebRuntime {
         router: elzevir_web::router(state.clone()),
         state,

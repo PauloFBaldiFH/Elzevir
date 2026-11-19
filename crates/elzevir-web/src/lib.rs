@@ -24,6 +24,7 @@ mod importing;
 mod items;
 mod new_record;
 mod opac;
+mod patrons;
 mod record_fields;
 mod record_form;
 mod registries;
@@ -85,6 +86,7 @@ impl Default for WebConfig {
 pub struct AppState {
     inner: Arc<Inner>,
     imports: Option<Arc<importing::Imports>>,
+    patrons: Option<Arc<dyn elzevir_app::patrons::PatronDesk>>,
 }
 
 struct Inner {
@@ -117,6 +119,7 @@ impl AppState {
     ) -> Self {
         Self {
             imports: None,
+            patrons: None,
             inner: Arc::new(Inner {
                 staff,
                 memory,
@@ -141,6 +144,14 @@ impl AppState {
         self.imports = Some(Arc::new(importing::Imports::new(port)?));
         Ok(self)
     }
+
+    /// Connects the patrons behind the wall (docs/specs/circulacao/leitores.md). Without
+    /// them the patron pages answer 404.
+    #[must_use]
+    pub fn with_patrons(mut self, desk: Arc<dyn elzevir_app::patrons::PatronDesk>) -> Self {
+        self.patrons = Some(desk);
+        self
+    }
 }
 
 /// All routes, with security headers on every response.
@@ -156,6 +167,12 @@ pub fn router(state: AppState) -> Router {
         .route("/static/elzevir-icons.svg", get(assets::icons))
         .route("/equipe", get(staff::home))
         .route("/equipe/acervo", get(catalog::catalog))
+        .route("/equipe/leitores", get(patrons::search))
+        .route(
+            "/equipe/leitores/categorias",
+            get(patrons::categories).post(patrons::change_category),
+        )
+        .route("/equipe/leitores/{id}", get(patrons::record))
         .route("/equipe/acervo/lote/marc", get(batch::export_marc))
         .route("/equipe/acervo/lote/exemplares", post(batch::change_items))
         .route("/equipe/acervo/listas", post(batch::change_list))
