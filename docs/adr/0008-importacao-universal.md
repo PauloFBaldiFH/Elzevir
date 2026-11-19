@@ -1,4 +1,4 @@
-# ADR 0004: importação universal pelo caminho de gravação existente
+# ADR 0008: importação universal pelo caminho de gravação existente
 
 - **Status:** proposto no I0, aguardando revisão de Paulo.
 - **Spec:** [importação universal](../specs/catalogo/importacao-universal.md).

@@ -9,7 +9,6 @@ pub(crate) const BORDER: Color = Color::Rgb(0x3b, 0x42, 0x61);
 pub(crate) const ACCENT: Color = Color::Rgb(0x7a, 0xa2, 0xf7);
 pub(crate) const SUCCESS: Color = Color::Rgb(0x9e, 0xce, 0x6a);
 pub(crate) const WARNING: Color = Color::Rgb(0xe0, 0xaf, 0x68);
-pub(crate) const ERROR: Color = Color::Rgb(0xf7, 0x76, 0x8e);
 pub(crate) const TEXT: Color = Color::Rgb(0xc0, 0xca, 0xf5);
 pub(crate) const MUTED: Color = Color::Rgb(0x78, 0x7c, 0x99);
 

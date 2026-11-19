@@ -3,14 +3,14 @@ source: crates/elzevir-panel/tests/live.rs
 expression: text
 ---
 Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
-+Seções--------------------+    1 Início         2 Saúde        3 Acesso        4 Backup        5 Versões       6 Acervo       7 Reinício
++Seções--------------------+     1 Início            2 Saúde          3 Acesso           4 Backup           5 Versões        6 Reinício
 |  d Painel de controle    |+Diagnóstico---------------------------------------------------------------------++Instituição selecionada-----+
 |> x Diagnóstico           ||Em execução                                                                     ||Biblioteca de teste         |
 |  a Endereços e acesso    ||                                                                                ||                            |
 |  b Backup e agendamentos ||Banco: OK                                                                       ||Listener configurado        |
 |  u Atualizações          ||Indexador: OK                                                                   ||127.0.0.1:0                 |
-|  m Acervo                ||SQLite quick_check: OK                                                          ||                            |
-|  r Reiniciar             ||HTTP do catálogo (local): Falha                                                 ||Listener observado          |
+|  r Reiniciar             ||SQLite quick_check: OK                                                          ||                            |
+|                          ||HTTP do catálogo (local): Falha                                                 ||Listener observado          |
 |                          ||Espaço livre (bytes): 104857600                                                 ||127.0.0.1:8080              |
 |                          ||Verificação de espaço livre: OK                                                 ||                            |
 |                          ||Volume local: Não executado                                                     ||Última consulta: há 0       |

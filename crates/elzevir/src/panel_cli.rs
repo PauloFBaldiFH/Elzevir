@@ -84,7 +84,6 @@ struct Collector {
     config: Option<PathBuf>,
     latest: Option<crate::release::Latest>,
     release_check: Option<std::thread::JoinHandle<Result<crate::release::Latest, String>>>,
-    catalog: Option<elzevir_panel::CatalogPage>,
     no_self_update: bool,
 }
 
@@ -100,7 +99,6 @@ impl Collector {
             config: None,
             latest: None,
             release_check: None,
-            catalog: None,
             no_self_update: false,
         }
     }
@@ -201,7 +199,6 @@ impl Collector {
         self.observe_request(request);
         let mut result = elzevir_panel::Operations {
             result: self.operation_result,
-            catalog: self.catalog.clone(),
             latest: self.latest.as_ref().map(|release| release.tag_name.clone()),
             update_available: self.latest.as_ref().is_some_and(|release| {
                 crate::personal_update::newer(&release.tag_name, env!("CARGO_PKG_VERSION"))
@@ -314,17 +311,7 @@ impl Collector {
         }
         if let ObservationRequest::Operate(operation) = request {
             self.operation_result = Some(match self.operate(operation) {
-                Ok(()) => match operation {
-                    elzevir_panel::Operation::Catalog(
-                        elzevir_panel::CatalogAction::Query(_)
-                        | elzevir_panel::CatalogAction::Policies,
-                    ) => "cat-results",
-                    elzevir_panel::Operation::Catalog(
-                        elzevir_panel::CatalogAction::DeletePolicy(_),
-                    ) => "cat-deleted",
-                    elzevir_panel::Operation::Catalog(_) => "cat-saved",
-                    _ => "op-submitted",
-                },
+                Ok(()) => "op-submitted",
                 Err(error) if error.starts_with("B1:") => "broker-unsupported",
                 Err(_) => "op-refused",
             });
@@ -333,11 +320,6 @@ impl Collector {
 
     fn operate(&mut self, operation: &elzevir_panel::Operation) -> Result<(), String> {
         use elzevir_panel::Operation;
-        if let Operation::Catalog(action) = operation {
-            let info = crate::runtime_info::read(&self.directory.join(crate::runtime_info::NAME))?;
-            self.catalog = Some(crate::admin::catalog(&info, action.clone())?);
-            return Ok(());
-        }
         if let Operation::Cloud(action) = operation {
             let info = crate::runtime_info::read(&self.directory.join(crate::runtime_info::NAME))?;
             crate::admin::cloud(&info, crate::cloud::intention(action)?)?;
@@ -406,8 +388,7 @@ impl Collector {
                 };
                 crate::admin::backup_policy(&info, policy)?;
             }
-            Operation::Catalog(_)
-            | Operation::Address(_)
+            Operation::Address(_)
             | Operation::Cloud(_)
             | Operation::Restore { .. }
             | Operation::Restart { .. }

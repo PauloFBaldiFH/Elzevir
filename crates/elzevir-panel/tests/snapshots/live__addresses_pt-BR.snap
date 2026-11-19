@@ -3,14 +3,14 @@ source: crates/elzevir-panel/tests/live.rs
 expression: text
 ---
 Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://catalog.example:8080/
-+Seções--------------------+    1 Início         2 Saúde        3 Acesso        4 Backup        5 Versões       6 Acervo       7 Reinício
++Seções--------------------+     1 Início            2 Saúde          3 Acesso           4 Backup           5 Versões        6 Reinício
 |  d Painel de controle    |+Endereços e acesso--------------------------------------------------------------++Instituição selecionada-----+
 |  x Diagnóstico           ||Em execução                                                                     ||Biblioteca de teste         |
 |> a Endereços e acesso    ||                                                                                ||                            |
 |  b Backup e agendamentos ||l Entrar na Cloudflare · s Domínio próprio · t Teste · h Log                    ||Listener configurado        |
 |  u Atualizações          ||g registrar/retomar *.elzevir.app · c consultar broker · w/W equipe             ||127.0.0.1:0                 |
-|  m Acervo                ||ligar/desligar · k exportar recuperação · o recuperar · n renovar · z           ||                            |
-|  r Reiniciar             ||desvincular domínio · Q QR                                                      ||Listener observado          |
+|  r Reiniciar             ||ligar/desligar · k exportar recuperação · o recuperar · n renovar · z           ||                            |
+|                          ||desvincular domínio · Q QR                                                      ||Listener observado          |
 |                          ||Domínio & Túnel (*.elzevir.app)                                                 ||127.0.0.1:8080              |
 |                          ||Estado do cadastro indisponível                                                 ||                            |
 |                          ||Não foi possível observar a configuração do túnel público.                      ||Última consulta: há 0       |

@@ -16,7 +16,6 @@ use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 #[derive(Clone, Copy)]
 pub(crate) enum Action {
     Section(Section),
-    CatalogRow(usize),
     Key(KeyCode),
 }
 
@@ -78,7 +77,6 @@ impl Action {
     pub(crate) fn apply(self, panel: &mut Panel, area: Rect) {
         match self {
             Self::Section(section) => panel.select(section),
-            Self::CatalogRow(row) => panel.catalog_row = row,
             Self::Key(key) => panel.handle(
                 &Event::Key(KeyEvent::new(key, KeyModifiers::NONE)),
                 area.width,
@@ -151,25 +149,6 @@ pub(crate) fn action_bar(
     }
     let contextual: &[(&str, char)] = match panel.section {
         Section::Dashboard => &[],
-        Section::Catalog
-            if panel
-                .catalog()
-                .is_some_and(|page| page.list == crate::CatalogList::Policies) =>
-        {
-            &[
-                ("cat-new", 'n'),
-                ("cat-edit", 'e'),
-                ("cat-delete", 'd'),
-                ("panel-catalog", 'c'),
-            ]
-        }
-        Section::Catalog => &[
-            ("cat-new", 'n'),
-            ("cat-search", 'b'),
-            ("cat-edit", 'e'),
-            ("cat-items", 'i'),
-            ("ui-config", 'c'),
-        ],
         Section::Diagnostics => &[("ui-verify", 'v'), ("ui-export", 'e')],
         Section::Addresses => &[("ui-test", 'v'), ("ui-share", 'Q'), ("ui-config", 's')],
         Section::Backup => &[("ui-new", 'n'), ("ui-verify", 'v'), ("ui-config", 's')],
