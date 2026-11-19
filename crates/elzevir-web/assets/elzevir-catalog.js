@@ -1832,3 +1832,62 @@ document.addEventListener("click", async (event) => {
     apply.disabled = false;
   }
 });
+
+// Saved lists (lote.md, items 15 to 22): the selection joins or leaves a list, and a
+// list is deleted with a second click.
+async function changeList(change) {
+  const token = document.querySelector(".catalog")?.dataset.csrf ?? "";
+  const response = await fetch("/equipe/acervo/listas", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-elzevir-csrf": token },
+    body: JSON.stringify(change),
+  });
+  if (response.ok) return response.json();
+  const problem = document.querySelector(".selection-list-error");
+  const answer = response.headers.get("content-type")?.includes("json")
+    ? await response.json()
+    : { errors: [{ message: await response.text() }] };
+  if (problem) problem.textContent = (answer.errors ?? []).map((error) => error.message).join(" ");
+  return null;
+}
+
+document.addEventListener("change", (event) => {
+  const choice = event.target;
+  if (!(choice instanceof HTMLSelectElement) || choice.id !== "selection-list") return;
+  const name = document.querySelector(".selection-list-name");
+  if (name) name.hidden = choice.value !== "new";
+});
+
+document.addEventListener("click", async (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  const heads = [...selected];
+  if (target?.closest(".selection-list-add")) {
+    const choice = document.getElementById("selection-list")?.value ?? "new";
+    const change = choice === "new"
+      ? { action: "create", name: document.querySelector(".selection-list-name")?.value ?? "", heads }
+      : { action: "add", list: Number(choice), heads };
+    const answer = await changeList(change);
+    if (answer) location.assign(answer.url);
+    return;
+  }
+  const remove = target?.closest(".selection-list-remove");
+  if (remove) {
+    const answer = await changeList({ action: "remove", list: Number(remove.dataset.list), heads });
+    if (answer) {
+      selected.clear();
+      saveSelection();
+      location.reload();
+    }
+    return;
+  }
+  const drop = target?.closest(".saved-list-delete");
+  if (!drop) return;
+  // The first click asks; the second deletes.
+  if (!drop.dataset.armed) {
+    drop.dataset.armed = "1";
+    drop.textContent = drop.dataset.confirm ?? drop.textContent;
+    return;
+  }
+  const answer = await changeList({ action: "delete", list: Number(drop.dataset.list) });
+  if (answer) location.assign("/equipe/acervo");
+});

@@ -13,7 +13,8 @@ mod staff_registries;
 
 pub use staff_catalog::{
     ActiveFilter, AuthorityLine, BatchChoices, Cord, FacetMenu, FacetOption, FacetStrip,
-    FamilyLine, HubLine, InstanceLine, PillLine, ScanLine, StaffCatalog, WorkLine, WorkListLink,
+    FamilyLine, HubLine, InstanceLine, PillLine, SavedListLink, ScanLine, StaffCatalog, WorkLine,
+    WorkListLink,
 };
 pub use staff_import::{
     ImportBatchLink, ImportDraft, ImportPage, ImportPreview, ImportReceipt, ImportSample,

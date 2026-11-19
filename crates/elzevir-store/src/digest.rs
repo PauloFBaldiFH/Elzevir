@@ -60,8 +60,12 @@ pub(crate) fn database(connection: &Connection) -> Result<String, crate::StoreEr
 
 fn tables(connection: &Connection) -> Result<Vec<String>, rusqlite::Error> {
     let mut statement = connection.prepare(
+        // The team's saved lists are its way of working, not catalog content: a new
+        // working table must not move the digest of an import.
         "SELECT name FROM sqlite_master
-         WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+         WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+           AND name NOT IN ('saved_lists', 'saved_list_families')
+         ORDER BY name",
     )?;
     statement
         .query_map([], |row| row.get(0))?

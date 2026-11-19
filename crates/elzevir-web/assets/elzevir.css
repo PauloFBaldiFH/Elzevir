@@ -214,6 +214,11 @@ main:has(.wide) { max-width: none; padding: 0; }
 .selection-bar { position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 10px 0 0; padding: 8px 12px; border: 1px solid var(--elzevir-color-primary); border-radius: 10px; background: var(--card-bg); font-size: 0.85rem; }
 .selection-bar[hidden] { display: none; }
 .selection-bar button { padding: 3px 10px; font-size: 0.82rem; }
+.selection-list { display: inline-flex; gap: 6px; align-items: center; }
+.selection-list select, .selection-list input { font-size: 0.82rem; padding: 2px 6px; }
+.selection-list-error { color: var(--elzevir-color-error); }
+.selection-list-error:empty { display: none; }
+.saved-list-delete { padding: 3px 10px; font-size: 0.82rem; }
 .batch-items { max-width: min(560px, calc(100vw - 32px)); padding: 20px; border: 1px solid var(--elzevir-color-border); border-radius: 12px; background: var(--card-bg); color: var(--text-main); }
 .batch-items::backdrop { background: rgb(0 0 0 / 0.35); }
 .batch-items h2 { margin: 0 0 6px; font-size: 1.05rem; }

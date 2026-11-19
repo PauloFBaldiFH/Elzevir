@@ -5,6 +5,7 @@
 use std::num::NonZeroUsize;
 
 use jiff::Timestamp;
+use serde::{Deserialize, Serialize};
 
 use crate::catalog::CatalogReadError;
 use crate::listing::{CatalogListing, FamilyHead, FamilyRow, MAX_FROM, PAGE_SIZE, row};
@@ -13,6 +14,16 @@ use crate::staff::StaffId;
 /// Most recent qualifying commands a list reads (facetas.md, items 15 and 16).
 pub const LIST_COMMANDS: usize = 2_000;
 
+/// Longest name of a saved list, in characters (docs/specs/catalogo/lote.md, item 17).
+pub const MAX_LIST_NAME: usize = 100;
+
+/// Most families a saved list holds (lote.md, item 17).
+pub const MAX_LIST_FAMILIES: usize = 5_000;
+
+/// A saved list of families (lote.md, part c).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct SavedListId(pub i64);
+
 /// A work list, as the listing offers it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkList {
@@ -20,25 +31,124 @@ pub enum WorkList {
     Recent,
     /// The families of the records a file brought today.
     ImportedToday,
+    /// A list the team saved (lote.md, item 19).
+    Saved(SavedListId),
 }
 
 impl WorkList {
-    /// Every list, in the order of the strip.
+    /// The lists every listing offers, in the order of the strip.
     pub const ALL: [Self; 2] = [Self::Recent, Self::ImportedToday];
 
-    /// The stable name the URL carries.
+    /// The stable name the URL carries: `s` and the number for a saved list.
     #[must_use]
-    pub const fn name(self) -> &'static str {
+    pub fn name(self) -> String {
         match self {
-            Self::Recent => "recent",
-            Self::ImportedToday => "imported-today",
+            Self::Recent => "recent".to_owned(),
+            Self::ImportedToday => "imported-today".to_owned(),
+            Self::Saved(list) => format!("s{}", list.0),
         }
     }
 
-    /// The list of a URL name; `None` for an unknown one.
+    /// The list of a URL name; `None` for an unknown or malformed one.
     #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
+        if let Some(digits) = name.strip_prefix('s')
+            && !digits.is_empty()
+            && digits.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            return digits.parse().ok().map(|id| Self::Saved(SavedListId(id)));
+        }
         Self::ALL.into_iter().find(|list| list.name() == name)
+    }
+}
+
+/// A saved list as the strip names it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SavedList {
+    /// The list.
+    pub id: SavedListId,
+    /// Its name.
+    pub name: String,
+    /// Families it holds, gone ones included.
+    pub families: usize,
+}
+
+/// A change of the saved lists (lote.md, item 21).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SavedListChange {
+    /// A new list holding these families.
+    Create {
+        /// Its name.
+        name: String,
+        /// Its families, in the order they were selected.
+        heads: Vec<FamilyHead>,
+    },
+    /// Families added to a list; those already there stay where they are.
+    Add {
+        /// The list.
+        list: SavedListId,
+        /// The families.
+        heads: Vec<FamilyHead>,
+    },
+    /// Families taken out of a list.
+    Remove {
+        /// The list.
+        list: SavedListId,
+        /// The families.
+        heads: Vec<FamilyHead>,
+    },
+    /// The list gone; its families stay in the catalog.
+    Delete {
+        /// The list.
+        list: SavedListId,
+    },
+}
+
+/// Why a change of the saved lists was refused (lote.md, item 17).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SavedListRefusal {
+    /// The name is empty or too long.
+    BadName,
+    /// Another list has this name, case aside.
+    NameTaken,
+    /// The list would hold more than [`MAX_LIST_FAMILIES`].
+    TooManyFamilies,
+    /// No list has this id.
+    Unknown,
+}
+
+impl SavedListRefusal {
+    /// Fluent key of the message.
+    #[must_use]
+    pub const fn message_key(self) -> &'static str {
+        match self {
+            Self::BadName => "saved-list-error-name",
+            Self::NameTaken => "saved-list-error-taken",
+            Self::TooManyFamilies => "saved-list-error-full",
+            Self::Unknown => "saved-list-error-unknown",
+        }
+    }
+}
+
+/// `change` with its name trimmed, or why the name is refused.
+///
+/// # Errors
+///
+/// [`SavedListRefusal::BadName`] for an empty or too long name.
+pub fn checked(change: SavedListChange) -> Result<SavedListChange, SavedListRefusal> {
+    match change {
+        SavedListChange::Create { name, heads } => {
+            let name = name.trim();
+            if name.is_empty() || name.chars().count() > MAX_LIST_NAME {
+                return Err(SavedListRefusal::BadName);
+            }
+            Ok(SavedListChange::Create {
+                name: name.to_owned(),
+                heads,
+            })
+        }
+        other => Ok(other),
     }
 }
 
@@ -49,6 +159,8 @@ pub enum WorkListQuery {
     TouchedBy(StaffId),
     /// What imports from a file brought since this instant.
     ImportedSince(Timestamp),
+    /// What a saved list holds, the last added first.
+    Saved(SavedListId),
 }
 
 /// Port: the family heads of a work list. The store implements it.
@@ -65,6 +177,13 @@ pub trait WorkListReader: Send + Sync {
         offset: usize,
         limit: NonZeroUsize,
     ) -> Result<Vec<FamilyHead>, CatalogReadError>;
+
+    /// Every saved list, in name order (lote.md, item 18).
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn saved_lists(&self) -> Result<Vec<SavedList>, CatalogReadError>;
 }
 
 /// One page of a work list.
@@ -130,6 +249,10 @@ mod tests {
                 .map(|n| FamilyHead::Work(WorkId(n)))
                 .collect())
         }
+
+        fn saved_lists(&self) -> Result<Vec<SavedList>, CatalogReadError> {
+            Ok(Vec::new())
+        }
     }
 
     impl CatalogListing for Fake {
@@ -181,5 +304,30 @@ mod tests {
             Some(WorkList::ImportedToday)
         );
         assert_eq!(WorkList::from_name("quarantine"), None);
+        assert_eq!(
+            WorkList::from_name("s12"),
+            Some(WorkList::Saved(SavedListId(12)))
+        );
+        assert_eq!(WorkList::Saved(SavedListId(12)).name(), "s12");
+        for bad in ["s", "s-1", "s1x", "s+2"] {
+            assert_eq!(WorkList::from_name(bad), None, "{bad}");
+        }
+        assert_eq!(
+            checked(SavedListChange::Create {
+                name: "  Doações  ".to_owned(),
+                heads: Vec::new()
+            }),
+            Ok(SavedListChange::Create {
+                name: "Doações".to_owned(),
+                heads: Vec::new()
+            })
+        );
+        assert_eq!(
+            checked(SavedListChange::Create {
+                name: " ".to_owned(),
+                heads: Vec::new()
+            }),
+            Err(SavedListRefusal::BadName)
+        );
     }
 }
