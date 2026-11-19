@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}{{ t.get("rules-title") }}{% endblock %}
+{% block content %}
+<div class="registries circulation-rules">
+<h1>{{ t.get("rules-title") }}</h1>
+<p class="form-hint">{{ t.get("rules-intro") }}</p>
+{% if saved %}<p class="codes-alert codes-saved" role="status">{{ t.get("rules-saved") }}</p>{% endif %}
+{% if let Some(message) = refused %}<p class="codes-alert codes-refused" role="alert">{{ message }}</p>{% endif %}
+<h2>{{ t.get("rules-overview") }}</h2>
+{% if scopes.is_empty() %}<p class="form-hint">{{ t.get("rules-overview-empty") }}</p>{% else %}
+<div class="rules-scroll">
+<table class="rules-overview">
+  <thead><tr>
+    <th scope="col">{{ t.get("rules-branch") }}</th>
+    <th scope="col">{{ t.get("rules-category") }}</th>
+    <th scope="col">{{ t.get("rules-policy") }}</th>
+    {% for column in overview_columns %}<th scope="col">{{ t.get(column) }}</th>{% endfor %}
+    <th scope="col"></th>
+  </tr></thead>
+  <tbody>
+  {% for scope in scopes %}
+    <tr{% if scope.current %} aria-current="true"{% endif %}>
+      <td>{{ scope.branch }}</td><td>{{ scope.category }}</td><td>{{ scope.policy }}</td>
+      {% for value in scope.values %}<td>{{ value }}</td>{% endfor %}
+      <td><a href="{{ scope.url }}">{{ scope.count }}</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+<h2 id="rules-scope">{{ t.get("rules-scope") }}</h2>
+<form method="get" action="/equipe/admin/regras#rules-scope" class="rules-chooser">
+  <label>{{ t.get("rules-branch") }} <select name="branch">{% for choice in branches %}<option value="{{ choice.id }}"{% if choice.chosen %} selected{% endif %}>{{ choice.name }}</option>{% endfor %}</select></label>
+  <label>{{ t.get("rules-category") }} <select name="category">{% for choice in categories %}<option value="{{ choice.id }}"{% if choice.chosen %} selected{% endif %}>{{ choice.name }}</option>{% endfor %}</select></label>
+  <label>{{ t.get("rules-policy") }} <select name="policy">{% for choice in policies %}<option value="{{ choice.id }}"{% if choice.chosen %} selected{% endif %}>{{ choice.name }}</option>{% endfor %}</select></label>
+  <button type="submit">{{ t.get("rules-open") }}</button>
+</form>
+<form method="post" action="/equipe/admin/regras">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% for choice in branches %}{% if choice.chosen %}<input type="hidden" name="branch" value="{{ choice.id }}">{% endif %}{% endfor %}
+  {% for choice in categories %}{% if choice.chosen %}<input type="hidden" name="category" value="{{ choice.id }}">{% endif %}{% endfor %}
+  {% for choice in policies %}{% if choice.chosen %}<input type="hidden" name="policy" value="{{ choice.id }}">{% endif %}{% endfor %}
+  {% for group in groups %}
+  <h3>{{ t.get(group.label_key) }}</h3>
+  <div class="rules-scroll">
+  <table class="rules-grid">
+    <thead><tr>
+      <th scope="col">{{ t.get("rules-rule") }}</th>
+      <th scope="col">{{ t.get("rules-here") }}</th>
+      <th scope="col">{{ t.get("rules-effective") }}</th>
+    </tr></thead>
+    <tbody>
+    {% for row in group.rows %}
+      <tr>
+        <th scope="row"><label for="rule-{{ row.name }}">{{ row.label }}</label></th>
+        <td>{% if let Some(reason) = row.not_scoped %}<span class="form-hint">{{ reason }}</span>{% else %}
+          <input type="text" id="rule-{{ row.name }}" name="v.{{ row.name }}" value="{{ row.value }}" maxlength="32">
+          {% if row.can_be_blank %}<label class="rules-blank" title="{{ t.get("rules-blank-hint") }}"><input type="checkbox" name="b.{{ row.name }}" value="1"{% if row.blank %} checked{% endif %}> {{ t.get("rules-blank") }}</label>{% endif %}
+        {% endif %}</td>
+        <td><strong>{{ row.effective }}</strong> <span class="form-hint">{{ row.origin }}</span></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endfor %}
+  <p><button type="submit">{{ t.get("rules-save") }}</button></p>
+</form>
+</div>
+{% endblock %}

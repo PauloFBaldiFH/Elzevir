@@ -5,6 +5,7 @@
 //! (English first, then Brazilian Portuguese; docs/arquitetura/04-decisoes.md, §1 item 7).
 
 mod staff_catalog;
+mod staff_circulation_rules;
 mod staff_import;
 mod staff_item_grid;
 mod staff_patrons;
@@ -16,6 +17,9 @@ pub use staff_catalog::{
     ActiveFilter, AuthorityLine, BatchChoices, Cord, FacetMenu, FacetOption, FacetStrip,
     FamilyLine, HubLine, InstanceLine, PillLine, SavedListLink, ScanLine, StaffCatalog, WorkLine,
     WorkListLink,
+};
+pub use staff_circulation_rules::{
+    Choice, RuleGroupPart, RuleRow, ScopeLine, StaffCirculationRules,
 };
 pub use staff_import::{
     ImportBatchLink, ImportChoice, ImportColumn, ImportColumns, ImportDetail, ImportDraft,
@@ -466,6 +470,7 @@ mod tests {
             include_str!("../templates/staff_patron.html"),
             include_str!("../templates/staff_patron_categories.html"),
             include_str!("../templates/staff_patron_form.html"),
+            include_str!("../templates/staff_circulation_rules.html"),
         ];
         let mut missing = Vec::new();
         for source in templates {

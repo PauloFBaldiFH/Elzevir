@@ -10,6 +10,7 @@ mod assets;
 mod authorities;
 mod batch;
 mod catalog;
+mod circulation_rules;
 mod creating;
 mod described;
 mod editing;
@@ -88,6 +89,7 @@ pub struct AppState {
     inner: Arc<Inner>,
     imports: Option<Arc<importing::Imports>>,
     patrons: Option<Arc<dyn elzevir_app::patrons::PatronDesk>>,
+    rules: Option<Arc<dyn elzevir_app::circulation_rules::RuleBook>>,
 }
 
 struct Inner {
@@ -121,6 +123,7 @@ impl AppState {
         Self {
             imports: None,
             patrons: None,
+            rules: None,
             inner: Arc::new(Inner {
                 staff,
                 memory,
@@ -151,6 +154,14 @@ impl AppState {
     #[must_use]
     pub fn with_patrons(mut self, desk: Arc<dyn elzevir_app::patrons::PatronDesk>) -> Self {
         self.patrons = Some(desk);
+        self
+    }
+
+    /// Connects the circulation rules (docs/specs/circulacao/regras.md). Without them the
+    /// rules screen answers 404.
+    #[must_use]
+    pub fn with_rules(mut self, book: Arc<dyn elzevir_app::circulation_rules::RuleBook>) -> Self {
+        self.rules = Some(book);
         self
     }
 }
@@ -247,15 +258,25 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/equipe/login", get(staff::login_form).post(staff::log_in))
         .route("/equipe/logout", post(staff::log_out))
-        .route("/equipe/admin/memory", get(staff::memory))
-        .route(
-            "/equipe/admin/cadastros",
-            get(registries::registries).post(registries::change_registry),
-        )
+        .merge(admin_routes())
         .merge(authority_routes())
         .merge(importing::routes())
         .layer(axum::middleware::map_response(security::headers))
         .with_state(state)
+}
+
+/// Administration: memory report, registries and circulation rules.
+fn admin_routes() -> Router<AppState> {
+    Router::new()
+        .route("/equipe/admin/memory", get(staff::memory))
+        .route(
+            "/equipe/admin/regras",
+            get(circulation_rules::rules).post(circulation_rules::set_rules),
+        )
+        .route(
+            "/equipe/admin/cadastros",
+            get(registries::registries).post(registries::change_registry),
+        )
 }
 
 /// The authorities column: agents and subjects edited once for every record, and linked
