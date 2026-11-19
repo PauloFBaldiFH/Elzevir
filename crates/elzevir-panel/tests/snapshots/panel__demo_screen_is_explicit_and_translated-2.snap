@@ -2,7 +2,7 @@
 source: crates/elzevir-panel/tests/panel.rs
 expression: "screen(&panel, \"pt-BR\", 120, 24)"
 ---
-🦀  Elzevir TUI  0.1.0-alpha.1  ·  Instituição fictícia
+🦀  Elzevir TUI  0.1.0-alpha.2  ·  Instituição fictícia
 ╭Seções────────────────────╮   1 Início         2 Saúde       3 Acesso       4 Backup        5 Versões     6 Reinício
 │▌ d Painel de controle    │╭Painel de controle──────────────────────────────────────────╮╭Instituição selecionada─────╮
 │  x Diagnóstico           ││DEMONSTRAÇÃO - dados simulados                              ││Biblioteca de demonstração  │
