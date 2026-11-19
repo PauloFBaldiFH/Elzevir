@@ -54,7 +54,7 @@
 
 ## 5. Desvios
 
-Na edição, não no cálculo:
+Na edição, não no cálculo, aprovados por Paulo em 2026-11-19 (DEV-0001 e DEV-0002 em [desvios-conhecidos.md](../../desvios-conhecidos.md)):
 
 1. O Koha não grava uma entrada num dia que já é feriado (`isHoliday`); o Elzevir troca o título da entrada daquele tipo. O efeito no cálculo é o mesmo.
 2. Ao apagar uma entrada semanal, o Koha transforma as exceções da unidade em datas fechadas, e escolhe as datas por `WEEKDAY()` do MySQL, que conta a partir de segunda-feira, enquanto o dia guardado conta a partir de domingo. Ao apagar uma entrada anual, faz o mesmo com as exceções daquele dia e mês. Isso fecha datas que a biblioteca tinha aberto. O Elzevir deixa as exceções como estão.
