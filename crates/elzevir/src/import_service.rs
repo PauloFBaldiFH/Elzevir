@@ -2,19 +2,19 @@
 //! Shared prepared import operations for the local CLI and the running institution.
 
 use std::fs::File;
-use std::io::{BufReader, Cursor, Seek};
+use std::io::{BufRead, BufReader, Cursor, Seek};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use elzevir_app::catalog::{CatalogReader, CatalogRefusal, CodeLists};
 use elzevir_app::import::batches::{
     BatchCommand, BatchError, BatchPort, BatchPreview, BatchReply, BatchState as State, BatchView,
-    Completion, FormatChoice, Receipt, Refusal,
+    Completion, FormatChoice, Receipt, Refusal, TableSource,
 };
 use elzevir_app::import::containers::{self, Selected};
 use elzevir_app::import::edits::{Recipe, RenderReport};
-use elzevir_app::import::sheet::{self, PreparedTable, SheetError};
-use elzevir_app::import::table::Delimiter;
+use elzevir_app::import::sheet::{self, PreparedTable, SheetError, TableSettings};
+use elzevir_app::import::table::{Delimiter, TableReader};
 use elzevir_app::import::{
     ImportError, ImportOptions, ImportReport, RecordFailure, RecordRejected, RecordSink,
     import_marc21,
@@ -60,6 +60,7 @@ pub(crate) fn execute(
             batches.list().map_err(BatchError::Unavailable)?,
         )),
         BatchCommand::Stage(input, selected) => Ok(view(
+            &batches,
             batches
                 .stage(input, selected)
                 .map_err(BatchError::Invalid)?,
@@ -72,7 +73,7 @@ pub(crate) fn execute(
             } else {
                 None
             };
-            Ok(view(batch, preview))
+            Ok(view(&batches, batch, preview))
         }
         BatchCommand::Edit(id, revision, recipe, format) => {
             let mut batch = load(&id)?;
@@ -104,7 +105,7 @@ pub(crate) fn execute(
             batch.preview_sha256 = None;
             batch.state = State::Review;
             batches.save(&batch).map_err(BatchError::Unavailable)?;
-            Ok(view(batch, None))
+            Ok(view(&batches, batch, None))
         }
         BatchCommand::Preview(id, revision, from) => {
             let mut batch = load(&id)?;
@@ -117,7 +118,7 @@ pub(crate) fn execute(
             batch.state = if ready { State::Ready } else { State::Review };
             batch.preview_sha256 = ready.then_some(stamp);
             batches.save(&batch).map_err(BatchError::Unavailable)?;
-            Ok(view(batch, Some(preview)))
+            Ok(view(&batches, batch, Some(preview)))
         }
         BatchCommand::Confirm(id, revision) => {
             let batch = load(&id)?;
@@ -145,13 +146,59 @@ pub(crate) fn execute(
     }
 }
 
-fn view(batch: Batch, preview: Option<BatchPreview>) -> BatchReply {
+fn view(batches: &Batches, batch: Batch, preview: Option<BatchPreview>) -> BatchReply {
+    let table = table_source(batches, &batch);
     BatchReply::Batch(Box::new(BatchView {
         batch: batch.summary(),
         recipe: batch.recipe,
         archive: batch.archive,
+        table,
         preview,
     }))
+}
+
+/// Reads only the header of the selected spreadsheet, for the column mapping form.
+///
+/// Any failure yields `None`: the header only feeds that form, and the preview
+/// reports the same failure with its location.
+fn table_source(batches: &Batches, batch: &Batch) -> Option<TableSource> {
+    let Some(selection) = &batch.recipe.archive else {
+        if batch.archive.is_some() || !batch.is_table() {
+            return None;
+        }
+        let settings = batch.table_settings().ok()?;
+        let header = batches
+            .with_source(batch, |input| first_row(input, &settings))
+            .ok()?;
+        return Some(TableSource { header, settings });
+    };
+    let source = batches.archive_source(batch).ok()?;
+    match containers::select(&source, selection).ok()? {
+        Selected::Workbook(rows) => {
+            let header = rows.into_iter().next()?.cells;
+            let settings = batch.settings_for(Some(Delimiter::Comma)).ok()?;
+            Some(TableSource { header, settings })
+        }
+        Selected::File(bytes, detected) if is_delimited(detected, selection.format) => {
+            let separator = table_delimiter(&bytes).or_else(|| {
+                (detected.evidence == Evidence::EmptyInput).then_some(Delimiter::Comma)
+            });
+            let settings = batch.settings_for(separator).ok()?;
+            let header = first_row(&mut bytes.as_slice(), &settings).ok()?;
+            Some(TableSource { header, settings })
+        }
+        Selected::File(..) => None,
+    }
+}
+
+fn first_row(input: &mut dyn BufRead, settings: &TableSettings) -> Result<Vec<String>, String> {
+    TableReader::new(input, settings.delimiter, settings.encoding)
+        .map_err(|error| error.to_string())?
+        .next()
+        .transpose()
+        .map_err(|error| error.to_string())?
+        .map(|row| row.cells)
+        .ok_or_else(|| "empty spreadsheet".to_owned())
 }
 
 fn check_revision(batch: &Batch, revision: u64) -> Result<(), BatchError> {

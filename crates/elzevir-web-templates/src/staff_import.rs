@@ -96,10 +96,10 @@ pub struct ImportDraft {
     pub interrupted: bool,
     /// Validation of the whole batch and the selected page.
     pub preview: Option<ImportPreview>,
-    /// Member paths with their detected format and worksheet names.
-    pub archive: Option<Vec<ImportMember>>,
-    /// Selected path and worksheet for the saved revision.
-    pub archive_selection: Option<String>,
+    /// Selectable archive members and worksheets, for an archive source.
+    pub archive: Option<Vec<ImportChoice>>,
+    /// Column mapping of the selected spreadsheet, when it needs one.
+    pub columns: Option<ImportColumns>,
     /// Saved MARC edit rules, in application order, or `None` when the source is
     /// a spreadsheet and edit rules do not apply.
     pub rules: Option<Vec<ImportRule>>,
@@ -135,14 +135,36 @@ pub struct ImportMatching {
     pub items: &'static str,
 }
 
-/// One file in a container inventory.
-pub struct ImportMember {
-    /// Exact JSON path for the recipe.
-    pub path: String,
-    /// Operator-facing detected format.
-    pub format: String,
-    /// Available worksheets.
-    pub sheets: Vec<String>,
+/// One selectable archive member, or one worksheet of a workbook member.
+pub struct ImportChoice {
+    /// Position in the inventory, as `entry` or `entry/sheet`.
+    pub value: String,
+    /// Member path, worksheet and format, for display.
+    pub label: String,
+    /// Whether the saved revision uses it.
+    pub selected: bool,
+}
+
+/// The column mapping form of a custom spreadsheet.
+pub struct ImportColumns {
+    /// Every column of the sheet, in order.
+    pub columns: Vec<ImportColumn>,
+    /// Every accepted destination, offered as a list.
+    pub targets: Vec<String>,
+    /// `none`, `isbn` or `title`.
+    pub group_by: &'static str,
+}
+
+/// One spreadsheet column and its chosen or suggested destination.
+pub struct ImportColumn {
+    /// One-based column.
+    pub position: usize,
+    /// Exact header.
+    pub header: String,
+    /// Saved or suggested destination, empty when there is no suggestion.
+    pub target: String,
+    /// Whether surrounding whitespace is trimmed.
+    pub trim: bool,
 }
 
 /// Review results for one page.

@@ -18,6 +18,7 @@ mod form_sections;
 mod history;
 mod icons;
 mod import_rules;
+mod import_sheets;
 mod importing;
 mod items;
 mod new_record;

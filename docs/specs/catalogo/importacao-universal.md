@@ -223,7 +223,16 @@ define a entrada nativa da escritora e a compatibilidade das gravações MARC.
 
 Na interface autenticada da equipe, abra **Importar CSV ou TSV**,
 baixe um modelo ou envie uma planilha própria. Para planilha própria,
-salve o perfil no campo da receita. Revise a prévia antes de confirmar.
+a seção **Colunas da planilha** lista cada coluna do cabeçalho com um campo
+de destino que filtra a lista de destinos aceitos (`ignore`, a ISBN e as
+colunas qualificadas do modelo gerado). Cabeçalhos conhecidos, como
+`Título` ou `Código de barras`, já vêm sugeridos; a sugestão só vale depois
+de salva. Cada coluna precisa de um destino, e a opção de remover espaços e
+o agrupamento por ISBN ou título também ficam no formulário. Salvar grava o
+mesmo perfil versionado de `table.profile`, com o separador e a codificação
+lidos do arquivo; um destino fora da lista é recusado sem alterar a receita.
+Planilha no modelo gerado não mostra a seção. Revise a prévia antes de
+confirmar.
 
 Na CLI, gere o cabeçalho ou prepare diretamente o arquivo preenchido.
 Use `--tsv` para gerar o modelo TSV. A etapa `stage` imprime o ID do lote.
@@ -507,8 +516,10 @@ arquivo. Guarde identificadores com zeros à esquerda como texto.
 ```
 
 Na tela da equipe, abra **Importar planilha ou arquivo compactado**.
-Envie o pacote, escolha o membro e a aba na receita, salve e revise a
-prévia. Pela CLI, salve a receita acima em `receita.json` e informe o
+Envie o pacote, escolha o membro, ou a aba de uma pasta de trabalho, na
+lista **Arquivo ou aba a importar**, mapeie as colunas se for planilha
+própria e revise a prévia. Escolher outro membro ou aba descarta o
+mapeamento de colunas salvo, que descrevia o cabeçalho anterior. Pela CLI, salve a receita acima em `receita.json` e informe o
 identificador apresentado por `stage` no lugar de `ID_DO_LOTE`.
 
 ```sh
