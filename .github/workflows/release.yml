@@ -124,7 +124,10 @@ jobs:
           sha256sum --check SHA256SUMS
           cd ..
           if draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null); then
-            if [[ "$draft" != true ]]; then
+            # A release published from the web creates the tag with no assets;
+            # fill it. Once SHA256SUMS is attached, published assets never change.
+            if [[ "$draft" != true ]] &&
+              gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | grep -Fxq SHA256SUMS; then
               echo "Release $RELEASE_TAG is already published."
               exit 0
             fi
