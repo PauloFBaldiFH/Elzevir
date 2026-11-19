@@ -5,7 +5,7 @@ use crate::{Component, Details, LiveState, Messages, Panel, Section, ServerStatu
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Color, Style},
+    style::Style,
     text::Line,
     widgets::{Paragraph, Wrap},
 };
@@ -54,12 +54,12 @@ pub(crate) fn draw(
     let expired = state.snapshot.is_some() && state.age_seconds > 5;
     let snapshot = state.snapshot.as_ref().filter(|_| !expired);
     let (key, color) = match snapshot.map(|sample| &sample.status) {
-        _ if expired => ("panel-state-stale", Color::Gray),
-        None => ("panel-state-loading", Color::Gray),
-        Some(ServerStatus::Running(_)) => ("panel-state-running", Color::Green),
-        Some(ServerStatus::Degraded(_)) => ("panel-state-degraded", Color::Yellow),
-        Some(ServerStatus::Stopped) => ("panel-state-stopped", Color::Gray),
-        Some(ServerStatus::Unavailable) => ("panel-state-unavailable", Color::Gray),
+        _ if expired => ("panel-state-stale", crate::ui::theme::MUTED),
+        None => ("panel-state-loading", crate::ui::theme::MUTED),
+        Some(ServerStatus::Running(_)) => ("panel-state-running", crate::ui::theme::SUCCESS),
+        Some(ServerStatus::Degraded(_)) => ("panel-state-degraded", crate::ui::theme::WARNING),
+        Some(ServerStatus::Stopped) => ("panel-state-stopped", crate::ui::theme::MUTED),
+        Some(ServerStatus::Unavailable) => ("panel-state-unavailable", crate::ui::theme::MUTED),
     };
     let details = snapshot.and_then(|sample| match &sample.status {
         ServerStatus::Running(details) | ServerStatus::Degraded(details) => Some(details),
@@ -97,7 +97,10 @@ pub(crate) fn draw(
         Paragraph::new(rows)
             .wrap(Wrap { trim: true })
             .scroll((panel.scroll, 0))
-            .block(crate::view::block(messages.get(panel.section.key()), ascii)),
+            .block(
+                crate::view::block(messages.get(panel.section.key()), ascii)
+                    .border_style(Style::new().fg(crate::ui::theme::ACCENT)),
+            ),
         work,
     );
     let name = state

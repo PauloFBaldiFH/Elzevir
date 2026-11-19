@@ -14,27 +14,39 @@ pub(crate) trait Download {
     fn fetch(&self, url: &str, output: &mut dyn Write, limit: u64) -> Result<(), String>;
 }
 pub(crate) struct Http;
+pub(crate) struct Metadata;
+
 impl Download for Http {
     fn fetch(&self, url: &str, output: &mut dyn Write, limit: u64) -> Result<(), String> {
-        if !url.starts_with("https://") {
-            return Err("downloads require HTTPS".to_owned());
-        }
-        let agent = crate::http_client::secure_agent(5, Duration::from_mins(15))?;
-        let mut response = agent
-            .get(url)
-            .header("User-Agent", "Elzevir-operations")
-            .call()
-            .map_err(|_| "official download unavailable")?;
-        if !response.status().is_success() {
-            return Err("official download refused".to_owned());
-        }
-        let bytes = std::io::copy(&mut response.body_mut().as_reader().take(limit + 1), output)
-            .map_err(|_| "official download failed")?;
-        if bytes > limit {
-            return Err("official download exceeds limit".to_owned());
-        }
-        Ok(())
+        fetch(url, output, limit, Duration::from_mins(15))
     }
+}
+
+impl Download for Metadata {
+    fn fetch(&self, url: &str, output: &mut dyn Write, limit: u64) -> Result<(), String> {
+        fetch(url, output, limit, Duration::from_secs(4))
+    }
+}
+
+fn fetch(url: &str, output: &mut dyn Write, limit: u64, timeout: Duration) -> Result<(), String> {
+    if !url.starts_with("https://") {
+        return Err("downloads require HTTPS".to_owned());
+    }
+    let agent = crate::http_client::secure_agent(5, timeout)?;
+    let mut response = agent
+        .get(url)
+        .header("User-Agent", "Elzevir-operations")
+        .call()
+        .map_err(|_| "official download unavailable")?;
+    if !response.status().is_success() {
+        return Err("official download refused".to_owned());
+    }
+    let bytes = std::io::copy(&mut response.body_mut().as_reader().take(limit + 1), output)
+        .map_err(|_| "official download failed")?;
+    if bytes > limit {
+        return Err("official download exceeds limit".to_owned());
+    }
+    Ok(())
 }
 #[derive(Debug, Deserialize)]
 pub(crate) struct Latest {

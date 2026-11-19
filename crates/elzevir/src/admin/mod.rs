@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Instance-bound, bounded read-only administrative protocol.
+//! Instance-bound, bounded administrative protocol on the OS-private transport.
 
 pub(crate) mod transport;
 
@@ -33,6 +33,9 @@ struct Request {
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 enum Command {
     Status,
+    Catalog {
+        action: elzevir_panel::CatalogAction,
+    },
     Diagnose,
     BackupNow,
     ConfigureCloud {
@@ -61,6 +64,7 @@ struct Response {
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 enum Outcome {
     Status { health: Report },
+    Catalog { page: elzevir_panel::CatalogPage },
     Diagnose { pid: u32, quick_check: Integrity },
     Sessions { count: usize },
     Job { job: crate::operations::Job },
@@ -95,6 +99,7 @@ async fn handle(
     probe: Arc<Probe>,
     operations: crate::operations::Client,
     sessions: elzevir_web::AppState,
+    catalog: crate::panel_catalog::Catalog,
 ) -> io::Result<()> {
     // Collapse decoding failures to a static code; never echo untrusted frame contents.
     let request = frame(&stream, MAX_FRAME)
@@ -112,6 +117,16 @@ async fn handle(
         Some(request) if request.instance != probe.instance() => Outcome::Error {
             code: ErrorCode::InstanceMismatch,
         },
+        Some(Request {
+            command: Command::Catalog { action },
+            ..
+        }) => {
+            let result = tokio::task::spawn_blocking(move || catalog.execute(action))
+                .await
+                .map_err(|_| "catalog operation failed".to_owned())
+                .and_then(|result| result);
+            operation_result(result.map(|page| Outcome::Catalog { page }))
+        }
         Some(Request {
             command: Command::Status,
             ..
@@ -183,6 +198,7 @@ pub(crate) async fn serve(
     probe: Arc<Probe>,
     operations: crate::operations::Client,
     sessions: elzevir_web::AppState,
+    catalog: crate::panel_catalog::Catalog,
     mut shutdown: watch::Receiver<bool>,
 ) -> io::Result<()> {
     let mut pending = JoinSet::new();
@@ -195,7 +211,8 @@ pub(crate) async fn serve(
                     let probe = Arc::clone(&probe);
                     let operations = operations.clone();
                     let sessions=sessions.clone();
-                    pending.spawn(async move { timeout(DEADLINE, handle(stream, probe, operations,sessions)).await });
+                    let catalog = catalog.clone();
+                    pending.spawn(async move { timeout(DEADLINE, handle(stream, probe, operations,sessions,catalog)).await });
                 }
                 // Dropping excess connections applies a fixed resource bound.
             }
@@ -220,6 +237,16 @@ pub(crate) fn status(info: &RuntimeInfo) -> Result<Report, String> {
             Ok(health)
         }
         _ => Err("administrative command refused".to_owned()),
+    }
+}
+
+pub(crate) fn catalog(
+    info: &RuntimeInfo,
+    action: elzevir_panel::CatalogAction,
+) -> Result<elzevir_panel::CatalogPage, String> {
+    match call(info, Command::Catalog { action })? {
+        Outcome::Catalog { page } => Ok(page),
+        _ => Err("catalog operation refused".into()),
     }
 }
 

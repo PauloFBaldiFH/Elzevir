@@ -19,48 +19,49 @@ Os instaladores verificam o SHA-256 do pacote e adicionam `elzevir` ao PATH
 do usuário. Eles consultam a release estável mais recente. Enquanto ela
 estiver indisponível, usam o pré-lançamento `v0.1.0-alpha.1`.
 
-Para iniciar o servidor no mesmo terminal:
+Abra o Elzevir pelo terminal. No primeiro uso, informe o nome da
+biblioteca, crie a senha do administrador e selecione um perfil inicial
+opcional.
 
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-elzevir serve --data-dir "${XDG_DATA_HOME:-$HOME/.local/share}/elzevir"
+```sh
+elzevir start
 ```
 
-```powershell
-elzevir serve --data-dir "$env:LOCALAPPDATA\Elzevir\data"
-```
-
-Abra o catálogo em `http://127.0.0.1:8080`. Em outro terminal, abra o
-painel Ratatui com a mesma pasta de dados, ou use `--demo` para explorar
-o painel com dados simulados.
-
-```bash
-elzevir panel --data-dir "${XDG_DATA_HOME:-$HOME/.local/share}/elzevir" --lang pt-BR
-```
-
-```powershell
-elzevir panel --data-dir "$env:LOCALAPPDATA\Elzevir\data" --lang pt-BR
-```
+`start` abre o painel Ratatui e serve o catálogo em
+`http://127.0.0.1:8080`. Fechar o painel encerra o servidor desse comando.
+Também é possível usar `elzevir serve` e `elzevir panel` em terminais
+separados. Use `elzevir panel --demo` para explorar a interface com dados
+simulados.
 
 ## Primeira inicialização
 
-Para criar uma instituição com administrador e configuração própria, execute
-em uma pasta local com destinos novos:
-
 ```sh
-elzevir init --name "Minha biblioteca"
-elzevir serve --config elzevir.toml
+elzevir init
+elzevir start --lang pt-BR
 ```
 
-`init` pede e confirma a senha sem mostrá-la, cria o administrador `admin`,
-a pasta `data-local` e a configuração. Recusa destinos existentes e volumes
-de rede. O servidor usa `http://127.0.0.1:8080` por padrão. Em desenvolvimento
-com HTTP local, use `serve --config elzevir.toml --insecure-cookies`.
+O diretório padrão é `$XDG_DATA_HOME/elzevir` ou
+`~/.local/share/elzevir` no Linux e macOS, e
+`%LOCALAPPDATA%\Elzevir\data` no Windows. A configuração operacional
+fica em `server.toml` nesse diretório. `--data-dir` e `--config`
+aceitam destinos explícitos. `--lang` sobrescreve o idioma do sistema.
 
-Para automação, use `init --password-stdin` com entrada redirecionada ou a
-variável `ELZEVIR_STAFF_PASSWORD`. A [especificação da inicialização](docs/specs/operacao/inicializacao.md)
-descreve as opções e os limites desta etapa. Consulte o [guia de operação](docs/operacao.md)
-para instaladores Linux/Windows, serviço, painel, backups e atualizações.
+Para automação, passe `--name` e leia a senha de
+`ELZEVIR_STAFF_PASSWORD` ou use `--password-stdin` com entrada
+redirecionada. `--profile public`, `school` e `university` são opcionais.
+
+```sh
+elzevir init --name "Minha biblioteca" --password-stdin < senha.txt
+elzevir serve
+```
+
+Para atualizar uma instalação pessoal, encerre o servidor e execute
+`elzevir update`. O comando verifica o SHA-256 do pacote oficial, faz
+backup preventivo e substitui o executável. Use `update --data-dir CAMINHO`
+para atualizar uma instalação pessoal com dados fora do padrão. O WinGet continua responsável
+pelas suas instalações. Use `elzevir update --no-self-update` para
+recusar a substituição. Consulte o [guia de operação](docs/operacao.md)
+e a [especificação de inicialização](docs/specs/operacao/inicializacao.md).
 
 ## Saúde local
 
@@ -91,7 +92,7 @@ parada e indexação omitem o conteúdo das requisições. Consulte o
 
 ```sh
 elzevir panel --demo --lang pt-BR
-elzevir panel --config elzevir.toml --lang pt-BR
+elzevir panel --lang pt-BR
 ```
 
 O modo demo usa dados simulados. O modo conectado consulta a instituição

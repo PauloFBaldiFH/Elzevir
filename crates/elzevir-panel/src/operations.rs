@@ -4,6 +4,8 @@
 /// An operation confirmed by the user, delivered once to the composition boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// A catalog operation sent to the same local service as other operator actions.
+    Catalog(crate::CatalogAction),
     /// One explicit free-address service intention.
     Address(crate::AddressOperation),
     /// Cloud configuration through the limited service worker.
@@ -87,6 +89,7 @@ impl Operation {
     #[must_use]
     pub const fn key(&self) -> &'static str {
         match self {
+            Self::Catalog(action) => action.key(),
             Self::Address(action) => action.key(),
             Self::Cloud(action) => action.key(),
             Self::TestTunnel => "op-tunnel-test",
@@ -137,6 +140,10 @@ pub struct Operations {
     pub sessions: Option<usize>,
     /// Latest version, only after a successful explicit metadata check.
     pub latest: Option<String>,
+    /// Projection of the last catalog query.
+    pub catalog: Option<crate::CatalogPage>,
+    /// The available release is newer than the installed program.
+    pub update_available: bool,
     /// Bounded plain-text official release notes.
     pub release_notes: Option<String>,
     /// Allowlisted sign-in URLs for pending interactive jobs.
@@ -167,6 +174,7 @@ impl Form {
     #[must_use]
     pub fn new(operation: Operation) -> Self {
         let (labels, values) = match &operation {
+            Operation::Catalog(action) => action.fields(),
             Operation::Address(action) => action.fields(),
             Operation::Cloud(action) => action.fields(),
             Operation::CloudflareSetup {
@@ -236,6 +244,9 @@ impl Form {
         if !self.confirming() {
             return None;
         }
+        if let Operation::Catalog(action) = self.operation {
+            return Some(Operation::Catalog(action.finish(self.values)?));
+        }
         if let Operation::Cloud(action) = self.operation {
             return Some(Operation::Cloud(action.finish(self.values)?));
         }
@@ -244,7 +255,7 @@ impl Form {
         }
         let mut values = self.values.into_iter();
         Some(match self.operation {
-            Operation::Address(_) | Operation::Cloud(_) => return None,
+            Operation::Address(_) | Operation::Cloud(_) | Operation::Catalog(_) => return None,
             Operation::CloudflareSetup { .. } => Operation::CloudflareSetup {
                 catalog: values.next()?,
                 staff: values.next()?,

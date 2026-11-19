@@ -33,7 +33,9 @@ impl Messages {
         Ok(Self(bundle))
     }
 
-    pub(crate) fn get(&self, key: &str) -> String {
+    /// Resolves an interface message from the selected language.
+    #[must_use]
+    pub fn get(&self, key: &str) -> String {
         let Some(pattern) = self.0.get_message(key).and_then(|message| message.value()) else {
             return key.to_owned();
         };

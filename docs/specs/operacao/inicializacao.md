@@ -2,14 +2,14 @@
 
 ## 1. Comportamento
 
-1. `elzevir init --name "Minha biblioteca"` cria `elzevir.toml`, a pasta
-   `data-local` e o primeiro administrador (`admin`) no diretório atual.
+1. `elzevir init --name "Minha biblioteca"` cria o primeiro administrador
+   (`admin`), o banco, o índice e a configuração no diretório do usuário.
    `--config`, `--data-dir`, `--login`, `--listen` e `--insecure-cookies`
-   permitem escolher os destinos e as opções já suportadas pela A1.
-2. Os diretórios pais dos destinos precisam existir. Os destinos devem ser
-   novos: até uma pasta vazia ou um link simbólico existente é recusado.
-   O comando não atualiza instalações nem redefine senhas. A repetição falha
-   sem modificar a instalação anterior, antes de pedir senha.
+   selecionam destinos e preferências. Com diretório explícito, o arquivo
+   de configuração padrão é `elzevir.toml` no diretório atual.
+2. Destinos explícitos exigem pais existentes e o caminho final novo. O
+   caminho padrão aceita a pasta vazia criada pelo instalador. Configuração,
+   dados existentes e links são preservados em todas as tentativas.
 3. O nome tem 1 a 200 caracteres após remover espaços nas extremidades e
    não contém controles. O login tem 1 a 64 caracteres ASCII: letras, dígitos,
    `_`, `-` ou `.`. O nome fica em `[institution].name`; a pasta de dados é
@@ -25,7 +25,7 @@
    Senhas e hashes não aparecem nas mensagens ou no TOML.
 6. O administrador tem permissões de equipe, administração e catalogação.
    Sua criação passa pelo comando `StaffCommand::Create` e pela escritora,
-   com Argon2id e auditoria existentes. Não há seed institucional no catálogo.
+   com Argon2id e auditoria existentes. Perfis são opcionais.
 7. No Linux, o tipo de filesystem é consultado via `statfs`; somente tipos
    locais reconhecidos são aceitos. No macOS, `statfs` exige a marca de volume
    local; no Windows, o destino precisa corresponder a um volume local reconhecido.
@@ -74,7 +74,7 @@ Nenhum: não há área de paridade.
 
 ## 6. Fora do escopo
 
-Instaladores, serviço, índice de busca (criado por `serve`), edição de instalação
+Instalação de serviços do sistema, edição de instalação
 existente e recuperação automática após queda de energia. Banco e TOML em
 destinos separados não são uma única transação de filesystem: se o processo
 for encerrado abruptamente, pode restar uma pasta incompleta, que a próxima
@@ -87,3 +87,22 @@ não use NFS/SMB, OneDrive ou equivalentes para os dados SQLite.
 de pedir a senha ou criar dados. Mantém a porta reservada durante a criação e
 a libera ao terminar. A verificação é opcional para usos offline de init;
 os instaladores a solicitam na primeira instalação.
+
+## Primeiro uso
+
+O modo padrão usa `$XDG_DATA_HOME/elzevir` ou `~/.local/share/elzevir`
+no Linux e macOS e `%LOCALAPPDATA%\Elzevir\data` no Windows. A
+configuração operacional padrão fica em `server.toml` nessa pasta.
+As opções explícitas continuam atendendo às instalações personalizadas.
+
+`init` em terminal pede o nome, a senha oculta com confirmação e, se
+desejado, um perfil inicial público, escolar ou universitário. O perfil
+usa os comandos existentes de unidade e política de circulação. O
+vocabulário de materiais continua vindo das listas oficiais de BIBFRAME.
+A instalação prepara SQLite e Tantivy antes de publicar a configuração.
+
+`serve`, `panel` e `start` oferecem o assistente no primeiro uso do
+diretório padrão em terminal. `start` executa o servidor e o painel na
+mesma instância e encerra o servidor de forma ordenada ao sair do painel.
+`--lang` seleciona o idioma explicitamente. Locales em português selecionam
+pt-BR por padrão.

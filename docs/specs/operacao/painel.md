@@ -59,3 +59,18 @@ Nenhum: não há área de paridade nesta entrega.
 Estado real do servidor, canal administrativo, backups, serviços, instalação,
 releases, túnel, broker, rclone e reinício real. Dependem das etapas A/P
 posteriores da análise. Não há alegação de validação em Windows nesta máquina.
+
+## Navegação interativa
+
+A apresentação interativa usa cores consistentes, barra superior com
+versão, estado observado do SQLite e Tantivy e navegação por números.
+As áreas clicáveis acompanham a geometria do quadro e o modal ativo.
+Atalhos e cliques enviam as mesmas intenções ao controlador. Confirmações
+continuam exigindo ação explícita. A demonstração permanece isolada.
+
+A aba Acervo usa o canal administrativo privado do sistema operacional
+e as portas do catálogo para busca, criação mínima e edição de título
+com a versão exibida. Excluir aparece na lista de políticas, onde a
+escritora já recusa políticas em uso. Os exemplares usam os sinais
+atuais de disponibilidade. A consulta apresenta até dez instâncias ou
+vinte políticas por seleção. A busca usa a listagem do Tantivy.

@@ -3,6 +3,7 @@
 
 use elzevir_app::commands::{StaffCommand, WriteCommand, WriteOutput};
 use elzevir_app::staff::{Permission, hash_password};
+use elzevir_panel::Messages;
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -11,13 +12,13 @@ use std::path::{Path, PathBuf};
 pub(crate) struct InitArgs {
     /// Institution name, saved in the configuration.
     #[arg(long)]
-    name: String,
+    name: Option<String>,
     /// New configuration file; its parent directory must already exist.
-    #[arg(long, default_value = "elzevir.toml")]
-    config: PathBuf,
+    #[arg(long)]
+    config: Option<PathBuf>,
     /// New data directory; its parent must already exist.
-    #[arg(long, default_value = "data-local")]
-    data_dir: PathBuf,
+    #[arg(long)]
+    data_dir: Option<PathBuf>,
     /// First administrator's login.
     #[arg(long, default_value = "admin")]
     login: String,
@@ -25,14 +26,71 @@ pub(crate) struct InitArgs {
     #[arg(long, default_value = "127.0.0.1:8080")]
     listen: SocketAddr,
     /// Allow plain-HTTP cookies for local development.
-    #[arg(long)]
-    insecure_cookies: bool,
+    #[arg(long, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    insecure_cookies: Option<bool>,
+    #[arg(long, value_parser = ["en", "pt-BR"])]
+    lang: Option<String>,
+    #[arg(long, value_enum)]
+    profile: Option<Profile>,
     /// Read a password line from redirected stdin instead of prompting.
-    #[arg(long)]
+    #[arg(long, requires = "name")]
     password_stdin: bool,
     /// Reserve the listen address during initialization, for managed installation.
     #[arg(long)]
     check_port: bool,
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum Profile {
+    Public,
+    School,
+    University,
+}
+
+impl InitArgs {
+    pub(crate) fn first_use(
+        lang: Option<String>,
+        listen: Option<SocketAddr>,
+        insecure: Option<bool>,
+    ) -> Self {
+        let listen = listen.unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 8080)));
+        Self {
+            name: None,
+            config: None,
+            data_dir: None,
+            login: "admin".into(),
+            listen,
+            insecure_cookies: insecure,
+            lang,
+            profile: None,
+            password_stdin: false,
+            check_port: true,
+        }
+    }
+}
+
+fn prompt(messages: &Messages, key: &str) -> Result<String, String> {
+    let mut output = io::stdout().lock();
+    write!(output, "{}  ", messages.get(key))
+        .and_then(|()| output.flush())
+        .map_err(|error| error.to_string())?;
+    let mut answer = String::new();
+    let count = io::Read::take(io::stdin().lock(), 1025)
+        .read_line(&mut answer)
+        .map_err(|error| error.to_string())?;
+    if count == 0 || count > 1024 {
+        return Err(messages.get("setup-cancelled"));
+    }
+    Ok(answer.trim().to_owned())
+}
+
+pub(crate) fn confirm_setup(messages: &Messages) -> Result<bool, String> {
+    Ok(matches!(
+        prompt(messages, "setup-offer")?
+            .to_ascii_lowercase()
+            .as_str(),
+        "" | "y" | "yes" | "s" | "sim"
+    ))
 }
 
 pub(crate) fn run(args: &InitArgs) -> Result<(), String> {
@@ -44,8 +102,14 @@ pub(crate) fn run(args: &InitArgs) -> Result<(), String> {
     } else {
         None
     };
-    let config = new_path(&args.config)?;
-    let data_dir = new_path(&args.data_dir)?;
+    let language = crate::first_use::language(args.lang.as_deref());
+    let messages = Messages::new(language).map_err(|error| error.to_string())?;
+    let Paths {
+        config,
+        data_dir,
+        using_default,
+        restore_empty,
+    } = paths(args)?;
     if config == data_dir {
         return Err("configuration and data directory must have different paths".to_owned());
     }
@@ -61,20 +125,26 @@ pub(crate) fn run(args: &InitArgs) -> Result<(), String> {
                 .to_owned(),
         );
     }
-    let source = crate::server_config::render_init(
-        &args.name,
-        &data_dir,
-        args.listen,
-        args.insecure_cookies,
-    )
-    .map_err(|error| error.to_string())?;
+    let (name, password, profile) = initial_choices(args, &messages, language)?;
+    let insecure = args
+        .insecure_cookies
+        .unwrap_or_else(|| using_default && args.listen.ip().is_loopback());
+    let source = crate::server_config::render_init(&name, &data_dir, args.listen, insecure)
+        .map_err(|error| error.to_string())?;
     let parent = data_dir.parent().ok_or("data directory needs a parent")?;
-    crate::local_disk::check(parent)?;
-    let password = password(args.password_stdin)?;
+    let existing = parent
+        .ancestors()
+        .find(|path| path.is_dir())
+        .ok_or("data directory needs an existing ancestor")?;
+    crate::local_disk::check(existing)?;
     if password.chars().count() < 8 || password.len() > 1024 {
         return Err("password must have at least 8 characters and at most 1024 bytes".to_owned());
     }
     let hash = hash_password(&password).map_err(|error| error.to_string())?;
+    if using_default {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        crate::local_disk::check(parent)?;
+    }
     let mut builder = crate::private_temp::builder();
     // No random suffix: create exactly the requested directory, exclusively.
     builder
@@ -85,12 +155,119 @@ pub(crate) fn run(args: &InitArgs) -> Result<(), String> {
         use std::os::unix::fs::PermissionsExt;
         builder.permissions(std::fs::Permissions::from_mode(0o700));
     }
-    let directory = builder
+    // Older installers created an empty directory. Only remove it if still empty;
+    // a concurrent writer that has added any file wins and keeps its data.
+    if restore_empty {
+        std::fs::remove_dir(&data_dir).map_err(|error| error.to_string())?;
+    }
+    let result = builder
         .tempdir_in(parent)
-        .map_err(|error| format!("cannot create new data directory: {error}"))?;
-    finish(directory, &config, &source, &args.login, hash)?;
+        .map_err(|error| format!("cannot create new data directory: {error}"))
+        .and_then(|directory| {
+            finish(
+                directory,
+                &config,
+                &source,
+                &args.login,
+                hash,
+                profile,
+                &messages,
+            )
+        });
+    if restore_empty && result.is_err() {
+        match std::fs::create_dir(&data_dir) {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(format!("cannot restore previous empty directory: {error}")),
+        }
+    }
+    result?;
     println!("elzevir: initialized {}", config.display());
     Ok(())
+}
+
+struct Paths {
+    config: PathBuf,
+    data_dir: PathBuf,
+    using_default: bool,
+    restore_empty: bool,
+}
+
+fn paths(args: &InitArgs) -> Result<Paths, String> {
+    let using_default = args.data_dir.is_none();
+    let data_dir = args
+        .data_dir
+        .clone()
+        .map_or_else(crate::first_use::data_dir, Ok)?;
+    let config_in_data = using_default && args.config.is_none();
+    let config = if config_in_data {
+        data_dir.join(crate::first_use::CONFIG)
+    } else {
+        new_path(
+            args.config
+                .as_deref()
+                .unwrap_or_else(|| Path::new("elzevir.toml")),
+        )?
+    };
+    let data_dir = if using_default {
+        data_dir
+    } else {
+        new_path(&data_dir)?
+    };
+    let restore_empty = if using_default {
+        match std::fs::symlink_metadata(&data_dir) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => false,
+            Ok(metadata)
+                if metadata.is_dir()
+                    && std::fs::read_dir(&data_dir)
+                        .map_err(|error| error.to_string())?
+                        .next()
+                        .is_none() =>
+            {
+                true
+            }
+            _ => {
+                return Err(format!(
+                    "destination already exists: {}",
+                    data_dir.display()
+                ));
+            }
+        }
+    } else {
+        false
+    };
+    Ok(Paths {
+        config,
+        data_dir,
+        using_default,
+        restore_empty,
+    })
+}
+
+fn initial_choices(
+    args: &InitArgs,
+    messages: &Messages,
+    language: &str,
+) -> Result<(String, zeroize::Zeroizing<String>, Option<Profile>), String> {
+    if let Some(name) = &args.name {
+        // Reject invalid explicit names before reading a secret.
+        crate::server_config::validate_name(name).map_err(|error| error.to_string())?;
+        let secret = zeroize::Zeroizing::new(password(args.password_stdin, messages)?);
+        return Ok((name.clone(), secret, args.profile));
+    }
+    if !crate::first_use::interactive() {
+        return Err("use --name for noninteractive initialization".into());
+    }
+    let selected = elzevir_panel::setup(language)
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| messages.get("setup-cancelled"))?;
+    let profile = match selected.profile {
+        elzevir_panel::SetupProfile::Empty => None,
+        elzevir_panel::SetupProfile::Public => Some(Profile::Public),
+        elzevir_panel::SetupProfile::School => Some(Profile::School),
+        elzevir_panel::SetupProfile::University => Some(Profile::University),
+    };
+    Ok((selected.name, selected.password, args.profile.or(profile)))
 }
 
 fn finish(
@@ -99,8 +276,18 @@ fn finish(
     source: &str,
     login: &str,
     hash: String,
+    profile: Option<Profile>,
+    messages: &Messages,
 ) -> Result<(), String> {
-    match populate(directory.path(), config, source, login, hash) {
+    match populate(
+        directory.path(),
+        config,
+        source,
+        login,
+        hash,
+        profile,
+        messages,
+    ) {
         Ok(()) => {
             drop(directory.keep());
         }
@@ -136,7 +323,7 @@ fn new_path(path: &Path) -> Result<PathBuf, String> {
     }
 }
 
-fn password(from_stdin: bool) -> Result<String, String> {
+fn password(from_stdin: bool, messages: &Messages) -> Result<String, String> {
     if from_stdin {
         if io::stdin().is_terminal() {
             return Err("omit --password-stdin for hidden interactive input".to_owned());
@@ -156,14 +343,16 @@ fn password(from_stdin: bool) -> Result<String, String> {
                 .to_owned(),
         );
     }
-    let first = rpassword::prompt_password("Administrator password: ")
+    let first = rpassword::prompt_password(messages.get("setup-password"))
         .map_err(|_| "cannot read password from terminal".to_owned())?;
-    let confirmation = rpassword::prompt_password("Confirm password: ")
+    let first = zeroize::Zeroizing::new(first);
+    let confirmation = rpassword::prompt_password(messages.get("setup-repeat"))
         .map_err(|_| "cannot read password confirmation".to_owned())?;
-    if first != confirmation {
+    let confirmation = zeroize::Zeroizing::new(confirmation);
+    if first.as_str() != confirmation.as_str() {
         return Err("password confirmation does not match".to_owned());
     }
-    Ok(first)
+    Ok(first.to_string())
 }
 
 fn read_password_line(reader: impl BufRead) -> Result<String, String> {
@@ -188,6 +377,8 @@ fn populate(
     source: &str,
     login: &str,
     hash: String,
+    profile: Option<Profile>,
+    messages: &Messages,
 ) -> Result<(), String> {
     // On errors, DataDir drops the store before releasing the single-writer lock.
     let data = crate::open_store(data_dir)?;
@@ -210,6 +401,29 @@ fn populate(
     if !matches!(outcome, WriteOutput::StaffCreated(_)) {
         return Err("unexpected answer while creating administrator".to_owned());
     }
+    if let Some(profile) = profile {
+        use elzevir_app::catalog::CatalogCommand;
+        let key = match profile {
+            Profile::Public => "setup-public",
+            Profile::School => "setup-school",
+            Profile::University => "setup-university",
+        };
+        for command in [
+            CatalogCommand::CreateBranch {
+                name: messages.get(key),
+            },
+            CatalogCommand::CreatePolicy {
+                name: messages.get("setup-policy"),
+            },
+        ] {
+            data.store
+                .submit(WriteCommand::Catalog(command))
+                .map_err(|error| error.to_string())?
+                .wait()
+                .map_err(|error| error.to_string())?;
+        }
+    }
+    drop(crate::open_index(data_dir)?);
     // Finish the writer and checkpoint the database before publishing its config.
     data.store.shutdown().map_err(|error| error.to_string())?;
     let mut file =
@@ -253,7 +467,18 @@ mod tests {
         std::fs::write(&config, "preserve").unwrap();
         let hash = hash_password("fictional-password").unwrap();
         let path = data.path().to_owned();
-        assert!(finish(data, &config, "replacement", "admin", hash).is_err());
+        assert!(
+            finish(
+                data,
+                &config,
+                "replacement",
+                "admin",
+                hash,
+                None,
+                &Messages::new("en").unwrap()
+            )
+            .is_err()
+        );
         assert_eq!(std::fs::read_to_string(&config).unwrap(), "preserve");
         assert!(!path.exists());
     }

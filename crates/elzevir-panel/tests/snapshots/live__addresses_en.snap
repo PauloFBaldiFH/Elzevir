@@ -2,13 +2,14 @@
 source: crates/elzevir-panel/tests/live.rs
 expression: text
 ---
-Elzevir administration
-+Sections------------------++Addresses and access------------------------------------------------------------++Selected institution--------+
-|  d Dashboard             ||Running                                                                         ||Biblioteca de teste         |
-|  x Diagnostics           ||                                                                                ||                            |
-|> a Addresses and access  ||l Cloudflare login · s Own domain · t Test · h Log                              ||Configured listener         |
-|  b Backups and schedules ||g register/resume *.elzevir.app · c refresh broker · w/W staff on/off · k export||127.0.0.1:0                 |
-|  u Updates               ||recovery · o recover · n renew · z unlink domain · Q share QR                   ||                            |
+Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://catalog.example:8080/
++Sections------------------+     1 Home         2 Health        3 Access        4 Backup        5 Updates       6 Catalog       7 Restart
+|  d Dashboard             |+Addresses and access------------------------------------------------------------++Selected institution--------+
+|  x Diagnostics           ||Running                                                                         ||Biblioteca de teste         |
+|> a Addresses and access  ||                                                                                ||                            |
+|  b Backups and schedules ||l Cloudflare login · s Own domain · t Test · h Log                              ||Configured listener         |
+|  u Updates               ||g register/resume *.elzevir.app · c refresh broker · w/W staff on/off · k export||127.0.0.1:0                 |
+|  m Catalog               ||recovery · o recover · n renew · z unlink domain · Q share QR                   ||                            |
 |  r Restart               ||Domain & Tunnel (*.elzevir.app)                                                 ||Observed listener           |
 |                          ||Registration status unavailable                                                 ||127.0.0.1:8080              |
 |                          ||Public tunnel configuration could not be observed.                              ||                            |
@@ -27,7 +28,6 @@ Elzevir administration
 |                          ||                                                                                ||                            |
 |                          ||Local interface candidates (not tested from another computer)                   ||                            |
 |                          ||No IP candidates for this binding; hostnames require client DNS/hosts.          ||                            |
-|                          ||Internet publication/tunnel: not configured in this step.                       ||                            |
-|                          ||                                                                                ||                            |
-+--------------------------++--------------------------------------------------------------------------------++----------------------------+
+|                          |+--------------------------------------------------------------------------------++----------------------------+
++--------------------------+          Test [V]                    Share [Q]                  Config [S]                  Refresh [F]
 Tab/arrows: navigate | f: refresh | PgUp/PgDn: scroll | Ctrl+P: palette | q/Ctrl+C: quit
