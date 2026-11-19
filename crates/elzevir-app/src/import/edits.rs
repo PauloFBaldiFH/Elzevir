@@ -38,6 +38,9 @@ pub struct Recipe {
     /// Settings of a native CSV or TSV revision.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub table: Option<TableSettings>,
+    /// Exact member and optional worksheet selected from a container inventory.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub archive: Option<super::containers::Selection>,
 }
 
 /// A change to one tag, on one record or the entire batch.
@@ -224,7 +227,7 @@ impl Recipe {
         if self.edits.len() > MAX_IMPORT_EDITS {
             return Err(PreviewError::Limit("edit count"));
         }
-        let limit = if self.table.is_some() {
+        let limit = if self.table.is_some() || self.archive.is_some() {
             super::table::MAX_TABLE_ROWS
         } else {
             MAX_IMPORT_RECORDS

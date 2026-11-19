@@ -52,7 +52,7 @@ pub use config::StoreConfig;
 pub use elzevir::{ElzevirHandler, ElzevirStore};
 pub use error::{CommandFailed, StoreError, SubmitError};
 pub use import::PendingAdd;
-pub use preview::{preview_import, preview_sheet};
+pub use preview::{preview_import, preview_sheet, preview_table_source};
 pub use readers::ReadPool;
 pub use writer::{CommandHandler, Pending, WriteTx};
 

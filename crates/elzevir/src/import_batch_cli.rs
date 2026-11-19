@@ -85,6 +85,14 @@ pub(crate) fn run(args: BatchArgs) -> Result<(), String> {
                 "batch {} revision {} {:?}",
                 view.batch.id, view.batch.revision, view.batch.state
             );
+            if let Some(inventory) = view.archive {
+                for entry in inventory.entries {
+                    println!(
+                        "{}",
+                        serde_json::to_string(&entry).map_err(|error| error.to_string())?
+                    );
+                }
+            }
             if let Some(preview) = view.preview {
                 return print_preview(&preview, view.recipe.matching);
             }

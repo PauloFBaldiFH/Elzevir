@@ -17,6 +17,8 @@ pub enum ImportFormat {
     MarcText,
     /// A table with a consistent delimiter.
     Delimited,
+    /// An inventoried ZIP, gzip or workbook in the staged workflow.
+    Archive,
     /// Declared Koha catalog or item tables.
     KohaSqlDump,
     /// Catalog, circulation and configuration tables together.
@@ -48,6 +50,8 @@ pub enum Evidence {
     ZipSignature,
     /// A gzip signature; nothing has been decompressed.
     GzipSignature,
+    /// Saved worksheet values from a validated XLSX or ODS package.
+    WorkbookSheet,
     /// The prefix does not establish a supported family.
     Inconclusive,
 }

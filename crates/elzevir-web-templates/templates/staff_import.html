@@ -7,7 +7,8 @@
     <option value="xml"{% if selection == "xml" %} selected{% endif %}>{{ t.get("import-xml") }}</option>
     <option value="mrk"{% if selection == "mrk" %} selected{% endif %}>{{ t.get("import-mrk") }}</option>{% if selection == "table" %}
     <option value="table" selected>{{ t.get("import-table") }}</option>{% endif %}{% if selection == "sql" %}
-    <option value="sql" selected>{{ t.get("import-sql") }}</option>{% endif %}
+    <option value="sql" selected>{{ t.get("import-sql") }}</option>{% endif %}{% if selection == "archive" %}
+    <option value="archive" selected>{{ t.get("import-archive") }}</option>{% endif %}
   </select>
 {% endmacro %}
 {% block title %}{{ t.get("import-title") }}{% endblock %}
@@ -46,7 +47,18 @@
     {% endif %}
   {% when ImportView::Draft with (draft) %}
     <p><a href="/equipe/acervo/importar">{{ t.get("import-drafts-back") }}</a></p>
-    <p>{{ draft.link.label }} · {{ t.get("import-revision") }} {{ draft.revision }}</p>
+    <p>{{ draft.link.label }} · {{ t.get("import-revision") }} {{ draft.revision }}</p>{% if let Some(members) = draft.archive %}
+    <details open>
+      <summary>{{ t.get("import-archive-inventory") }}</summary>
+      <p>{{ t.get("import-archive-recipe") }}</p>
+      <pre>{"archive":{"member":["catalog.xlsx"],"sheet":"Books"}}</pre>
+      <ul>{% for member in members %}
+        <li><code>{{ member.path }}</code> · {{ member.format }}{% if !member.sheets.is_empty() %}
+          <ul>{% for sheet in member.sheets %}<li>{{ sheet }}</li>{% endfor %}</ul>{% endif %}
+        </li>{% endfor %}
+      </ul>
+      {% if let Some(selection) = draft.archive_selection %}<p>{{ t.get("import-archive-selected") }} <code>{{ selection }}</code></p>{% endif %}
+    </details>{% endif %}
     {% if draft.editable %}
       <form action="/equipe/acervo/importar/{{ draft.link.id }}/editar" method="post" data-import-edit>
         <input type="hidden" name="csrf" value="{{ csrf }}">

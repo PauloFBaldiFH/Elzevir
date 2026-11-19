@@ -7,12 +7,14 @@ use std::path::Path;
 use cap_fs_ext::{DirExt, FollowSymlinks, OpenOptionsFollowExt};
 use cap_std::fs::{Dir, DirBuilder, OpenOptions};
 use elzevir_app::import::batches::{BatchState as State, BatchSummary, MAX_BATCH_MANIFEST_BYTES};
+use elzevir_app::import::containers::{self, Inventory};
 use elzevir_app::import::edits::{Recipe, RenderReport, render_page};
 use elzevir_app::import::preview::MAX_IMPORT_FILE_BYTES;
 use elzevir_app::import::sheet::TableSettings;
 use elzevir_app::import::table::{Delimiter, Encoding};
 use elzevir_app::import_detection::{
-    Evidence, ImportFormat, MAX_DETECTION_BYTES, detect_format, select_prepared, table_delimiter,
+    Detection, Evidence, ImportFormat, MAX_DETECTION_BYTES, detect_format, select_prepared,
+    table_delimiter,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -40,6 +42,8 @@ pub(crate) struct Batch {
     selected: Option<ImportFormat>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     table_separator: Option<Delimiter>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) archive: Option<Inventory>,
     sha256: String,
     pub(crate) revision: u64,
     pub(crate) state: State,
@@ -139,6 +143,7 @@ impl Batches {
             format: String::new(),
             selected: None,
             table_separator: None,
+            archive: None,
             sha256: String::new(),
             revision: 1,
             state: State::Preparing,
@@ -176,18 +181,27 @@ impl Batches {
             .read_to_end(&mut prefix)
             .map_err(io_error)?;
         let detected = detect_format(&prefix);
+        if matches!(
+            detected.evidence,
+            Evidence::ZipSignature | Evidence::GzipSignature
+        ) {
+            if selected.is_some_and(|format| format != ImportFormat::Archive) {
+                return Err(
+                    "select the member from the container inventory before choosing its reader"
+                        .into(),
+                );
+            }
+            let input = read_file(&self.batch_dir(&batch.id)?, SOURCE)?;
+            batch.archive = Some(containers::inspect(&read_archive(input)?).map_err(io_error)?);
+            batch.format = "Archive".into();
+            batch.selected = selected;
+            batch.table_separator = None;
+            return Ok(());
+        }
         if detected.format == ImportFormat::KohaFullBackup {
             return Err(elzevir_app::import::koha_sql::DumpProblem::FullBackup.to_string());
         }
-        let table = selected.is_none() && detected.format == ImportFormat::Delimited
-            || selected == Some(ImportFormat::Delimited)
-                && matches!(
-                    detected.evidence,
-                    Evidence::DelimitedRows
-                        | Evidence::AmbiguousDelimiter
-                        | Evidence::Inconclusive
-                        | Evidence::EmptyInput
-                );
+        let table = is_delimited(detected, selected);
         let format = if table {
             ImportFormat::Delimited
         } else {
@@ -198,6 +212,7 @@ impl Batches {
                 .format
         };
         batch.format = format!("{format:?}");
+        batch.archive = None;
         batch.selected = selected;
         batch.table_separator = table
             .then(|| {
@@ -271,6 +286,23 @@ impl Batches {
         }
         let source = HashInput::new(source);
         let mut input = BufReader::new(source);
+        let result = self.render_member(batch, from, &mut input, batch.selected)?;
+        if input.into_inner().digest() != batch.sha256
+            || format!("{:?}", result.1.detection.format) != batch.format
+        {
+            return Err("original identity changed".into());
+        }
+        Ok(result)
+    }
+
+    pub(crate) fn render_member(
+        &self,
+        batch: &Batch,
+        from: Option<u64>,
+        input: impl BufRead,
+        selected: Option<ImportFormat>,
+    ) -> Result<(std::fs::File, RenderReport, String), String> {
+        let dir = self.batch_dir(&batch.id)?;
         let mut output = HashInput::new(tempfile::tempfile().map_err(io_error)?);
         let recipe = serde_json::to_vec(&(&batch.sha256, batch.revision, &batch.recipe))
             .map_err(|_| "cannot encode preview identity")?;
@@ -278,23 +310,15 @@ impl Batches {
         let limit = usize::try_from(self.available(&dir)?)
             .unwrap_or(usize::MAX)
             .min(MAX_IMPORT_FILE_BYTES);
-        let report = render_page(
-            &mut input,
-            &mut output,
-            &batch.recipe,
-            limit,
-            from,
-            batch.selected,
-        )
-        .map_err(|error| error.to_string())?;
-        if input.into_inner().digest() != batch.sha256
-            || format!("{:?}", report.detection.format) != batch.format
-        {
-            return Err("original identity changed".into());
-        }
+        let report = render_page(input, &mut output, &batch.recipe, limit, from, selected)
+            .map_err(|error| error.to_string())?;
         let stamp = format!("{:x}", output.hash.finalize());
         output.input.rewind().map_err(io_error)?;
         Ok((output.input, report, stamp))
+    }
+
+    pub(crate) fn archive_source(&self, batch: &Batch) -> Result<Vec<u8>, String> {
+        self.with_source(batch, |input| read_archive(input))
     }
 
     pub(crate) fn with_source<T>(
@@ -384,12 +408,17 @@ impl Batch {
     }
 
     pub(crate) fn table_settings(&self) -> Result<TableSettings, String> {
+        self.settings_for(self.table_separator)
+    }
+
+    pub(crate) fn settings_for(
+        &self,
+        delimiter: Option<Delimiter>,
+    ) -> Result<TableSettings, String> {
         if let Some(settings) = &self.recipe.table {
             return Ok(settings.clone());
         }
-        let delimiter = self
-            .table_separator
-            .ok_or("choose a spreadsheet separator in the recipe")?;
+        let delimiter = delimiter.ok_or("choose a spreadsheet separator in the recipe")?;
         Ok(TableSettings {
             delimiter,
             encoding: Encoding::Utf8,
@@ -417,6 +446,18 @@ impl Batch {
             self.state
         ))
     }
+}
+
+pub(crate) fn is_delimited(detected: Detection, selected: Option<ImportFormat>) -> bool {
+    selected.is_none() && detected.format == ImportFormat::Delimited
+        || selected == Some(ImportFormat::Delimited)
+            && matches!(
+                detected.evidence,
+                Evidence::DelimitedRows
+                    | Evidence::AmbiguousDelimiter
+                    | Evidence::Inconclusive
+                    | Evidence::EmptyInput
+            )
 }
 
 pub(crate) fn read_recipe(path: &Path) -> Result<Recipe, String> {
@@ -456,6 +497,18 @@ fn valid_id(id: &str) -> bool {
 
 fn io_error(error: impl std::fmt::Display) -> String {
     format!("cannot access private import files: {error}")
+}
+
+fn read_archive(input: impl Read) -> Result<Vec<u8>, String> {
+    let mut bytes = Vec::new();
+    input
+        .take(MAX_IMPORT_FILE_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(io_error)?;
+    if bytes.len() > MAX_IMPORT_FILE_BYTES {
+        return Err("archive exceeds the import file limit".into());
+    }
+    Ok(bytes)
 }
 
 fn size(dir: &Dir) -> Result<u64, String> {

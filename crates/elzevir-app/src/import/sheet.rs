@@ -169,7 +169,22 @@ pub fn prepare(
     exclude: &BTreeSet<u64>,
     accept_missing_barcodes: &BTreeSet<u64>,
 ) -> Result<PreparedTable, SheetError> {
-    let mut reader = TableReader::new(input, settings.delimiter, settings.encoding)?;
+    let reader = TableReader::new(input, settings.delimiter, settings.encoding)?;
+    prepare_rows(reader, settings, codes, exclude, accept_missing_barcodes)
+}
+
+/// Applies the existing native mapping to rows from a validated spreadsheet.
+///
+/// # Errors
+/// Reports invalid rows, mapping, names, values, grouping or repeated barcodes.
+pub fn prepare_rows(
+    rows: impl IntoIterator<Item = Result<TableRow, TableError>>,
+    settings: &TableSettings,
+    codes: &CodeLists,
+    exclude: &BTreeSet<u64>,
+    accept_missing_barcodes: &BTreeSet<u64>,
+) -> Result<PreparedTable, SheetError> {
+    let mut reader = rows.into_iter();
     let mut groups = Groups::default();
     let (mut read, mut excluded) = (0, 0);
     let mut last = 0;
@@ -181,7 +196,11 @@ pub fn prepare(
         };
         for row in reader {
             let row = row?;
-            let data_position = row.number - 1;
+            let data_position = row
+                .number
+                .checked_sub(header.number)
+                .filter(|position| *position > last)
+                .ok_or_else(|| cell(&row, 1, "rows must follow source order"))?;
             last = data_position;
             if empty(&row) {
                 continue;

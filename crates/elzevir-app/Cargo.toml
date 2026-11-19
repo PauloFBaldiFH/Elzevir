@@ -9,6 +9,10 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+calamine.workspace = true
+flate2.workspace = true
+quick-xml.workspace = true
+zip.workspace = true
 elzevir-domain.workspace = true
 elzevir-data.workspace = true
 elzevir-marc.workspace = true

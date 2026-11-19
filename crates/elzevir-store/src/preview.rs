@@ -5,14 +5,14 @@ use std::io::{BufRead, ErrorKind};
 use std::num::NonZeroUsize;
 use std::path::Path;
 
-use elzevir_app::catalog::{CatalogReadError, CatalogRefusal, ItemData};
+use elzevir_app::catalog::{CatalogReadError, CatalogRefusal, CodeLists, ItemData};
 use elzevir_app::commands::WriteRefusal;
 use elzevir_app::import::ImportOptions;
 use elzevir_app::import::edits::Recipe;
 use elzevir_app::import::preview::{
     PreviewCatalog, PreviewError, PreviewReport, preview, preview_page, preview_table,
 };
-use elzevir_app::import::sheet::{PreparedTable, TableSettings, prepare};
+use elzevir_app::import::sheet::{PreparedTable, SheetError, TableSettings, prepare};
 use elzevir_app::matching::MatchKey;
 use elzevir_domain::catalog::InstanceId;
 use rusqlite::{Connection, params};
@@ -48,20 +48,38 @@ pub fn preview_sheet(
     recipe: &Recipe,
     from: u64,
 ) -> Result<(PreparedTable, PreviewReport), PreviewError> {
+    preview_table_source(path, recipe, from, |codes| {
+        prepare(
+            input,
+            settings,
+            codes,
+            &recipe.exclude,
+            &recipe.accept_missing_barcodes,
+        )
+    })
+}
+
+/// Resolves any validated tabular source against a read-only catalog snapshot.
+///
+/// # Errors
+/// Reports read, preparation and schema errors.
+pub fn preview_table_source(
+    path: &Path,
+    recipe: &Recipe,
+    from: u64,
+    source: impl FnOnce(&CodeLists) -> Result<PreparedTable, SheetError>,
+) -> Result<(PreparedTable, PreviewReport), PreviewError> {
     match std::fs::metadata(path) {
-        Err(error) if error.kind() == ErrorKind::NotFound => {
-            sheet(input, settings, recipe, from, None)
-        }
+        Err(error) if error.kind() == ErrorKind::NotFound => sheet(source, recipe, from, None),
         Err(error) => Err(read_error(error).into()),
         Ok(_) => ReadPool::open(path, NonZeroUsize::MIN)
             .map_err(read_error)?
-            .preview_sheet(input, settings, recipe, from),
+            .preview_table_source(recipe, from, source),
     }
 }
 
 fn sheet(
-    input: impl BufRead,
-    settings: &TableSettings,
+    source: impl FnOnce(&CodeLists) -> Result<PreparedTable, SheetError>,
     recipe: &Recipe,
     from: u64,
     connection: Option<&Connection>,
@@ -71,14 +89,7 @@ fn sheet(
         .transpose()
         .map_err(read_error)?
         .unwrap_or_default();
-    let table = prepare(
-        input,
-        settings,
-        &codes,
-        &recipe.exclude,
-        &recipe.accept_missing_barcodes,
-    )
-    .map_err(|error| PreviewError::Edit(error.to_string()))?;
+    let table = source(&codes).map_err(|error| PreviewError::Edit(error.to_string()))?;
     let snapshot = connection.map(Snapshot);
     let catalog = snapshot
         .as_ref()
@@ -103,10 +114,31 @@ impl ReadPool {
         recipe: &Recipe,
         from: u64,
     ) -> Result<(PreparedTable, PreviewReport), PreviewError> {
+        self.preview_table_source(recipe, from, |codes| {
+            prepare(
+                input,
+                settings,
+                codes,
+                &recipe.exclude,
+                &recipe.accept_missing_barcodes,
+            )
+        })
+    }
+
+    /// Uses the same registry and matching snapshot for a decoded tabular source.
+    ///
+    /// # Errors
+    /// Reports read, preparation and schema errors.
+    pub fn preview_table_source(
+        &self,
+        recipe: &Recipe,
+        from: u64,
+        source: impl FnOnce(&CodeLists) -> Result<PreparedTable, SheetError>,
+    ) -> Result<(PreparedTable, PreviewReport), PreviewError> {
         self.read(|connection| {
             let transaction = connection.unchecked_transaction().map_err(read_error)?;
             check_schema(&transaction)?;
-            sheet(input, settings, recipe, from, Some(&transaction))
+            sheet(source, recipe, from, Some(&transaction))
         })
     }
 
