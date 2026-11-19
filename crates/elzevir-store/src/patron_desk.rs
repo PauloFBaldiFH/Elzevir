@@ -1,0 +1,190 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! The patron port on SQLite: commands through the writer, reads through the pool
+//! (docs/specs/circulacao/leitores.md, items 10 to 14).
+
+use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
+use elzevir_app::patrons::{
+    MAX_SEARCH_ROWS, Patron, PatronCategory, PatronCommand, PatronDesk, PatronDeskError,
+    PatronFields, PatronOutput, PatronQuery, PatronRow, ReadingHistory,
+};
+use elzevir_app::staff::StaffId;
+use elzevir_domain::catalog::BranchId;
+use elzevir_domain::patron::{Cpf, Enrolment, PatronCategoryId, PatronId};
+use jiff::civil::Date;
+use rusqlite::{OptionalExtension, Row, params};
+
+use crate::{CommandFailed, ElzevirStore, SubmitError};
+
+fn unavailable(error: impl std::fmt::Display) -> PatronDeskError {
+    PatronDeskError::Unavailable(error.to_string())
+}
+
+/// A stored date; a malformed one is a storage failure, never a guess.
+fn day(text: &str) -> rusqlite::Result<Date> {
+    text.parse().map_err(|error: jiff::Error| {
+        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, error.into())
+    })
+}
+
+fn optional_day(text: Option<&str>) -> rusqlite::Result<Option<Date>> {
+    text.map(day).transpose()
+}
+
+const PATRON: &str = "SELECT p.id, p.row_version, p.cardnumber, p.surname, p.first_name, p.cpf,
+                             p.date_of_birth, p.email, p.phone, p.address, p.branch_id,
+                             p.category_id, p.enrolled, p.expires, p.staff_note,
+                             p.reading_history, b.name, c.name
+                      FROM patrons p
+                      JOIN branches b ON b.id = p.branch_id
+                      JOIN patron_categories c ON c.id = p.category_id
+                      WHERE p.id = ?1";
+
+fn patron_of(row: &Row<'_>) -> rusqlite::Result<Patron> {
+    let cpf: Option<String> = row.get(5)?;
+    Ok(Patron {
+        id: PatronId(row.get(0)?),
+        row_version: row.get(1)?,
+        fields: PatronFields {
+            cardnumber: row.get(2)?,
+            surname: row.get(3)?,
+            first_name: row.get(4)?,
+            // A CPF that no longer parses is shown as absent rather than failing the record.
+            cpf: cpf.as_deref().and_then(|digits| Cpf::parse(digits).ok()),
+            date_of_birth: optional_day(row.get::<_, Option<String>>(6)?.as_deref())?,
+            email: row.get(7)?,
+            phone: row.get(8)?,
+            address: row.get(9)?,
+            branch: BranchId(row.get(10)?),
+            category: PatronCategoryId(row.get(11)?),
+            enrolled: day(&row.get::<_, String>(12)?)?,
+            expires: Some(day(&row.get::<_, String>(13)?)?),
+            staff_note: row.get(14)?,
+            reading_history: if row.get::<_, i64>(15)? == 1 {
+                ReadingHistory::Kept
+            } else {
+                ReadingHistory::NotKept
+            },
+        },
+        branch_name: row.get(16)?,
+        category_name: row.get(17)?,
+    })
+}
+
+/// `?1` the card number, `?2` the CPF digits, `?3` a `LIKE` pattern for names (or
+/// `NULL`), `?4` the most rows.
+const SEARCH: &str = "SELECT p.id, p.cardnumber, p.surname, p.first_name, c.name, p.expires
+                      FROM patrons p
+                      JOIN patron_categories c ON c.id = p.category_id
+                      WHERE p.cardnumber = ?1
+                         OR p.cpf = ?2
+                         OR (?3 IS NOT NULL
+                             AND (p.surname || ' ' || coalesce(p.first_name, '') LIKE ?3 ESCAPE '\\'
+                                  OR coalesce(p.first_name, '') || ' ' || p.surname LIKE ?3 ESCAPE '\\'))
+                      ORDER BY p.surname, p.first_name, p.id
+                      LIMIT ?4";
+
+/// `%text%` with the `LIKE` wildcards of `text` escaped.
+fn contains(text: &str) -> String {
+    let mut pattern = String::with_capacity(text.len() + 2);
+    pattern.push('%');
+    for c in text.chars() {
+        if matches!(c, '%' | '_' | '\\') {
+            pattern.push('\\');
+        }
+        pattern.push(c);
+    }
+    pattern.push('%');
+    pattern
+}
+
+impl PatronDesk for ElzevirStore {
+    fn apply(
+        &self,
+        actor: StaffId,
+        command: PatronCommand,
+    ) -> Result<PatronOutput, PatronDeskError> {
+        let pending = self
+            .submit_as(actor.0, WriteCommand::Patrons(command))
+            .map_err(|error| match error {
+                SubmitError::Busy => PatronDeskError::Busy,
+                SubmitError::Closed => unavailable(error),
+            })?;
+        match pending.wait() {
+            Ok(WriteOutput::Patrons(output)) => Ok(output),
+            Ok(_) => Err(unavailable("the writer answered with another result")),
+            Err(CommandFailed::Rejected(WriteRefusal::Patrons(refusal))) => {
+                Err(PatronDeskError::Refused(refusal))
+            }
+            Err(failure) => Err(unavailable(failure)),
+        }
+    }
+
+    fn patron(&self, id: PatronId) -> Result<Option<Patron>, PatronDeskError> {
+        self.readers()
+            .read(|c| c.query_row(PATRON, [id.0], patron_of).optional())
+            .map_err(unavailable)
+    }
+
+    fn search(&self, query: &PatronQuery) -> Result<Vec<PatronRow>, PatronDeskError> {
+        let cpf = query.cpf.as_ref().map(|cpf| cpf.digits().to_owned());
+        let name = query.name.as_deref().map(contains);
+        let limit = i64::try_from(MAX_SEARCH_ROWS).unwrap_or(i64::MAX);
+        self.readers()
+            .read(|c| {
+                let mut statement = c.prepare_cached(SEARCH)?;
+                let rows =
+                    statement.query_map(params![query.cardnumber, cpf, name, limit], |row| {
+                        Ok(PatronRow {
+                            id: PatronId(row.get(0)?),
+                            cardnumber: row.get(1)?,
+                            surname: row.get(2)?,
+                            first_name: row.get(3)?,
+                            category_name: row.get(4)?,
+                            expires: day(&row.get::<_, String>(5)?)?,
+                        })
+                    })?;
+                rows.collect::<rusqlite::Result<Vec<_>>>()
+            })
+            .map_err(unavailable)
+    }
+
+    fn categories(&self) -> Result<Vec<PatronCategory>, PatronDeskError> {
+        self.readers()
+            .read(|c| {
+                let mut statement = c.prepare_cached(
+                    "SELECT c.id, c.name, c.enrolment_months, c.enrolment_until,
+                            (SELECT count(*) FROM patrons p WHERE p.category_id = c.id)
+                     FROM patron_categories c ORDER BY c.name, c.id",
+                )?;
+                let rows = statement.query_map([], |row| {
+                    let months: Option<u16> = row.get(2)?;
+                    let until: Option<String> = row.get(3)?;
+                    let enrolment = match (months, until) {
+                        (Some(months), _) => Enrolment::Months(months),
+                        (None, Some(until)) => Enrolment::Until(day(&until)?),
+                        // The table's CHECK keeps one of the two; read a broken row as
+                        // a failure rather than inventing a period.
+                        (None, None) => return Err(rusqlite::Error::InvalidQuery),
+                    };
+                    Ok(PatronCategory {
+                        id: PatronCategoryId(row.get(0)?),
+                        name: row.get(1)?,
+                        enrolment,
+                        patrons: u64::try_from(row.get::<_, i64>(4)?).unwrap_or(0),
+                    })
+                })?;
+                rows.collect::<rusqlite::Result<Vec<_>>>()
+            })
+            .map_err(unavailable)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::contains;
+
+    #[test]
+    fn like_wildcards_are_escaped() {
+        assert_eq!(contains("a_b%c\\"), "%a\\_b\\%c\\\\%");
+    }
+}

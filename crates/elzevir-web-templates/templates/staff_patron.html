@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ name }}{% endblock %}
+{% block content %}
+<article class="patron-record">
+<p><a href="/equipe/leitores">{{ t.get("patrons-back") }}</a></p>
+<h1>{{ name }}</h1>
+{% if expired %}<p class="codes-alert codes-refused" role="alert">{{ t.get("patron-expired-alert") }}</p>{% endif %}
+<dl class="patron-fields">
+{% for (label, value) in rows %}
+  <dt>{{ t.get(label) }}</dt><dd>{{ value }}</dd>
+{% endfor %}
+</dl>
+</article>
+{% endblock %}

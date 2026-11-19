@@ -288,3 +288,52 @@ fn a_category_with_patrons_or_a_branch_with_patrons_stays() {
 fn category_named(store: &ElzevirStore, name: &str) -> PatronCategoryId {
     category(store, name, Enrolment::Months(12))
 }
+
+#[test]
+fn a_search_finds_card_numbers_cpfs_and_parts_of_names_and_views_are_logged() {
+    use elzevir_app::patrons::{PatronDesk, PatronQuery};
+    use elzevir_app::staff::StaffId;
+    let dir = tempfile::tempdir().unwrap();
+    let (store, branch, category) = library(&dir);
+    let PatronOutput::Added(ana) = add(&store, fields(branch, category)).unwrap() else {
+        panic!("not added");
+    };
+    let mut bruno = fields(branch, category);
+    bruno.cardnumber = "000200".to_owned();
+    bruno.surname = "Souza".to_owned();
+    bruno.first_name = Some("Bruno_".to_owned());
+    bruno.cpf = None;
+    add(&store, bruno).unwrap();
+    let found = |text: &str| -> Vec<String> {
+        store
+            .search(&PatronQuery::parse(text).unwrap())
+            .unwrap()
+            .into_iter()
+            .map(|row| row.cardnumber)
+            .collect()
+    };
+    assert_eq!(found("000123"), ["000123"]);
+    assert_eq!(found("529.982.247-25"), ["000123"]);
+    assert_eq!(found("ana silva"), ["000123"]);
+    assert_eq!(found("silva ana"), ["000123"]);
+    assert_eq!(found("S"), Vec::<String>::new());
+    assert_eq!(found("so"), ["000200"]);
+    // `_` is a letter here, not a wildcard.
+    assert_eq!(found("o_"), ["000200"]);
+    let record = store.patron(ana).unwrap().unwrap();
+    assert_eq!(record.category_name, "Estudante");
+    assert_eq!(record.fields.expires, Some(date(2027, 1, 31)));
+    assert_eq!(record.fields.cpf.unwrap().masked(), "***.982.247-**");
+    assert_eq!(store.categories().unwrap()[0].patrons, 2);
+    assert_eq!(
+        store.apply(StaffId(3), PatronCommand::View(ana)).unwrap(),
+        PatronOutput::Viewed(ana)
+    );
+    assert_eq!(
+        read::<i64>(
+            &store,
+            "SELECT count(*) FROM audit_log WHERE kind = 'patrons.view' AND actor = 3"
+        ),
+        1
+    );
+}

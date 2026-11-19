@@ -1,6 +1,6 @@
 # Leitores e categorias de leitor
 
-> Status: tarefa 3.1, parte a (modelo e comandos). A parte b (busca, ficha e telas) vem no PR seguinte. Base: Koha 26.05.05, [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (tabela da Fase 3, linha 3.1) e [interface](../../UI_BIBFRAME_INTERACTION_SPEC.md) §18.4.
+> Status: tarefa 3.1, partes a (modelo e comandos) e b (busca, ficha e categorias na tela). A parte c (cadastro e edição do leitor pela tela) vem no PR seguinte. Base: Koha 26.05.05, [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (tabela da Fase 3, linha 3.1) e [interface](../../UI_BIBFRAME_INTERACTION_SPEC.md) §18.4.
 
 ## 1. Comportamento
 
@@ -37,6 +37,14 @@
 8. O CPF é mostrado mascarado (`***.456.789-**`) em toda tela; o inteiro só aparece no campo de edição, para quem tem a permissão de cadastro de leitores.
 9. Permissões novas: **circulação** (Koha: `circulate`), que vai abrir a ficha e emprestar, e **leitores** (Koha: `borrowers`), que cria e edita leitores e categorias.
 
+### Na tela (parte b)
+
+10. **Busca** em `/equipe/leitores?q=`, para quem tem a permissão de circulação ou a de leitores. O texto acha a carteirinha inteira, o CPF (com ou sem pontuação) e, com duas letras ou mais, um pedaço de "sobrenome nome" ou "nome sobrenome", sem diferença entre maiúscula e minúscula. `%` e `_` são letras, não curingas. Até 50 leitores, por sobrenome e nome. Cada linha mostra carteirinha, nome, categoria e validade, com "vencido" quando for o caso.
+11. Uma busca que acha **um só leitor, pela carteirinha**, vai direto à ficha (o bipe da carteirinha).
+12. **Ficha** em `/equipe/leitores/{id}`, do outro lado do muro (interface §18.1): só com a permissão de circulação. Cada abertura vai para o `audit_log` (`patrons.view`, com quem abriu e quando) **antes** de os dados saírem do servidor. A ficha mostra os campos preenchidos, o CPF mascarado e um aviso quando a inscrição venceu.
+13. **Categorias** em `/equipe/leitores/categorias`, para quem tem a permissão de leitores: nome e período (meses **ou** data fixa; os dois, ou nenhum, são recusados), quantos leitores cada uma tem, criar, salvar e apagar. As recusas aparecem na própria página.
+14. A página inicial da equipe só mostra o link "Leitores" para quem tem a permissão de circulação ou a de leitores. Nenhuma página do acervo traz dado de leitor.
+
 ## 2. Origem no Koha
 
 - Tabelas `categories` e `borrowers` (`reference/koha/installer/data/mysql/kohastructure.sql`).
@@ -45,7 +53,7 @@
 
 ## 3. Paridade
 
-`livre` (cadastro e interface), menos a validade, que segue o Koha (item 5). Prova: testes de unidade no domínio (CPF, máscara, validade) e em `elzevir-app::patrons` (limites dos campos); `crates/elzevir-store/tests/patrons.rs` (criar, editar, recusas de carteirinha e CPF repetidos, categoria em uso, edição concorrente, `audit_log`).
+`livre` (cadastro e interface), menos a validade, que segue o Koha (item 5). Prova: testes de unidade no domínio (CPF, máscara, validade) e em `elzevir-app::patrons` (limites dos campos); `crates/elzevir-store/tests/patrons.rs` (criar, editar, recusas de carteirinha e CPF repetidos, categoria em uso, edição concorrente, `audit_log`, busca e registro da abertura). `crates/elzevir/tests/patrons.rs`, com o servidor de verdade: permissões de cada página, busca por nome, carteirinha que abre a ficha, CPF mascarado, abertura no `audit_log`, categorias com meses ou data.
 
 ## 4. Casos de borda
 

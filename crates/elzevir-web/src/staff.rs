@@ -6,7 +6,7 @@ use axum::extract::State;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Redirect, Response};
 use elzevir_app::staff::{LoginRefused, Permission, log_in as check_credentials};
-use elzevir_web_templates::{StaffHome, StaffLogin};
+use elzevir_web_templates::{StaffHome, StaffLogin, Visibility};
 use serde::Deserialize;
 
 use crate::security::{random_token, tokens_match};
@@ -26,6 +26,11 @@ pub(crate) async fn home(State(state): State<AppState>, headers: HeaderMap) -> R
         login: &session.identity.login,
         is_admin: session.identity.can(Permission::Administration),
         can_catalogue: session.identity.can(Permission::Cataloguing),
+        patrons: Visibility::when(
+            state.patrons.is_some()
+                && (session.identity.can(Permission::Circulation)
+                    || session.identity.can(Permission::Patrons)),
+        ),
         can_import: state.imports.is_some() && session.identity.can(Permission::Cataloguing),
         csrf: &session.csrf,
     })
