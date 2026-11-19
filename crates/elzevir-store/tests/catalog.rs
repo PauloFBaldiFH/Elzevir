@@ -264,6 +264,7 @@ fn items_are_added_and_listed_in_creation_order() {
         call_number: Some("869.3 A848d".to_owned()),
         location: Some(stacks),
         status: ItemStatus::default(),
+        due: None,
     };
     assert_eq!(items, [expected(first, "0001"), expected(second, "0002")]);
     assert!(store.items(InstanceId(instance.0 + 1)).unwrap().is_empty());

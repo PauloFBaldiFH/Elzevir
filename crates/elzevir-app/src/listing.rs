@@ -428,6 +428,10 @@ pub struct ItemPill {
     pub inventory_number: Option<String>,
     /// The counter signal.
     pub signal: ShelfSignal,
+    /// Barcode, to lend it from the pill.
+    pub barcode: Option<String>,
+    /// The day it is due, while it is on loan.
+    pub due: Option<jiff::civil::Date>,
 }
 
 /// One page of the listing, after `after` (from the first when `None`).
@@ -604,7 +608,7 @@ fn work_row(work: FamilyWork, found: &[InstanceId]) -> WorkRow {
 
 fn instance_row(instance: FamilyInstance, matched: Match) -> InstanceRow {
     let items = instance.items.len();
-    let mut pills: Vec<ItemPill> = instance.items.into_iter().map(pill).collect();
+    let mut pills: Vec<ItemPill> = instance.items.into_iter().map(ItemPill::from).collect();
     let available = pills
         .iter()
         .filter(|pill| pill.signal == ShelfSignal::Available)
@@ -632,14 +636,18 @@ fn instance_row(instance: FamilyInstance, matched: Match) -> InstanceRow {
     }
 }
 
-fn pill(item: ItemView) -> ItemPill {
-    ItemPill {
-        id: item.id,
-        signal: item.status.signal(),
-        home_branch: item.home_branch,
-        location: item.location,
-        call_number: item.call_number,
-        inventory_number: item.inventory_number,
+impl From<ItemView> for ItemPill {
+    fn from(item: ItemView) -> Self {
+        Self {
+            id: item.id,
+            signal: item.signal(),
+            barcode: item.barcode,
+            due: item.due,
+            home_branch: item.home_branch,
+            location: item.location,
+            call_number: item.call_number,
+            inventory_number: item.inventory_number,
+        }
     }
 }
 
@@ -686,6 +694,7 @@ mod tests {
             call_number: None,
             location: None,
             status,
+            due: None,
         }
     }
 

@@ -28,8 +28,8 @@ use elzevir_app::suggestions::AuthoritySuggestions;
 use elzevir_app::worklist::{self, SavedList, WorkList, WorkListQuery, WorkListReader};
 use elzevir_domain::catalog::InstanceId;
 use elzevir_web_templates::{
-    AuthorityLine, BatchChoices, Cord, FacetStrip, FamilyLine, HubLine, InstanceLine, PillLine,
-    ScanLine, StaffCatalog, WorkLine, url_encode,
+    AuthorityLine, BatchChoices, Cord, FacetStrip, FamilyLine, HubLine, I18n, InstanceLine,
+    PillLine, ScanLine, StaffCatalog, WorkLine, url_encode,
 };
 use serde::Deserialize;
 
@@ -283,15 +283,17 @@ pub(crate) async fn catalog(
         _ => None,
     };
     let can_catalogue = session.identity.can(Permission::Cataloguing);
+    let can_circulate = state.loans.is_some() && session.identity.can(Permission::Circulation);
     let (strip, batch) = with_saved(strip, &page, &saved, &codes, can_catalogue, rows_only);
     let lines = |rows: &[FamilyRow]| -> Vec<FamilyLine> {
-        rows.iter().map(|row| family_line(row, &codes)).collect()
+        rows.iter().map(|row| family_line(row, &codes, t)).collect()
     };
     let page = match &page {
         Page::Browse(page) => StaffCatalog {
             t: &state.inner.i18n,
             csrf: &session.csrf,
             can_catalogue,
+            can_circulate,
             query: "",
             total: None,
             scan: None,
@@ -307,6 +309,7 @@ pub(crate) async fn catalog(
             t: &state.inner.i18n,
             csrf: &session.csrf,
             can_catalogue,
+            can_circulate,
             query: &page.query,
             total: Some(page.total),
             scan: scan_line(scan, can_catalogue),
@@ -324,6 +327,7 @@ pub(crate) async fn catalog(
             t: &state.inner.i18n,
             csrf: &session.csrf,
             can_catalogue,
+            can_circulate,
             query: "",
             total: None,
             scan: None,
@@ -335,15 +339,19 @@ pub(crate) async fn catalog(
             batch,
         },
     };
-    // The search form swaps the whole list and picks it from a full page; the next-page
-    // loader asks for the rows alone.
+    respond(&page, rows_only)
+}
+
+/// The search form swaps the whole list and picks it from a full page; the next-page loader
+/// asks for the rows alone.
+fn respond(page: &StaffCatalog<'_>, rows_only: bool) -> Response {
     if rows_only {
         match page.as_rows().render() {
             Ok(html) => Html(html).into_response(),
             Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response(),
         }
     } else {
-        render(&page)
+        render(page)
     }
 }
 
@@ -568,7 +576,7 @@ fn iri_base(state: &AppState, headers: &HeaderMap) -> Option<IriBase> {
     valid.then(|| IriBase::new(&format!("{scheme}://{host}/bibframe")))
 }
 
-fn family_line(row: &FamilyRow, codes: &CodeLists) -> FamilyLine {
+fn family_line(row: &FamilyRow, codes: &CodeLists, t: &I18n) -> FamilyLine {
     let hub = match (row.cursor.head, &row.hub_title) {
         (FamilyHead::Hub(id), Some(title)) => Some(HubLine {
             id: id.0,
@@ -640,7 +648,7 @@ fn family_line(row: &FamilyRow, codes: &CodeLists) -> FamilyLine {
                     label_key: "staff-cord-about",
                 });
             }
-            work_line(work, cords, codes)
+            work_line(work, cords, codes, t)
         })
         .collect();
     let instances = || row.works.iter().flat_map(|work| work.instances.iter());
@@ -672,7 +680,7 @@ fn family_line(row: &FamilyRow, codes: &CodeLists) -> FamilyLine {
     }
 }
 
-fn work_line(work: &WorkRow, cords: Vec<Cord>, codes: &CodeLists) -> WorkLine {
+fn work_line(work: &WorkRow, cords: Vec<Cord>, codes: &CodeLists, t: &I18n) -> WorkLine {
     WorkLine {
         cords,
         id: work.id.0,
@@ -689,12 +697,12 @@ fn work_line(work: &WorkRow, cords: Vec<Cord>, codes: &CodeLists) -> WorkLine {
         instances: work
             .instances
             .iter()
-            .map(|instance| instance_line(instance, codes))
+            .map(|instance| instance_line(instance, codes, t))
             .collect(),
     }
 }
 
-fn instance_line(instance: &InstanceRow, codes: &CodeLists) -> InstanceLine {
+fn instance_line(instance: &InstanceRow, codes: &CodeLists, t: &I18n) -> InstanceLine {
     let imprint = match (&instance.publisher, &instance.date) {
         (Some(publisher), Some(date)) => Some(format!("{publisher}, {date}")),
         (Some(only), None) | (None, Some(only)) => Some(only.clone()),
@@ -716,14 +724,14 @@ fn instance_line(instance: &InstanceRow, codes: &CodeLists) -> InstanceLine {
         pills: instance
             .pills
             .iter()
-            .map(|pill| pill_line(pill, codes))
+            .map(|pill| pill_line(pill, codes, t))
             .collect(),
         more_items: instance.more_items,
     }
 }
 
 /// One Item in a line, with names in place of codes (exemplares.md, item 29).
-fn pill_line(pill: &ItemPill, codes: &CodeLists) -> PillLine {
+pub(crate) fn pill_line(pill: &ItemPill, codes: &CodeLists, t: &I18n) -> PillLine {
     let parts = [
         Some(codes.branch(pill.home_branch)),
         pill.location.map(|id| codes.location(id)),
@@ -736,6 +744,10 @@ fn pill_line(pill: &ItemPill, codes: &CodeLists) -> PillLine {
         signal_class,
         signal_key,
         signal_icon: signal_icon(pill.signal),
+        item: pill.id.0,
+        lendable: pill.signal == ShelfSignal::Available && pill.barcode.is_some(),
+        due: pill.due.map(|day| crate::patrons::shown(t, day)),
+        refused: Vec::new(),
     }
 }
 
@@ -743,6 +755,7 @@ fn pill_line(pill: &ItemPill, codes: &CodeLists) -> PillLine {
 pub(crate) const fn signal(signal: ShelfSignal) -> (&'static str, &'static str) {
     match signal {
         ShelfSignal::Available => ("signal-available", "shelf-signal-available"),
+        ShelfSignal::OnLoan => ("signal-on-loan", "shelf-signal-on-loan"),
         ShelfSignal::NotForLoan => ("signal-not-for-loan", "shelf-signal-not-for-loan"),
         ShelfSignal::OutOfCirculation => (
             "signal-out-of-circulation",

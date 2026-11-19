@@ -96,6 +96,7 @@ fn family(n: i64, title: &str, lost: bool) -> Family {
                     call_number: Some("869.3 A848d".to_owned()),
                     location: None,
                     status,
+                    due: None,
                 }],
             }],
         }],

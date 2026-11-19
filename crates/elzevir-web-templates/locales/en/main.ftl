@@ -155,6 +155,7 @@ staff-catalog-more-items = { $count ->
    *[other] +{ $count } items — see all
 }
 shelf-signal-available = Available
+shelf-signal-on-loan = On loan
 shelf-signal-not-for-loan = Not for loan
 shelf-signal-out-of-circulation = Out of circulation
 staff-cord-work = work
@@ -913,3 +914,6 @@ checkin-needs = It belongs at { $branch }: send it there.
 checkin-arrived = Its transfer from { $branch } has arrived.
 checkin-wrong-branch = It is in transit to { $branch }: send it there.
 circulation-busy = The system is busy. Try again.
+pill-cardnumber = Card number
+pill-to-patron = Open the patron who has it
+pill-unknown-patron = No patron has this card number.

@@ -810,8 +810,8 @@ impl CatalogReader for ElzevirStore {
                 let mut statement = c.prepare(
                     "SELECT items.id, barcode, inventory_number, home_branch, policy_id,
                             call_number, sublocation_id, not_for_loan, damaged, lost, withdrawn,
-                            restricted
-                     FROM items
+                            restricted, loans.due
+                     FROM items LEFT JOIN loans ON loans.item_id = items.id
                      WHERE instance_id = ?1 ORDER BY items.id",
                 )?;
                 statement
@@ -825,6 +825,7 @@ impl CatalogReader for ElzevirStore {
                             call_number: row.get(5)?,
                             location: row.get::<_, Option<i64>>(6)?.map(SublocationId),
                             status: status_at(row, 7)?,
+                            due: due_day(row, 12)?,
                         })
                     })?
                     .collect::<Result<Vec<_>, _>>()
@@ -890,6 +891,26 @@ pub(crate) fn status_at(
         withdrawn: row.get(first + 3)?,
         restricted: row.get(first + 4)?,
     })
+}
+
+/// The day a loan is due, from its due time in column `at`, which is NULL without a loan.
+pub(crate) fn due_day(
+    row: &rusqlite::Row<'_>,
+    at: usize,
+) -> Result<Option<jiff::civil::Date>, rusqlite::Error> {
+    row.get::<_, Option<String>>(at)?
+        .map(|due| {
+            due.parse::<jiff::Zoned>()
+                .map(|due| due.date())
+                .map_err(|error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        at,
+                        rusqlite::types::Type::Text,
+                        error.into(),
+                    )
+                })
+        })
+        .transpose()
 }
 
 /// Why reading an Instance failed.

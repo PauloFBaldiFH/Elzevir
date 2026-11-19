@@ -17,8 +17,8 @@ mod staff_registries;
 pub use staff_calendar::{DayCell, EntryLine, StaffCalendar};
 pub use staff_catalog::{
     ActiveFilter, AuthorityLine, BatchChoices, Cord, FacetMenu, FacetOption, FacetStrip,
-    FamilyLine, HubLine, InstanceLine, PillLine, SavedListLink, ScanLine, StaffCatalog, WorkLine,
-    WorkListLink,
+    FamilyLine, HubLine, InstanceLine, PillInstance, PillLine, SavedListLink, ScanLine,
+    StaffCatalog, StaffItemPill, WorkLine, WorkListLink,
 };
 pub use staff_circulation_rules::{
     Choice, RuleGroupPart, RuleRow, ScopeLine, StaffCirculationRules,

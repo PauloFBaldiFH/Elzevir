@@ -15,6 +15,8 @@ pub struct StaffCatalog<'a> {
     pub csrf: &'a str,
     /// Whether the viewer may catalogue, and so create records (criacao.md, item 13).
     pub can_catalogue: bool,
+    /// Whether the viewer may lend from a pill (interface §18.2).
+    pub can_circulate: bool,
     /// The query, empty when browsing.
     pub query: &'a str,
     /// Records found, for a search.
@@ -344,6 +346,39 @@ pub struct PillLine {
     /// Symbol of its signal's icon in `/static/elzevir-icons.svg` (bibframe-completo.md,
     /// item 15): an indicator, or the padlock of local use.
     pub signal_icon: &'static str,
+    /// The Item, for lending it from the pill.
+    pub item: i64,
+    /// Whether it can be lent from the pill: available and with a barcode.
+    pub lendable: bool,
+    /// The due date as shown, while it is on loan.
+    pub due: Option<String>,
+    /// Why the last checkout from the pill was refused; the box stays open.
+    pub refused: Vec<String>,
+}
+
+/// The inside of one Item's pill, alone, after a checkout from it (interface §18.2).
+#[derive(Template)]
+#[template(path = "staff_item_pill.html")]
+pub struct StaffItemPill<'a> {
+    /// Interface texts.
+    pub t: &'a I18n,
+    /// Anti-forgery token of the session.
+    pub csrf: &'a str,
+    /// Whether the person may lend (the circulation permission).
+    pub can_circulate: bool,
+    /// The Instance of the Item.
+    pub instance: PillInstance,
+    /// The Item.
+    pub pill: PillLine,
+}
+
+/// What the pill reads of its Instance.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PillInstance {
+    /// Instance id.
+    pub id: i64,
+    /// Symbol of the Instance's carrier icon.
+    pub icon: &'static str,
 }
 
 /// What the server found for a scanned code.

@@ -2,7 +2,7 @@
 //! Lending an Item to a patron and taking it back (docs/specs/circulacao/emprestimo.md,
 //! docs/specs/circulacao/devolucao.md).
 
-use elzevir_domain::catalog::BranchId;
+use elzevir_domain::catalog::{BranchId, ItemId};
 use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome};
 use elzevir_domain::checkout::{Alert, Confirm, Impossible};
 use elzevir_domain::patron::PatronId;
@@ -236,6 +236,20 @@ pub trait LoanDesk: Send + Sync {
         patron: PatronId,
         today: Date,
     ) -> Result<Option<SuspensionEnd>, CirculationDeskError>;
+
+    /// The branch an Item is at, as the desk of a checkout from its pill.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn holding_branch(&self, item: ItemId) -> Result<Option<BranchId>, CirculationDeskError>;
+
+    /// Who has the Item, while it is on loan; only for the arrow across the wall.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn borrower(&self, item: ItemId) -> Result<Option<PatronId>, CirculationDeskError>;
 
     /// Runs one circulation command as `actor`.
     ///

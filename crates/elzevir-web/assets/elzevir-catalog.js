@@ -1891,3 +1891,25 @@ document.addEventListener("click", async (event) => {
   const answer = await changeList({ action: "delete", list: Number(drop.dataset.list) });
   if (answer) location.assign("/equipe/acervo");
 });
+
+// Esc closes the lending box of a pill first, before the family (interface §3 and §18.2).
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !(event.target instanceof Element)) return;
+  const box = event.target.closest("details.lend-box[open]");
+  if (!box) return;
+  event.preventDefault();
+  event.stopPropagation();
+  box.open = false;
+  box.querySelector("summary")?.focus();
+}, true);
+
+// A box that opens takes the card number at once; one swapped in after a refusal too.
+document.addEventListener("toggle", (event) => {
+  const box = event.target;
+  if (box instanceof HTMLDetailsElement && box.classList.contains("lend-box") && box.open) {
+    box.querySelector("input[name=cardnumber]")?.focus();
+  }
+}, true);
+document.addEventListener("htmx:afterSwap", (event) => {
+  event.target?.querySelector?.("details.lend-box[open] input[name=cardnumber]")?.focus();
+});
