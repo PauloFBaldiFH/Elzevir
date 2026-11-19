@@ -209,6 +209,20 @@ async fn measure_listing(app: &Router, session: &str, records: usize) {
         filtered.push(time_as(app, &uri, session).await);
     }
     report("staff listing, filtered page", filtered);
+    // Work lists (facetas.md, item 16): what the import brought today, its first pages.
+    let mut listed = Vec::with_capacity(REQUESTS);
+    for n in 0..REQUESTS {
+        let from = n % 10 * 30;
+        listed.push(
+            time_as(
+                app,
+                &format!("/equipe/acervo?list=imported-today&from={from}"),
+                session,
+            )
+            .await,
+        );
+    }
+    report("staff listing, work list page", listed);
 }
 
 /// The Work titles (`245 $a`) of the export.
