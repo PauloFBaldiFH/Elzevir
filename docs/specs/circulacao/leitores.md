@@ -1,6 +1,6 @@
 # Leitores e categorias de leitor
 
-> Status: tarefa 3.1, partes a (modelo e comandos) e b (busca, ficha e categorias na tela). A parte c (cadastro e edição do leitor pela tela) vem no PR seguinte. Base: Koha 26.05.05, [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (tabela da Fase 3, linha 3.1) e [interface](../../UI_BIBFRAME_INTERACTION_SPEC.md) §18.4.
+> Status: tarefa 3.1 completa: partes a (modelo e comandos), b (busca, ficha e categorias na tela) e c (cadastro e edição pela tela). Base: Koha 26.05.05, [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (tabela da Fase 3, linha 3.1) e [interface](../../UI_BIBFRAME_INTERACTION_SPEC.md) §18.4.
 
 ## 1. Comportamento
 
@@ -45,6 +45,13 @@
 13. **Categorias** em `/equipe/leitores/categorias`, para quem tem a permissão de leitores: nome e período (meses **ou** data fixa; os dois, ou nenhum, são recusados), quantos leitores cada uma tem, criar, salvar e apagar. As recusas aparecem na própria página.
 14. A página inicial da equipe só mostra o link "Leitores" para quem tem a permissão de circulação ou a de leitores. Nenhuma página do acervo traz dado de leitor.
 
+### Cadastro e edição (parte c)
+
+15. **Novo leitor** em `/equipe/leitores/novo` e **edição** em `/equipe/leitores/{id}/editar`, só com a permissão de leitores; a busca mostra o link "Novo leitor" e a ficha mostra "Editar leitor" para quem tem essa permissão. Unidade e categoria são listas de seleção dos cadastros; sem nenhuma categoria, o formulário avisa que é preciso criar uma antes.
+16. No leitor novo, a inscrição é o dia de hoje no fuso da biblioteca e a validade vazia vem da categoria (item 5). Na edição, a inscrição fica como está e a validade é a do campo.
+17. O formulário de edição é o único lugar que mostra o CPF inteiro (item 8); abri-lo também vai para o `audit_log` como abertura (`patrons.view`). CPF inválido, data malformada e cada regra do item 4 voltam ao formulário com o que foi digitado e o motivo (422); carteirinha ou CPF repetidos e edição concorrente, com 409.
+18. Salvar volta ao formulário de edição com "Salvo". `elzevir staff add --circulation --patrons` concede as duas permissões novas; o primeiro administrador criado pelo `init` já tem as duas.
+
 ## 2. Origem no Koha
 
 - Tabelas `categories` e `borrowers` (`reference/koha/installer/data/mysql/kohastructure.sql`).
@@ -53,7 +60,7 @@
 
 ## 3. Paridade
 
-`livre` (cadastro e interface), menos a validade, que segue o Koha (item 5). Prova: testes de unidade no domínio (CPF, máscara, validade) e em `elzevir-app::patrons` (limites dos campos); `crates/elzevir-store/tests/patrons.rs` (criar, editar, recusas de carteirinha e CPF repetidos, categoria em uso, edição concorrente, `audit_log`, busca e registro da abertura). `crates/elzevir/tests/patrons.rs`, com o servidor de verdade: permissões de cada página, busca por nome, carteirinha que abre a ficha, CPF mascarado, abertura no `audit_log`, categorias com meses ou data.
+`livre` (cadastro e interface), menos a validade, que segue o Koha (item 5). Prova: testes de unidade no domínio (CPF, máscara, validade) e em `elzevir-app::patrons` (limites dos campos); `crates/elzevir-store/tests/patrons.rs` (criar, editar, recusas de carteirinha e CPF repetidos, categoria em uso, edição concorrente, `audit_log`, busca e registro da abertura). `crates/elzevir/tests/patrons.rs`, com o servidor de verdade: permissões de cada página, busca por nome, carteirinha que abre a ficha, CPF mascarado, abertura no `audit_log`, categorias com meses ou data, cadastro com CPF inválido e carteirinha repetida recusados, CPF inteiro só no formulário de edição, edição concorrente recusada.
 
 ## 4. Casos de borda
 

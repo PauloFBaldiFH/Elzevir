@@ -26,7 +26,8 @@ pub use staff_item_grid::{
     GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid, SuggestedCallNumber,
 };
 pub use staff_patrons::{
-    CategoryLine, PatronLine, StaffPatron, StaffPatronCategories, StaffPatrons,
+    CategoryLine, PatronFormValues, PatronLine, StaffPatron, StaffPatronCategories,
+    StaffPatronForm, StaffPatrons,
 };
 pub use staff_record_fields::{FieldEntry, FieldGroup, FieldValue, ItemFields, RecordFields};
 pub use staff_record_form::{
@@ -464,6 +465,7 @@ mod tests {
             include_str!("../templates/staff_patrons.html"),
             include_str!("../templates/staff_patron.html"),
             include_str!("../templates/staff_patron_categories.html"),
+            include_str!("../templates/staff_patron_form.html"),
         ];
         let mut missing = Vec::new();
         for source in templates {

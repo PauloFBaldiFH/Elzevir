@@ -4,6 +4,7 @@
 <article class="patron-record">
 <p><a href="/equipe/leitores">{{ t.get("patrons-back") }}</a></p>
 <h1>{{ name }}</h1>
+{% if let Some(url) = edit_url %}<p><a href="{{ url }}">{{ t.get("patron-edit") }}</a></p>{% endif %}
 {% if expired %}<p class="codes-alert codes-refused" role="alert">{{ t.get("patron-expired-alert") }}</p>{% endif %}
 <dl class="patron-fields">
 {% for (label, value) in rows %}

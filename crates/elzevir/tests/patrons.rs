@@ -289,3 +289,105 @@ fn categories_are_created_with_months_or_a_date_by_who_manages_patrons() {
     assert!(page.contains("value=\"Projeto\""));
     assert!(page.contains("value=\"2026-12-31\""));
 }
+
+#[test]
+fn a_patron_is_enrolled_and_edited_on_the_form() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    let (server, address) = start(data.path());
+    let lei = sign_in(address, "lei");
+    let cir = sign_in(address, "cir");
+    assert_status(
+        &request(address, "GET", "/equipe/leitores/novo", &cir, ""),
+        403,
+    );
+    let page = request(address, "GET", "/equipe/leitores/novo", &lei, "");
+    assert_status(&page, 200);
+    assert!(page.contains("Biblioteca Central") && page.contains("Estudante"));
+    let token = csrf(&page).to_owned();
+    let form = format!("{lei}Content-Type: application/x-www-form-urlencoded\r\n");
+    let post = |path: &str, body: &str| {
+        request(
+            address,
+            "POST",
+            path,
+            &form,
+            &format!("csrf={token}&{body}"),
+        )
+    };
+    let fields = "surname=Souza&first_name=Bruno&branch=1&category=1&expires=&history_kept=1";
+    let bad_cpf = post(
+        "/equipe/leitores/novo",
+        &format!("cardnumber=000200&cpf=111.111.111-11&{fields}"),
+    );
+    assert_status(&bad_cpf, 422);
+    assert!(bad_cpf.contains("This is not a valid CPF"));
+    // What was typed comes back in the form.
+    assert!(bad_cpf.contains("value=\"Souza\""));
+    let same_card = post(
+        "/equipe/leitores/novo",
+        &format!("cardnumber=000123&{fields}"),
+    );
+    assert_status(&same_card, 409);
+    let added = post(
+        "/equipe/leitores/novo",
+        &format!("cardnumber=000200&cpf=000.000.006-04&{fields}"),
+    );
+    assert_status(&added, 303);
+    let location = added
+        .lines()
+        .find_map(|line| line.strip_prefix("location: "))
+        .unwrap()
+        .to_owned();
+    let edit = location.trim_end_matches("?saved=1").to_owned();
+    assert_ne!(edit, format!("/equipe/leitores/{ana}/editar"));
+    let page = request(address, "GET", &location, &lei, "");
+    assert_status(&page, 200);
+    // Only the edit form shows the whole CPF.
+    assert!(page.contains("value=\"00000000604\""));
+    assert!(page.contains("name=\"history_kept\" value=\"1\" checked"));
+    let row_version = "row_version=1";
+    let changed = post(
+        &edit,
+        &format!(
+            "{row_version}&cardnumber=000200&cpf=&surname=Souza&first_name=Bruno&branch=1&category=1&expires=2030-01-31&phone=4499"
+        ),
+    );
+    assert_status(&changed, 303);
+    let stale = post(
+        &edit,
+        &format!(
+            "{row_version}&cardnumber=000200&surname=Souza&branch=1&category=1&expires=2030-01-31"
+        ),
+    );
+    assert_status(&stale, 409);
+    assert!(stale.contains("Someone changed this patron"));
+    drop(server);
+
+    let store = open(data.path());
+    let (phone, expires, cpf): (String, String, Option<String>) = store
+        .readers()
+        .read(|c| {
+            c.query_row(
+                "SELECT phone, expires, cpf FROM patrons WHERE cardnumber = '000200'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+        })
+        .unwrap();
+    assert_eq!(
+        (phone.as_str(), expires.as_str(), cpf),
+        ("4499", "2030-01-31", None)
+    );
+    let views: i64 = store
+        .readers()
+        .read(|c| {
+            c.query_row(
+                "SELECT count(*) FROM audit_log WHERE kind = 'patrons.view'",
+                [],
+                |row| row.get(0),
+            )
+        })
+        .unwrap();
+    assert_eq!(views, 1);
+}
