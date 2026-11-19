@@ -1139,6 +1139,7 @@ dependencies = [
 name = "elzevir-scenarios"
 version = "0.1.0-alpha.1"
 dependencies = [
+ "elzevir-data",
  "elzevir-domain",
  "jiff",
  "serde",

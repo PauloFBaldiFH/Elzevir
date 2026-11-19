@@ -1,0 +1,809 @@
+{
+ "koha_version": "26.05.05.000",
+ "spec": "docs/specs/circulacao/regras.md",
+ "recorder": "tools/circ-rules-recorder/record.py",
+ "raw": [
+  {
+   "context": {
+    "item_type_id": "*",
+    "library_id": "*",
+    "patron_category_id": "*"
+   },
+   "rules": {
+    "fine": "2.00",
+    "issuelength": "21"
+   }
+  },
+  {
+   "context": {
+    "item_type_id": "AL",
+    "library_id": "*",
+    "patron_category_id": "*"
+   },
+   "rules": {
+    "lost_item_processing_fee": "0.000000"
+   }
+  },
+  {
+   "context": {
+    "item_type_id": "BK",
+    "library_id": "*",
+    "patron_category_id": "*"
+   },
+   "rules": {
+    "lost_item_processing_fee": "0.000000"
+   }
+  },
+  {
+   "context": {
+    "item_type_id": "DV",
+    "library_id": "*",
+    "patron_category_id": "*"
+   },
+   "rules": {
+    "issuelength": "3",
+    "lost_item_processing_fee": "0.000000",
+    "renewalsallowed": "1"
+   }
+  },
+  {
+   "context": {
+    "item_type_id": "GB",
+    "library_id": "*",
+    "patron_category_id": "*"
+   },
+   "rules": {
+    "lost_item_processing_fee": "0.000000"
+   }
+  },
+  {
+   "context": {
+    "item_type_id": "JV",
+    "library_id": "*",
+    "patron_category_id": "*"
+   },
+   "rules": {
+    "lost_item_processing_fee": "0.000000"
+   }
+  },
+  {
+   "context": {
+    "item_type_id": "LB",
+    "library_id": "*",
+    "patron_category_id": "*"
+   },
+   "rules": {
+    "lost_item_processing_fee": "0.000000"
+   }
+  },
+  {
+   "context": {
+    "item_type_id": "LI",
+    "library_id": "*",
+    "patron_category_id": "*"
+   },
+   "rules": {
+    "lost_item_processing_fee": "0.000000"
+   }
+  },
+  {
+   "context": {
+    "item_type_id": "RO",
+    "library_id": "*",
+    "patron_category_id": "*"
+   },
+   "rules": {
+    "lost_item_processing_fee": "0.000000"
+   }
+  },
+  {
+   "context": {
+    "item_type_id": "*",
+    "library_id": "*",
+    "patron_category_id": "COM"
+   },
+   "rules": {
+    "fine": "0.50",
+    "issuelength": "7"
+   }
+  },
+  {
+   "context": {
+    "item_type_id": "DV",
+    "library_id": "*",
+    "patron_category_id": "COM"
+   },
+   "rules": {
+    "finedays": "2",
+    "issuelength": "5"
+   }
+  },
+  {
+   "context": {
+    "item_type_id": "*",
+    "library_id": "MAIN",
+    "patron_category_id": "*"
+   },
+   "rules": {
+    "article_requests": "no",
+    "auto_renew": "0",
+    "cap_fine_to_replacement_price": "",
+    "chargeperiod": "1",
+    "chargeperiod_charge_at": "1",
+    "daysmode": "Datedue",
+    "decreaseloanholds": "",
+    "fine": "1.00",
+    "finedays": "",
+    "firstremind": "0",
+    "hardduedate": "",
+    "hardduedatecompare": "-1",
+    "holds_per_day": "",
+    "holds_per_record": "",
+    "holds_pickup_period": "14",
+    "issuelength": "14",
+    "lengthunit": "days",
+    "maxissueqty": "4",
+    "maxonsiteissueqty": "4",
+    "maxsuspensiondays": "",
+    "no_auto_renewal_after": "",
+    "no_auto_renewal_after_hard_limit": "",
+    "noautorenewalbefore": "",
+    "norenewalbefore": "",
+    "note": "",
+    "onshelfholds": "1",
+    "opacitemholds": "N",
+    "overduefinescap": "40.00",
+    "renewalperiod": "14",
+    "renewalsallowed": "5",
+    "rentaldiscount": "0.00",
+    "reservesallowed": "2",
+    "suspension_chargeperiod": "1",
+    "unseen_renewals_allowed": ""
+   }
+  },
+  {
+   "context": {
+    "item_type_id": "DV",
+    "library_id": "MAIN",
+    "patron_category_id": "*"
+   },
+   "rules": {
+    "issuelength": "2"
+   }
+  },
+  {
+   "context": {
+    "item_type_id": "*",
+    "library_id": "MAIN",
+    "patron_category_id": "B"
+   },
+   "rules": {
+    "renewalsallowed": ""
+   }
+  }
+ ],
+ "effective": [
+  {
+   "library": "MAIN",
+   "category": "B",
+   "item_type": "AL",
+   "rules": {
+    "article_requests": "no",
+    "auto_renew": "0",
+    "cap_fine_to_replacement_price": "",
+    "chargeperiod": "1",
+    "chargeperiod_charge_at": "1",
+    "daysmode": "Datedue",
+    "decreaseloanholds": "",
+    "fine": "1.00",
+    "finedays": "",
+    "firstremind": "0",
+    "hardduedate": "",
+    "hardduedatecompare": "-1",
+    "holds_per_day": "",
+    "holds_per_record": "",
+    "holds_pickup_period": "14",
+    "issuelength": "14",
+    "lengthunit": "days",
+    "lost_item_processing_fee": "0.000000",
+    "maxissueqty": "4",
+    "maxonsiteissueqty": "4",
+    "maxsuspensiondays": "",
+    "no_auto_renewal_after": "",
+    "no_auto_renewal_after_hard_limit": "",
+    "noautorenewalbefore": "",
+    "norenewalbefore": "",
+    "note": "",
+    "onshelfholds": "1",
+    "opacitemholds": "N",
+    "overduefinescap": "40.00",
+    "renewalperiod": "14",
+    "renewalsallowed": "",
+    "rentaldiscount": "0.00",
+    "reservesallowed": "2",
+    "suspension_chargeperiod": "1",
+    "unseen_renewals_allowed": ""
+   }
+  },
+  {
+   "library": "MAIN",
+   "category": "B",
+   "item_type": "BK",
+   "rules": {
+    "article_requests": "no",
+    "auto_renew": "0",
+    "cap_fine_to_replacement_price": "",
+    "chargeperiod": "1",
+    "chargeperiod_charge_at": "1",
+    "daysmode": "Datedue",
+    "decreaseloanholds": "",
+    "fine": "1.00",
+    "finedays": "",
+    "firstremind": "0",
+    "hardduedate": "",
+    "hardduedatecompare": "-1",
+    "holds_per_day": "",
+    "holds_per_record": "",
+    "holds_pickup_period": "14",
+    "issuelength": "14",
+    "lengthunit": "days",
+    "lost_item_processing_fee": "0.000000",
+    "maxissueqty": "4",
+    "maxonsiteissueqty": "4",
+    "maxsuspensiondays": "",
+    "no_auto_renewal_after": "",
+    "no_auto_renewal_after_hard_limit": "",
+    "noautorenewalbefore": "",
+    "norenewalbefore": "",
+    "note": "",
+    "onshelfholds": "1",
+    "opacitemholds": "N",
+    "overduefinescap": "40.00",
+    "renewalperiod": "14",
+    "renewalsallowed": "",
+    "rentaldiscount": "0.00",
+    "reservesallowed": "2",
+    "suspension_chargeperiod": "1",
+    "unseen_renewals_allowed": ""
+   }
+  },
+  {
+   "library": "MAIN",
+   "category": "B",
+   "item_type": "DV",
+   "rules": {
+    "article_requests": "no",
+    "auto_renew": "0",
+    "cap_fine_to_replacement_price": "",
+    "chargeperiod": "1",
+    "chargeperiod_charge_at": "1",
+    "daysmode": "Datedue",
+    "decreaseloanholds": "",
+    "fine": "1.00",
+    "finedays": "",
+    "firstremind": "0",
+    "hardduedate": "",
+    "hardduedatecompare": "-1",
+    "holds_per_day": "",
+    "holds_per_record": "",
+    "holds_pickup_period": "14",
+    "issuelength": "2",
+    "lengthunit": "days",
+    "lost_item_processing_fee": "0.000000",
+    "maxissueqty": "4",
+    "maxonsiteissueqty": "4",
+    "maxsuspensiondays": "",
+    "no_auto_renewal_after": "",
+    "no_auto_renewal_after_hard_limit": "",
+    "noautorenewalbefore": "",
+    "norenewalbefore": "",
+    "note": "",
+    "onshelfholds": "1",
+    "opacitemholds": "N",
+    "overduefinescap": "40.00",
+    "renewalperiod": "14",
+    "renewalsallowed": "",
+    "rentaldiscount": "0.00",
+    "reservesallowed": "2",
+    "suspension_chargeperiod": "1",
+    "unseen_renewals_allowed": ""
+   }
+  },
+  {
+   "library": "MAIN",
+   "category": "B",
+   "item_type": "*",
+   "rules": {
+    "article_requests": "no",
+    "auto_renew": "0",
+    "cap_fine_to_replacement_price": "",
+    "chargeperiod": "1",
+    "chargeperiod_charge_at": "1",
+    "daysmode": "Datedue",
+    "decreaseloanholds": "",
+    "fine": "1.00",
+    "finedays": "",
+    "firstremind": "0",
+    "hardduedate": "",
+    "hardduedatecompare": "-1",
+    "holds_per_day": "",
+    "holds_per_record": "",
+    "holds_pickup_period": "14",
+    "issuelength": "14",
+    "lengthunit": "days",
+    "maxissueqty": "4",
+    "maxonsiteissueqty": "4",
+    "maxsuspensiondays": "",
+    "no_auto_renewal_after": "",
+    "no_auto_renewal_after_hard_limit": "",
+    "noautorenewalbefore": "",
+    "norenewalbefore": "",
+    "note": "",
+    "onshelfholds": "1",
+    "opacitemholds": "N",
+    "overduefinescap": "40.00",
+    "renewalperiod": "14",
+    "renewalsallowed": "",
+    "rentaldiscount": "0.00",
+    "reservesallowed": "2",
+    "suspension_chargeperiod": "1",
+    "unseen_renewals_allowed": ""
+   }
+  },
+  {
+   "library": "MAIN",
+   "category": "COM",
+   "item_type": "AL",
+   "rules": {
+    "article_requests": "no",
+    "auto_renew": "0",
+    "cap_fine_to_replacement_price": "",
+    "chargeperiod": "1",
+    "chargeperiod_charge_at": "1",
+    "daysmode": "Datedue",
+    "decreaseloanholds": "",
+    "fine": "1.00",
+    "finedays": "",
+    "firstremind": "0",
+    "hardduedate": "",
+    "hardduedatecompare": "-1",
+    "holds_per_day": "",
+    "holds_per_record": "",
+    "holds_pickup_period": "14",
+    "issuelength": "14",
+    "lengthunit": "days",
+    "lost_item_processing_fee": "0.000000",
+    "maxissueqty": "4",
+    "maxonsiteissueqty": "4",
+    "maxsuspensiondays": "",
+    "no_auto_renewal_after": "",
+    "no_auto_renewal_after_hard_limit": "",
+    "noautorenewalbefore": "",
+    "norenewalbefore": "",
+    "note": "",
+    "onshelfholds": "1",
+    "opacitemholds": "N",
+    "overduefinescap": "40.00",
+    "renewalperiod": "14",
+    "renewalsallowed": "5",
+    "rentaldiscount": "0.00",
+    "reservesallowed": "2",
+    "suspension_chargeperiod": "1",
+    "unseen_renewals_allowed": ""
+   }
+  },
+  {
+   "library": "MAIN",
+   "category": "COM",
+   "item_type": "BK",
+   "rules": {
+    "article_requests": "no",
+    "auto_renew": "0",
+    "cap_fine_to_replacement_price": "",
+    "chargeperiod": "1",
+    "chargeperiod_charge_at": "1",
+    "daysmode": "Datedue",
+    "decreaseloanholds": "",
+    "fine": "1.00",
+    "finedays": "",
+    "firstremind": "0",
+    "hardduedate": "",
+    "hardduedatecompare": "-1",
+    "holds_per_day": "",
+    "holds_per_record": "",
+    "holds_pickup_period": "14",
+    "issuelength": "14",
+    "lengthunit": "days",
+    "lost_item_processing_fee": "0.000000",
+    "maxissueqty": "4",
+    "maxonsiteissueqty": "4",
+    "maxsuspensiondays": "",
+    "no_auto_renewal_after": "",
+    "no_auto_renewal_after_hard_limit": "",
+    "noautorenewalbefore": "",
+    "norenewalbefore": "",
+    "note": "",
+    "onshelfholds": "1",
+    "opacitemholds": "N",
+    "overduefinescap": "40.00",
+    "renewalperiod": "14",
+    "renewalsallowed": "5",
+    "rentaldiscount": "0.00",
+    "reservesallowed": "2",
+    "suspension_chargeperiod": "1",
+    "unseen_renewals_allowed": ""
+   }
+  },
+  {
+   "library": "MAIN",
+   "category": "COM",
+   "item_type": "DV",
+   "rules": {
+    "article_requests": "no",
+    "auto_renew": "0",
+    "cap_fine_to_replacement_price": "",
+    "chargeperiod": "1",
+    "chargeperiod_charge_at": "1",
+    "daysmode": "Datedue",
+    "decreaseloanholds": "",
+    "fine": "1.00",
+    "finedays": "",
+    "firstremind": "0",
+    "hardduedate": "",
+    "hardduedatecompare": "-1",
+    "holds_per_day": "",
+    "holds_per_record": "",
+    "holds_pickup_period": "14",
+    "issuelength": "2",
+    "lengthunit": "days",
+    "lost_item_processing_fee": "0.000000",
+    "maxissueqty": "4",
+    "maxonsiteissueqty": "4",
+    "maxsuspensiondays": "",
+    "no_auto_renewal_after": "",
+    "no_auto_renewal_after_hard_limit": "",
+    "noautorenewalbefore": "",
+    "norenewalbefore": "",
+    "note": "",
+    "onshelfholds": "1",
+    "opacitemholds": "N",
+    "overduefinescap": "40.00",
+    "renewalperiod": "14",
+    "renewalsallowed": "5",
+    "rentaldiscount": "0.00",
+    "reservesallowed": "2",
+    "suspension_chargeperiod": "1",
+    "unseen_renewals_allowed": ""
+   }
+  },
+  {
+   "library": "MAIN",
+   "category": "COM",
+   "item_type": "*",
+   "rules": {
+    "article_requests": "no",
+    "auto_renew": "0",
+    "cap_fine_to_replacement_price": "",
+    "chargeperiod": "1",
+    "chargeperiod_charge_at": "1",
+    "daysmode": "Datedue",
+    "decreaseloanholds": "",
+    "fine": "1.00",
+    "finedays": "",
+    "firstremind": "0",
+    "hardduedate": "",
+    "hardduedatecompare": "-1",
+    "holds_per_day": "",
+    "holds_per_record": "",
+    "holds_pickup_period": "14",
+    "issuelength": "14",
+    "lengthunit": "days",
+    "maxissueqty": "4",
+    "maxonsiteissueqty": "4",
+    "maxsuspensiondays": "",
+    "no_auto_renewal_after": "",
+    "no_auto_renewal_after_hard_limit": "",
+    "noautorenewalbefore": "",
+    "norenewalbefore": "",
+    "note": "",
+    "onshelfholds": "1",
+    "opacitemholds": "N",
+    "overduefinescap": "40.00",
+    "renewalperiod": "14",
+    "renewalsallowed": "5",
+    "rentaldiscount": "0.00",
+    "reservesallowed": "2",
+    "suspension_chargeperiod": "1",
+    "unseen_renewals_allowed": ""
+   }
+  },
+  {
+   "library": "MAIN",
+   "category": "*",
+   "item_type": "AL",
+   "rules": {
+    "article_requests": "no",
+    "auto_renew": "0",
+    "cap_fine_to_replacement_price": "",
+    "chargeperiod": "1",
+    "chargeperiod_charge_at": "1",
+    "daysmode": "Datedue",
+    "decreaseloanholds": "",
+    "fine": "1.00",
+    "finedays": "",
+    "firstremind": "0",
+    "hardduedate": "",
+    "hardduedatecompare": "-1",
+    "holds_per_day": "",
+    "holds_per_record": "",
+    "holds_pickup_period": "14",
+    "issuelength": "14",
+    "lengthunit": "days",
+    "lost_item_processing_fee": "0.000000",
+    "maxissueqty": "4",
+    "maxonsiteissueqty": "4",
+    "maxsuspensiondays": "",
+    "no_auto_renewal_after": "",
+    "no_auto_renewal_after_hard_limit": "",
+    "noautorenewalbefore": "",
+    "norenewalbefore": "",
+    "note": "",
+    "onshelfholds": "1",
+    "opacitemholds": "N",
+    "overduefinescap": "40.00",
+    "renewalperiod": "14",
+    "renewalsallowed": "5",
+    "rentaldiscount": "0.00",
+    "reservesallowed": "2",
+    "suspension_chargeperiod": "1",
+    "unseen_renewals_allowed": ""
+   }
+  },
+  {
+   "library": "MAIN",
+   "category": "*",
+   "item_type": "BK",
+   "rules": {
+    "article_requests": "no",
+    "auto_renew": "0",
+    "cap_fine_to_replacement_price": "",
+    "chargeperiod": "1",
+    "chargeperiod_charge_at": "1",
+    "daysmode": "Datedue",
+    "decreaseloanholds": "",
+    "fine": "1.00",
+    "finedays": "",
+    "firstremind": "0",
+    "hardduedate": "",
+    "hardduedatecompare": "-1",
+    "holds_per_day": "",
+    "holds_per_record": "",
+    "holds_pickup_period": "14",
+    "issuelength": "14",
+    "lengthunit": "days",
+    "lost_item_processing_fee": "0.000000",
+    "maxissueqty": "4",
+    "maxonsiteissueqty": "4",
+    "maxsuspensiondays": "",
+    "no_auto_renewal_after": "",
+    "no_auto_renewal_after_hard_limit": "",
+    "noautorenewalbefore": "",
+    "norenewalbefore": "",
+    "note": "",
+    "onshelfholds": "1",
+    "opacitemholds": "N",
+    "overduefinescap": "40.00",
+    "renewalperiod": "14",
+    "renewalsallowed": "5",
+    "rentaldiscount": "0.00",
+    "reservesallowed": "2",
+    "suspension_chargeperiod": "1",
+    "unseen_renewals_allowed": ""
+   }
+  },
+  {
+   "library": "MAIN",
+   "category": "*",
+   "item_type": "DV",
+   "rules": {
+    "article_requests": "no",
+    "auto_renew": "0",
+    "cap_fine_to_replacement_price": "",
+    "chargeperiod": "1",
+    "chargeperiod_charge_at": "1",
+    "daysmode": "Datedue",
+    "decreaseloanholds": "",
+    "fine": "1.00",
+    "finedays": "",
+    "firstremind": "0",
+    "hardduedate": "",
+    "hardduedatecompare": "-1",
+    "holds_per_day": "",
+    "holds_per_record": "",
+    "holds_pickup_period": "14",
+    "issuelength": "2",
+    "lengthunit": "days",
+    "lost_item_processing_fee": "0.000000",
+    "maxissueqty": "4",
+    "maxonsiteissueqty": "4",
+    "maxsuspensiondays": "",
+    "no_auto_renewal_after": "",
+    "no_auto_renewal_after_hard_limit": "",
+    "noautorenewalbefore": "",
+    "norenewalbefore": "",
+    "note": "",
+    "onshelfholds": "1",
+    "opacitemholds": "N",
+    "overduefinescap": "40.00",
+    "renewalperiod": "14",
+    "renewalsallowed": "5",
+    "rentaldiscount": "0.00",
+    "reservesallowed": "2",
+    "suspension_chargeperiod": "1",
+    "unseen_renewals_allowed": ""
+   }
+  },
+  {
+   "library": "MAIN",
+   "category": "*",
+   "item_type": "*",
+   "rules": {
+    "article_requests": "no",
+    "auto_renew": "0",
+    "cap_fine_to_replacement_price": "",
+    "chargeperiod": "1",
+    "chargeperiod_charge_at": "1",
+    "daysmode": "Datedue",
+    "decreaseloanholds": "",
+    "fine": "1.00",
+    "finedays": "",
+    "firstremind": "0",
+    "hardduedate": "",
+    "hardduedatecompare": "-1",
+    "holds_per_day": "",
+    "holds_per_record": "",
+    "holds_pickup_period": "14",
+    "issuelength": "14",
+    "lengthunit": "days",
+    "maxissueqty": "4",
+    "maxonsiteissueqty": "4",
+    "maxsuspensiondays": "",
+    "no_auto_renewal_after": "",
+    "no_auto_renewal_after_hard_limit": "",
+    "noautorenewalbefore": "",
+    "norenewalbefore": "",
+    "note": "",
+    "onshelfholds": "1",
+    "opacitemholds": "N",
+    "overduefinescap": "40.00",
+    "renewalperiod": "14",
+    "renewalsallowed": "5",
+    "rentaldiscount": "0.00",
+    "reservesallowed": "2",
+    "suspension_chargeperiod": "1",
+    "unseen_renewals_allowed": ""
+   }
+  },
+  {
+   "library": "*",
+   "category": "B",
+   "item_type": "AL",
+   "rules": {
+    "fine": "2.00",
+    "issuelength": "21",
+    "lost_item_processing_fee": "0.000000"
+   }
+  },
+  {
+   "library": "*",
+   "category": "B",
+   "item_type": "BK",
+   "rules": {
+    "fine": "2.00",
+    "issuelength": "21",
+    "lost_item_processing_fee": "0.000000"
+   }
+  },
+  {
+   "library": "*",
+   "category": "B",
+   "item_type": "DV",
+   "rules": {
+    "fine": "2.00",
+    "issuelength": "3",
+    "lost_item_processing_fee": "0.000000",
+    "renewalsallowed": "1"
+   }
+  },
+  {
+   "library": "*",
+   "category": "B",
+   "item_type": "*",
+   "rules": {
+    "fine": "2.00",
+    "issuelength": "21"
+   }
+  },
+  {
+   "library": "*",
+   "category": "COM",
+   "item_type": "AL",
+   "rules": {
+    "fine": "0.50",
+    "issuelength": "7",
+    "lost_item_processing_fee": "0.000000"
+   }
+  },
+  {
+   "library": "*",
+   "category": "COM",
+   "item_type": "BK",
+   "rules": {
+    "fine": "0.50",
+    "issuelength": "7",
+    "lost_item_processing_fee": "0.000000"
+   }
+  },
+  {
+   "library": "*",
+   "category": "COM",
+   "item_type": "DV",
+   "rules": {
+    "fine": "0.50",
+    "finedays": "2",
+    "issuelength": "5",
+    "lost_item_processing_fee": "0.000000",
+    "renewalsallowed": "1"
+   }
+  },
+  {
+   "library": "*",
+   "category": "COM",
+   "item_type": "*",
+   "rules": {
+    "fine": "0.50",
+    "issuelength": "7"
+   }
+  },
+  {
+   "library": "*",
+   "category": "*",
+   "item_type": "AL",
+   "rules": {
+    "fine": "2.00",
+    "issuelength": "21",
+    "lost_item_processing_fee": "0.000000"
+   }
+  },
+  {
+   "library": "*",
+   "category": "*",
+   "item_type": "BK",
+   "rules": {
+    "fine": "2.00",
+    "issuelength": "21",
+    "lost_item_processing_fee": "0.000000"
+   }
+  },
+  {
+   "library": "*",
+   "category": "*",
+   "item_type": "DV",
+   "rules": {
+    "fine": "2.00",
+    "issuelength": "3",
+    "lost_item_processing_fee": "0.000000",
+    "renewalsallowed": "1"
+   }
+  },
+  {
+   "library": "*",
+   "category": "*",
+   "item_type": "*",
+   "rules": {
+    "fine": "2.00",
+    "issuelength": "21"
+   }
+  }
+ ]
+}

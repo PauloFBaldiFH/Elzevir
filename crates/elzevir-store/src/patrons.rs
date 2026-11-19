@@ -95,7 +95,8 @@ fn change_category(
         CategoryChange::Delete(category) => {
             let users: i64 = connection
                 .query_row(
-                    "SELECT count(*) FROM patrons WHERE category_id = ?1",
+                    "SELECT (SELECT count(*) FROM patrons WHERE category_id = ?1)
+                          + (SELECT count(*) FROM circulation_rules WHERE category_id = ?1)",
                     [category.0],
                     |row| row.get(0),
                 )
