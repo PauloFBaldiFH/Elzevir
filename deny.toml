@@ -33,6 +33,8 @@ allow = [
   "MIT",
   "MPL-2.0",
   "Unicode-3.0",
+  # Public-domain dedication, GPL-compatible; used by ksni (Linux tray).
+  "Unlicense",
   "Zlib",
 ]
 

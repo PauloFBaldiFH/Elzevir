@@ -118,6 +118,12 @@ pub(crate) fn presentation(mode: &StaffMode) -> StaffAccess {
     }
 }
 
+/// Catalog and staff addresses on this computer, for the tray's shortcuts.
+pub(crate) fn local_urls(status: &crate::status::Status) -> (Option<String>, Option<String>) {
+    let book = build(status.listen, status.staff.as_ref(), &[]);
+    (book.catalog, book.staff)
+}
+
 fn local_ips() -> Vec<IpAddr> {
     // Interface enumeration is optional evidence, not proof that other computers can connect.
     sysinfo::Networks::new_with_refreshed_list().map_or_else(

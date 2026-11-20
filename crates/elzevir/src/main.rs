@@ -62,6 +62,7 @@ mod shutdown;
 mod status;
 mod support_archive;
 mod tools_cli;
+mod tray;
 mod tunnel_cli;
 mod tunnel_observe;
 mod update;
@@ -107,6 +108,8 @@ enum Command {
     Tools(tools_cli::Args),
     /// Start the server in the background, apart from the panel.
     Background(background::Args),
+    /// Show the server status in the system tray, starting it if needed.
+    Tray(tray::Args),
     /// Stop the server started in the background.
     Stop(server_config::ServeArgs),
     /// Add or remove the desktop launcher that opens the panel.
@@ -199,6 +202,7 @@ fn main() -> ExitCode {
         Command::Tools(args) => tools_cli::run(args),
         Command::Desktop(args) => desktop::run(&args),
         Command::Background(args) => background::run(args),
+        Command::Tray(args) => tray::run(args),
         Command::Stop(args) => first_use::resolve(args)
             .and_then(|(settings, _)| background::stop(&settings.data_dir))
             .map(drop),

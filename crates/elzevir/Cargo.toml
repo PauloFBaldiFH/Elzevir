@@ -55,6 +55,10 @@ ureq.workspace = true
 stats_alloc = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "net", "signal", "macros", "sync", "io-util", "time"] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# System tray over D-Bus (StatusNotifierItem), pure Rust: no GTK, works in the static musl build.
+ksni = { version = "0.3.7", default-features = false, features = ["tokio", "blocking"] }
+
 [dev-dependencies]
 elzevir-scenarios.workspace = true
 http-body-util.workspace = true

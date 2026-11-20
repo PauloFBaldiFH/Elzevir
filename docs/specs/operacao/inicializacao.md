@@ -106,10 +106,24 @@ diretório padrão em terminal. `start` deixa o servidor rodando em segundo
 plano (`elzevir background`, processo separado do terminal) e abre o painel
 ligado a ele; fechar o painel não para o servidor (Paulo, 2026-11-20).
 `elzevir background` inicia o servidor da instituição padrão sem abrir
-nada e não faz nada se ele já estiver rodando; é o que roda no login, pela
-entrada de autoinício do Linux (`~/.config/autostart`, criada por
-`elzevir desktop install`) e pelo atalho na pasta Inicializar do Windows.
+nada e não faz nada se ele já estiver rodando. No login, o servidor sobe
+pela bandeja no Linux (`elzevir tray`, pela entrada em `~/.config/autostart`
+criada por `elzevir desktop install`) e pelo atalho na pasta Inicializar do
+Windows (`elzevir background`).
 `elzevir stop` pede pelo canal administrativo local a parada ordenada.
+
+`elzevir tray` é o ícone de bandeja. Ao abrir, inicia o servidor se ele
+estiver parado (mesmo onde não há bandeja) e mostra o estado: rodando,
+rodando com problemas, parado, iniciando, parando, sem resposta ou ainda
+não configurado. O menu oferece só o que o estado permite: abrir o painel
+(também com clique simples), abrir o catálogo e a interface da equipe no
+navegador, iniciar ou parar o servidor e fechar o ícone. No Linux usa o
+protocolo StatusNotifierItem (KDE, XFCE, Cinnamon, MATE, LXQt; GNOME só
+com a extensão AppIndicator). Sem bandeja, o comando sai com aviso
+depois de iniciar o servidor. O painel abre pelo atalho do menu
+(`gio launch`), que usa o terminal preferido do desktop, ou pelo primeiro
+terminal conhecido encontrado. No login do Linux, a entrada de autoinício
+roda `elzevir tray`.
 A atualização pessoal para o servidor em segundo plano antes de trocar o
 executável e o inicia de novo depois, mesmo se a atualização falhar.
 `elzevir` sem subcomando equivale a `elzevir start`, para que o uso diário
