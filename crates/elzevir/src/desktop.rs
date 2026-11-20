@@ -185,10 +185,10 @@ mod tests {
             desktop_dir(dirs, home),
             PathBuf::from("/home/reader/Área de Trabalho")
         );
-        assert_eq!(
-            desktop_dir("XDG_DESKTOP_DIR=\"/srv/desk\"", home),
-            PathBuf::from("/srv/desk")
-        );
+        // An absolute path in this platform's own form.
+        let absolute = std::env::temp_dir().join("desk");
+        let line = format!("XDG_DESKTOP_DIR=\"{}\"", absolute.display());
+        assert_eq!(desktop_dir(&line, home), absolute);
         assert_eq!(desktop_dir("", home), PathBuf::from("/home/reader/Desktop"));
         assert_eq!(
             desktop_dir("XDG_DESKTOP_DIR=\"relative\"", home),
