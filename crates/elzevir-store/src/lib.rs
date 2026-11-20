@@ -38,6 +38,7 @@ mod loan_desk;
 mod loans;
 mod matching;
 mod native_items;
+mod overdue_fines;
 mod patron_desk;
 mod patrons;
 mod places;

@@ -4,26 +4,25 @@
 use elzevir_app::circulation_rules::{CirculationOutput, CirculationRefusal, RuleKind};
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
 use elzevir_app::loans::{CheckedIn, CheckinRefusal, CheckinRequest, checked_barcode};
-use elzevir_domain::account::{DebtSettings, fine_rule};
 use elzevir_domain::catalog::{BranchId, Money, PolicyId};
 use elzevir_domain::checkin::{
     CheckinFacts, CheckinSettings, Destination, LoanOutcome, LostOutcome, OpenTransfer,
     ReturnPolicy, TransferReason, checkin as decide,
 };
-use elzevir_domain::checkout::loan_rule;
 use elzevir_domain::circulation_rules::CirculationRule;
 use elzevir_domain::circulation_rules::{RuleScopeKey, effective_rule};
-use elzevir_domain::fine::{FineContext, FineSettings, calc_fine};
+use elzevir_domain::fine::FineSettings;
 use elzevir_domain::patron::PatronId;
 use elzevir_domain::suspension::{LateReturn, SuspensionSettings, suspension_until};
 use jiff::Zoned;
 use jiff::civil::Date;
 use rusqlite::{Connection, OptionalExtension, params};
 
-use crate::accounts::{OverdueLoan, charge_overdue, close_overdue};
+use crate::accounts::close_overdue;
 use crate::calendar::read_calendar;
 use crate::circulation_rules::read_rules;
-use crate::loans::{USE_DAYS_MODE, find_patron};
+use crate::loans::find_patron;
+use crate::overdue_fines::{FineMoment, LateLoan, update_overdue_fine};
 use crate::restrictions::{suspend, suspension};
 use crate::{CommandFailed, StoreError};
 
@@ -175,12 +174,8 @@ fn suspend_late(
     }
 }
 
-/// Charges the fine of a late return and stops it growing, and returns the fine.
-///
-/// The rules, the calendar and the branch of the fine are those of the branch the Item was
-/// held at before the return (`CircControl` `ItemHomeLibrary` with `HomeOrHoldingBranch`
-/// `holdingbranch`, Koha's defaults: Koha fines before moving the Item to the desk); a
-/// lost Item is not fined.
+/// Charges the fine of a late return and stops it growing, and returns the fine. A lost
+/// Item is not fined.
 ///
 /// Koha: `C4::Circulation::_CalculateAndUpdateFine`, `C4::Circulation::_FixOverduesOnReturn`.
 fn fine_late(
@@ -190,51 +185,20 @@ fn fine_late(
     loan: &Loan,
     request: &CheckinRequest,
 ) -> rusqlite::Result<Option<Money>> {
-    let settings = FineSettings::default();
-    let at = request.at.to_string();
     let mut fine = None;
-    if settings.on_return && item.lost == 0 {
-        let Some((category, _)) = find_patron(connection, loan.patron)? else {
-            return Ok(None);
+    if FineSettings::default().on_return && item.lost == 0 {
+        let late = LateLoan {
+            loan: loan.id,
+            patron: loan.patron,
+            item: item.id,
+            holding: item.holding,
+            policy: item.policy,
+            replacement_price: item.replacement_price,
+            due: loan.due.clone(),
         };
-        let scope = RuleScopeKey {
-            branch: Some(item.holding),
-            category: Some(category),
-            policy: Some(item.policy),
-        };
-        let unit = loan_rule(rules, &scope, USE_DAYS_MODE).unit;
-        let calendar = read_calendar(connection, item.holding.0)?;
-        let rule = fine_rule(rules, &scope, unit);
-        let computed = calc_fine(
-            &loan.due,
-            &request.at,
-            &FineContext {
-                rule: &rule,
-                calendar: &calendar,
-                fines_calendar: settings.calendar,
-                include_grace: settings.include_grace,
-                replacement_price: item.replacement_price.map(Money),
-                default_replacement_cost: None,
-                overdue_recall: false,
-            },
-        );
-        if computed.amount.0 > 0 {
-            let overdue = OverdueLoan {
-                loan: loan.id,
-                patron: loan.patron,
-                item: item.id,
-                branch: item.holding,
-            };
-            fine = charge_overdue(
-                connection,
-                &overdue,
-                computed.amount,
-                DebtSettings::default().max_fine,
-                &at,
-            )?;
-        }
+        fine = update_overdue_fine(connection, rules, &late, &request.at, FineMoment::Return)?;
     }
-    close_overdue(connection, loan.patron, item.id, &at)?;
+    close_overdue(connection, loan.patron, item.id, &request.at.to_string())?;
     Ok(fine)
 }
 
