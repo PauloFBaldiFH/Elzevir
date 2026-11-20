@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, HashMap};
 use elzevir_app::circulation_rules::{CirculationOutput, NoticeRules, OverdueNoticeRule};
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
 use elzevir_app::notices::{
-    NoticeAbout, NoticeId, NoticeItem, NoticeOutcome, NoticeQueue, NoticeQueueError, PendingEmail,
+    NoticeAbout, NoticeId, NoticeItem, NoticeOutcome, NoticeQueue, NoticeQueueError, PendingNotice,
 };
 use elzevir_domain::calendar::Calendar;
 use elzevir_domain::catalog::BranchId;
@@ -355,31 +355,37 @@ pub(crate) fn mark(
     Ok(WriteOutput::Circulation(CirculationOutput::NoticeMarked))
 }
 
-/// The oldest overdue notices still pending by e-mail, at most `limit`, with their Items.
-pub(crate) fn pending_emails(
+/// The oldest notices still pending by `transport`, at most `limit`, with their Items; an
+/// e-mail notice only with its address.
+fn pending(
     connection: &Connection,
+    transport: Transport,
     limit: usize,
-) -> rusqlite::Result<Vec<PendingEmail>> {
+) -> rusqlite::Result<Vec<PendingNotice>> {
     let mut statement = connection.prepare_cached(
         "SELECT n.id, n.to_address, p.first_name, p.surname, b.name, b.email, n.level,
-                n.hold_until
+                n.hold_until, p.address
          FROM notices n
          JOIN patrons p ON p.id = n.patron_id
          JOIN branches b ON b.id = n.branch_id
-         WHERE n.status = 'pending' AND n.transport = 'email' AND n.to_address IS NOT NULL
+         WHERE n.status = 'pending' AND n.transport = ?2
+           AND (n.transport <> 'email' OR n.to_address IS NOT NULL)
          ORDER BY n.id LIMIT ?1",
     )?;
     let limit = i64::try_from(limit).unwrap_or(i64::MAX);
     let notices = statement
-        .query_map([limit], |row| {
+        .query_map(params![limit, transport.as_str()], |row| {
             let first: Option<String> = row.get(2)?;
             let surname: String = row.get(3)?;
             let about = about(row.get(6)?, row.get(7)?).ok_or_else(|| {
                 rusqlite::Error::FromSqlConversionFailure(6, Type::Integer, "no such notice".into())
             })?;
-            Ok(PendingEmail {
+            Ok(PendingNotice {
                 id: NoticeId(row.get(0)?),
                 to: row.get(1)?,
+                address: row
+                    .get::<_, Option<String>>(8)?
+                    .filter(|address| !address.trim().is_empty()),
                 name: first.map_or_else(|| surname.clone(), |first| format!("{first} {surname}")),
                 library: row.get(4)?,
                 reply_to: row
@@ -436,9 +442,15 @@ fn notice_items(connection: &Connection, notice: NoticeId) -> rusqlite::Result<V
 }
 
 impl NoticeQueue for ElzevirStore {
-    fn pending_emails(&self, limit: usize) -> Result<Vec<PendingEmail>, NoticeQueueError> {
+    fn pending_emails(&self, limit: usize) -> Result<Vec<PendingNotice>, NoticeQueueError> {
         self.readers()
-            .read(|c| pending_emails(c, limit))
+            .read(|c| pending(c, Transport::Email, limit))
+            .map_err(|error| NoticeQueueError(error.to_string()))
+    }
+
+    fn pending_prints(&self, limit: usize) -> Result<Vec<PendingNotice>, NoticeQueueError> {
+        self.readers()
+            .read(|c| pending(c, Transport::Print, limit))
             .map_err(|error| NoticeQueueError(error.to_string()))
     }
 }

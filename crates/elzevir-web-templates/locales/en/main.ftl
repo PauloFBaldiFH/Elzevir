@@ -766,6 +766,14 @@ notices-no-categories = Create a patron category first.
 notices-holds = Hold waiting notice
 notices-holds-hint = How patrons of each category hear that a hold is waiting for them. E-mail to a patron without an address goes on paper.
 notices-error-days = Days overdue are a whole number above zero.
+print-notices-title = Printed notices
+print-notices-empty = No printed notice is waiting.
+print-notices-hint = Print this page with the browser (one notice per page), then mark the notices as sent. Only the notices shown here are marked.
+print-notices-mark = Mark these notices as sent
+print-notices-marked = { $count ->
+    [one] { $count } notice marked as sent.
+   *[other] { $count } notices marked as sent.
+}
 rule-kind-article_request_fee = Article request fee
 rule-kind-article_requests = Article requests
 rule-kind-auto_renew = Automatic renewal

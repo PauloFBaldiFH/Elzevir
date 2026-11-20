@@ -149,7 +149,7 @@ impl WriteCommand {
             // the calendar; both are the administrators' here. A checkout is the desk's
             // (Koha: `circulate_remaining_permissions`), and so is a payment (Koha:
             // `updatecharges`), and so are holds (Koha: `reserveforothers`) and lifting a
-            // restriction (Koha: `borrowers.edit_borrowers`).
+            // restriction (Koha: `borrowers.edit_borrowers`), and marking printed notices as sent.
             Self::Circulation(
                 CirculationCommand::Checkout(_)
                 | CirculationCommand::Checkin(_)
@@ -158,7 +158,8 @@ impl WriteCommand {
                 | CirculationCommand::PlaceHold(_)
                 | CirculationCommand::CancelHold(_)
                 | CirculationCommand::SetHoldAside(_)
-                | CirculationCommand::LiftRestriction { .. },
+                | CirculationCommand::LiftRestriction { .. }
+                | CirculationCommand::MarkNotice { .. },
             )
             | Self::Patrons(PatronCommand::View(_)) => Permission::Circulation,
             Self::Staff(_) | Self::Circulation(_) => Permission::Administration,

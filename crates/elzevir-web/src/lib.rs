@@ -33,6 +33,7 @@ mod patron_form;
 mod patron_holds;
 mod patrons;
 mod pill_loans;
+mod print_notices;
 mod record_fields;
 mod record_form;
 mod registries;
@@ -57,7 +58,7 @@ use elzevir_web_templates::{I18n, OpacHome};
 pub use access::{AccessError, AccessPolicy, normalize_hostname, restrict_access};
 pub use catalog::StaffPorts;
 pub use opac::OpacPorts;
-pub use patrons::shown as date_text;
+pub use print_notices::notice_text;
 pub use session::Sessions;
 
 /// Web settings.
@@ -99,6 +100,7 @@ pub struct AppState {
     loans: Option<Arc<dyn elzevir_app::loans::LoanDesk>>,
     rules: Option<Arc<dyn elzevir_app::circulation_rules::RuleBook>>,
     calendar: Option<Arc<dyn elzevir_app::calendar::CalendarBook>>,
+    notices: Option<Arc<dyn elzevir_app::notices::NoticeQueue>>,
 }
 
 struct Inner {
@@ -135,6 +137,7 @@ impl AppState {
             loans: None,
             rules: None,
             calendar: None,
+            notices: None,
             inner: Arc::new(Inner {
                 staff,
                 memory,
@@ -189,6 +192,14 @@ impl AppState {
     #[must_use]
     pub fn with_calendar(mut self, book: Arc<dyn elzevir_app::calendar::CalendarBook>) -> Self {
         self.calendar = Some(book);
+        self
+    }
+
+    /// Connects the queue of notices (docs/specs/circulacao/avisos.md). Without it the
+    /// printed notices screen answers 404.
+    #[must_use]
+    pub fn with_notices(mut self, queue: Arc<dyn elzevir_app::notices::NoticeQueue>) -> Self {
+        self.notices = Some(queue);
         self
     }
 }
