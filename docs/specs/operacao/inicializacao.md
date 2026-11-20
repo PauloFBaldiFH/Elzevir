@@ -104,5 +104,7 @@ A instalação prepara SQLite e Tantivy antes de publicar a configuração.
 `serve`, `panel` e `start` oferecem o assistente no primeiro uso do
 diretório padrão em terminal. `start` executa o servidor e o painel na
 mesma instância e encerra o servidor de forma ordenada ao sair do painel.
+`elzevir` sem subcomando equivale a `elzevir start`, para que o uso diário
+não exija lembrar comandos.
 `--lang` seleciona o idioma explicitamente. Locales em português selecionam
 pt-BR por padrão.

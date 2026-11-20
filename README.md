@@ -34,11 +34,12 @@ biblioteca, crie a senha do administrador e selecione um perfil inicial
 opcional.
 
 ```sh
-elzevir start
+elzevir
 ```
 
-`start` abre o painel Ratatui e serve o catálogo em
-`http://127.0.0.1:8080`. Fechar o painel encerra o servidor desse comando.
+O comando sem argumentos (o mesmo que `elzevir start`) abre o painel
+Ratatui e serve o catálogo em `http://127.0.0.1:7390`. Fechar o painel
+encerra o servidor desse comando.
 Também é possível usar `elzevir serve` e `elzevir panel` em terminais
 separados. Use `elzevir panel --demo` para explorar a interface com dados
 simulados.

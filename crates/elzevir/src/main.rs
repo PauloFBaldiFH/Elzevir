@@ -91,8 +91,9 @@ struct Cli {
     /// Keep update ownership with the installer or package manager.
     #[arg(long, global = true)]
     no_self_update: bool,
+    /// Without a command, opens the panel (`start`).
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Subcommand)]
@@ -182,6 +183,8 @@ fn main() -> ExitCode {
         command,
         no_self_update,
     } = Cli::parse();
+    // Daily use needs no command: the bare program opens the panel.
+    let command = command.unwrap_or_else(|| Command::Start(server_config::ServeArgs::default()));
     let result = match command {
         Command::HostJob(args) => host_jobs::run(&args),
         Command::Tools(args) => tools_cli::run(args),

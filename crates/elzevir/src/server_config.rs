@@ -9,8 +9,17 @@ use serde::{Deserialize, Serialize};
 
 const MAX_BYTES: usize = 64 * 1024;
 
+/// Default port: unassigned in the IANA registry and away from the 8080,
+/// 8000 and 3000 that development servers and other library systems take.
+pub(crate) const DEFAULT_PORT: u16 = 7390;
+
+/// Default listen address: loopback only, so a first start exposes nothing.
+pub(crate) fn default_listen() -> SocketAddr {
+    SocketAddr::from(([127, 0, 0, 1], DEFAULT_PORT))
+}
+
 /// The existing server flags plus an optional configuration file.
-#[derive(clap::Args)]
+#[derive(clap::Args, Default)]
 pub(crate) struct ServeArgs {
     /// TOML configuration file (paths inside it are relative to its directory).
     #[arg(long)]
@@ -18,7 +27,7 @@ pub(crate) struct ServeArgs {
     /// Institution data directory (overrides the configuration file).
     #[arg(long)]
     pub(crate) data_dir: Option<PathBuf>,
-    /// Address to listen on (default: 127.0.0.1:8080).
+    /// Address to listen on (default: 127.0.0.1:7390).
     #[arg(long)]
     pub(crate) listen: Option<SocketAddr>,
     /// Allow plain-HTTP cookies; use =false to override a true configuration value.
@@ -71,7 +80,7 @@ impl Default for Server {
     fn default() -> Self {
         Self {
             data_dir: None,
-            listen: SocketAddr::from(([127, 0, 0, 1], 8080)),
+            listen: default_listen(),
             insecure_cookies: false,
             iri_base: None,
         }
@@ -314,7 +323,7 @@ mod tests {
     #[test]
     fn absent_options_keep_loopback_and_secure_defaults() {
         let settings = args().resolve().unwrap();
-        assert_eq!(settings.listen, "127.0.0.1:8080".parse().unwrap());
+        assert_eq!(settings.listen, "127.0.0.1:7390".parse().unwrap());
         assert!(!settings.insecure_cookies);
         assert_eq!(settings.data_dir, Path::new("local-data"));
     }

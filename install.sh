@@ -7,7 +7,7 @@ version=latest
 institution=
 identifier=library
 login=admin
-listen=127.0.0.1:8080
+listen=127.0.0.1:7390
 plan=false
 firewall=false
 download_only=
@@ -56,7 +56,7 @@ while [[ $# -gt 0 ]]; do
         --download-only) value "$@"; download_only=$2; shift 2 ;;
         --dry-run) plan=true; shift ;;
         --open-firewall) firewall=true; managed=true; shift ;;
-        --help) printf '%s\n' 'Usage: bash install.sh [--version TAG] [--dry-run] [--download-only NEW_DIRECTORY]' 'Managed service: sudo bash install.sh --name "Library" [--id library] [--login admin] [--listen 127.0.0.1:8080] [--open-firewall]'; exit 0 ;;
+        --help) printf '%s\n' 'Usage: bash install.sh [--version TAG] [--dry-run] [--download-only NEW_DIRECTORY]' 'Managed service: sudo bash install.sh --name "Library" [--id library] [--login admin] [--listen 127.0.0.1:7390] [--open-firewall]'; exit 0 ;;
         *) fail "unknown option: $1" ;;
     esac
 done
@@ -190,7 +190,7 @@ if ! $managed; then
     if "$binary" start --help >/dev/null 2>&1; then
         printf '\nNext step:\n    %s start\n' "$command"
         printf 'The first start asks for the library name and the administrator password,\n'
-        printf 'then serves the catalog at http://127.0.0.1:8080 and opens the panel.\n'
+        printf 'then serves the catalog and opens the panel, which shows its address.\n'
     else
         printf '\nThis release has no start command. Next steps:\n'
         printf '    %s init --name "My library" --data-dir %q --config %q\n' "$command" "$data/institution" "$data/elzevir.toml"
