@@ -212,8 +212,8 @@ fn rules_are_changed_by_scope_and_say_where_their_value_comes_from() {
         &request(address, "GET", "/equipe/admin/regras", &cat, ""),
         403,
     );
-    assert!(!request(address, "GET", "/equipe", &cat, "").contains("/equipe/admin/regras"));
-    assert!(request(address, "GET", "/equipe", &adm, "").contains("/equipe/admin/regras"));
+    assert!(!request(address, "GET", "/equipe/barra", &cat, "").contains("/equipe/admin/regras"));
+    assert!(request(address, "GET", "/equipe/barra", &adm, "").contains("/equipe/admin/regras"));
 
     // The branch inherits the loan period of any scope, and says so.
     let scope = format!("/equipe/admin/regras?branch={branch}&category=0&policy=0");
@@ -306,7 +306,7 @@ fn notice_rules_and_hold_notices_are_set_on_their_screen() {
         &request(address, "GET", "/equipe/admin/avisos", &cat, ""),
         403,
     );
-    assert!(request(address, "GET", "/equipe", &adm, "").contains("/equipe/admin/avisos"));
+    assert!(request(address, "GET", "/equipe/barra", &adm, "").contains("/equipe/admin/avisos"));
 
     let page = request(address, "GET", "/equipe/admin/avisos", &adm, "");
     assert_status(&page, 200);

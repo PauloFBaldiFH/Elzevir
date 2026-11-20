@@ -19,6 +19,10 @@ pub struct StaffBar<'a> {
     pub scopes: Vec<BarScope>,
     /// What the "New" menu may create, in registry order; the menu is left out when empty.
     pub new_entries: Vec<BarLink>,
+    /// The main modules, for the drawer.
+    pub modules: Vec<BarLink>,
+    /// The screens that exist today, listed in the drawer under the modules.
+    pub tools: Vec<BarLink>,
 }
 
 impl StaffBar<'_> {
@@ -63,10 +67,10 @@ pub struct BarScope {
     pub shortcut: char,
     /// Whether it is the scope the page starts with.
     pub selected: bool,
-    /// Whether it acts on an Item (checkin) rather than searching; drawn in the circulation tone.
-    pub operation: bool,
-    /// Whether a divider goes before it: the first operation after the searches.
-    pub divider_before: bool,
+    /// Whether its screen exists; a scope that is not ready shows as a disabled placeholder.
+    pub ready: bool,
+    /// Whether it searches or acts on an Item.
+    pub kind: ScopeKind,
 }
 
 /// One entry of the "New" menu.
@@ -78,6 +82,31 @@ pub struct BarLink {
     pub icon: &'static str,
     /// Domain tone.
     pub tone: &'static str,
-    /// Where it goes.
-    pub href: &'static str,
+    /// Where it goes; `None` for a placeholder of a screen that does not exist yet.
+    pub href: Option<&'static str>,
+}
+
+/// What a scope does, which decides its tone and the divider before it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScopeKind {
+    /// It searches (patrons, catalog, authorities, repositories).
+    Search,
+    /// It acts on an Item (checkin, renewal), drawn in the circulation tone.
+    Operation,
+    /// The first operation after the searches, with a divider before it.
+    FirstOperation,
+}
+
+impl ScopeKind {
+    /// Whether it acts on an Item.
+    #[must_use]
+    pub fn is_operation(self) -> bool {
+        self != Self::Search
+    }
+
+    /// Whether a divider goes before it.
+    #[must_use]
+    pub fn divider_before(self) -> bool {
+        self == Self::FirstOperation
+    }
 }

@@ -227,7 +227,7 @@ async fn full_sign_in_and_sign_out() {
     let home = send(&app, get("/equipe", Some(&session))).await;
     assert_eq!(home.status(), StatusCode::OK);
     let home_html = body(home).await;
-    assert!(home_html.contains("/equipe/admin/regras"));
+    assert!(home_html.contains("href=\"/equipe/admin\""));
     assert!(home_html.contains("Administration"));
     // The header, loaded into every staff screen, names the operator and signs out.
     let bar = body(send(&app, get("/equipe/barra", Some(&session))).await).await;

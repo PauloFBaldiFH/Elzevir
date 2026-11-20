@@ -16,6 +16,7 @@
   <header class="topbar staff-bar" id="staff-bar" hx-get="/equipe/barra?escopo=acervo" hx-trigger="load" hx-swap="outerHTML">
   <div class="top-row">
     <div class="brand-side">
+      <span class="icon-btn" aria-hidden="true"><svg class="ico" focusable="false"><use href="/static/elzevir-icons.svg#bar-menu"></use></svg></span>
       <a class="staff-brand" href="/equipe"><img class="brand-crab" src="/static/elzevir-mark.svg" alt="" width="33" height="33">Elzevir</a>
       <span class="product-label">Área da equipe</span>
     </div>
@@ -23,7 +24,7 @@
   </div>
   <form class="search-row" action="/equipe/busca" method="get" role="search">
     <div class="search-field">
-      <select class="scope-fallback" name="escopo" aria-label="Buscar em"><option value="acervo">Acervo</option><option value="leitores">Leitores</option><option value="devolucao">Devolução</option></select>
+      <select class="scope-fallback" name="escopo" aria-label="Buscar em"><option value="acervo">Catálogo</option><option value="leitores">Usuários</option><option value="devolucao">Devolução</option></select>
       <input class="search-input" type="search" name="q" maxlength="200" aria-label="Termo de busca">
       <button type="submit" class="search-submit" aria-label="Buscar"><svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-search"></use></svg></button>
     </div>

@@ -4,6 +4,7 @@
 {% block header %}<header class="topbar staff-bar" id="staff-bar" hx-get="/equipe/barra?escopo={% block scope %}acervo{% endblock %}" hx-trigger="load" hx-swap="outerHTML">
   <div class="top-row">
     <div class="brand-side">
+      <span class="icon-btn" aria-hidden="true"><svg class="ico" focusable="false"><use href="/static/elzevir-icons.svg#bar-menu"></use></svg></span>
       <a class="staff-brand" href="/equipe"><img class="brand-crab" src="/static/elzevir-mark.svg" alt="" width="33" height="33">{{ t.get("app-name") }}</a>
       <span class="product-label">{{ t.get("bar-product") }}</span>
     </div>

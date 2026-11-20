@@ -1,18 +1,35 @@
+{% macro icon(name) %}<svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ name }}"></use></svg>{% endmacro %}
+{% macro entry(link) %}{% if let Some(href) = link.href %}<a class="tone-{{ link.tone }}" href="{{ href }}">{% call icon(link.icon) %}{% endcall %}<span>{{ t.get(link.label_key) }}</span></a>{% else %}<span class="tone-{{ link.tone }} is-soon" aria-disabled="true">{% call icon(link.icon) %}{% endcall %}<span>{{ t.get(link.label_key) }}</span><small>{{ t.get("bar-soon") }}</small></span>{% endif %}{% endmacro %}
+{% macro soon(icon_name, key) %}<button type="button" class="icon-btn" disabled aria-label="{{ t.get(key) }} ({{ t.get("bar-soon") }})" title="{{ t.get(key) }} · {{ t.get("bar-soon") }}">{% call icon(icon_name) %}{% endcall %}</button>{% endmacro %}
 <header class="topbar staff-bar" id="staff-bar">
   <div class="top-row">
     <div class="brand-side">
-      <a class="staff-brand" href="/equipe" aria-label="{{ t.get("app-name") }}, {{ t.get("staff-home-title") }}"><img class="brand-crab" src="/static/elzevir-mark.svg" alt="" width="33" height="33">{{ t.get("app-name") }}</a>
+      <details class="menu drawer-menu">
+        <summary class="icon-btn" aria-label="{{ t.get("bar-menu") }}" title="{{ t.get("bar-menu") }}">{% call icon("bar-menu") %}{% endcall %}</summary>
+        <nav class="drawer" aria-label="{{ t.get("bar-navigation") }}">
+          <div class="panel-head"><strong>{{ t.get("bar-navigation") }}</strong></div>
+          <ul class="drawer-list">{% for module in modules %}<li>{% call entry(module) %}{% endcall %}</li>{% endfor %}</ul>
+          {% if !tools.is_empty() %}<p class="eyebrow drawer-heading">{{ t.get("bar-tools") }}</p>
+          <ul class="drawer-list">{% for tool in tools %}<li>{% call entry(tool) %}{% endcall %}</li>{% endfor %}</ul>{% endif %}
+        </nav>
+      </details>
+      <a class="staff-brand" href="/equipe"><img class="brand-crab" src="/static/elzevir-mark.svg" alt="" width="33" height="33">{{ t.get("app-name") }}</a>
       <span class="product-label">{{ t.get("bar-product") }}</span>
       {% if !new_entries.is_empty() %}<details class="menu bar-new">
-        <summary class="new-btn" data-shortcut="n" title="{{ t.get("bar-new") }} (Alt+N)"><svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-new"></use></svg><span>{{ t.get("bar-new") }}</span><svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-chevron"></use></svg></summary>
-        <ul class="dropdown">{% for entry in new_entries %}<li><a class="tone-{{ entry.tone }}" href="{{ entry.href }}"><svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ entry.icon }}"></use></svg>{{ t.get(entry.label_key) }}</a></li>{% endfor %}</ul>
+        <summary class="new-btn" data-shortcut="n" title="{{ t.get("bar-new") }} (Alt+N)">{% call icon("bar-new") %}{% endcall %}<span>{{ t.get("bar-new") }}</span>{% call icon("bar-chevron") %}{% endcall %}</summary>
+        <ul class="dropdown">{% for link in new_entries %}<li>{% call entry(link) %}{% endcall %}</li>{% endfor %}</ul>
       </details>{% endif %}
     </div>
     <div class="top-tools">
-      <button type="button" class="icon-btn" data-theme-toggle hidden aria-label="{{ t.get("bar-theme") }}" title="{{ t.get("bar-theme") }}"><svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-theme"></use></svg></button>
+      <button type="button" class="tool-btn ai-btn" disabled title="{{ t.get("bar-ai") }} · Alt+I · {{ t.get("bar-soon") }}">{% call icon("tool-ai") %}{% endcall %}<span>{{ t.get("bar-ai") }}</span></button>
+      <button type="button" class="tool-btn" disabled title="{{ t.get("bar-lists") }} · Alt+L · {{ t.get("bar-soon") }}">{% call icon("tool-lists") %}{% endcall %}<span>{{ t.get("bar-lists") }}</span></button>
+      {% call soon("tool-chat", "bar-chat") %}{% endcall %}
+      {% call soon("mod-calendar", "bar-calendar") %}{% endcall %}
+      <button type="button" class="icon-btn" data-theme-toggle hidden aria-label="{{ t.get("bar-theme") }}" title="{{ t.get("bar-theme") }}">{% call icon("bar-theme") %}{% endcall %}</button>
+      {% call soon("mod-bell", "bar-notifications") %}{% endcall %}
       <span class="top-divider" aria-hidden="true"></span>
       <details class="menu">
-        <summary class="user-chip"><span class="avatar" aria-hidden="true">{{ self.initials() }}</span><span class="user-name">{{ login }}</span></summary>
+        <summary class="user-chip" aria-label="{{ t.get("bar-user-menu") }}"><span class="avatar" aria-hidden="true">{{ self.initials() }}</span><span class="user-name">{{ login }}</span></summary>
         <div class="dropdown dropdown-end">
           <a href="/">{{ t.get("nav-catalog") }}</a>
           <form action="/equipe/logout" method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">{{ t.get("staff-home-logout") }}</button></form>
@@ -22,13 +39,14 @@
   </div>
   {% if !scopes.is_empty() %}<form class="search-row" action="/equipe/busca" method="get" role="search">
     <div class="search-field">
-      {% if let Some(scope) = self.selected() %}<span class="active-scope tone-{{ scope.tone }}" id="bar-scope-label" aria-hidden="true"><svg class="ico" focusable="false"><use href="/static/elzevir-icons.svg#{{ scope.icon }}"></use></svg><span>{{ t.get(scope.label_key) }}</span></span>{% endif %}
+      {% if let Some(scope) = self.selected() %}<span class="active-scope tone-{{ scope.tone }}" id="bar-scope-label" aria-hidden="true">{% call icon(scope.icon) %}{% endcall %}<span>{{ t.get(scope.label_key) }}</span></span>{% endif %}
       <input class="search-input" type="search" name="q" id="bar-query" maxlength="200" autocomplete="off" enterkeyhint="search" placeholder="{{ t.get(self.hint_key()) }}" aria-label="{{ t.get("bar-query") }}" aria-keyshortcuts="/">
-      <button type="submit" class="search-submit" aria-label="{{ t.get("bar-search") }}" title="{{ t.get("bar-search") }}"><svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-search"></use></svg></button>
+      <button type="button" class="search-filter" disabled aria-label="{{ t.get("bar-advanced") }} ({{ t.get("bar-soon") }})" title="{{ t.get("bar-advanced") }} · {{ t.get("bar-soon") }}">{% call icon("bar-filter") %}{% endcall %}</button>
+      <button type="submit" class="search-submit" aria-label="{{ t.get("bar-search") }}" title="{{ t.get("bar-search") }}">{% call icon("bar-search") %}{% endcall %}</button>
     </div>
     <fieldset class="scope-actions">
       <legend class="visually-hidden">{{ t.get("bar-scopes") }}</legend>
-      {% for scope in scopes %}{% if scope.divider_before %}<span class="scope-divider" aria-hidden="true"></span>{% endif %}<label class="scope-btn tone-{{ scope.tone }}{% if scope.operation %} operation{% endif %}" data-tooltip="{{ t.get(scope.label_key) }} · Alt+{{ scope.shortcut.to_ascii_uppercase() }}"><input type="radio" name="escopo" value="{{ scope.key }}" data-shortcut="{{ scope.shortcut }}" data-hint="{{ t.get(scope.hint_key) }}" data-label="{{ t.get(scope.label_key) }}" data-icon="{{ scope.icon }}" data-tone="{{ scope.tone }}"{% if scope.selected %} checked{% endif %}><svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ scope.icon }}"></use></svg><span class="visually-hidden">{{ t.get(scope.label_key) }}</span></label>{% endfor %}
+      {% for scope in scopes %}{% if scope.kind.divider_before() %}<span class="scope-divider" aria-hidden="true"></span>{% endif %}<label class="scope-btn tone-{{ scope.tone }}{% if scope.kind.is_operation() %} operation{% endif %}" data-tooltip="{{ t.get(scope.label_key) }} · Alt+{{ scope.shortcut.to_ascii_uppercase() }}{% if !scope.ready %} · {{ t.get("bar-soon") }}{% endif %}"><input type="radio" name="escopo" value="{{ scope.key }}" data-shortcut="{{ scope.shortcut }}" data-hint="{{ t.get(scope.hint_key) }}" data-label="{{ t.get(scope.label_key) }}" data-icon="{{ scope.icon }}" data-tone="{{ scope.tone }}"{% if scope.selected %} checked{% endif %}{% if !scope.ready %} disabled{% endif %}>{% call icon(scope.icon) %}{% endcall %}<span class="visually-hidden">{{ t.get(scope.label_key) }}</span></label>{% endfor %}
     </fieldset>
   </form>{% endif %}
 </header>

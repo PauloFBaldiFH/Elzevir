@@ -43,7 +43,7 @@
         if (menu.open) menu.querySelector("a")?.focus();
         return;
       }
-      const radio = document.querySelector(`.bar-scopes input[data-shortcut="${letter}"]`);
+      const radio = document.querySelector(`.scope-actions input[data-shortcut="${letter}"]:not(:disabled)`);
       if (radio instanceof HTMLInputElement) {
         event.preventDefault();
         radio.checked = true;

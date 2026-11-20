@@ -16,7 +16,7 @@ mod staff_record_fields;
 mod staff_record_form;
 mod staff_registries;
 
-pub use staff_bar::{BarLink, BarScope, StaffBar};
+pub use staff_bar::{BarLink, BarScope, ScopeKind, StaffBar};
 pub use staff_calendar::{DayCell, EntryLine, StaffCalendar};
 pub use staff_catalog::{
     ActiveFilter, AuthorityLine, BatchChoices, Cord, FacetMenu, FacetOption, FacetStrip,
@@ -407,49 +407,14 @@ pub struct StaffLogin<'a> {
     pub error: Option<&'static str>,
 }
 
-/// Staff home page.
+/// Staff home page: the notice board and the main modules (interface §22 item 11).
 #[derive(Template)]
 #[template(path = "staff_home.html")]
 pub struct StaffHome<'a> {
     /// Interface texts.
     pub t: &'a I18n,
-    /// Signed-in login.
-    pub login: &'a str,
-    /// Whether to show administration links.
-    pub is_admin: bool,
-    /// Whether to show what cataloguers may change.
-    pub can_catalogue: bool,
-    /// The patrons link, for circulation or patron management.
-    pub patrons: Visibility,
-    /// Whether the checkin desk is shown (the circulation permission).
-    pub circulation: Visibility,
-    /// Whether prepared imports are available to this operator.
-    pub can_import: bool,
-    /// Anti-forgery token for the sign-out form.
-    pub csrf: &'a str,
-}
-
-/// Whether a part of a page shows.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Visibility {
-    /// It shows.
-    Shown,
-    /// It is left out.
-    Hidden,
-}
-
-impl Visibility {
-    /// [`Visibility::Shown`] when `shown`.
-    #[must_use]
-    pub const fn when(shown: bool) -> Self {
-        if shown { Self::Shown } else { Self::Hidden }
-    }
-
-    /// Whether it shows.
-    #[must_use]
-    pub fn is_shown(self) -> bool {
-        self == Self::Shown
-    }
+    /// The modules this operator may see, in the draft's order; placeholders have no link.
+    pub modules: Vec<BarLink>,
 }
 
 #[cfg(test)]
