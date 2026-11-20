@@ -3,13 +3,13 @@
    override these (docs/arquitetura/04-decisoes.md, §8). */
 :root {
   --elzevir-color-bg: #ffffff;
-  --elzevir-color-text: #1d2433;
-  --elzevir-color-muted: #5b6475;
-  --elzevir-color-primary: #1f5fa8;
+  --elzevir-color-text: #0f172a;
+  --elzevir-color-muted: #64748b;
+  --elzevir-color-primary: #115e59;
   --elzevir-color-primary-text: #ffffff;
   --elzevir-color-error: #a1261f;
   --elzevir-color-available: #1d7a46;
-  --elzevir-color-border: #d5dae3;
+  --elzevir-color-border: #e2e8f0;
   --elzevir-color-signal-available: #16a34a;
   --elzevir-color-signal-not-for-loan: #64748b;
   --elzevir-color-signal-out: #dc2626;
@@ -34,11 +34,25 @@
   --elzevir-color-work-bg: #eff6ff;
   --elzevir-color-instance: #16a34a;
   --elzevir-color-instance-bg: #f0fdf4;
-  /* Domain tones (spec de UI §22 item 8): one hue per area of work. */
-  --elzevir-tone-circulation: #c2410c;
+  /* Domain tones (spec de UI §22 item 8), from the home-v11 draft: accent, soft and border. */
+  --elzevir-tone-circulation: #ea580c;
+  --elzevir-tone-circulation-soft: #fff7ed;
+  --elzevir-tone-circulation-border: #fed7aa;
   --elzevir-tone-catalog: #0f766e;
+  --elzevir-tone-catalog-soft: #f0fdfa;
+  --elzevir-tone-catalog-border: #99f6e4;
   --elzevir-tone-patrons: #0369a1;
+  --elzevir-tone-patrons-soft: #f0f9ff;
+  --elzevir-tone-patrons-border: #bae6fd;
   --elzevir-tone-admin: #475569;
+  --elzevir-tone-admin-soft: #f8fafc;
+  --elzevir-tone-admin-border: #cbd5e1;
+  --elzevir-color-surface: #ffffff;
+  --elzevir-color-soft: #f1f5f9;
+  --elzevir-color-page: #f8fafc;
+  --elzevir-color-page-dot: #dce4ec;
+  --elzevir-color-border-strong: #cbd5e1;
+  --elzevir-shadow-pop: 0 18px 48px rgba(15, 23, 42, 0.18);
   color-scheme: light;
   --elzevir-radius: 6px;
   --elzevir-space: 1rem;
@@ -48,14 +62,14 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --elzevir-color-bg: #12161f;
+    --elzevir-color-bg: #0b1120;
     --elzevir-color-text: #e6e9ef;
     --elzevir-color-muted: #a3abba;
-    --elzevir-color-primary: #6aa2e8;
-    --elzevir-color-primary-text: #0b1220;
+    --elzevir-color-primary: #5eead4;
+    --elzevir-color-primary-text: #042f2e;
     --elzevir-color-error: #f08c84;
     --elzevir-color-available: #6fcf97;
-    --elzevir-color-border: #2c3445;
+    --elzevir-color-border: #263347;
     --elzevir-color-signal-available: #4ade80;
     --elzevir-color-signal-not-for-loan: #94a3b8;
     --elzevir-color-signal-out: #f87171;
@@ -81,21 +95,35 @@
     --elzevir-color-instance: #4ade80;
     --elzevir-color-instance-bg: #14301f;
     --elzevir-tone-circulation: #fb923c;
-    --elzevir-tone-catalog: #2dd4bf;
-    --elzevir-tone-patrons: #38bdf8;
-    --elzevir-tone-admin: #94a3b8;
+    --elzevir-tone-circulation-soft: rgba(251, 146, 60, 0.11);
+    --elzevir-tone-circulation-border: rgba(251, 146, 60, 0.3);
+    --elzevir-tone-catalog: #36d3c0;
+    --elzevir-tone-catalog-soft: rgba(45, 212, 191, 0.13);
+    --elzevir-tone-catalog-border: rgba(45, 212, 191, 0.35);
+    --elzevir-tone-patrons: #7dd3fc;
+    --elzevir-tone-patrons-soft: rgba(56, 189, 248, 0.13);
+    --elzevir-tone-patrons-border: rgba(125, 211, 252, 0.32);
+    --elzevir-tone-admin: #cbd5e1;
+    --elzevir-tone-admin-soft: rgba(148, 163, 184, 0.12);
+    --elzevir-tone-admin-border: rgba(203, 213, 225, 0.28);
+    --elzevir-color-surface: #121c2d;
+    --elzevir-color-soft: #1c2a3c;
+    --elzevir-color-page: #0b1120;
+    --elzevir-color-page-dot: #1b293e;
+    --elzevir-color-border-strong: #42526a;
+    --elzevir-shadow-pop: 0 22px 54px rgba(0, 0, 0, 0.5);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --elzevir-color-bg: #12161f;
+  --elzevir-color-bg: #0b1120;
   --elzevir-color-text: #e6e9ef;
   --elzevir-color-muted: #a3abba;
-  --elzevir-color-primary: #6aa2e8;
-  --elzevir-color-primary-text: #0b1220;
+  --elzevir-color-primary: #5eead4;
+  --elzevir-color-primary-text: #042f2e;
   --elzevir-color-error: #f08c84;
   --elzevir-color-available: #6fcf97;
-  --elzevir-color-border: #2c3445;
+  --elzevir-color-border: #263347;
   --elzevir-color-signal-available: #4ade80;
   --elzevir-color-signal-not-for-loan: #94a3b8;
   --elzevir-color-signal-out: #f87171;
@@ -121,68 +149,122 @@
   --elzevir-color-instance: #4ade80;
   --elzevir-color-instance-bg: #14301f;
   --elzevir-tone-circulation: #fb923c;
-  --elzevir-tone-catalog: #2dd4bf;
-  --elzevir-tone-patrons: #38bdf8;
-  --elzevir-tone-admin: #94a3b8;
+  --elzevir-tone-circulation-soft: rgba(251, 146, 60, 0.11);
+  --elzevir-tone-circulation-border: rgba(251, 146, 60, 0.3);
+  --elzevir-tone-catalog: #36d3c0;
+  --elzevir-tone-catalog-soft: rgba(45, 212, 191, 0.13);
+  --elzevir-tone-catalog-border: rgba(45, 212, 191, 0.35);
+  --elzevir-tone-patrons: #7dd3fc;
+  --elzevir-tone-patrons-soft: rgba(56, 189, 248, 0.13);
+  --elzevir-tone-patrons-border: rgba(125, 211, 252, 0.32);
+  --elzevir-tone-admin: #cbd5e1;
+  --elzevir-tone-admin-soft: rgba(148, 163, 184, 0.12);
+  --elzevir-tone-admin-border: rgba(203, 213, 225, 0.28);
+  --elzevir-color-surface: #121c2d;
+  --elzevir-color-soft: #1c2a3c;
+  --elzevir-color-page: #0b1120;
+  --elzevir-color-page-dot: #1b293e;
+  --elzevir-color-border-strong: #42526a;
+  --elzevir-shadow-pop: 0 22px 54px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  background: var(--elzevir-color-bg);
+  background-color: var(--elzevir-color-page);
+  background-image: radial-gradient(var(--elzevir-color-page-dot) 0.9px, transparent 0.9px);
+  background-size: 21px 21px;
   color: var(--elzevir-color-text);
   font-family: var(--elzevir-font);
   line-height: 1.5;
 }
 .topbar {
   display: flex;
-  gap: var(--elzevir-space);
+  gap: 14px;
   align-items: center;
   justify-content: space-between;
-  padding: calc(var(--elzevir-space) / 2) var(--elzevir-space);
+  min-height: 60px;
+  padding: 10px clamp(14px, 1.75vw, 38px);
+  background: var(--elzevir-color-surface);
   border-bottom: 1px solid var(--elzevir-color-border);
 }
-.topbar nav { display: flex; gap: var(--elzevir-space); }
-.brand { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 700; text-decoration: none; color: inherit; }
+.topbar nav { display: flex; align-items: center; gap: 9px; }
+.tool-link { display: flex; align-items: center; height: 36px; padding: 0 10px; border: 1px solid var(--elzevir-color-border); border-radius: 10px; color: var(--elzevir-color-muted); font-size: 12.5px; font-weight: 620; text-decoration: none; }
+.tool-link:hover { border-color: var(--elzevir-color-border-strong); color: var(--elzevir-color-text); }
+.brand, .staff-brand { display: inline-flex; align-items: center; gap: 9px; font-size: 20px; font-weight: 760; letter-spacing: -0.7px; text-decoration: none; color: inherit; }
+.brand-crab { width: 33px; height: 33px; flex: none; }
+.product-label { padding: 2px 7px; border: 1px solid var(--elzevir-color-border); border-radius: 6px; background: var(--elzevir-color-soft); color: var(--elzevir-color-muted); font-size: 11px; white-space: nowrap; }
+.product-label.tone-catalog { border-color: var(--tone-border); background: var(--tone-soft); color: var(--tone); font-weight: 650; }
+.ico { width: 18px; height: 18px; flex: none; }
 /* Theme switch (spec de UI §22 item 9): shown only once the theme script runs. */
 .theme-switchable [data-theme-toggle][hidden] { display: inline-flex; }
-.bar-theme { align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; padding: 0; border: 1px solid var(--elzevir-color-border); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
-.bar-theme svg, .staff-bar svg { width: 1.1rem; height: 1.1rem; flex: none; }
-/* Domain tones as one custom property, so a part sets its tone once (§22 item 8). */
-.tone-circulation { --tone: var(--elzevir-tone-circulation); }
-.tone-catalog { --tone: var(--elzevir-tone-catalog); }
-.tone-patrons { --tone: var(--elzevir-tone-patrons); }
-.tone-admin { --tone: var(--elzevir-tone-admin); }
-/* Staff header (§22): brand, scoped search, "New", theme and session on one line. */
-.staff-bar { position: relative; z-index: 50; flex-wrap: wrap; justify-content: flex-start; background: color-mix(in srgb, var(--elzevir-color-bg) 92%, transparent); backdrop-filter: blur(6px); }
-.staff-brand { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 700; color: inherit; text-decoration: none; }
-.bar-search { display: flex; flex: 1 1 30rem; align-items: center; gap: 0.25rem; padding: 0.25rem; border: 1px solid var(--elzevir-color-border); border-radius: 999px; background: var(--elzevir-color-bg); }
-.bar-search:focus-within { border-color: var(--elzevir-color-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--elzevir-color-primary) 22%, transparent); }
-.bar-scopes { display: flex; gap: 0.125rem; margin: 0; padding: 0; border: 0; }
-.bar-scope { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.7rem; border-radius: 999px; color: var(--elzevir-color-muted); font-size: 0.875rem; cursor: pointer; }
-.bar-scope input { position: absolute; opacity: 0; pointer-events: none; }
-.bar-scope:hover { color: var(--tone); }
-.bar-scope:has(input:checked) { background: color-mix(in srgb, var(--tone) 14%, transparent); color: var(--tone); font-weight: 600; }
-.bar-scope:has(input:focus-visible) { outline: 2px solid var(--tone); outline-offset: 1px; }
-.bar-search input[type="search"] { flex: 1; min-width: 8rem; border: 0; background: transparent; padding: 0.35rem 0.5rem; }
-.bar-search input[type="search"]:focus { outline: none; }
-.bar-search select { border: 0; background: transparent; color: inherit; font: inherit; }
-.bar-go { display: inline-flex; align-items: center; justify-content: center; width: 2.1rem; height: 2.1rem; padding: 0; border-radius: 999px; }
-.bar-new { position: relative; }
-.bar-new > summary { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.4rem 0.9rem; border-radius: 999px; background: var(--elzevir-color-primary); color: var(--elzevir-color-primary-text); font-weight: 600; list-style: none; cursor: pointer; }
-.bar-new > summary::-webkit-details-marker { display: none; }
-.bar-new ul { position: absolute; z-index: 60; top: calc(100% + 6px); left: 0; min-width: 14rem; margin: 0; padding: 0.375rem; list-style: none; background: var(--elzevir-color-bg); border: 1px solid var(--elzevir-color-border); border-radius: 10px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16); }
-.bar-new a { display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.6rem; border-radius: 6px; color: inherit; text-decoration: none; }
-.bar-new a svg { color: var(--tone); }
-.bar-new a:hover, .bar-new a:focus-visible { background: color-mix(in srgb, var(--tone) 12%, transparent); }
-.bar-end { display: flex; align-items: center; gap: 0.75rem; margin-left: auto; }
-.bar-login { color: var(--elzevir-color-muted); font-size: 0.875rem; }
-.bar-logout { display: block; }
-.bar-logout button { padding: 0.3rem 0.8rem; border: 1px solid var(--elzevir-color-border); border-radius: 999px; background: transparent; color: inherit; font: inherit; font-size: 0.875rem; cursor: pointer; }
-@media (max-width: 40rem) {
-  .bar-scope span { display: none; }
-  .bar-search { order: 10; flex-basis: 100%; }
+/* Domain tones as custom properties, so a part sets its tone once (§22 item 8). */
+.tone-circulation { --tone: var(--elzevir-tone-circulation); --tone-soft: var(--elzevir-tone-circulation-soft); --tone-border: var(--elzevir-tone-circulation-border); }
+.tone-catalog { --tone: var(--elzevir-tone-catalog); --tone-soft: var(--elzevir-tone-catalog-soft); --tone-border: var(--elzevir-tone-catalog-border); }
+.tone-patrons { --tone: var(--elzevir-tone-patrons); --tone-soft: var(--elzevir-tone-patrons-soft); --tone-border: var(--elzevir-tone-patrons-border); }
+.tone-admin { --tone: var(--elzevir-tone-admin); --tone-soft: var(--elzevir-tone-admin-soft); --tone-border: var(--elzevir-tone-admin-border); }
+/* Staff header (§22), after the home-v11 draft: brand row, then the search row. */
+.staff-bar { position: sticky; top: 0; z-index: 40; display: block; padding: 0; background: var(--elzevir-color-surface); border-bottom: 1px solid var(--elzevir-color-border); box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04); }
+.top-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 60px; padding: 10px clamp(14px, 1.75vw, 38px); border-bottom: 1px solid var(--elzevir-color-border); }
+.brand-side, .top-tools { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.icon-btn, .user-chip { display: flex; align-items: center; justify-content: center; gap: 7px; height: 36px; border: 1px solid var(--elzevir-color-border); border-radius: 10px; background: var(--elzevir-color-surface); color: var(--elzevir-color-muted); cursor: pointer; }
+.icon-btn { width: 36px; flex: none; padding: 0; }
+.icon-btn:hover, .user-chip:hover { border-color: var(--elzevir-color-border-strong); color: var(--elzevir-color-text); }
+.top-divider { width: 1px; height: 24px; margin: 0 2px; background: var(--elzevir-color-border); }
+.menu { position: relative; }
+.menu > summary { list-style: none; }
+.menu > summary::-webkit-details-marker { display: none; }
+.new-btn { display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 12px; border-radius: 10px; background: var(--elzevir-tone-circulation); color: #ffffff; font-weight: 700; cursor: pointer; }
+.new-btn:hover { filter: brightness(0.92); }
+.new-btn .ico:last-child { width: 13px; }
+.dropdown { position: absolute; z-index: 61; top: calc(100% + 7px); left: 0; min-width: 270px; margin: 0; padding: 6px; list-style: none; background: var(--elzevir-color-surface); border: 1px solid var(--elzevir-color-border); border-radius: 12px; box-shadow: var(--elzevir-shadow-pop); }
+.dropdown-end { left: auto; right: 0; }
+.dropdown a, .dropdown button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; border: 0; border-radius: 7px; background: transparent; color: var(--elzevir-color-text); font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.dropdown a:hover, .dropdown a:focus-visible, .dropdown button:hover { background: var(--elzevir-color-soft); }
+.dropdown .ico { color: var(--tone, currentColor); }
+.dropdown form { display: block; }
+.user-chip { gap: 8px; padding: 0 10px 0 5px; border-radius: 30px; color: var(--elzevir-color-text); font-size: 12px; font-weight: 650; }
+.avatar { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: var(--elzevir-tone-catalog); color: #ffffff; font-size: 10px; }
+.search-row { display: flex; align-items: center; gap: 13px; min-width: 0; margin: 0; padding: 10px clamp(14px, 1.75vw, 38px); }
+.search-field { display: flex; flex: 1 1 auto; align-items: center; min-width: 230px; height: 42px; border: 1.5px solid var(--elzevir-color-border-strong); border-radius: 11px; background: var(--elzevir-color-surface); }
+.search-field:focus-within { border-color: var(--elzevir-tone-catalog); box-shadow: 0 0 0 3px var(--elzevir-tone-catalog-soft); }
+.active-scope { display: flex; flex: none; align-items: center; gap: 6px; max-width: 158px; margin-left: 7px; padding: 4px 9px; border-radius: 7px; background: var(--tone-soft); color: var(--tone); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.search-input { flex: 1; min-width: 30px; height: 100%; padding: 0 10px; border: 0; border-radius: 0; background: transparent; color: var(--elzevir-color-text); font-size: 13px; }
+.search-input:focus { outline: none; }
+.search-input::placeholder { color: var(--elzevir-color-muted); }
+.search-submit { display: grid; place-items: center; min-width: 43px; height: 40px; padding: 0; border: 0; border-radius: 0 9px 9px 0; background: var(--elzevir-color-primary); color: var(--elzevir-color-primary-text); cursor: pointer; }
+.scope-actions { display: flex; flex: none; align-items: center; gap: 4px; margin: 0; padding: 3px; border: 1px solid var(--elzevir-color-border); border-radius: 12px; background: var(--elzevir-color-soft); }
+.scope-btn { position: relative; display: grid; place-items: center; width: 39px; height: 36px; border: 1px solid transparent; border-radius: 8px; color: var(--elzevir-color-muted); cursor: pointer; }
+.scope-btn input { position: absolute; opacity: 0; pointer-events: none; }
+.scope-btn:hover { background: var(--elzevir-color-surface); color: var(--elzevir-color-text); }
+.scope-btn.operation { color: var(--elzevir-tone-circulation); }
+.scope-btn:has(input:checked) { background: var(--elzevir-color-surface); border-color: var(--tone-border); color: var(--tone); box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05); }
+.scope-btn:has(input:focus-visible) { outline: 3px solid var(--tone); outline-offset: 2px; }
+.scope-btn:hover::after, .scope-btn:has(input:focus-visible)::after { content: attr(data-tooltip); position: absolute; z-index: 55; top: calc(100% + 10px); left: 50%; transform: translateX(-50%); padding: 5px 9px; border-radius: 7px; background: var(--elzevir-color-text); color: var(--elzevir-color-surface); font-size: 11px; font-weight: 650; white-space: nowrap; pointer-events: none; box-shadow: var(--elzevir-shadow-pop); }
+.scope-divider { width: 1px; height: 22px; margin: 0 3px; background: var(--elzevir-color-border-strong); }
+.tool-btn { display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 10px; border: 1px solid var(--elzevir-color-border); border-radius: 10px; background: var(--elzevir-color-surface); color: var(--elzevir-color-muted); font: inherit; font-size: 12.5px; font-weight: 620; }
+.ai-btn { border-color: var(--elzevir-tone-catalog-border); background: var(--elzevir-tone-catalog-soft); color: var(--elzevir-tone-catalog); }
+.icon-btn:disabled, .tool-btn:disabled, .search-filter:disabled { cursor: not-allowed; opacity: 0.55; }
+.search-filter { display: grid; place-items: center; width: 33px; height: 32px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--elzevir-color-muted); }
+.scope-btn:has(input:disabled) { cursor: not-allowed; opacity: 0.5; }
+.dropdown .is-soon, .drawer-list .is-soon { white-space: nowrap; display: flex; align-items: center; gap: 10px; padding: 10px; color: var(--elzevir-color-muted); cursor: default; }
+.dropdown .is-soon small, .drawer-list .is-soon small { margin-left: auto; }
+/* Hamburger drawer (§22 item 1): every module, then the screens that exist today. */
+.drawer-menu > summary { list-style: none; }
+.drawer-menu[open] > summary::before { content: ""; position: fixed; inset: 0; z-index: 60; background: rgba(11, 17, 32, 0.46); cursor: default; }
+.staff-bar .drawer { display: block; position: fixed; z-index: 65; top: 0; bottom: 0; left: 0; width: min(360px, 95vw); overflow-y: auto; padding: 0 16px 16px; background: var(--elzevir-color-surface); box-shadow: var(--elzevir-shadow-pop); }
+.panel-head { display: flex; align-items: center; min-height: 65px; margin: 0 -16px 12px; padding: 14px 17px; border-bottom: 1px solid var(--elzevir-color-border); font-size: 15px; }
+.drawer-list { display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.drawer-list a { display: flex; align-items: center; gap: 11px; padding: 10px 11px; border-radius: 9px; color: var(--elzevir-color-text); text-decoration: none; }
+.drawer-list a:hover, .drawer-list a:focus-visible { background: var(--elzevir-color-soft); }
+.drawer-list .ico { width: 18px; height: 18px; color: var(--tone); }
+.drawer .drawer-heading { margin: 18px 0 8px; }
+.scope-fallback { height: 100%; border: 0; border-right: 1px solid var(--elzevir-color-border); background: transparent; color: inherit; font: inherit; }
+@media (max-width: 46rem) {
+  .product-label, .user-name { display: none; }
+  .search-row { flex-wrap: wrap; }
+  .search-field { flex-basis: 100%; min-width: 0; }
 }
 a { color: var(--elzevir-color-primary); }
 main { max-width: var(--elzevir-measure); margin: 0 auto; padding: var(--elzevir-space); }
@@ -823,3 +905,31 @@ main:has(.import-workspace) { max-width: 90rem; }
   .topbar, .print-hide { display: none; }
   .printed-notice { border: 0; break-after: page; }
 }
+/* Staff home (spec de UI §22 item 11), after home-v11: notice board beside the modules. */
+.staff-home { display: grid; grid-template-columns: clamp(255px, 21vw, 350px) minmax(0, 1fr); gap: clamp(16px, 1.75vw, 32px); align-items: start; padding: 24px clamp(14px, 1.75vw, 38px) 100px; }
+.heading-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.heading-line .eyebrow { margin: 0; }
+.eyebrow { margin: 0 0 12px; color: var(--elzevir-color-muted); font-size: 11px; font-weight: 760; letter-spacing: 0.085em; text-transform: uppercase; }
+.sub-action { padding: 3px; border: 0; background: transparent; color: var(--elzevir-tone-catalog); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.sub-action:disabled, .edit-toggle:disabled { cursor: not-allowed; opacity: 0.55; }
+.postit { position: relative; padding: 16px 16px 12px; border: 1px solid rgba(99, 162, 196, 0.24); border-radius: 3px; background: #cfeffc; color: #244b5e; box-shadow: 0 10px 18px rgba(15, 23, 42, 0.06); transform: rotate(-1deg); }
+.postit::before { content: ""; position: absolute; top: 10px; right: 12px; width: 11px; height: 11px; border-radius: 50%; background: rgba(201, 166, 41, 0.95); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); }
+.note-top { margin: 0 0 8px; font-size: 10px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.72; }
+/* Handwriting from fonts already on the computer: the page may not load fonts from elsewhere. */
+.note-text, .postit-meta { font-family: "Segoe Print", "Bradley Hand", "Comic Neue", "Chalkboard SE", cursive; }
+.note-text { margin: 0; font-size: 16px; line-height: 1.4; overflow-wrap: anywhere; }
+.postit-meta { display: flex; justify-content: space-between; gap: 4px; margin: 12px 0 0; padding-top: 8px; border-top: 1px dashed rgba(36, 75, 94, 0.25); font-size: 13px; opacity: 0.82; }
+.module-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(11px, 1vw, 18px); }
+.module-card { display: flex; align-items: center; gap: 14px; min-height: 80px; padding: 15px 16px; border: 1.5px solid var(--tone-border); border-radius: 14px; background: var(--elzevir-color-surface); color: var(--elzevir-color-text); text-decoration: none; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03); transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s; }
+a.module-card:hover, a.module-card:focus-visible { transform: translateY(-2px); border-color: var(--tone); box-shadow: 0 8px 20px rgba(15, 23, 42, 0.07); }
+.module-icon { display: grid; flex: none; place-items: center; width: 44px; height: 44px; border: 1px solid var(--tone-border); border-radius: 12px; background: var(--tone-soft); color: var(--tone); }
+.ico-lg { width: 22px; height: 22px; }
+.module-name { display: grid; font-size: 13.5px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+/* Placeholders of screens to come (Paulo, 2026-11-20): shown, never clickable. */
+.is-soon small { color: var(--elzevir-color-muted); font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; }
+.module-card.is-soon { cursor: default; }
+.module-card.is-soon .module-icon { opacity: 0.75; }
+.edit-toggle { position: fixed; right: 20px; bottom: 18px; z-index: 26; display: flex; align-items: center; gap: 7px; padding: 9px 12px; border: 1px solid var(--elzevir-color-border-strong); border-radius: 9px; background: var(--elzevir-color-surface); color: var(--elzevir-color-text); font: inherit; font-size: 12px; font-weight: 670; box-shadow: var(--elzevir-shadow-pop); }
+@media (max-width: 64rem) { .module-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 46rem) { .staff-home { grid-template-columns: 1fr; } .module-grid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .module-card { transition: none; } a.module-card:hover { transform: none; } }

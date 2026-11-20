@@ -194,7 +194,9 @@ fn closings_are_added_shown_removed_and_copied_on_the_screen() {
         &request(address, "GET", "/equipe/admin/calendario", &cat, ""),
         403,
     );
-    assert!(request(address, "GET", "/equipe", &adm, "").contains("/equipe/admin/calendario"));
+    assert!(
+        request(address, "GET", "/equipe/barra", &adm, "").contains("/equipe/admin/calendario")
+    );
 
     let month = format!("/equipe/admin/calendario?branch={central}&month=2026-11");
     let page = request(address, "GET", &month, &adm, "");

@@ -838,7 +838,9 @@ fn printed_notices_are_listed_and_marked_as_sent() {
     restricted_for_overdues(data.path(), ana);
     let (server, address) = start(data.path());
     let cir = sign_in(address, "cir");
-    assert!(request(address, "GET", "/equipe", &cir, "").contains("/equipe/circulacao/avisos"));
+    assert!(
+        request(address, "GET", "/equipe/barra", &cir, "").contains("/equipe/circulacao/avisos")
+    );
     let page = request(address, "GET", "/equipe/circulacao/avisos", &cir, "");
     assert_status(&page, 200);
     assert!(
@@ -1096,10 +1098,8 @@ fn the_staff_header_offers_only_permitted_scopes_and_dispatches_the_search() {
     assert!(
         bar.contains(r#"value="leitores""#)
             && bar.contains(r#"value="acervo""#)
-            && bar.contains(
-                r#"value="devolucao" data-shortcut="d" data-hint="Item barcode" checked"#
-            )
-            && bar.contains(r#"placeholder="Item barcode""#)
+            && checked(&bar, "devolucao")
+            && bar.contains(r#"placeholder="Scan or type the item barcode…""#)
             && !bar.contains("/equipe/acervo/nova"),
         "{bar}"
     );
@@ -1141,7 +1141,7 @@ fn the_staff_header_offers_only_permitted_scopes_and_dispatches_the_search() {
         bar.contains("/equipe/acervo/nova")
             && !bar.contains(r#"value="leitores""#)
             && !bar.contains("/equipe/leitores/novo")
-            && bar.contains(r#"value="acervo" data-shortcut="c" data-hint="Title, author, subject or ISBN" checked"#),
+            && checked(&bar, "acervo"),
         "{bar}"
     );
     assert_status(
@@ -1158,6 +1158,17 @@ fn the_staff_header_offers_only_permitted_scopes_and_dispatches_the_search() {
         &request(address, "GET", "/equipe/busca?escopo=nada&q=x", &cat, ""),
         400,
     );
+    // Scopes still to come show as placeholders and lead nowhere yet.
+    assert_status(
+        &request(
+            address,
+            "GET",
+            "/equipe/busca?escopo=autoridades&q=x",
+            &cat,
+            "",
+        ),
+        404,
+    );
     let lei = sign_in(address, "lei");
     let bar = request(address, "GET", "/equipe/barra", &lei, "");
     assert!(
@@ -1165,4 +1176,11 @@ fn the_staff_header_offers_only_permitted_scopes_and_dispatches_the_search() {
         "{bar}"
     );
     drop(server);
+}
+
+/// Whether the header's scope radio `key` is the one checked.
+fn checked(bar: &str, key: &str) -> bool {
+    bar.split_once(&format!(r#"value="{key}""#))
+        .and_then(|(_, rest)| rest.split_once('>'))
+        .is_some_and(|(attributes, _)| attributes.ends_with(" checked"))
 }

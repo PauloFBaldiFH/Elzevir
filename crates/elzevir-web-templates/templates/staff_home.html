@@ -2,26 +2,28 @@
 {% block scope %}{% endblock %}
 {% block title %}{{ t.get("staff-home-title") }}{% endblock %}
 {% block content %}
-<h1>{{ t.get("staff-home-title") }}</h1>
-<p>{{ t.get("staff-home-signed-in-as") }} <strong id="signed-in-as">{{ login }}</strong></p>
-<p><a href="/equipe/acervo">{{ t.get("staff-home-catalog") }}</a></p>
-{% if patrons.is_shown() %}<p><a href="/equipe/leitores">{{ t.get("patrons-title") }}</a></p>{% endif %}{% if circulation.is_shown() %}<p><a href="/equipe/circulacao/devolucao">{{ t.get("checkin-title") }}</a></p>
-<p><a href="/equipe/circulacao/avisos">{{ t.get("print-notices-title") }}</a></p>{% endif %}{% if can_import %}
-<p><a href="/equipe/acervo/importar">{{ t.get("import-title") }}</a></p>
-<p><a href="/equipe/acervo/importar?tabular=true">{{ t.get("import-table") }}</a></p>
-<p><a href="/equipe/acervo/importar?koha_sql=true">{{ t.get("import-sql-link") }}</a></p>
-<p><a href="/equipe/acervo/importar?source=archive">{{ t.get("import-archive-link") }}</a></p>{% endif %}
-{% if can_catalogue %}
-<p><a href="/equipe/admin/cadastros">{{ t.get("registries-title") }}</a></p>
-{% endif %}
-{% if is_admin %}
-<p><a href="/equipe/admin/regras">{{ t.get("rules-title") }}</a></p>
-<p><a href="/equipe/admin/avisos">{{ t.get("notices-title") }}</a></p>
-<p><a href="/equipe/admin/calendario">{{ t.get("calendar-title") }}</a></p>
-<p><a href="/equipe/admin">{{ t.get("staff-home-administration") }}</a></p>
-{% endif %}
-<form action="/equipe/logout" method="post">
-  <input type="hidden" name="csrf" value="{{ csrf }}">
-  <button type="submit">{{ t.get("staff-home-logout") }}</button>
-</form>
+<div class="wide staff-home">
+<h1 class="visually-hidden">{{ t.get("staff-home-title") }}</h1>
+<aside class="mural" aria-labelledby="mural-title">
+  <div class="heading-line">
+    <h2 class="eyebrow" id="mural-title">{{ t.get("home-mural") }}</h2>
+    <button type="button" class="sub-action" disabled title="{{ t.get("bar-soon") }}">{{ t.get("home-new-note") }}</button>
+  </div>
+  <article class="postit note-blue">
+    <p class="note-top">{{ t.get("home-welcome-kind") }}</p>
+    <p class="note-text">{{ t.get("home-welcome-text") }}</p>
+    <p class="postit-meta"><span>{{ t.get("home-welcome-author") }}</span><span>{{ t.get("home-welcome-when") }}</span></p>
+  </article>
+</aside>
+<section class="modules-area" aria-labelledby="modules-title">
+  <div class="heading-line">
+    <h2 class="eyebrow" id="modules-title">{{ t.get("home-modules") }}</h2>
+    <button type="button" class="sub-action" disabled title="{{ t.get("bar-soon") }}">{{ t.get("home-show-all") }}</button>
+  </div>
+  <div class="module-grid">{% for module in modules %}
+    {% if let Some(href) = module.href %}<a class="module-card tone-{{ module.tone }}" href="{{ href }}">{% else %}<span class="module-card tone-{{ module.tone }} is-soon" aria-disabled="true">{% endif %}<span class="module-icon"><svg class="ico ico-lg" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ module.icon }}"></use></svg></span><span class="module-name">{{ t.get(module.label_key) }}{% if module.href.is_none() %}<small>{{ t.get("bar-soon") }}</small>{% endif %}</span>{% if module.href.is_some() %}</a>{% else %}</span>{% endif %}
+  {% endfor %}</div>
+</section>
+<button type="button" class="edit-toggle" disabled title="{{ t.get("bar-soon") }}"><svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-edit"></use></svg>{{ t.get("home-customize") }}</button>
+</div>
 {% endblock %}

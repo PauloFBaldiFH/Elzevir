@@ -227,9 +227,12 @@ async fn full_sign_in_and_sign_out() {
     let home = send(&app, get("/equipe", Some(&session))).await;
     assert_eq!(home.status(), StatusCode::OK);
     let home_html = body(home).await;
-    assert!(home_html.contains(r#"<strong id="signed-in-as">ana</strong>"#));
+    assert!(home_html.contains("href=\"/equipe/admin\""));
     assert!(home_html.contains("Administration"));
-    let logout_csrf = hidden_csrf(&home_html);
+    // The header, loaded into every staff screen, names the operator and signs out.
+    let bar = body(send(&app, get("/equipe/barra", Some(&session))).await).await;
+    assert!(bar.contains(r#"<span class="user-name">ana</span>"#));
+    let logout_csrf = hidden_csrf(&bar);
 
     let memory = send(&app, get("/equipe/admin/memory", Some(&session))).await;
     assert_eq!(memory.status(), StatusCode::OK);

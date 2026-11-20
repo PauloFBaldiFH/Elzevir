@@ -29,8 +29,10 @@ try {
   await page.fill("#password", password);
   await page.click("button[type=submit]");
   await page.waitForURL(`${base}/equipe`);
-  assert.equal(await page.locator("#signed-in-as").textContent(), login);
+  // The staff header arrives by htmx and names the operator; sign-out sits in its menu.
+  assert.equal(await page.locator("#staff-bar .user-name").textContent(), login);
 
+  await page.click("#staff-bar .user-chip");
   await page.click("text=Sign out");
   await page.waitForURL(`${base}/equipe/login`);
 

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{% endblock %} · {{ t.get("app-name") }}</title>
   <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
+  <link rel="icon" href="/static/elzevir-mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/elzevir.css">
   <script src="/static/elzevir-theme.js"></script>
   <script src="/static/htmx.min.js" defer></script>
@@ -13,11 +14,13 @@
 </head>
 <body>
   {% block header %}<header class="topbar">
-    <a class="brand" href="/"><img src="/static/elzevir-mark.svg" alt="" width="30" height="24"><span>{{ t.get("app-name") }}</span></a>
+    <div class="brand-side">
+      <a class="brand" href="/"><img class="brand-crab" src="/static/elzevir-mark.svg" alt="" width="33" height="33">{{ t.get("app-name") }}</a>
+      <span class="product-label tone-catalog">{{ t.get("opac-product") }}</span>
+    </div>
     <nav>
-      <a href="/">{{ t.get("nav-catalog") }}</a>
-      <a href="/equipe">{{ t.get("nav-staff") }}</a>
-      <button type="button" class="bar-theme" data-theme-toggle hidden aria-label="{{ t.get("bar-theme") }}" title="{{ t.get("bar-theme") }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-theme"></use></svg></button>
+      <a class="tool-link" href="/equipe">{{ t.get("nav-staff") }}</a>
+      <button type="button" class="icon-btn" data-theme-toggle hidden aria-label="{{ t.get("bar-theme") }}" title="{{ t.get("bar-theme") }}"><svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-theme"></use></svg></button>
     </nav>
   </header>{% endblock %}
   <main>

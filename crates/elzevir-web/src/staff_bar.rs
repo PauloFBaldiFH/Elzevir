@@ -9,7 +9,7 @@ use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
 use elzevir_app::staff::Permission;
-use elzevir_web_templates::{BarLink, BarScope, StaffBar};
+use elzevir_web_templates::{BarLink, BarScope, ScopeKind, StaffBar};
 use serde::Deserialize;
 
 use crate::session::ActiveSession;
@@ -27,26 +27,44 @@ struct ScopeEntry {
     hint_key: &'static str,
     icon: &'static str,
     tone: &'static str,
-    /// Letter used with Alt; the drafts' letters A, P, R, I and L stay reserved (§22 item 6).
+    /// Letter used with Alt (§22 item 6).
     shortcut: char,
-    /// Path of the screen that answers, without the query.
-    target: &'static str,
-    /// Name of the query parameter that screen reads.
-    parameter: &'static str,
+    /// Path of the screen that answers and the query parameter it reads; `None` while the
+    /// screen does not exist yet, so the scope shows as a disabled placeholder.
+    target: Option<(&'static str, &'static str)>,
+    /// Whether it acts on an Item instead of searching (the draft's "operations").
+    operation: bool,
     allowed: Allowed,
 }
 
-/// One entry of the "New" menu.
-struct NewEntry {
+/// One link of the header, the drawer or the home: a module, a tool or a "New" entry.
+struct LinkEntry {
     label_key: &'static str,
     icon: &'static str,
     tone: &'static str,
-    href: &'static str,
+    /// Where it goes; `None` while the screen does not exist yet (a placeholder).
+    href: Option<&'static str>,
     allowed: Allowed,
 }
 
-/// The search scopes, in the order the header shows them.
-const SCOPES: [ScopeEntry; 3] = [
+const fn link(
+    label_key: &'static str,
+    icon: &'static str,
+    tone: &'static str,
+    href: Option<&'static str>,
+    allowed: Allowed,
+) -> LinkEntry {
+    LinkEntry {
+        label_key,
+        icon,
+        tone,
+        href,
+        allowed,
+    }
+}
+
+/// The search scopes, in the order of the home-v11 draft.
+const SCOPES: [ScopeEntry; 6] = [
     ScopeEntry {
         key: "leitores",
         label_key: "bar-scope-patrons",
@@ -54,8 +72,8 @@ const SCOPES: [ScopeEntry; 3] = [
         icon: "bar-patrons",
         tone: "patrons",
         shortcut: 'u',
-        target: "/equipe/leitores",
-        parameter: "q",
+        target: Some(("/equipe/leitores", "q")),
+        operation: false,
         allowed: sees_patrons,
     },
     ScopeEntry {
@@ -65,8 +83,30 @@ const SCOPES: [ScopeEntry; 3] = [
         icon: "bar-catalog",
         tone: "catalog",
         shortcut: 'c',
-        target: "/equipe/acervo",
-        parameter: "q",
+        target: Some(("/equipe/acervo", "q")),
+        operation: false,
+        allowed: any_staff,
+    },
+    ScopeEntry {
+        key: "autoridades",
+        label_key: "bar-scope-authorities",
+        hint_key: "bar-hint-authorities",
+        icon: "mod-authorities",
+        tone: "catalog",
+        shortcut: 'a',
+        target: None,
+        operation: false,
+        allowed: any_staff,
+    },
+    ScopeEntry {
+        key: "repositorios",
+        label_key: "bar-scope-repositories",
+        hint_key: "bar-hint-repositories",
+        icon: "mod-repositories",
+        tone: "patrons",
+        shortcut: 'p',
+        target: None,
+        operation: false,
         allowed: any_staff,
     },
     ScopeEntry {
@@ -77,28 +117,162 @@ const SCOPES: [ScopeEntry; 3] = [
         tone: "circulation",
         shortcut: 'd',
         // The desk opens with the barcode filled in, so the desk's branch is still chosen there.
-        target: "/equipe/circulacao/devolucao",
-        parameter: "codigo",
+        target: Some(("/equipe/circulacao/devolucao", "codigo")),
+        operation: true,
         allowed: circulates,
+    },
+    ScopeEntry {
+        key: "renovacao",
+        label_key: "bar-scope-renewal",
+        hint_key: "bar-hint-renewal",
+        icon: "mod-renew",
+        tone: "circulation",
+        shortcut: 'r',
+        target: None,
+        operation: true,
+        allowed: any_staff,
     },
 ];
 
-/// The "New" menu, in the order it shows.
-const NEW_ENTRIES: [NewEntry; 2] = [
-    NewEntry {
-        label_key: "bar-new-record",
-        icon: "bar-catalog",
-        tone: "catalog",
-        href: "/equipe/acervo/nova",
-        allowed: catalogues,
-    },
-    NewEntry {
-        label_key: "bar-new-patron",
-        icon: "bar-patrons",
-        tone: "patrons",
-        href: "/equipe/leitores/novo",
-        allowed: manages_patrons,
-    },
+/// The "New" menu, in the draft's order.
+const NEW_ENTRIES: [LinkEntry; 5] = [
+    link(
+        "bar-new-record",
+        "bar-catalog",
+        "catalog",
+        Some("/equipe/acervo/nova"),
+        catalogues,
+    ),
+    link(
+        "bar-new-patron",
+        "bar-patrons",
+        "patrons",
+        Some("/equipe/leitores/novo"),
+        manages_patrons,
+    ),
+    link(
+        "bar-new-authority",
+        "mod-authorities",
+        "catalog",
+        None,
+        any_staff,
+    ),
+    link(
+        "bar-new-repository",
+        "mod-repositories",
+        "patrons",
+        None,
+        any_staff,
+    ),
+    link(
+        "bar-new-subscription",
+        "mod-serials",
+        "circulation",
+        None,
+        any_staff,
+    ),
+];
+
+/// The main modules of the home and the drawer, in the draft's order and tones.
+const MODULES: [LinkEntry; 9] = [
+    link(
+        "module-circulation",
+        "bar-circulation",
+        "circulation",
+        Some("/equipe/circulacao/devolucao"),
+        circulates,
+    ),
+    link(
+        "module-patrons",
+        "bar-patrons",
+        "patrons",
+        Some("/equipe/leitores"),
+        sees_patrons,
+    ),
+    link(
+        "module-cataloguing",
+        "bar-catalog",
+        "catalog",
+        Some("/equipe/acervo"),
+        any_staff,
+    ),
+    link(
+        "module-authorities",
+        "mod-authorities",
+        "catalog",
+        None,
+        any_staff,
+    ),
+    link(
+        "module-repositories",
+        "mod-repositories",
+        "patrons",
+        None,
+        any_staff,
+    ),
+    link(
+        "module-serials",
+        "mod-serials",
+        "circulation",
+        None,
+        any_staff,
+    ),
+    link("module-reports", "mod-reports", "admin", None, any_staff),
+    link("module-tools", "mod-tools", "admin", None, any_staff),
+    link(
+        "module-administration",
+        "mod-rules",
+        "admin",
+        Some("/equipe/admin"),
+        administers,
+    ),
+];
+
+/// Screens that exist today, listed in the drawer under the modules until each module page
+/// gathers its own.
+const TOOLS: [LinkEntry; 6] = [
+    link(
+        "tool-import",
+        "mod-import",
+        "catalog",
+        Some("/equipe/acervo/importar"),
+        imports,
+    ),
+    link(
+        "tool-printed-notices",
+        "mod-notices",
+        "circulation",
+        Some("/equipe/circulacao/avisos"),
+        circulates,
+    ),
+    link(
+        "tool-registries",
+        "mod-registries",
+        "admin",
+        Some("/equipe/admin/cadastros"),
+        catalogues,
+    ),
+    link(
+        "tool-rules",
+        "mod-admin",
+        "admin",
+        Some("/equipe/admin/regras"),
+        administers,
+    ),
+    link(
+        "tool-notices",
+        "mod-bell",
+        "admin",
+        Some("/equipe/admin/avisos"),
+        administers,
+    ),
+    link(
+        "tool-calendar",
+        "mod-calendar",
+        "admin",
+        Some("/equipe/admin/calendario"),
+        administers,
+    ),
 ];
 
 fn any_staff(_: &AppState, _: &ActiveSession) -> bool {
@@ -121,8 +295,36 @@ fn catalogues(_: &AppState, session: &ActiveSession) -> bool {
     session.identity.can(Permission::Cataloguing)
 }
 
+fn imports(state: &AppState, session: &ActiveSession) -> bool {
+    state.imports.is_some() && session.identity.can(Permission::Cataloguing)
+}
+
+fn administers(_: &AppState, session: &ActiveSession) -> bool {
+    session.identity.can(Permission::Administration)
+}
+
 fn manages_patrons(state: &AppState, session: &ActiveSession) -> bool {
     state.patrons.is_some() && session.identity.can(Permission::Patrons)
+}
+
+/// The entries this operator may use, as the templates draw them. Placeholders are open to
+/// everyone, since they lead nowhere yet.
+fn links(entries: &[LinkEntry], state: &AppState, session: &ActiveSession) -> Vec<BarLink> {
+    entries
+        .iter()
+        .filter(|entry| (entry.allowed)(state, session))
+        .map(|entry| BarLink {
+            label_key: entry.label_key,
+            icon: entry.icon,
+            tone: entry.tone,
+            href: entry.href,
+        })
+        .collect()
+}
+
+/// The modules of the staff home for this operator (§22 item 11).
+pub(crate) fn home_modules(state: &AppState, session: &ActiveSession) -> Vec<BarLink> {
+    links(&MODULES, state, session)
 }
 
 /// The query of the header and of its dispatch.
@@ -148,32 +350,34 @@ pub(crate) async fn bar(
         .filter(|entry| (entry.allowed)(&state, &session))
         .collect();
     // A screen without a scope of its own, or with one this operator lacks, starts on the
-    // first permitted scope (§22 item 7).
+    // first permitted scope that works (§22 item 7).
     let chosen = permitted
         .iter()
+        .filter(|entry| entry.target.is_some())
         .find(|entry| entry.key == params.escopo)
-        .or_else(|| permitted.first())
+        .or_else(|| permitted.iter().find(|entry| entry.target.is_some()))
         .map(|entry| entry.key);
+    let mut after_search = false;
     let scopes: Vec<BarScope> = permitted
         .into_iter()
-        .map(|entry| BarScope {
-            key: entry.key,
-            label_key: entry.label_key,
-            hint_key: entry.hint_key,
-            icon: entry.icon,
-            tone: entry.tone,
-            shortcut: entry.shortcut,
-            selected: Some(entry.key) == chosen,
-        })
-        .collect();
-    let new_entries = NEW_ENTRIES
-        .iter()
-        .filter(|entry| (entry.allowed)(&state, &session))
-        .map(|entry| BarLink {
-            label_key: entry.label_key,
-            icon: entry.icon,
-            tone: entry.tone,
-            href: entry.href,
+        .map(|entry| {
+            let kind = match (entry.operation, after_search) {
+                (false, _) => ScopeKind::Search,
+                (true, true) => ScopeKind::FirstOperation,
+                (true, false) => ScopeKind::Operation,
+            };
+            after_search = !entry.operation;
+            BarScope {
+                key: entry.key,
+                label_key: entry.label_key,
+                hint_key: entry.hint_key,
+                icon: entry.icon,
+                tone: entry.tone,
+                shortcut: entry.shortcut,
+                selected: Some(entry.key) == chosen,
+                ready: entry.target.is_some(),
+                kind,
+            }
         })
         .collect();
     render(&StaffBar {
@@ -181,7 +385,9 @@ pub(crate) async fn bar(
         login: &session.identity.login,
         csrf: &session.csrf,
         scopes,
-        new_entries,
+        new_entries: links(&NEW_ENTRIES, &state, &session),
+        modules: links(&MODULES, &state, &session),
+        tools: links(&TOOLS, &state, &session),
     })
 }
 
@@ -201,17 +407,15 @@ pub(crate) async fn search(
     if !(entry.allowed)(&state, &session) {
         return StatusCode::FORBIDDEN.into_response();
     }
+    // A placeholder scope has no screen yet.
+    let Some((target, parameter)) = entry.target else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
     let query = params.q.trim();
     if query.is_empty() {
-        return Redirect::to(entry.target).into_response();
+        return Redirect::to(target).into_response();
     }
-    Redirect::to(&format!(
-        "{}?{}={}",
-        entry.target,
-        entry.parameter,
-        query_value(query)
-    ))
-    .into_response()
+    Redirect::to(&format!("{target}?{parameter}={}", query_value(query))).into_response()
 }
 
 /// `value` percent-encoded for a query string: everything but the unreserved characters of
@@ -238,7 +442,8 @@ mod tests {
 
     #[test]
     fn scope_keys_and_shortcuts_are_unique_and_not_reserved() {
-        let reserved = ['a', 'p', 'r', 'i', 'l', 'n'];
+        // N opens "New"; I and L stay reserved for the AI and Lists tools of the draft.
+        let reserved = ['i', 'l', 'n'];
         for (index, entry) in SCOPES.iter().enumerate() {
             assert!(!reserved.contains(&entry.shortcut), "{}", entry.key);
             for other in &SCOPES[index + 1..] {
