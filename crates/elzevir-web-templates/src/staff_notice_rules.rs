@@ -23,6 +23,8 @@ pub struct StaffNoticeRules<'a> {
     pub levels: Vec<NoticeLevelRow>,
     /// One row per patron category for the hold notice.
     pub holds: Vec<HoldNoticeRow>,
+    /// The text of each notice.
+    pub texts: Vec<NoticeTextForm>,
     /// Whether the last change was stored.
     pub saved: bool,
     /// Why the last change was refused, as shown.
@@ -57,6 +59,23 @@ pub struct NoticeLevelRow {
     pub print: bool,
     /// Restricts the patron.
     pub restrict: bool,
+}
+
+/// The text of one notice, as the library wrote it or built in.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NoticeTextForm {
+    /// The notice's name, sent back with the form.
+    pub kind: &'static str,
+    /// Its heading.
+    pub title: String,
+    /// The subject.
+    pub subject: String,
+    /// The body.
+    pub body: String,
+    /// The placeholders it may use, as shown.
+    pub placeholders: String,
+    /// Whether it is the library's own text.
+    pub own: bool,
 }
 
 /// How one patron category hears of a waiting hold.

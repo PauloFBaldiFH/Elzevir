@@ -131,6 +131,7 @@ impl WriteCommand {
             }
             Self::Circulation(CirculationCommand::MarkNotice { .. }) => "circ.mark_notice",
             Self::Circulation(CirculationCommand::SetHoldNotice { .. }) => "circ.set_hold_notice",
+            Self::Circulation(CirculationCommand::SetNoticeText { .. }) => "circ.set_notice_text",
             Self::Circulation(CirculationCommand::LiftRestriction { .. }) => {
                 "circ.lift_restriction"
             }

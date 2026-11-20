@@ -55,6 +55,9 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CirculationCommand) -> Applied {
             category,
             transports,
         } => crate::notices::set_hold_notice(tx.connection(), *category, *transports),
+        CirculationCommand::SetNoticeText { kind, text } => {
+            crate::notices::set_text(tx.connection(), *kind, text.clone())
+        }
         CirculationCommand::MarkNotice {
             notice,
             outcome,

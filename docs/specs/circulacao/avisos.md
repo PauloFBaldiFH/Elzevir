@@ -1,6 +1,6 @@
 # Avisos
 
-> Status: tarefa 3.9, partes a (regras de aviso de atraso e fila de avisos), b (suspensão por aviso), c (envio por e-mail), d (aviso de reserva disponível), e (tela das regras de aviso) e f (avisos impressos). Base: Koha 26.05.05. As partes seguintes trazem os modelos editáveis e o recibo.
+> Status: tarefa 3.9, partes a (regras de aviso de atraso e fila de avisos), b (suspensão por aviso), c (envio por e-mail), d (aviso de reserva disponível), e (tela das regras de aviso), f (avisos impressos) e g (textos editáveis). Base: Koha 26.05.05. A parte seguinte traz o recibo.
 
 ## 1. Comportamento
 
@@ -58,6 +58,13 @@
 32. Impressa pelo navegador, a página tira o cabeçalho e os botões e põe um aviso por folha.
 33. "Marcar como enviados" marca como enviados (`circ.mark_notice`, que passa a pedir a permissão de circulação) só os avisos que a página mostrou; um aviso que chegou depois continua pendente. Koha: `gather_print_notices.pl`, que junta os impressos pendentes num arquivo e os marca como enviados.
 
+### Textos dos avisos
+
+34. Há um texto (assunto e corpo) para cada aviso: primeiro, segundo e terceiro aviso de atraso e reserva disponível (Koha: as cartas `ODUE`, `ODUE2`, `ODUE3` e `HOLD`). Sem texto da biblioteca vale o texto padrão do item 20, na língua do servidor.
+35. Na tela "Avisos", cada aviso mostra o texto da biblioteca ou, sem ele, o padrão com os marcadores no lugar dos dados. Gravar, com a permissão de administração, guarda o texto da biblioteca (comando `circ.set_notice_text`); gravar o texto igual ao padrão, ou o botão "Voltar ao texto padrão", apaga o da biblioteca.
+36. Marcadores: `{name}` (o leitor), `{library}` (a unidade) e `{items}` (uma linha por exemplar, no formato do item 20) em todos; `{date}` (até quando retirar) só no aviso de reserva. O assunto é uma linha só, com até 200 caracteres; o corpo tem até 8.000. Texto vazio, assunto com mais de uma linha ou chave que não abre um marcador do aviso são recusados sem gravar nada, e a tela volta com o motivo e o que foi digitado.
+37. O texto vale no envio, para o e-mail e para o impresso, também para os avisos que já estavam na fila; os dados entram como estão, sem que um marcador dentro deles seja preenchido de novo.
+
 ## 2. Origem no Koha
 
 - `misc/cronjobs/overdue_notices.pl` com `-t` (`debian/koha-common.cron.daily`), `C4::Overdues::GetBranchcodesWithOverdueRules`, `GetOverdueMessageTransportTypes`.
@@ -65,13 +72,14 @@
 - Tabelas `overduerules` e `overduerules_transport_types`; `message_queue` (`C4::Letters::EnqueueLetter`).
 - `C4::Reserves::ModReserveAffect` e `_koha_notify_reserve` (`Hold_Filled`, carta `HOLD`; impresso quando falta o e-mail).
 - `misc/cronjobs/gather_print_notices.pl` (impressos).
+- `tools/letter.pl` e as cartas `ODUE`, `ODUE2`, `ODUE3` e `HOLD` (textos).
 - `misc/cronjobs/process_message_queue.pl` (`*/15` em `debian/koha-common.cron.d`), `C4::Letters::SendQueuedMessages` e `_set_message_status`.
 - `Koha::Patron::Debarments::AddUniqueDebarment`, `UpdateBorrowerDebarmentFlags` (`9999-12-31` quando alguma restrição não tem fim), `DelUniqueDebarment`.
 - `Koha::Calendar::days_between` (com `OverdueNoticeCalendar`), que tira os dias fechados contando as duas pontas.
 
 ## 3. Paridade
 
-`exigida` nos dias de disparo. A corrida do Koha é um script de cron, que o gravador não alcança pela API; a prova é por testes contra o código lido: `crates/elzevir-domain/src/notice.rs` (dias com e sem calendário, nível que dispara, meios) e `crates/elzevir-store/tests/notices.rs` (regras da unidade e de qualquer unidade, categoria sem regra, atraso exato, um aviso por dia, e-mail que vira impresso, exemplar perdido fora, nível que suspende sem meio, empréstimo recusado até a equipe retirar, corrida repetida no dia que não suspende de novo, avisos de e-mail pendentes com seus exemplares, marcados como enviados). `crates/elzevir-store/tests/checkout.rs` testa o aviso de reserva: sem preferência nada sai, em trânsito nada sai, ao chegar sai um impresso para o leitor sem e-mail, e separar de novo não repete. A tela é testada em `crates/elzevir/tests/circulation_rules.rs` (gravar e ler uma regra, dias inválidos, preferência de reserva, sem permissão), e os impressos em `crates/elzevir/tests/patrons.rs` (listar, marcar como enviado). O envio é testado contra um servidor SMTP falso em `crates/elzevir/src/notice_mail.rs` (aceito, recusado, fora do ar) e o texto nas duas línguas.
+`exigida` nos dias de disparo. A corrida do Koha é um script de cron, que o gravador não alcança pela API; a prova é por testes contra o código lido: `crates/elzevir-domain/src/notice.rs` (dias com e sem calendário, nível que dispara, meios) e `crates/elzevir-store/tests/notices.rs` (regras da unidade e de qualquer unidade, categoria sem regra, atraso exato, um aviso por dia, e-mail que vira impresso, exemplar perdido fora, nível que suspende sem meio, empréstimo recusado até a equipe retirar, corrida repetida no dia que não suspende de novo, avisos de e-mail pendentes com seus exemplares, marcados como enviados). `crates/elzevir-store/tests/checkout.rs` testa o aviso de reserva: sem preferência nada sai, em trânsito nada sai, ao chegar sai um impresso para o leitor sem e-mail, e separar de novo não repete. A tela é testada em `crates/elzevir/tests/circulation_rules.rs` (gravar e ler uma regra, dias inválidos, preferência de reserva, sem permissão), e os impressos em `crates/elzevir/tests/patrons.rs` (listar, marcar como enviado). Os textos são testados em `crates/elzevir-domain/src/notice_text.rs` (marcadores e recusas), no envio (texto da biblioteca no lugar do padrão) e na tela (gravar, recusar, voltar ao padrão). O envio é testado contra um servidor SMTP falso em `crates/elzevir/src/notice_mail.rs` (aceito, recusado, fora do ar) e o texto nas duas línguas.
 
 ## 4. Casos de borda
 
@@ -84,7 +92,7 @@
 ## 5. Configuração
 
 - No Koha, a categoria precisa de `overduenoticerequired` e de uma linha em `overduerules`. No Elzevir basta a regra: categoria sem aviso é categoria sem regra. Uma importação traduz `overduenoticerequired` desligado em nenhuma regra.
-- O Koha escolhe um modelo (`letter1`..`letter3`) por nível; no Elzevir o modelo é o do nível (parte dos modelos).
+- O Koha escolhe um modelo (`letter1`..`letter3`) por nível e permite cartas por unidade e por língua, escritas em Template Toolkit; no Elzevir o texto é o do nível, um para a biblioteca, com os marcadores do item 36.
 - O Koha guarda o texto pronto em `message_queue` ao enfileirar; o Elzevir escreve o texto no envio, com os dados guardados na fila.
 - SMS e os outros meios do Koha vêm depois, com WhatsApp e Telegram (doc 03, linha 3.9).
 

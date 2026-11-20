@@ -33,7 +33,7 @@ pub use staff_item_grid::{
     GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid, SuggestedCallNumber,
 };
 pub use staff_notice_rules::{
-    HoldNoticeRow, NoticeLevelRow, NoticeRuleLine, PrintedNotice, StaffNoticeRules,
+    HoldNoticeRow, NoticeLevelRow, NoticeRuleLine, NoticeTextForm, PrintedNotice, StaffNoticeRules,
     StaffPrintNotices,
 };
 pub use staff_patrons::{

@@ -323,6 +323,7 @@ fn admin_routes() -> Router<AppState> {
             "/equipe/admin/avisos/reservas",
             post(notice_rules::set_hold_notices),
         )
+        .route("/equipe/admin/avisos/textos", post(notice_rules::set_text))
         .route(
             "/equipe/admin/cadastros",
             get(registries::registries).post(registries::change_registry),

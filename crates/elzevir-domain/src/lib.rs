@@ -16,6 +16,7 @@ pub mod fine;
 pub mod hold;
 pub mod long_overdue;
 pub mod notice;
+pub mod notice_text;
 pub mod patron;
 pub mod renewal;
 pub mod statement;

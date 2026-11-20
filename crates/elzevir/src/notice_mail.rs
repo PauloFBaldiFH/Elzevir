@@ -216,6 +216,7 @@ mod tests {
     use super::*;
     use elzevir_app::notices::{NoticeAbout, NoticeId, NoticeItem};
     use elzevir_domain::notice::NoticeLevel;
+    use elzevir_domain::notice_text::NoticeText;
     use std::io::{BufRead, BufReader, Write};
     use std::net::TcpListener;
 
@@ -237,7 +238,24 @@ mod tests {
                         .unwrap(),
                 ),
             }],
+            text: None,
         }
+    }
+
+    #[test]
+    fn the_librarys_own_text_takes_the_place_of_the_built_in_one() {
+        let zone = TimeZone::get("America/Sao_Paulo").unwrap();
+        let mut written = notice();
+        written.text = Some(NoticeText {
+            subject: "{library}: atraso".to_owned(),
+            body: "Olá, {name}!\n{items}\n{date}".to_owned(),
+        });
+        let (subject, body) = notice_text(&I18n::english().unwrap(), &written, &zone);
+        assert_eq!(subject, "Central: atraso");
+        assert_eq!(
+            body,
+            "Olá, Ana Silva!\n- Dom Casmurro (0001), due 2026-11-16\n"
+        );
     }
 
     #[test]
