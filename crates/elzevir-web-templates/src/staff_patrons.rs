@@ -124,8 +124,19 @@ pub struct HoldRow {
     pub pickup: String,
     /// The day it was placed, as shown.
     pub day: String,
-    /// Its place in the queue.
-    pub position: String,
+    /// Its place in the queue, or that it waits or is in transit.
+    pub status: String,
+}
+
+/// The button that sets a checked-in Item aside for the hold it answers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AsideForm {
+    /// The hold.
+    pub hold: i64,
+    /// The Item's barcode.
+    pub barcode: String,
+    /// The desk's branch.
+    pub desk: i64,
 }
 
 /// A branch the desk may be at.
@@ -160,6 +171,8 @@ pub struct StaffCheckin<'a> {
     pub desks: Vec<DeskOption>,
     /// What the last checkin did.
     pub notices: Vec<Notice>,
+    /// Setting the Item aside, when it answers a hold.
+    pub aside: Option<AsideForm>,
 }
 
 /// The patron categories.

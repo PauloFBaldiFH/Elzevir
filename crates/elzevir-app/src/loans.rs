@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::accounts::AccountLine;
 use crate::circulation_rules::{CirculationCommand, CirculationDeskError, CirculationOutput};
+use crate::holds::CheckinHold;
 use crate::holds::PatronHold;
 use crate::staff::StaffId;
 
@@ -125,6 +126,8 @@ pub struct CheckedIn {
     pub suspended_until: Option<Date>,
     /// The overdue fine the late return charged, as it stands now.
     pub fine: Option<Money>,
+    /// The hold the Item answers, if any (docs/specs/circulacao/reservas.md).
+    pub hold: Option<CheckinHold>,
 }
 
 /// Why a checkin did not happen.

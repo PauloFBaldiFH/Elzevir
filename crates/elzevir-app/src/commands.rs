@@ -120,6 +120,7 @@ impl WriteCommand {
             Self::Circulation(CirculationCommand::Pay(_)) => "circ.pay",
             Self::Circulation(CirculationCommand::PlaceHold(_)) => "circ.place_hold",
             Self::Circulation(CirculationCommand::CancelHold(_)) => "circ.cancel_hold",
+            Self::Circulation(CirculationCommand::SetHoldAside(_)) => "circ.set_hold_aside",
             Self::Circulation(CirculationCommand::ChargeOverdues { .. }) => "circ.charge_overdues",
             Self::Circulation(CirculationCommand::MarkLongOverdue { .. }) => {
                 "circ.mark_long_overdue"
@@ -142,7 +143,8 @@ impl WriteCommand {
                 | CirculationCommand::Renew(_)
                 | CirculationCommand::Pay(_)
                 | CirculationCommand::PlaceHold(_)
-                | CirculationCommand::CancelHold(_),
+                | CirculationCommand::CancelHold(_)
+                | CirculationCommand::SetHoldAside(_),
             )
             | Self::Patrons(PatronCommand::View(_)) => Permission::Circulation,
             Self::Staff(_) | Self::Circulation(_) => Permission::Administration,

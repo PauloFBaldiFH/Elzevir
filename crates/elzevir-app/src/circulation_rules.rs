@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::accounts::{Paid, PayRefusal, PaymentRequest};
 use crate::calendar::CalendarChange;
-use crate::holds::{HoldCancellation, HoldPlaced, HoldRefused, HoldRequest};
+use crate::holds::{HoldAside, HoldCancellation, HoldPlaced, HoldRefused, HoldRequest, SetAside};
 use crate::loans::{
     CheckedIn, CheckedOut, CheckinRefusal, CheckinRequest, CheckoutRefusal, CheckoutRequest,
     RenewRefusal, RenewRequest, Renewed,
@@ -40,6 +40,8 @@ pub enum CirculationCommand {
     PlaceHold(HoldRequest),
     /// Cancels a hold (docs/specs/circulacao/reservas.md).
     CancelHold(HoldCancellation),
+    /// Sets a checked-in Item aside for the hold it answers (docs/specs/circulacao/reservas.md).
+    SetHoldAside(HoldAside),
     /// Brings the fine of every overdue loan to what it is worth at `at`: the daily run
     /// (docs/specs/circulacao/conta.md).
     ChargeOverdues {
@@ -96,6 +98,8 @@ pub enum CirculationOutput {
     HoldPlaced(HoldPlaced),
     /// A hold was cancelled.
     HoldCancelled,
+    /// An Item was set aside for a hold.
+    HoldSetAside(SetAside),
 }
 
 /// What the run of long overdue Items did.

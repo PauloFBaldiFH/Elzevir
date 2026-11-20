@@ -19,7 +19,10 @@ use elzevir_app::circulation_rules::{
 };
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
-use elzevir_app::holds::{HoldCancellation, HoldLevel, HoldPlaced, HoldRefused, HoldRequest};
+use elzevir_app::holds::{
+    CheckinHold, HoldAside, HoldCancellation, HoldId, HoldLevel, HoldPlaced, HoldRefused,
+    HoldRequest, SetAside,
+};
 use elzevir_app::loans::{
     CheckedIn, CheckedOut, CheckinRefusal, CheckinRequest, CheckoutRefusal, CheckoutRequest,
     LoanDesk, RenewRefusal, RenewRequest, Renewed,
@@ -32,7 +35,7 @@ use elzevir_domain::catalog::{BranchId, InstanceId, Money};
 use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome, TransferReason};
 use elzevir_domain::checkout::{Alert, Confirm, Impossible, TooManyReason};
 use elzevir_domain::circulation_rules::RuleScopeKey;
-use elzevir_domain::hold::HoldRefusal;
+use elzevir_domain::hold::{Found, HoldMatch, HoldRefusal};
 use elzevir_domain::long_overdue::{DEFAULT_MAX_DAYS, LongOverdueSettings};
 use elzevir_domain::patron::{Enrolment, PatronId};
 use elzevir_domain::renewal::RenewalRefusal;
@@ -333,6 +336,29 @@ impl Library {
         }
     }
 
+    fn set_aside(
+        &self,
+        hold: HoldId,
+        barcode: &str,
+        (desk, at): (BranchId, &str),
+    ) -> Result<SetAside, HoldRefused> {
+        match submit(
+            &self.store,
+            WriteCommand::Circulation(CirculationCommand::SetHoldAside(HoldAside {
+                hold,
+                barcode: barcode.to_owned(),
+                desk,
+                at: format!("{at}[America/Sao_Paulo]").parse().unwrap(),
+            })),
+        ) {
+            Ok(WriteOutput::Circulation(CirculationOutput::HoldSetAside(done))) => Ok(done),
+            Err(CommandFailed::Rejected(WriteRefusal::Circulation(CirculationRefusal::Hold(
+                refusal,
+            )))) => Err(refusal),
+            other => panic!("{other:?}"),
+        }
+    }
+
     fn read<T: rusqlite::types::FromSql>(&self, sql: &str) -> T {
         self.store
             .readers()
@@ -516,6 +542,7 @@ fn a_returned_item_goes_home_and_its_transfer_arrives() {
             },
             suspended_until: None,
             fine: None,
+            hold: None,
         }
     );
     assert_eq!(library.read::<i64>("SELECT count(*) FROM loans"), 0);
@@ -1154,6 +1181,149 @@ fn holds_queue_up_per_record_and_close_up_when_one_is_cancelled() {
     assert_eq!(
         (holds.len(), holds[0].barcode.as_deref(), holds[0].priority),
         (1, Some("0002"), 1)
+    );
+}
+
+/// Two Items of one record, and two record holds on it: Bia picks up at the annex, Caio at
+/// the central branch. Holds wait three days.
+fn two_holds(dir: &tempfile::TempDir) -> (Library, PatronId, HoldPlaced, HoldPlaced) {
+    let library = library(dir);
+    library.item("0001", ItemStatus::default());
+    library.item("0002", ItemStatus::default());
+    library.rules(&[("reservesallowed", "5"), ("holds_pickup_period", "3")]);
+    let bia = library.another_patron("000124", library.central);
+    let caio = library.another_patron("000125", library.central);
+    let first = library
+        .hold(bia, "0001", HoldLevel::Record, library.annex)
+        .unwrap();
+    let second = library
+        .hold(caio, "0001", HoldLevel::Record, library.central)
+        .unwrap();
+    (library, bia, first, second)
+}
+
+/// Each hold as priority, found and Item.
+fn queue(library: &Library) -> String {
+    library.read::<String>(
+        "SELECT group_concat(priority || coalesce(found, '-') || coalesce(item_id, '-'), ' ')
+         FROM (SELECT * FROM holds ORDER BY id)",
+    )
+}
+
+#[test]
+fn a_returned_item_is_set_aside_for_the_first_hold_it_can_fill() {
+    let dir = tempfile::tempdir().unwrap();
+    let (library, _, first, second) = two_holds(&dir);
+    // Returned at the annex, where Bia picks it up: it stays there instead of going home.
+    let back = library
+        .give_back("0001", library.annex, "2026-11-20T10:00:00-03:00")
+        .unwrap();
+    assert_eq!(back.destination, Destination::Stays);
+    assert_eq!(
+        back.hold,
+        Some(CheckinHold {
+            found: HoldMatch::Reserved(first.hold),
+            pickup: library.annex
+        })
+    );
+    assert_eq!(
+        library.set_aside(
+            second.hold,
+            "0002",
+            (library.central, "2026-11-20T11:00:00-03:00")
+        ),
+        Ok(SetAside {
+            found: Found::Waiting,
+            pickup: library.central,
+            expires_on: Some(date(2026, 11, 23)),
+        }),
+        "a record hold takes any Item of its record"
+    );
+    assert_eq!(
+        library.set_aside(
+            HoldId(99),
+            "0001",
+            (library.annex, "2026-11-20T11:00:00-03:00")
+        ),
+        Err(HoldRefused::UnknownHold)
+    );
+    let aside = library
+        .set_aside(
+            first.hold,
+            "0001",
+            (library.annex, "2026-11-20T11:00:00-03:00"),
+        )
+        .unwrap();
+    assert_eq!(
+        (aside.found, aside.expires_on),
+        (Found::Waiting, Some(date(2026, 11, 23)))
+    );
+    assert_eq!(queue(&library), "0W1 0W2");
+}
+
+#[test]
+fn a_hold_waiting_elsewhere_goes_back_to_the_queue_and_its_item_in_transit() {
+    let dir = tempfile::tempdir().unwrap();
+    let (library, bia, first, second) = two_holds(&dir);
+    for (hold, barcode, desk) in [
+        (first, "0001", library.annex),
+        (second, "0002", library.central),
+    ] {
+        library
+            .set_aside(hold.hold, barcode, (desk, "2026-11-20T11:00:00-03:00"))
+            .unwrap();
+    }
+    // Waiting at the annex and returned at the central branch: the hold goes back to the
+    // head of the queue, forgets the Item, and the Item stays for it to be sent.
+    let at_central = library
+        .give_back("0001", library.central, "2026-11-21T10:00:00-03:00")
+        .unwrap();
+    assert_eq!(
+        at_central.hold.map(|found| found.found),
+        Some(HoldMatch::Reserved(first.hold))
+    );
+    assert_eq!(queue(&library), "1-- 0W2");
+    let sent = library
+        .set_aside(
+            first.hold,
+            "0001",
+            (library.central, "2026-11-21T11:00:00-03:00"),
+        )
+        .unwrap();
+    assert_eq!((sent.found, sent.expires_on), (Found::InTransit, None));
+    assert_eq!(
+        library.read::<String>(
+            "SELECT from_branch || '>' || to_branch || ' ' || reason FROM transfers
+             WHERE arrived_at IS NULL"
+        ),
+        format!("{}>{} Reserve", library.central.0, library.annex.0)
+    );
+    // At the annex the transfer arrives and the hold waits again.
+    let arrived = library
+        .give_back("0001", library.annex, "2026-11-22T10:00:00-03:00")
+        .unwrap();
+    assert_eq!(
+        arrived.destination,
+        Destination::Arrived {
+            from: library.central
+        }
+    );
+    assert_eq!(
+        arrived.hold.map(|found| found.found),
+        Some(HoldMatch::InTransit(first.hold))
+    );
+    library
+        .set_aside(
+            first.hold,
+            "0001",
+            (library.annex, "2026-11-22T11:00:00-03:00"),
+        )
+        .unwrap();
+    assert_eq!(queue(&library), "0W1 0W2");
+    let shown = library.store.holds(bia).unwrap();
+    assert_eq!(
+        (shown[0].found, shown[0].expires_on),
+        (Some(Found::Waiting), Some(date(2026, 11, 25)))
     );
 }
 

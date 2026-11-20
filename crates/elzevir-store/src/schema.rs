@@ -687,6 +687,30 @@ const MIGRATIONS: &[&str] = &[
          ended_at    TEXT NOT NULL,
          outcome     TEXT NOT NULL CHECK (outcome IN ('CANCELLED'))
      );",
+    // 53: a hold set aside for its patron (docs/specs/circulacao/reservas.md, part b).
+    // `found` is `W` waiting at the pickup branch or `T` in transit to it, with priority 0;
+    // `item_level` keeps whether the patron asked for the Item, since a record hold gets its
+    // Item when it is set aside. A filled hold ends as `FILLED`, so `ended_holds` is rebuilt
+    // with the wider check.
+    "ALTER TABLE holds ADD COLUMN item_level INTEGER NOT NULL DEFAULT 0
+         CHECK (item_level IN (0, 1));
+     UPDATE holds SET item_level = 1 WHERE item_id IS NOT NULL;
+     ALTER TABLE holds ADD COLUMN found TEXT CHECK (found IN ('W', 'T'));
+     ALTER TABLE holds ADD COLUMN waiting_since TEXT;
+     ALTER TABLE holds ADD COLUMN expires_on TEXT;
+     CREATE TABLE ended_holds_new (
+         id          INTEGER PRIMARY KEY,
+         patron_id   INTEGER REFERENCES patrons (id),
+         instance_id INTEGER NOT NULL REFERENCES instances (id),
+         item_id     INTEGER REFERENCES items (id),
+         pickup_id   INTEGER NOT NULL REFERENCES branches (id),
+         placed_on   TEXT NOT NULL,
+         ended_at    TEXT NOT NULL,
+         outcome     TEXT NOT NULL CHECK (outcome IN ('CANCELLED', 'FILLED'))
+     );
+     INSERT INTO ended_holds_new SELECT * FROM ended_holds;
+     DROP TABLE ended_holds;
+     ALTER TABLE ended_holds_new RENAME TO ended_holds;",
 ];
 
 /// The migration that creates `match_keys`.

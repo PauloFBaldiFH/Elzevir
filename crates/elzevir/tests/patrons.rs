@@ -808,3 +808,74 @@ fn holds_are_placed_listed_and_cancelled_on_the_record() {
     );
     drop(server);
 }
+
+#[test]
+fn a_returned_item_is_set_aside_for_its_hold_at_the_checkin_desk() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    stock(data.path());
+    let store = open(data.path());
+    submit(
+        &store,
+        WriteCommand::Circulation(CirculationCommand::SetRules(RuleChange {
+            scope: RuleScopeKey::default(),
+            values: vec![("reservesallowed".to_owned(), Some("3".to_owned()))],
+        })),
+    );
+    store.shutdown().unwrap();
+    let (server, address) = start(data.path());
+    let cir = sign_in(address, "cir");
+    let record = format!("/equipe/leitores/{ana}");
+    let page = request(address, "GET", &record, &cir, "");
+    let (token, desk) = (csrf(&page).to_owned(), selected_desk(&page).to_owned());
+    let form = format!("{cir}Content-Type: application/x-www-form-urlencoded\r\n");
+    let placed = request(
+        address,
+        "POST",
+        &format!("{record}/reservas"),
+        &form,
+        &format!("csrf={token}&desk={desk}&barcode=0001&level=record&pickup={desk}&op=place"),
+    );
+    assert_status(&placed, 200);
+    let scanned = request(
+        address,
+        "POST",
+        "/equipe/circulacao/devolucao",
+        &form,
+        &format!("csrf={token}&barcode=0001&desk={desk}"),
+    );
+    assert_status(&scanned, 200);
+    assert!(
+        scanned.contains("It fills a hold to pick up at")
+            && scanned.contains("Set aside for the hold"),
+        "{scanned}"
+    );
+    // The checkin desk still shows nothing about the patron.
+    assert!(!scanned.contains("Silva") && !scanned.contains("000123"));
+    let hold = hidden(&scanned, "hold").to_owned();
+    let aside = request(
+        address,
+        "POST",
+        "/equipe/circulacao/devolucao/reserva",
+        &form,
+        &format!("csrf={token}&hold={hold}&barcode=0001&desk={desk}"),
+    );
+    assert_status(&aside, 200);
+    assert!(
+        aside.contains("Put it on the hold shelf; it waits until"),
+        "{aside}"
+    );
+    let shown = request(address, "GET", &record, &cir, "");
+    assert!(shown.contains("Waiting until"), "{shown}");
+    assert_status(
+        &request(
+            address,
+            "POST",
+            "/equipe/circulacao/devolucao/reserva",
+            &form,
+            &format!("csrf=forged&hold={hold}&barcode=0001&desk={desk}"),
+        ),
+        403,
+    );
+    drop(server);
+}

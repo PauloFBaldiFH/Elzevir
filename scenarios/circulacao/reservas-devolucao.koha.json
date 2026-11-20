@@ -1,0 +1,86 @@
+{
+ "koha_version": "26.05.05.000",
+ "spec": [
+  "docs/specs/circulacao/reservas.md"
+ ],
+ "recorder": "tools/holds-recorder/set_aside.py",
+ "patron": {
+  "category": "B",
+  "library": "MAIN"
+ },
+ "pickup": "MAIN",
+ "preferences": {
+  "ReservesControlBranch": "PatronLibrary",
+  "ReservesNeedReturns": "1",
+  "ReservesMaxPickUpDelay": "7",
+  "ExcludeHolidaysFromMaxPickUpDelay": "0",
+  "HoldsAutoFill": "0",
+  "ConfirmFutureHolds": "0",
+  "LocalHoldsPriority": "None",
+  "TrapHoldsOnOrder": "1",
+  "AllowHoldPolicyOverride": "0",
+  "UseBranchTransferLimits": "0"
+ },
+ "items": [
+  {
+   "barcode": "1511",
+   "item_type": "BK",
+   "home_library": "MAIN",
+   "holding_library": "MAIN"
+  },
+  {
+   "barcode": "13443",
+   "item_type": "BK",
+   "home_library": "MAIN",
+   "holding_library": "MAIN"
+  }
+ ],
+ "steps": [
+  {
+   "rules": [
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "holds_per_record": "",
+      "holds_pickup_period": "",
+      "reservesallowed": "3"
+     }
+    }
+   ],
+   "at": "2026-11-20T02:39:56+00:00",
+   "found": true,
+   "status": "W",
+   "priority": 0,
+   "item_set": true,
+   "waiting_date": "2026-11-19",
+   "expiration_date": "2026-11-26"
+  },
+  {
+   "rules": [
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "holds_per_record": "",
+      "holds_pickup_period": "3",
+      "reservesallowed": "3"
+     }
+    }
+   ],
+   "at": "2026-11-20T02:40:00+00:00",
+   "found": true,
+   "status": "W",
+   "priority": 0,
+   "item_set": true,
+   "waiting_date": "2026-11-19",
+   "expiration_date": "2026-11-22"
+  }
+ ]
+}

@@ -4,12 +4,15 @@
 use elzevir_app::circulation_rules::{CirculationOutput, CirculationRefusal};
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
 use elzevir_app::holds::{
-    HoldCancellation, HoldId, HoldLevel, HoldPlaced, HoldRefused, HoldRequest, PatronHold,
+    CheckinHold, HoldAside, HoldCancellation, HoldId, HoldLevel, HoldPlaced, HoldRefused,
+    HoldRequest, PatronHold, SetAside,
 };
 use elzevir_app::loans::checked_barcode;
 use elzevir_domain::catalog::{BranchId, InstanceId, ItemId, Money, PolicyId};
+use elzevir_domain::circulation_rules::{CirculationRule, RuleScopeKey};
 use elzevir_domain::hold::{
-    CurrentHold, HoldItem, HoldPatron, HoldRequestFacts, HoldSettings, HoldTarget, check_hold,
+    CurrentHold, Found, HoldItem, HoldMatch, HoldPatron, HoldRequestFacts, HoldSettings,
+    HoldTarget, QueuedHold, check_hold, hold_for_item, pickup_days,
 };
 use elzevir_domain::patron::{PatronCategoryId, PatronId};
 use jiff::civil::Date;
@@ -110,13 +113,16 @@ fn branches(connection: &Connection) -> rusqlite::Result<Vec<BranchId>> {
         .collect()
 }
 
-/// Numbers the Instance's queue 1, 2, 3... in its current order, closing any gap.
+/// Numbers the Instance's queue 1, 2, 3... in its current order, closing any gap; holds set
+/// aside stay out of it.
 ///
-/// Koha: `C4::Reserves::FixPriority` (without lowest priority or found holds).
+/// Koha: `C4::Reserves::FixPriority` (without lowest priority).
 fn fix_priority(connection: &Connection, instance: i64) -> rusqlite::Result<()> {
     let ids = {
-        let mut statement = connection
-            .prepare_cached("SELECT id FROM holds WHERE instance_id = ?1 ORDER BY priority, id")?;
+        let mut statement = connection.prepare_cached(
+            "SELECT id FROM holds WHERE instance_id = ?1 AND found IS NULL
+             ORDER BY priority, id",
+        )?;
         statement
             .query_map([instance], |row| row.get::<_, i64>(0))?
             .collect::<rusqlite::Result<Vec<_>>>()?
@@ -174,7 +180,7 @@ pub(crate) fn place_hold(connection: &Connection, request: &HoldRequest) -> Appl
         .map_err(|refusal| refused(HoldRefused::Rules(refusal)))?;
     let queued: i64 = connection
         .query_row(
-            "SELECT count(*) FROM holds WHERE instance_id = ?1",
+            "SELECT count(*) FROM holds WHERE instance_id = ?1 AND found IS NULL",
             [instance],
             |row| row.get(0),
         )
@@ -182,8 +188,8 @@ pub(crate) fn place_hold(connection: &Connection, request: &HoldRequest) -> Appl
     connection
         .execute(
             "INSERT INTO holds (patron_id, instance_id, item_id, pickup_id, priority, placed_on,
-                                created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                                created_at, item_level)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?3 IS NOT NULL)",
             params![
                 request.patron.0,
                 instance,
@@ -247,7 +253,8 @@ pub(crate) fn patron_holds(
     patron: PatronId,
 ) -> rusqlite::Result<Vec<PatronHold>> {
     let mut statement = connection.prepare_cached(
-        "SELECT h.id, n.title, i.barcode, b.name, h.placed_on, h.priority
+        "SELECT h.id, n.title, i.barcode, b.name, h.placed_on, h.priority, h.found,
+                h.expires_on
          FROM holds h
          JOIN instances n ON n.id = h.instance_id
          JOIN branches b ON b.id = h.pickup_id
@@ -258,6 +265,8 @@ pub(crate) fn patron_holds(
     statement
         .query_map([patron.0], |row| {
             let placed_on: String = row.get(4)?;
+            let found: Option<String> = row.get(6)?;
+            let expires_on: Option<String> = row.get(7)?;
             Ok(PatronHold {
                 id: HoldId(row.get(0)?),
                 title: row.get(1)?,
@@ -265,7 +274,225 @@ pub(crate) fn patron_holds(
                 pickup: row.get(3)?,
                 placed_on: date(&placed_on, 4)?,
                 priority: row.get(5)?,
+                found: found.as_deref().and_then(Found::from_code),
+                expires_on: expires_on.map(|day| date(&day, 7)).transpose()?,
             })
         })?
         .collect()
+}
+
+/// The Instance's holds, as `hold_for_item` reads them.
+fn instance_queue(connection: &Connection, instance: i64) -> rusqlite::Result<Vec<QueuedHold>> {
+    let mut statement = connection.prepare_cached(
+        "SELECT h.id, p.branch_id, h.pickup_id, h.priority, h.found, h.item_id
+         FROM holds h JOIN patrons p ON p.id = h.patron_id
+         WHERE h.instance_id = ?1",
+    )?;
+    statement
+        .query_map([instance], |row| {
+            let found: Option<String> = row.get(4)?;
+            Ok(QueuedHold {
+                id: HoldId(row.get(0)?),
+                patron_branch: BranchId(row.get(1)?),
+                pickup: BranchId(row.get(2)?),
+                priority: row.get(3)?,
+                found: found.as_deref().and_then(Found::from_code),
+                item: row.get::<_, Option<i64>>(5)?.map(ItemId),
+            })
+        })?
+        .collect()
+}
+
+/// An Item at a checkin, as the holds see it.
+pub(crate) struct CheckinItem {
+    /// The Item, already at the desk's branch.
+    pub(crate) item: HoldItem,
+    /// Its Instance.
+    pub(crate) instance: i64,
+    /// Its `notforloan` status.
+    pub(crate) not_for_loan: i64,
+}
+
+/// The hold a checked-in Item answers, read before anything changes.
+///
+/// Koha: `C4::Circulation::AddReturn` calls `C4::Reserves::CheckReserves` unless the Item is
+/// withdrawn; `ConfirmFutureHolds` is off.
+pub(crate) fn hold_at_checkin(
+    connection: &Connection,
+    rules: &[CirculationRule],
+    item: &CheckinItem,
+) -> rusqlite::Result<Option<CheckinHold>> {
+    let queue = instance_queue(connection, item.instance)?;
+    let Some(found) = hold_for_item(rules, &queue, &item.item, item.not_for_loan) else {
+        return Ok(None);
+    };
+    let pickup = queue
+        .iter()
+        .find(|hold| hold.id == found.hold())
+        .map_or(item.item.holding, |hold| hold.pickup);
+    Ok(Some(CheckinHold { found, pickup }))
+}
+
+/// A hold waiting at another branch than the desk's goes back to the head of the queue, so
+/// the Item can be sent where it is picked up.
+///
+/// Koha: `C4::Circulation::AddReturn` and `Koha::Hold::revert_found`.
+pub(crate) fn revert_waiting(
+    connection: &Connection,
+    found: CheckinHold,
+    desk: BranchId,
+    instance: i64,
+) -> rusqlite::Result<CheckinHold> {
+    let HoldMatch::Waiting(hold) = found.found else {
+        return Ok(found);
+    };
+    if found.pickup == desk {
+        return Ok(found);
+    }
+    connection.execute(
+        "UPDATE holds SET priority = priority + 1 WHERE instance_id = ?1 AND priority > 0",
+        [instance],
+    )?;
+    connection.execute(
+        "UPDATE holds SET priority = 1, found = NULL, waiting_since = NULL, expires_on = NULL,
+                          item_id = CASE WHEN item_level = 1 THEN item_id END
+         WHERE id = ?1",
+        [hold.0],
+    )?;
+    fix_priority(connection, instance)?;
+    Ok(CheckinHold {
+        found: HoldMatch::Reserved(hold),
+        ..found
+    })
+}
+
+/// The hold to set aside, with what deciding needs.
+struct Aside {
+    instance: i64,
+    item: Option<i64>,
+    pickup: BranchId,
+    category: i64,
+    waiting_since: Option<String>,
+}
+
+fn find_aside(connection: &Connection, hold: HoldId) -> rusqlite::Result<Option<Aside>> {
+    connection
+        .query_row(
+            "SELECT h.instance_id, h.item_id, h.pickup_id, p.category_id, h.waiting_since
+             FROM holds h JOIN patrons p ON p.id = h.patron_id WHERE h.id = ?1",
+            [hold.0],
+            |row| {
+                Ok(Aside {
+                    instance: row.get(0)?,
+                    item: row.get(1)?,
+                    pickup: BranchId(row.get(2)?),
+                    category: row.get(3)?,
+                    waiting_since: row.get(4)?,
+                })
+            },
+        )
+        .optional()
+}
+
+/// Applies `circ.set_hold_aside`: the Item waits for the hold at the desk's branch, or goes
+/// in transit to its pickup branch.
+///
+/// Koha: `C4::Reserves::ModReserveAffect`, `Koha::Hold::set_waiting`, `set_transfer`, and
+/// `ModItemTransfer` with reason `Reserve` (`circ/returns.pl`).
+pub(crate) fn set_hold_aside(connection: &Connection, request: &HoldAside) -> Applied {
+    let barcode =
+        checked_barcode(&request.barcode).ok_or_else(|| refused(HoldRefused::UnknownBarcode))?;
+    let (item, instance, policy): (i64, i64, i64) = connection
+        .query_row(
+            "SELECT id, instance_id, policy_id FROM items WHERE barcode = ?1",
+            [barcode],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()
+        .map_err(storage)?
+        .ok_or_else(|| refused(HoldRefused::UnknownBarcode))?;
+    let hold = find_aside(connection, request.hold)
+        .map_err(storage)?
+        .ok_or_else(|| refused(HoldRefused::UnknownHold))?;
+    if hold.instance != instance || hold.item.is_some_and(|asked| asked != item) {
+        return Err(refused(HoldRefused::WrongItem));
+    }
+    let at = request.at.to_string();
+    let open: Option<i64> = connection
+        .query_row(
+            "SELECT id FROM transfers WHERE item_id = ?1 AND arrived_at IS NULL",
+            [item],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(storage)?;
+    let set_aside = if hold.pickup == request.desk {
+        let today = request.at.date();
+        let since = match &hold.waiting_since {
+            Some(day) => date(day, 0).map_err(storage)?,
+            None => today,
+        };
+        let scope = RuleScopeKey {
+            branch: Some(hold.pickup),
+            category: Some(PatronCategoryId(hold.category)),
+            policy: Some(PolicyId(policy)),
+        };
+        let rules = read_rules(connection).map_err(storage)?;
+        // A period past the calendar's end waits until its last day.
+        let expires = since
+            .checked_add(jiff::Span::new().days(i64::from(pickup_days(&rules, &scope))))
+            .unwrap_or(Date::MAX);
+        connection
+            .execute(
+                "UPDATE holds SET found = 'W', priority = 0, item_id = ?2, waiting_since = ?3,
+                                  expires_on = ?4
+                 WHERE id = ?1",
+                params![request.hold.0, item, since.to_string(), expires.to_string()],
+            )
+            .map_err(storage)?;
+        if let Some(open) = open {
+            connection
+                .execute(
+                    "UPDATE transfers SET arrived_at = ?2 WHERE id = ?1",
+                    params![open, at],
+                )
+                .map_err(storage)?;
+        }
+        SetAside {
+            found: Found::Waiting,
+            pickup: hold.pickup,
+            expires_on: Some(expires),
+        }
+    } else {
+        connection
+            .execute(
+                "UPDATE holds SET found = 'T', priority = 0, item_id = ?2 WHERE id = ?1",
+                params![request.hold.0, item],
+            )
+            .map_err(storage)?;
+        // Koha: `ModItemTransfer` replaces the open transfer with this one; Elzevir keeps no
+        // cancelled transfers.
+        connection
+            .execute(
+                "DELETE FROM transfers WHERE item_id = ?1 AND arrived_at IS NULL",
+                [item],
+            )
+            .map_err(storage)?;
+        connection
+            .execute(
+                "INSERT INTO transfers (item_id, from_branch, to_branch, reason, sent_at)
+                 VALUES (?1, ?2, ?3, 'Reserve', ?4)",
+                params![item, request.desk.0, hold.pickup.0, at],
+            )
+            .map_err(storage)?;
+        SetAside {
+            found: Found::InTransit,
+            pickup: hold.pickup,
+            expires_on: None,
+        }
+    };
+    fix_priority(connection, instance).map_err(storage)?;
+    Ok(WriteOutput::Circulation(CirculationOutput::HoldSetAside(
+        set_aside,
+    )))
 }
