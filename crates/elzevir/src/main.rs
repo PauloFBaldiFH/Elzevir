@@ -9,6 +9,7 @@
 mod access_config;
 mod addresses;
 mod admin;
+mod background;
 mod backup_archive;
 mod backup_cli;
 mod broker;
@@ -104,6 +105,10 @@ enum Command {
     HostJob(host_jobs::Args),
     /// Install or inspect optional operational tools.
     Tools(tools_cli::Args),
+    /// Start the server in the background, apart from the panel.
+    Background(background::Args),
+    /// Stop the server started in the background.
+    Stop(server_config::ServeArgs),
     /// Add or remove the desktop launcher that opens the panel.
     Desktop(desktop::Args),
     /// Manage a free address through an explicitly compatible broker.
@@ -193,6 +198,10 @@ fn main() -> ExitCode {
         Command::HostJob(args) => host_jobs::run(&args),
         Command::Tools(args) => tools_cli::run(args),
         Command::Desktop(args) => desktop::run(&args),
+        Command::Background(args) => background::run(args),
+        Command::Stop(args) => first_use::resolve(args)
+            .and_then(|(settings, _)| background::stop(&settings.data_dir))
+            .map(drop),
         Command::Address(args) => broker_cli::run(args),
         Command::Cloud(args) => cloud_cli::run(args),
         Command::Tunnel(args) => tunnel_cli::run(args),
@@ -621,7 +630,7 @@ async fn run_http(
         Arc::clone(&probe),
         operations,
         web.state,
-        receiver.clone(),
+        control.clone(),
     );
     let health_server = axum::serve(health_listener, health_app)
         .with_graceful_shutdown(wait_shutdown(receiver.clone()))

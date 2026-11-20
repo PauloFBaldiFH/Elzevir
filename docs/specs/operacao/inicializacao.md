@@ -102,8 +102,16 @@ vocabulário de materiais continua vindo das listas oficiais de BIBFRAME.
 A instalação prepara SQLite e Tantivy antes de publicar a configuração.
 
 `serve`, `panel` e `start` oferecem o assistente no primeiro uso do
-diretório padrão em terminal. `start` executa o servidor e o painel na
-mesma instância e encerra o servidor de forma ordenada ao sair do painel.
+diretório padrão em terminal. `start` deixa o servidor rodando em segundo
+plano (`elzevir background`, processo separado do terminal) e abre o painel
+ligado a ele; fechar o painel não para o servidor (Paulo, 2026-11-20).
+`elzevir background` inicia o servidor da instituição padrão sem abrir
+nada e não faz nada se ele já estiver rodando; é o que roda no login, pela
+entrada de autoinício do Linux (`~/.config/autostart`, criada por
+`elzevir desktop install`) e pelo atalho na pasta Inicializar do Windows.
+`elzevir stop` pede pelo canal administrativo local a parada ordenada.
+A atualização pessoal para o servidor em segundo plano antes de trocar o
+executável e o inicia de novo depois, mesmo se a atualização falhar.
 `elzevir` sem subcomando equivale a `elzevir start`, para que o uso diário
 não exija lembrar comandos.
 Se a porta configurada estiver ocupada, `start` (e o primeiro uso) abre

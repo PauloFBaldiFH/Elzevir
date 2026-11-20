@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
 use std::{io, sync::Arc, time::Duration};
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader},
-    sync::watch,
     task::JoinSet,
     time::timeout,
 };
@@ -46,6 +45,8 @@ enum Command {
     BackupPolicy {
         policy: crate::operations_config::Policy,
     },
+    /// Ordered shutdown, for a server running in the background.
+    Stop,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -65,6 +66,7 @@ enum Outcome {
     Sessions { count: usize },
     Job { job: crate::operations::Job },
     Operations { view: crate::operations::View },
+    Stopping,
     Error { code: ErrorCode },
 }
 
@@ -95,6 +97,7 @@ async fn handle(
     probe: Arc<Probe>,
     operations: crate::operations::Client,
     sessions: elzevir_web::AppState,
+    control: crate::shutdown::Control,
 ) -> io::Result<()> {
     // Collapse decoding failures to a static code; never echo untrusted frame contents.
     let request = frame(&stream, MAX_FRAME)
@@ -163,6 +166,15 @@ async fn handle(
                 .policy(&policy)
                 .map(|view| Outcome::Operations { view }),
         ),
+        Some(Request {
+            command: Command::Stop,
+            ..
+        }) => {
+            // The same durable request as a console signal: the reply is
+            // written before the listeners close.
+            control.request();
+            Outcome::Stopping
+        }
     };
     let response = Response {
         schema: 1,
@@ -183,8 +195,9 @@ pub(crate) async fn serve(
     probe: Arc<Probe>,
     operations: crate::operations::Client,
     sessions: elzevir_web::AppState,
-    mut shutdown: watch::Receiver<bool>,
+    control: crate::shutdown::Control,
 ) -> io::Result<()> {
+    let mut shutdown = control.receiver();
     let mut pending = JoinSet::new();
     loop {
         tokio::select! {
@@ -195,7 +208,8 @@ pub(crate) async fn serve(
                     let probe = Arc::clone(&probe);
                     let operations = operations.clone();
                     let sessions=sessions.clone();
-                    pending.spawn(async move { timeout(DEADLINE, handle(stream, probe, operations,sessions)).await });
+                    let control = control.clone();
+                    pending.spawn(async move { timeout(DEADLINE, handle(stream, probe, operations, sessions, control)).await });
                 }
                 // Dropping excess connections applies a fixed resource bound.
             }
@@ -220,6 +234,14 @@ pub(crate) fn status(info: &RuntimeInfo) -> Result<Report, String> {
             Ok(health)
         }
         _ => Err("administrative command refused".to_owned()),
+    }
+}
+
+/// Asks a running server for an ordered shutdown.
+pub(crate) fn stop(info: &RuntimeInfo) -> Result<(), String> {
+    match call(info, Command::Stop)? {
+        Outcome::Stopping => Ok(()),
+        _ => Err("stop request refused".to_owned()),
     }
 }
 

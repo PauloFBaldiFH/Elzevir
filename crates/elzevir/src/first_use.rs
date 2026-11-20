@@ -132,42 +132,7 @@ pub(crate) fn start(args: ServeArgs, no_self_update: bool) -> Result<(), String>
     let mut settings = settings;
     let saved = config.as_deref().filter(|_| !explicit_listen);
     settings.listen = crate::listen_port::ensure(settings.listen, saved, &settings.lang)?;
-    let control = crate::shutdown::Control::default();
-    std::thread::scope(|scope| {
-        let (ready, started) = std::sync::mpsc::sync_channel(1);
-        let server_control = control.clone();
-        let settings_ref = &settings;
-        let server = std::thread::Builder::new()
-            .name("elzevir-web".into())
-            .spawn_scoped(scope, move || {
-                let result = crate::serve_controlled(settings_ref, &server_control, || {
-                    ready.send(()).map_err(|_| "start panel unavailable".into())
-                });
-                server_control.request();
-                result
-            })
-            .map_err(|error| error.to_string())?;
-        let _stop = StopOnDrop(&control);
-        let panel = if started.recv().is_ok() {
-            let stopping = control.clone();
-            crate::panel_cli::connected(&settings, config, false, no_self_update, move || {
-                stopping.requested()
-            })
-        } else {
-            Err("server stopped before the panel could open".into())
-        };
-        control.request();
-        server
-            .join()
-            .map_err(|_| "integrated server thread failed")??;
-        panel
-    })
-}
-
-struct StopOnDrop<'a>(&'a crate::shutdown::Control);
-
-impl Drop for StopOnDrop<'_> {
-    fn drop(&mut self) {
-        self.0.request();
-    }
+    // The server keeps running after the panel closes (Paulo, 2026-11-20).
+    crate::background::launch(&settings, config.as_deref())?;
+    crate::panel_cli::connected(&settings, config, false, no_self_update, || false)
 }

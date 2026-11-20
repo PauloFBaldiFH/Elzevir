@@ -38,8 +38,8 @@ elzevir
 ```
 
 O comando sem argumentos (o mesmo que `elzevir start`) abre o painel
-Ratatui e serve o catálogo em `http://127.0.0.1:7390`. Fechar o painel
-encerra o servidor desse comando.
+Ratatui e serve o catálogo em `http://127.0.0.1:7390`. O servidor continua
+rodando em segundo plano depois que o painel fecha; `elzevir stop` o para.
 Também é possível usar `elzevir serve` e `elzevir panel` em terminais
 separados. Use `elzevir panel --demo` para explorar a interface com dados
 simulados.
