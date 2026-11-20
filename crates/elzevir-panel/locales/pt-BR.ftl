@@ -317,3 +317,4 @@ port-use = Usar esta porta [Enter]
 port-invalid = Digite um número de 1024 a 65535.
 port-still-busy = A porta { $port } também está em uso. Escolha outra.
 desktop-comment = Abrir o painel do Elzevir
+desktop-autostart = Iniciar o servidor do Elzevir ao entrar

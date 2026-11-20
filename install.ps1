@@ -169,16 +169,17 @@ function Set-ElzevirPrivateDirectory([string] $Path, [switch] $ForUser) {
     & "$env:SystemRoot\System32\icacls.exe" $Path '/inheritance:r' '/grant:r' @grants | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Cannot protect installation directory' }
 }
-function New-ElzevirShortcut([string] $Folder, [string] $Target, [string] $Arguments) {
+function New-ElzevirShortcut([string] $Folder, [string] $Target, [string] $Arguments, [string] $Name = 'Elzevir', [int] $WindowStyle = 1) {
     # Shortcuts are a convenience; the installation stands without them.
     try {
         if (-not (Test-Path -LiteralPath $Folder -PathType Container)) { return $false }
         $shell = New-Object -ComObject WScript.Shell
-        $shortcut = $shell.CreateShortcut((Join-Path $Folder 'Elzevir.lnk'))
+        $shortcut = $shell.CreateShortcut((Join-Path $Folder ($Name + '.lnk')))
         $shortcut.TargetPath = $Target
         $shortcut.Arguments = $Arguments
         $shortcut.WorkingDirectory = Split-Path -Parent $Target
         $shortcut.Description = 'Elzevir'
+        $shortcut.WindowStyle = $WindowStyle
         $shortcut.Save()
         return $true
     } catch {
@@ -224,6 +225,12 @@ function Install-ElzevirForUser([string] $Payload, [string] $BinDirectory, [stri
         $menu = New-ElzevirShortcut ([Environment]::GetFolderPath('Programs')) $destination 'start'
         $desktop = New-ElzevirShortcut ([Environment]::GetFolderPath('Desktop')) $destination 'start'
         if ($menu -or $desktop) { Write-Output 'Elzevir is in the Start menu and on the desktop.' }
+        # The server starts at sign-in; 7 keeps its short-lived console minimized.
+        & $destination background --help *> $null
+        if ($LASTEXITCODE -eq 0 -and (New-ElzevirShortcut ([Environment]::GetFolderPath('Startup')) $destination 'background' 'Elzevir (server)' 7)) {
+            Write-Output 'The Elzevir server starts when you sign in.'
+        }
+        $global:LASTEXITCODE = 0
         Write-Output ''
         Write-Output 'To open the panel later:'
         Write-Output '    elzevir'

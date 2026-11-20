@@ -3,11 +3,13 @@
 //!
 //! Linux follows the freedesktop.org specifications: an application entry
 //! with `Terminal=true` lets the desktop open its own terminal, whichever it
-//! is. Windows shortcuts are created by `install.ps1`.
+//! is. An autostart entry starts the server in the background at login.
+//! Windows shortcuts are created by `install.ps1`.
 
 use std::path::{Path, PathBuf};
 
 const ENTRY: &str = "elzevir.desktop";
+const AUTOSTART: &str = "elzevir-background.desktop";
 const ICON: &str = include_str!("../../../docs/marca/elzevir-logo.svg");
 
 /// Arguments of `elzevir desktop`.
@@ -19,7 +21,7 @@ pub(crate) struct Args {
 
 #[derive(clap::Subcommand)]
 enum Action {
-    /// Add the Elzevir launcher to the application menu and the desktop.
+    /// Add the launcher to the menu and the desktop, and start the server at login.
     Install,
     /// Remove the launcher and its icon.
     Remove,
@@ -29,6 +31,7 @@ enum Action {
 struct Places {
     entry: PathBuf,
     icon: PathBuf,
+    autostart: PathBuf,
     desktop: Option<PathBuf>,
 }
 
@@ -43,13 +46,18 @@ pub(crate) fn run(args: &Args) -> Result<(), String> {
     let places = Places {
         entry: data.join("applications").join(ENTRY),
         icon: data.join("icons/hicolor/scalable/apps/elzevir.svg"),
+        autostart: config.join("autostart").join(AUTOSTART),
         desktop: Some(desktop_dir(&user_dirs, &home)).filter(|path| path.is_dir()),
     };
     match args.action {
         Action::Install => {
             let executable =
                 std::env::current_exe().map_err(|_| "cannot locate the elzevir executable")?;
-            install(&places, &entry(&executable)?)
+            install(
+                &places,
+                &entry(&executable)?,
+                &autostart_entry(&executable)?,
+            )
         }
         Action::Remove => remove(&places),
     }
@@ -93,11 +101,28 @@ fn exec_argument(value: &str) -> String {
     quoted
 }
 
-fn entry(executable: &Path) -> Result<String, String> {
-    let path = executable
+fn exec_path(executable: &Path) -> Result<String, String> {
+    executable
         .to_str()
         .filter(|path| !path.chars().any(char::is_control))
-        .ok_or("the executable path cannot be written in a launcher")?;
+        .map(exec_argument)
+        .ok_or_else(|| "the executable path cannot be written in a launcher".to_owned())
+}
+
+/// Login entry: no window, the server simply starts (Paulo, 2026-11-20).
+fn autostart_entry(executable: &Path) -> Result<String, String> {
+    let english = elzevir_panel::Messages::new("en").map_err(|error| error.to_string())?;
+    Ok(format!(
+        "[Desktop Entry]\nType=Application\nVersion=1.5\nName=Elzevir\n\
+         Comment={}\nExec={} background\nIcon=elzevir\nTerminal=false\n\
+         NoDisplay=true\nX-GNOME-Autostart-enabled=true\n",
+        english.get("desktop-autostart"),
+        exec_path(executable)?,
+    ))
+}
+
+fn entry(executable: &Path) -> Result<String, String> {
+    let path = exec_path(executable)?;
     let english = elzevir_panel::Messages::new("en").map_err(|error| error.to_string())?;
     let portuguese = elzevir_panel::Messages::new("pt-BR").map_err(|error| error.to_string())?;
     Ok(format!(
@@ -106,13 +131,14 @@ fn entry(executable: &Path) -> Result<String, String> {
          Terminal=true\nCategories=Office;Education;\nStartupNotify=false\n",
         english.get("desktop-comment"),
         portuguese.get("desktop-comment"),
-        exec_argument(path),
+        path,
     ))
 }
 
-fn install(places: &Places, entry: &str) -> Result<(), String> {
+fn install(places: &Places, entry: &str, autostart: &str) -> Result<(), String> {
     write(&places.icon, ICON, 0o644)?;
     write(&places.entry, entry, 0o644)?;
+    write(&places.autostart, autostart, 0o644)?;
     if let Some(desktop) = &places.desktop {
         let launcher = desktop.join(ENTRY);
         // Desktops only run launchers on the desktop folder when executable.
@@ -160,9 +186,14 @@ fn trust(launcher: &Path) {
 
 fn remove(places: &Places) -> Result<(), String> {
     let desktop = places.desktop.as_ref().map(|folder| folder.join(ENTRY));
-    for path in [Some(&places.entry), Some(&places.icon), desktop.as_ref()]
-        .into_iter()
-        .flatten()
+    for path in [
+        Some(&places.entry),
+        Some(&places.icon),
+        Some(&places.autostart),
+        desktop.as_ref(),
+    ]
+    .into_iter()
+    .flatten()
     {
         match std::fs::remove_file(path) {
             Ok(()) => {}
@@ -212,6 +243,9 @@ mod tests {
         assert!(text.contains("Terminal=true\n"));
         assert!(text.contains("Comment[pt_BR]=Abrir o painel do Elzevir\n"));
         assert!(entry(Path::new("/bad\npath")).is_err());
+        let login = autostart_entry(Path::new("/opt/elzevir/elzevir")).unwrap();
+        assert!(login.contains("Exec=\"/opt/elzevir/elzevir\" background\n"));
+        assert!(login.contains("Terminal=false\n"));
     }
 
     #[test]
@@ -222,10 +256,13 @@ mod tests {
         let places = Places {
             entry: root.path().join("share/applications/elzevir.desktop"),
             icon: root.path().join("share/icons/elzevir.svg"),
+            autostart: root
+                .path()
+                .join("config/autostart/elzevir-background.desktop"),
             desktop: Some(desktop.clone()),
         };
-        install(&places, "[Desktop Entry]\n").unwrap();
-        assert!(places.entry.is_file() && places.icon.is_file());
+        install(&places, "[Desktop Entry]\n", "[Desktop Entry]\n").unwrap();
+        assert!(places.entry.is_file() && places.icon.is_file() && places.autostart.is_file());
         let launcher = desktop.join(ENTRY);
         #[cfg(unix)]
         {
@@ -235,6 +272,7 @@ mod tests {
         }
         remove(&places).unwrap();
         assert!(!places.entry.exists() && !launcher.exists() && desktop.is_dir());
+        assert!(!places.autostart.exists());
         remove(&places).unwrap();
     }
 }

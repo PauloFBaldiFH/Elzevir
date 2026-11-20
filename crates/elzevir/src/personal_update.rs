@@ -96,13 +96,22 @@ pub(crate) fn execute(
     if !crate::release::valid_version(version) || !newer(version, env!("CARGO_PKG_VERSION")) {
         return Err("self-update requires a newer official release".into());
     }
-    apply(
+    // The background server holds the database and, on Windows, the program.
+    let was_running = crate::background::stop(directory)?;
+    let applied = apply(
         directory,
         config,
         version,
         executable,
         &crate::release::Http,
-    )
+    );
+    if was_running {
+        // Whether or not the update applied, the catalog comes back online.
+        let restarted = crate::background::restart(executable, directory, config);
+        applied.and(restarted)
+    } else {
+        applied
+    }
 }
 
 fn apply(
