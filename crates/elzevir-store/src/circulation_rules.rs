@@ -32,6 +32,9 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CirculationCommand) -> Applied {
         CirculationCommand::Checkin(request) => crate::returns::checkin(tx.connection(), request),
         CirculationCommand::Renew(request) => crate::renewals::renew(tx.connection(), request),
         CirculationCommand::Pay(request) => crate::accounts::pay(tx.connection(), request),
+        CirculationCommand::ChargeOverdues { at } => {
+            crate::overdue_fines::charge_overdues(tx.connection(), at)
+        }
     }
 }
 

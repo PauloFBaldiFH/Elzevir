@@ -1,6 +1,6 @@
 # Conta do leitor
 
-> Status: tarefa 3.7, partes a (multa lançada na devolução e dívida no empréstimo) e b (pagamento e abono). Multa diária pelo agendador e exemplar perdido vêm nas próximas partes. Base: Koha 26.05.05.
+> Status: tarefa 3.7, partes a (multa lançada na devolução e dívida no empréstimo), b (pagamento e abono) e c (multa diária). Exemplar perdido e a gravação no oráculo vêm nas próximas partes. Base: Koha 26.05.05.
 
 ## 1. Comportamento
 
@@ -17,19 +17,25 @@
 11. O valor precisa ser maior que zero e não pode passar do que se deve nos débitos marcados, ou em todos quando nenhum foi marcado (Koha: `error_over` do `paycollect.pl`). Um débito marcado que já não deve nada recusa o pedido.
 12. O pagamento vira um crédito do valor (negativo), com movimento `CREATE`. Ele quita primeiro os débitos marcados, do mais antigo ao mais novo, e o que sobra vai para os outros débitos, também do mais antigo ao mais novo, como o `pay` do Koha. Cada débito leva o que deve enquanto o crédito durar; cada quitação deixa um movimento `APPLY` com o valor negativo.
 13. A resposta diz quanto foi pago ou abonado e quanto o leitor ainda deve. A ficha lista a conta, do lançamento mais novo ao mais antigo, com o dia, o tipo, o código de barras do exemplar, o valor e o que falta.
-14. As contas não entram no resumo da importação.
+14. **Multa diária.** Enquanto o servidor roda, ele recalcula as multas dos empréstimos atrasados ao iniciar e depois a cada hora (o Koha roda `fines.pl` pelo cron, em geral uma vez por dia). Cada empréstimo atrasado de exemplar não perdido tem a multa calculada até o momento e lançada ou ajustada como no item 5; a multa fica `UNRETURNED` e continua crescendo até a devolução, que a fecha (item 7).
+15. Rodar mais de uma vez no mesmo dia não muda nada: a multa só muda quando os centavos mudam. Por isso rodar de hora em hora cobra o mesmo que rodar uma vez por dia; só os empréstimos por hora ficam em dia mais cedo.
+16. Num dia em que a unidade está fechada, a multa não é recalculada (`ChargeFinesOnClosedDays` desligado, o padrão). As regras, o calendário e a unidade são os do item 4.
+17. Os empréstimos são percorridos por leitor e, dentro de cada leitor, na ordem em que foram feitos (o `Getoverdues` do Koha ordena por leitor), o que decide qual multa para no teto do `MaxFine`.
+18. O resultado de cada rodada vai para o log do servidor (`fines.charged`, com quantos empréstimos estavam atrasados e quantas multas foram lançadas ou mantidas; `fines.failed` quando falha, e a próxima hora tenta de novo).
+19. As contas não entram no resumo da importação.
 
 ## 2. Origem no Koha
 
 - `C4::Circulation::AddReturn`, `_CalculateAndUpdateFine`, `_FixOverduesOnReturn`.
 - `C4::Overdues::UpdateFine`, `Koha::Account::add_debit`, `Koha::Account::Line::adjust`.
+- `misc/cronjobs/fines.pl`, `C4::Overdues::Getoverdues`.
 - `Koha::Account::pay`, `add_credit`, `Koha::Account::Line::apply`, `members/paycollect.pl`.
 - `C4::Circulation::CanBookBeIssued` (`DEBT`), `Koha::Patron::is_patron_inside_charge_limits`, `Koha::Account::non_issues_charges`.
 - Teste: `reference/koha/t/db_dependent/Overdues.t` ("UpdateFine tests").
 
 ## 3. Paridade
 
-`exigida`. Prova, por enquanto: `crates/elzevir-domain/src/account.rs` (a sequência de `MaxFine` de `Overdues.t`, leitura das regras, dívida) `crates/elzevir-store/tests/checkout.rs` (multa lançada na devolução, confirmação e recusa por dívida, pagamento do mais antigo, abono dos marcados, limites do valor) e `crates/elzevir/tests/patrons.rs` (a conta na ficha, pagamento e abono pelo formulário). A gravação no oráculo vem com a multa diária.
+`exigida`. Prova, por enquanto: `crates/elzevir-domain/src/account.rs` (a sequência de `MaxFine` de `Overdues.t`, leitura das regras, dívida) `crates/elzevir-store/tests/checkout.rs` (multa lançada na devolução, confirmação e recusa por dívida, pagamento do mais antigo, abono dos marcados, limites do valor, multa diária crescendo e parada no dia fechado) e `crates/elzevir/tests/patrons.rs` (a conta na ficha, pagamento e abono pelo formulário). A gravação no oráculo vem com a multa diária.
 
 ## 4. Casos de borda
 
@@ -47,6 +53,7 @@ O Elzevir não tem `finesMode`: a multa é cobrada quando a regra tem valor de m
 
 - Tipo de pagamento, caixa e recibo (`RequirePaymentType`, `UseCashRegisters`, `AutomaticEmailReceipts`); troco; estorno e devolução de crédito (`payout`, `OVERPAYMENT`).
 - Débitos manuais e créditos avulsos; a permissão própria de cobrança (Koha: `updatecharges`), que hoje é a de circulação.
-- Multa diária pelo agendador (`fines.pl`), exemplar perdido por atraso longo (`longoverdue.pl`).
+- Exemplar perdido por atraso longo (`longoverdue.pl`).
+- As opções do `fines.pl` (`--maxdays`, `--verify-issue`, arquivo de relatório).
 - Isenção da multa na devolução (`exemptfine`) e devolução com data retroativa.
 - Limites de dívida da categoria e de responsáveis (`NoIssuesChargeGuarantees`).

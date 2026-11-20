@@ -5,6 +5,7 @@ pub use elzevir_data::RuleKind;
 use elzevir_domain::circulation_rules::{
     CirculationRule, RuleScopeKey, RuleValueError, checked_value,
 };
+use jiff::Zoned;
 use serde::{Deserialize, Serialize};
 
 use crate::accounts::{Paid, PayRefusal, PaymentRequest};
@@ -33,6 +34,12 @@ pub enum CirculationCommand {
     Renew(RenewRequest),
     /// Pays or writes off what a patron owes (docs/specs/circulacao/conta.md).
     Pay(PaymentRequest),
+    /// Brings the fine of every overdue loan to what it is worth at `at`: the daily run
+    /// (docs/specs/circulacao/conta.md).
+    ChargeOverdues {
+        /// When, in the library's time zone.
+        at: Zoned,
+    },
 }
 
 /// New values for some rules at one scope.
@@ -67,6 +74,17 @@ pub enum CirculationOutput {
     Renewed(Renewed),
     /// A payment or write-off was made.
     Paid(Paid),
+    /// The daily run went through the overdue loans.
+    OverduesCharged(OverduesCharged),
+}
+
+/// What the daily run of overdue fines did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct OverduesCharged {
+    /// Loans overdue.
+    pub overdue: usize,
+    /// Loans whose fine is charged now.
+    pub charged: usize,
 }
 
 /// Why a circulation command was refused.

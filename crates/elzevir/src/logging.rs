@@ -17,6 +17,8 @@ pub(crate) enum Event {
     IndexerPanicked,
     RuntimeCleanupFailed,
     AdminHandlerFailed,
+    OverdueFinesCharged { overdue: u64, charged: u64 },
+    OverdueFinesFailed,
 }
 
 /// Records a known event with the identity generated for this execution.
@@ -42,6 +44,12 @@ pub(crate) fn emit(instance: &str, event: Event) {
         }
         Event::AdminHandlerFailed => {
             tracing::warn!(target: TARGET, institution = "local", instance, event = "admin.handler_failed", "administrative handler failed");
+        }
+        Event::OverdueFinesCharged { overdue, charged } => {
+            tracing::info!(target: TARGET, institution = "local", instance, event = "fines.charged", overdue, charged, "overdue fines brought up to date");
+        }
+        Event::OverdueFinesFailed => {
+            tracing::warn!(target: TARGET, institution = "local", instance, event = "fines.failed", "overdue fines run failed; retried next hour");
         }
         Event::RuntimeCleanupFailed => {
             tracing::warn!(target: TARGET, institution = "local", instance, event = "runtime.cleanup_failed", "runtime metadata cleanup failed");

@@ -44,6 +44,7 @@ mod memory;
 mod operations;
 mod operations_cli;
 mod operations_config;
+mod overdue_run;
 mod panel_cli;
 mod personal_update;
 mod private_temp;
@@ -450,6 +451,7 @@ fn serve_controlled(
             parallelism,
             Arc::clone(&probe),
         )?;
+        let time_zone = loaded.time_zone.clone();
         let app = web_app(
             &store,
             index,
@@ -464,6 +466,12 @@ fn serve_controlled(
             &settings.lang,
         )?;
         let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+        let fines = runtime.spawn(overdue_run::run(
+            Arc::clone(&store),
+            time_zone,
+            instance.clone(),
+            control.receiver(),
+        ));
         let result = runtime.block_on(run_http(
             settings,
             control,
@@ -472,6 +480,8 @@ fn serve_controlled(
             Arc::clone(&probe),
             operations.client(),
         ));
+        // The run holds the store; it ends with the server, or is dropped with the runtime.
+        fines.abort();
         drop(indexer);
         // Runtime drop waits for blocking reads; keep the institution lock until all
         // readers are gone and the existing writer has reported its final checkpoint.

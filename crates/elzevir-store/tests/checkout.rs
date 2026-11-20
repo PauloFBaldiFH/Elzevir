@@ -14,7 +14,7 @@ use elzevir_app::catalog::{
     NewRecord, RecordItems,
 };
 use elzevir_app::circulation_rules::{
-    CirculationCommand, CirculationOutput, CirculationRefusal, RuleChange,
+    CirculationCommand, CirculationOutput, CirculationRefusal, OverduesCharged, RuleChange,
 };
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
@@ -819,4 +819,93 @@ fn payments_settle_the_oldest_debits_first_and_write_offs_the_chosen_ones() {
     library
         .lend("0001", "2026-12-22T10:00:00-03:00", false)
         .unwrap();
+}
+
+fn charge_overdues(library: &Library, at: &str) -> OverduesCharged {
+    let at: Zoned = format!("{at}[America/Sao_Paulo]").parse().unwrap();
+    match submit(
+        &library.store,
+        WriteCommand::Circulation(CirculationCommand::ChargeOverdues { at }),
+    ) {
+        Ok(WriteOutput::Circulation(CirculationOutput::OverduesCharged(done))) => done,
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn the_daily_run_grows_the_fine_of_a_loan_still_out_except_on_closed_days() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(&dir);
+    library.item("0001", ItemStatus::default());
+    library.rules(&[
+        ("maxissueqty", "5"),
+        ("issuelength", "7"),
+        ("fine", "0.50"),
+        ("chargeperiod", "1"),
+    ]);
+    // Lent at the annex, which holds the Item while it is out; due on Thursday the 26th.
+    library
+        .lend("0001", "2026-11-19T10:00:00-03:00", false)
+        .unwrap();
+    let fine = || {
+        library.read::<String>(
+            "SELECT status || ' ' || amount || ' ' || outstanding FROM account_lines",
+        )
+    };
+    assert_eq!(
+        charge_overdues(&library, "2026-11-26T22:00:00-03:00"),
+        OverduesCharged::default()
+    );
+    // Saturday: two days late.
+    assert_eq!(
+        charge_overdues(&library, "2026-11-28T10:00:00-03:00"),
+        OverduesCharged {
+            overdue: 1,
+            charged: 1
+        }
+    );
+    assert_eq!(fine(), "UNRETURNED 100 100");
+    submit(
+        &library.store,
+        WriteCommand::Circulation(CirculationCommand::ChangeCalendar(CalendarChange {
+            branch: library.annex,
+            action: CalendarAction::CloseWeekday {
+                weekday: 0,
+                text: HolidayText {
+                    title: "Domingo".to_owned(),
+                    description: None,
+                },
+            },
+        })),
+    )
+    .unwrap();
+    // Sunday the annex is closed: nothing changes (`ChargeFinesOnClosedDays` off).
+    assert_eq!(
+        charge_overdues(&library, "2026-11-29T10:00:00-03:00"),
+        OverduesCharged {
+            overdue: 1,
+            charged: 0
+        }
+    );
+    assert_eq!(fine(), "UNRETURNED 100 100");
+    // Monday: the 27th, 28th and 30th count, Sunday does not.
+    charge_overdues(&library, "2026-11-30T10:00:00-03:00");
+    assert_eq!(fine(), "UNRETURNED 150 150");
+    // Twice the same day changes nothing.
+    charge_overdues(&library, "2026-11-30T18:00:00-03:00");
+    let back = library
+        .give_back("0001", library.central, "2026-12-01T10:00:00-03:00")
+        .unwrap();
+    assert_eq!(back.fine, Some(Money(200)));
+    assert_eq!(fine(), "RETURNED 200 200");
+    assert_eq!(
+        library.read::<String>(
+            "SELECT group_concat(kind || ' ' || amount, ', ') FROM account_offsets ORDER BY id"
+        ),
+        "CREATE 100, OVERDUE_INCREASE 50, OVERDUE_INCREASE 50"
+    );
+    assert_eq!(
+        charge_overdues(&library, "2026-12-02T10:00:00-03:00"),
+        OverduesCharged::default()
+    );
 }

@@ -46,6 +46,8 @@ pub struct FineSettings {
     pub calendar: FinesCalendar,
     /// `FinesIncludeGracePeriod` (Koha: on).
     pub include_grace: bool,
+    /// `ChargeFinesOnClosedDays` (Koha: off): the daily run charges on closed days too.
+    pub charge_on_closed_days: bool,
 }
 
 impl Default for FineSettings {
@@ -54,6 +56,7 @@ impl Default for FineSettings {
             on_return: true,
             calendar: FinesCalendar::NoFinesWhenClosed,
             include_grace: true,
+            charge_on_closed_days: false,
         }
     }
 }
