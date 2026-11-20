@@ -26,6 +26,7 @@ mod import_sheets;
 mod importing;
 mod items;
 mod new_record;
+mod notice_rules;
 mod opac;
 mod patron_account;
 mod patron_form;
@@ -302,6 +303,14 @@ fn admin_routes() -> Router<AppState> {
         .route(
             "/equipe/admin/regras",
             get(circulation_rules::rules).post(circulation_rules::set_rules),
+        )
+        .route(
+            "/equipe/admin/avisos",
+            get(notice_rules::notices).post(notice_rules::set_overdue_rule),
+        )
+        .route(
+            "/equipe/admin/avisos/reservas",
+            post(notice_rules::set_hold_notices),
         )
         .route(
             "/equipe/admin/cadastros",

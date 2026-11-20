@@ -139,7 +139,7 @@ const GROUPS: [(&str, &[&str]); 8] = [
 ];
 
 /// The session and the rule book, or the response that stops the request.
-fn open(
+pub(crate) fn open(
     state: &AppState,
     headers: &HeaderMap,
 ) -> Result<(ActiveSession, Arc<dyn RuleBook>), Box<Response>> {
@@ -156,7 +156,7 @@ fn open(
 }
 
 /// One scope id as the lists send it: `0` or nothing is "any".
-fn chosen(id: Option<i64>) -> Option<i64> {
+pub(crate) fn chosen(id: Option<i64>) -> Option<i64> {
     id.filter(|id| *id != 0)
 }
 
@@ -364,14 +364,14 @@ struct Shown {
 }
 
 /// The names of the branches, categories and policies.
-struct Names {
-    branches: Vec<Named<BranchId>>,
-    categories: Vec<(PatronCategoryId, String)>,
+pub(crate) struct Names {
+    pub(crate) branches: Vec<Named<BranchId>>,
+    pub(crate) categories: Vec<(PatronCategoryId, String)>,
     policies: Vec<Named<PolicyId>>,
 }
 
 impl Names {
-    fn branch(&self, t: &I18n, id: Option<BranchId>) -> String {
+    pub(crate) fn branch(&self, t: &I18n, id: Option<BranchId>) -> String {
         name_of(
             t,
             id,
@@ -379,7 +379,7 @@ impl Names {
         )
     }
 
-    fn category(&self, t: &I18n, id: Option<PatronCategoryId>) -> String {
+    pub(crate) fn category(&self, t: &I18n, id: Option<PatronCategoryId>) -> String {
         name_of(
             t,
             id,
@@ -420,7 +420,7 @@ fn name_of<'a, Id: PartialEq>(
 }
 
 /// The lists of the chooser, "any" first.
-fn choices<Id: Copy + PartialEq>(
+pub(crate) fn choices<Id: Copy + PartialEq>(
     t: &I18n,
     rows: impl Iterator<Item = (Id, i64, String)>,
     chosen: Option<Id>,
@@ -438,7 +438,7 @@ fn choices<Id: Copy + PartialEq>(
     list
 }
 
-async fn names(state: &AppState) -> Option<Names> {
+pub(crate) async fn names(state: &AppState) -> Option<Names> {
     let catalog = Arc::clone(&state.inner.opac.catalog);
     let codes = tokio::task::spawn_blocking(move || catalog.codes())
         .await

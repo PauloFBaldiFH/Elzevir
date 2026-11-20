@@ -2,8 +2,8 @@
 //! `circ.set_rules` and the rule book (docs/specs/circulacao/regras.md).
 
 use elzevir_app::circulation_rules::{
-    CirculationCommand, CirculationDeskError, CirculationOutput, CirculationRefusal, RuleBook,
-    RuleChange, RuleKind, checked_rules,
+    CirculationCommand, CirculationDeskError, CirculationOutput, CirculationRefusal, NoticeChange,
+    NoticeRules, RuleBook, RuleChange, RuleKind, checked_rules,
 };
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::staff::StaffId;
@@ -188,13 +188,35 @@ impl RuleBook for ElzevirStore {
         actor: StaffId,
         change: RuleChange,
     ) -> Result<CirculationOutput, CirculationDeskError> {
+        self.run_circulation(actor, CirculationCommand::SetRules(change))
+    }
+
+    fn notice_rules(&self) -> Result<NoticeRules, CirculationDeskError> {
+        self.readers()
+            .read(crate::notices::notice_rules)
+            .map_err(|error| CirculationDeskError::Unavailable(error.to_string()))
+    }
+
+    fn set_notice_rule(
+        &self,
+        actor: StaffId,
+        change: NoticeChange,
+    ) -> Result<CirculationOutput, CirculationDeskError> {
+        self.run_circulation(actor, change.command())
+    }
+}
+
+impl ElzevirStore {
+    /// Runs one circulation command as `actor` and waits for its answer.
+    fn run_circulation(
+        &self,
+        actor: StaffId,
+        command: CirculationCommand,
+    ) -> Result<CirculationOutput, CirculationDeskError> {
         let unavailable =
             |error: &dyn std::fmt::Display| CirculationDeskError::Unavailable(error.to_string());
         let pending = self
-            .submit_as(
-                actor.0,
-                WriteCommand::Circulation(CirculationCommand::SetRules(change)),
-            )
+            .submit_as(actor.0, WriteCommand::Circulation(command))
             .map_err(|error| match error {
                 SubmitError::Busy => CirculationDeskError::Busy,
                 SubmitError::Closed => unavailable(&error),
