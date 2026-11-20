@@ -9,7 +9,7 @@
    e `iri_base` (base das IRIs BIBFRAME).
    O arquivo de exemplo é `elzevir.example.toml`.
 3. Precedência: opções explícitas da CLI > arquivo > padrões internos.
-   `listen` tem padrão `127.0.0.1:8080`; `insecure_cookies` é falso por padrão.
+   `listen` tem padrão `127.0.0.1:7390` (porta livre no registro da IANA, longe da 8080 que outros serviços costumam ocupar); `insecure_cookies` é falso por padrão.
    `data_dir` precisa vir do arquivo ou da CLI. Esta etapa continua atendendo
    uma instituição por processo; a pasta identifica essa instituição.
 4. `serve --data-dir PASTA [--listen IP:PORTA] [--insecure-cookies]` continua

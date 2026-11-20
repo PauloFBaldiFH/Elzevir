@@ -6,7 +6,7 @@ param(
     [string] $Name,
     [ValidatePattern('^[a-z0-9][a-z0-9-]{0,31}$')] [string] $Id = 'library',
     [ValidatePattern('^[a-zA-Z0-9_.-]{1,64}$')] [string] $Login = 'admin',
-    [string] $Listen = '127.0.0.1:8080',
+    [string] $Listen = '127.0.0.1:7390',
     [switch] $Plan,
     [switch] $OpenFirewall,
     [string] $DownloadOnly
@@ -207,7 +207,7 @@ function Install-ElzevirForUser([string] $Payload, [string] $BinDirectory, [stri
         Write-Output 'Next step:'
         Write-Output '    elzevir start'
         Write-Output 'The first start asks for the library name and the administrator password,'
-        Write-Output 'then serves the catalog at http://127.0.0.1:8080 and opens the panel.'
+        Write-Output 'then serves the catalog and opens the panel, which shows its address.'
     } else {
         $config = Join-Path $Data 'elzevir.toml'
         Write-Output ''

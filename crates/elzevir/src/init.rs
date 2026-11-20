@@ -23,7 +23,7 @@ pub(crate) struct InitArgs {
     #[arg(long, default_value = "admin")]
     pub(crate) login: String,
     /// Server IP and port.
-    #[arg(long, default_value = "127.0.0.1:8080")]
+    #[arg(long, default_value_t = crate::server_config::default_listen())]
     pub(crate) listen: SocketAddr,
     /// Allow plain-HTTP cookies for local development.
     #[arg(long, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
@@ -53,7 +53,7 @@ impl InitArgs {
         listen: Option<SocketAddr>,
         insecure: Option<bool>,
     ) -> Self {
-        let listen = listen.unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 8080)));
+        let listen = listen.unwrap_or_else(crate::server_config::default_listen);
         Self {
             name: None,
             config: None,
