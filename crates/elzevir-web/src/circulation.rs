@@ -258,6 +258,10 @@ pub(crate) fn routes() -> axum::Router<AppState> {
             get(checkin_desk).post(check_in),
         )
         .route(
+            "/equipe/circulacao/avisos",
+            get(crate::print_notices::print_notices).post(crate::print_notices::mark_printed),
+        )
+        .route(
             "/equipe/circulacao/devolucao/reserva",
             post(crate::patron_holds::set_aside),
         )

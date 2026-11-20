@@ -50,13 +50,15 @@ pub enum NoticeAbout {
     HoldWaiting(Date),
 }
 
-/// A notice waiting to go out by e-mail.
+/// A notice waiting to go out, by e-mail or on paper.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PendingEmail {
+pub struct PendingNotice {
     /// The notice.
     pub id: NoticeId,
-    /// Where it goes.
-    pub to: String,
+    /// The e-mail address it goes to; `None` on paper.
+    pub to: Option<String>,
+    /// The patron's postal address, for a printed notice.
+    pub address: Option<String>,
     /// The patron's name, first name first.
     pub name: String,
     /// The branch it comes from.
@@ -74,12 +76,19 @@ pub struct PendingEmail {
 #[error("notice queue unavailable: {0}")]
 pub struct NoticeQueueError(pub String);
 
-/// The queue of notices, for the sender.
+/// The queue of notices, for the sender and the print screen.
 pub trait NoticeQueue: Send + Sync {
     /// The oldest e-mail notices still pending, at most `limit`.
     ///
     /// # Errors
     ///
     /// When storage fails.
-    fn pending_emails(&self, limit: usize) -> Result<Vec<PendingEmail>, NoticeQueueError>;
+    fn pending_emails(&self, limit: usize) -> Result<Vec<PendingNotice>, NoticeQueueError>;
+
+    /// The oldest printed notices still pending, at most `limit`.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn pending_prints(&self, limit: usize) -> Result<Vec<PendingNotice>, NoticeQueueError>;
 }

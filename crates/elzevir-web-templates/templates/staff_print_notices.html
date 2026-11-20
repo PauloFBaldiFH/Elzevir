@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ t.get("print-notices-title") }}{% endblock %}
+{% block content %}
+<div class="print-notices">
+<div class="print-hide">
+<h1>{{ t.get("print-notices-title") }}</h1>
+{% if let Some(message) = marked %}<p class="codes-alert codes-saved" role="status">{{ message }}</p>{% endif %}
+{% if notices.is_empty() %}<p class="form-hint">{{ t.get("print-notices-empty") }}</p>{% else %}
+<p class="form-hint">{{ t.get("print-notices-hint") }}</p>
+<form method="post" action="/equipe/circulacao/avisos">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% for notice in notices %}<input type="hidden" name="n" value="{{ notice.id }}">{% endfor %}
+  <button type="submit">{{ t.get("print-notices-mark") }}</button>
+</form>
+{% endif %}
+</div>
+{% for notice in notices %}
+<article class="printed-notice">
+  <p class="printed-notice-to">{{ notice.name }}{% if let Some(address) = notice.address %}<br>{{ address }}{% endif %}</p>
+  <h2>{{ notice.subject }}</h2>
+  <p class="printed-notice-text">{{ notice.text }}</p>
+</article>
+{% endfor %}
+</div>
+{% endblock %}

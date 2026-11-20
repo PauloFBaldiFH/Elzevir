@@ -358,6 +358,14 @@ notices-no-categories = Crie antes uma categoria de leitor.
 notices-holds = Aviso de reserva disponível
 notices-holds-hint = Como os leitores de cada categoria ficam sabendo da reserva que os aguarda. E-mail para leitor sem endereço vira impresso.
 notices-error-days = Os dias de atraso são um número inteiro maior que zero.
+print-notices-title = Avisos impressos
+print-notices-empty = Nenhum aviso impresso esperando.
+print-notices-hint = Imprima esta página pelo navegador (um aviso por página) e depois marque os avisos como enviados. Só os avisos mostrados aqui são marcados.
+print-notices-mark = Marcar estes avisos como enviados
+print-notices-marked = { $count ->
+    [one] { $count } aviso marcado como enviado.
+   *[other] { $count } avisos marcados como enviados.
+}
 rule-kind-article_request_fee = Taxa de pedido de artigo
 rule-kind-article_requests = Pedidos de artigo
 rule-kind-auto_renew = Renovação automática

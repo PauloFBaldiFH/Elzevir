@@ -71,3 +71,33 @@ pub struct HoldNoticeRow {
     /// On paper.
     pub print: bool,
 }
+
+/// The printed notices pending, ready to print (docs/specs/circulacao/avisos.md, items 31
+/// to 33).
+#[derive(Template)]
+#[template(path = "staff_print_notices.html")]
+pub struct StaffPrintNotices<'a> {
+    /// Interface texts.
+    pub t: &'a I18n,
+    /// Anti-forgery token of the session.
+    pub csrf: &'a str,
+    /// The notices, oldest first.
+    pub notices: Vec<PrintedNotice>,
+    /// How many were just marked as sent, as shown.
+    pub marked: Option<String>,
+}
+
+/// One notice to print.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrintedNotice {
+    /// Notice id, sent back when marking.
+    pub id: i64,
+    /// The patron's name.
+    pub name: String,
+    /// The patron's postal address.
+    pub address: Option<String>,
+    /// The subject.
+    pub subject: String,
+    /// The text, with line breaks.
+    pub text: String,
+}

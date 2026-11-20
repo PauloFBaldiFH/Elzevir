@@ -737,7 +737,8 @@ fn the_account_shows_the_fine_and_takes_payments_and_write_offs() {
     drop(server);
 }
 
-/// Lends 0001 to Ana and runs the overdue notices with a level that restricts her.
+/// Lends 0001 to Ana and runs the overdue notices with a level that restricts her and
+/// prints a notice.
 fn restricted_for_overdues(data: &Path, ana: i64) {
     let store = open(data);
     let at = |day: &str| -> jiff::Zoned { format!("{day}[America/Sao_Paulo]").parse().unwrap() };
@@ -771,7 +772,10 @@ fn restricted_for_overdues(data: &Path, ana: i64) {
                 levels: vec![OverdueLevel {
                     level: NoticeLevel::First,
                     delay: 1,
-                    transports: Transports::default(),
+                    transports: Transports {
+                        email: false,
+                        print: true,
+                    },
                     restrict: true,
                 }],
             },
@@ -823,6 +827,58 @@ fn a_restriction_for_overdues_is_shown_and_lifted_on_the_record() {
     let again = request(address, "POST", &action, &form, &body("OVERDUES"));
     assert_status(&again, 422);
     assert!(again.contains("The patron has no such restriction."));
+    drop(server);
+}
+
+#[test]
+fn printed_notices_are_listed_and_marked_as_sent() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    stock(data.path());
+    restricted_for_overdues(data.path(), ana);
+    let (server, address) = start(data.path());
+    let cir = sign_in(address, "cir");
+    assert!(request(address, "GET", "/equipe", &cir, "").contains("/equipe/circulacao/avisos"));
+    let page = request(address, "GET", "/equipe/circulacao/avisos", &cir, "");
+    assert_status(&page, 200);
+    assert!(
+        page.contains("<h2>Overdue items at ") && page.contains("(0001), due "),
+        "{page}"
+    );
+    let id = page
+        .split_once("name=\"n\" value=\"")
+        .unwrap()
+        .1
+        .split_once('"')
+        .unwrap()
+        .0
+        .to_owned();
+    let form = format!("{cir}Content-Type: application/x-www-form-urlencoded\r\n");
+    let action = "/equipe/circulacao/avisos";
+    let token = csrf(&page).to_owned();
+    assert_status(
+        &request(address, "POST", action, &form, &format!("csrf={token}&n=x")),
+        400,
+    );
+    let marked = request(
+        address,
+        "POST",
+        action,
+        &form,
+        &format!("csrf={token}&n={id}"),
+    );
+    assert_status(&marked, 303);
+    let page = request(
+        address,
+        "GET",
+        "/equipe/circulacao/avisos?marked=1",
+        &cir,
+        "",
+    );
+    assert!(
+        page.contains("1 notice marked as sent.") && page.contains("No printed notice is waiting."),
+        "{page}"
+    );
     drop(server);
 }
 

@@ -515,7 +515,7 @@ fn a_restricting_level_blocks_the_patron_until_the_staff_lift_it() {
 }
 
 #[test]
-fn the_sender_reads_pending_emails_with_their_items_and_marks_them() {
+fn the_sender_and_the_print_screen_read_pending_notices_with_their_items() {
     let dir = tempfile::tempdir().unwrap();
     let library = library(&dir);
     let ana = library.patron("1", library.adults, Some("ana@example.org"));
@@ -538,12 +538,17 @@ fn the_sender_reads_pending_emails_with_their_items_and_marks_them() {
     let notice = &pending[0];
     assert_eq!(
         (
-            notice.to.as_str(),
+            notice.to.as_deref(),
             notice.name.as_str(),
             notice.library.as_str()
         ),
-        ("ana@example.org", "Silva", "Central")
+        (Some("ana@example.org"), "Silva", "Central")
     );
+    // The print screen sees Bia's, with no e-mail address.
+    let printed = library.store.pending_prints(10).unwrap();
+    assert_eq!(printed.len(), 1);
+    assert_eq!(printed[0].to, None);
+    assert_eq!(printed[0].items[0].barcode, "0003");
     assert_eq!(notice.about, NoticeAbout::Overdue(NoticeLevel::First));
     let barcodes: Vec<_> = notice
         .items

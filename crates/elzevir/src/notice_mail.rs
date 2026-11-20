@@ -10,9 +10,9 @@ use std::time::Duration;
 
 use elzevir_app::circulation_rules::{CirculationCommand, CirculationOutput};
 use elzevir_app::commands::{WriteCommand, WriteOutput};
-use elzevir_app::notices::{NoticeAbout, NoticeItem, NoticeOutcome, NoticeQueue, PendingEmail};
-use elzevir_domain::notice::NoticeLevel;
+use elzevir_app::notices::{NoticeOutcome, NoticeQueue, PendingNotice};
 use elzevir_store::ElzevirStore;
+use elzevir_web::notice_text;
 use elzevir_web_templates::I18n;
 use jiff::tz::TimeZone;
 use lettre::message::Mailbox;
@@ -85,60 +85,6 @@ impl MailSettings {
     }
 }
 
-/// The subject and the text of a notice, in the language of `t`.
-pub(crate) fn render(t: &I18n, notice: &PendingEmail, time_zone: &TimeZone) -> (String, String) {
-    let item_line = |item: &NoticeItem| match &item.due {
-        Some(due) => t.get_texts(
-            "notice-overdue-item",
-            &[
-                ("title", &item.title),
-                ("barcode", &item.barcode),
-                (
-                    "date",
-                    &elzevir_web::date_text(t, due.with_time_zone(time_zone.clone()).date()),
-                ),
-            ],
-        ),
-        None => t.get_texts(
-            "notice-hold-item",
-            &[("title", &item.title), ("barcode", &item.barcode)],
-        ),
-    };
-    let items = notice
-        .items
-        .iter()
-        .map(item_line)
-        .collect::<Vec<_>>()
-        .join("\n");
-    let (subject_key, body_key, until) = match notice.about {
-        NoticeAbout::Overdue(NoticeLevel::First) => {
-            ("notice-overdue-subject-1", "notice-overdue-body", None)
-        }
-        NoticeAbout::Overdue(NoticeLevel::Second) => {
-            ("notice-overdue-subject-2", "notice-overdue-body", None)
-        }
-        NoticeAbout::Overdue(NoticeLevel::Third) => {
-            ("notice-overdue-subject-3", "notice-overdue-body", None)
-        }
-        NoticeAbout::HoldWaiting(until) => (
-            "notice-hold-subject",
-            "notice-hold-body",
-            Some(elzevir_web::date_text(t, until)),
-        ),
-    };
-    let subject = t.get_with(subject_key, "library", &notice.library);
-    let body = t.get_texts(
-        body_key,
-        &[
-            ("name", &notice.name),
-            ("library", &notice.library),
-            ("items", &items),
-            ("date", until.as_deref().unwrap_or_default()),
-        ],
-    );
-    (subject, body)
-}
-
 /// What became of one notice.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Delivery {
@@ -152,9 +98,9 @@ fn deliver(
     transport: &SmtpTransport,
     settings: &MailSettings,
     (subject, body): (String, String),
-    notice: &PendingEmail,
+    notice: &PendingNotice,
 ) -> Delivery {
-    let Ok(to) = notice.to.parse::<Mailbox>() else {
+    let Some(Ok(to)) = notice.to.as_deref().map(str::parse::<Mailbox>) else {
         return Delivery::Done(NoticeOutcome::Failed);
     };
     let mut builder = Message::builder()
@@ -194,7 +140,12 @@ fn send_pending(
     let transport = settings.transport().ok()?;
     let (mut sent, mut failed) = (0, 0);
     for notice in &pending {
-        let outcome = match deliver(&transport, settings, render(t, notice, time_zone), notice) {
+        let outcome = match deliver(
+            &transport,
+            settings,
+            notice_text(t, notice, time_zone),
+            notice,
+        ) {
             Delivery::Done(outcome) => outcome,
             Delivery::Later => return None,
         };
@@ -263,14 +214,16 @@ pub(crate) async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use elzevir_app::notices::NoticeId;
+    use elzevir_app::notices::{NoticeAbout, NoticeId, NoticeItem};
+    use elzevir_domain::notice::NoticeLevel;
     use std::io::{BufRead, BufReader, Write};
     use std::net::TcpListener;
 
-    fn notice() -> PendingEmail {
-        PendingEmail {
+    fn notice() -> PendingNotice {
+        PendingNotice {
             id: NoticeId(1),
-            to: "ana@example.org".to_owned(),
+            to: Some("ana@example.org".to_owned()),
+            address: None,
             name: "Ana Silva".to_owned(),
             library: "Central".to_owned(),
             reply_to: Some("central@example.org".to_owned()),
@@ -290,14 +243,14 @@ mod tests {
     #[test]
     fn the_notice_lists_its_items_in_the_servers_language() {
         let zone = TimeZone::get("America/Sao_Paulo").unwrap();
-        let (subject, body) = render(&I18n::english().unwrap(), &notice(), &zone);
+        let (subject, body) = notice_text(&I18n::english().unwrap(), &notice(), &zone);
         assert_eq!(subject, "Second notice: overdue items at Central");
         assert!(body.starts_with("Dear Ana Silva,\n\n"), "{body}");
         assert!(
             body.contains("\n- Dom Casmurro (0001), due 2026-11-16\n"),
             "{body}"
         );
-        let (subject, body) = render(&I18n::portuguese().unwrap(), &notice(), &zone);
+        let (subject, body) = notice_text(&I18n::portuguese().unwrap(), &notice(), &zone);
         assert_eq!(subject, "Segundo aviso: exemplares em atraso na Central");
         assert!(
             body.contains("- Dom Casmurro (0001), venceu em 16/11/2026"),
@@ -311,13 +264,13 @@ mod tests {
         let mut waiting = notice();
         waiting.about = NoticeAbout::HoldWaiting(jiff::civil::date(2026, 11, 27));
         waiting.items[0].due = None;
-        let (subject, body) = render(&I18n::english().unwrap(), &waiting, &zone);
+        let (subject, body) = notice_text(&I18n::english().unwrap(), &waiting, &zone);
         assert_eq!(subject, "Your hold is waiting at Central");
         assert!(
             body.contains("- Dom Casmurro (0001)\n") && body.contains("until 2026-11-27"),
             "{body}"
         );
-        let (subject, body) = render(&I18n::portuguese().unwrap(), &waiting, &zone);
+        let (subject, body) = notice_text(&I18n::portuguese().unwrap(), &waiting, &zone);
         assert_eq!(subject, "Sua reserva aguarda retirada na Central");
         assert!(body.contains("até 27/11/2026"), "{body}");
     }

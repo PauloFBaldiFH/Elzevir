@@ -32,7 +32,10 @@ pub use staff_import::{
 pub use staff_item_grid::{
     GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid, SuggestedCallNumber,
 };
-pub use staff_notice_rules::{HoldNoticeRow, NoticeLevelRow, NoticeRuleLine, StaffNoticeRules};
+pub use staff_notice_rules::{
+    HoldNoticeRow, NoticeLevelRow, NoticeRuleLine, PrintedNotice, StaffNoticeRules,
+    StaffPrintNotices,
+};
 pub use staff_patrons::{
     AccountRow, AsideForm, CategoryLine, DeskOption, HoldRow, LoanLine, Notice, PatronFormValues,
     PatronLine, RestrictionRow, StaffCheckin, StaffPatron, StaffPatronCategories, StaffPatronForm,
@@ -479,6 +482,7 @@ mod tests {
             include_str!("../templates/staff_patron_form.html"),
             include_str!("../templates/staff_circulation_rules.html"),
             include_str!("../templates/staff_notice_rules.html"),
+            include_str!("../templates/staff_print_notices.html"),
             include_str!("../templates/staff_calendar.html"),
         ];
         let mut missing = Vec::new();
