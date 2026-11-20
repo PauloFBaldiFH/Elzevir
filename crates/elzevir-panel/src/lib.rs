@@ -16,6 +16,8 @@ mod live;
 mod messages;
 mod operation_view;
 mod operations;
+mod port;
+pub use port::{MIN_PORT, PortForm, PortStep, Refusal, choose_port};
 mod runtime;
 mod setup;
 pub use setup::{Setup, SetupProfile, setup};
