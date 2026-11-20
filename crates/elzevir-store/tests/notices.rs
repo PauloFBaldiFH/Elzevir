@@ -16,15 +16,17 @@ use elzevir_app::circulation_rules::{
 };
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
-use elzevir_app::loans::CheckoutRequest;
+use elzevir_app::loans::{CheckoutRefusal, CheckoutRequest};
 use elzevir_app::patrons::{
     CategoryChange, PatronCommand, PatronFields, PatronOutput, ReadingHistory,
 };
 use elzevir_domain::catalog::{BranchId, InstanceId};
+use elzevir_domain::checkout::Impossible;
 use elzevir_domain::circulation_rules::RuleScopeKey;
 use elzevir_domain::long_overdue::LongOverdueSettings;
 use elzevir_domain::notice::{LevelsError, NoticeLevel, OverdueLevel, Transports};
 use elzevir_domain::patron::{Enrolment, PatronCategoryId, PatronId};
+use elzevir_domain::suspension::{RestrictionKind, SuspensionEnd};
 use elzevir_store::{CommandFailed, ElzevirHandler, ElzevirStore, StoreConfig};
 use jiff::Zoned;
 use jiff::civil::date;
@@ -57,6 +59,7 @@ fn level(level: NoticeLevel, delay: u16, transports: Transports) -> OverdueLevel
         level,
         delay,
         transports,
+        restrict: false,
     }
 }
 
@@ -436,4 +439,76 @@ fn levels_out_of_order_or_an_unknown_scope_are_refused_and_no_level_removes() {
     assert!(delete().is_err());
     library.rule(None, library.adults, Vec::new()).unwrap();
     assert!(delete().is_ok());
+}
+
+#[test]
+fn a_restricting_level_blocks_the_patron_until_the_staff_lift_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(&dir);
+    let ana = library.patron("1", library.adults, None);
+    library.lend("0001", ana, library.central, "2026-11-02");
+    library
+        .rule(
+            None,
+            library.adults,
+            vec![OverdueLevel {
+                restrict: true,
+                ..level(NoticeLevel::First, 3, Transports::default())
+            }],
+        )
+        .unwrap();
+    let lift = || {
+        submit(
+            &library.store,
+            WriteCommand::Circulation(CirculationCommand::LiftRestriction {
+                patron: ana,
+                kind: RestrictionKind::Overdues,
+            }),
+        )
+    };
+    assert!(matches!(
+        lift(),
+        Err(CommandFailed::Rejected(WriteRefusal::Circulation(
+            CirculationRefusal::NoRestriction
+        )))
+    ));
+    // No transport: nothing queued, but the patron is restricted.
+    assert_eq!(library.run("2026-11-19"), 0);
+    let checkout = || {
+        submit(
+            &library.store,
+            WriteCommand::Circulation(CirculationCommand::Checkout(CheckoutRequest {
+                patron: ana,
+                barcode: "0001".to_owned(),
+                desk: library.central,
+                on_site: false,
+                confirmed: true,
+                at: at("2026-11-19"),
+            })),
+        )
+    };
+    match checkout() {
+        Err(CommandFailed::Rejected(WriteRefusal::Circulation(CirculationRefusal::Checkout(
+            CheckoutRefusal::Impossible(impossible),
+        )))) => assert!(impossible.contains(&Impossible::Suspended(SuspensionEnd::WhenLifted))),
+        other => panic!("{other:?}"),
+    }
+    assert!(matches!(
+        lift(),
+        Ok(WriteOutput::Circulation(
+            CirculationOutput::RestrictionLifted
+        ))
+    ));
+    // The run that comes back later the same day does not restrict again.
+    assert_eq!(library.run("2026-11-19"), 0);
+    let restricted: i64 = library
+        .store
+        .readers()
+        .read(|c| {
+            c.query_row("SELECT count(*) FROM patron_restrictions", [], |row| {
+                row.get(0)
+            })
+        })
+        .unwrap();
+    assert_eq!(restricted, 0);
 }

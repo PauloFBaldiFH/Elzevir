@@ -8,7 +8,8 @@ use elzevir_domain::circulation_rules::{
 };
 use elzevir_domain::long_overdue::LongOverdueSettings;
 use elzevir_domain::notice::{LevelsError, OverdueLevel};
-use elzevir_domain::patron::PatronCategoryId;
+use elzevir_domain::patron::{PatronCategoryId, PatronId};
+use elzevir_domain::suspension::RestrictionKind;
 use jiff::Zoned;
 use serde::{Deserialize, Serialize};
 
@@ -67,6 +68,13 @@ pub enum CirculationCommand {
     },
     /// Replaces the overdue notice levels of one scope (docs/specs/circulacao/avisos.md).
     SetOverdueNoticeRule(OverdueNoticeRule),
+    /// Lifts a patron's restriction of one kind (docs/specs/circulacao/suspensao.md).
+    LiftRestriction {
+        /// The patron.
+        patron: PatronId,
+        /// Which restriction.
+        kind: RestrictionKind,
+    },
     /// Queues the overdue notices due today: the daily run
     /// (docs/specs/circulacao/avisos.md).
     QueueOverdueNotices {
@@ -135,6 +143,8 @@ pub enum CirculationOutput {
     },
     /// An overdue notice rule was stored or removed.
     OverdueNoticeRuleSet,
+    /// A patron's restriction was lifted.
+    RestrictionLifted,
     /// How many overdue notices the daily run queued.
     OverdueNoticesQueued {
         /// Notices queued.
@@ -210,6 +220,9 @@ pub enum CirculationRefusal {
     /// A hold was refused, or could not be cancelled.
     #[error(transparent)]
     Hold(#[from] HoldRefused),
+    /// The patron has no restriction of that kind.
+    #[error("the patron has no such restriction")]
+    NoRestriction,
     /// The levels of an overdue notice rule do not fit together.
     #[error(transparent)]
     NoticeLevels(#[from] LevelsError),
@@ -245,6 +258,7 @@ impl CirculationRefusal {
             Self::Pay(refusal) => refusal.message_key(),
             Self::Hold(refusal) => refusal.message_key(),
             Self::NoticeLevels(_) => "notices-error-levels",
+            Self::NoRestriction => "restriction-error-none",
         }
     }
 }

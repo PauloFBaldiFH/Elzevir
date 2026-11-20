@@ -20,6 +20,48 @@ pub enum SuspensionEnd {
     WhenLifted,
 }
 
+/// Why a patron is restricted (Koha: `borrower_debarments.type`). A patron has at most one
+/// restriction of each kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum RestrictionKind {
+    /// A late return (`SUSPENSION`).
+    Suspension,
+    /// An overdue notice whose level restricts (`OVERDUES`).
+    Overdues,
+}
+
+impl RestrictionKind {
+    /// The kind as stored, Koha's name.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Suspension => "SUSPENSION",
+            Self::Overdues => "OVERDUES",
+        }
+    }
+
+    /// The kind stored as `name`.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "SUSPENSION" => Some(Self::Suspension),
+            "OVERDUES" => Some(Self::Overdues),
+            _ => None,
+        }
+    }
+}
+
+/// Until when a patron with these restrictions, all still holding, may not borrow: until
+/// lifted when one has no end, otherwise until the latest end.
+///
+/// Koha: `Koha::Patron::Debarments::UpdateBorrowerDebarmentFlags` (`9999-12-31` for a
+/// restriction without end, else the greatest expiration).
+#[must_use]
+pub fn restricted_until(ends: impl IntoIterator<Item = SuspensionEnd>) -> Option<SuspensionEnd> {
+    // `WhenLifted` sorts after every day.
+    ends.into_iter().max()
+}
+
 /// Whether closed days count in a suspension (`SuspensionsCalendar`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SuspensionsCalendar {
@@ -128,6 +170,18 @@ pub fn suspension_until(late: &LateReturn<'_>, settings: &SuspensionSettings) ->
 mod tests {
     use super::*;
     use jiff::civil::{Weekday, date};
+
+    #[test]
+    fn a_restriction_without_end_outlasts_every_day() {
+        let day = SuspensionEnd::Day(date(2026, 12, 1));
+        let later = SuspensionEnd::Day(date(2027, 1, 5));
+        assert_eq!(restricted_until([day, later]), Some(later));
+        assert_eq!(
+            restricted_until([later, SuspensionEnd::WhenLifted, day]),
+            Some(SuspensionEnd::WhenLifted)
+        );
+        assert_eq!(restricted_until([]), None);
+    }
 
     fn rule(kind: RuleKind, value: &str) -> CirculationRule {
         CirculationRule {

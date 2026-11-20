@@ -33,7 +33,8 @@ pub use staff_item_grid::{
 };
 pub use staff_patrons::{
     AccountRow, AsideForm, CategoryLine, DeskOption, HoldRow, LoanLine, Notice, PatronFormValues,
-    PatronLine, StaffCheckin, StaffPatron, StaffPatronCategories, StaffPatronForm, StaffPatrons,
+    PatronLine, RestrictionRow, StaffCheckin, StaffPatron, StaffPatronCategories, StaffPatronForm,
+    StaffPatrons,
 };
 pub use staff_record_fields::{FieldEntry, FieldGroup, FieldValue, ItemFields, RecordFields};
 pub use staff_record_form::{

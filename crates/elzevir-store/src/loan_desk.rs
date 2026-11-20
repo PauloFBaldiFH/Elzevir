@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! The circulation desk port: a patron's loans and suspension, and the circulation
+//! The circulation desk port: a patron's loans and restrictions, and the circulation
 //! commands (interface §18.3).
 
 use elzevir_app::accounts::AccountLine;
@@ -10,11 +10,10 @@ use elzevir_app::loans::{LoanDesk, PatronLoan};
 use elzevir_app::staff::StaffId;
 use elzevir_domain::catalog::{BranchId, ItemId, Money};
 use elzevir_domain::patron::PatronId;
-use elzevir_domain::suspension::SuspensionEnd;
+use elzevir_domain::suspension::{RestrictionKind, SuspensionEnd};
 use jiff::civil::Date;
 use rusqlite::OptionalExtension;
 
-use crate::restrictions::suspension;
 use crate::{CommandFailed, ElzevirStore, SubmitError};
 
 fn unavailable(error: &dyn std::fmt::Display) -> CirculationDeskError {
@@ -62,19 +61,14 @@ impl LoanDesk for ElzevirStore {
             .map_err(|error| unavailable(&error))
     }
 
-    fn suspension(
+    fn restrictions(
         &self,
         patron: PatronId,
         today: Date,
-    ) -> Result<Option<SuspensionEnd>, CirculationDeskError> {
+    ) -> Result<Vec<(RestrictionKind, SuspensionEnd)>, CirculationDeskError> {
         self.readers()
-            .read(|c| suspension(c, patron))
+            .read(|c| crate::restrictions::restrictions(c, patron, today))
             .map_err(|error| unavailable(&error))
-            .map(|found| {
-                found
-                    .filter(|suspension| suspension.holds_on(today))
-                    .map(crate::restrictions::Suspension::end)
-            })
     }
 
     fn owed(&self, patron: PatronId) -> Result<Money, CirculationDeskError> {

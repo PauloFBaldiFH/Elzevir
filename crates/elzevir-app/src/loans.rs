@@ -7,7 +7,7 @@ use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome};
 use elzevir_domain::checkout::{Alert, Confirm, Impossible};
 use elzevir_domain::patron::PatronId;
 use elzevir_domain::renewal::RenewalRefusal;
-use elzevir_domain::suspension::SuspensionEnd;
+use elzevir_domain::suspension::{RestrictionKind, SuspensionEnd};
 use jiff::Zoned;
 use jiff::civil::Date;
 use serde::{Deserialize, Serialize};
@@ -233,16 +233,16 @@ pub trait LoanDesk: Send + Sync {
     /// When storage fails.
     fn loans(&self, patron: PatronId) -> Result<Vec<PatronLoan>, CirculationDeskError>;
 
-    /// The patron's suspension, while it holds on `today`.
+    /// The patron's restrictions that hold on `today`, by kind.
     ///
     /// # Errors
     ///
     /// When storage fails.
-    fn suspension(
+    fn restrictions(
         &self,
         patron: PatronId,
         today: Date,
-    ) -> Result<Option<SuspensionEnd>, CirculationDeskError>;
+    ) -> Result<Vec<(RestrictionKind, SuspensionEnd)>, CirculationDeskError>;
 
     /// What the patron owes: the outstanding debits.
     ///

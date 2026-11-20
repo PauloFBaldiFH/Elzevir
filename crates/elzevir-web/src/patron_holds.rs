@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The patron's holds on their record: the list, placing and cancelling
-//! (docs/specs/circulacao/reservas.md).
+//! (docs/specs/circulacao/reservas.md); and lifting a restriction
+//! (docs/specs/circulacao/suspensao.md).
 
 use std::sync::Arc;
 
@@ -13,6 +14,7 @@ use elzevir_app::holds::{HoldAside, HoldCancellation, HoldId, HoldLevel, HoldReq
 use elzevir_domain::catalog::BranchId;
 use elzevir_domain::hold::Found;
 use elzevir_domain::patron::PatronId;
+use elzevir_domain::suspension::RestrictionKind;
 use elzevir_web_templates::{HoldRow, I18n};
 use serde::Deserialize;
 
@@ -202,6 +204,56 @@ pub(crate) async fn change(
             outcome.notices.push(ok(t.get("hold-cancelled")));
         }
         Ok(Ok(_)) => {}
+        Ok(Err(CirculationDeskError::Refused(refusal))) => {
+            outcome.notices = refusal_notices(t, &refusal);
+        }
+        Ok(Err(CirculationDeskError::Busy)) => {
+            outcome.notices.push(refused(t.get("circulation-busy")));
+        }
+        Ok(Err(CirculationDeskError::Unavailable(_))) | Err(_) => {
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
+    }
+    page(&state, &session, (patrons, loans), patron, outcome).await
+}
+
+/// The lift button of a restriction, posted with the rest of the record's form.
+#[derive(Deserialize)]
+pub(crate) struct LiftFields {
+    csrf: String,
+    lift: String,
+    desk: Option<i64>,
+}
+
+/// `POST /equipe/leitores/{id}/restricoes`: lifts one of the patron's restrictions, and
+/// shows the record again.
+pub(crate) async fn lift_restriction(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+    Form(form): Form<LiftFields>,
+) -> Response {
+    let (session, patrons, loans) = match open(&state, &headers) {
+        Ok(opened) => opened,
+        Err(response) => return *response,
+    };
+    if !tokens_match(&session.csrf, &form.csrf) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let Some(kind) = RestrictionKind::from_name(&form.lift) else {
+        return (StatusCode::BAD_REQUEST, "unknown restriction").into_response();
+    };
+    let t = &state.inner.i18n;
+    let patron = PatronId(id);
+    let command = CirculationCommand::LiftRestriction { patron, kind };
+    let mut outcome = Outcome {
+        desk: form.desk.map(BranchId),
+        ..Outcome::default()
+    };
+    let actor = session.identity.id;
+    let writer = Arc::clone(&loans);
+    match tokio::task::spawn_blocking(move || writer.circulate(actor, command)).await {
+        Ok(Ok(_)) => outcome.notices.push(ok(t.get("restriction-lifted"))),
         Ok(Err(CirculationDeskError::Refused(refusal))) => {
             outcome.notices = refusal_notices(t, &refusal);
         }

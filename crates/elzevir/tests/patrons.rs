@@ -17,7 +17,7 @@ use elzevir_app::catalog::{
     CatalogCommand, CatalogOutput, ItemData, ItemStatus, NewInstance, NewItem, NewRecord,
     RecordItems,
 };
-use elzevir_app::circulation_rules::{CirculationCommand, RuleChange};
+use elzevir_app::circulation_rules::{CirculationCommand, OverdueNoticeRule, RuleChange};
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{StaffCommand, WriteCommand, WriteOutput};
 use elzevir_app::loans::{CheckinRequest, CheckoutRequest};
@@ -27,7 +27,8 @@ use elzevir_app::patrons::{
 use elzevir_app::staff::{Permission, hash_password};
 use elzevir_domain::catalog::BranchId;
 use elzevir_domain::circulation_rules::RuleScopeKey;
-use elzevir_domain::patron::{Cpf, Enrolment, PatronId};
+use elzevir_domain::notice::{NoticeLevel, OverdueLevel, Transports};
+use elzevir_domain::patron::{Cpf, Enrolment, PatronCategoryId, PatronId};
 use elzevir_store::{ElzevirHandler, ElzevirStore, StoreConfig};
 use jiff::civil::date;
 
@@ -733,6 +734,95 @@ fn the_account_shows_the_fine_and_takes_payments_and_write_offs() {
         ),
         403,
     );
+    drop(server);
+}
+
+/// Lends 0001 to Ana and runs the overdue notices with a level that restricts her.
+fn restricted_for_overdues(data: &Path, ana: i64) {
+    let store = open(data);
+    let at = |day: &str| -> jiff::Zoned { format!("{day}[America/Sao_Paulo]").parse().unwrap() };
+    submit(
+        &store,
+        WriteCommand::Circulation(CirculationCommand::Checkout(CheckoutRequest {
+            patron: PatronId(ana),
+            barcode: "0001".to_owned(),
+            desk: BranchId(1),
+            on_site: false,
+            confirmed: true,
+            at: at("2026-11-02T10:00:00-03:00"),
+        })),
+    );
+    let category: i64 = store
+        .readers()
+        .read(|c| {
+            c.query_row(
+                "SELECT category_id FROM patrons WHERE id = ?1",
+                [ana],
+                |row| row.get(0),
+            )
+        })
+        .unwrap();
+    submit(
+        &store,
+        WriteCommand::Circulation(CirculationCommand::SetOverdueNoticeRule(
+            OverdueNoticeRule {
+                branch: None,
+                category: PatronCategoryId(category),
+                levels: vec![OverdueLevel {
+                    level: NoticeLevel::First,
+                    delay: 1,
+                    transports: Transports::default(),
+                    restrict: true,
+                }],
+            },
+        )),
+    );
+    let due: String = store
+        .readers()
+        .read(|c| c.query_row("SELECT due FROM loans", [], |row| row.get(0)))
+        .unwrap();
+    let due: jiff::Zoned = due.parse().unwrap();
+    let next_day = due.date().tomorrow().unwrap();
+    submit(
+        &store,
+        WriteCommand::Circulation(CirculationCommand::QueueOverdueNotices {
+            at: at(&format!("{next_day}T10:00:00-03:00")),
+        }),
+    );
+    store.shutdown().unwrap();
+}
+
+#[test]
+fn a_restriction_for_overdues_is_shown_and_lifted_on_the_record() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    stock(data.path());
+    restricted_for_overdues(data.path(), ana);
+    let (server, address) = start(data.path());
+    let cir = sign_in(address, "cir");
+    let record = format!("/equipe/leitores/{ana}");
+    let page = request(address, "GET", &record, &cir, "");
+    assert_status(&page, 200);
+    assert!(
+        page.contains("Restricted for overdue items until the staff lift it.")
+            && page.contains("name=\"lift\" value=\"OVERDUES\""),
+        "{page}"
+    );
+    let (token, desk) = (csrf(&page).to_owned(), selected_desk(&page).to_owned());
+    let form = format!("{cir}Content-Type: application/x-www-form-urlencoded\r\n");
+    let action = format!("{record}/restricoes");
+    // The whole record's form comes along with the button.
+    let body = |lift: &str| format!("csrf={token}&desk={desk}&barcode=&lift={lift}");
+    assert_status(
+        &request(address, "POST", &action, &form, &body("NONE")),
+        400,
+    );
+    let lifted = request(address, "POST", &action, &form, &body("OVERDUES"));
+    assert_status(&lifted, 200);
+    assert!(lifted.contains("Restriction lifted.") && !lifted.contains("name=\"lift\""));
+    let again = request(address, "POST", &action, &form, &body("OVERDUES"));
+    assert_status(&again, 422);
+    assert!(again.contains("The patron has no such restriction."));
     drop(server);
 }
 

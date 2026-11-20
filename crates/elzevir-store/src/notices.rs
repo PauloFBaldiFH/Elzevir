@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Overdue notice rules and the queue of notices (docs/specs/circulacao/avisos.md).
 
+use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 
 use elzevir_app::circulation_rules::{CirculationOutput, OverdueNoticeRule};
@@ -11,6 +12,7 @@ use elzevir_domain::notice::{
     NoticeLevel, NoticeSettings, OverdueLevel, Transport, Transports, checked_levels, days_overdue,
     sends_on, transports, triggered,
 };
+use elzevir_domain::patron::PatronId;
 use jiff::Zoned;
 use jiff::civil::Date;
 use rusqlite::types::Type;
@@ -18,6 +20,7 @@ use rusqlite::{Connection, params};
 
 use crate::calendar::read_calendar;
 use crate::circulation_rules::scope_exists;
+use crate::restrictions::restrict_for_overdues;
 use crate::{CommandFailed, StoreError};
 
 type Applied = Result<WriteOutput, CommandFailed<WriteRefusal>>;
@@ -52,15 +55,16 @@ pub(crate) fn set_rule(connection: &Connection, rule: &OverdueNoticeRule) -> App
         connection
             .execute(
                 "INSERT INTO overdue_notice_rules
-                     (branch_id, category_id, level, delay, email, print)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                     (branch_id, category_id, level, delay, email, print, restricts)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
                     branch,
                     rule.category.0,
                     level.level.number(),
                     level.delay,
                     level.transports.email,
-                    level.transports.print
+                    level.transports.print,
+                    level.restrict
                 ],
             )
             .map_err(storage)?;
@@ -75,7 +79,7 @@ type Rules = HashMap<(Option<i64>, i64), Vec<OverdueLevel>>;
 
 fn read_rules(connection: &Connection) -> rusqlite::Result<Rules> {
     let mut statement = connection.prepare(
-        "SELECT branch_id, category_id, level, delay, email, print
+        "SELECT branch_id, category_id, level, delay, email, print, restricts
          FROM overdue_notice_rules ORDER BY level",
     )?;
     let rows = statement.query_map([], |row| {
@@ -90,6 +94,7 @@ fn read_rules(connection: &Connection) -> rusqlite::Result<Rules> {
                 email: row.get(4)?,
                 print: row.get(5)?,
             },
+            restrict: row.get(6)?,
         };
         Ok((scope, level))
     })?;
@@ -150,30 +155,26 @@ fn loans_out(connection: &Connection) -> rusqlite::Result<Vec<LoanOut>> {
 /// The Items of one notice, with their due dates, by patron, branch and level.
 type Due = BTreeMap<(i64, i64, NoticeLevel), Vec<(i64, String)>>;
 
-/// Applies `circ.queue_overdue_notices`: every patron with a loan exactly as many days
-/// overdue as a level of the rule for the patron's category at the loan's branch gets that
-/// level's notices, listing the loans at that branch as late; a notice already queued today
-/// is not queued again.
-///
-/// Koha: `misc/cronjobs/overdue_notices.pl -t`, with `OverdueNoticeFrom` `cron`
-/// (`issues.branchcode`).
-pub(crate) fn queue_overdue_notices(connection: &Connection, at: &Zoned) -> Applied {
-    let settings = NoticeSettings::default();
-    let today = at.date();
-    let rules = read_rules(connection).map_err(storage)?;
-    let loans = loans_out(connection).map_err(storage)?;
+/// What one patron owes notices for: the category and the e-mail address.
+type Patrons = HashMap<i64, (i64, Option<String>)>;
+
+/// The loans of each patron at each branch whose days overdue are exactly a level's.
+fn due_today(
+    connection: &Connection,
+    rules: &Rules,
+    today: Date,
+    settings: NoticeSettings,
+) -> rusqlite::Result<(Due, Patrons)> {
     let mut calendars: HashMap<i64, Calendar> = HashMap::new();
     let mut due = Due::new();
-    let mut patrons: HashMap<i64, (i64, Option<String>)> = HashMap::new();
-    for loan in loans {
-        let Some(levels) = levels_for(&rules, loan.branch, loan.category) else {
+    let mut patrons = Patrons::new();
+    for loan in loans_out(connection)? {
+        let Some(levels) = levels_for(rules, loan.branch, loan.category) else {
             continue;
         };
         let calendar = match calendars.entry(loan.branch) {
-            std::collections::hash_map::Entry::Occupied(found) => found.into_mut(),
-            std::collections::hash_map::Entry::Vacant(empty) => {
-                empty.insert(read_calendar(connection, loan.branch).map_err(storage)?)
-            }
+            Entry::Occupied(found) => found.into_mut(),
+            Entry::Vacant(empty) => empty.insert(read_calendar(connection, loan.branch)?),
         };
         if !sends_on(today, calendar, settings) {
             continue;
@@ -188,7 +189,41 @@ pub(crate) fn queue_overdue_notices(connection: &Connection, at: &Zoned) -> Appl
             .or_default()
             .push((loan.item, loan.due.to_string()));
     }
+    Ok((due, patrons))
+}
+
+/// Records that the daily run of `name` went through `today`; `false` when it already had.
+///
+/// Koha runs `overdue_notices.pl` once a day from cron; the server runs every hour, so a
+/// restriction the staff lift during the day is not put back by the next run.
+fn first_run_today(connection: &Connection, name: &str, today: Date) -> rusqlite::Result<bool> {
+    let changed = connection.execute(
+        "INSERT INTO daily_runs (name, day) VALUES (?1, ?2)
+         ON CONFLICT (name) DO UPDATE SET day = excluded.day WHERE day <> excluded.day",
+        params![name, today.to_string()],
+    )?;
+    Ok(changed > 0)
+}
+
+/// Applies `circ.queue_overdue_notices`, once a day: every patron with a loan exactly as
+/// many days overdue as a level of the rule for the patron's category at the loan's branch
+/// gets that level's notices, listing the loans at that branch as late, and is restricted
+/// when the level says so.
+///
+/// Koha: `misc/cronjobs/overdue_notices.pl -t`, with `OverdueNoticeFrom` `cron`
+/// (`issues.branchcode`).
+pub(crate) fn queue_overdue_notices(connection: &Connection, at: &Zoned) -> Applied {
+    let today = at.date();
+    let created_at = at.to_string();
     let mut queued = 0;
+    if !first_run_today(connection, "overdue_notices", today).map_err(storage)? {
+        return Ok(WriteOutput::Circulation(
+            CirculationOutput::OverdueNoticesQueued { queued },
+        ));
+    }
+    let rules = read_rules(connection).map_err(storage)?;
+    let (due, patrons) =
+        due_today(connection, &rules, today, NoticeSettings::default()).map_err(storage)?;
     for ((patron, branch, level), items) in &due {
         let Some((category, email)) = patrons.get(patron) else {
             continue;
@@ -202,16 +237,18 @@ pub(crate) fn queue_overdue_notices(connection: &Connection, at: &Zoned) -> Appl
         else {
             continue;
         };
+        if wanted.restrict {
+            restrict_for_overdues(connection, PatronId(*patron), &created_at).map_err(storage)?;
+        }
         for transport in transports(wanted.transports, email.is_some()) {
-            let address = (transport == Transport::Email).then_some(email).flatten();
             let notice = Notice {
                 patron: *patron,
                 branch: *branch,
                 level: *level,
                 transport: transport.as_str(),
-                address,
+                address: (transport == Transport::Email).then_some(email).flatten(),
             };
-            if enqueue(connection, &notice, today, &at.to_string(), items).map_err(storage)? {
+            if enqueue(connection, &notice, today, &created_at, items).map_err(storage)? {
                 queued += 1;
             }
         }
