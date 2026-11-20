@@ -16,6 +16,7 @@ use elzevir_domain::patron::{PatronCategoryId, PatronId};
 use jiff::civil::Date;
 use rusqlite::{Connection, OptionalExtension, params};
 
+use crate::accounts::owed;
 use crate::calendar::read_calendar;
 use crate::catalog::exists;
 use crate::circulation_rules::read_rules;
@@ -157,6 +158,7 @@ pub(crate) fn checkout(connection: &Connection, request: &CheckoutRequest) -> Ap
     item.facts.on_loan = holder(connection, item.id, request.patron).map_err(storage)?;
     let rules = read_rules(connection).map_err(storage)?;
     let loans = current_loans(connection, request.patron).map_err(storage)?;
+    let owed = owed(connection, request.patron).map_err(storage)?;
     let suspended = suspension(connection, request.patron)
         .map_err(storage)?
         .filter(|suspension| suspension.holds_on(request.at.date()))
@@ -173,6 +175,7 @@ pub(crate) fn checkout(connection: &Connection, request: &CheckoutRequest) -> Ap
         &CheckoutFacts {
             suspended,
             patron_expired: expires < request.at.date(),
+            owed,
             item: item.facts,
             too_many: too_many(&rules, &query, &loans),
         },

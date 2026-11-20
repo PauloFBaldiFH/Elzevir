@@ -55,7 +55,7 @@
 
 ### Fora desta parte
 
-18. Ficam para as tarefas que os trazem: dívidas (3.7), restrições manuais e atrasos em curso (com a ficha do leitor), reservas (3.8). Cartão perdido e endereço inválido (`GNA`, `LOST`) chegam com o cadastro que os grava. O Elzevir não tem tipos de item pais, então a regra de limite do tipo pai do Koha não existe aqui.
+18. A dívida está em [conta.md](conta.md). Ficam para as tarefas que os trazem: restrições manuais e atrasos em curso (com a ficha do leitor), reservas (3.8). Cartão perdido e endereço inválido (`GNA`, `LOST`) chegam com o cadastro que os grava. O Elzevir não tem tipos de item pais, então a regra de limite do tipo pai do Koha não existe aqui.
 
 ## 2. Origem no Koha
 

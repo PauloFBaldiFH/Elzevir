@@ -6,7 +6,7 @@ use elzevir_app::circulation_rules::{CirculationCommand, CirculationDeskError, C
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::loans::{LoanDesk, PatronLoan};
 use elzevir_app::staff::StaffId;
-use elzevir_domain::catalog::{BranchId, ItemId};
+use elzevir_domain::catalog::{BranchId, ItemId, Money};
 use elzevir_domain::patron::PatronId;
 use elzevir_domain::suspension::SuspensionEnd;
 use jiff::civil::Date;
@@ -73,6 +73,12 @@ impl LoanDesk for ElzevirStore {
                     .filter(|suspension| suspension.holds_on(today))
                     .map(crate::restrictions::Suspension::end)
             })
+    }
+
+    fn owed(&self, patron: PatronId) -> Result<Money, CirculationDeskError> {
+        self.readers()
+            .read(|c| crate::accounts::owed(c, patron))
+            .map_err(|error| unavailable(&error))
     }
 
     fn holding_branch(&self, item: ItemId) -> Result<Option<BranchId>, CirculationDeskError> {

@@ -181,6 +181,7 @@ fn elzevir_keys(outcome: &Result<CheckedOut, CheckoutRefusal>) -> Keys {
                         }
                     }
                     Impossible::PatronExpired => "EXPIRED",
+                    Impossible::Debt(_) => "DEBT",
                     Impossible::TooMany(too_many) => {
                         keys.too_many = Some(limit(too_many));
                         "TOO_MANY"
@@ -197,6 +198,7 @@ fn elzevir_keys(outcome: &Result<CheckedOut, CheckoutRefusal>) -> Keys {
                 let key = match reason {
                     Confirm::Renew => "RENEW_ISSUE",
                     Confirm::IssuedToAnother => "ISSUED_TO_ANOTHER",
+                    Confirm::Debt(_) => "DEBT",
                     Confirm::PatronCannotBorrow => "PATRON_CANT",
                     Confirm::TooMany(too_many) => {
                         keys.too_many = Some(limit(too_many));

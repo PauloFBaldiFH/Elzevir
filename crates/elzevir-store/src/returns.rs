@@ -4,22 +4,26 @@
 use elzevir_app::circulation_rules::{CirculationOutput, CirculationRefusal, RuleKind};
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
 use elzevir_app::loans::{CheckedIn, CheckinRefusal, CheckinRequest, checked_barcode};
-use elzevir_domain::catalog::{BranchId, PolicyId};
+use elzevir_domain::account::{DebtSettings, fine_rule};
+use elzevir_domain::catalog::{BranchId, Money, PolicyId};
 use elzevir_domain::checkin::{
     CheckinFacts, CheckinSettings, Destination, LoanOutcome, LostOutcome, OpenTransfer,
     ReturnPolicy, TransferReason, checkin as decide,
 };
+use elzevir_domain::checkout::loan_rule;
 use elzevir_domain::circulation_rules::CirculationRule;
 use elzevir_domain::circulation_rules::{RuleScopeKey, effective_rule};
+use elzevir_domain::fine::{FineContext, FineSettings, calc_fine};
 use elzevir_domain::patron::PatronId;
 use elzevir_domain::suspension::{LateReturn, SuspensionSettings, suspension_until};
 use jiff::Zoned;
 use jiff::civil::Date;
 use rusqlite::{Connection, OptionalExtension, params};
 
+use crate::accounts::{OverdueLoan, charge_overdue, close_overdue};
 use crate::calendar::read_calendar;
 use crate::circulation_rules::read_rules;
-use crate::loans::find_patron;
+use crate::loans::{USE_DAYS_MODE, find_patron};
 use crate::restrictions::{suspend, suspension};
 use crate::{CommandFailed, StoreError};
 
@@ -42,6 +46,7 @@ struct Item {
     policy: PolicyId,
     withdrawn: i64,
     lost: i64,
+    replacement_price: Option<i64>,
 }
 
 struct Loan {
@@ -53,7 +58,8 @@ struct Loan {
 fn find_item(connection: &Connection, barcode: &str) -> rusqlite::Result<Option<Item>> {
     connection
         .query_row(
-            "SELECT id, home_branch, holding_branch, policy_id, withdrawn, lost
+            "SELECT id, home_branch, holding_branch, policy_id, withdrawn, lost,
+                    replacement_price_cents
              FROM items WHERE barcode = ?1",
             [barcode],
             |row| {
@@ -64,6 +70,7 @@ fn find_item(connection: &Connection, barcode: &str) -> rusqlite::Result<Option<
                     policy: PolicyId(row.get(3)?),
                     withdrawn: row.get(4)?,
                     lost: row.get(5)?,
+                    replacement_price: row.get(6)?,
                 })
             },
         )
@@ -168,6 +175,69 @@ fn suspend_late(
     }
 }
 
+/// Charges the fine of a late return and stops it growing, and returns the fine.
+///
+/// The rules, the calendar and the branch of the fine are those of the branch the Item was
+/// held at before the return (`CircControl` `ItemHomeLibrary` with `HomeOrHoldingBranch`
+/// `holdingbranch`, Koha's defaults: Koha fines before moving the Item to the desk); a
+/// lost Item is not fined.
+///
+/// Koha: `C4::Circulation::_CalculateAndUpdateFine`, `C4::Circulation::_FixOverduesOnReturn`.
+fn fine_late(
+    connection: &Connection,
+    rules: &[CirculationRule],
+    item: &Item,
+    loan: &Loan,
+    request: &CheckinRequest,
+) -> rusqlite::Result<Option<Money>> {
+    let settings = FineSettings::default();
+    let at = request.at.to_string();
+    let mut fine = None;
+    if settings.on_return && item.lost == 0 {
+        let Some((category, _)) = find_patron(connection, loan.patron)? else {
+            return Ok(None);
+        };
+        let scope = RuleScopeKey {
+            branch: Some(item.holding),
+            category: Some(category),
+            policy: Some(item.policy),
+        };
+        let unit = loan_rule(rules, &scope, USE_DAYS_MODE).unit;
+        let calendar = read_calendar(connection, item.holding.0)?;
+        let rule = fine_rule(rules, &scope, unit);
+        let computed = calc_fine(
+            &loan.due,
+            &request.at,
+            &FineContext {
+                rule: &rule,
+                calendar: &calendar,
+                fines_calendar: settings.calendar,
+                include_grace: settings.include_grace,
+                replacement_price: item.replacement_price.map(Money),
+                default_replacement_cost: None,
+                overdue_recall: false,
+            },
+        );
+        if computed.amount.0 > 0 {
+            let overdue = OverdueLoan {
+                loan: loan.id,
+                patron: loan.patron,
+                item: item.id,
+                branch: item.holding,
+            };
+            fine = charge_overdue(
+                connection,
+                &overdue,
+                computed.amount,
+                DebtSettings::default().max_fine,
+                &at,
+            )?;
+        }
+    }
+    close_overdue(connection, loan.patron, item.id, &at)?;
+    Ok(fine)
+}
+
 /// Moves the loan to the returned loans, without its patron unless the patron keeps a
 /// reading history.
 ///
@@ -225,9 +295,11 @@ pub(crate) fn checkin(connection: &Connection, request: &CheckinRequest) -> Appl
         .map_err(|_| refused(CheckinRefusal::Withdrawn))?;
     let mut patron = None;
     let mut suspended_until = None;
+    let mut fine = None;
     if let (LoanOutcome::Ended { overdue }, Some(loan)) = (done.loan, &loan) {
         end_loan(connection, loan, request).map_err(storage)?;
         patron = Some(loan.patron);
+        fine = fine_late(connection, &rules, &item, loan, request).map_err(storage)?;
         if overdue {
             suspended_until =
                 suspend_late(connection, &rules, &item, loan, request).map_err(storage)?;
@@ -275,6 +347,7 @@ pub(crate) fn checkin(connection: &Connection, request: &CheckinRequest) -> Appl
             lost: done.lost,
             destination: done.destination,
             suspended_until,
+            fine,
         },
     )))
 }

@@ -17,7 +17,7 @@ use elzevir_app::loans::{
 };
 use elzevir_app::patrons::{PatronCommand, PatronDesk};
 use elzevir_app::staff::Permission;
-use elzevir_domain::catalog::BranchId;
+use elzevir_domain::catalog::{BranchId, Money};
 use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome};
 use elzevir_domain::checkout::{Alert, Confirm, Impossible, TooMany};
 use elzevir_domain::patron::{PatronId, is_expired};
@@ -78,6 +78,18 @@ fn suspension_text(t: &I18n, end: SuspensionEnd, day_key: &str, lifted_key: &str
     }
 }
 
+/// An amount as the interface shows it: two decimals, with the language's separator.
+pub(crate) fn money(t: &I18n, Money(cents): Money) -> String {
+    let sign = if cents < 0 { "-" } else { "" };
+    let cents = cents.unsigned_abs();
+    format!(
+        "{sign}{}{}{:02}",
+        cents / 100,
+        t.get("money-decimal-separator"),
+        cents % 100
+    )
+}
+
 fn limit_text(t: &I18n, key: &str, too_many: &TooMany) -> String {
     t.get_texts(
         key,
@@ -97,6 +109,9 @@ fn impossible_text(t: &I18n, reason: &Impossible) -> String {
             "checkout-impossible-suspended-lifted",
         ),
         Impossible::PatronExpired => t.get("checkout-impossible-expired"),
+        Impossible::Debt(owed) => {
+            t.get_with("checkout-impossible-debt", "amount", &money(t, *owed))
+        }
         Impossible::TooMany(too_many) => limit_text(t, "checkout-impossible-too-many", too_many),
         Impossible::NotForLoan(_) => t.get("checkout-impossible-not-for-loan"),
         Impossible::Withdrawn => t.get("checkout-impossible-withdrawn"),
@@ -108,6 +123,7 @@ fn confirm_text(t: &I18n, reason: &Confirm) -> String {
     match reason {
         Confirm::Renew => t.get("checkout-confirm-renew"),
         Confirm::IssuedToAnother => t.get("checkout-confirm-issued-to-another"),
+        Confirm::Debt(owed) => t.get_with("checkout-confirm-debt", "amount", &money(t, *owed)),
         Confirm::PatronCannotBorrow => t.get("checkout-confirm-cannot-borrow"),
         Confirm::TooMany(too_many) => limit_text(t, "checkout-confirm-too-many", too_many),
         Confirm::NotForLoan(_) => t.get("checkout-confirm-not-for-loan"),
@@ -152,6 +168,13 @@ fn checkin_notices(
     }];
     if done.loan == (LoanOutcome::Ended { overdue: true }) {
         notices.push(refused(t.get("checkin-overdue")));
+    }
+    if let Some(fine) = done.fine {
+        notices.push(refused(t.get_with(
+            "checkin-fined",
+            "amount",
+            &money(t, fine),
+        )));
     }
     if let Some(until) = done.suspended_until {
         notices.push(refused(t.get_with(
@@ -264,10 +287,11 @@ async fn page(
         };
         let current = loans.loans(id).map_err(unavailable)?;
         let suspended = loans.suspension(id, day).map_err(unavailable)?;
-        Ok(Some((patron, current, suspended)))
+        let owed = loans.owed(id).map_err(unavailable)?;
+        Ok(Some((patron, current, suspended, owed)))
     })
     .await;
-    let (patron, current, suspended) = match read {
+    let (patron, current, suspended, owed) = match read {
         Ok(Ok(Some(read))) => read,
         Ok(Ok(None)) => return StatusCode::NOT_FOUND.into_response(),
         Ok(Err(error)) => return failed(&error),
@@ -301,6 +325,7 @@ async fn page(
         csrf: &session.csrf,
         suspended: suspended
             .map(|end| suspension_text(t, end, "patron-suspended", "patron-suspended-lifted")),
+        owed: (owed.0 > 0).then(|| t.get_with("patron-owes", "amount", &money(t, owed))),
         loans: current
             .iter()
             .map(|loan| loan_line(t, loan, &moment, outcome.lent.as_deref()))
@@ -521,4 +546,23 @@ pub(crate) async fn check_in(
         }
     };
     checkin_page(&state, &session, Some(desk), notices).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn amounts_show_two_decimals_with_the_languages_separator() {
+        let english = I18n::english().unwrap();
+        let portuguese = I18n::portuguese().unwrap();
+        assert_eq!(money(&english, Money(250)), "2.50");
+        assert_eq!(money(&portuguese, Money(250)), "2,50");
+        assert_eq!(money(&english, Money(5)), "0.05");
+        assert_eq!(money(&english, Money(-1205)), "-12.05");
+        assert_eq!(
+            english.get_with("patron-owes", "amount", &money(&english, Money(800))),
+            "Owes 8.00."
+        );
+    }
 }

@@ -9,6 +9,7 @@
 {% if let Some(url) = edit_url %}<p><a href="{{ url }}">{{ t.get("patron-edit") }}</a></p>{% endif %}
 {% if expired %}<p class="codes-alert codes-refused" role="alert">{{ t.get("patron-expired-alert") }}</p>{% endif %}
 {% if let Some(suspended) = suspended %}<p class="codes-alert codes-refused" role="alert">{{ suspended }}</p>{% endif %}
+{% if let Some(owed) = owed %}<p class="codes-alert patron-owed">{{ owed }}</p>{% endif %}
 <fieldset class="checkout-box">
   <legend>{{ t.get("checkout-title") }}</legend>
   <label for="checkout-barcode">{{ t.get("checkout-barcode") }}</label>
