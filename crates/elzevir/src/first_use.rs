@@ -80,9 +80,6 @@ pub(crate) fn resolve(mut args: ServeArgs) -> Result<(Settings, Option<PathBuf>)
             }
             let messages = elzevir_panel::Messages::new(language(args.lang.as_deref()))
                 .map_err(|error| error.to_string())?;
-            if !crate::init::confirm_setup(&messages)? {
-                return Err(messages.get("setup-cancelled"));
-            }
             let mut init = crate::init::InitArgs::first_use(
                 args.lang.clone(),
                 args.listen,

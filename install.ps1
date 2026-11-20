@@ -8,6 +8,7 @@ param(
     [ValidatePattern('^[a-zA-Z0-9_.-]{1,64}$')] [string] $Login = 'admin',
     [string] $Listen = '127.0.0.1:7390',
     [switch] $Plan,
+    [switch] $NoLaunch,
     [switch] $OpenFirewall,
     [string] $DownloadOnly
 )
@@ -16,6 +17,7 @@ param($InstallerParameters)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$script:OpenPanel = $null
 function Test-ElzevirVersion([string] $Version) {
     if ($Version.Length -gt 40 -or $Version -cnotmatch '\Av(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})(?:-(?<preview>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?\z') { return $false }
     return $Matches['preview'] -cnotmatch '(^|\.)0[0-9]+(\.|$)'
@@ -167,6 +169,22 @@ function Set-ElzevirPrivateDirectory([string] $Path, [switch] $ForUser) {
     & "$env:SystemRoot\System32\icacls.exe" $Path '/inheritance:r' '/grant:r' @grants | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Cannot protect installation directory' }
 }
+function New-ElzevirShortcut([string] $Folder, [string] $Target, [string] $Arguments) {
+    # Shortcuts are a convenience; the installation stands without them.
+    try {
+        if (-not (Test-Path -LiteralPath $Folder -PathType Container)) { return $false }
+        $shell = New-Object -ComObject WScript.Shell
+        $shortcut = $shell.CreateShortcut((Join-Path $Folder 'Elzevir.lnk'))
+        $shortcut.TargetPath = $Target
+        $shortcut.Arguments = $Arguments
+        $shortcut.WorkingDirectory = Split-Path -Parent $Target
+        $shortcut.Description = 'Elzevir'
+        $shortcut.Save()
+        return $true
+    } catch {
+        return $false
+    }
+}
 function Install-ElzevirForUser([string] $Payload, [string] $BinDirectory, [string] $Data, [string] $Version) {
     $source = Join-Path $Payload 'elzevir.exe'
     $reported = Invoke-ElzevirNative $source @('--version')
@@ -203,11 +221,15 @@ function Install-ElzevirForUser([string] $Payload, [string] $BinDirectory, [stri
     Write-Output 'Other terminals opened before this installation need to be reopened to find elzevir.'
     & $destination start --help *> $null
     if ($LASTEXITCODE -eq 0) {
+        $menu = New-ElzevirShortcut ([Environment]::GetFolderPath('Programs')) $destination 'start'
+        $desktop = New-ElzevirShortcut ([Environment]::GetFolderPath('Desktop')) $destination 'start'
+        if ($menu -or $desktop) { Write-Output 'Elzevir is in the Start menu and on the desktop.' }
         Write-Output ''
-        Write-Output 'Next step:'
-        Write-Output '    elzevir start'
+        Write-Output 'To open the panel later:'
+        Write-Output '    elzevir'
         Write-Output 'The first start asks for the library name and the administrator password,'
         Write-Output 'then serves the catalog and opens the panel, which shows its address.'
+        $script:OpenPanel = $destination
     } else {
         $config = Join-Path $Data 'elzevir.toml'
         Write-Output ''
@@ -299,6 +321,12 @@ try {
     }
     if (-not $managed) {
         Install-ElzevirForUser $payload $installRoot $data $Version
+        # The download is not needed while the panel runs.
+        Remove-Item -LiteralPath $temporary -Recurse -Force
+        if ($script:OpenPanel -and -not $NoLaunch -and [Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
+            Write-Output 'Opening the panel now.'
+            & $script:OpenPanel start
+        }
         return
     }
     if (Test-Path -LiteralPath $config) {
@@ -349,6 +377,6 @@ try {
     $shortcut.Save()
     Write-Output "Elzevir ready. Open the Start menu shortcut with Run as administrator, or: & '$binary' panel --config '$config' --lang pt-BR"
 } finally {
-    Remove-Item -LiteralPath $temporary -Recurse -Force
+    if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Recurse -Force }
 }
 } $PSBoundParameters

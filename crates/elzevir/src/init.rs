@@ -69,30 +69,6 @@ impl InitArgs {
     }
 }
 
-fn prompt(messages: &Messages, key: &str) -> Result<String, String> {
-    let mut output = io::stdout().lock();
-    write!(output, "{}  ", messages.get(key))
-        .and_then(|()| output.flush())
-        .map_err(|error| error.to_string())?;
-    let mut answer = String::new();
-    let count = io::Read::take(io::stdin().lock(), 1025)
-        .read_line(&mut answer)
-        .map_err(|error| error.to_string())?;
-    if count == 0 || count > 1024 {
-        return Err(messages.get("setup-cancelled"));
-    }
-    Ok(answer.trim().to_owned())
-}
-
-pub(crate) fn confirm_setup(messages: &Messages) -> Result<bool, String> {
-    Ok(matches!(
-        prompt(messages, "setup-offer")?
-            .to_ascii_lowercase()
-            .as_str(),
-        "" | "y" | "yes" | "s" | "sim"
-    ))
-}
-
 pub(crate) fn run(args: &InitArgs) -> Result<(), String> {
     let _listener = if args.check_port {
         Some(

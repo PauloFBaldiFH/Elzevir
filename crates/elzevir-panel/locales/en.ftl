@@ -270,7 +270,6 @@ domain-error-unavailable = Requested domain is unavailable.
 domain-error-tunnel = Connector configuration or startup failed; retry registration to resume.
 domain-error-provisioning = Broker provisioning failed; the private identity was preserved.
 
-setup-offer = Set up this library now? [Y/n]
 setup-name = 1/3  Library name
 setup-password = 2/3  Password for the administrator
 setup-repeat = Confirm the password
@@ -317,3 +316,4 @@ port-field = Port:
 port-use = Use this port [Enter]
 port-invalid = Type a number from 1024 to 65535.
 port-still-busy = Port { $port } is in use too. Choose another.
+desktop-comment = Open the Elzevir panel

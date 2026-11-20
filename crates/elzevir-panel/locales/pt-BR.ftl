@@ -270,7 +270,6 @@ domain-error-unavailable = Domínio solicitado indisponível.
 domain-error-tunnel = Configuração ou início do conector falhou; repita o cadastro para retomar.
 domain-error-provisioning = Provisionamento no broker falhou; a identidade privada foi preservada.
 
-setup-offer = Configurar a biblioteca agora? [S/n]
 setup-name = 1/3  Nome da biblioteca
 setup-password = 2/3  Senha do administrador
 setup-repeat = Confirme a senha
@@ -317,3 +316,4 @@ port-field = Porta:
 port-use = Usar esta porta [Enter]
 port-invalid = Digite um número de 1024 a 65535.
 port-still-busy = A porta { $port } também está em uso. Escolha outra.
+desktop-comment = Abrir o painel do Elzevir

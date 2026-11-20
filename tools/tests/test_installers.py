@@ -29,7 +29,7 @@ class InstallerTests(unittest.TestCase):
             plans.append(dict(line.split("=", 1) for line in result.stdout.splitlines())["binary"])
         self.assertEqual(len(set(plans)), 3)
 
-    def download(self, *, bad_hash=False, symlink=False, quick_install=False, latest=None):
+    def download(self, *, bad_hash=False, symlink=False, quick_install=False, latest=None, launcher=False):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             fixture = directory / "fixture"
@@ -46,6 +46,7 @@ class InstallerTests(unittest.TestCase):
 case "$*" in
     --version) printf '%s\\n' 'elzevir {tag[1:]}' ;;
     'panel --help') printf '%s\\n' 'Usage: elzevir panel' ;;
+    'start --help'|'desktop --help'|'desktop install'|start) [[ -n ${{ELZEVIR_TEST_CALLS:-}} ]] || exit 1; printf '%s\\n' "$*" >>"$ELZEVIR_TEST_CALLS" ;;
     *) exit 1 ;;
 esac
 """.encode()
@@ -96,11 +97,21 @@ else:
                 environment["XDG_DATA_HOME"] = str(directory / "local data")
                 script = (ROOT / "install.sh").read_text()
                 data = directory / "local data" / "elzevir"
+                calls = directory / "calls"
+                if launcher:
+                    environment["ELZEVIR_TEST_CALLS"] = str(calls)
+                    environment["DISPLAY"] = ":0"
+                    environment.pop("WAYLAND_DISPLAY", None)
                 for _ in range(2):
-                    result = subprocess.run(["bash"], input=script, env=environment, capture_output=True, text=True)
+                    # A new session has no controlling terminal, like an unattended run.
+                    result = subprocess.run(["bash"], input=script, env=environment, capture_output=True, text=True, start_new_session=True)
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertIn(f"elzevir {tag[1:]}", result.stdout)
-                    self.assertIn("Next step", result.stdout)
+                    self.assertIn("To open the panel later" if launcher else "Next step", result.stdout)
+                if launcher:
+                    recorded = calls.read_text().splitlines()
+                    self.assertEqual(recorded.count("desktop install"), 2)
+                    self.assertNotIn("start", recorded, "the panel never opens without a terminal")
                     self.assertTrue(data.is_dir())
                     sentinel = data / "preserve"
                     if sentinel.exists():
@@ -133,6 +144,9 @@ else:
 
     def test_quick_install_without_stable_release_takes_the_newest_prerelease(self):
         self.download(quick_install=True)
+
+    def test_quick_install_adds_the_desktop_launcher_and_skips_the_panel_without_a_terminal(self):
+        self.download(quick_install=True, launcher=True)
 
     def test_quick_install_prefers_the_stable_latest_release(self):
         self.download(quick_install=True, latest="v2.0.0")
