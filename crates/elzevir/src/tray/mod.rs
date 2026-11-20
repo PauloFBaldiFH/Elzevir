@@ -4,6 +4,13 @@
 //!
 //! The state and the menu are decided here, platform-free and tested; each
 //! platform only draws them and reports which entry was chosen.
+#![cfg_attr(
+    not(target_os = "linux"),
+    allow(
+        dead_code,
+        reason = "only the Linux icon uses the shared core so far; elsewhere the tray only starts the server"
+    )
+)]
 
 #[cfg(target_os = "linux")]
 mod linux;
