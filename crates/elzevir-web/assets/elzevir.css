@@ -976,3 +976,5 @@ a.module-card:hover, a.module-card:focus-visible { transform: translateY(-2px); 
 .board-form button { padding: 8px 16px; border: 0; border-radius: 9px; background: var(--elzevir-color-primary); color: var(--elzevir-color-primary-text); font: inherit; font-weight: 700; cursor: pointer; }
 .board-remove { margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--elzevir-color-border); }
 .board-form button.danger { background: transparent; border: 1px solid var(--elzevir-color-error); color: var(--elzevir-color-error); }
+/* Pending work on a module card (interface spec, §22 item 14). */
+.module-name .pending-chip { justify-self: start; margin-top: 4px; padding: 1px 8px; border-radius: 999px; background: var(--tone-soft); color: var(--tone); font-size: 11px; font-weight: 700; }

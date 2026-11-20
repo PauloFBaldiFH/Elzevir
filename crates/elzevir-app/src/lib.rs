@@ -31,6 +31,7 @@ pub mod notices;
 pub mod opac;
 pub mod parallelism;
 pub mod patrons;
+pub mod pending;
 pub mod profiles;
 pub mod rdf;
 pub mod registries;

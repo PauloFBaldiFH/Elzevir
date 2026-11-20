@@ -1171,3 +1171,15 @@ board-error-empty = The note cannot be empty.
 board-error-long = The note is longer than 1,400 characters.
 board-error-full = The board already keeps 50 notes. Remove an old one first.
 board-error-stale = Someone changed this note meanwhile. Your text is below; save again to replace theirs.
+home-pending-overdue = { $count ->
+    [one] 1 loan overdue
+   *[other] { $count } loans overdue
+}
+home-pending-holds = { $count ->
+    [one] 1 hold on the shelf
+   *[other] { $count } holds on the shelf
+}
+home-pending-notices = { $count ->
+    [one] 1 notice to print
+   *[other] { $count } notices to print
+}

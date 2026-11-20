@@ -21,7 +21,7 @@
     <button type="button" class="sub-action" disabled title="{{ t.get("bar-soon") }}">{{ t.get("home-show-all") }}</button>
   </div>
   <div class="module-grid">{% for module in modules %}
-    {% if let Some(href) = module.href %}<a class="module-card tone-{{ module.tone }}" href="{{ href }}">{% else %}<span class="module-card tone-{{ module.tone }} is-soon" aria-disabled="true">{% endif %}<span class="module-icon"><svg class="ico ico-lg" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ module.icon }}"></use></svg></span><span class="module-name">{{ t.get(module.label_key) }}{% if module.href.is_none() %}<small>{{ t.get("bar-soon") }}</small>{% endif %}</span>{% if module.href.is_some() %}</a>{% else %}</span>{% endif %}
+    {% if let Some(href) = module.href %}<a class="module-card tone-{{ module.tone }}" href="{{ href }}">{% else %}<span class="module-card tone-{{ module.tone }} is-soon" aria-disabled="true">{% endif %}<span class="module-icon"><svg class="ico ico-lg" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ module.icon }}"></use></svg></span><span class="module-name">{{ t.get(module.label_key) }}{% if module.href.is_none() %}<small>{{ t.get("bar-soon") }}</small>{% endif %}{% for chip in pending %}{% if chip.module == module.label_key %}<small class="pending-chip">{{ chip.text }}</small>{% endif %}{% endfor %}</span>{% if module.href.is_some() %}</a>{% else %}</span>{% endif %}
   {% endfor %}</div>
 </section>
 <button type="button" class="edit-toggle" disabled title="{{ t.get("bar-soon") }}"><svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-edit"></use></svg>{{ t.get("home-customize") }}</button>

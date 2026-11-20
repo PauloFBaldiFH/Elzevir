@@ -6,7 +6,7 @@ use axum::extract::State;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Redirect, Response};
 use elzevir_app::staff::{LoginRefused, Permission, log_in as check_credentials};
-use elzevir_web_templates::{StaffHome, StaffLogin};
+use elzevir_web_templates::{PendingChip, StaffHome, StaffLogin};
 use serde::Deserialize;
 
 use crate::security::{random_token, tokens_match};
@@ -22,12 +22,42 @@ pub(crate) async fn home(State(state): State<AppState>, headers: HeaderMap) -> R
         return Redirect::to("/equipe/login").into_response();
     };
     let notes = crate::board::staff_cards(&state, &session).await;
+    let pending = pending_chips(&state, &session).await;
     render(&StaffHome {
         t: &state.inner.i18n,
         modules: crate::staff_bar::home_modules(&state, &session),
         notes,
         board: state.board.is_some(),
+        pending,
     })
+}
+
+/// The desk's pending work for the Circulation card, for those who circulate; counts of
+/// zero are left out, and a failed count shows none, since the home works without them.
+async fn pending_chips(state: &AppState, session: &ActiveSession) -> Vec<PendingChip> {
+    let Some(reader) = state.pending.clone() else {
+        return Vec::new();
+    };
+    if !session.identity.can(Permission::Circulation) {
+        return Vec::new();
+    }
+    let now = jiff::Timestamp::now();
+    let Ok(Ok(counts)) = tokio::task::spawn_blocking(move || reader.pending(now)).await else {
+        return Vec::new();
+    };
+    let t = &state.inner.i18n;
+    [
+        ("home-pending-overdue", counts.overdue),
+        ("home-pending-holds", counts.waiting_holds),
+        ("home-pending-notices", counts.notices_to_print),
+    ]
+    .into_iter()
+    .filter(|(_, count)| *count > 0)
+    .map(|(key, count)| PendingChip {
+        module: "module-circulation",
+        text: t.get_numbers(key, &[("count", count)]),
+    })
+    .collect()
 }
 
 /// `GET /equipe/admin/memory`: allocator report as JSON, for administrators.

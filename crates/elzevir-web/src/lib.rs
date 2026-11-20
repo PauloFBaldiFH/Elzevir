@@ -104,6 +104,7 @@ pub struct AppState {
     calendar: Option<Arc<dyn elzevir_app::calendar::CalendarBook>>,
     notices: Option<Arc<dyn elzevir_app::notices::NoticeQueue>>,
     board: Option<Arc<dyn elzevir_app::board::NoticeBoard>>,
+    pending: Option<Arc<dyn elzevir_app::pending::PendingReader>>,
 }
 
 struct Inner {
@@ -142,6 +143,7 @@ impl AppState {
             calendar: None,
             notices: None,
             board: None,
+            pending: None,
             inner: Arc::new(Inner {
                 staff,
                 memory,
@@ -212,6 +214,14 @@ impl AppState {
     #[must_use]
     pub fn with_board(mut self, board: Arc<dyn elzevir_app::board::NoticeBoard>) -> Self {
         self.board = Some(board);
+        self
+    }
+
+    /// Connects the counts of the desk's pending work (interface spec, §22 item 14).
+    /// Without them the module cards show no counts.
+    #[must_use]
+    pub fn with_pending(mut self, reader: Arc<dyn elzevir_app::pending::PendingReader>) -> Self {
+        self.pending = Some(reader);
         self
     }
 }
