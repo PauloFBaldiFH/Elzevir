@@ -19,6 +19,8 @@ pub(crate) enum Event {
     AdminHandlerFailed,
     OverdueFinesCharged { overdue: u64, charged: u64 },
     OverdueFinesFailed,
+    LongOverdueMarked { lost: u64, charged: u64 },
+    LongOverdueFailed,
 }
 
 /// Records a known event with the identity generated for this execution.
@@ -50,6 +52,12 @@ pub(crate) fn emit(instance: &str, event: Event) {
         }
         Event::OverdueFinesFailed => {
             tracing::warn!(target: TARGET, institution = "local", instance, event = "fines.failed", "overdue fines run failed; retried next hour");
+        }
+        Event::LongOverdueMarked { lost, charged } => {
+            tracing::info!(target: TARGET, institution = "local", instance, event = "long_overdue.marked", lost, charged, "long overdue items declared lost");
+        }
+        Event::LongOverdueFailed => {
+            tracing::warn!(target: TARGET, institution = "local", instance, event = "long_overdue.failed", "long overdue run failed; retried next hour");
         }
         Event::RuntimeCleanupFailed => {
             tracing::warn!(target: TARGET, institution = "local", instance, event = "runtime.cleanup_failed", "runtime metadata cleanup failed");

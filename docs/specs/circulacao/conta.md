@@ -1,6 +1,6 @@
 # Conta do leitor
 
-> Status: tarefa 3.7, partes a (multa lançada na devolução e dívida no empréstimo), b (pagamento e abono) e c (multa diária). Exemplar perdido vem na próxima parte. Base: Koha 26.05.05.
+> Status: tarefa 3.7, partes a (multa lançada na devolução e dívida no empréstimo), b (pagamento e abono) c (multa diária) e d (exemplar perdido por atraso longo). Base: Koha 26.05.05.
 
 ## 1. Comportamento
 
@@ -23,19 +23,27 @@
 17. Os empréstimos são percorridos por leitor e, dentro de cada leitor, na ordem em que foram feitos (o `Getoverdues` do Koha ordena por leitor), o que decide qual multa para no teto do `MaxFine`.
 18. O resultado de cada rodada vai para o log do servidor (`fines.charged`, com quantos empréstimos estavam atrasados e quantas multas foram lançadas ou mantidas; `fines.failed` quando falha, e a próxima hora tenta de novo).
 19. As contas não entram no resumo da importação.
+20. **Atraso longo vira perdido.** Com `[circulation.long_overdue]` no `elzevir.toml` (desligado por padrão, como no Koha, em que `DefaultLongOverdueDays` vem vazio), a mesma rodada horária marca como perdido o exemplar emprestado cujo vencimento ficou entre `days` e `max_days` dias antes de hoje (padrão 366): vencimento anterior à meia-noite de hoje menos `days` e não anterior à meia-noite de hoje menos `max_days`, contando dias corridos, sem calendário, como o `longoverdue.pl`. O exemplar recebe a situação de perda `lost_status` (padrão 1, "perdido"); quem já tem essa situação é ignorado.
+21. Sem `charge`, o exemplar só fica perdido: o empréstimo continua, e a multa para de crescer porque a multa diária ignora exemplar perdido. Com `mark_returned`, o empréstimo termina também.
+22. Com `charge` ligado, além de marcar como perdido: a multa aberta do empréstimo fica `LOST` (a de valor zero e sem pagamento é apagada, como no item 7; não é perdoada, `WhenLostForgiveFine` desligado); o leitor recebe um débito `LOST` do preço de reposição do exemplar, quando maior que zero, e um débito `PROCESSING` da taxa da regra `lost_item_processing_fee` da unidade e da política do exemplar, quando maior que zero; e o empréstimo termina (`MarkLostItemsAsReturned` do Koha inclui `cronjob` por padrão).
+23. Nenhum débito de perda é lançado duas vezes para o mesmo empréstimo: se já existe um `LOST` dele, nada é cobrado de novo.
+24. A unidade das cobranças, das regras e da devolução registrada é a unidade onde o exemplar está (`LostChargesControl` = `ItemHomeLibrary` com `HomeOrHoldingBranch` = `holdingbranch`). O empréstimo terminado vai para o histórico como numa devolução, com o dia da rodada.
+25. O resultado vai para o log (`long_overdue.marked`, com quantos exemplares ficaram perdidos e quantos foram cobrados; `long_overdue.failed` quando falha). Ela roda logo depois da multa diária, como no cron do Koha.
+26. A ficha do leitor mostra os débitos `LOST` ("Exemplar perdido") e `PROCESSING` ("Taxa de processamento de perda") como os outros, e eles contam na dívida do item 8.
 
 ## 2. Origem no Koha
 
 - `C4::Circulation::AddReturn`, `_CalculateAndUpdateFine`, `_FixOverduesOnReturn`.
 - `C4::Overdues::UpdateFine`, `Koha::Account::add_debit`, `Koha::Account::Line::adjust`.
 - `misc/cronjobs/fines.pl`, `C4::Overdues::Getoverdues`.
+- `misc/cronjobs/longoverdue.pl`, `C4::Circulation::LostItem`, `C4::Accounts::chargelostitem`, `Koha::Checkout::branch_for_fee_context`.
 - `Koha::Account::pay`, `add_credit`, `Koha::Account::Line::apply`, `members/paycollect.pl`.
 - `C4::Circulation::CanBookBeIssued` (`DEBT`), `Koha::Patron::is_patron_inside_charge_limits`, `Koha::Account::non_issues_charges`.
 - Teste: `reference/koha/t/db_dependent/Overdues.t` ("UpdateFine tests").
 
 ## 3. Paridade
 
-`exigida`. Prova, por enquanto: `crates/elzevir-domain/src/account.rs` (a sequência de `MaxFine` de `Overdues.t`, leitura das regras, dívida) `crates/elzevir-store/tests/checkout.rs` (multa lançada na devolução, confirmação e recusa por dívida, pagamento do mais antigo, abono dos marcados, limites do valor, multa diária crescendo e parada no dia fechado) e `crates/elzevir/tests/patrons.rs` (a conta na ficha, pagamento e abono pelo formulário). `crates/elzevir/tests/checkin_oracle.rs` reproduz `scenarios/circulacao/multa-conta.koha.json` (gravado por `tools/fines-recorder/record.py`): duas devoluções atrasadas com fim de semana no atraso dão as mesmas multas que o Koha, a dívida pede a mesma confirmação (`DEBT`), o pagamento sem linhas marcadas quita na mesma ordem e o abono da linha marcada deixa os mesmos saldos. O `fines.pl` não roda pela web, então a multa diária é comparada só pelo cálculo, que é o mesmo da devolução.
+`exigida`. Prova, por enquanto: `crates/elzevir-domain/src/account.rs` (a sequência de `MaxFine` de `Overdues.t`, leitura das regras, dívida) `crates/elzevir-store/tests/checkout.rs` (multa lançada na devolução, confirmação e recusa por dívida, pagamento do mais antigo, abono dos marcados, limites do valor, multa diária crescendo e parada no dia fechado) e `crates/elzevir/tests/patrons.rs` (a conta na ficha, pagamento e abono pelo formulário). `crates/elzevir/tests/checkin_oracle.rs` reproduz `scenarios/circulacao/multa-conta.koha.json` (gravado por `tools/fines-recorder/record.py`): duas devoluções atrasadas com fim de semana no atraso dão as mesmas multas que o Koha, a dívida pede a mesma confirmação (`DEBT`), o pagamento sem linhas marcadas quita na mesma ordem e o abono da linha marcada deixa os mesmos saldos. O `fines.pl` não roda pela web, então a multa diária é comparada só pelo cálculo, que é o mesmo da devolução. O `longoverdue.pl` também não; a perda por atraso longo é provada pelos testes do store contra o comportamento lido no código do Koha.
 
 ## 4. Casos de borda
 
@@ -44,16 +52,31 @@
 3. Valor de regra com mais de duas casas: arredondado para o centavo mais próximo (`0.005` vira 0,01).
 4. Pagamento do valor exato da dívida: quita tudo e o crédito fica sem saldo.
 5. Valor digitado com três casas ou com separador de milhar: recusado antes de chegar ao escritor.
+6. Vencimento exatamente `days` dias antes, à meia-noite: ainda não fica perdido (o Koha compara com "menor que").
+7. Exemplar sem preço de reposição e sem taxa de processamento: fica perdido e o empréstimo termina, sem débito.
 
 ## 5. Configuração
 
 O Elzevir não tem `finesMode`: a multa é cobrada quando a regra tem valor de multa. Uma biblioteca que não cobra multas deixa `fine` vazio. As demais preferências seguem os padrões do Koha até chegarem ao `elzevir.toml`.
 
+Atraso longo:
+
+```toml
+[circulation.long_overdue]
+days = 60          # obrigatório; liga a perda por atraso longo
+lost_status = 1    # situação de perda gravada no exemplar
+charge = true      # cobra reposição e taxa e termina o empréstimo
+max_days = 366     # vencimentos mais antigos que isso são ignorados
+mark_returned = false  # sem charge, termina o empréstimo mesmo assim
+```
+
+As categorias, unidades e tipos que o `longoverdue.pl` filtra por opção não existem aqui; `DefaultLongOverdueSkipLostStatuses` também não.
+
 ## 6. Fora desta parte
 
 - Tipo de pagamento, caixa e recibo (`RequirePaymentType`, `UseCashRegisters`, `AutomaticEmailReceipts`); troco; estorno e devolução de crédito (`payout`, `OVERPAYMENT`).
 - Débitos manuais e créditos avulsos; a permissão própria de cobrança (Koha: `updatecharges`), que hoje é a de circulação.
-- Exemplar perdido por atraso longo (`longoverdue.pl`).
+- Devolução de exemplar perdido: reembolso da reposição (`lostreturn`) e cobrança de volta da multa; perdão da multa na perda (`WhenLostForgiveFine`); custo de reposição padrão do tipo (`useDefaultReplacementCost`).
 - As opções do `fines.pl` (`--maxdays`, `--verify-issue`, arquivo de relatório).
 - Isenção da multa na devolução (`exemptfine`) e devolução com data retroativa.
 - Limites de dívida da categoria e de responsáveis (`NoIssuesChargeGuarantees`).

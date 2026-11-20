@@ -35,6 +35,9 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CirculationCommand) -> Applied {
         CirculationCommand::ChargeOverdues { at } => {
             crate::overdue_fines::charge_overdues(tx.connection(), at)
         }
+        CirculationCommand::MarkLongOverdue { at, settings } => {
+            crate::long_overdue::mark_long_overdue(tx.connection(), at, settings)
+        }
     }
 }
 

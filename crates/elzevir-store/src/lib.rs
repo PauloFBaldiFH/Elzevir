@@ -36,6 +36,7 @@ mod koha_types;
 mod listing;
 mod loan_desk;
 mod loans;
+mod long_overdue;
 mod matching;
 mod native_items;
 mod overdue_fines;

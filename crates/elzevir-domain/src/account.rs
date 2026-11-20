@@ -15,6 +15,10 @@ use crate::fine::FineRule;
 pub enum DebitType {
     /// An overdue fine (`OVERDUE`).
     Overdue,
+    /// The replacement price of an Item lost while on loan (`LOST`).
+    Lost,
+    /// The fee for processing a lost Item (`PROCESSING`).
+    Processing,
 }
 
 impl DebitType {
@@ -23,13 +27,17 @@ impl DebitType {
     pub const fn code(self) -> &'static str {
         match self {
             Self::Overdue => "OVERDUE",
+            Self::Lost => "LOST",
+            Self::Processing => "PROCESSING",
         }
     }
 
     /// The type of a stored code.
     #[must_use]
     pub fn from_code(code: &str) -> Option<Self> {
-        (code == "OVERDUE").then_some(Self::Overdue)
+        [Self::Overdue, Self::Lost, Self::Processing]
+            .into_iter()
+            .find(|kind| kind.code() == code)
     }
 }
 
@@ -124,6 +132,8 @@ pub enum OverdueStatus {
     Unreturned,
     /// The Item came back; the fine no longer changes (`RETURNED`).
     Returned,
+    /// The Item was declared lost; the fine no longer changes (`LOST`).
+    Lost,
 }
 
 impl OverdueStatus {
@@ -133,6 +143,7 @@ impl OverdueStatus {
         match self {
             Self::Unreturned => "UNRETURNED",
             Self::Returned => "RETURNED",
+            Self::Lost => "LOST",
         }
     }
 }

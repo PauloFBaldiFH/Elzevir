@@ -32,6 +32,8 @@ pub(crate) fn account_rows(t: &I18n, lines: &[AccountLine]) -> Vec<AccountRow> {
         .map(|line| {
             let what = match line.kind {
                 LineKind::Debit(DebitType::Overdue) => t.get("account-overdue"),
+                LineKind::Debit(DebitType::Lost) => t.get("account-lost"),
+                LineKind::Debit(DebitType::Processing) => t.get("account-processing"),
                 LineKind::Credit(CreditType::Payment) => t.get("account-payment"),
                 LineKind::Credit(CreditType::Writeoff) => t.get("account-writeoff"),
             };
