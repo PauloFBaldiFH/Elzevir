@@ -39,14 +39,28 @@ pub struct PatronLine {
     pub expires: String,
     /// Up to two initials.
     pub initials: String,
-    /// Name of the home branch, shown in the full view.
+    /// Name of the home branch.
     pub branch: String,
     /// How the patron stands, as on the record.
     pub status: Vec<StatusChip>,
-    /// "N loans", shown in the full view.
-    pub loans: String,
-    /// "N holds", shown in the full view.
-    pub holds: String,
+    /// Open loans.
+    pub loans: usize,
+    /// "N loans", for the full view.
+    pub loans_text: String,
+    /// When the first open loan is due, as shown.
+    pub next_due: Option<String>,
+    /// Open holds.
+    pub holds: u32,
+    /// "N holds", for the full view.
+    pub holds_text: String,
+    /// "N waiting for pickup", when some are set aside.
+    pub waiting: Option<String>,
+    /// What the patron owes, as shown.
+    pub owed: String,
+    /// Day of the enrolment, as shown.
+    pub enrolled: String,
+    /// Message key of the reading history choice.
+    pub history_key: &'static str,
 }
 
 /// The patron's record, behind the wall.

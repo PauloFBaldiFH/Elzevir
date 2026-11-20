@@ -402,6 +402,12 @@ pub struct PatronRow {
     pub loans_due: Vec<Zoned>,
     /// Open holds.
     pub holds: u32,
+    /// Holds set aside, waiting for the patron.
+    pub holds_waiting: u32,
+    /// Day of the enrolment.
+    pub enrolled: Date,
+    /// Whether returns are kept in the reading history.
+    pub reading_history: ReadingHistory,
     /// What the patron owes.
     pub owed: Money,
 }

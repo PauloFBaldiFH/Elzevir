@@ -84,6 +84,9 @@ const SEARCH: &str = "SELECT p.id, p.cardnumber, p.surname, p.first_name, c.name
                              (SELECT group_concat(l.due, char(31)) FROM loans l
                               WHERE l.patron_id = p.id),
                              (SELECT count(*) FROM holds h WHERE h.patron_id = p.id),
+                             (SELECT count(*) FROM holds h
+                              WHERE h.patron_id = p.id AND h.found = 'W'),
+                             p.enrolled, p.reading_history,
                              (SELECT coalesce(sum(a.outstanding), 0) FROM account_lines a
                               WHERE a.patron_id = p.id AND a.debit_type IS NOT NULL)
                       FROM patrons p
@@ -175,7 +178,14 @@ impl PatronDesk for ElzevirStore {
                             branch_name: row.get(6)?,
                             loans_due: dues(row.get::<_, Option<String>>(7)?.as_deref())?,
                             holds: row.get(8)?,
-                            owed: Money(row.get(9)?),
+                            holds_waiting: row.get(9)?,
+                            enrolled: day(&row.get::<_, String>(10)?)?,
+                            reading_history: if row.get::<_, i64>(11)? == 1 {
+                                ReadingHistory::Kept
+                            } else {
+                                ReadingHistory::NotKept
+                            },
+                            owed: Money(row.get(12)?),
                         })
                     })?;
                 rows.collect::<rusqlite::Result<Vec<_>>>()

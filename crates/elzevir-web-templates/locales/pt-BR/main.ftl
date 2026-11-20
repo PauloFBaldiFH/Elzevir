@@ -354,6 +354,15 @@ patron-list-holds = { $count ->
     [one] 1 reserva
    *[other] { $count } reservas
 }
+patron-list-waiting = { $count ->
+    [one] 1 aguardando retirada
+   *[other] { $count } aguardando retirada
+}
+patron-list-loans-label = Empréstimos
+patron-list-holds-label = Reservas
+patron-list-next-due = Próximo vencimento
+patron-list-owed = Débito
+patron-list-open = Abrir ficha
 loan-due-late = Atrasado · { $date }
 loan-due-soon = Vence logo · { $date }
 loan-due-ok = Dev. { $date }

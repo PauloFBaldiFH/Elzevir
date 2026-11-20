@@ -161,7 +161,7 @@ pub(crate) fn header(
 }
 
 /// One patron of the search: a line in the compact view, a card in the full one. Nothing
-/// personal beyond the name and card number (interface §24.6).
+/// personal beyond the name and card number, and no titles (interface §24.6).
 pub(crate) fn patron_line(t: &I18n, row: PatronRow, now: &Zoned) -> PatronLine {
     let overdue = row
         .loans_due
@@ -169,19 +169,33 @@ pub(crate) fn patron_line(t: &I18n, row: PatronRow, now: &Zoned) -> PatronLine {
         .filter(|due| LoanUrgency::of(due, now) == LoanUrgency::Overdue)
         .count();
     let expired = is_expired(row.expires, now.date());
-    let count = |key: &str, count: usize| {
-        t.get_numbers(key, &[("count", u64::try_from(count).unwrap_or(u64::MAX))])
-    };
+    let count = |key: &str, count: u64| t.get_numbers(key, &[("count", count)]);
+    let loans = row.loans_due.len();
     PatronLine {
         id: row.id.0,
         initials: initials(&row.surname, row.first_name.as_deref()),
         name: full_name(&row.surname, row.first_name.as_deref()),
         status: status(t, overdue, row.owed, expired),
-        loans: count("patron-list-loans", row.loans_due.len()),
-        holds: count(
-            "patron-list-holds",
-            usize::try_from(row.holds).unwrap_or(usize::MAX),
+        loans,
+        loans_text: count(
+            "patron-list-loans",
+            u64::try_from(loans).unwrap_or(u64::MAX),
         ),
+        next_due: row.loans_due.iter().min().map(|due| due_text(t, due)),
+        holds: row.holds,
+        holds_text: count("patron-list-holds", u64::from(row.holds)),
+        waiting: (row.holds_waiting > 0)
+            .then(|| count("patron-list-waiting", u64::from(row.holds_waiting))),
+        owed: if row.owed.0 > 0 {
+            money(t, row.owed)
+        } else {
+            "—".to_owned()
+        },
+        enrolled: shown(t, row.enrolled),
+        history_key: match row.reading_history {
+            ReadingHistory::Kept => "patron-history-kept",
+            ReadingHistory::NotKept => "patron-history-not-kept",
+        },
         cardnumber: row.cardnumber,
         category: row.category_name,
         branch: row.branch_name,

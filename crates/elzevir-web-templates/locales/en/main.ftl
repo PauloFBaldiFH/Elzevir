@@ -770,6 +770,15 @@ patron-list-holds = { $count ->
     [one] 1 hold
    *[other] { $count } holds
 }
+patron-list-waiting = { $count ->
+    [one] 1 waiting for pickup
+   *[other] { $count } waiting for pickup
+}
+patron-list-loans-label = Loans
+patron-list-holds-label = Holds
+patron-list-next-due = Next due
+patron-list-owed = Owes
+patron-list-open = Open record
 loan-due-late = Overdue · { $date }
 loan-due-soon = Due soon · { $date }
 loan-due-ok = Due { $date }
