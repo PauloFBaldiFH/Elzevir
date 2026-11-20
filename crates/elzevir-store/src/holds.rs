@@ -20,7 +20,7 @@ use rusqlite::types::Type;
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::circulation_rules::read_rules;
-use crate::restrictions::suspension;
+use crate::restrictions::restricted;
 use crate::{CommandFailed, StoreError};
 
 type Applied = Result<WriteOutput, CommandFailed<WriteRefusal>>;
@@ -55,7 +55,7 @@ fn hold_patron(
     else {
         return Ok(None);
     };
-    let suspended = suspension(connection, patron)?.is_some_and(|found| found.holds_on(today));
+    let suspended = restricted(connection, patron, today)?.is_some();
     // Koha: `Koha::Account::balance`, debits and credits together.
     let balance: i64 = connection.query_row(
         "SELECT coalesce(sum(outstanding), 0) FROM account_lines WHERE patron_id = ?1",

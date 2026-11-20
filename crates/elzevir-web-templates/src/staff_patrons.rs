@@ -57,8 +57,8 @@ pub struct StaffPatron<'a> {
     pub id: i64,
     /// Anti-forgery token of the session.
     pub csrf: &'a str,
-    /// The text of the suspension, while it holds.
-    pub suspended: Option<String>,
+    /// The patron's restrictions that hold today, each with its lift button.
+    pub restrictions: Vec<RestrictionRow>,
     /// What the patron owes, when they owe something.
     pub owed: Option<String>,
     /// The lines of the account, newest first.
@@ -109,6 +109,15 @@ pub struct AccountRow {
     pub outstanding: String,
     /// Whether it still owes, so it can be chosen for a payment.
     pub payable: bool,
+}
+
+/// One of the patron's restrictions as shown.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RestrictionRow {
+    /// The kind as posted by the lift button.
+    pub kind: &'static str,
+    /// What it says.
+    pub text: String,
 }
 
 /// One of the patron's holds.

@@ -1,6 +1,6 @@
 # Suspensão na devolução atrasada
 
-> Status: tarefa 3.5, partes c e d. Base: Koha 26.05.05.
+> Status: tarefa 3.5, partes c e d; tarefa 3.9, parte b (suspensão por aviso de atraso e retirada pela equipe). Base: Koha 26.05.05.
 
 ## 1. Comportamento
 
@@ -10,11 +10,12 @@
 4. A suspensão é `dias de atraso × finedays`. Com `suspension_chargeperiod` maior que 1, ela é dividida por ele, arredondando para baixo. Com `maxsuspensiondays` preenchido, ela não passa dele.
 5. Ela conta a partir da data da devolução. Com `CumulativeRestrictionPeriods` ligado (padrão desligado) e uma suspensão em curso, conta a partir do fim dela.
 6. Com `SuspensionsCalendar` = `noSuspensionsWhenClosed` (o padrão), só dias abertos contam, como no vencimento com `useDaysMode` = `Calendar`; com `ignoreCalendar`, todos os dias contam.
-7. O leitor tem no máximo uma suspensão. Uma nova suspensão só a estende: se a atual termina depois, fica a atual. Uma suspensão sem fim é substituída pela nova data, como no Koha, que só compara duas datas.
+7. O leitor tem no máximo uma suspensão por devolução atrasada (e uma por aviso de atraso, [avisos.md](avisos.md), item 15). Uma nova suspensão por devolução só a estende: se a atual termina depois, fica a atual. Uma suspensão sem fim é substituída pela nova data, como no Koha, que só compara duas datas.
 8. A suspensão vale até o dia anterior ao fim: no dia do fim o leitor já pode emprestar (Koha: `is_debarred` compara a data com o momento atual).
 9. A resposta da devolução diz até quando o leitor fica suspenso, quando a devolução o suspendeu.
-10. O empréstimo a um leitor suspenso é impossível (Koha: `DEBARRED` e `USERBLOCKEDWITHENDDATE`, ou `USERBLOCKEDNOENDDATE` sem fim). A recusa vem antes da de cadastro expirado.
+10. O empréstimo a um leitor suspenso é impossível (Koha: `DEBARRED` e `USERBLOCKEDWITHENDDATE`, ou `USERBLOCKEDNOENDDATE` sem fim). Com as duas suspensões, vale a que termina mais tarde, e a sem fim vence qualquer data (Koha: `UpdateBorrowerDebarmentFlags`). A recusa vem antes da de cadastro expirado.
 11. As restrições do leitor não entram no resumo da importação.
+12. **Retirar.** Na ficha do leitor, com a permissão de circulação, cada suspensão que vale aparece com o botão "Retirar" (comando `circ.lift_restriction`, Koha: `DelUniqueDebarment`). Retirar uma suspensão que o leitor não tem é recusado.
 
 ## 2. Origem no Koha
 
@@ -36,7 +37,7 @@
 
 - Empréstimos por hora não suspendem ainda: o Koha mistura horas e dias nesse cálculo (`DateTime::Duration` com `finedays × 24`), e isso ainda não foi conferido no oráculo.
 - `RestrictionBlockRenewing` (padrão desligado): a suspensão não impede a renovação.
-- Restrições manuais, retirada da suspensão pela equipe e `AutoRemoveOverduesRestrictions` vêm com a ficha do leitor.
+- Restrições manuais e `AutoRemoveOverduesRestrictions` (padrão `no`) vêm depois.
 
 ## 6. Desvios
 

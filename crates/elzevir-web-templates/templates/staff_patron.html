@@ -8,7 +8,6 @@
 <h1>{{ name }}</h1>
 {% if let Some(url) = edit_url %}<p><a href="{{ url }}">{{ t.get("patron-edit") }}</a></p>{% endif %}
 {% if expired %}<p class="codes-alert codes-refused" role="alert">{{ t.get("patron-expired-alert") }}</p>{% endif %}
-{% if let Some(suspended) = suspended %}<p class="codes-alert codes-refused" role="alert">{{ suspended }}</p>{% endif %}
 {% if let Some(owed) = owed %}<p class="codes-alert patron-owed">{{ owed }}</p>{% endif %}
 <fieldset class="checkout-box">
   <legend>{{ t.get("checkout-title") }}</legend>
@@ -19,6 +18,7 @@
   <label for="checkout-desk">{{ t.get("circulation-desk") }}</label>
   <select id="checkout-desk" name="desk">{% for desk in desks %}<option value="{{ desk.id }}"{% if desk.selected %} selected{% endif %}>{{ desk.name }}</option>{% endfor %}</select>
 </fieldset>
+{% for restriction in restrictions %}<p class="codes-alert codes-refused" role="alert">{{ restriction.text }} <button type="submit" formaction="/equipe/leitores/{{ id }}/restricoes" name="lift" value="{{ restriction.kind }}">{{ t.get("restriction-lift") }}</button></p>{% endfor %}
 {% for notice in notices %}<p class="codes-alert{% if notice.refused %} codes-refused{% endif %}" role="{% if notice.refused %}alert{% else %}status{% endif %}">{{ notice.text }}</p>{% endfor %}
 <dl class="patron-fields">
 {% for (label, value) in rows %}

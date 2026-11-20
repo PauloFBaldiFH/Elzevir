@@ -51,6 +51,17 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CirculationCommand) -> Applied {
         CirculationCommand::SetOverdueNoticeRule(rule) => {
             crate::notices::set_rule(tx.connection(), rule)
         }
+        CirculationCommand::LiftRestriction { patron, kind } => {
+            if crate::restrictions::lift(tx.connection(), *patron, *kind)
+                .map_err(StoreError::from)?
+            {
+                Ok(WriteOutput::Circulation(
+                    CirculationOutput::RestrictionLifted,
+                ))
+            } else {
+                Err(refused(CirculationRefusal::NoRestriction))
+            }
+        }
         CirculationCommand::QueueOverdueNotices { at } => {
             crate::notices::queue_overdue_notices(tx.connection(), at)
         }

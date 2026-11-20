@@ -59,6 +59,10 @@ pub struct OverdueLevel {
     pub delay: u16,
     /// How it goes out.
     pub transports: Transports,
+    /// Whether the patron is restricted when it goes out, until the staff lift it
+    /// (`debarred1` to `debarred3`).
+    #[serde(default)]
+    pub restrict: bool,
 }
 
 /// Why the levels of a rule were refused.
@@ -197,6 +201,7 @@ mod tests {
                 email: true,
                 print: false,
             },
+            restrict: false,
         }
     }
 

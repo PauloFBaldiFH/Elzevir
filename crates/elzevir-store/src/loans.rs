@@ -22,7 +22,7 @@ use crate::calendar::read_calendar;
 use crate::catalog::exists;
 use crate::circulation_rules::read_rules;
 use crate::holds::{ItemHold, fill_at_checkout, hold_for_checkout};
-use crate::restrictions::{Suspension, suspension};
+use crate::restrictions::restricted;
 use crate::{CommandFailed, StoreError};
 
 type Applied = Result<WriteOutput, CommandFailed<WriteRefusal>>;
@@ -228,10 +228,7 @@ pub(crate) fn checkout(connection: &Connection, request: &CheckoutRequest) -> Ap
     let rules = read_rules(connection).map_err(storage)?;
     let loans = current_loans(connection, request.patron).map_err(storage)?;
     let owed = owed(connection, request.patron).map_err(storage)?;
-    let suspended = suspension(connection, request.patron)
-        .map_err(storage)?
-        .filter(|suspension| suspension.holds_on(request.at.date()))
-        .map(Suspension::end);
+    let suspended = restricted(connection, request.patron, request.at.date()).map_err(storage)?;
     let (hold_item, answered) = item_hold(connection, &rules, &item).map_err(storage)?;
     let query = LimitQuery {
         branch: item.holding_branch,

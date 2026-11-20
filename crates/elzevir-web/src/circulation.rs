@@ -22,9 +22,9 @@ use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome};
 use elzevir_domain::checkout::{Alert, Confirm, HeldFor, Impossible, TooMany};
 use elzevir_domain::hold::HoldMatch;
 use elzevir_domain::patron::{PatronId, is_expired};
-use elzevir_domain::suspension::SuspensionEnd;
+use elzevir_domain::suspension::{RestrictionKind, SuspensionEnd};
 use elzevir_web_templates::{
-    AsideForm, DeskOption, I18n, LoanLine, Notice, StaffCheckin, StaffPatron,
+    AsideForm, DeskOption, I18n, LoanLine, Notice, RestrictionRow, StaffCheckin, StaffPatron,
 };
 use jiff::Zoned;
 use serde::Deserialize;
@@ -250,6 +250,10 @@ pub(crate) fn routes() -> axum::Router<AppState> {
             post(crate::patron_holds::change),
         )
         .route(
+            "/equipe/leitores/{id}/restricoes",
+            post(crate::patron_holds::lift_restriction),
+        )
+        .route(
             "/equipe/circulacao/devolucao",
             get(checkin_desk).post(check_in),
         )
@@ -313,7 +317,7 @@ pub(crate) async fn page(
             return Ok(None);
         };
         let current = loans.loans(id).map_err(unavailable)?;
-        let suspended = loans.suspension(id, day).map_err(unavailable)?;
+        let suspended = loans.restrictions(id, day).map_err(unavailable)?;
         let owed = loans.owed(id).map_err(unavailable)?;
         let account = loans.account(id).map_err(unavailable)?;
         let holds = loans.holds(id).map_err(unavailable)?;
@@ -352,8 +356,7 @@ pub(crate) async fn page(
             .then(|| format!("/equipe/leitores/{}/editar", id.0)),
         id: id.0,
         csrf: &session.csrf,
-        suspended: suspended
-            .map(|end| suspension_text(t, end, "patron-suspended", "patron-suspended-lifted")),
+        restrictions: restriction_rows(t, &suspended),
         owed: (owed.0 > 0).then(|| t.get_with("patron-owes", "amount", &money(t, owed))),
         loans: current
             .iter()
@@ -370,6 +373,26 @@ pub(crate) async fn page(
         *response.status_mut() = status;
     }
     response
+}
+
+/// The patron's restrictions as shown: a suspension with its end, or the restriction of
+/// the overdue notices.
+fn restriction_rows(
+    t: &I18n,
+    restrictions: &[(RestrictionKind, SuspensionEnd)],
+) -> Vec<RestrictionRow> {
+    restrictions
+        .iter()
+        .map(|(kind, end)| RestrictionRow {
+            kind: kind.as_str(),
+            text: match kind {
+                RestrictionKind::Suspension => {
+                    suspension_text(t, *end, "patron-suspended", "patron-suspended-lifted")
+                }
+                RestrictionKind::Overdues => t.get("patron-restricted-overdues"),
+            },
+        })
+        .collect()
 }
 
 fn unavailable(error: CirculationDeskError) -> elzevir_app::patrons::PatronDeskError {
