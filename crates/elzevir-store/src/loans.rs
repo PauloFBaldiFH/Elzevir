@@ -4,14 +4,15 @@
 use elzevir_app::circulation_rules::{CirculationOutput, CirculationRefusal};
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
 use elzevir_app::loans::{CheckedOut, CheckoutRefusal, CheckoutRequest, LoanId, checked_barcode};
-use elzevir_domain::catalog::{BranchId, PolicyId};
+use elzevir_domain::catalog::{BranchId, ItemId, PolicyId};
 use elzevir_domain::checkout::{
-    CheckoutFacts, CheckoutSettings, CurrentLoan, ItemFacts, LimitQuery, LoanHolder,
+    CheckoutFacts, CheckoutSettings, CurrentLoan, HeldFor, ItemFacts, LimitQuery, LoanHolder,
     check_checkout, loan_rule, too_many,
 };
 use elzevir_domain::circulation::checkout_due;
-use elzevir_domain::circulation_rules::RuleScopeKey;
+use elzevir_domain::circulation_rules::{CirculationRule, RuleScopeKey};
 use elzevir_domain::due_date::{ConsiderLibraryHours, DueDateContext, LibraryHours};
+use elzevir_domain::hold::{HoldItem, HoldMatch};
 use elzevir_domain::patron::{PatronCategoryId, PatronId};
 use jiff::civil::Date;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -20,6 +21,7 @@ use crate::accounts::owed;
 use crate::calendar::read_calendar;
 use crate::catalog::exists;
 use crate::circulation_rules::read_rules;
+use crate::holds::{ItemHold, fill_at_checkout, hold_for_checkout};
 use crate::restrictions::{Suspension, suspension};
 use crate::{CommandFailed, StoreError};
 
@@ -40,22 +42,27 @@ fn storage(error: rusqlite::Error) -> CommandFailed<WriteRefusal> {
 
 struct Item {
     id: i64,
+    home_branch: BranchId,
     holding_branch: BranchId,
     policy: PolicyId,
+    instance: i64,
     facts: ItemFacts,
 }
 
 fn find_item(connection: &Connection, barcode: &str) -> rusqlite::Result<Option<Item>> {
     connection
         .query_row(
-            "SELECT id, holding_branch, policy_id, not_for_loan, withdrawn, restricted, lost
+            "SELECT id, holding_branch, policy_id, not_for_loan, withdrawn, restricted, lost,
+                    home_branch, instance_id
              FROM items WHERE barcode = ?1",
             [barcode],
             |row| {
                 Ok(Item {
                     id: row.get(0)?,
+                    home_branch: BranchId(row.get(7)?),
                     holding_branch: BranchId(row.get(1)?),
                     policy: PolicyId(row.get(2)?),
+                    instance: row.get(8)?,
                     facts: ItemFacts {
                         not_for_loan: row.get(3)?,
                         withdrawn: row.get(4)?,
@@ -131,6 +138,68 @@ fn holder(
     }))
 }
 
+/// The Item as the holds see it, and the hold it answers where it is now.
+fn item_hold(
+    connection: &Connection,
+    rules: &[CirculationRule],
+    item: &Item,
+) -> rusqlite::Result<(HoldItem, Option<ItemHold>)> {
+    let hold_item = HoldItem {
+        id: ItemId(item.id),
+        home: item.home_branch,
+        holding: item.holding_branch,
+        policy: item.policy,
+    };
+    let answered = hold_for_checkout(
+        connection,
+        rules,
+        &hold_item,
+        item.instance,
+        item.facts.not_for_loan,
+    )?;
+    Ok((hold_item, answered))
+}
+
+/// How the Item answers a hold of someone else than `patron`.
+fn held_for_another(answered: Option<ItemHold>, patron: PatronId) -> Option<HeldFor> {
+    answered
+        .filter(|found| found.patron != patron)
+        .map(|found| match found.found {
+            HoldMatch::Waiting(_) => HeldFor::Waiting,
+            HoldMatch::InTransit(_) => HeldFor::InTransit,
+            HoldMatch::Reserved(_) => HeldFor::Reserved,
+        })
+}
+
+/// Stores the loan, and moves the Item to the desk's branch and finds it if it was lost
+/// (Koha: `AddIssue`).
+fn record_loan(
+    connection: &Connection,
+    item: i64,
+    request: &CheckoutRequest,
+    due: &impl std::fmt::Display,
+) -> rusqlite::Result<LoanId> {
+    connection.execute(
+        "INSERT INTO loans (item_id, patron_id, branch_id, issued_at, due, on_site)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            item,
+            request.patron.0,
+            request.desk.0,
+            request.at.to_string(),
+            due.to_string(),
+            request.on_site
+        ],
+    )?;
+    let loan = LoanId(connection.last_insert_rowid());
+    connection.execute(
+        "UPDATE items SET holding_branch = ?2, lost = 0, row_version = row_version + 1
+         WHERE id = ?1",
+        params![item, request.desk.0],
+    )?;
+    Ok(loan)
+}
+
 /// Applies `circ.checkout` inside the writer's transaction.
 ///
 /// The rules that apply are those of the Item's holding branch before the loan, the
@@ -163,6 +232,7 @@ pub(crate) fn checkout(connection: &Connection, request: &CheckoutRequest) -> Ap
         .map_err(storage)?
         .filter(|suspension| suspension.holds_on(request.at.date()))
         .map(Suspension::end);
+    let (hold_item, answered) = item_hold(connection, &rules, &item).map_err(storage)?;
     let query = LimitQuery {
         branch: item.holding_branch,
         category,
@@ -178,6 +248,7 @@ pub(crate) fn checkout(connection: &Connection, request: &CheckoutRequest) -> Ap
             owed,
             item: item.facts,
             too_many: too_many(&rules, &query, &loans),
+            held_for_another: held_for_another(answered, request.patron),
         },
         &CheckoutSettings::default(),
     );
@@ -209,29 +280,16 @@ pub(crate) fn checkout(connection: &Connection, request: &CheckoutRequest) -> Ap
         },
     )
     .map_err(|_| refused(CheckoutRefusal::NoDueDate))?;
-    connection
-        .execute(
-            "INSERT INTO loans (item_id, patron_id, branch_id, issued_at, due, on_site)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![
-                item.id,
-                request.patron.0,
-                request.desk.0,
-                request.at.to_string(),
-                due.to_string(),
-                request.on_site
-            ],
-        )
-        .map_err(storage)?;
-    let loan = LoanId(connection.last_insert_rowid());
-    // Koha: `AddIssue` moves the Item to the desk's branch and finds it if it was lost.
-    connection
-        .execute(
-            "UPDATE items SET holding_branch = ?2, lost = 0, row_version = row_version + 1
-             WHERE id = ?1",
-            params![item.id, request.desk.0],
-        )
-        .map_err(storage)?;
+    let loan = record_loan(connection, item.id, request, &due).map_err(storage)?;
+    fill_at_checkout(
+        connection,
+        &rules,
+        (&hold_item, item.instance),
+        request.patron,
+        answered,
+        &request.at.to_string(),
+    )
+    .map_err(storage)?;
     Ok(WriteOutput::Circulation(CirculationOutput::CheckedOut(
         CheckedOut {
             loan,

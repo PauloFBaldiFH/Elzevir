@@ -19,7 +19,7 @@ use elzevir_app::patrons::{PatronCommand, PatronDesk};
 use elzevir_app::staff::Permission;
 use elzevir_domain::catalog::{BranchId, Money};
 use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome};
-use elzevir_domain::checkout::{Alert, Confirm, Impossible, TooMany};
+use elzevir_domain::checkout::{Alert, Confirm, HeldFor, Impossible, TooMany};
 use elzevir_domain::hold::HoldMatch;
 use elzevir_domain::patron::{PatronId, is_expired};
 use elzevir_domain::suspension::SuspensionEnd;
@@ -132,6 +132,9 @@ fn confirm_text(t: &I18n, reason: &Confirm) -> String {
         Confirm::TooMany(too_many) => limit_text(t, "checkout-confirm-too-many", too_many),
         Confirm::NotForLoan(_) => t.get("checkout-confirm-not-for-loan"),
         Confirm::Lost(_) => t.get("checkout-confirm-lost"),
+        Confirm::Held(HeldFor::Waiting) => t.get("checkout-confirm-held-waiting"),
+        Confirm::Held(HeldFor::InTransit) => t.get("checkout-confirm-held-in-transit"),
+        Confirm::Held(HeldFor::Reserved) => t.get("checkout-confirm-held"),
     }
 }
 

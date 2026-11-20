@@ -496,3 +496,100 @@ pub(crate) fn set_hold_aside(connection: &Connection, request: &HoldAside) -> Ap
         set_aside,
     )))
 }
+
+/// Another patron's hold, or the patron's own, that an Item answers at checkout.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ItemHold {
+    /// The hold, and whether it is set aside.
+    pub(crate) found: HoldMatch,
+    /// Whose hold it is.
+    pub(crate) patron: PatronId,
+}
+
+/// The hold the Item answers where it is now, before a checkout.
+///
+/// Koha: `C4::Circulation::CanBookBeIssued` calls `C4::Reserves::CheckReserves`.
+pub(crate) fn hold_for_checkout(
+    connection: &Connection,
+    rules: &[CirculationRule],
+    item: &HoldItem,
+    instance: i64,
+    not_for_loan: i64,
+) -> rusqlite::Result<Option<ItemHold>> {
+    let queue = instance_queue(connection, instance)?;
+    let Some(found) = hold_for_item(rules, &queue, item, not_for_loan) else {
+        return Ok(None);
+    };
+    let patron = connection.query_row(
+        "SELECT patron_id FROM holds WHERE id = ?1",
+        [found.hold().0],
+        |row| row.get(0).map(PatronId),
+    )?;
+    Ok(Some(ItemHold { found, patron }))
+}
+
+/// After a checkout, fills the patron's own hold the Item answers, or else the patron's
+/// first hold on the Instance (of the record, or of this Item) when the rule
+/// `fill_other_biblio_holds_policy` (default on) lets it. The hold ends as `FILLED`.
+///
+/// Koha: `C4::Reserves::MoveReserve` (without `cancelreserve`) and `Koha::Hold::fill`.
+pub(crate) fn fill_at_checkout(
+    connection: &Connection,
+    rules: &[CirculationRule],
+    (item, instance): (&HoldItem, i64),
+    patron: PatronId,
+    answered: Option<ItemHold>,
+    at: &str,
+) -> rusqlite::Result<()> {
+    let own = match answered {
+        Some(found) if found.patron == patron => Some(found.found.hold()),
+        _ => connection
+            .query_row(
+                "SELECT id FROM holds
+                 WHERE patron_id = ?1 AND instance_id = ?2 AND (item_level = 0 OR item_id = ?3)
+                 ORDER BY priority, id LIMIT 1",
+                params![patron.0, instance, item.id.0],
+                |row| row.get(0).map(HoldId),
+            )
+            .optional()?,
+    };
+    let Some(hold) = own else {
+        return Ok(());
+    };
+    let asked: Option<i64> =
+        connection.query_row("SELECT item_id FROM holds WHERE id = ?1", [hold.0], |row| {
+            row.get(0)
+        })?;
+    if asked != Some(item.id.0) {
+        let patron_branch = connection.query_row(
+            "SELECT branch_id FROM patrons WHERE id = ?1",
+            [patron.0],
+            |row| row.get(0).map(BranchId),
+        )?;
+        let scope = RuleScopeKey {
+            branch: Some(patron_branch),
+            category: None,
+            policy: Some(item.policy),
+        };
+        let fill = elzevir_domain::circulation_rules::effective_rule(
+            rules,
+            elzevir_app::circulation_rules::RuleKind::FillOtherBiblioHoldsPolicy,
+            &scope,
+        )
+        .is_none_or(|rule| rule.value != "0" && !rule.value.is_empty());
+        if !fill {
+            return Ok(());
+        }
+    }
+    connection.execute(
+        "INSERT INTO ended_holds (patron_id, instance_id, item_id, pickup_id, placed_on,
+                                  ended_at, outcome)
+         SELECT CASE WHEN p.reading_history = 1 THEN h.patron_id END,
+                h.instance_id, ?2, h.pickup_id, h.placed_on, ?3, 'FILLED'
+         FROM holds h JOIN patrons p ON p.id = h.patron_id
+         WHERE h.id = ?1",
+        params![hold.0, item.id.0, at],
+    )?;
+    connection.execute("DELETE FROM holds WHERE id = ?1", [hold.0])?;
+    fix_priority(connection, instance)
+}

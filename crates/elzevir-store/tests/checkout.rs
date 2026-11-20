@@ -33,7 +33,7 @@ use elzevir_app::patrons::{
 use elzevir_domain::account::{CreditType, PaymentRefusal};
 use elzevir_domain::catalog::{BranchId, InstanceId, Money};
 use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome, TransferReason};
-use elzevir_domain::checkout::{Alert, Confirm, Impossible, TooManyReason};
+use elzevir_domain::checkout::{Alert, Confirm, HeldFor, Impossible, TooManyReason};
 use elzevir_domain::circulation_rules::RuleScopeKey;
 use elzevir_domain::hold::{Found, HoldMatch, HoldRefusal};
 use elzevir_domain::long_overdue::{DEFAULT_MAX_DAYS, LongOverdueSettings};
@@ -1325,6 +1325,78 @@ fn a_hold_waiting_elsewhere_goes_back_to_the_queue_and_its_item_in_transit() {
         (shown[0].found, shown[0].expires_on),
         (Some(Found::Waiting), Some(date(2026, 11, 25)))
     );
+}
+
+#[test]
+fn a_checkout_asks_before_taking_an_item_held_for_another_and_fills_the_holders_hold() {
+    let dir = tempfile::tempdir().unwrap();
+    let (library, bia, first, _) = two_holds(&dir);
+    library.rules(&[("maxissueqty", "5"), ("issuelength", "7")]);
+    library
+        .set_aside(
+            first.hold,
+            "0001",
+            (library.annex, "2026-11-20T11:00:00-03:00"),
+        )
+        .unwrap();
+    // Ana has no hold: the Item waits for Bia, and the next one may fill Caio's hold.
+    assert_eq!(
+        library.lend("0001", "2026-11-20T12:00:00-03:00", false),
+        Err(CheckoutRefusal::NeedsConfirmation(vec![Confirm::Held(
+            HeldFor::Waiting
+        )]))
+    );
+    assert_eq!(
+        library.lend("0002", "2026-11-20T12:00:00-03:00", false),
+        Err(CheckoutRefusal::NeedsConfirmation(vec![Confirm::Held(
+            HeldFor::Reserved
+        )]))
+    );
+    // Bia takes her Item: her hold is filled and leaves the queue.
+    library
+        .lend_to(bia, "0001", "2026-11-20T12:00:00-03:00", false)
+        .unwrap();
+    assert_eq!(queue(&library), "1--");
+    assert_eq!(
+        library.read::<String>(
+            "SELECT coalesce(patron_id, '-') || ' ' || item_id || ' ' || outcome FROM ended_holds"
+        ),
+        "- 1 FILLED"
+    );
+    // Ana borrows the other Item after confirming; Caio's hold stays first in the queue.
+    library
+        .lend("0002", "2026-11-20T12:00:00-03:00", true)
+        .unwrap();
+    assert_eq!(queue(&library), "1--");
+}
+
+#[test]
+fn a_record_hold_is_filled_by_any_item_of_the_record_unless_a_rule_says_no() {
+    let dir = tempfile::tempdir().unwrap();
+    let (library, bia, first, _) = two_holds(&dir);
+    library.rules(&[("maxissueqty", "5"), ("issuelength", "7")]);
+    // Item 0002 can fill Caio's hold, so the staff confirm; Bia's own hold on the record,
+    // set aside with 0001, is filled by 0002 only when the rule lets it.
+    library
+        .set_aside(
+            first.hold,
+            "0001",
+            (library.annex, "2026-11-20T11:00:00-03:00"),
+        )
+        .unwrap();
+    library.rules(&[("fill_other_biblio_holds_policy", "0")]);
+    library
+        .lend_to(bia, "0002", "2026-11-20T12:00:00-03:00", true)
+        .unwrap();
+    assert_eq!(queue(&library), "0W1 1--", "the rule keeps Bia's hold");
+    library
+        .give_back("0002", library.annex, "2026-11-20T13:00:00-03:00")
+        .unwrap();
+    library.rules(&[("fill_other_biblio_holds_policy", "1")]);
+    library
+        .lend_to(bia, "0002", "2026-11-20T14:00:00-03:00", true)
+        .unwrap();
+    assert_eq!(queue(&library), "1--");
 }
 
 #[test]
