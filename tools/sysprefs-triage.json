@@ -730,8 +730,8 @@
       "nota": "Decidir na spec de catalogação (Fase 1)."
     },
     "ConfirmFutureHolds": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "0: sem reservas futuras (docs/specs/circulacao/reservas.md, §6)."
     },
     "ConsiderHeadingUse": {
       "destino": "revisar",
@@ -1138,24 +1138,24 @@
       "nota": "A busca do Elzevir é Tantivy; decidir na spec de busca (Fase 1) o que vira opção."
     },
     "ExpireReservesAutoFill": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Desligada: a próxima reserva é achada na devolução seguinte (docs/specs/circulacao/reservas.md, item 18)."
     },
     "ExpireReservesAutoFillEmail": {
       "destino": "revisar",
       "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
     },
     "ExpireReservesMaxPickUpDelay": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "config",
+      "nota": "expire_waiting em elzevir.toml [circulation.holds] (docs/specs/circulacao/reservas.md, item 18)."
     },
     "ExpireReservesMaxPickUpDelayCharge": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "0: sem cobrança ao cancelar a reserva vencida (docs/specs/circulacao/reservas.md, §6)."
     },
     "ExpireReservesOnHolidays": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Ligada: a reserva vencida é cancelada mesmo em dia fechado (docs/specs/circulacao/reservas.md, item 18)."
     },
     "ExportCircHistory": {
       "destino": "revisar",
@@ -1330,8 +1330,8 @@
       "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
     },
     "HoldsAutoFill": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Desligada: a equipe confirma na devolução (docs/specs/circulacao/reservas.md, item 14)."
     },
     "HoldsAutoFillPrintSlip": {
       "destino": "revisar",
@@ -2850,8 +2850,8 @@
       "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
     },
     "ReservesMaxPickUpDelay": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "7 dias quando holds_pickup_period não diz outra coisa (docs/specs/circulacao/reservas.md, item 15)."
     },
     "ReservesNeedReturns": {
       "destino": "revisar",
