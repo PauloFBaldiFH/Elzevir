@@ -11,6 +11,7 @@ const ICONS: &str = include_str!("../assets/elzevir-icons.svg");
 const MARK: &str = include_str!("../assets/elzevir-mark.svg");
 const THEME_SCRIPT: &str = include_str!("../assets/elzevir-theme.js");
 const STAFF_SCRIPT: &str = include_str!("../assets/elzevir-staff.js");
+const OPAC_SCRIPT: &str = include_str!("../assets/elzevir-opac.js");
 const HTMX: &str = include_str!("../assets/htmx-2.0.10.min.js");
 const CACHE: &str = "public, max-age=3600";
 
@@ -91,5 +92,15 @@ pub(crate) async fn staff_script() -> impl IntoResponse {
             (header::CACHE_CONTROL, CACHE),
         ],
         STAFF_SCRIPT,
+    )
+}
+
+pub(crate) async fn opac_script() -> impl IntoResponse {
+    (
+        [
+            (header::CONTENT_TYPE, "text/javascript; charset=utf-8"),
+            (header::CACHE_CONTROL, CACHE),
+        ],
+        OPAC_SCRIPT,
     )
 }

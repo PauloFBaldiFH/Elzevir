@@ -7,5 +7,6 @@
 | `elzevir-mark.svg` | Elzevir, from `docs/marca/elzevir-logo.svg` without the wordmark | GPL-3.0-or-later |
 | `elzevir-theme.js` | Elzevir: light/dark switch (interface §22) | GPL-3.0-or-later |
 | `elzevir-staff.js` | Elzevir: staff header keyboard (interface §22) | GPL-3.0-or-later |
+| `elzevir-opac.js` | Elzevir: OPAC home strip buttons (interface §23) | GPL-3.0-or-later |
 
 Assets are compiled into the binary (`include_bytes!`); there is no CDN dependency.

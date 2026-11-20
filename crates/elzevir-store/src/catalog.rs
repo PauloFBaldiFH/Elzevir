@@ -5,7 +5,7 @@ use elzevir_app::catalog::{
     AuthorityLink, CatalogCommand, CatalogOutput, CatalogReadError, CatalogReader, CatalogRefusal,
     CodeLists, InstanceView, ItemData, ItemState, ItemStatus, ItemView, Movement, NamePart,
     NewContribution, NewIdentifier, NewInstance, NewInstanceOfWork, NewNote, NewRecord, NewSubject,
-    NewWorkRelation,
+    NewWorkRelation, RecentInstance,
 };
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
 use elzevir_app::history::touched;
@@ -889,6 +889,41 @@ impl CatalogReader for ElzevirStore {
         self.readers()
             .read(crate::items::code_lists)
             .map_err(|e| CatalogReadError(e.to_string()))
+    }
+
+    fn recent_instances(&self, limit: usize) -> Result<Vec<RecentInstance>, CatalogReadError> {
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        self.readers()
+            .read(|c| {
+                // Instance ids grow with creation, so the largest are the newest.
+                let mut statement = c.prepare_cached(
+                    "SELECT instances.id, instances.title, instances.date,
+                            (SELECT agents.heading FROM contributions
+                             JOIN agents ON agents.id = contributions.agent_id
+                             WHERE contributions.work_id = works.id
+                             ORDER BY contributions.position LIMIT 1),
+                            COALESCE((SELECT items.call_number FROM items
+                                      WHERE items.instance_id = instances.id
+                                        AND items.call_number <> ''
+                                      ORDER BY items.id LIMIT 1),
+                                     works.classification)
+                     FROM instances JOIN works ON works.id = instances.work_id
+                     WHERE instances.opac_hidden = 0
+                     ORDER BY instances.id DESC LIMIT ?1",
+                )?;
+                statement
+                    .query_map(params![limit], |row| {
+                        Ok(RecentInstance {
+                            id: InstanceId(row.get(0)?),
+                            title: row.get(1)?,
+                            date: row.get(2)?,
+                            contributor: row.get(3)?,
+                            call_number: row.get(4)?,
+                        })
+                    })?
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .map_err(|e: rusqlite::Error| CatalogReadError(e.to_string()))
     }
 }
 

@@ -649,6 +649,13 @@ mod tests {
         fn codes(&self) -> Result<crate::catalog::CodeLists, CatalogReadError> {
             Ok(crate::catalog::CodeLists::default())
         }
+
+        fn recent_instances(
+            &self,
+            _: usize,
+        ) -> Result<Vec<crate::catalog::RecentInstance>, CatalogReadError> {
+            Ok(Vec::new())
+        }
     }
 
     impl SearchIndex for Fake {

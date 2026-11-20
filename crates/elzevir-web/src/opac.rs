@@ -13,7 +13,8 @@ use elzevir_app::opac::{self, RecordPage, ResultsPage};
 use elzevir_app::search::SearchIndex;
 use elzevir_domain::catalog::{InstanceId, NoteKind};
 use elzevir_web_templates::{
-    I18n, IconText, ItemLine, OpacNotFound, OpacRecord, OpacRecordBody, OpacResults, ResultLine,
+    I18n, IconText, ItemLine, OpacHome, OpacNotFound, OpacRecord, OpacRecordBody, OpacResults,
+    RecentCard, ResultLine,
 };
 use serde::Deserialize;
 
@@ -75,6 +76,31 @@ impl RecordCache {
         }
         bodies.insert(instance.0, (version, body));
     }
+}
+
+/// `GET /`: the home page, with the notice board, the Instances catalogued last and the
+/// patron sign-in (a placeholder until task 3.10).
+pub(crate) async fn home(State(state): State<AppState>) -> Response {
+    let ports = state.inner.opac.clone();
+    let read = tokio::task::spawn_blocking(move || opac::recent(&*ports.catalog)).await;
+    // The strip is an extra: when the catalog cannot be read, the page still offers search.
+    let recent = match read {
+        Ok(Ok(recent)) => recent,
+        Ok(Err(_)) | Err(_) => Vec::new(),
+    };
+    render(&OpacHome {
+        t: &state.inner.i18n,
+        recent: recent
+            .into_iter()
+            .map(|instance| RecentCard {
+                id: instance.id.0,
+                title: instance.title,
+                contributor: instance.contributor,
+                date: instance.date,
+                call_number: instance.call_number,
+            })
+            .collect(),
+    })
 }
 
 /// Query string of `/search`.

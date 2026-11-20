@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 
 use elzevir_domain::catalog::InstanceId;
 
-use crate::catalog::{CatalogReadError, CatalogReader, InstanceView, ItemView};
+use crate::catalog::{CatalogReadError, CatalogReader, InstanceView, ItemView, RecentInstance};
 use crate::search::{SearchError, SearchHit, SearchIndex, SearchQuery, SearchScope};
 
 /// Results per page.
@@ -21,6 +21,19 @@ pub const MAX_QUERY_CHARS: usize = 256;
 /// Last page that can be asked for, so a crafted URL cannot make the index skip millions
 /// of documents.
 pub const MAX_PAGE: usize = 500;
+
+/// Instances shown on the home page, as "last catalogued".
+pub const RECENT_COUNT: usize = 12;
+
+/// The Instances catalogued last, for the home page, newest first; Instances hidden from
+/// the OPAC are left out.
+///
+/// # Errors
+///
+/// When the catalog fails.
+pub fn recent<C: CatalogReader + ?Sized>(catalog: &C) -> Result<Vec<RecentInstance>, OpacError> {
+    Ok(catalog.recent_instances(RECENT_COUNT)?)
+}
 
 /// One result with its availability.
 #[derive(Debug, Clone, PartialEq)]

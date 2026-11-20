@@ -72,8 +72,25 @@ home-welcome-when = Introduction
 ## OPAC
 opac-home-title = Library catalog
 opac-home-search-label = Search the catalog
-opac-home-search-placeholder = Title, author or subject
+opac-home-search-placeholder = Title, author, subject or ISBN…
 opac-home-search-button = Search
+opac-scope = Catalog
+opac-recent = Last catalogued
+opac-recent-none = Nothing catalogued yet.
+opac-recent-previous = Previous titles
+opac-recent-next = Next titles
+opac-welcome-kind = Welcome
+opac-welcome-text = Welcome to the online catalog! Search for books, authors and subjects, and see the titles catalogued last.
+opac-welcome-author = Library
+opac-account = Patron account
+opac-login-title = Sign in to the catalog
+opac-login-hint = See your loans, holds and renewals.
+opac-login-card = Card number
+opac-login-password = Password
+opac-login-submit = Sign in
+opac-login-soon = Patron sign-in is coming soon.
+nav-to-staff = Staff area
+nav-to-opac = Online catalog
 
 ## Staff login
 staff-login-title = Staff sign in

@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use elzevir_app::catalog::{
     CatalogReadError, CatalogReader, CodeLists, InstanceView, ItemState, ItemStatus, ItemView,
-    Named, Place,
+    Named, Place, RecentInstance,
 };
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::listing::{CatalogListing, Family, FamilyCursor, FamilyHead};
@@ -108,6 +108,25 @@ impl CatalogReader for Catalog {
                 edge(CodeTable::ItemType, "T1", "Normal loan"),
             ],
         })
+    }
+
+    fn recent_instances(&self, limit: usize) -> Result<Vec<RecentInstance>, CatalogReadError> {
+        Ok(self
+            .records
+            .lock()
+            .unwrap()
+            .values()
+            .rev()
+            .filter(|(_, view, _)| !view.opac_hidden)
+            .take(limit)
+            .map(|(_, view, items)| RecentInstance {
+                id: view.id,
+                title: view.title.clone(),
+                contributor: view.contributors.first().map(|(_, name)| name.clone()),
+                date: view.date.clone(),
+                call_number: items.iter().find_map(|item| item.call_number.clone()),
+            })
+            .collect())
     }
 }
 

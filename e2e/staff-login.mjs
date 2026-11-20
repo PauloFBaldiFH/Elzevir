@@ -23,11 +23,11 @@ try {
 
   await page.fill("#login", login);
   await page.fill("#password", "wrong-password");
-  await page.click("button[type=submit]");
+  await page.click("form.login button[type=submit]");
   assert.equal(await page.locator("[role=alert]").textContent(), "Invalid username or password.");
 
   await page.fill("#password", password);
-  await page.click("button[type=submit]");
+  await page.click("form.login button[type=submit]");
   await page.waitForURL(`${base}/equipe`);
   // The staff header arrives by htmx and names the operator; sign-out sits in its menu.
   assert.equal(await page.locator("#staff-bar .user-name").textContent(), login);

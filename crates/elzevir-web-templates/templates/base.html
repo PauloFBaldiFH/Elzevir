@@ -13,15 +13,25 @@
   {% block head %}{% endblock %}
 </head>
 <body>
-  {% block header %}<header class="topbar">
-    <div class="brand-side">
-      <a class="brand" href="/"><img class="brand-crab" src="/static/elzevir-mark.svg" alt="" width="33" height="33">{{ t.get("app-name") }}</a>
-      <span class="product-label tone-catalog">{{ t.get("opac-product") }}</span>
+  {% block header %}<header class="topbar opac-bar">
+    <div class="top-row">
+      <div class="brand-side">
+        <a class="brand" href="/"><img class="brand-crab" src="/static/elzevir-mark.svg" alt="" width="33" height="33">{{ t.get("app-name") }}</a>
+        <span class="product-label tone-catalog">{{ t.get("opac-product") }}</span>
+      </div>
+      <div class="top-tools">
+        <a class="icon-btn" href="/equipe" aria-label="{{ t.get("nav-to-staff") }}" title="{{ t.get("nav-to-staff") }}"><svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#nav-staff"></use></svg></a>
+        <button type="button" class="icon-btn" data-theme-toggle hidden aria-label="{{ t.get("bar-theme") }}" title="{{ t.get("bar-theme") }}"><svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-theme"></use></svg></button>
+      </div>
     </div>
-    <nav>
-      <a class="tool-link" href="/equipe">{{ t.get("nav-staff") }}</a>
-      <button type="button" class="icon-btn" data-theme-toggle hidden aria-label="{{ t.get("bar-theme") }}" title="{{ t.get("bar-theme") }}"><svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-theme"></use></svg></button>
-    </nav>
+    <form class="search-row" action="/search" method="get" role="search"{% block search_hx %}{% endblock %}>
+      <div class="search-field">
+        <span class="active-scope tone-catalog" aria-hidden="true"><svg class="ico" focusable="false"><use href="/static/elzevir-icons.svg#bar-catalog"></use></svg><span>{{ t.get("opac-scope") }}</span></span>
+        <input class="search-input" id="q" name="q" type="search" value="{% block search_value %}{% endblock %}" maxlength="256" enterkeyhint="search" placeholder="{{ t.get("opac-home-search-placeholder") }}" aria-label="{{ t.get("opac-home-search-label") }}">
+        <button type="button" class="search-filter" disabled aria-label="{{ t.get("bar-advanced") }} ({{ t.get("bar-soon") }})" title="{{ t.get("bar-advanced") }} · {{ t.get("bar-soon") }}"><svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-filter"></use></svg></button>
+        <button type="submit" class="search-submit" aria-label="{{ t.get("opac-home-search-button") }}" title="{{ t.get("opac-home-search-button") }}"><svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-search"></use></svg></button>
+      </div>
+    </form>
   </header>{% endblock %}
   <main>
     {% block content %}{% endblock %}
