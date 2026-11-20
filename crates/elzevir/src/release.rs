@@ -48,10 +48,20 @@ fn fetch(url: &str, output: &mut dyn Write, limit: u64, timeout: Duration) -> Re
     }
     Ok(())
 }
+/// The newest official release offered to this installation.
 #[derive(Debug, Deserialize)]
 pub(crate) struct Latest {
     pub tag_name: String,
     pub body: Option<String>,
+}
+
+/// One entry of the GitHub release list; drafts are never offered.
+#[derive(Debug, Deserialize)]
+struct Listed {
+    tag_name: String,
+    body: Option<String>,
+    #[serde(default)]
+    draft: bool,
 }
 
 pub(crate) fn valid_version(version: &str) -> bool {
@@ -82,20 +92,46 @@ fn prerelease_identifier(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
         && (!value.bytes().all(|byte| byte.is_ascii_digit()) || numeric_identifier(value))
 }
+/// Resolves the newest release for the running version.
+///
+/// `releases/latest` skips pre-releases, so an alpha installation never saw a
+/// newer alpha. The list is read instead and the choice follows semantic versioning
+/// precedence: pre-releases are offered only to an installation that already
+/// runs one, so a stable installation is never moved to a pre-release.
 pub(crate) fn latest(source: &impl Download) -> Result<Latest, String> {
     let mut bytes = Vec::new();
     source.fetch(
-        "https://api.github.com/repos/PauloFBaldiFH/Elzevir/releases/latest",
+        "https://api.github.com/repos/PauloFBaldiFH/Elzevir/releases?per_page=30",
         &mut bytes,
-        65_536,
+        MAX_RELEASE_LIST,
     )?;
-    let mut release: Latest =
+    let releases: Vec<Listed> =
         serde_json::from_slice(&bytes).map_err(|_| "invalid release document")?;
-    if !valid_version(&release.tag_name) {
-        return Err("unsupported release version".to_owned());
-    }
+    let mut release = newest(releases, env!("CARGO_PKG_VERSION"))
+        .ok_or("no official release for this version")?;
     release.body = release.body.map(|body| crate::panel_text(&body, 16_384));
     Ok(release)
+}
+
+const MAX_RELEASE_LIST: u64 = 2 * 1024 * 1024;
+
+fn newest(releases: Vec<Listed>, running: &str) -> Option<Latest> {
+    let accept_prerelease = semver::Version::parse(running.trim_start_matches('v'))
+        .is_ok_and(|version| !version.pre.is_empty());
+    releases
+        .into_iter()
+        .filter(|release| !release.draft && valid_version(&release.tag_name))
+        .filter_map(|release| {
+            semver::Version::parse(release.tag_name.trim_start_matches('v'))
+                .ok()
+                .map(|version| (version, release))
+        })
+        .filter(|(version, _)| accept_prerelease || version.pre.is_empty())
+        .max_by(|(left, _), (right, _)| left.cmp_precedence(right))
+        .map(|(_, release)| Latest {
+            tag_name: release.tag_name,
+            body: release.body,
+        })
 }
 pub(crate) fn target() -> Result<&'static str, String> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
@@ -413,5 +449,54 @@ mod tests {
         assert!(!target.join("README.md").exists());
         assert!(unpack(&package, &target, true).is_err());
         assert_eq!(std::fs::read(&executable).unwrap(), b"fictional executable");
+    }
+
+    fn listed(tag: &str, draft: bool) -> Listed {
+        Listed {
+            tag_name: tag.to_owned(),
+            body: Some(format!("notes {tag}")),
+            draft,
+        }
+    }
+
+    #[test]
+    fn newest_release_includes_prereleases_only_for_prerelease_installations() {
+        let releases = || {
+            vec![
+                listed("v0.1.0-alpha.2", false),
+                listed("v0.1.0-alpha.10", false),
+                listed("v0.2.0-beta.1", true),
+                listed("not-a-version", false),
+                listed("v0.0.9", false),
+            ]
+        };
+        let alpha = newest(releases(), "0.1.0-alpha.2").unwrap();
+        assert_eq!(alpha.tag_name, "v0.1.0-alpha.10");
+        assert_eq!(alpha.body.as_deref(), Some("notes v0.1.0-alpha.10"));
+        assert_eq!(newest(releases(), "0.0.9").unwrap().tag_name, "v0.0.9");
+        assert!(newest(vec![listed("v0.1.0-alpha.2", false)], "0.0.9").is_none());
+        let stable = newest(
+            vec![listed("v0.1.0-alpha.3", false), listed("v0.1.0", false)],
+            "0.1.0-alpha.2",
+        )
+        .unwrap();
+        assert_eq!(stable.tag_name, "v0.1.0");
+    }
+
+    #[test]
+    fn latest_reads_the_release_list_instead_of_the_stable_only_endpoint() {
+        struct Fixed;
+        impl Download for Fixed {
+            fn fetch(&self, url: &str, output: &mut dyn Write, _: u64) -> Result<(), String> {
+                assert!(url.ends_with("/releases?per_page=30"));
+                let tag = format!("v{}", env!("CARGO_PKG_VERSION"));
+                let body =
+                    serde_json::json!([{"tag_name": tag, "body": "fictional", "draft": false}]);
+                output.write_all(body.to_string().as_bytes()).unwrap();
+                Ok(())
+            }
+        }
+        let release = latest(&Fixed).unwrap();
+        assert_eq!(release.tag_name, format!("v{}", env!("CARGO_PKG_VERSION")));
     }
 }
