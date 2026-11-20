@@ -4,7 +4,7 @@
 
 use askama::Template;
 
-use crate::I18n;
+use crate::{AccountRow, I18n, LoanLine};
 
 /// What the "Patron account" panel shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,4 +57,12 @@ pub struct OpacAccount<'a> {
     pub category_name: String,
     /// Last day of the enrolment, as shown.
     pub expires: String,
+    /// The restrictions that hold today, as told to the patron.
+    pub restrictions: Vec<String>,
+    /// What the patron owes, when something.
+    pub owed: Option<String>,
+    /// The loans, the first due first.
+    pub loans: Vec<LoanLine>,
+    /// The account's lines, newest first.
+    pub account: Vec<AccountRow>,
 }

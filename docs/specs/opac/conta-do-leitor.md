@@ -29,9 +29,13 @@
 10. **Sair.** `POST /conta/sair`, com o token, encerra a sessão e volta ao início.
 11. **Muro.** A página do registro, guardada em cache por versão, nunca leva dado de leitor. O início do OPAC mostra no painel só o primeiro nome de quem entrou e é servido com `Cache-Control: no-store`. A página da conta também.
 
-### Página da conta (parte a)
+### Página da conta
 
-12. `GET /conta` mostra o nome, a carteirinha, a unidade, a categoria e a validade da inscrição do próprio leitor. Sem sessão de leitor, leva a `/conta/entrar`. Empréstimos, débitos e reservas entram nas partes seguintes.
+12. `GET /conta` mostra o nome, a carteirinha, a unidade, a categoria e a validade da inscrição do próprio leitor. Sem sessão de leitor, leva a `/conta/entrar`.
+13. **Empréstimos (parte b).** A página lista os empréstimos do leitor, o primeiro a vencer primeiro, com o título, a data de devolução (com hora só quando não é o fim do dia), a marca "em atraso" quantas vezes foi renovado e o código de barras do exemplar, como no Koha (`opac-user.pl`).
+14. **Restrições.** Uma suspensão que vale hoje aparece com o dia em que acaba, ou com o aviso de falar com a biblioteca quando só a equipe a tira. A restrição por atraso aparece como bloqueio por itens em atraso. O leitor não tira restrição nenhuma.
+15. **Débitos.** A página mostra o total devido, quando há, e as linhas da conta, a mais nova primeiro: dia, o que é (multa por atraso, item perdido, taxa, pagamento, abono, com o código de barras do item quando a linha é de um item), valor e saldo. O pagamento é só no balcão.
+16. Os dados vêm das mesmas consultas da ficha do leitor na equipe, mas abrir a própria conta não grava no `audit_log`: o registro de abertura é para a equipe que vê dado alheio. Reservas entram na parte d.
 
 ## 2. Origem no Koha
 

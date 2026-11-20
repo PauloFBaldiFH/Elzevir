@@ -30,6 +30,7 @@ mod items;
 mod new_record;
 mod notice_rules;
 mod opac;
+mod opac_account;
 mod patron_account;
 mod patron_form;
 mod patron_holds;
@@ -348,7 +349,7 @@ pub fn router(state: AppState) -> Router {
 /// (docs/specs/opac/conta-do-leitor.md).
 fn patron_routes() -> Router<AppState> {
     Router::new()
-        .route("/conta", get(patron_login::account))
+        .route("/conta", get(opac_account::account))
         .route(
             "/conta/entrar",
             get(patron_login::login_form).post(patron_login::log_in_patron),

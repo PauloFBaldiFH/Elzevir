@@ -75,7 +75,12 @@ pub(crate) fn refused(text: String) -> Notice {
     }
 }
 
-fn suspension_text(t: &I18n, end: SuspensionEnd, day_key: &str, lifted_key: &str) -> String {
+pub(crate) fn suspension_text(
+    t: &I18n,
+    end: SuspensionEnd,
+    day_key: &str,
+    lifted_key: &str,
+) -> String {
     match end {
         SuspensionEnd::Day(day) => t.get_with(day_key, "date", &shown(t, day)),
         SuspensionEnd::WhenLifted => t.get(lifted_key),

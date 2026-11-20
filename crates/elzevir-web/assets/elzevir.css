@@ -964,6 +964,19 @@ a.module-card:hover, a.module-card:focus-visible { transform: translateY(-2px); 
 .button-link { display: inline-block; padding: 0.5rem 1rem; border-radius: var(--elzevir-radius); background: var(--elzevir-color-primary); color: var(--elzevir-color-primary-text); font-weight: 700; text-decoration: none; }
 button.quiet { border: 1px solid var(--elzevir-color-border-strong); background: transparent; color: var(--elzevir-color-text); }
 .opac-narrow { max-width: 30rem; margin: 32px auto; }
+.opac-account { display: grid; grid-template-columns: minmax(0, 20rem) minmax(0, 1fr); align-items: start; gap: 20px; margin: 24px 0; }
+.account-main { display: grid; gap: 16px; }
+.account-main h2 { margin: 0 0 10px; font-size: 18px; }
+.account-main .codes-alert { margin: 0; }
+.opac-loans { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.opac-loans li { display: grid; gap: 2px; padding: 9px 12px; border: 1px solid var(--elzevir-color-border); border-left: 4px solid var(--elzevir-tone-catalog); border-radius: 8px; }
+.opac-loans li.overdue { border-left-color: var(--elzevir-color-error); }
+.opac-loans .loan-title { font-weight: 650; }
+.opac-loans .loan-meta { color: var(--elzevir-color-muted); font-size: 13.5px; }
+.opac-loans li.overdue strong { color: var(--elzevir-color-error); }
+.opac-owed { margin: 0 0 10px; font-weight: 700; color: var(--elzevir-color-error); }
+.table-scroll { overflow-x: auto; }
+@media (max-width: 46rem) { .opac-account { grid-template-columns: minmax(0, 1fr); } }
 .account-card h1 { margin: 0 0 14px; font-size: 22px; }
 .account-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 18px; margin: 0 0 16px; }
 .account-facts dt { color: var(--elzevir-color-muted); }
