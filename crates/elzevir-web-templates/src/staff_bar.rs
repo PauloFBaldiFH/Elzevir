@@ -22,13 +22,27 @@ pub struct StaffBar<'a> {
 }
 
 impl StaffBar<'_> {
+    /// The scope the page starts with.
+    #[must_use]
+    pub fn selected(&self) -> Option<&BarScope> {
+        self.scopes.iter().find(|scope| scope.selected)
+    }
+
     /// The hint key of the selected scope, for the search box placeholder.
     #[must_use]
     pub fn hint_key(&self) -> &'static str {
-        self.scopes
-            .iter()
-            .find(|scope| scope.selected)
-            .map_or("bar-query", |scope| scope.hint_key)
+        self.selected().map_or("bar-query", |scope| scope.hint_key)
+    }
+
+    /// Up to two letters of the login for the avatar, upper case.
+    #[must_use]
+    pub fn initials(&self) -> String {
+        self.login
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .take(2)
+            .flat_map(char::to_uppercase)
+            .collect()
     }
 }
 
@@ -49,6 +63,10 @@ pub struct BarScope {
     pub shortcut: char,
     /// Whether it is the scope the page starts with.
     pub selected: bool,
+    /// Whether it acts on an Item (checkin) rather than searching; drawn in the circulation tone.
+    pub operation: bool,
+    /// Whether a divider goes before it: the first operation after the searches.
+    pub divider_before: bool,
 }
 
 /// One entry of the "New" menu.

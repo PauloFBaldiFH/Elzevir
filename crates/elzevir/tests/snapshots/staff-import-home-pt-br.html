@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Importar registros para o acervo · Elzevir</title>
   <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
+  <link rel="icon" href="/static/elzevir-mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/elzevir.css">
   <script src="/static/elzevir-theme.js"></script>
   <script src="/static/htmx.min.js" defer></script>
@@ -13,13 +14,20 @@
 </head>
 <body>
   <header class="topbar staff-bar" id="staff-bar" hx-get="/equipe/barra?escopo=acervo" hx-trigger="load" hx-swap="outerHTML">
-  <a class="staff-brand" href="/equipe"><img src="/static/elzevir-mark.svg" alt="" width="30" height="24"><span>Elzevir</span></a>
-  <form class="bar-search" action="/equipe/busca" method="get" role="search">
-    <select name="escopo" aria-label="Buscar em"><option value="acervo">Acervo</option><option value="leitores">Leitores</option><option value="devolucao">Devolução</option></select>
-    <input type="search" name="q" maxlength="200" aria-label="Termo de busca">
-    <button type="submit">Buscar</button>
+  <div class="top-row">
+    <div class="brand-side">
+      <a class="staff-brand" href="/equipe"><img class="brand-crab" src="/static/elzevir-mark.svg" alt="" width="33" height="33">Elzevir</a>
+      <span class="product-label">Área da equipe</span>
+    </div>
+    <nav class="top-tools"><a class="tool-link" href="/">Catálogo</a></nav>
+  </div>
+  <form class="search-row" action="/equipe/busca" method="get" role="search">
+    <div class="search-field">
+      <select class="scope-fallback" name="escopo" aria-label="Buscar em"><option value="acervo">Acervo</option><option value="leitores">Leitores</option><option value="devolucao">Devolução</option></select>
+      <input class="search-input" type="search" name="q" maxlength="200" aria-label="Termo de busca">
+      <button type="submit" class="search-submit" aria-label="Buscar"><svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-search"></use></svg></button>
+    </div>
   </form>
-  <nav><a href="/equipe">Equipe</a> <a href="/">Catálogo</a></nav>
 </header>
   <main>
 

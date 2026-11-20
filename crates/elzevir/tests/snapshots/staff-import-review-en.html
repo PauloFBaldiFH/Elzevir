@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Import catalog records · Elzevir</title>
   <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
+  <link rel="icon" href="/static/elzevir-mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/elzevir.css">
   <script src="/static/elzevir-theme.js"></script>
   <script src="/static/htmx.min.js" defer></script>
@@ -13,13 +14,20 @@
 </head>
 <body>
   <header class="topbar staff-bar" id="staff-bar" hx-get="/equipe/barra?escopo=acervo" hx-trigger="load" hx-swap="outerHTML">
-  <a class="staff-brand" href="/equipe"><img src="/static/elzevir-mark.svg" alt="" width="30" height="24"><span>Elzevir</span></a>
-  <form class="bar-search" action="/equipe/busca" method="get" role="search">
-    <select name="escopo" aria-label="Search in"><option value="acervo">Catalog</option><option value="leitores">Patrons</option><option value="devolucao">Checkin</option></select>
-    <input type="search" name="q" maxlength="200" aria-label="Search term">
-    <button type="submit">Search</button>
+  <div class="top-row">
+    <div class="brand-side">
+      <a class="staff-brand" href="/equipe"><img class="brand-crab" src="/static/elzevir-mark.svg" alt="" width="33" height="33">Elzevir</a>
+      <span class="product-label">Staff area</span>
+    </div>
+    <nav class="top-tools"><a class="tool-link" href="/">Catalog</a></nav>
+  </div>
+  <form class="search-row" action="/equipe/busca" method="get" role="search">
+    <div class="search-field">
+      <select class="scope-fallback" name="escopo" aria-label="Search in"><option value="acervo">Catalog</option><option value="leitores">Patrons</option><option value="devolucao">Checkin</option></select>
+      <input class="search-input" type="search" name="q" maxlength="200" aria-label="Search term">
+      <button type="submit" class="search-submit" aria-label="Search"><svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-search"></use></svg></button>
+    </div>
   </form>
-  <nav><a href="/equipe">Staff</a> <a href="/">Catalog</a></nav>
 </header>
   <main>
 

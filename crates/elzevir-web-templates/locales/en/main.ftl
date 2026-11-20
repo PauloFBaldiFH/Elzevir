@@ -21,6 +21,21 @@ bar-new = New
 bar-new-record = Bibliographic record
 bar-new-patron = Patron
 bar-theme = Switch between light and dark
+bar-product = Staff area
+opac-product = Online catalog · OPAC
+home-group-desk = Front desk
+home-group-collection = Collection
+home-group-management = Management
+home-module-checkin = Checkin
+home-module-patrons = Patrons
+home-module-notices = Printed notices
+home-module-catalog = Cataloguing
+home-module-import = Import records
+home-module-registries = Branches and policies
+home-module-rules = Circulation rules
+home-module-notice-rules = Notices
+home-module-calendar = Calendar
+home-module-admin = Administration
 
 ## OPAC
 opac-home-title = Library catalog

@@ -33,6 +33,8 @@ struct ScopeEntry {
     target: &'static str,
     /// Name of the query parameter that screen reads.
     parameter: &'static str,
+    /// Whether it acts on an Item instead of searching (the draft's "operations").
+    operation: bool,
     allowed: Allowed,
 }
 
@@ -56,6 +58,7 @@ const SCOPES: [ScopeEntry; 3] = [
         shortcut: 'u',
         target: "/equipe/leitores",
         parameter: "q",
+        operation: false,
         allowed: sees_patrons,
     },
     ScopeEntry {
@@ -67,6 +70,7 @@ const SCOPES: [ScopeEntry; 3] = [
         shortcut: 'c',
         target: "/equipe/acervo",
         parameter: "q",
+        operation: false,
         allowed: any_staff,
     },
     ScopeEntry {
@@ -79,6 +83,7 @@ const SCOPES: [ScopeEntry; 3] = [
         // The desk opens with the barcode filled in, so the desk's branch is still chosen there.
         target: "/equipe/circulacao/devolucao",
         parameter: "codigo",
+        operation: true,
         allowed: circulates,
     },
 ];
@@ -154,9 +159,15 @@ pub(crate) async fn bar(
         .find(|entry| entry.key == params.escopo)
         .or_else(|| permitted.first())
         .map(|entry| entry.key);
+    let mut after_search = false;
     let scopes: Vec<BarScope> = permitted
         .into_iter()
-        .map(|entry| BarScope {
+        .map(|entry| {
+            let divider_before = entry.operation && after_search;
+            after_search = !entry.operation;
+            (entry, divider_before)
+        })
+        .map(|(entry, divider_before)| BarScope {
             key: entry.key,
             label_key: entry.label_key,
             hint_key: entry.hint_key,
@@ -164,6 +175,8 @@ pub(crate) async fn bar(
             tone: entry.tone,
             shortcut: entry.shortcut,
             selected: Some(entry.key) == chosen,
+            operation: entry.operation,
+            divider_before,
         })
         .collect();
     let new_entries = NEW_ENTRIES

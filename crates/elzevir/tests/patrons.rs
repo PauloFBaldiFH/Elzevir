@@ -1096,9 +1096,7 @@ fn the_staff_header_offers_only_permitted_scopes_and_dispatches_the_search() {
     assert!(
         bar.contains(r#"value="leitores""#)
             && bar.contains(r#"value="acervo""#)
-            && bar.contains(
-                r#"value="devolucao" data-shortcut="d" data-hint="Item barcode" checked"#
-            )
+            && checked(&bar, "devolucao")
             && bar.contains(r#"placeholder="Item barcode""#)
             && !bar.contains("/equipe/acervo/nova"),
         "{bar}"
@@ -1141,7 +1139,7 @@ fn the_staff_header_offers_only_permitted_scopes_and_dispatches_the_search() {
         bar.contains("/equipe/acervo/nova")
             && !bar.contains(r#"value="leitores""#)
             && !bar.contains("/equipe/leitores/novo")
-            && bar.contains(r#"value="acervo" data-shortcut="c" data-hint="Title, author, subject or ISBN" checked"#),
+            && checked(&bar, "acervo"),
         "{bar}"
     );
     assert_status(
@@ -1165,4 +1163,11 @@ fn the_staff_header_offers_only_permitted_scopes_and_dispatches_the_search() {
         "{bar}"
     );
     drop(server);
+}
+
+/// Whether the header's scope radio `key` is the one checked.
+fn checked(bar: &str, key: &str) -> bool {
+    bar.split_once(&format!(r#"value="{key}""#))
+        .and_then(|(_, rest)| rest.split_once('>'))
+        .is_some_and(|(attributes, _)| attributes.ends_with(" checked"))
 }

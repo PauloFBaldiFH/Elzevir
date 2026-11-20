@@ -1,11 +1,19 @@
 {% extends "base.html" %}
 {% block shell_head %}<script src="/static/elzevir-staff.js" defer></script>{% endblock %}
+{# Same two rows as staff_bar.html, so the page does not jump when htmx swaps the full header in. Without scripts this form still works: the server checks the scope. #}
 {% block header %}<header class="topbar staff-bar" id="staff-bar" hx-get="/equipe/barra?escopo={% block scope %}acervo{% endblock %}" hx-trigger="load" hx-swap="outerHTML">
-  <a class="staff-brand" href="/equipe"><img src="/static/elzevir-mark.svg" alt="" width="30" height="24"><span>{{ t.get("app-name") }}</span></a>
-  <form class="bar-search" action="/equipe/busca" method="get" role="search">
-    <select name="escopo" aria-label="{{ t.get("bar-scopes") }}"><option value="acervo">{{ t.get("bar-scope-catalog") }}</option><option value="leitores">{{ t.get("bar-scope-patrons") }}</option><option value="devolucao">{{ t.get("bar-scope-checkin") }}</option></select>
-    <input type="search" name="q" maxlength="200" aria-label="{{ t.get("bar-query") }}">
-    <button type="submit">{{ t.get("bar-search") }}</button>
+  <div class="top-row">
+    <div class="brand-side">
+      <a class="staff-brand" href="/equipe"><img class="brand-crab" src="/static/elzevir-mark.svg" alt="" width="33" height="33">{{ t.get("app-name") }}</a>
+      <span class="product-label">{{ t.get("bar-product") }}</span>
+    </div>
+    <nav class="top-tools"><a class="tool-link" href="/">{{ t.get("nav-catalog") }}</a></nav>
+  </div>
+  <form class="search-row" action="/equipe/busca" method="get" role="search">
+    <div class="search-field">
+      <select class="scope-fallback" name="escopo" aria-label="{{ t.get("bar-scopes") }}"><option value="acervo">{{ t.get("bar-scope-catalog") }}</option><option value="leitores">{{ t.get("bar-scope-patrons") }}</option><option value="devolucao">{{ t.get("bar-scope-checkin") }}</option></select>
+      <input class="search-input" type="search" name="q" maxlength="200" aria-label="{{ t.get("bar-query") }}">
+      <button type="submit" class="search-submit" aria-label="{{ t.get("bar-search") }}"><svg class="ico" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-search"></use></svg></button>
+    </div>
   </form>
-  <nav><a href="/equipe">{{ t.get("nav-staff") }}</a> <a href="/">{{ t.get("nav-catalog") }}</a></nav>
 </header>{% endblock %}
