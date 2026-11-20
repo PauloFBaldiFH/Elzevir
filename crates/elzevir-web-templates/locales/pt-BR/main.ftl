@@ -517,6 +517,14 @@ loans-renewals = { $count ->
 }
 loans-renew = Renovar
 loans-return = Devolver
+slip-title = Recibo de empréstimo
+slip-quick-title = Recibo rápido
+slip-out = Emprestados
+slip-overdue = Em atraso
+slip-today = Emprestados ou renovados hoje
+slip-none = Nenhum.
+slip-back = Voltar à ficha
+slip-print-hint = Imprima esta página pelo navegador.
 checkout-title = Emprestar
 checkout-barcode = Código de barras do exemplar
 checkout-lend = Emprestar

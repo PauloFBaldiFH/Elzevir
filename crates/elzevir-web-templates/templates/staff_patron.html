@@ -29,6 +29,7 @@
 {# After the record, so Enter in the barcode box lends; the stylesheet puts it on the left. #}
 <section class="wall-loans" aria-labelledby="loans-title">
   <h2 id="loans-title">{{ t.get_numbers("loans-title", [("count", loans.len() as u64)]) }}</h2>
+  <p class="slip-links"><a href="/equipe/leitores/{{ id }}/recibo" target="_blank" rel="noopener">{{ t.get("slip-title") }}</a> · <a href="/equipe/leitores/{{ id }}/recibo?rapido=1" target="_blank" rel="noopener">{{ t.get("slip-quick-title") }}</a></p>
   {% if loans.is_empty() %}<p class="form-hint">{{ t.get("loans-none") }}</p>{% endif %}
   <ol class="loan-list">
   {% for loan in loans %}

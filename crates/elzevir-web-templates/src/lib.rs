@@ -38,8 +38,8 @@ pub use staff_notice_rules::{
 };
 pub use staff_patrons::{
     AccountRow, AsideForm, CategoryLine, DeskOption, HoldRow, LoanLine, Notice, PatronFormValues,
-    PatronLine, RestrictionRow, StaffCheckin, StaffPatron, StaffPatronCategories, StaffPatronForm,
-    StaffPatrons,
+    PatronLine, RestrictionRow, SlipLine, SlipSection, StaffCheckin, StaffCheckoutSlip,
+    StaffPatron, StaffPatronCategories, StaffPatronForm, StaffPatrons,
 };
 pub use staff_record_fields::{FieldEntry, FieldGroup, FieldValue, ItemFields, RecordFields};
 pub use staff_record_form::{
@@ -478,6 +478,7 @@ mod tests {
             include_str!("../templates/staff_registries.html"),
             include_str!("../templates/staff_patrons.html"),
             include_str!("../templates/staff_patron.html"),
+            include_str!("../templates/staff_checkout_slip.html"),
             include_str!("../templates/staff_patron_categories.html"),
             include_str!("../templates/staff_patron_form.html"),
             include_str!("../templates/staff_circulation_rules.html"),

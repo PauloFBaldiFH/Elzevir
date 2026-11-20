@@ -11,6 +11,7 @@ mod authorities;
 mod batch;
 mod calendar;
 mod catalog;
+mod checkout_slip;
 mod circulation;
 mod circulation_rules;
 mod creating;

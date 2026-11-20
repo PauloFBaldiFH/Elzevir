@@ -217,6 +217,10 @@ pub struct PatronLoan {
     pub title: String,
     /// When it is due.
     pub due: Zoned,
+    /// When it was lent.
+    pub issued: Zoned,
+    /// When it was last renewed, if ever.
+    pub renewed: Option<Zoned>,
     /// How many times it was renewed.
     pub renewals: u32,
     /// A loan to be used inside the library.
