@@ -229,20 +229,13 @@ pub(crate) fn cancel_hold(connection: &Connection, request: &HoldCancellation) -
         .optional()
         .map_err(storage)?
         .ok_or_else(|| refused(HoldRefused::UnknownHold))?;
-    connection
-        .execute(
-            "INSERT INTO ended_holds (patron_id, instance_id, item_id, pickup_id, placed_on,
-                                      ended_at, outcome)
-             SELECT CASE WHEN p.reading_history = 1 THEN h.patron_id END,
-                    h.instance_id, h.item_id, h.pickup_id, h.placed_on, ?2, 'CANCELLED'
-             FROM holds h JOIN patrons p ON p.id = h.patron_id
-             WHERE h.id = ?1",
-            params![request.hold.0, request.at.to_string()],
-        )
-        .map_err(storage)?;
-    connection
-        .execute("DELETE FROM holds WHERE id = ?1", [request.hold.0])
-        .map_err(storage)?;
+    end_hold(
+        connection,
+        request.hold.0,
+        &request.at.to_string(),
+        "CANCELLED",
+    )
+    .map_err(storage)?;
     fix_priority(connection, instance).map_err(storage)?;
     Ok(WriteOutput::Circulation(CirculationOutput::HoldCancelled))
 }
@@ -592,4 +585,54 @@ pub(crate) fn fill_at_checkout(
     )?;
     connection.execute("DELETE FROM holds WHERE id = ?1", [hold.0])?;
     fix_priority(connection, instance)
+}
+
+/// Applies `circ.expire_holds`: every hold waiting past its last day to pick up is
+/// cancelled, and its queue closes up. The Item stays where it is, for the checkin to find
+/// the next hold.
+///
+/// Koha: `C4::Reserves::CancelExpiredReserves` with `ExpireReservesMaxPickUpDelay` on,
+/// `ExpireReservesOnHolidays` on and no charge (`ExpireReservesMaxPickUpDelayCharge` 0);
+/// `misc/cronjobs/holds/cancel_expired_holds.pl`.
+pub(crate) fn expire_holds(connection: &Connection, at: &jiff::Zoned) -> Applied {
+    let today = at.date().to_string();
+    let expired = {
+        let mut statement = connection
+            .prepare_cached(
+                "SELECT id, instance_id FROM holds
+                 WHERE found = 'W' AND expires_on < ?1 ORDER BY id",
+            )
+            .map_err(storage)?;
+        statement
+            .query_map([&today], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+            })
+            .map_err(storage)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(storage)?
+    };
+    let ended_at = at.to_string();
+    for (hold, instance) in &expired {
+        end_hold(connection, *hold, &ended_at, "CANCELLED").map_err(storage)?;
+        fix_priority(connection, *instance).map_err(storage)?;
+    }
+    Ok(WriteOutput::Circulation(CirculationOutput::HoldsExpired {
+        cancelled: expired.len(),
+    }))
+}
+
+/// Moves a hold to the ended holds with `outcome`, without its patron unless the patron
+/// keeps a reading history.
+fn end_hold(connection: &Connection, hold: i64, at: &str, outcome: &str) -> rusqlite::Result<()> {
+    connection.execute(
+        "INSERT INTO ended_holds (patron_id, instance_id, item_id, pickup_id, placed_on,
+                                  ended_at, outcome)
+         SELECT CASE WHEN p.reading_history = 1 THEN h.patron_id END,
+                h.instance_id, h.item_id, h.pickup_id, h.placed_on, ?2, ?3
+         FROM holds h JOIN patrons p ON p.id = h.patron_id
+         WHERE h.id = ?1",
+        params![hold, at, outcome],
+    )?;
+    connection.execute("DELETE FROM holds WHERE id = ?1", [hold])?;
+    Ok(())
 }

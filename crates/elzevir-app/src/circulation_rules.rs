@@ -56,6 +56,12 @@ pub enum CirculationCommand {
         /// The library's settings.
         settings: LongOverdueSettings,
     },
+    /// Cancels the holds waiting past their last day to pick up
+    /// (docs/specs/circulacao/reservas.md).
+    ExpireHolds {
+        /// When, in the library's time zone.
+        at: Zoned,
+    },
 }
 
 /// New values for some rules at one scope.
@@ -100,6 +106,11 @@ pub enum CirculationOutput {
     HoldCancelled,
     /// An Item was set aside for a hold.
     HoldSetAside(SetAside),
+    /// How many waiting holds were cancelled for being past their last day.
+    HoldsExpired {
+        /// Holds cancelled.
+        cancelled: usize,
+    },
 }
 
 /// What the run of long overdue Items did.

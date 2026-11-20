@@ -1400,6 +1400,38 @@ fn a_record_hold_is_filled_by_any_item_of_the_record_unless_a_rule_says_no() {
 }
 
 #[test]
+fn a_hold_waiting_past_its_last_day_is_cancelled() {
+    let dir = tempfile::tempdir().unwrap();
+    let (library, _, first, _) = two_holds(&dir);
+    library
+        .set_aside(
+            first.hold,
+            "0001",
+            (library.annex, "2026-11-20T11:00:00-03:00"),
+        )
+        .unwrap();
+    let expire = |at: &str| match submit(
+        &library.store,
+        WriteCommand::Circulation(CirculationCommand::ExpireHolds {
+            at: format!("{at}[America/Sao_Paulo]").parse().unwrap(),
+        }),
+    ) {
+        Ok(WriteOutput::Circulation(CirculationOutput::HoldsExpired { cancelled })) => cancelled,
+        other => panic!("{other:?}"),
+    };
+    // The last day is 2026-11-23: the hold still waits on it.
+    assert_eq!(expire("2026-11-23T23:00:00-03:00"), 0);
+    assert_eq!(queue(&library), "0W1 1--");
+    assert_eq!(expire("2026-11-24T00:30:00-03:00"), 1);
+    assert_eq!(queue(&library), "1--");
+    assert_eq!(
+        library.read::<String>("SELECT outcome || ' ' || item_id FROM ended_holds"),
+        "CANCELLED 1"
+    );
+    assert_eq!(expire("2026-11-25T00:30:00-03:00"), 0);
+}
+
+#[test]
 fn a_patron_who_owes_too_much_places_no_hold() {
     let dir = tempfile::tempdir().unwrap();
     let library = library(&dir);

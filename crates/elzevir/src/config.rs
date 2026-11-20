@@ -38,6 +38,17 @@ pub(crate) struct Config {
 struct Circulation {
     /// Declaring long overdue Items lost; off when absent (docs/specs/circulacao/conta.md).
     long_overdue: Option<LongOverdue>,
+    /// Holds (docs/specs/circulacao/reservas.md).
+    #[serde(default)]
+    holds: Holds,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Holds {
+    /// Cancel the holds waiting past their last day to pick up; off when absent (Koha:
+    /// `ExpireReservesMaxPickUpDelay`).
+    expire_waiting: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -99,6 +110,8 @@ pub(crate) struct Loaded {
     pub(crate) time_zone: TimeZone,
     /// How long overdue Items are declared lost, when they are.
     pub(crate) long_overdue: Option<LongOverdueSettings>,
+    /// Whether holds waiting past their last day are cancelled.
+    pub(crate) expire_waiting_holds: bool,
 }
 
 /// Reads `data_dir/elzevir.toml` and what it points to; no file is no configuration.
@@ -121,12 +134,14 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         ),
         None => None,
     };
+    let expire_waiting_holds = config.circulation.holds.expire_waiting.unwrap_or(false);
     let Some(table) = config.call_number.author_table else {
         return Ok(Loaded {
             author_table: None,
             table_report: None,
             time_zone,
             long_overdue,
+            expire_waiting_holds,
         });
     };
     let table_path = data_dir.join(table);
@@ -143,6 +158,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         table_report: Some((table_path, report)),
         time_zone,
         long_overdue,
+        expire_waiting_holds,
     })
 }
 
@@ -232,6 +248,18 @@ mod tests {
         assert_eq!(zone.iana_name(), Some("America/Sao_Paulo"));
         std::fs::write(&config, "[library]\ntime_zone = \"Mars/Olympus\"\n").unwrap();
         assert!(load(dir.path()).unwrap_err().contains("library.time_zone"));
+    }
+
+    #[test]
+    fn waiting_holds_expire_only_when_asked() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!load(dir.path()).unwrap().expire_waiting_holds);
+        std::fs::write(
+            dir.path().join("elzevir.toml"),
+            "[circulation.holds]\nexpire_waiting = true\n",
+        )
+        .unwrap();
+        assert!(load(dir.path()).unwrap().expire_waiting_holds);
     }
 
     #[test]
