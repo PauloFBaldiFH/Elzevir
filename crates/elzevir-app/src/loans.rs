@@ -222,8 +222,14 @@ impl RenewRefusal {
 /// A loan as the patron's record lists it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PatronLoan {
+    /// The Item.
+    pub item: ItemId,
     /// The Item's barcode.
     pub barcode: String,
+    /// The Item's call number, when it has one.
+    pub call_number: Option<String>,
+    /// Name of the branch holding the Item.
+    pub branch_name: String,
     /// The title of the Item's Instance.
     pub title: String,
     /// When it is due.
@@ -238,6 +244,37 @@ pub struct PatronLoan {
     pub renewals_left: u32,
     /// A loan to be used inside the library.
     pub on_site: bool,
+}
+
+/// How close a loan is to its due date, for the colour of its card (interface §24.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoanUrgency {
+    /// The due moment has passed.
+    Overdue,
+    /// Due today or in the next [`DUE_SOON_DAYS`] days.
+    DueSoon,
+    /// Due later.
+    OnTime,
+}
+
+/// Days ahead that still count as "due soon".
+pub const DUE_SOON_DAYS: i64 = 2;
+
+impl PatronLoan {
+    /// The loan's urgency at `now`, counted in calendar days of the due date's time zone.
+    #[must_use]
+    pub fn urgency(&self, now: &Zoned) -> LoanUrgency {
+        if self.due.timestamp() < now.timestamp() {
+            return LoanUrgency::Overdue;
+        }
+        let today = now.with_time_zone(self.due.time_zone().clone()).date();
+        let days = (self.due.date() - today).get_days();
+        if i64::from(days) <= DUE_SOON_DAYS {
+            LoanUrgency::DueSoon
+        } else {
+            LoanUrgency::OnTime
+        }
+    }
 }
 
 /// The circulation desk: the patron's loans and suspension, and the circulation commands
@@ -329,4 +366,51 @@ pub trait LoanDesk: Send + Sync {
         &self,
         command: CirculationCommand,
     ) -> Result<CirculationOutput, CirculationDeskError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn due(text: &str) -> PatronLoan {
+        let at: Zoned = format!("{text}[America/Sao_Paulo]").parse().unwrap();
+        PatronLoan {
+            item: ItemId(1),
+            barcode: "0001".to_owned(),
+            call_number: None,
+            branch_name: "Central".to_owned(),
+            title: "Dom Casmurro".to_owned(),
+            due: at.clone(),
+            issued: at,
+            renewed: None,
+            renewals: 0,
+            renewals_left: 0,
+            on_site: false,
+        }
+    }
+
+    #[test]
+    fn a_loan_is_overdue_due_soon_or_on_time_by_calendar_day() {
+        let now: Zoned = "2026-11-20T10:00:00-03:00[America/Sao_Paulo]"
+            .parse()
+            .unwrap();
+        for (due_at, expected) in [
+            ("2026-11-20T09:59:59-03:00", LoanUrgency::Overdue),
+            ("2026-11-20T23:59:59-03:00", LoanUrgency::DueSoon),
+            ("2026-11-22T23:59:59-03:00", LoanUrgency::DueSoon),
+            ("2026-11-23T00:00:00-03:00", LoanUrgency::OnTime),
+        ] {
+            assert_eq!(due(due_at).urgency(&now), expected, "{due_at}");
+        }
+        // The day is the library's, whatever zone "now" is read in.
+        let utc: Zoned = "2026-11-21T01:00:00+00:00[UTC]".parse().unwrap();
+        assert_eq!(
+            due("2026-11-22T23:59:59-03:00").urgency(&utc),
+            LoanUrgency::DueSoon
+        );
+        assert_eq!(
+            due("2026-11-23T12:00:00-03:00").urgency(&utc),
+            LoanUrgency::OnTime
+        );
+    }
 }

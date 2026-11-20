@@ -622,10 +622,10 @@ Proposta de Paulo, 2026-11-20. Os empréstimos aparecem como cartões à esquerd
 4. **Atalho `Alt+Z`.** Faz o mesmo que o botão e vale também dentro de campo de texto, porque usa `Alt`, como os escopos (§22 item 6). O `Alt+Z` não estava reservado.
 5. **Onde vale.** Na ficha do leitor (`/equipe/leitores/{id}`), na lista de leitores (`/equipe/leitores?q=`) e na listagem do acervo (`/equipe/acervo`). Cada uma dessas três telas tem o seu modo.
 6. **Modo inicial.** As listas abrem no compacto. A ficha do leitor abre no completo, porque quem abre uma ficha quer atender aquele leitor.
-7. **O modo fica só neste navegador**, por tela, como o tema (§22 item 9). É conveniência visual:
-   - o servidor manda o mesmo HTML nos dois modos;
-   - o modo é só o atributo `data-zoom` do contêiner;
-   - trocar de modo não faz pedido ao servidor nem muda a URL.
+7. **O modo fica só neste navegador**, por tela, num cookie próprio da tela (`elzevir_zoom_patron` para a ficha, caminho `/equipe`). É conveniência visual:
+   - o servidor lê o cookie só para abrir a página no modo certo, sem piscar no outro; valor desconhecido vale o modo inicial;
+   - o HTML tem tudo nos dois modos; o modo é só o atributo `data-zoom` do contêiner;
+   - trocar de modo não faz pedido ao servidor nem muda a URL: o script troca o atributo e regrava o cookie.
 8. **Sem JavaScript.** Cada tela fica no modo inicial, e todo registro tem link para os seus detalhes.
 9. **Nenhum modo perde função.** Identificação, situação, as ações de circulação e o caminho para os detalhes existem nos dois modos. No compacto, as ações viram botões só com ícone, com dica e nome acessível. O que o compacto esconde está sempre a um `Alt+Z` ou a um clique.
 

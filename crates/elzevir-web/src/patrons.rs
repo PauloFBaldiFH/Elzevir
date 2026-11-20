@@ -9,11 +9,10 @@ use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
 use elzevir_app::patrons::{
-    CategoryChange, Patron, PatronCommand, PatronDesk, PatronDeskError, PatronQuery, PatronRefusal,
-    ReadingHistory,
+    CategoryChange, PatronCommand, PatronDesk, PatronDeskError, PatronQuery, PatronRefusal,
 };
 use elzevir_app::staff::Permission;
-use elzevir_domain::patron::{Cpf, Enrolment, PatronCategoryId, is_expired};
+use elzevir_domain::patron::{Enrolment, PatronCategoryId, is_expired};
 use elzevir_web_templates::{CategoryLine, I18n, PatronLine, StaffPatronCategories, StaffPatrons};
 use jiff::civil::Date;
 use serde::Deserialize;
@@ -134,44 +133,6 @@ pub(crate) async fn search(
             .collect(),
         can_manage: session.identity.can(Permission::Patrons),
     })
-}
-
-/// The rows of the record; the CPF only masked (spec, item 8).
-pub(crate) fn record_rows(t: &I18n, patron: &Patron) -> Vec<(&'static str, String)> {
-    let fields = &patron.fields;
-    let mut rows = vec![
-        ("patron-cardnumber", fields.cardnumber.clone()),
-        ("patron-category", patron.category_name.clone()),
-        ("patron-branch", patron.branch_name.clone()),
-        ("patron-enrolled", shown(t, fields.enrolled)),
-    ];
-    if let Some(expires) = fields.expires {
-        rows.push(("patron-expires", shown(t, expires)));
-    }
-    let optional = [
-        ("patron-cpf", fields.cpf.as_ref().map(Cpf::masked)),
-        (
-            "patron-date-of-birth",
-            fields.date_of_birth.map(|day| shown(t, day)),
-        ),
-        ("patron-email", fields.email.clone()),
-        ("patron-phone", fields.phone.clone()),
-        ("patron-address", fields.address.clone()),
-        ("patron-staff-note", fields.staff_note.clone()),
-    ];
-    rows.extend(
-        optional
-            .into_iter()
-            .filter_map(|(label, value)| value.map(|value| (label, value))),
-    );
-    rows.push((
-        "patron-reading-history",
-        t.get(match fields.reading_history {
-            ReadingHistory::Kept => "patron-history-kept",
-            ReadingHistory::NotKept => "patron-history-not-kept",
-        }),
-    ));
-    rows
 }
 
 /// Query string of the categories page.

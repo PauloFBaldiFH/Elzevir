@@ -134,7 +134,15 @@ pub(crate) async fn pay(
     };
     let Some(amount) = typed_amount(&form.amount) else {
         outcome.notices.push(refused(t.get("account-error-amount")));
-        return page(&state, &session, (patrons, loans), patron, outcome).await;
+        return page(
+            &state,
+            &session,
+            &headers,
+            (patrons, loans),
+            patron,
+            outcome,
+        )
+        .await;
     };
     let command = CirculationCommand::Pay(PaymentRequest {
         patron,
@@ -171,7 +179,15 @@ pub(crate) async fn pay(
             return StatusCode::SERVICE_UNAVAILABLE.into_response();
         }
     }
-    page(&state, &session, (patrons, loans), patron, outcome).await
+    page(
+        &state,
+        &session,
+        &headers,
+        (patrons, loans),
+        patron,
+        outcome,
+    )
+    .await
 }
 
 #[cfg(test)]

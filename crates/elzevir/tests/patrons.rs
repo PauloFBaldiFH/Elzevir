@@ -514,6 +514,19 @@ fn an_item_is_lent_renewed_and_returned_from_the_patrons_side_of_the_wall() {
     assert_status(&lent, 200);
     assert!(lent.contains("Lent until"), "{lent}");
     assert!(lent.contains("loan-new") && lent.contains("Dom Casmurro"));
+    // The loan card crosses to the catalogue with the barcode alone (interface §24.4).
+    assert!(
+        lent.contains(r#"class="loan-title" href="/equipe/acervo?q=0001" data-cross="#),
+        "{lent}"
+    );
+    assert!(lent.contains("urgency-ok") && lent.contains("In good standing"));
+    // The record opens full; the zoom this browser chose last wins.
+    assert!(lent.contains(r#"data-zoom="full""#));
+    let compact = format!("{}; elzevir_zoom_patron=compact\r\n", cir.trim_end());
+    let zoomed = request(address, "GET", &record, &compact, "");
+    assert!(zoomed.contains(r#"data-zoom="compact""#), "{zoomed}");
+    let odd = format!("{}; elzevir_zoom_patron=huge\r\n", cir.trim_end());
+    assert!(request(address, "GET", &record, &odd, "").contains(r#"data-zoom="full""#));
     // No rule gives renewals.
     let renewed = post("renew%3A0001", "");
     assert_status(&renewed, 422);

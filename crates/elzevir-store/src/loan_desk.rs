@@ -32,9 +32,10 @@ impl LoanDesk for ElzevirStore {
                 let mut statement = c.prepare_cached(
                     "SELECT coalesce(i.barcode, ''), n.title, l.due, l.renewals, l.on_site,
                             l.issued_at, l.renewed_at, i.holding_branch, p.category_id,
-                            i.policy_id
+                            i.policy_id, i.id, i.call_number, b.name
                      FROM loans l
                      JOIN items i ON i.id = l.item_id
+                     JOIN branches b ON b.id = i.holding_branch
                      JOIN instances n ON n.id = i.instance_id
                      JOIN patrons p ON p.id = l.patron_id
                      WHERE l.patron_id = ?1",
@@ -59,7 +60,10 @@ impl LoanDesk for ElzevirStore {
                     };
                     let allowed = renewals_allowed(&rules, &at);
                     Ok(PatronLoan {
+                        item: ItemId(row.get(10)?),
                         barcode: row.get(0)?,
+                        call_number: row.get(11)?,
+                        branch_name: row.get(12)?,
                         title: row.get(1)?,
                         due: moment(2, row.get(2)?)?,
                         issued: moment(5, row.get(5)?)?,

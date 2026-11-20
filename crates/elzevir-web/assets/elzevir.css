@@ -861,30 +861,102 @@ main:has(.import-workspace) { max-width: 90rem; }
 .hold button, .hold-place button, .hold-place select, .hold-place input[type="text"] { font: inherit; padding: 4px 10px; border: 1px solid var(--elzevir-color-border); border-radius: 6px; justify-self: start; }
 .hold-place { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 
-/* The wall (interface §18): the patron's loans on the left, tied to the record by orange cords. */
-.wall { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 3rem; align-items: start; }
-.wall-loans { order: -1; }
-.wall-patron { padding: var(--elzevir-space); border: 2px solid var(--elzevir-color-loan-cord); border-radius: var(--elzevir-radius); }
-.loan-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .75rem; }
-.loan { position: relative; display: grid; gap: .25rem; padding: .5rem .75rem; border: 1px solid var(--elzevir-color-border); border-left: 4px solid var(--elzevir-color-loan-cord); border-radius: var(--elzevir-radius); }
-.loan::after { content: ""; position: absolute; top: 50%; right: -3rem; width: 3rem; border-top: 2px solid var(--elzevir-color-loan-cord); }
-.loan-overdue { border-left-color: var(--elzevir-color-signal-out); }
-.loan-title { font-weight: 600; }
-.loan-meta { color: var(--elzevir-color-muted); }
-.loan-actions { display: flex; gap: .5rem; }
-.loan-actions button, .checkout-box button, .checkout-box select, .checkout-box input { font: inherit; padding: 4px 10px; border: 1px solid var(--elzevir-color-border); border-radius: 6px; }
-.checkout-box { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-block: var(--elzevir-space); border: 1px solid var(--elzevir-color-border); border-radius: var(--elzevir-radius); }
-@media (max-width: 48rem) {
-  .wall { grid-template-columns: 1fr; }
-  .wall-loans { order: 1; }
-  .loan::after { display: none; }
+/* The wall (interface §18, §24): the patron's loans as cards on the left, tied to the
+   record by cords the script draws; the zoom shows or hides what only the full view has. */
+main:has(.patron-page) { max-width: 90rem; }
+.patron-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.patron-crumbs { font-size: 14px; color: var(--elzevir-color-muted); }
+.zoom-toggle { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border: 1px solid var(--elzevir-tone-patrons-border); border-radius: 9px; background: var(--elzevir-tone-patrons-soft); color: var(--elzevir-tone-patrons); font-weight: 600; }
+.zoom-toggle svg { width: 18px; height: 18px; }
+.zoom-toggle kbd { font: 11px ui-monospace, monospace; padding: 1px 5px; border: 1px solid var(--elzevir-tone-patrons-border); border-radius: 5px; background: var(--elzevir-color-surface); }
+[data-zoom="full"] .z-compact, [data-zoom="compact"] .z-full { display: none !important; }
+.wall { position: relative; display: grid; grid-template-columns: minmax(16rem, 22rem) minmax(4rem, 1fr) minmax(0, 52rem); align-items: start; }
+.wall-loans { grid-column: 1; grid-row: 1; }
+.wall-loans h2 { margin: 0 0 .75rem; font-size: 1rem; height: 1.5rem; }
+.wall-patron { grid-column: 3; grid-row: 1; position: relative; margin-top: 2.25rem; padding: 20px 24px; border: 1.5px solid var(--elzevir-tone-patrons-border); border-radius: 14px; background: var(--elzevir-color-surface); }
+.wall-cords { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.wall-cords path { fill: none; stroke: var(--elzevir-color-loan-cord); stroke-width: 2; }
+.wall-cords path.late { stroke: var(--elzevir-color-signal-out); stroke-dasharray: 6 5; }
+.cord-port { position: absolute; width: 12px; height: 12px; border-radius: 50%; background: var(--elzevir-color-surface); border: 2.5px solid var(--elzevir-color-cord-port); }
+.patron-port { left: -7px; top: 42px; }
+.loan-port { right: -7px; top: calc(50% - 6px); border-color: var(--elzevir-color-loan-cord); }
+.urgency-late .loan-port { border-color: var(--elzevir-color-signal-out); }
+.patron-head { display: flex; gap: 16px; align-items: flex-start; }
+.patron-initials { flex: none; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--elzevir-tone-patrons-soft); border: 1.5px solid var(--elzevir-tone-patrons-border); color: var(--elzevir-tone-patrons); font-weight: 800; font-size: 18px; }
+.patron-who { flex: 1; min-width: 0; display: grid; gap: 8px; }
+.patron-who h1 { margin: 0; font-size: 1.4rem; }
+.patron-tags, .patron-status { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.tag { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--elzevir-color-border-strong); font-size: 12px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+.tag-patrons { background: var(--elzevir-tone-patrons-soft); border-color: var(--elzevir-tone-patrons-border); color: var(--elzevir-tone-patrons); }
+.tag-catalog { background: var(--elzevir-tone-catalog-soft); border-color: var(--elzevir-tone-catalog-border); color: var(--elzevir-tone-catalog); }
+.status-chip, .due-chip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.status-chip svg { width: 14px; height: 14px; }
+.tone-late { background: var(--elzevir-color-out-bg); color: var(--elzevir-color-out-text); }
+.tone-soon { background: var(--elzevir-tone-circulation-soft); color: var(--elzevir-tone-circulation); border: 1px solid var(--elzevir-tone-circulation-border); }
+.tone-ok { background: var(--elzevir-color-available-bg); color: var(--elzevir-color-available-text); }
+.patron-tools { display: flex; gap: 6px; flex: none; }
+.icon-button { display: inline-grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--elzevir-color-border-strong); border-radius: 9px; color: var(--elzevir-color-text); }
+.icon-button:hover { border-color: var(--elzevir-tone-patrons); color: var(--elzevir-tone-patrons); }
+.icon-button svg { width: 18px; height: 18px; }
+.checkout-box { display: flex; gap: 10px; margin: 16px 0 0; padding: 0; border: 0; }
+.checkout-box input { flex: 1; min-width: 10rem; height: 42px; padding: 0 14px; border: 1px solid var(--elzevir-color-border-strong); border-radius: 10px; }
+.checkout-box select { height: 42px; padding: 0 10px; border: 1px solid var(--elzevir-color-border-strong); border-radius: 10px; background: var(--elzevir-color-surface); color: inherit; font: inherit; }
+.checkout-box button { height: 42px; border-radius: 10px; font-weight: 700; }
+.wall-patron .codes-alert { margin: 12px 0 0; }
+.patron-summary { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--elzevir-color-border); font-size: 14px; color: var(--elzevir-color-muted); }
+.patron-summary a { font-weight: 600; }
+.patron-summary strong { color: var(--elzevir-color-text); }
+.patron-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--elzevir-color-border); }
+.column-head { margin: 0 0 10px; font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--elzevir-color-muted); }
+.patron-fields { display: grid; grid-template-columns: auto 1fr; gap: 7px 12px; margin: 0; font-size: 14px; }
+.patron-fields dt { color: var(--elzevir-color-muted); }
+.patron-fields dd { margin: 0; text-align: right; font-weight: 600; overflow-wrap: anywhere; }
+.patron-fields-empty { margin: 0; font-size: 14px; color: var(--elzevir-color-muted); }
+.loan-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.loan { position: relative; display: grid; gap: 4px; padding: 9px 12px; border: 1.5px solid var(--elzevir-color-border); border-radius: 12px; background: var(--elzevir-color-surface); }
+.loan.urgency-late { border-color: color-mix(in srgb, var(--elzevir-color-signal-out) 55%, transparent); }
+.loan.urgency-soon { border-color: var(--elzevir-tone-circulation-border); }
+.loan.urgency-ok { border-color: color-mix(in srgb, var(--elzevir-color-signal-available) 45%, transparent); }
+.loan-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.loan-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; color: var(--elzevir-color-text); text-decoration: none; }
+.loan-title:hover { color: var(--elzevir-tone-patrons); text-decoration: underline; }
+.loan-meta { color: var(--elzevir-color-muted); font-size: 13px; }
+.loan-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.loan-actions button { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 8px; border: 1px solid var(--elzevir-color-border-strong); border-radius: 8px; background: var(--elzevir-color-surface); color: var(--elzevir-color-text); font: inherit; font-size: 13px; font-weight: 600; }
+.loan-actions svg { width: 15px; height: 15px; }
+[data-zoom="compact"] .loan { grid-template-columns: minmax(0, 1fr) auto; }
+[data-zoom="compact"] .loan-top { grid-column: 1 / -1; }
+[data-zoom="compact"] .loan-actions { grid-column: 2; grid-row: 2; }
+.patron-page .patron-holds, .patron-page .patron-account { max-width: 52rem; margin-left: auto; }
+@media (max-width: 45rem) {
+  .wall { grid-template-columns: minmax(0, 1fr); }
+  .wall-patron { grid-column: 1; margin-top: 0; }
+  .wall-loans { grid-row: 2; margin-top: 1.5rem; }
+  .wall-cords, .cord-port { display: none; }
+  .patron-columns { grid-template-columns: 1fr; }
+  .patron-head { flex-wrap: wrap; }
+  .patron-who { flex-basis: calc(100% - 72px); }
+  .checkout-box { flex-wrap: wrap; }
+  .checkout-box input { flex-basis: 100%; min-width: 0; }
+  .checkout-box select { flex: 1; min-width: 0; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .loan-new { animation: loan-in .3s ease-out; }
-  .loan-new::after { animation: cord-in .4s ease-out; transform-origin: left; }
+  .wall-cords path.drawn-new { stroke-dasharray: 600; animation: cord-in .5s ease-out; }
+  ::view-transition-group(*) { animation-duration: .25s; }
+  @view-transition { navigation: auto; }
+  ::view-transition-old(root) { animation: .45s cubic-bezier(.65, 0, .35, 1) both slide-to-left; }
+  ::view-transition-new(root) { animation: .45s cubic-bezier(.65, 0, .35, 1) both slide-from-right; }
+  html:active-view-transition-type(to-catalog)::view-transition-old(root) { animation-name: slide-to-right; }
+  html:active-view-transition-type(to-catalog)::view-transition-new(root) { animation-name: slide-from-left; }
+  ::view-transition-group(crossing) { animation-duration: .45s; }
 }
 @keyframes loan-in { from { opacity: 0; transform: translateX(-1rem); } }
-@keyframes cord-in { from { transform: scaleX(0); } }
+@keyframes cord-in { from { stroke-dashoffset: 600; } to { stroke-dashoffset: 0; } }
+@keyframes slide-to-left { to { transform: translateX(-30%); opacity: 0; } }
+@keyframes slide-from-right { from { transform: translateX(30%); opacity: 0; } }
+@keyframes slide-to-right { to { transform: translateX(30%); opacity: 0; } }
+@keyframes slide-from-left { from { transform: translateX(-30%); opacity: 0; } }
 
 /* Lending from the pill (interface §18.2): the box opens inside the pill; a lent pill turns
    yellow at once, before the page is read again. */

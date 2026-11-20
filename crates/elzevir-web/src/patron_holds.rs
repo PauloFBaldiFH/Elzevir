@@ -226,7 +226,15 @@ pub(crate) async fn change(
             return StatusCode::SERVICE_UNAVAILABLE.into_response();
         }
     }
-    page(&state, &session, (patrons, loans), patron, outcome).await
+    page(
+        &state,
+        &session,
+        &headers,
+        (patrons, loans),
+        patron,
+        outcome,
+    )
+    .await
 }
 
 /// The lift button of a restriction, posted with the rest of the record's form.
@@ -276,7 +284,15 @@ pub(crate) async fn lift_restriction(
             return StatusCode::SERVICE_UNAVAILABLE.into_response();
         }
     }
-    page(&state, &session, (patrons, loans), patron, outcome).await
+    page(
+        &state,
+        &session,
+        &headers,
+        (patrons, loans),
+        patron,
+        outcome,
+    )
+    .await
 }
 
 #[cfg(test)]

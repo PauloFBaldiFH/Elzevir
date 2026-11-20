@@ -47,8 +47,10 @@ pub struct StaffPatron<'a> {
     pub t: &'a I18n,
     /// "Surname, First name".
     pub name: String,
-    /// Rows of the record: Fluent key of the label and the value as shown.
-    pub rows: Vec<(&'static str, String)>,
+    /// What the card shows of the patron (interface §24.2).
+    pub header: PatronHeader,
+    /// `full` or `compact`: the zoom the page opens in (interface §24.1).
+    pub zoom: &'static str,
     /// Whether the enrolment is over.
     pub expired: bool,
     /// The edit form, for who manages patrons.
@@ -77,6 +79,42 @@ pub struct StaffPatron<'a> {
     pub confirm: bool,
 }
 
+/// The top of the patron's card: who they are and how they stand (interface §24.2).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PatronHeader {
+    /// Up to two initials, for the round badge.
+    pub initials: String,
+    /// The name, first name first.
+    pub display_name: String,
+    /// Library card number.
+    pub cardnumber: String,
+    /// Name of the category.
+    pub category: String,
+    /// Name of the home branch.
+    pub branch: String,
+    /// Last day of the enrolment, as shown.
+    pub expires: Option<String>,
+    /// How the patron stands, each with its tone and icon.
+    pub status: Vec<StatusChip>,
+    /// Contact rows: Fluent key of the label and the value as shown.
+    pub contact: Vec<(&'static str, String)>,
+    /// Library use rows.
+    pub usage: Vec<(&'static str, String)>,
+    /// Identification rows; the CPF only masked.
+    pub identity: Vec<(&'static str, String)>,
+}
+
+/// One mark of how the patron stands, never colour alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatusChip {
+    /// `late`, `soon` or `ok`.
+    pub tone: &'static str,
+    /// Icon in the sprite.
+    pub icon: &'static str,
+    /// What it says.
+    pub text: String,
+}
+
 /// One loan on the patron's side of the wall.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoanLine {
@@ -84,12 +122,20 @@ pub struct LoanLine {
     pub barcode: String,
     /// The Instance's title.
     pub title: String,
-    /// The due date as shown.
+    /// The Item, for the crossing to the catalogue (interface §24.4).
+    pub item: i64,
+    /// The catalogue's page of the Item: its barcode in the search, nothing of the patron.
+    pub catalog_url: String,
+    /// The due date as shown, with its urgency (interface §24.3).
     pub due: String,
-    /// Whether it is overdue now.
-    pub overdue: bool,
-    /// The renewals, as shown, when there were some.
+    /// `late`, `soon` or `ok`: the colour of the card and its cord.
+    pub urgency: &'static str,
+    /// The Item's call number and the branch holding it, as shown.
+    pub place: String,
+    /// The renewals done, as shown, when there were some.
     pub renewals: Option<String>,
+    /// How many renewals are left, as shown.
+    pub renewals_left: String,
     /// Whether it was just lent, so its cord is drawn.
     pub new: bool,
 }

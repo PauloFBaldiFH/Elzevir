@@ -329,6 +329,26 @@ patron-staff-note = Observação interna
 patron-reading-history = Histórico de leitura
 patron-history-kept = Guardado, com consentimento do leitor
 patron-history-not-kept = Não guardado
+patron-status-overdue = { $count ->
+    [one] 1 em atraso
+   *[other] { $count } em atraso
+}
+patron-status-owes = Deve { $amount }
+patron-status-expired = Inscrição vencida
+patron-status-clear = Em dia
+patron-group-contact = Contato
+patron-group-usage = Uso da biblioteca
+patron-group-identity = Identificação
+patron-group-empty = Nada registrado.
+loan-due-late = Atrasado · { $date }
+loan-due-soon = Vence logo · { $date }
+loan-due-ok = Dev. { $date }
+checkout-placeholder = Bipe ou digite o código de barras para emprestar…
+zoom-label = Zoom
+zoom-show-full = Mostrar completo (Alt+Z)
+zoom-show-compact = Mostrar compacto (Alt+Z)
+zoom-mode-full = Modo completo
+zoom-mode-compact = Modo compacto
 patron-categories-title = Categorias de leitor
 patron-categories-intro = Cada categoria diz por quanto tempo o leitor fica inscrito: um número de meses ou até uma data fixa. Preencha um dos dois.
 patron-category-months = Meses

@@ -420,7 +420,7 @@ pub(crate) async fn search(
 
 /// `value` percent-encoded for a query string: everything but the unreserved characters of
 /// RFC 3986 is escaped, so the redirect can never carry a second parameter or a header break.
-fn query_value(value: &str) -> String {
+pub(crate) fn query_value(value: &str) -> String {
     let mut encoded = String::with_capacity(value.len());
     for byte in value.bytes() {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
