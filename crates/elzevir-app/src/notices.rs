@@ -2,6 +2,7 @@
 //! The queue of notices as the sender reads it (docs/specs/circulacao/avisos.md).
 
 use elzevir_domain::notice::NoticeLevel;
+use elzevir_domain::notice_text::NoticeText;
 use jiff::Zoned;
 use jiff::civil::Date;
 use serde::{Deserialize, Serialize};
@@ -69,6 +70,8 @@ pub struct PendingNotice {
     pub about: NoticeAbout,
     /// The Items, the first due first.
     pub items: Vec<NoticeItem>,
+    /// The library's text for this notice; `None` is the built-in one.
+    pub text: Option<NoticeText>,
 }
 
 /// Reading the queue failed.

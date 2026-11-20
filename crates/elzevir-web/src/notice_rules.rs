@@ -9,17 +9,20 @@ use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
 use elzevir_app::circulation_rules::{
-    CirculationDeskError, NoticeChange, NoticeRules, OverdueNoticeRule, RuleBook,
+    CirculationDeskError, CirculationRefusal, NoticeChange, NoticeRules, OverdueNoticeRule,
+    RuleBook,
 };
 use elzevir_domain::catalog::BranchId;
 use elzevir_domain::notice::{NoticeLevel, OverdueLevel, Transports};
+use elzevir_domain::notice_text::{NoticeText, NoticeTextError, NoticeTextKind};
 use elzevir_domain::patron::PatronCategoryId;
 use elzevir_web_templates::{
-    HoldNoticeRow, I18n, NoticeLevelRow, NoticeRuleLine, StaffNoticeRules,
+    HoldNoticeRow, I18n, NoticeLevelRow, NoticeRuleLine, NoticeTextForm, StaffNoticeRules,
 };
 use serde::Deserialize;
 
 use crate::circulation_rules::{Names, choices, chosen, names, open};
+use crate::print_notices::built_in_text;
 use crate::security::tokens_match;
 use crate::session::ActiveSession;
 use crate::{AppState, render};
@@ -41,6 +44,8 @@ struct Shown {
     branch: Option<BranchId>,
     category: Option<PatronCategoryId>,
     typed: Option<[LevelFields; 3]>,
+    /// A notice text as typed, after a refusal.
+    typed_text: Option<(NoticeTextKind, NoticeText)>,
     saved: bool,
     refused: Option<String>,
 }
@@ -73,6 +78,7 @@ pub(crate) async fn notices(
                 branch: chosen(params.branch).map(BranchId),
                 category: chosen(params.category).map(PatronCategoryId),
                 typed: None,
+                typed_text: None,
                 saved: params.saved.is_some(),
                 refused: None,
             };
@@ -157,7 +163,7 @@ pub(crate) async fn set_overdue_rule(
             match apply(&book, &session, change).await {
                 Ok(()) => None,
                 Err(CirculationDeskError::Refused(refusal)) => {
-                    Some(state.inner.i18n.get(refusal.message_key()))
+                    Some(refusal_text(&state.inner.i18n, &refusal))
                 }
                 Err(CirculationDeskError::Busy | CirculationDeskError::Unavailable(_)) => {
                     return StatusCode::SERVICE_UNAVAILABLE.into_response();
@@ -173,6 +179,7 @@ pub(crate) async fn set_overdue_rule(
         branch,
         category: Some(category),
         typed: Some(typed),
+        typed_text: None,
         saved: false,
         refused: refusal,
     };
@@ -335,11 +342,126 @@ async fn page(
                 }
             })
             .collect(),
+        texts: NoticeTextKind::ALL
+            .iter()
+            .map(|kind| text_form(t, &stored, shown.typed_text.as_ref(), *kind))
+            .collect(),
         saved: shown.saved,
         refused: shown.refused,
     });
     *response.status_mut() = status;
     response
+}
+
+/// The refusal as the screen says it, with the placeholder it names.
+fn refusal_text(t: &I18n, refusal: &CirculationRefusal) -> String {
+    match refusal {
+        CirculationRefusal::NoticeText(NoticeTextError::UnknownPlaceholder(placeholder)) => {
+            t.get_with(refusal.message_key(), "placeholder", placeholder)
+        }
+        _ => t.get(refusal.message_key()),
+    }
+}
+
+/// The form of one notice's text: as typed, the library's, or the built-in one.
+fn text_form(
+    t: &I18n,
+    stored: &NoticeRules,
+    typed: Option<&(NoticeTextKind, NoticeText)>,
+    kind: NoticeTextKind,
+) -> NoticeTextForm {
+    let own = stored
+        .texts
+        .iter()
+        .find(|(stored, _)| *stored == kind)
+        .map(|(_, text)| text);
+    let text = typed
+        .filter(|(typed, _)| *typed == kind)
+        .map(|(_, text)| text)
+        .or(own)
+        .cloned()
+        .unwrap_or_else(|| built_in_text(t, kind));
+    let placeholders = kind
+        .placeholders()
+        .iter()
+        .map(|name| format!("{{{name}}}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    NoticeTextForm {
+        kind: kind.as_str(),
+        title: t.get(&format!(
+            "notices-text-{}",
+            kind.as_str().to_ascii_lowercase()
+        )),
+        subject: text.subject,
+        body: text.body,
+        placeholders: t.get_with("notices-text-placeholders", "list", &placeholders),
+        own: own.is_some(),
+    }
+}
+
+/// The posted text of one notice.
+#[derive(Deserialize)]
+pub(crate) struct TextFields {
+    csrf: String,
+    kind: String,
+    subject: String,
+    body: String,
+    /// Present when the built-in text is wanted back.
+    default: Option<String>,
+}
+
+/// `POST /equipe/admin/avisos/textos`: the library's text of a notice; the built-in text,
+/// or the button that asks for it, removes the library's (spec, items 35 and 36).
+pub(crate) async fn set_text(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Form(fields): Form<TextFields>,
+) -> Response {
+    let (session, book) = match open(&state, &headers) {
+        Ok(opened) => opened,
+        Err(response) => return *response,
+    };
+    if !tokens_match(&session.csrf, &fields.csrf) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let Some(kind) = NoticeTextKind::from_name(&fields.kind) else {
+        return (StatusCode::BAD_REQUEST, "unknown notice").into_response();
+    };
+    let t = &state.inner.i18n;
+    let typed = NoticeText {
+        subject: fields.subject,
+        body: fields.body.replace("\r\n", "\n"),
+    };
+    let built_in = built_in_text(t, kind);
+    let text = (fields.default.is_none()
+        && (typed.subject.trim() != built_in.subject || typed.body.trim() != built_in.body))
+        .then(|| typed.clone());
+    let refused = match apply(&book, &session, NoticeChange::Text { kind, text }).await {
+        Ok(()) => {
+            return Redirect::to(&format!("{PATH}?saved=1#notice-texts")).into_response();
+        }
+        Err(CirculationDeskError::Refused(refusal)) => refusal_text(t, &refusal),
+        Err(CirculationDeskError::Busy | CirculationDeskError::Unavailable(_)) => {
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
+    };
+    let shown = Shown {
+        branch: None,
+        category: None,
+        typed: None,
+        typed_text: Some((kind, typed)),
+        saved: false,
+        refused: Some(refused),
+    };
+    page(
+        &state,
+        &session,
+        book,
+        shown,
+        StatusCode::UNPROCESSABLE_ENTITY,
+    )
+    .await
 }
 
 /// The form's fields for stored levels.

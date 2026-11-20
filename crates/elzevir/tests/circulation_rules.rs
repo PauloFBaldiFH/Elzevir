@@ -385,3 +385,51 @@ fn notice_rules_and_hold_notices_are_set_on_their_screen() {
         1
     );
 }
+
+#[test]
+fn notice_texts_are_written_refused_and_taken_back_on_their_screen() {
+    let data = tempfile::tempdir().unwrap();
+    library(data.path());
+    let (server, address) = start(data.path());
+    let adm = sign_in(address, "adm");
+    let page = request(address, "GET", "/equipe/admin/avisos", &adm, "");
+    assert!(
+        page.contains("value=\"Overdue items at {library}\"") && page.contains("Dear {name},"),
+        "{page}"
+    );
+    let headers = format!("{adm}Content-Type: application/x-www-form-urlencoded\r\n");
+    let token = csrf(&page).to_owned();
+    let post = |fields: &str| {
+        request(
+            address,
+            "POST",
+            "/equipe/admin/avisos/textos",
+            &headers,
+            &format!("csrf={token}&{fields}"),
+        )
+    };
+
+    // The hold's last day is not in an overdue notice.
+    let refused = post("kind=OVERDUE1&subject=Atraso&body=At%C3%A9+%7Bdate%7D");
+    assert_status(&refused, 422);
+    assert!(refused.contains("{date} is not a placeholder of this notice."));
+    assert!(refused.contains("Até {date}</textarea>"), "{refused}");
+
+    let saved = post("kind=OVERDUE1&subject=Atraso+em+%7Blibrary%7D&body=Ol%C3%A1+%7Bname%7D");
+    assert_status(&saved, 303);
+    let page = request(address, "GET", location(&saved), &adm, "");
+    assert!(page.contains("value=\"Atraso em {library}\"") && page.contains(">library text<"));
+
+    // The button takes the built-in text back.
+    let back = post("kind=OVERDUE1&subject=x&body=y&default=1");
+    assert_status(&back, 303);
+    drop(server);
+    assert_eq!(count(data.path(), "SELECT count(*) FROM notice_texts"), 0);
+    assert_eq!(
+        count(
+            data.path(),
+            "SELECT count(*) FROM audit_log WHERE kind = 'circ.set_notice_text'"
+        ),
+        2
+    );
+}

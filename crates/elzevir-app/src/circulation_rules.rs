@@ -8,6 +8,7 @@ use elzevir_domain::circulation_rules::{
 };
 use elzevir_domain::long_overdue::LongOverdueSettings;
 use elzevir_domain::notice::{LevelsError, OverdueLevel, Transports};
+use elzevir_domain::notice_text::{NoticeText, NoticeTextError, NoticeTextKind};
 use elzevir_domain::patron::{PatronCategoryId, PatronId};
 use elzevir_domain::suspension::RestrictionKind;
 use jiff::Zoned;
@@ -84,6 +85,14 @@ pub enum CirculationCommand {
         /// How the notice goes out; neither is no notice.
         transports: Transports,
     },
+    /// Sets the library's text of a notice, or goes back to the built-in one
+    /// (docs/specs/circulacao/avisos.md).
+    SetNoticeText {
+        /// Which notice.
+        kind: NoticeTextKind,
+        /// The text; `None` is the built-in one.
+        text: Option<NoticeText>,
+    },
     /// Records what became of a notice the sender tried (docs/specs/circulacao/avisos.md).
     MarkNotice {
         /// The notice.
@@ -119,6 +128,8 @@ pub struct NoticeRules {
     pub overdue: Vec<OverdueNoticeRule>,
     /// How each patron category with a preference hears of a waiting hold.
     pub holds: Vec<(PatronCategoryId, Transports)>,
+    /// The texts the library wrote, in place of the built-in ones.
+    pub texts: Vec<(NoticeTextKind, NoticeText)>,
 }
 
 /// A change the notices screen makes.
@@ -132,6 +143,13 @@ pub enum NoticeChange {
         category: PatronCategoryId,
         /// How the notice goes out; neither is no notice.
         transports: Transports,
+    },
+    /// `circ.set_notice_text`.
+    Text {
+        /// Which notice.
+        kind: NoticeTextKind,
+        /// The text; `None` is the built-in one.
+        text: Option<NoticeText>,
     },
 }
 
@@ -148,6 +166,7 @@ impl NoticeChange {
                 category,
                 transports,
             },
+            Self::Text { kind, text } => CirculationCommand::SetNoticeText { kind, text },
         }
     }
 }
@@ -207,6 +226,8 @@ pub enum CirculationOutput {
     NoticeMarked,
     /// A category's hold notice was set.
     HoldNoticeSet,
+    /// A notice's text was set or went back to the built-in one.
+    NoticeTextSet,
     /// How many overdue notices the daily run queued.
     OverdueNoticesQueued {
         /// Notices queued.
@@ -288,6 +309,9 @@ pub enum CirculationRefusal {
     /// The levels of an overdue notice rule do not fit together.
     #[error(transparent)]
     NoticeLevels(#[from] LevelsError),
+    /// A notice text was refused.
+    #[error(transparent)]
+    NoticeText(#[from] NoticeTextError),
 }
 
 impl CirculationRefusal {
@@ -320,6 +344,12 @@ impl CirculationRefusal {
             Self::Pay(refusal) => refusal.message_key(),
             Self::Hold(refusal) => refusal.message_key(),
             Self::NoticeLevels(_) => "notices-error-levels",
+            Self::NoticeText(NoticeTextError::Empty) => "notices-error-text-empty",
+            Self::NoticeText(NoticeTextError::TooLong) => "notices-error-text-long",
+            Self::NoticeText(NoticeTextError::SubjectLines) => "notices-error-text-subject",
+            Self::NoticeText(NoticeTextError::UnknownPlaceholder(_)) => {
+                "notices-error-text-placeholder"
+            }
             Self::NoRestriction => "restriction-error-none",
         }
     }

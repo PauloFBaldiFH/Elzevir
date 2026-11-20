@@ -9,6 +9,7 @@ use axum::response::{IntoResponse, Redirect, Response};
 use elzevir_app::circulation_rules::CirculationCommand;
 use elzevir_app::notices::{NoticeAbout, NoticeId, NoticeItem, NoticeOutcome, PendingNotice};
 use elzevir_domain::notice::NoticeLevel;
+use elzevir_domain::notice_text::{NoticeText, NoticeTextKind, fill};
 use elzevir_web_templates::{I18n, PrintedNotice, StaffPrintNotices};
 use jiff::tz::TimeZone;
 use serde::Deserialize;
@@ -49,33 +50,49 @@ pub fn notice_text(t: &I18n, notice: &PendingNotice, time_zone: &TimeZone) -> (S
         .map(item_line)
         .collect::<Vec<_>>()
         .join("\n");
-    let (subject_key, body_key, until) = match notice.about {
-        NoticeAbout::Overdue(NoticeLevel::First) => {
-            ("notice-overdue-subject-1", "notice-overdue-body", None)
-        }
-        NoticeAbout::Overdue(NoticeLevel::Second) => {
-            ("notice-overdue-subject-2", "notice-overdue-body", None)
-        }
-        NoticeAbout::Overdue(NoticeLevel::Third) => {
-            ("notice-overdue-subject-3", "notice-overdue-body", None)
-        }
-        NoticeAbout::HoldWaiting(until) => (
-            "notice-hold-subject",
-            "notice-hold-body",
-            Some(shown(t, until)),
-        ),
+    let (kind, until) = match notice.about {
+        NoticeAbout::Overdue(level) => (NoticeTextKind::Overdue(level), None),
+        NoticeAbout::HoldWaiting(until) => (NoticeTextKind::Hold, Some(shown(t, until))),
     };
-    let subject = t.get_with(subject_key, "library", &notice.library);
-    let body = t.get_texts(
-        body_key,
-        &[
-            ("name", &notice.name),
-            ("library", &notice.library),
-            ("items", &items),
-            ("date", until.as_deref().unwrap_or_default()),
-        ],
-    );
-    (subject, body)
+    let text = notice
+        .text
+        .clone()
+        .unwrap_or_else(|| built_in_text(t, kind));
+    let values = [
+        ("name", notice.name.as_str()),
+        ("library", notice.library.as_str()),
+        ("items", items.as_str()),
+        ("date", until.as_deref().unwrap_or_default()),
+    ];
+    (fill(&text.subject, &values), fill(&text.body, &values))
+}
+
+/// The built-in text of a notice in the language of `t`, with its placeholders, which a
+/// library starts from when it writes its own (spec, item 35).
+#[must_use]
+pub(crate) fn built_in_text(t: &I18n, kind: NoticeTextKind) -> NoticeText {
+    let (subject_key, body_key) = match kind {
+        NoticeTextKind::Overdue(NoticeLevel::First) => {
+            ("notice-overdue-subject-1", "notice-overdue-body")
+        }
+        NoticeTextKind::Overdue(NoticeLevel::Second) => {
+            ("notice-overdue-subject-2", "notice-overdue-body")
+        }
+        NoticeTextKind::Overdue(NoticeLevel::Third) => {
+            ("notice-overdue-subject-3", "notice-overdue-body")
+        }
+        NoticeTextKind::Hold => ("notice-hold-subject", "notice-hold-body"),
+    };
+    let placeholders =
+        ["name", "library", "items", "date"].map(|name| (name, format!("{{{name}}}")));
+    let values: Vec<(&str, &str)> = placeholders
+        .iter()
+        .map(|(name, value)| (*name, value.as_str()))
+        .collect();
+    NoticeText {
+        subject: t.get_with(subject_key, "library", "{library}"),
+        body: t.get_texts(body_key, &values),
+    }
 }
 
 /// Query string of the page.

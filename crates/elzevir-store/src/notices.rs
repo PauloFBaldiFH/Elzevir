@@ -17,6 +17,7 @@ use elzevir_domain::notice::{
     NoticeLevel, NoticeSettings, OverdueLevel, Transport, Transports, checked_levels, days_overdue,
     sends_on, transports, triggered,
 };
+use elzevir_domain::notice_text::{NoticeText, NoticeTextKind, checked_text};
 use elzevir_domain::patron::{PatronCategoryId, PatronId};
 use jiff::Zoned;
 use jiff::civil::Date;
@@ -137,7 +138,55 @@ pub(crate) fn notice_rules(connection: &Connection) -> rusqlite::Result<NoticeRu
             ))
         })?
         .collect::<rusqlite::Result<_>>()?;
-    Ok(NoticeRules { overdue, holds })
+    let mut statement = connection.prepare("SELECT kind, subject, body FROM notice_texts")?;
+    let mut texts: Vec<(NoticeTextKind, NoticeText)> = statement
+        .query_map([], |row| {
+            let kind: String = row.get(0)?;
+            let kind = NoticeTextKind::from_name(&kind).ok_or_else(|| {
+                rusqlite::Error::FromSqlConversionFailure(0, Type::Text, "no such kind".into())
+            })?;
+            Ok((
+                kind,
+                NoticeText {
+                    subject: row.get(1)?,
+                    body: row.get(2)?,
+                },
+            ))
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    texts.sort_by_key(|(kind, _)| *kind);
+    Ok(NoticeRules {
+        overdue,
+        holds,
+        texts,
+    })
+}
+
+/// Applies `circ.set_notice_text`: the library's text of a notice, or none for the built-in
+/// one.
+///
+/// Koha: `tools/letter.pl`, which edits the `ODUE`, `ODUE2`, `ODUE3` and `HOLD` letters.
+pub(crate) fn set_text(
+    connection: &Connection,
+    kind: NoticeTextKind,
+    text: Option<NoticeText>,
+) -> Applied {
+    let text = text
+        .map(|text| checked_text(kind, &text))
+        .transpose()
+        .map_err(|error| CommandFailed::Rejected(WriteRefusal::Circulation(error.into())))?;
+    connection
+        .execute("DELETE FROM notice_texts WHERE kind = ?1", [kind.as_str()])
+        .map_err(storage)?;
+    if let Some(text) = text {
+        connection
+            .execute(
+                "INSERT INTO notice_texts (kind, subject, body) VALUES (?1, ?2, ?3)",
+                params![kind.as_str(), text.subject, text.body],
+            )
+            .map_err(storage)?;
+    }
+    Ok(WriteOutput::Circulation(CirculationOutput::NoticeTextSet))
 }
 
 /// The levels for a patron category at a branch: the branch's rules, or the rules of any
@@ -364,10 +413,12 @@ fn pending(
 ) -> rusqlite::Result<Vec<PendingNotice>> {
     let mut statement = connection.prepare_cached(
         "SELECT n.id, n.to_address, p.first_name, p.surname, b.name, b.email, n.level,
-                n.hold_until, p.address
+                n.hold_until, p.address, t.subject, t.body
          FROM notices n
          JOIN patrons p ON p.id = n.patron_id
          JOIN branches b ON b.id = n.branch_id
+         LEFT JOIN notice_texts t
+             ON t.kind = CASE n.kind WHEN 'HOLD' THEN 'HOLD' ELSE 'OVERDUE' || n.level END
          WHERE n.status = 'pending' AND n.transport = ?2
            AND (n.transport <> 'email' OR n.to_address IS NOT NULL)
          ORDER BY n.id LIMIT ?1",
@@ -393,6 +444,10 @@ fn pending(
                     .filter(|email| !email.trim().is_empty()),
                 about,
                 items: Vec::new(),
+                text: match (row.get(9)?, row.get(10)?) {
+                    (Some(subject), Some(body)) => Some(NoticeText { subject, body }),
+                    _ => None,
+                },
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
