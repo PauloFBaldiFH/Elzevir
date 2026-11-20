@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use elzevir_app::circulation_rules::{CirculationCommand, CirculationOutput};
 use elzevir_app::commands::{WriteCommand, WriteOutput};
-use elzevir_app::notices::{NoticeOutcome, NoticeQueue, PendingEmail};
+use elzevir_app::notices::{NoticeAbout, NoticeItem, NoticeOutcome, NoticeQueue, PendingEmail};
 use elzevir_domain::notice::NoticeLevel;
 use elzevir_store::ElzevirStore;
 use elzevir_web_templates::I18n;
@@ -85,36 +85,55 @@ impl MailSettings {
     }
 }
 
-/// The subject and the text of an overdue notice, in the language of `t`.
+/// The subject and the text of a notice, in the language of `t`.
 pub(crate) fn render(t: &I18n, notice: &PendingEmail, time_zone: &TimeZone) -> (String, String) {
-    let subject_key = match notice.level {
-        NoticeLevel::First => "notice-overdue-subject-1",
-        NoticeLevel::Second => "notice-overdue-subject-2",
-        NoticeLevel::Third => "notice-overdue-subject-3",
+    let item_line = |item: &NoticeItem| match &item.due {
+        Some(due) => t.get_texts(
+            "notice-overdue-item",
+            &[
+                ("title", &item.title),
+                ("barcode", &item.barcode),
+                (
+                    "date",
+                    &elzevir_web::date_text(t, due.with_time_zone(time_zone.clone()).date()),
+                ),
+            ],
+        ),
+        None => t.get_texts(
+            "notice-hold-item",
+            &[("title", &item.title), ("barcode", &item.barcode)],
+        ),
     };
     let items = notice
         .items
         .iter()
-        .map(|item| {
-            let day = item.due.with_time_zone(time_zone.clone()).date();
-            t.get_texts(
-                "notice-overdue-item",
-                &[
-                    ("title", &item.title),
-                    ("barcode", &item.barcode),
-                    ("date", &elzevir_web::date_text(t, day)),
-                ],
-            )
-        })
+        .map(item_line)
         .collect::<Vec<_>>()
         .join("\n");
+    let (subject_key, body_key, until) = match notice.about {
+        NoticeAbout::Overdue(NoticeLevel::First) => {
+            ("notice-overdue-subject-1", "notice-overdue-body", None)
+        }
+        NoticeAbout::Overdue(NoticeLevel::Second) => {
+            ("notice-overdue-subject-2", "notice-overdue-body", None)
+        }
+        NoticeAbout::Overdue(NoticeLevel::Third) => {
+            ("notice-overdue-subject-3", "notice-overdue-body", None)
+        }
+        NoticeAbout::HoldWaiting(until) => (
+            "notice-hold-subject",
+            "notice-hold-body",
+            Some(elzevir_web::date_text(t, until)),
+        ),
+    };
     let subject = t.get_with(subject_key, "library", &notice.library);
     let body = t.get_texts(
-        "notice-overdue-body",
+        body_key,
         &[
             ("name", &notice.name),
             ("library", &notice.library),
             ("items", &items),
+            ("date", until.as_deref().unwrap_or_default()),
         ],
     );
     (subject, body)
@@ -244,7 +263,7 @@ pub(crate) async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use elzevir_app::notices::{NoticeId, NoticeItem};
+    use elzevir_app::notices::NoticeId;
     use std::io::{BufRead, BufReader, Write};
     use std::net::TcpListener;
 
@@ -255,13 +274,15 @@ mod tests {
             name: "Ana Silva".to_owned(),
             library: "Central".to_owned(),
             reply_to: Some("central@example.org".to_owned()),
-            level: NoticeLevel::Second,
+            about: NoticeAbout::Overdue(NoticeLevel::Second),
             items: vec![NoticeItem {
                 title: "Dom Casmurro".to_owned(),
                 barcode: "0001".to_owned(),
-                due: "2026-11-16T23:59:00-03:00[America/Sao_Paulo]"
-                    .parse()
-                    .unwrap(),
+                due: Some(
+                    "2026-11-16T23:59:00-03:00[America/Sao_Paulo]"
+                        .parse()
+                        .unwrap(),
+                ),
             }],
         }
     }
@@ -282,6 +303,23 @@ mod tests {
             body.contains("- Dom Casmurro (0001), venceu em 16/11/2026"),
             "{body}"
         );
+    }
+
+    #[test]
+    fn the_hold_notice_says_where_and_until_when() {
+        let zone = TimeZone::get("America/Sao_Paulo").unwrap();
+        let mut waiting = notice();
+        waiting.about = NoticeAbout::HoldWaiting(jiff::civil::date(2026, 11, 27));
+        waiting.items[0].due = None;
+        let (subject, body) = render(&I18n::english().unwrap(), &waiting, &zone);
+        assert_eq!(subject, "Your hold is waiting at Central");
+        assert!(
+            body.contains("- Dom Casmurro (0001)\n") && body.contains("until 2026-11-27"),
+            "{body}"
+        );
+        let (subject, body) = render(&I18n::portuguese().unwrap(), &waiting, &zone);
+        assert_eq!(subject, "Sua reserva aguarda retirada na Central");
+        assert!(body.contains("até 27/11/2026"), "{body}");
     }
 
     /// A mail server that answers one session, refusing the recipient when `refuse` is set,

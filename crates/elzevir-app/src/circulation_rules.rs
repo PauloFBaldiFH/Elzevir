@@ -7,7 +7,7 @@ use elzevir_domain::circulation_rules::{
     CirculationRule, RuleScopeKey, RuleValueError, checked_value,
 };
 use elzevir_domain::long_overdue::LongOverdueSettings;
-use elzevir_domain::notice::{LevelsError, OverdueLevel};
+use elzevir_domain::notice::{LevelsError, OverdueLevel, Transports};
 use elzevir_domain::patron::{PatronCategoryId, PatronId};
 use elzevir_domain::suspension::RestrictionKind;
 use jiff::Zoned;
@@ -75,6 +75,14 @@ pub enum CirculationCommand {
         patron: PatronId,
         /// Which restriction.
         kind: RestrictionKind,
+    },
+    /// Sets how a patron category hears of a hold waiting for it
+    /// (docs/specs/circulacao/avisos.md).
+    SetHoldNotice {
+        /// The patron category.
+        category: PatronCategoryId,
+        /// How the notice goes out; neither is no notice.
+        transports: Transports,
     },
     /// Records what became of a notice the sender tried (docs/specs/circulacao/avisos.md).
     MarkNotice {
@@ -157,6 +165,8 @@ pub enum CirculationOutput {
     RestrictionLifted,
     /// A notice was marked sent or failed.
     NoticeMarked,
+    /// A category's hold notice was set.
+    HoldNoticeSet,
     /// How many overdue notices the daily run queued.
     OverdueNoticesQueued {
         /// Notices queued.

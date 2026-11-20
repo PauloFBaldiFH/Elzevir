@@ -1008,3 +1008,15 @@ notice-overdue-body =
 
     { $library }
 notice-overdue-item = - { $title } ({ $barcode }), due { $date }
+notice-hold-subject = Your hold is waiting at { $library }
+notice-hold-body =
+    Dear { $name },
+
+    The item you asked for is waiting for you at { $library }:
+
+    { $items }
+
+    You can pick it up until { $date }.
+
+    { $library }
+notice-hold-item = - { $title } ({ $barcode })

@@ -603,3 +603,15 @@ notice-overdue-body =
 
     { $library }
 notice-overdue-item = - { $title } ({ $barcode }), venceu em { $date }
+notice-hold-subject = Sua reserva aguarda retirada na { $library }
+notice-hold-body =
+    Olá, { $name }.
+
+    O exemplar que você reservou aguarda retirada na { $library }:
+
+    { $items }
+
+    Você pode retirá-lo até { $date }.
+
+    { $library }
+notice-hold-item = - { $title } ({ $barcode })

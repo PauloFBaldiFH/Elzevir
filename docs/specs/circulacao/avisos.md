@@ -1,6 +1,6 @@
 # Avisos
 
-> Status: tarefa 3.9, partes a (regras de aviso de atraso e fila de avisos), b (suspensão por aviso) e c (envio por e-mail). Base: Koha 26.05.05. As partes seguintes trazem os modelos editáveis e a tela da fila, o aviso de reserva disponível e o recibo.
+> Status: tarefa 3.9, partes a (regras de aviso de atraso e fila de avisos), b (suspensão por aviso), c (envio por e-mail) e d (aviso de reserva disponível). Base: Koha 26.05.05. As partes seguintes trazem os modelos editáveis, a tela da fila e das regras, e o recibo.
 
 ## 1. Comportamento
 
@@ -38,18 +38,27 @@
 21. Aviso aceito pelo servidor fica "enviado"; recusado de vez (endereço inválido, resposta 5xx) fica "falho" e não é tentado de novo. Servidor fora do ar ou recusa temporária deixam o aviso pendente, e o envio para até a próxima vez.
 22. Avisos impressos continuam pendentes; a tela da fila vem depois.
 
+### Reserva disponível
+
+23. Cada categoria de leitor diz como o leitor fica sabendo da reserva que o aguarda: e-mail, impresso, os dois ou nenhum (comando `circ.set_hold_notice`, com a permissão de administração; nenhum meio apaga a preferência). Sem preferência, não há aviso. No Koha é a preferência de mensagens `Hold_Filled` do leitor, que vem da categoria.
+24. O aviso entra na fila quando a reserva passa a aguardar retirada ([reservas.md](reservas.md), item 12): separada no balcão da unidade de retirada, ou chegada nela depois do trânsito. A reserva em trânsito não gera aviso, e separar de novo uma reserva que já aguardava também não.
+25. Os meios seguem o item 12: e-mail sem endereço vira impresso, no máximo um impresso.
+26. O aviso guarda a unidade de retirada, o exemplar e o último dia para retirar; o texto diz o título, o código de barras, a unidade e até quando retirar. Ele sai pelo envio dos itens 18 a 21.
+27. Uma categoria com preferência de aviso não pode ser apagada.
+
 ## 2. Origem no Koha
 
 - `misc/cronjobs/overdue_notices.pl` com `-t` (`debian/koha-common.cron.daily`), `C4::Overdues::GetBranchcodesWithOverdueRules`, `GetOverdueMessageTransportTypes`.
 - `tools/overduerules.pl`: dias numéricos, em ordem crescente; nível com dias e sem aviso nem suspensão é recusado.
 - Tabelas `overduerules` e `overduerules_transport_types`; `message_queue` (`C4::Letters::EnqueueLetter`).
+- `C4::Reserves::ModReserveAffect` e `_koha_notify_reserve` (`Hold_Filled`, carta `HOLD`; impresso quando falta o e-mail).
 - `misc/cronjobs/process_message_queue.pl` (`*/15` em `debian/koha-common.cron.d`), `C4::Letters::SendQueuedMessages` e `_set_message_status`.
 - `Koha::Patron::Debarments::AddUniqueDebarment`, `UpdateBorrowerDebarmentFlags` (`9999-12-31` quando alguma restrição não tem fim), `DelUniqueDebarment`.
 - `Koha::Calendar::days_between` (com `OverdueNoticeCalendar`), que tira os dias fechados contando as duas pontas.
 
 ## 3. Paridade
 
-`exigida` nos dias de disparo. A corrida do Koha é um script de cron, que o gravador não alcança pela API; a prova é por testes contra o código lido: `crates/elzevir-domain/src/notice.rs` (dias com e sem calendário, nível que dispara, meios) e `crates/elzevir-store/tests/notices.rs` (regras da unidade e de qualquer unidade, categoria sem regra, atraso exato, um aviso por dia, e-mail que vira impresso, exemplar perdido fora, nível que suspende sem meio, empréstimo recusado até a equipe retirar, corrida repetida no dia que não suspende de novo, avisos de e-mail pendentes com seus exemplares, marcados como enviados). O envio é testado contra um servidor SMTP falso em `crates/elzevir/src/notice_mail.rs` (aceito, recusado, fora do ar) e o texto nas duas línguas.
+`exigida` nos dias de disparo. A corrida do Koha é um script de cron, que o gravador não alcança pela API; a prova é por testes contra o código lido: `crates/elzevir-domain/src/notice.rs` (dias com e sem calendário, nível que dispara, meios) e `crates/elzevir-store/tests/notices.rs` (regras da unidade e de qualquer unidade, categoria sem regra, atraso exato, um aviso por dia, e-mail que vira impresso, exemplar perdido fora, nível que suspende sem meio, empréstimo recusado até a equipe retirar, corrida repetida no dia que não suspende de novo, avisos de e-mail pendentes com seus exemplares, marcados como enviados). `crates/elzevir-store/tests/checkout.rs` testa o aviso de reserva: sem preferência nada sai, em trânsito nada sai, ao chegar sai um impresso para o leitor sem e-mail, e separar de novo não repete. O envio é testado contra um servidor SMTP falso em `crates/elzevir/src/notice_mail.rs` (aceito, recusado, fora do ar) e o texto nas duas línguas.
 
 ## 4. Casos de borda
 

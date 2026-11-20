@@ -17,7 +17,7 @@ use elzevir_app::circulation_rules::{
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::loans::{CheckoutRefusal, CheckoutRequest};
-use elzevir_app::notices::{NoticeOutcome, NoticeQueue};
+use elzevir_app::notices::{NoticeAbout, NoticeOutcome, NoticeQueue};
 use elzevir_app::patrons::{
     CategoryChange, PatronCommand, PatronFields, PatronOutput, ReadingHistory,
 };
@@ -544,7 +544,7 @@ fn the_sender_reads_pending_emails_with_their_items_and_marks_them() {
         ),
         ("ana@example.org", "Silva", "Central")
     );
-    assert_eq!(notice.level, NoticeLevel::First);
+    assert_eq!(notice.about, NoticeAbout::Overdue(NoticeLevel::First));
     let barcodes: Vec<_> = notice
         .items
         .iter()

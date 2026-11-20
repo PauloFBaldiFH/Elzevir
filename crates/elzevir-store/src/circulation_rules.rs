@@ -51,6 +51,10 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CirculationCommand) -> Applied {
         CirculationCommand::SetOverdueNoticeRule(rule) => {
             crate::notices::set_rule(tx.connection(), rule)
         }
+        CirculationCommand::SetHoldNotice {
+            category,
+            transports,
+        } => crate::notices::set_hold_notice(tx.connection(), *category, *transports),
         CirculationCommand::MarkNotice {
             notice,
             outcome,
