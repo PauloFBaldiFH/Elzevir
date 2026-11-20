@@ -23,6 +23,8 @@ pub(crate) enum Event {
     LongOverdueFailed,
     HoldsExpired { cancelled: u64 },
     HoldsExpiryFailed,
+    OverdueNoticesQueued { queued: u64 },
+    OverdueNoticesFailed,
 }
 
 /// Records a known event with the identity generated for this execution.
@@ -66,6 +68,12 @@ pub(crate) fn emit(instance: &str, event: Event) {
         }
         Event::HoldsExpiryFailed => {
             tracing::warn!(target: TARGET, institution = "local", instance, event = "holds.expiry_failed", "expired holds run failed; retried next hour");
+        }
+        Event::OverdueNoticesQueued { queued } => {
+            tracing::info!(target: TARGET, institution = "local", instance, event = "notices.overdue_queued", queued, "overdue notices queued");
+        }
+        Event::OverdueNoticesFailed => {
+            tracing::warn!(target: TARGET, institution = "local", instance, event = "notices.overdue_failed", "overdue notices run failed; retried next hour");
         }
         Event::RuntimeCleanupFailed => {
             tracing::warn!(target: TARGET, institution = "local", instance, event = "runtime.cleanup_failed", "runtime metadata cleanup failed");

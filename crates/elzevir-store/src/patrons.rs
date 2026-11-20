@@ -96,7 +96,8 @@ fn change_category(
             let users: i64 = connection
                 .query_row(
                     "SELECT (SELECT count(*) FROM patrons WHERE category_id = ?1)
-                          + (SELECT count(*) FROM circulation_rules WHERE category_id = ?1)",
+                          + (SELECT count(*) FROM circulation_rules WHERE category_id = ?1)
+                          + (SELECT count(*) FROM overdue_notice_rules WHERE category_id = ?1)",
                     [category.0],
                     |row| row.get(0),
                 )

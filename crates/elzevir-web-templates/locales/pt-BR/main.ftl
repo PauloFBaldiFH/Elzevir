@@ -337,6 +337,7 @@ rules-error-repeated = Cada regra aparece uma vez só.
 rules-error-unknown-branch = Essa unidade não existe mais.
 rules-error-unknown-category = Essa categoria de leitor não existe mais.
 rules-error-unknown-policy = Essa política de circulação não existe mais.
+notices-error-levels = Cada nível de aviso aparece uma vez só, depois de pelo menos um dia e depois do nível anterior.
 rule-kind-article_request_fee = Taxa de pedido de artigo
 rule-kind-article_requests = Pedidos de artigo
 rule-kind-auto_renew = Renovação automática

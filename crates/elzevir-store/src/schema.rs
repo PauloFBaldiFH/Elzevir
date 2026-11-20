@@ -711,6 +711,41 @@ const MIGRATIONS: &[&str] = &[
      INSERT INTO ended_holds_new SELECT * FROM ended_holds;
      DROP TABLE ended_holds;
      ALTER TABLE ended_holds_new RENAME TO ended_holds;",
+    // 54: overdue notice rules and the queue of notices (docs/specs/circulacao/avisos.md).
+    // A NULL branch is any branch. A notice goes out once per patron, kind, level, branch,
+    // transport and day, which the unique index enforces for the hourly run.
+    "CREATE TABLE overdue_notice_rules (
+         id          INTEGER PRIMARY KEY,
+         branch_id   INTEGER REFERENCES branches (id),
+         category_id INTEGER NOT NULL REFERENCES patron_categories (id),
+         level       INTEGER NOT NULL CHECK (level BETWEEN 1 AND 3),
+         delay       INTEGER NOT NULL CHECK (delay > 0),
+         email       INTEGER NOT NULL CHECK (email IN (0, 1)),
+         print       INTEGER NOT NULL CHECK (print IN (0, 1))
+     );
+     CREATE UNIQUE INDEX overdue_notice_rules_scope
+         ON overdue_notice_rules (coalesce(branch_id, 0), category_id, level);
+     CREATE TABLE notices (
+         id         INTEGER PRIMARY KEY,
+         patron_id  INTEGER NOT NULL REFERENCES patrons (id),
+         kind       TEXT NOT NULL CHECK (kind IN ('OVERDUE')),
+         level      INTEGER CHECK (level BETWEEN 1 AND 3),
+         branch_id  INTEGER NOT NULL REFERENCES branches (id),
+         transport  TEXT NOT NULL CHECK (transport IN ('email', 'print')),
+         to_address TEXT,
+         status     TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending', 'sent', 'failed')),
+         day        TEXT NOT NULL,
+         created_at TEXT NOT NULL
+     );
+     CREATE UNIQUE INDEX notices_once
+         ON notices (patron_id, kind, coalesce(level, 0), branch_id, transport, day);
+     CREATE TABLE notice_items (
+         notice_id INTEGER NOT NULL REFERENCES notices (id),
+         item_id   INTEGER NOT NULL REFERENCES items (id),
+         due       TEXT NOT NULL,
+         PRIMARY KEY (notice_id, item_id)
+     );",
 ];
 
 /// The migration that creates `match_keys`.
@@ -1541,7 +1576,7 @@ mod catalog_tests {
             .unwrap();
         connection
             .execute_batch(
-                "DROP TABLE ended_holds; DROP TABLE holds; DROP TABLE account_offsets; DROP TABLE account_lines; DROP TABLE patron_restrictions; DROP TABLE transfers; DROP TABLE returned_loans; DROP TABLE loans; DROP TABLE calendar_dates; DROP TABLE calendar_annual; DROP TABLE calendar_weekly; DROP TABLE circulation_rules; DROP TABLE patrons; DROP TABLE patron_categories; DROP INDEX audit_imports; DROP TABLE saved_list_families; DROP TABLE saved_lists; DROP INDEX audit_by_actor; DROP INDEX audit_by_kind; DROP INDEX audit_entities_by_seq; DROP TABLE instance_notes; ALTER TABLE works DROP COLUMN audience;
+                "DROP TABLE notice_items; DROP TABLE notices; DROP TABLE overdue_notice_rules; DROP TABLE ended_holds; DROP TABLE holds; DROP TABLE account_offsets; DROP TABLE account_lines; DROP TABLE patron_restrictions; DROP TABLE transfers; DROP TABLE returned_loans; DROP TABLE loans; DROP TABLE calendar_dates; DROP TABLE calendar_annual; DROP TABLE calendar_weekly; DROP TABLE circulation_rules; DROP TABLE patrons; DROP TABLE patron_categories; DROP INDEX audit_imports; DROP TABLE saved_list_families; DROP TABLE saved_lists; DROP INDEX audit_by_actor; DROP INDEX audit_by_kind; DROP INDEX audit_entities_by_seq; DROP TABLE instance_notes; ALTER TABLE works DROP COLUMN audience;
                  DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; DROP TABLE koha_type_statements; ALTER TABLE circulation_policies ADD COLUMN code TEXT; UPDATE circulation_policies SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 4 AND local_id = circulation_policies.id), 'P' || id); ALTER TABLE circulation_policies RENAME COLUMN name TO description; ALTER TABLE circulation_policies RENAME TO item_types; ALTER TABLE items RENAME COLUMN policy_id TO item_type; DELETE FROM koha_codes WHERE kind = 4; ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id), 'B' || id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id; ALTER TABLE items DROP COLUMN collection_id; DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes; ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone; ALTER TABLE branches DROP COLUMN email; ALTER TABLE branches DROP COLUMN url; ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; DROP TABLE subject_identifiers; ALTER TABLE subjects DROP COLUMN name_parts; DROP TABLE contribution_identifiers; ALTER TABLE contributions DROP COLUMN role_term; ALTER TABLE agents DROP COLUMN name_parts; DROP INDEX subjects_identity; ALTER TABLE subjects DROP COLUMN subdivisions; CREATE UNIQUE INDEX subjects_identity ON subjects (kind, heading, coalesce(thesaurus, 0)); ALTER TABLE works ADD COLUMN material_type INTEGER; ALTER TABLE instances ADD COLUMN material_type INTEGER; ALTER TABLE subjects DROP COLUMN row_version; ALTER TABLE agents DROP COLUMN row_version; ALTER TABLE instances DROP COLUMN opac_hidden; DROP TABLE audit_entities; ALTER TABLE audit_log DROP COLUMN at; PRAGMA user_version = 5;",
             )
             .unwrap();
@@ -2533,7 +2568,7 @@ mod catalog_tests {
         if version < WORK_LISTS_VERSION {
             connection
                 .execute_batch(
-                    "DROP TABLE ended_holds; DROP TABLE holds; DROP TABLE account_offsets; DROP TABLE account_lines; DROP TABLE patron_restrictions; DROP TABLE transfers; DROP TABLE returned_loans; DROP TABLE loans; DROP TABLE calendar_dates; DROP TABLE calendar_annual; DROP TABLE calendar_weekly; DROP TABLE circulation_rules; DROP TABLE patrons; DROP TABLE patron_categories; DROP INDEX audit_imports; DROP TABLE saved_list_families; DROP TABLE saved_lists; DROP INDEX audit_by_actor; DROP INDEX audit_by_kind;
+                    "DROP TABLE notice_items; DROP TABLE notices; DROP TABLE overdue_notice_rules; DROP TABLE ended_holds; DROP TABLE holds; DROP TABLE account_offsets; DROP TABLE account_lines; DROP TABLE patron_restrictions; DROP TABLE transfers; DROP TABLE returned_loans; DROP TABLE loans; DROP TABLE calendar_dates; DROP TABLE calendar_annual; DROP TABLE calendar_weekly; DROP TABLE circulation_rules; DROP TABLE patrons; DROP TABLE patron_categories; DROP INDEX audit_imports; DROP TABLE saved_list_families; DROP TABLE saved_lists; DROP INDEX audit_by_actor; DROP INDEX audit_by_kind;
                      DROP INDEX audit_entities_by_seq;",
                 )
                 .unwrap();

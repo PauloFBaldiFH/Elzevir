@@ -126,6 +126,12 @@ impl WriteCommand {
                 "circ.mark_long_overdue"
             }
             Self::Circulation(CirculationCommand::ExpireHolds { .. }) => "circ.expire_holds",
+            Self::Circulation(CirculationCommand::SetOverdueNoticeRule(_)) => {
+                "circ.set_overdue_notice_rules"
+            }
+            Self::Circulation(CirculationCommand::QueueOverdueNotices { .. }) => {
+                "circ.queue_overdue_notices"
+            }
         }
     }
 

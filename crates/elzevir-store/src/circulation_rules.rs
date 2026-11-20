@@ -48,11 +48,17 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CirculationCommand) -> Applied {
         CirculationCommand::MarkLongOverdue { at, settings } => {
             crate::long_overdue::mark_long_overdue(tx.connection(), at, settings)
         }
+        CirculationCommand::SetOverdueNoticeRule(rule) => {
+            crate::notices::set_rule(tx.connection(), rule)
+        }
+        CirculationCommand::QueueOverdueNotices { at } => {
+            crate::notices::queue_overdue_notices(tx.connection(), at)
+        }
     }
 }
 
 /// Confirms that every id of the scope exists.
-fn scope_exists(
+pub(crate) fn scope_exists(
     connection: &Connection,
     scope: &RuleScopeKey,
 ) -> Result<(), CommandFailed<WriteRefusal>> {

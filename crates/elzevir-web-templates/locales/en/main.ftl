@@ -745,6 +745,7 @@ rules-error-repeated = Each rule may appear once.
 rules-error-unknown-branch = That branch no longer exists.
 rules-error-unknown-category = That patron category no longer exists.
 rules-error-unknown-policy = That circulation policy no longer exists.
+notices-error-levels = Each notice level appears once, after at least one day and after the level before it.
 rule-kind-article_request_fee = Article request fee
 rule-kind-article_requests = Article requests
 rule-kind-auto_renew = Automatic renewal
