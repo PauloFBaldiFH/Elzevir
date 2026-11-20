@@ -181,7 +181,7 @@ pub(crate) fn current_session(state: &AppState, headers: &HeaderMap) -> Option<A
 }
 
 /// The value of cookie `name` in the request, if present.
-fn cookie(headers: &HeaderMap, name: &str) -> Option<String> {
+pub(crate) fn cookie(headers: &HeaderMap, name: &str) -> Option<String> {
     headers
         .get_all(header::COOKIE)
         .iter()
@@ -192,16 +192,16 @@ fn cookie(headers: &HeaderMap, name: &str) -> Option<String> {
         .map(|(_, value)| value.to_owned())
 }
 
-fn session_cookie(name: &str, value: &str, secure: bool) -> String {
+pub(crate) fn session_cookie(name: &str, value: &str, secure: bool) -> String {
     let secure = if secure { "; Secure" } else { "" };
     format!("{name}={value}; Path=/; HttpOnly; SameSite=Lax{secure}")
 }
 
-fn expired_cookie(name: &str) -> String {
+pub(crate) fn expired_cookie(name: &str) -> String {
     format!("{name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0")
 }
 
-fn set_cookie(response: &mut Response, cookie: &str) {
+pub(crate) fn set_cookie(response: &mut Response, cookie: &str) {
     if let Ok(value) = HeaderValue::from_str(cookie) {
         response.headers_mut().append(header::SET_COOKIE, value);
     }

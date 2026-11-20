@@ -120,6 +120,7 @@ impl WriteCommand {
             Self::Patrons(PatronCommand::Add(_)) => "patrons.add",
             Self::Patrons(PatronCommand::Update(_)) => "patrons.update",
             Self::Patrons(PatronCommand::View(_)) => "patrons.view",
+            Self::Patrons(PatronCommand::SetPassword { .. }) => "patrons.set_password",
             Self::Circulation(CirculationCommand::SetRules(_)) => "circ.set_rules",
             Self::Circulation(CirculationCommand::ChangeCalendar(_)) => "circ.change_calendar",
             Self::Circulation(CirculationCommand::Checkout(_)) => "circ.checkout",

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Staff sessions, held in memory. A restart signs everyone out; persisting sessions comes
-//! with the institution lifecycle work (open on demand, close when idle).
+//! Staff and patron sessions, held in memory. A restart signs everyone out; persisting
+//! sessions comes with the institution lifecycle work (open on demand, close when idle).
 
 use std::collections::HashMap;
 use std::sync::{Mutex, PoisonError};
@@ -10,26 +10,32 @@ use elzevir_app::staff::StaffIdentity;
 
 use crate::security::random_token;
 
-/// Active staff sessions, keyed by an unguessable id stored in a cookie.
-pub struct Sessions {
-    active: Mutex<HashMap<String, Session>>,
+/// Active sessions of one kind, keyed by an unguessable id stored in a cookie.
+pub struct SessionStore<T> {
+    active: Mutex<HashMap<String, Session<T>>>,
     idle: Duration,
 }
 
-struct Session {
-    identity: StaffIdentity,
+/// The staff's sessions.
+pub type Sessions = SessionStore<StaffIdentity>;
+
+struct Session<T> {
+    identity: T,
     csrf: String,
     last_seen: Instant,
 }
 
 /// A live session as seen by a request.
 #[derive(Debug, Clone)]
-pub(crate) struct ActiveSession {
-    pub(crate) identity: StaffIdentity,
+pub(crate) struct Live<T> {
+    pub(crate) identity: T,
     pub(crate) csrf: String,
 }
 
-impl Sessions {
+/// A live staff session.
+pub(crate) type ActiveSession = Live<StaffIdentity>;
+
+impl<T: Clone> SessionStore<T> {
     /// Sessions expire after `idle` without requests.
     #[must_use]
     pub fn new(idle: Duration) -> Self {
@@ -40,7 +46,7 @@ impl Sessions {
     }
 
     /// Starts a session and returns its id.
-    pub(crate) fn start(&self, identity: StaffIdentity) -> Result<String, getrandom::Error> {
+    pub(crate) fn start(&self, identity: T) -> Result<String, getrandom::Error> {
         let id = random_token()?;
         let csrf = random_token()?;
         let mut active = self.lock();
@@ -58,7 +64,7 @@ impl Sessions {
     }
 
     /// The session with `id`, if it exists and has not expired; refreshes its idle timer.
-    pub(crate) fn touch(&self, id: &str) -> Option<ActiveSession> {
+    pub(crate) fn touch(&self, id: &str) -> Option<Live<T>> {
         let mut active = self.lock();
         let now = Instant::now();
         let session = active.get_mut(id)?;
@@ -67,7 +73,7 @@ impl Sessions {
             return None;
         }
         session.last_seen = now;
-        Some(ActiveSession {
+        Some(Live {
             identity: session.identity.clone(),
             csrf: session.csrf.clone(),
         })
@@ -78,7 +84,7 @@ impl Sessions {
         self.lock().remove(id);
     }
 
-    /// Counts unexpired staff sessions without returning identities or extending idle time.
+    /// Counts unexpired sessions without returning identities or extending idle time.
     #[must_use]
     pub fn count(&self) -> usize {
         self.count_at(Instant::now())
@@ -90,7 +96,7 @@ impl Sessions {
         active.len()
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, Session>> {
+    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, Session<T>>> {
         // A poisoned lock means a request panicked mid-update of one entry; the map is
         // still a valid map, and the worst case is one stale session.
         self.active.lock().unwrap_or_else(PoisonError::into_inner)

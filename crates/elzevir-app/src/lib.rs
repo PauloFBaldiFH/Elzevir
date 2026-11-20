@@ -30,6 +30,7 @@ pub mod memory;
 pub mod notices;
 pub mod opac;
 pub mod parallelism;
+pub mod patron_account;
 pub mod patrons;
 pub mod pending;
 pub mod profiles;

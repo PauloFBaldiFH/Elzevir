@@ -1183,3 +1183,26 @@ home-pending-notices = { $count ->
     [one] 1 notice to print
    *[other] { $count } notices to print
 }
+opac-hello = Hello, { $name }!
+opac-signed-in-hint = You are signed in to your patron account.
+opac-my-account = My account
+opac-sign-out = Sign out
+opac-login-invalid = Card number or password is wrong.
+opac-login-locked = Too many attempts; try again later.
+opac-login-unavailable = Sign-in is unavailable right now; try again shortly.
+opac-account-branch = Library
+opac-account-category = Category
+opac-account-expires = Enrolment valid until
+opac-account-soon = Your loans, fines and holds will show here soon.
+patron-password-title = OPAC password
+patron-password-none = This patron has no password and cannot sign in to the OPAC.
+patron-password-set = This patron can sign in to the OPAC with the card number and a password.
+patron-password-new = New password
+patron-password-hint = At least 8 characters, and not the card number or the CPF. Tell the patron in person; it is never shown again.
+patron-password-save = Set password
+patron-password-remove = Remove OPAC access
+patron-password-saved = The OPAC password was saved.
+patron-password-removed = The patron can no longer sign in to the OPAC.
+patron-password-short = The password needs at least 8 characters.
+patron-password-long = The password can have at most 128 characters.
+patron-password-guessable = The password cannot be the card number or the CPF.

@@ -80,7 +80,7 @@ impl RecordCache {
 
 /// `GET /`: the home page, with the notice board, the Instances catalogued last and the
 /// patron sign-in (a placeholder until task 3.10).
-pub(crate) async fn home(State(state): State<AppState>) -> Response {
+pub(crate) async fn home(State(state): State<AppState>, headers: HeaderMap) -> Response {
     let ports = state.inner.opac.clone();
     let read = tokio::task::spawn_blocking(move || opac::recent(&*ports.catalog)).await;
     // The strip is an extra: when the catalog cannot be read, the page still offers search.
@@ -89,7 +89,8 @@ pub(crate) async fn home(State(state): State<AppState>) -> Response {
         Ok(Err(_)) | Err(_) => Vec::new(),
     };
     let notes = crate::board::opac_cards(&state).await;
-    render(&OpacHome {
+    let (panel, csrf) = crate::patron_login::panel(&state, &headers);
+    let page = render(&OpacHome {
         t: &state.inner.i18n,
         notes,
         recent: recent
@@ -102,7 +103,9 @@ pub(crate) async fn home(State(state): State<AppState>) -> Response {
                 call_number: instance.call_number,
             })
             .collect(),
-    })
+        panel,
+    });
+    crate::patron_login::with_panel_cookie(&state, page, csrf.as_deref())
 }
 
 /// Query string of `/search`.

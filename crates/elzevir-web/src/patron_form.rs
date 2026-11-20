@@ -14,7 +14,7 @@ use elzevir_app::patrons::{
 use elzevir_app::staff::Permission;
 use elzevir_domain::catalog::BranchId;
 use elzevir_domain::patron::{Cpf, PatronCategoryId, PatronId};
-use elzevir_web_templates::{PatronFormValues, StaffPatronForm};
+use elzevir_web_templates::{PasswordSection, PatronFormValues, StaffPatronForm};
 use jiff::civil::Date;
 use serde::Deserialize;
 
@@ -23,7 +23,7 @@ use crate::security::tokens_match;
 use crate::session::ActiveSession;
 use crate::{AppState, render};
 
-fn manages(session: &ActiveSession) -> bool {
+pub(crate) fn manages(session: &ActiveSession) -> bool {
     session.identity.can(Permission::Patrons)
 }
 
@@ -128,7 +128,7 @@ impl PatronForm {
 }
 
 /// The stored patron in the form; the CPF whole, only here (spec, item 8).
-fn stored_values(patron: &Patron) -> PatronFormValues {
+pub(crate) fn stored_values(patron: &Patron) -> PatronFormValues {
     let fields = &patron.fields;
     let day = |day: Option<Date>| day.map(|day| day.to_string()).unwrap_or_default();
     PatronFormValues {
@@ -153,17 +153,18 @@ fn stored_values(patron: &Patron) -> PatronFormValues {
 }
 
 /// What a form page shows besides the values.
-struct FormPage {
-    action: String,
-    title: &'static str,
-    row_version: i64,
-    values: PatronFormValues,
-    saved: bool,
-    refused: Option<&'static str>,
-    status: StatusCode,
+pub(crate) struct FormPage {
+    pub(crate) action: String,
+    pub(crate) title: &'static str,
+    pub(crate) row_version: i64,
+    pub(crate) values: PatronFormValues,
+    pub(crate) saved: bool,
+    pub(crate) refused: Option<&'static str>,
+    pub(crate) status: StatusCode,
+    pub(crate) password: Option<PasswordSection>,
 }
 
-async fn form_page(
+pub(crate) async fn form_page(
     state: &AppState,
     session: &ActiveSession,
     desk: Arc<dyn PatronDesk>,
@@ -203,6 +204,7 @@ async fn form_page(
             .collect(),
         saved: page.saved,
         refused,
+        password: page.password,
     });
     *response.status_mut() = page.status;
     response
@@ -233,6 +235,7 @@ pub(crate) async fn new_patron(State(state): State<AppState>, headers: HeaderMap
         saved: false,
         refused: None,
         status: StatusCode::OK,
+        password: None,
     };
     form_page(&state, &session, desk, page).await
 }
@@ -258,6 +261,7 @@ pub(crate) async fn add_patron(
         saved: false,
         refused: Some(refusal.message_key()),
         status: status_of(refusal),
+        password: None,
     };
     let fields = match form.fields(today(&state)) {
         Ok(fields) => fields,
@@ -286,10 +290,12 @@ pub(crate) async fn add_patron(
 #[derive(Deserialize)]
 pub(crate) struct EditParams {
     saved: Option<String>,
+    /// `1` after a password was set, `0` after it was taken away.
+    senha: Option<String>,
 }
 
 /// Logs the opening, then reads the patron (the form shows the whole CPF).
-async fn viewed(
+pub(crate) async fn viewed(
     desk: &Arc<dyn PatronDesk>,
     session: &ActiveSession,
     id: PatronId,
@@ -332,6 +338,12 @@ pub(crate) async fn edit_patron(
         saved: params.saved.is_some(),
         refused: None,
         status: StatusCode::OK,
+        password: Some(crate::patron_password::section(
+            id,
+            patron.has_password,
+            crate::patron_password::notice(params.senha.as_deref()),
+            None,
+        )),
     };
     form_page(&state, &session, desk, page).await
 }
@@ -366,6 +378,12 @@ pub(crate) async fn update_patron(
         saved: false,
         refused: Some(refusal.message_key()),
         status: status_of(refusal),
+        password: Some(crate::patron_password::section(
+            id,
+            stored.has_password,
+            None,
+            None,
+        )),
     };
     let fields = match form.fields(stored.fields.enrolled) {
         Ok(fields) => fields,

@@ -954,6 +954,23 @@ a.module-card:hover, a.module-card:focus-visible { transform: translateY(-2px); 
 .login-placeholder input { min-height: 42px; border-color: var(--elzevir-color-border-strong); border-radius: 9px; }
 .login-placeholder button { min-height: 42px; border-radius: 9px; font-weight: 700; }
 .login-placeholder :disabled { cursor: not-allowed; opacity: 0.6; }
+/* Patron sign-in and account (docs/specs/opac/conta-do-leitor.md). */
+.patron-login-form { display: grid; gap: 12px; margin-top: 16px; }
+.patron-login-form input { min-height: 42px; border-color: var(--elzevir-color-border-strong); border-radius: 9px; }
+.patron-login-form button { min-height: 42px; border-radius: 9px; font-weight: 700; justify-self: stretch; }
+.login-error { margin: 12px 0 0; padding: 8px 11px; border: 1px solid var(--elzevir-color-error); border-radius: 9px; color: var(--elzevir-color-error); font-size: 13.5px; }
+.patron-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; }
+.patron-actions form { margin: 0; }
+.button-link { display: inline-block; padding: 0.5rem 1rem; border-radius: var(--elzevir-radius); background: var(--elzevir-color-primary); color: var(--elzevir-color-primary-text); font-weight: 700; text-decoration: none; }
+button.quiet { border: 1px solid var(--elzevir-color-border-strong); background: transparent; color: var(--elzevir-color-text); }
+.opac-narrow { max-width: 30rem; margin: 32px auto; }
+.account-card h1 { margin: 0 0 14px; font-size: 22px; }
+.account-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 18px; margin: 0 0 16px; }
+.account-facts dt { color: var(--elzevir-color-muted); }
+.account-facts dd { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
+.patron-password { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--elzevir-color-border); }
+.patron-password h2 { margin: 0 0 6px; font-size: 18px; }
+.patron-password form { margin-top: 10px; }
 @media (max-width: 64rem) { .opac-home { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .opac-home .recent { grid-column: 1 / -1; grid-row: 1; } }
 @media (max-width: 46rem) { .opac-home { grid-template-columns: minmax(0, 1fr); } }
 @media (prefers-reduced-motion: reduce) { .recent-card a { transition: none; } .recent-card a:hover { transform: none; } }

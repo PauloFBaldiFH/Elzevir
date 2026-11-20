@@ -776,3 +776,26 @@ home-pending-notices = { $count ->
     [one] 1 aviso para imprimir
    *[other] { $count } avisos para imprimir
 }
+opac-hello = Olá, { $name }!
+opac-signed-in-hint = Você entrou na sua conta de leitor.
+opac-my-account = Minha conta
+opac-sign-out = Sair
+opac-login-invalid = Número do cartão ou senha incorretos.
+opac-login-locked = Muitas tentativas; tente de novo mais tarde.
+opac-login-unavailable = A entrada está indisponível agora; tente de novo em instantes.
+opac-account-branch = Biblioteca
+opac-account-category = Categoria
+opac-account-expires = Inscrição válida até
+opac-account-soon = Seus empréstimos, débitos e reservas vão aparecer aqui em breve.
+patron-password-title = Senha do OPAC
+patron-password-none = Este leitor não tem senha e não entra no OPAC.
+patron-password-set = Este leitor entra no OPAC com o número do cartão e uma senha.
+patron-password-new = Nova senha
+patron-password-hint = Pelo menos 8 caracteres, diferente do número do cartão e do CPF. Informe ao leitor pessoalmente; ela não aparece de novo.
+patron-password-save = Definir senha
+patron-password-remove = Tirar o acesso ao OPAC
+patron-password-saved = A senha do OPAC foi salva.
+patron-password-removed = O leitor não entra mais no OPAC.
+patron-password-short = A senha precisa de pelo menos 8 caracteres.
+patron-password-long = A senha pode ter no máximo 128 caracteres.
+patron-password-guessable = A senha não pode ser o número do cartão nem o CPF.

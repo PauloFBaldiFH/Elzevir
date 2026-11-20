@@ -3,6 +3,9 @@
 //! (docs/specs/circulacao/leitores.md, items 10 to 14).
 
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
+use elzevir_app::patron_account::{
+    PatronAccount, PatronAccountError, PatronAccounts, PatronCredentials,
+};
 use elzevir_app::patrons::{
     MAX_SEARCH_ROWS, Patron, PatronCategory, PatronCommand, PatronDesk, PatronDeskError,
     PatronFields, PatronOutput, PatronQuery, PatronRow, ReadingHistory,
@@ -33,7 +36,8 @@ fn optional_day(text: Option<&str>) -> rusqlite::Result<Option<Date>> {
 const PATRON: &str = "SELECT p.id, p.row_version, p.cardnumber, p.surname, p.first_name, p.cpf,
                              p.date_of_birth, p.email, p.phone, p.address, p.branch_id,
                              p.category_id, p.enrolled, p.expires, p.staff_note,
-                             p.reading_history, b.name, c.name
+                             p.reading_history, b.name, c.name,
+                             p.password_hash IS NOT NULL
                       FROM patrons p
                       JOIN branches b ON b.id = p.branch_id
                       JOIN patron_categories c ON c.id = p.category_id
@@ -67,6 +71,7 @@ fn patron_of(row: &Row<'_>) -> rusqlite::Result<Patron> {
         },
         branch_name: row.get(16)?,
         category_name: row.get(17)?,
+        has_password: row.get(18)?,
     })
 }
 
@@ -176,6 +181,50 @@ impl PatronDesk for ElzevirStore {
                 rows.collect::<rusqlite::Result<Vec<_>>>()
             })
             .map_err(unavailable)
+    }
+}
+
+impl PatronAccounts for ElzevirStore {
+    fn credentials(
+        &self,
+        cardnumber: &str,
+    ) -> Result<Option<PatronCredentials>, PatronAccountError> {
+        self.readers()
+            .read(|c| {
+                c.query_row(
+                    "SELECT id, coalesce(nullif(first_name, ''), surname), password_hash
+                     FROM patrons WHERE cardnumber = ?1",
+                    params![cardnumber],
+                    |row| {
+                        Ok(PatronCredentials {
+                            id: PatronId(row.get(0)?),
+                            greeting: row.get(1)?,
+                            password_hash: row.get(2)?,
+                        })
+                    },
+                )
+                .optional()
+            })
+            .map_err(|error: rusqlite::Error| PatronAccountError(error.to_string()))
+    }
+
+    fn account(&self, id: PatronId) -> Result<Option<PatronAccount>, PatronAccountError> {
+        self.readers()
+            .read(|c| c.query_row(PATRON, params![id.0], patron_of).optional())
+            .map_err(|error: rusqlite::Error| PatronAccountError(error.to_string()))
+            .map(|patron| {
+                patron.map(|patron| PatronAccount {
+                    name: patron.fields.first_name.as_deref().map_or_else(
+                        || patron.fields.surname.clone(),
+                        |first| format!("{first} {}", patron.fields.surname),
+                    ),
+                    cardnumber: patron.fields.cardnumber,
+                    branch_name: patron.branch_name,
+                    category_name: patron.category_name,
+                    // A stored patron always has its expiry (`patrons.expires` is NOT NULL).
+                    expires: patron.fields.expires.unwrap_or(patron.fields.enrolled),
+                })
+            })
     }
 }
 

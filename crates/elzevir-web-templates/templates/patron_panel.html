@@ -1,0 +1,32 @@
+{# The "Patron account" panel of the OPAC (docs/specs/opac/conta-do-leitor.md). #}
+<section class="panel patron-login" aria-labelledby="login-title">
+  <p class="eyebrow">{{ t.get("opac-account") }}</p>
+  {% match panel %}
+  {% when PatronPanel::Soon %}
+  <h2 id="login-title">{{ t.get("opac-login-title") }}</h2>
+  <p class="muted">{{ t.get("opac-login-hint") }}</p>
+  <form class="login-placeholder" aria-describedby="login-soon">
+    <input type="text" disabled placeholder="{{ t.get("opac-login-card") }}" aria-label="{{ t.get("opac-login-card") }}">
+    <input type="password" disabled placeholder="{{ t.get("opac-login-password") }}" aria-label="{{ t.get("opac-login-password") }}">
+    <button type="button" disabled>{{ t.get("opac-login-submit") }}</button>
+  </form>
+  <p class="muted" id="login-soon">{{ t.get("opac-login-soon") }}</p>
+  {% when PatronPanel::SignIn with { csrf, card, error } %}
+  <h2 id="login-title">{{ t.get("opac-login-title") }}</h2>
+  <p class="muted">{{ t.get("opac-login-hint") }}</p>
+  {% if let Some(key) = error %}<p class="login-error" role="alert">{{ t.get(key) }}</p>{% endif %}
+  <form class="patron-login-form" method="post" action="/conta/entrar">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="text" name="card" value="{{ card }}" required maxlength="32" autocomplete="username" inputmode="numeric" placeholder="{{ t.get("opac-login-card") }}" aria-label="{{ t.get("opac-login-card") }}">
+    <input type="password" name="password" required maxlength="128" autocomplete="current-password" placeholder="{{ t.get("opac-login-password") }}" aria-label="{{ t.get("opac-login-password") }}">
+    <button type="submit">{{ t.get("opac-login-submit") }}</button>
+  </form>
+  {% when PatronPanel::SignedIn with { greeting, csrf } %}
+  <h2 id="login-title">{{ t.get_with("opac-hello", "name", greeting) }}</h2>
+  <p class="muted">{{ t.get("opac-signed-in-hint") }}</p>
+  <div class="patron-actions">
+    <a class="button-link" href="/conta">{{ t.get("opac-my-account") }}</a>
+    <form method="post" action="/conta/sair"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="quiet">{{ t.get("opac-sign-out") }}</button></form>
+  </div>
+  {% endmatch %}
+</section>

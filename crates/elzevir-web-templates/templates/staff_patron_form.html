@@ -30,5 +30,26 @@
   <label><input type="checkbox" name="history_kept" value="1"{% if values.history_kept %} checked{% endif %}> {{ t.get("patron-history-consent") }}</label>
   <button type="submit">{{ t.get("registries-save") }}</button>
 </form>
+{% if let Some(section) = password %}
+<section class="patron-password" aria-labelledby="password-title">
+  <h2 id="password-title">{{ t.get("patron-password-title") }}</h2>
+  {% if let Some(key) = section.notice %}<p class="codes-alert codes-saved" role="status">{{ t.get(key) }}</p>{% endif %}
+  {% if let Some(key) = section.error %}<p class="codes-alert codes-refused" role="alert">{{ t.get(key) }}</p>{% endif %}
+  <p class="form-hint">{% if section.has_password %}{{ t.get("patron-password-set") }}{% else %}{{ t.get("patron-password-none") }}{% endif %}</p>
+  <form method="post" action="{{ section.action }}" class="registry-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>{{ t.get("patron-password-new") }} <input type="password" name="password" minlength="8" maxlength="128" autocomplete="new-password" required></label>
+    <p class="form-hint">{{ t.get("patron-password-hint") }}</p>
+    <button type="submit">{{ t.get("patron-password-save") }}</button>
+  </form>
+  {% if section.has_password %}
+  <form method="post" action="{{ section.action }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="remove" value="1">
+    <button type="submit" class="quiet">{{ t.get("patron-password-remove") }}</button>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
 </div>
 {% endblock %}

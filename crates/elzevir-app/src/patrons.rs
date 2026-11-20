@@ -33,6 +33,14 @@ pub enum PatronCommand {
     /// Records that a staff member opened the patron's record; changes nothing else
     /// (interface §18.1: who saw which patron, and when).
     View(PatronId),
+    /// Sets the patron's OPAC password, or takes it away (docs/specs/opac/conta-do-leitor.md,
+    /// items 1 to 4). Carries only the hash, never the password.
+    SetPassword {
+        /// The patron.
+        patron: PatronId,
+        /// The Argon2id hash; `None` takes the OPAC access away.
+        password_hash: Option<String>,
+    },
 }
 
 /// One change to the patron categories.
@@ -123,6 +131,8 @@ pub enum PatronOutput {
     Updated(PatronId),
     /// The opening of the record was logged.
     Viewed(PatronId),
+    /// The patron's OPAC password was set or taken away.
+    PasswordSet(PatronId),
 }
 
 /// A field of the patron form, to name the one refused.
@@ -313,6 +323,51 @@ pub struct Patron {
     pub branch_name: String,
     /// Name of the category.
     pub category_name: String,
+    /// Whether the patron has an OPAC password.
+    pub has_password: bool,
+}
+
+/// Shortest OPAC password (docs/specs/opac/conta-do-leitor.md, item 3).
+pub const MIN_PASSWORD_CHARS: usize = 8;
+
+/// Longest OPAC password; bounds the work of hashing.
+pub const MAX_PASSWORD_CHARS: usize = 128;
+
+/// Why a patron's OPAC password is refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum PasswordRefusal {
+    /// Shorter than [`MIN_PASSWORD_CHARS`].
+    #[error("the password is too short")]
+    TooShort,
+    /// Longer than [`MAX_PASSWORD_CHARS`].
+    #[error("the password is too long")]
+    TooLong,
+    /// The same as the card number or the CPF.
+    #[error("the password repeats the card number or the CPF")]
+    Guessable,
+}
+
+/// Checks a new OPAC password for the patron with `fields` (spec, item 3).
+///
+/// # Errors
+/// [`PasswordRefusal`] with the rule it breaks.
+pub fn check_password(password: &str, fields: &PatronFields) -> Result<(), PasswordRefusal> {
+    let length = password.chars().count();
+    if length < MIN_PASSWORD_CHARS {
+        return Err(PasswordRefusal::TooShort);
+    }
+    if length > MAX_PASSWORD_CHARS {
+        return Err(PasswordRefusal::TooLong);
+    }
+    let digits: String = password.chars().filter(char::is_ascii_digit).collect();
+    let same_cpf = fields
+        .cpf
+        .as_ref()
+        .is_some_and(|cpf| digits.len() == password.len() && digits == cpf.digits());
+    if password == fields.cardnumber || same_cpf {
+        return Err(PasswordRefusal::Guessable);
+    }
+    Ok(())
 }
 
 /// One line of a patron search.
@@ -550,5 +605,32 @@ mod tests {
             create("Estudante", Enrolment::Months(1000)),
             Err(PatronRefusal::BadCategory)
         );
+    }
+
+    #[test]
+    fn a_password_is_long_enough_and_not_the_card_or_the_cpf() {
+        let mut fields = fields();
+        fields.cardnumber = "12345678".to_owned();
+        fields.cpf = Some(Cpf::parse("529.982.247-25").unwrap());
+        assert_eq!(
+            check_password("1234567", &fields),
+            Err(PasswordRefusal::TooShort)
+        );
+        assert_eq!(
+            check_password(&"a".repeat(MAX_PASSWORD_CHARS + 1), &fields),
+            Err(PasswordRefusal::TooLong)
+        );
+        assert!(check_password(&"á".repeat(MAX_PASSWORD_CHARS), &fields).is_ok());
+        assert_eq!(
+            check_password("12345678", &fields),
+            Err(PasswordRefusal::Guessable)
+        );
+        assert_eq!(
+            check_password("52998224725", &fields),
+            Err(PasswordRefusal::Guessable)
+        );
+        // The CPF inside a longer password is fine.
+        assert!(check_password("cpf52998224725", &fields).is_ok());
+        assert!(check_password("leitura-segura", &fields).is_ok());
     }
 }

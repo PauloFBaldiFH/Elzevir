@@ -144,7 +144,8 @@ pub enum LoginRefused {
 
 /// Hash compared against when the login is unknown, so that response time does not reveal
 /// which logins exist.
-static DECOY_HASH: LazyLock<Option<String>> = LazyLock::new(|| hash_password("decoy").ok());
+pub(crate) static DECOY_HASH: LazyLock<Option<String>> =
+    LazyLock::new(|| hash_password("decoy").ok());
 
 /// Checks `login` and `password` and returns the staff identity.
 ///
