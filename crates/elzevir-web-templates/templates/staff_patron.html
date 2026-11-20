@@ -44,4 +44,30 @@
   </ol>
 </section>
 </form>
+{% if !account.is_empty() %}
+<section class="patron-account" aria-labelledby="account-title">
+  <h2 id="account-title">{{ t.get("account-title") }}</h2>
+  <form method="post" action="/equipe/leitores/{{ id }}/conta">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% for desk in desks %}{% if desk.selected %}<input type="hidden" name="desk" value="{{ desk.id }}">{% endif %}{% endfor %}
+  <table class="account-lines">
+    <thead><tr><th scope="col"><span class="visually-hidden">{{ t.get("account-choose") }}</span></th><th scope="col">{{ t.get("account-day") }}</th><th scope="col">{{ t.get("account-description") }}</th><th scope="col">{{ t.get("account-amount") }}</th><th scope="col">{{ t.get("account-outstanding") }}</th></tr></thead>
+    <tbody>
+    {% for line in account %}
+      <tr><td>{% if line.payable %}<input type="checkbox" name="line" value="{{ line.id }}" aria-label="{{ t.get("account-choose") }}">{% endif %}</td><td>{{ line.day }}</td><td>{{ line.description }}</td><td class="account-money">{{ line.amount }}</td><td class="account-money">{{ line.outstanding }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if owed.is_some() %}
+  <p class="account-pay">
+    <label for="account-amount">{{ t.get("account-amount-to-pay") }}</label>
+    <input type="text" id="account-amount" name="amount" inputmode="decimal" maxlength="12" autocomplete="off">
+    <button type="submit" name="op" value="pay">{{ t.get("account-pay") }}</button>
+    <button type="submit" name="op" value="writeoff">{{ t.get("account-write-off") }}</button>
+  </p>
+  <p class="form-hint">{{ t.get("account-hint") }}</p>
+  {% endif %}
+  </form>
+</section>
+{% endif %}
 {% endblock %}

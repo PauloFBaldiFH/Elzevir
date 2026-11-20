@@ -26,6 +26,7 @@ use elzevir_web_templates::{DeskOption, I18n, LoanLine, Notice, StaffCheckin, St
 use jiff::Zoned;
 use serde::Deserialize;
 
+use crate::patron_account::account_rows;
 use crate::patrons::{failed, full_name, record_rows, shown, today};
 use crate::security::tokens_match;
 use crate::session::ActiveSession;
@@ -33,14 +34,14 @@ use crate::{AppState, render};
 
 /// What the last circulation action left on the page.
 #[derive(Default)]
-struct Outcome {
-    notices: Vec<Notice>,
+pub(crate) struct Outcome {
+    pub(crate) notices: Vec<Notice>,
     /// The barcode to keep in the box, when a checkout waits for confirmation.
-    barcode: String,
-    confirm: bool,
-    desk: Option<BranchId>,
+    pub(crate) barcode: String,
+    pub(crate) confirm: bool,
+    pub(crate) desk: Option<BranchId>,
     /// The barcode just lent, whose cord is drawn.
-    lent: Option<String>,
+    pub(crate) lent: Option<String>,
 }
 
 pub(crate) fn now(state: &AppState) -> Zoned {
@@ -57,14 +58,14 @@ fn due_text(t: &I18n, due: &Zoned) -> String {
     }
 }
 
-fn ok(text: String) -> Notice {
+pub(crate) fn ok(text: String) -> Notice {
     Notice {
         refused: false,
         text,
     }
 }
 
-fn refused(text: String) -> Notice {
+pub(crate) fn refused(text: String) -> Notice {
     Notice {
         refused: true,
         text,
@@ -227,6 +228,10 @@ pub(crate) fn routes() -> axum::Router<AppState> {
         .route("/equipe/leitores/{id}", get(record))
         .route("/equipe/leitores/{id}/circulacao", post(circulate))
         .route(
+            "/equipe/leitores/{id}/conta",
+            post(crate::patron_account::pay),
+        )
+        .route(
             "/equipe/circulacao/devolucao",
             get(checkin_desk).post(check_in),
         )
@@ -270,7 +275,7 @@ pub(crate) async fn record(
     }
 }
 
-async fn page(
+pub(crate) async fn page(
     state: &AppState,
     session: &ActiveSession,
     (patrons, loans): (Arc<dyn PatronDesk>, Arc<dyn LoanDesk>),
@@ -288,10 +293,11 @@ async fn page(
         let current = loans.loans(id).map_err(unavailable)?;
         let suspended = loans.suspension(id, day).map_err(unavailable)?;
         let owed = loans.owed(id).map_err(unavailable)?;
-        Ok(Some((patron, current, suspended, owed)))
+        let account = loans.account(id).map_err(unavailable)?;
+        Ok(Some((patron, current, suspended, (owed, account))))
     })
     .await;
-    let (patron, current, suspended, owed) = match read {
+    let (patron, current, suspended, (owed, account)) = match read {
         Ok(Ok(Some(read))) => read,
         Ok(Ok(None)) => return StatusCode::NOT_FOUND.into_response(),
         Ok(Err(error)) => return failed(&error),
@@ -334,6 +340,7 @@ async fn page(
         barcode: outcome.barcode,
         notices: outcome.notices,
         confirm: outcome.confirm,
+        account: account_rows(t, &account),
     });
     if response.status() == StatusCode::OK {
         *response.status_mut() = status;

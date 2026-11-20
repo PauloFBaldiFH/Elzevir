@@ -20,12 +20,14 @@ use elzevir_app::catalog::{
 use elzevir_app::circulation_rules::{CirculationCommand, RuleChange};
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{StaffCommand, WriteCommand, WriteOutput};
+use elzevir_app::loans::{CheckinRequest, CheckoutRequest};
 use elzevir_app::patrons::{
     CategoryChange, PatronCommand, PatronFields, PatronOutput, ReadingHistory,
 };
 use elzevir_app::staff::{Permission, hash_password};
+use elzevir_domain::catalog::BranchId;
 use elzevir_domain::circulation_rules::RuleScopeKey;
-use elzevir_domain::patron::{Cpf, Enrolment};
+use elzevir_domain::patron::{Cpf, Enrolment, PatronId};
 use elzevir_store::{ElzevirHandler, ElzevirStore, StoreConfig};
 use jiff::civil::date;
 
@@ -634,5 +636,102 @@ fn an_item_is_lent_from_its_pill_and_the_arrow_crosses_the_wall() {
     // Lent already: the pill stays yellow and offers no box.
     let again = check_out("000123");
     assert!(!again.contains("lend-box"));
+    drop(server);
+}
+
+/// Lends "0001" to Ana on 2 November and takes it back on 19 November, ten days late at
+/// 0.50 a day: a fine of 5.00.
+fn late_return(data: &Path, ana: i64) {
+    let store = open(data);
+    submit(
+        &store,
+        WriteCommand::Circulation(CirculationCommand::SetRules(RuleChange {
+            scope: RuleScopeKey::default(),
+            values: vec![
+                ("fine".to_owned(), Some("0.50".to_owned())),
+                ("chargeperiod".to_owned(), Some("1".to_owned())),
+            ],
+        })),
+    );
+    let at = |day: &str| -> jiff::Zoned { format!("{day}[America/Sao_Paulo]").parse().unwrap() };
+    submit(
+        &store,
+        WriteCommand::Circulation(CirculationCommand::Checkout(CheckoutRequest {
+            patron: PatronId(ana),
+            barcode: "0001".to_owned(),
+            desk: BranchId(1),
+            on_site: false,
+            confirmed: true,
+            at: at("2026-11-02T10:00:00-03:00"),
+        })),
+    );
+    submit(
+        &store,
+        WriteCommand::Circulation(CirculationCommand::Checkin(CheckinRequest {
+            barcode: "0001".to_owned(),
+            desk: BranchId(1),
+            at: at("2026-11-19T10:00:00-03:00"),
+        })),
+    );
+    store.shutdown().unwrap();
+}
+
+#[test]
+fn the_account_shows_the_fine_and_takes_payments_and_write_offs() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    stock(data.path());
+    late_return(data.path(), ana);
+    let (server, address) = start(data.path());
+    let cir = sign_in(address, "cir");
+    let record = format!("/equipe/leitores/{ana}");
+    let page = request(address, "GET", &record, &cir, "");
+    assert_status(&page, 200);
+    assert!(
+        page.contains("Owes 5.00.") && page.contains("Overdue fine · 0001"),
+        "{page}"
+    );
+    let line = page
+        .split_once("name=\"line\" value=\"")
+        .unwrap()
+        .1
+        .split_once('"')
+        .unwrap()
+        .0
+        .to_owned();
+    let (token, desk) = (csrf(&page).to_owned(), selected_desk(&page).to_owned());
+    let form = format!("{cir}Content-Type: application/x-www-form-urlencoded\r\n");
+    let action = format!("{record}/conta");
+    let post = |body: &str| {
+        request(
+            address,
+            "POST",
+            &action,
+            &form,
+            &format!("csrf={token}&desk={desk}&{body}"),
+        )
+    };
+    assert_status(&post("op=pay&amount=abc"), 422);
+    let over = post(&format!("op=pay&amount=6&line={line}"));
+    assert_status(&over, 422);
+    assert!(over.contains("more than what is owed"));
+    let paid = post("op=pay&amount=2%2C50");
+    assert_status(&paid, 200);
+    assert!(paid.contains("Paid 2.50. The patron owes 2.50."), "{paid}");
+    let written = post(&format!("op=writeoff&amount=2.50&line={line}"));
+    assert_status(&written, 200);
+    assert!(written.contains("Wrote off 2.50. The patron owes 0.00."));
+    assert!(!written.contains("Owes ") && !written.contains("name=\"amount\""));
+    // The token and the circulation permission are needed.
+    assert_status(
+        &request(
+            address,
+            "POST",
+            &action,
+            &form,
+            &format!("csrf=forged&desk={desk}&op=pay&amount=1"),
+        ),
+        403,
+    );
     drop(server);
 }

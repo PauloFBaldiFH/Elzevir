@@ -31,6 +31,7 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CirculationCommand) -> Applied {
         CirculationCommand::Checkout(request) => crate::loans::checkout(tx.connection(), request),
         CirculationCommand::Checkin(request) => crate::returns::checkin(tx.connection(), request),
         CirculationCommand::Renew(request) => crate::renewals::renew(tx.connection(), request),
+        CirculationCommand::Pay(request) => crate::accounts::pay(tx.connection(), request),
     }
 }
 
