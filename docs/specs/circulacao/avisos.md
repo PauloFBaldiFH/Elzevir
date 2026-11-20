@@ -1,6 +1,6 @@
 # Avisos
 
-> Status: tarefa 3.9, partes a (regras de aviso de atraso e fila de avisos) e b (suspensão por aviso). Base: Koha 26.05.05. As partes seguintes trazem os modelos editáveis e o envio por SMTP, o aviso de reserva disponível e o recibo, e as telas.
+> Status: tarefa 3.9, partes a (regras de aviso de atraso e fila de avisos), b (suspensão por aviso) e c (envio por e-mail). Base: Koha 26.05.05. As partes seguintes trazem os modelos editáveis e a tela da fila, o aviso de reserva disponível e o recibo.
 
 ## 1. Comportamento
 
@@ -30,17 +30,26 @@
 16. Essa suspensão se soma à suspensão por devolução atrasada ([suspensao.md](suspensao.md)): o leitor tem no máximo uma de cada tipo, e o empréstimo e a reserva são recusados enquanto qualquer uma vale; com a suspensão por atraso, a recusa é a sem fim (`USERBLOCKEDNOENDDATE`).
 17. Ela só termina quando a equipe a retira (item 12 de [suspensao.md](suspensao.md)); devolver os exemplares não a retira (`AutoRemoveOverduesRestrictions` = `no`, o padrão). Como a corrida roda uma vez por dia, a suspensão retirada não volta no mesmo dia.
 
+### Envio por e-mail
+
+18. O servidor de e-mail fica em `[notices.email]` no `elzevir.toml`: remetente (`from`), servidor (`host`), porta (padrão 465 com `tls`, 587 com `starttls`, 25 com `none`), proteção (`security`, padrão `starttls`) e, quando o servidor pede, usuário (`user`) e o nome da variável de ambiente com a senha (`password_env`). A senha não fica no arquivo e nunca aparece em log. Sem a seção, nada é enviado e os avisos ficam pendentes.
+19. A cada 15 minutos (o cron do Koha para `process_message_queue.pl`), o servidor envia até 100 avisos de e-mail pendentes, dos mais antigos aos mais novos.
+20. O texto é escrito no envio, na língua do servidor: assunto pelo nível ("Exemplares em atraso", "Segundo aviso", "Último aviso") com o nome da unidade, e corpo com o nome do leitor, a unidade e uma linha por exemplar (título, código de barras, vencimento). A resposta vai para o e-mail da unidade, quando ela tem um.
+21. Aviso aceito pelo servidor fica "enviado"; recusado de vez (endereço inválido, resposta 5xx) fica "falho" e não é tentado de novo. Servidor fora do ar ou recusa temporária deixam o aviso pendente, e o envio para até a próxima vez.
+22. Avisos impressos continuam pendentes; a tela da fila vem depois.
+
 ## 2. Origem no Koha
 
 - `misc/cronjobs/overdue_notices.pl` com `-t` (`debian/koha-common.cron.daily`), `C4::Overdues::GetBranchcodesWithOverdueRules`, `GetOverdueMessageTransportTypes`.
 - `tools/overduerules.pl`: dias numéricos, em ordem crescente; nível com dias e sem aviso nem suspensão é recusado.
 - Tabelas `overduerules` e `overduerules_transport_types`; `message_queue` (`C4::Letters::EnqueueLetter`).
+- `misc/cronjobs/process_message_queue.pl` (`*/15` em `debian/koha-common.cron.d`), `C4::Letters::SendQueuedMessages` e `_set_message_status`.
 - `Koha::Patron::Debarments::AddUniqueDebarment`, `UpdateBorrowerDebarmentFlags` (`9999-12-31` quando alguma restrição não tem fim), `DelUniqueDebarment`.
 - `Koha::Calendar::days_between` (com `OverdueNoticeCalendar`), que tira os dias fechados contando as duas pontas.
 
 ## 3. Paridade
 
-`exigida` nos dias de disparo. A corrida do Koha é um script de cron, que o gravador não alcança pela API; a prova é por testes contra o código lido: `crates/elzevir-domain/src/notice.rs` (dias com e sem calendário, nível que dispara, meios) e `crates/elzevir-store/tests/notices.rs` (regras da unidade e de qualquer unidade, categoria sem regra, atraso exato, um aviso por dia, e-mail que vira impresso, exemplar perdido fora, nível que suspende sem meio, empréstimo recusado até a equipe retirar, corrida repetida no dia que não suspende de novo).
+`exigida` nos dias de disparo. A corrida do Koha é um script de cron, que o gravador não alcança pela API; a prova é por testes contra o código lido: `crates/elzevir-domain/src/notice.rs` (dias com e sem calendário, nível que dispara, meios) e `crates/elzevir-store/tests/notices.rs` (regras da unidade e de qualquer unidade, categoria sem regra, atraso exato, um aviso por dia, e-mail que vira impresso, exemplar perdido fora, nível que suspende sem meio, empréstimo recusado até a equipe retirar, corrida repetida no dia que não suspende de novo, avisos de e-mail pendentes com seus exemplares, marcados como enviados). O envio é testado contra um servidor SMTP falso em `crates/elzevir/src/notice_mail.rs` (aceito, recusado, fora do ar) e o texto nas duas línguas.
 
 ## 4. Casos de borda
 
@@ -54,6 +63,7 @@
 
 - No Koha, a categoria precisa de `overduenoticerequired` e de uma linha em `overduerules`. No Elzevir basta a regra: categoria sem aviso é categoria sem regra. Uma importação traduz `overduenoticerequired` desligado em nenhuma regra.
 - O Koha escolhe um modelo (`letter1`..`letter3`) por nível; no Elzevir o modelo é o do nível (parte dos modelos).
+- O Koha guarda o texto pronto em `message_queue` ao enfileirar; o Elzevir escreve o texto no envio, com os dados guardados na fila.
 - SMS e os outros meios do Koha vêm depois, com WhatsApp e Telegram (doc 03, linha 3.9).
 
 ## 6. Desvios

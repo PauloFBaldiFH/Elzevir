@@ -51,6 +51,11 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CirculationCommand) -> Applied {
         CirculationCommand::SetOverdueNoticeRule(rule) => {
             crate::notices::set_rule(tx.connection(), rule)
         }
+        CirculationCommand::MarkNotice {
+            notice,
+            outcome,
+            at,
+        } => crate::notices::mark(tx.connection(), *notice, *outcome, at),
         CirculationCommand::LiftRestriction { patron, kind } => {
             if crate::restrictions::lift(tx.connection(), *patron, *kind)
                 .map_err(StoreError::from)?

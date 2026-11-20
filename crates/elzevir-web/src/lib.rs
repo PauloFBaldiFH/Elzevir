@@ -56,6 +56,7 @@ use elzevir_web_templates::{I18n, OpacHome};
 pub use access::{AccessError, AccessPolicy, normalize_hostname, restrict_access};
 pub use catalog::StaffPorts;
 pub use opac::OpacPorts;
+pub use patrons::shown as date_text;
 pub use session::Sessions;
 
 /// Web settings.

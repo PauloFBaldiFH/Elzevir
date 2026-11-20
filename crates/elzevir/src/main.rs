@@ -41,6 +41,7 @@ mod managed_restore;
 mod managed_tool_update;
 mod managed_tools;
 mod memory;
+mod notice_mail;
 mod operations;
 mod operations_cli;
 mod operations_config;
@@ -362,6 +363,16 @@ struct WebRuntime {
     state: AppState,
 }
 
+/// The interface texts in the server's language: Brazilian Portuguese or English.
+fn language_bundle(language: &str) -> Result<I18n, String> {
+    if language == "pt-BR" {
+        I18n::portuguese()
+    } else {
+        I18n::english()
+    }
+    .map_err(|error| error.to_string())
+}
+
 fn web_app(
     store: &Arc<ElzevirStore>,
     index: Arc<TantivyIndex>,
@@ -369,12 +380,7 @@ fn web_app(
     config: WebConfig,
     language: &str,
 ) -> Result<WebRuntime, String> {
-    let i18n = if language == "pt-BR" {
-        I18n::portuguese()
-    } else {
-        I18n::english()
-    }
-    .map_err(|error| error.to_string())?;
+    let i18n = language_bundle(language)?;
     let opac = OpacPorts {
         catalog: Arc::clone(store) as _,
         index,
@@ -411,6 +417,42 @@ fn web_app(
         router: elzevir_web::router(state.clone()),
         state,
     })
+}
+
+/// What the server runs besides answering requests: the circulation runs and the mail.
+struct Background {
+    time_zone: jiff::tz::TimeZone,
+    long_overdue: Option<elzevir_domain::long_overdue::LongOverdueSettings>,
+    expire_holds: bool,
+    mail: Option<notice_mail::MailSettings>,
+}
+
+impl Background {
+    /// Starts the runs; each ends when the server stops, or is aborted with the runtime.
+    fn spawn(
+        self,
+        runtime: &tokio::runtime::Runtime,
+        store: &Arc<ElzevirStore>,
+        language: &str,
+        (instance, control): (&str, &shutdown::Control),
+    ) -> Result<Vec<tokio::task::JoinHandle<()>>, String> {
+        let mut runs = vec![runtime.spawn(overdue_run::run(
+            Arc::clone(store),
+            self.time_zone.clone(),
+            (self.long_overdue, self.expire_holds),
+            instance.to_owned(),
+            control.receiver(),
+        ))];
+        if let Some(mail) = self.mail {
+            runs.push(runtime.spawn(notice_mail::run(
+                Arc::clone(store),
+                (mail, Arc::new(language_bundle(language)?), self.time_zone),
+                instance.to_owned(),
+                control.receiver(),
+            )));
+        }
+        Ok(runs)
+    }
 }
 
 fn serve(settings: &server_config::Settings) -> Result<(), String> {
@@ -451,9 +493,12 @@ fn serve_controlled(
             parallelism,
             Arc::clone(&probe),
         )?;
-        let time_zone = loaded.time_zone.clone();
-        let long_overdue = loaded.long_overdue;
-        let expire_holds = loaded.expire_waiting_holds;
+        let background = Background {
+            time_zone: loaded.time_zone.clone(),
+            long_overdue: loaded.long_overdue,
+            expire_holds: loaded.expire_waiting_holds,
+            mail: loaded.mail.clone(),
+        };
         let app = web_app(
             &store,
             index,
@@ -468,13 +513,7 @@ fn serve_controlled(
             &settings.lang,
         )?;
         let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
-        let fines = runtime.spawn(overdue_run::run(
-            Arc::clone(&store),
-            time_zone,
-            (long_overdue, expire_holds),
-            instance.clone(),
-            control.receiver(),
-        ));
+        let runs = background.spawn(&runtime, &store, &settings.lang, (&instance, control))?;
         let result = runtime.block_on(run_http(
             settings,
             control,
@@ -484,7 +523,9 @@ fn serve_controlled(
             operations.client(),
         ));
         // The run holds the store; it ends with the server, or is dropped with the runtime.
-        fines.abort();
+        for run in runs {
+            run.abort();
+        }
         drop(indexer);
         // Runtime drop waits for blocking reads; keep the institution lock until all
         // readers are gone and the existing writer has reported its final checkpoint.

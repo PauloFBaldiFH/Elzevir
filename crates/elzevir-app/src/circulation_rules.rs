@@ -20,6 +20,7 @@ use crate::loans::{
     CheckedIn, CheckedOut, CheckinRefusal, CheckinRequest, CheckoutRefusal, CheckoutRequest,
     RenewRefusal, RenewRequest, Renewed,
 };
+use crate::notices::{NoticeId, NoticeOutcome};
 use crate::staff::StaffId;
 
 /// Most rules one change may set.
@@ -74,6 +75,15 @@ pub enum CirculationCommand {
         patron: PatronId,
         /// Which restriction.
         kind: RestrictionKind,
+    },
+    /// Records what became of a notice the sender tried (docs/specs/circulacao/avisos.md).
+    MarkNotice {
+        /// The notice.
+        notice: NoticeId,
+        /// Sent or failed.
+        outcome: NoticeOutcome,
+        /// When.
+        at: Zoned,
     },
     /// Queues the overdue notices due today: the daily run
     /// (docs/specs/circulacao/avisos.md).
@@ -145,6 +155,8 @@ pub enum CirculationOutput {
     OverdueNoticeRuleSet,
     /// A patron's restriction was lifted.
     RestrictionLifted,
+    /// A notice was marked sent or failed.
+    NoticeMarked,
     /// How many overdue notices the daily run queued.
     OverdueNoticesQueued {
         /// Notices queued.

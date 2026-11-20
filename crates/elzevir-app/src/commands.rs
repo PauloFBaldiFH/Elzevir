@@ -129,6 +129,7 @@ impl WriteCommand {
             Self::Circulation(CirculationCommand::SetOverdueNoticeRule(_)) => {
                 "circ.set_overdue_notice_rules"
             }
+            Self::Circulation(CirculationCommand::MarkNotice { .. }) => "circ.mark_notice",
             Self::Circulation(CirculationCommand::LiftRestriction { .. }) => {
                 "circ.lift_restriction"
             }

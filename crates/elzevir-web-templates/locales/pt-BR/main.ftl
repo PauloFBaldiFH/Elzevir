@@ -586,3 +586,20 @@ hold-error-other-branch = Só leitores da unidade do exemplar podem reservá-lo.
 item-status-on-loan = Emprestado, devolução em { $date }
 item-status-in-transit = Em trânsito
 item-status-on-hold = Reservado para um leitor
+
+## Avisos de atraso por e-mail (docs/specs/circulacao/avisos.md)
+
+notice-overdue-subject-1 = Exemplares em atraso na { $library }
+notice-overdue-subject-2 = Segundo aviso: exemplares em atraso na { $library }
+notice-overdue-subject-3 = Último aviso: exemplares em atraso na { $library }
+notice-overdue-body =
+    Olá, { $name }.
+
+    Pelos nossos registros, estes exemplares emprestados na { $library } estão em atraso:
+
+    { $items }
+
+    Por favor, devolva ou renove assim que possível.
+
+    { $library }
+notice-overdue-item = - { $title } ({ $barcode }), venceu em { $date }

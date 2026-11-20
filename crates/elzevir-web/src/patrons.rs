@@ -62,7 +62,7 @@ pub(crate) fn failed(error: &PatronDeskError) -> Response {
 }
 
 /// A date as the language writes it.
-pub(crate) fn shown(t: &I18n, day: Date) -> String {
+pub fn shown(t: &I18n, day: Date) -> String {
     if t.lang().starts_with("pt") {
         day.strftime("%d/%m/%Y").to_string()
     } else {

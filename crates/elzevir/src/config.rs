@@ -12,6 +12,8 @@ use elzevir_domain::long_overdue::{DEFAULT_MAX_DAYS, LongOverdueSettings};
 use jiff::tz::TimeZone;
 use serde::Deserialize;
 
+use crate::notice_mail::{MailSettings, Security};
+
 /// Most bytes of `elzevir.toml`.
 const MAX_CONFIG: u64 = 1 << 20;
 
@@ -31,6 +33,73 @@ pub(crate) struct Config {
     /// Circulation settings that are not rules.
     #[serde(default)]
     circulation: Circulation,
+    /// How notices go out (docs/specs/circulacao/avisos.md).
+    #[serde(default)]
+    notices: Notices,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Notices {
+    /// The mail server; no e-mail goes out when absent.
+    email: Option<Email>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Email {
+    /// The sender's address, such as `Biblioteca <biblioteca@example.org>`.
+    from: String,
+    /// The mail server.
+    host: String,
+    /// Its port; 465 with `tls`, 587 with `starttls`, 25 with `none` when absent.
+    port: Option<u16>,
+    /// `tls`, `starttls` (when absent) or `none`.
+    security: Option<String>,
+    /// The user to sign in as; no sign-in when absent.
+    user: Option<String>,
+    /// The environment variable that holds the password, so it is not written here.
+    password_env: Option<String>,
+}
+
+impl Email {
+    /// The settings, or why they cannot be; reads the password from its variable.
+    fn settings(&self) -> Result<MailSettings, String> {
+        let security = match self.security.as_deref().unwrap_or("starttls") {
+            "tls" => Security::Tls,
+            "starttls" => Security::StartTls,
+            "none" => Security::None,
+            other => {
+                return Err(format!(
+                    "security must be tls, starttls or none, not {other}"
+                ));
+            }
+        };
+        let from = self
+            .from
+            .parse()
+            .map_err(|_| format!("from is not an e-mail address: {}", self.from))?;
+        let credentials = match (&self.user, &self.password_env) {
+            (None, None) => None,
+            (Some(user), Some(variable)) => {
+                let password = std::env::var(variable)
+                    .map_err(|_| format!("the variable {variable} of password_env is not set"))?;
+                Some((user.clone(), password))
+            }
+            _ => return Err("user and password_env go together".to_owned()),
+        };
+        Ok(MailSettings {
+            from,
+            host: self.host.clone(),
+            port: self.port.unwrap_or(match security {
+                Security::Tls => 465,
+                Security::StartTls => 587,
+                Security::None => 25,
+            }),
+            security,
+            credentials,
+        })
+    }
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -112,6 +181,8 @@ pub(crate) struct Loaded {
     pub(crate) long_overdue: Option<LongOverdueSettings>,
     /// Whether holds waiting past their last day are cancelled.
     pub(crate) expire_waiting_holds: bool,
+    /// The mail server, when notices go out by e-mail.
+    pub(crate) mail: Option<MailSettings>,
 }
 
 /// Reads `data_dir/elzevir.toml` and what it points to; no file is no configuration.
@@ -135,6 +206,14 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         None => None,
     };
     let expire_waiting_holds = config.circulation.holds.expire_waiting.unwrap_or(false);
+    let mail = match &config.notices.email {
+        Some(section) => Some(
+            section
+                .settings()
+                .map_err(|e| format!("{}: notices.email: {e}", path.display()))?,
+        ),
+        None => None,
+    };
     let Some(table) = config.call_number.author_table else {
         return Ok(Loaded {
             author_table: None,
@@ -142,6 +221,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
             time_zone,
             long_overdue,
             expire_waiting_holds,
+            mail,
         });
     };
     let table_path = data_dir.join(table);
@@ -159,6 +239,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         time_zone,
         long_overdue,
         expire_waiting_holds,
+        mail,
     })
 }
 
@@ -211,6 +292,38 @@ pub(crate) fn summary(path: &Path, report: &TableReport) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_mail_server_is_read_and_its_password_comes_from_a_variable() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(load(dir.path()).unwrap().mail.is_none());
+        let config = dir.path().join("elzevir.toml");
+        let write = |text: &str| std::fs::write(&config, text).unwrap();
+        write(
+            "[notices.email]\nfrom = \"Biblioteca <b@example.org>\"\nhost = \"smtp.example.org\"\n",
+        );
+        let mail = load(dir.path()).unwrap().mail.unwrap();
+        assert_eq!((mail.port, mail.security), (587, Security::StartTls));
+        assert!(mail.credentials.is_none());
+        // `PATH` is always set; its value stands in for a password.
+        write(
+            "[notices.email]\nfrom = \"b@example.org\"\nhost = \"h\"\nsecurity = \"tls\"\n\
+             user = \"u\"\npassword_env = \"PATH\"\n",
+        );
+        let mail = load(dir.path()).unwrap().mail.unwrap();
+        assert_eq!((mail.port, mail.security), (465, Security::Tls));
+        assert_eq!(mail.credentials.map(|(user, _)| user).as_deref(), Some("u"));
+        for wrong in [
+            "from = \"b@example.org\"\nhost = \"h\"\nsecurity = \"ssl\"\n",
+            "from = \"nobody\"\nhost = \"h\"\n",
+            "from = \"b@example.org\"\nhost = \"h\"\nuser = \"u\"\n",
+            "from = \"b@example.org\"\nhost = \"h\"\nuser = \"u\"\npassword_env = \"ELZEVIR_NO_SUCH_VARIABLE_FOR_TESTS\"\n",
+            "from = \"b@example.org\"\nhost = \"h\"\npassword = \"x\"\n",
+        ] {
+            write(&format!("[notices.email]\n{wrong}"));
+            assert!(load(dir.path()).is_err(), "{wrong}");
+        }
+    }
 
     #[test]
     fn the_table_is_read_relative_to_the_data_directory() {
