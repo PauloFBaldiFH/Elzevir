@@ -32,7 +32,7 @@ pub use staff_item_grid::{
     GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid, SuggestedCallNumber,
 };
 pub use staff_patrons::{
-    AccountRow, CategoryLine, DeskOption, LoanLine, Notice, PatronFormValues, PatronLine,
+    AccountRow, CategoryLine, DeskOption, HoldRow, LoanLine, Notice, PatronFormValues, PatronLine,
     StaffCheckin, StaffPatron, StaffPatronCategories, StaffPatronForm, StaffPatrons,
 };
 pub use staff_record_fields::{FieldEntry, FieldGroup, FieldValue, ItemFields, RecordFields};

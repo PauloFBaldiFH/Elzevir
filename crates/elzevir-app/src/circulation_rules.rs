@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::accounts::{Paid, PayRefusal, PaymentRequest};
 use crate::calendar::CalendarChange;
+use crate::holds::{HoldCancellation, HoldPlaced, HoldRefused, HoldRequest};
 use crate::loans::{
     CheckedIn, CheckedOut, CheckinRefusal, CheckinRequest, CheckoutRefusal, CheckoutRequest,
     RenewRefusal, RenewRequest, Renewed,
@@ -35,6 +36,10 @@ pub enum CirculationCommand {
     Renew(RenewRequest),
     /// Pays or writes off what a patron owes (docs/specs/circulacao/conta.md).
     Pay(PaymentRequest),
+    /// Places a hold (docs/specs/circulacao/reservas.md).
+    PlaceHold(HoldRequest),
+    /// Cancels a hold (docs/specs/circulacao/reservas.md).
+    CancelHold(HoldCancellation),
     /// Brings the fine of every overdue loan to what it is worth at `at`: the daily run
     /// (docs/specs/circulacao/conta.md).
     ChargeOverdues {
@@ -87,6 +92,10 @@ pub enum CirculationOutput {
     OverduesCharged(OverduesCharged),
     /// What the run of long overdue Items did.
     LongOverdueMarked(LongOverdueMarked),
+    /// A hold was placed.
+    HoldPlaced(HoldPlaced),
+    /// A hold was cancelled.
+    HoldCancelled,
 }
 
 /// What the run of long overdue Items did.
@@ -154,6 +163,9 @@ pub enum CirculationRefusal {
     /// A payment or write-off was refused.
     #[error(transparent)]
     Pay(#[from] PayRefusal),
+    /// A hold was refused, or could not be cancelled.
+    #[error(transparent)]
+    Hold(#[from] HoldRefused),
 }
 
 impl CirculationRefusal {
@@ -184,6 +196,7 @@ impl CirculationRefusal {
             Self::Checkin(refusal) => refusal.message_key(),
             Self::Renew(refusal) => refusal.message_key(),
             Self::Pay(refusal) => refusal.message_key(),
+            Self::Hold(refusal) => refusal.message_key(),
         }
     }
 }

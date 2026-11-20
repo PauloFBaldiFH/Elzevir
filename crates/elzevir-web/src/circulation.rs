@@ -232,6 +232,10 @@ pub(crate) fn routes() -> axum::Router<AppState> {
             post(crate::patron_account::pay),
         )
         .route(
+            "/equipe/leitores/{id}/reservas",
+            post(crate::patron_holds::change),
+        )
+        .route(
             "/equipe/circulacao/devolucao",
             get(checkin_desk).post(check_in),
         )
@@ -294,10 +298,11 @@ pub(crate) async fn page(
         let suspended = loans.suspension(id, day).map_err(unavailable)?;
         let owed = loans.owed(id).map_err(unavailable)?;
         let account = loans.account(id).map_err(unavailable)?;
-        Ok(Some((patron, current, suspended, (owed, account))))
+        let holds = loans.holds(id).map_err(unavailable)?;
+        Ok(Some((patron, current, suspended, (owed, account, holds))))
     })
     .await;
-    let (patron, current, suspended, (owed, account)) = match read {
+    let (patron, current, suspended, (owed, account, holds)) = match read {
         Ok(Ok(Some(read))) => read,
         Ok(Ok(None)) => return StatusCode::NOT_FOUND.into_response(),
         Ok(Err(error)) => return failed(&error),
@@ -341,6 +346,7 @@ pub(crate) async fn page(
         notices: outcome.notices,
         confirm: outcome.confirm,
         account: account_rows(t, &account),
+        holds: crate::patron_holds::hold_rows(t, &holds),
     });
     if response.status() == StatusCode::OK {
         *response.status_mut() = status;

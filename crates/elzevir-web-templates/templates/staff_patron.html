@@ -44,6 +44,34 @@
   </ol>
 </section>
 </form>
+<section class="patron-holds" aria-labelledby="holds-title">
+  <h2 id="holds-title">{{ t.get_numbers("holds-title", [("count", holds.len() as u64)]) }}</h2>
+  <form method="post" action="/equipe/leitores/{{ id }}/reservas">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% for desk in desks %}{% if desk.selected %}<input type="hidden" name="desk" value="{{ desk.id }}">{% endif %}{% endfor %}
+  {% if !holds.is_empty() %}
+  <ol class="hold-list">
+  {% for hold in holds %}
+    <li class="hold">
+      <span class="hold-title">{{ hold.title }}</span>
+      <span class="hold-meta">{{ t.get_with("holds-position", "position", hold.position) }}{% if let Some(barcode) = hold.barcode %} · <code>{{ barcode }}</code>{% endif %} · {{ t.get_with("holds-pickup", "branch", hold.pickup) }} · {{ hold.day }}</span>
+      <button type="submit" name="op" value="cancel:{{ hold.id }}">{{ t.get("holds-cancel") }}</button>
+    </li>
+  {% endfor %}
+  </ol>
+  {% endif %}
+  <fieldset class="hold-place">
+    <legend>{{ t.get("holds-place-title") }}</legend>
+    <label for="hold-barcode">{{ t.get("checkout-barcode") }}</label>
+    <input type="text" id="hold-barcode" name="barcode" maxlength="64" autocomplete="off">
+    <label><input type="radio" name="level" value="record" checked> {{ t.get("holds-level-record") }}</label>
+    <label><input type="radio" name="level" value="item"> {{ t.get("holds-level-item") }}</label>
+    <label for="hold-pickup">{{ t.get("holds-pickup-label") }}</label>
+    <select id="hold-pickup" name="pickup">{% for desk in desks %}<option value="{{ desk.id }}"{% if desk.selected %} selected{% endif %}>{{ desk.name }}</option>{% endfor %}</select>
+    <button type="submit" name="op" value="place">{{ t.get("holds-place") }}</button>
+  </fieldset>
+  </form>
+</section>
 {% if !account.is_empty() %}
 <section class="patron-account" aria-labelledby="account-title">
   <h2 id="account-title">{{ t.get("account-title") }}</h2>

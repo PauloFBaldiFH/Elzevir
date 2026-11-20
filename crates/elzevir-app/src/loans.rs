@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::accounts::AccountLine;
 use crate::circulation_rules::{CirculationCommand, CirculationDeskError, CirculationOutput};
+use crate::holds::PatronHold;
 use crate::staff::StaffId;
 
 /// Most characters of a barcode the checkout reads.
@@ -253,6 +254,13 @@ pub trait LoanDesk: Send + Sync {
     ///
     /// When storage fails.
     fn account(&self, patron: PatronId) -> Result<Vec<AccountLine>, CirculationDeskError>;
+
+    /// The patron's holds, oldest first.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn holds(&self, patron: PatronId) -> Result<Vec<PatronHold>, CirculationDeskError>;
 
     /// The branch an Item is at, as the desk of a checkout from its pill.
     ///

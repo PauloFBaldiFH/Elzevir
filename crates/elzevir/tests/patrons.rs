@@ -735,3 +735,76 @@ fn the_account_shows_the_fine_and_takes_payments_and_write_offs() {
     );
     drop(server);
 }
+
+#[test]
+fn holds_are_placed_listed_and_cancelled_on_the_record() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    stock(data.path());
+    let store = open(data.path());
+    submit(
+        &store,
+        WriteCommand::Circulation(CirculationCommand::SetRules(RuleChange {
+            scope: RuleScopeKey::default(),
+            values: vec![("reservesallowed".to_owned(), Some("3".to_owned()))],
+        })),
+    );
+    store.shutdown().unwrap();
+    let (server, address) = start(data.path());
+    let cir = sign_in(address, "cir");
+    let record = format!("/equipe/leitores/{ana}");
+    let page = request(address, "GET", &record, &cir, "");
+    assert_status(&page, 200);
+    assert!(
+        page.contains("Place a hold") && page.contains(">Holds<"),
+        "{page}"
+    );
+    let (token, desk) = (csrf(&page).to_owned(), selected_desk(&page).to_owned());
+    let form = format!("{cir}Content-Type: application/x-www-form-urlencoded\r\n");
+    let action = format!("{record}/reservas");
+    let post = |body: &str| {
+        request(
+            address,
+            "POST",
+            &action,
+            &form,
+            &format!("csrf={token}&desk={desk}&{body}"),
+        )
+    };
+    let placed = post(&format!("barcode=0001&level=record&pickup={desk}&op=place"));
+    assert_status(&placed, 200);
+    assert!(
+        placed.contains("Hold placed, place 1 in the queue.")
+            && placed.contains("1 hold")
+            && placed.contains("Dom Casmurro"),
+        "{placed}"
+    );
+    let again = post(&format!("barcode=0001&level=item&pickup={desk}&op=place"));
+    assert_status(&again, 422);
+    assert!(
+        again.contains("as many holds on this record as allowed"),
+        "{again}"
+    );
+    let hold = placed
+        .split_once("value=\"cancel:")
+        .unwrap()
+        .1
+        .split_once('"')
+        .unwrap()
+        .0
+        .to_owned();
+    let cancelled = post(&format!("op=cancel:{hold}"));
+    assert_status(&cancelled, 200);
+    assert!(cancelled.contains("Hold cancelled.") && !cancelled.contains("cancel:"));
+    assert_status(
+        &request(
+            address,
+            "POST",
+            &action,
+            &form,
+            &format!("csrf=forged&desk={desk}&op=cancel:{hold}"),
+        ),
+        403,
+    );
+    drop(server);
+}

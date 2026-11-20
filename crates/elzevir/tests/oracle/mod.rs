@@ -156,6 +156,18 @@ impl Library {
     pub(crate) fn add_item(
         &self,
         barcode: &str,
+        branches: (&str, &str),
+        item_type: &str,
+        status: ItemStatus,
+    ) {
+        self.add_item_to(self.instance, barcode, branches, item_type, status);
+    }
+
+    /// Adds an Item of `instance`.
+    pub(crate) fn add_item_to(
+        &self,
+        instance: InstanceId,
+        barcode: &str,
         (home, holding): (&str, &str),
         item_type: &str,
         status: ItemStatus,
@@ -163,7 +175,7 @@ impl Library {
         submit(
             &self.store,
             WriteCommand::Catalog(CatalogCommand::AddItem(Box::new(NewItem {
-                instance: self.instance,
+                instance,
                 item: ItemData {
                     barcode: Some(barcode.to_owned()),
                     inventory_number: None,

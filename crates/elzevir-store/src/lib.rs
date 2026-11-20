@@ -30,6 +30,7 @@ mod elzevir;
 mod error;
 mod export;
 mod history;
+mod holds;
 mod import;
 mod items;
 mod koha_types;

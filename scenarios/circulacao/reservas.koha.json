@@ -1,0 +1,243 @@
+{
+ "koha_version": "26.05.05.000",
+ "spec": [
+  "docs/specs/circulacao/reservas.md"
+ ],
+ "recorder": "tools/holds-recorder/record.py",
+ "patron": {
+  "category": "B",
+  "library": "MAIN"
+ },
+ "pickup": "MAIN",
+ "preferences": {
+  "ReservesControlBranch": "PatronLibrary",
+  "AllowHoldsOnDamagedItems": "1",
+  "AllowHoldsOnPatronsPossessions": "1",
+  "ReservesNeedReturns": "1",
+  "AllowHoldPolicyOverride": "0",
+  "IndependentBranches": "0",
+  "UseBranchTransferLimits": "0",
+  "maxoutstanding": "5",
+  "maxreserves": "50"
+ },
+ "records": [
+  [
+   {
+    "barcode": "7026",
+    "item_type": "BK",
+    "home_library": "MAIN",
+    "holding_library": "MAIN"
+   },
+   {
+    "barcode": "13804",
+    "item_type": "BK",
+    "home_library": "MAIN",
+    "holding_library": "MAIN"
+   }
+  ],
+  [
+   {
+    "barcode": "1511",
+    "item_type": "BK",
+    "home_library": "MAIN",
+    "holding_library": "MAIN"
+   }
+  ],
+  [
+   {
+    "barcode": "933",
+    "item_type": "BK",
+    "home_library": "MAIN",
+    "holding_library": "MAIN"
+   }
+  ]
+ ],
+ "steps": [
+  {
+   "rules": [
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "holds_per_day": "",
+      "holds_per_record": "",
+      "reservesallowed": "0"
+     }
+    }
+   ],
+   "record": 0,
+   "item": null,
+   "answer": {
+    "status": 403,
+    "error": "Hold cannot be placed. Reason: noReservesAllowed"
+   }
+  },
+  {
+   "rules": [
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "holds_per_day": "",
+      "holds_per_record": "1",
+      "reservesallowed": "3"
+     }
+    }
+   ],
+   "record": 0,
+   "item": null,
+   "answer": {
+    "priority": 1
+   }
+  },
+  {
+   "rules": [
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "holds_per_day": "",
+      "holds_per_record": "1",
+      "reservesallowed": "3"
+     }
+    }
+   ],
+   "record": 0,
+   "item": 1,
+   "answer": {
+    "status": 403,
+    "error": "Hold cannot be placed. Reason: tooManyHoldsForThisRecord"
+   }
+  },
+  {
+   "rules": [
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "holds_per_day": "",
+      "holds_per_record": "1",
+      "reservesallowed": "3"
+     }
+    }
+   ],
+   "record": 1,
+   "item": 0,
+   "answer": {
+    "priority": 1
+   }
+  },
+  {
+   "rules": [
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "holds_per_day": "",
+      "holds_per_record": "1",
+      "reservesallowed": "3"
+     }
+    }
+   ],
+   "record": 1,
+   "item": 0,
+   "answer": {
+    "status": 403,
+    "error": "Hold cannot be placed. Reason: itemAlreadyOnHold"
+   }
+  },
+  {
+   "rules": [
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "holds_per_day": "2",
+      "holds_per_record": "1",
+      "reservesallowed": "3"
+     }
+    }
+   ],
+   "record": 2,
+   "item": null,
+   "answer": {
+    "status": 403,
+    "error": "Hold cannot be placed. Reason: tooManyReservesToday"
+   }
+  },
+  {
+   "rules": [
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "holds_per_day": "",
+      "holds_per_record": "1",
+      "reservesallowed": "2"
+     }
+    }
+   ],
+   "record": 2,
+   "item": null,
+   "answer": {
+    "status": 403,
+    "error": "Hold cannot be placed. Reason: tooManyReserves"
+   }
+  },
+  {
+   "cancelled": 0
+  },
+  {
+   "rules": [
+    {
+     "context": {
+      "item_type_id": "*",
+      "library_id": "MAIN",
+      "patron_category_id": "*"
+     },
+     "rules": {
+      "holds_per_day": "",
+      "holds_per_record": "1",
+      "reservesallowed": "2"
+     }
+    }
+   ],
+   "record": 2,
+   "item": null,
+   "answer": {
+    "priority": 1
+   }
+  }
+ ],
+ "queue": [
+  [
+   1,
+   1
+  ],
+  [
+   2,
+   1
+  ]
+ ]
+}

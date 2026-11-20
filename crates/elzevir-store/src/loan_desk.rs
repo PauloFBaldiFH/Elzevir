@@ -5,6 +5,7 @@
 use elzevir_app::accounts::AccountLine;
 use elzevir_app::circulation_rules::{CirculationCommand, CirculationDeskError, CirculationOutput};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
+use elzevir_app::holds::PatronHold;
 use elzevir_app::loans::{LoanDesk, PatronLoan};
 use elzevir_app::staff::StaffId;
 use elzevir_domain::catalog::{BranchId, ItemId, Money};
@@ -85,6 +86,12 @@ impl LoanDesk for ElzevirStore {
     fn account(&self, patron: PatronId) -> Result<Vec<AccountLine>, CirculationDeskError> {
         self.readers()
             .read(|c| crate::accounts::lines(c, patron))
+            .map_err(|error| unavailable(&error))
+    }
+
+    fn holds(&self, patron: PatronId) -> Result<Vec<PatronHold>, CirculationDeskError> {
+        self.readers()
+            .read(|c| crate::holds::patron_holds(c, patron))
             .map_err(|error| unavailable(&error))
     }
 

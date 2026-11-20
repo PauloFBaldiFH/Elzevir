@@ -15,6 +15,7 @@ pub mod description;
 pub mod editing;
 pub mod export;
 pub mod history;
+pub mod holds;
 pub mod import;
 pub mod import_detection;
 pub mod items;

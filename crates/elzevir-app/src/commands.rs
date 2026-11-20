@@ -118,6 +118,8 @@ impl WriteCommand {
             Self::Circulation(CirculationCommand::Checkin(_)) => "circ.checkin",
             Self::Circulation(CirculationCommand::Renew(_)) => "circ.renew",
             Self::Circulation(CirculationCommand::Pay(_)) => "circ.pay",
+            Self::Circulation(CirculationCommand::PlaceHold(_)) => "circ.place_hold",
+            Self::Circulation(CirculationCommand::CancelHold(_)) => "circ.cancel_hold",
             Self::Circulation(CirculationCommand::ChargeOverdues { .. }) => "circ.charge_overdues",
             Self::Circulation(CirculationCommand::MarkLongOverdue { .. }) => {
                 "circ.mark_long_overdue"
@@ -133,12 +135,14 @@ impl WriteCommand {
             // Koha: `parameters.manage_circ_rules` for the rules, `tools.edit_calendar` for
             // the calendar; both are the administrators' here. A checkout is the desk's
             // (Koha: `circulate_remaining_permissions`), and so is a payment (Koha:
-            // `updatecharges`).
+            // `updatecharges`), and so are holds (Koha: `reserveforothers`).
             Self::Circulation(
                 CirculationCommand::Checkout(_)
                 | CirculationCommand::Checkin(_)
                 | CirculationCommand::Renew(_)
-                | CirculationCommand::Pay(_),
+                | CirculationCommand::Pay(_)
+                | CirculationCommand::PlaceHold(_)
+                | CirculationCommand::CancelHold(_),
             )
             | Self::Patrons(PatronCommand::View(_)) => Permission::Circulation,
             Self::Staff(_) | Self::Circulation(_) => Permission::Administration,

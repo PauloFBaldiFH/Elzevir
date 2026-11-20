@@ -29,6 +29,7 @@ mod new_record;
 mod opac;
 mod patron_account;
 mod patron_form;
+mod patron_holds;
 mod patrons;
 mod pill_loans;
 mod record_fields;

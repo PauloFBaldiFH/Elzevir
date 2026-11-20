@@ -19,9 +19,10 @@ use elzevir_app::circulation_rules::{
 };
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
+use elzevir_app::holds::{HoldCancellation, HoldLevel, HoldPlaced, HoldRefused, HoldRequest};
 use elzevir_app::loans::{
     CheckedIn, CheckedOut, CheckinRefusal, CheckinRequest, CheckoutRefusal, CheckoutRequest,
-    RenewRefusal, RenewRequest, Renewed,
+    LoanDesk, RenewRefusal, RenewRequest, Renewed,
 };
 use elzevir_app::patrons::{
     CategoryChange, PatronCommand, PatronFields, PatronOutput, ReadingHistory,
@@ -31,6 +32,7 @@ use elzevir_domain::catalog::{BranchId, InstanceId, Money};
 use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome, TransferReason};
 use elzevir_domain::checkout::{Alert, Confirm, Impossible, TooManyReason};
 use elzevir_domain::circulation_rules::RuleScopeKey;
+use elzevir_domain::hold::HoldRefusal;
 use elzevir_domain::long_overdue::{DEFAULT_MAX_DAYS, LongOverdueSettings};
 use elzevir_domain::patron::{Enrolment, PatronId};
 use elzevir_domain::renewal::RenewalRefusal;
@@ -270,6 +272,61 @@ impl Library {
         ) {
             Ok(WriteOutput::Circulation(CirculationOutput::Renewed(done))) => Ok(done),
             Err(CommandFailed::Rejected(WriteRefusal::Circulation(CirculationRefusal::Renew(
+                refusal,
+            )))) => Err(refusal),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    /// Another patron of the same category, at `branch`.
+    fn another_patron(&self, cardnumber: &str, branch: BranchId) -> PatronId {
+        let category: i64 = self.read("SELECT category_id FROM patrons LIMIT 1");
+        let Ok(WriteOutput::Patrons(PatronOutput::Added(patron))) = submit(
+            &self.store,
+            WriteCommand::Patrons(PatronCommand::Add(Box::new(PatronFields {
+                cardnumber: cardnumber.to_owned(),
+                surname: "Souza".to_owned(),
+                first_name: None,
+                cpf: None,
+                date_of_birth: None,
+                email: None,
+                phone: None,
+                address: None,
+                branch,
+                category: elzevir_domain::patron::PatronCategoryId(category),
+                enrolled: date(2026, 1, 31),
+                expires: None,
+                staff_note: None,
+                reading_history: ReadingHistory::NotKept,
+            }))),
+        ) else {
+            panic!("no patron");
+        };
+        patron
+    }
+
+    fn hold(
+        &self,
+        patron: PatronId,
+        barcode: &str,
+        level: HoldLevel,
+        pickup: BranchId,
+    ) -> Result<HoldPlaced, HoldRefused> {
+        let at: Zoned = "2026-11-20T10:00:00-03:00[America/Sao_Paulo]"
+            .parse()
+            .unwrap();
+        match submit(
+            &self.store,
+            WriteCommand::Circulation(CirculationCommand::PlaceHold(HoldRequest {
+                patron,
+                barcode: barcode.to_owned(),
+                level,
+                pickup,
+                at,
+            })),
+        ) {
+            Ok(WriteOutput::Circulation(CirculationOutput::HoldPlaced(placed))) => Ok(placed),
+            Err(CommandFailed::Rejected(WriteRefusal::Circulation(CirculationRefusal::Hold(
                 refusal,
             )))) => Err(refusal),
             other => panic!("{other:?}"),
@@ -1020,5 +1077,111 @@ fn long_overdue_items_are_declared_lost_and_charged_once() {
     assert_eq!(
         mark_long_overdue(&library, "2026-12-29T10:00:00-03:00", charged),
         LongOverdueMarked::default()
+    );
+}
+
+#[test]
+fn holds_queue_up_per_record_and_close_up_when_one_is_cancelled() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(&dir);
+    library.item("0001", ItemStatus::default());
+    library.item("0002", ItemStatus::default());
+    let ana = library.patron;
+    let bia = library.another_patron("000124", library.central);
+    let caio = library.another_patron("000125", library.annex);
+    // Koha holds nothing without a `reservesallowed` rule.
+    assert_eq!(
+        library.hold(ana, "0001", HoldLevel::Record, library.central),
+        Err(HoldRefused::Rules(HoldRefusal::NoReservesAllowed))
+    );
+    library.rules(&[("reservesallowed", "5")]);
+    let first = library
+        .hold(ana, "0001", HoldLevel::Record, library.central)
+        .unwrap();
+    assert_eq!(first.priority, 1);
+    // `holds_per_record` is 1 when no rule says otherwise.
+    assert_eq!(
+        library.hold(ana, "0002", HoldLevel::Item, library.central),
+        Err(HoldRefused::Rules(HoldRefusal::TooManyHoldsForThisRecord {
+            limit: 1
+        }))
+    );
+    let second = library
+        .hold(bia, "0002", HoldLevel::Item, library.annex)
+        .unwrap();
+    let third = library
+        .hold(caio, "0001", HoldLevel::Record, library.central)
+        .unwrap();
+    assert_eq!((second.priority, third.priority), (2, 3));
+    assert_eq!(
+        library.hold(bia, "0002", HoldLevel::Item, BranchId(99)),
+        Err(HoldRefused::UnknownBranch)
+    );
+    // Only the patron's own hold can be cancelled.
+    let cancel = |patron, hold: HoldPlaced| {
+        submit(
+            &library.store,
+            WriteCommand::Circulation(CirculationCommand::CancelHold(HoldCancellation {
+                patron,
+                hold: hold.hold,
+                at: "2026-11-21T09:00:00-03:00[America/Sao_Paulo]"
+                    .parse()
+                    .unwrap(),
+            })),
+        )
+    };
+    assert!(matches!(
+        cancel(ana, second),
+        Err(CommandFailed::Rejected(WriteRefusal::Circulation(
+            CirculationRefusal::Hold(HoldRefused::UnknownHold)
+        )))
+    ));
+    cancel(ana, first).unwrap();
+    assert_eq!(
+        library.read::<String>(
+            "SELECT group_concat(patron_id || ':' || priority, ' ') FROM holds ORDER BY priority"
+        ),
+        format!("{}:1 {}:2", bia.0, caio.0)
+    );
+    // The ended hold forgets the patron, who keeps no reading history.
+    assert_eq!(
+        library.read::<String>(
+            "SELECT coalesce(patron_id, '-') || ' ' || outcome || ' ' || ended_at FROM ended_holds"
+        ),
+        "- CANCELLED 2026-11-21T09:00:00-03:00[America/Sao_Paulo]"
+    );
+    let holds = library.store.holds(bia).unwrap();
+    assert_eq!(
+        (holds.len(), holds[0].barcode.as_deref(), holds[0].priority),
+        (1, Some("0002"), 1)
+    );
+}
+
+#[test]
+fn a_patron_who_owes_too_much_places_no_hold() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(&dir);
+    library.item("0001", ItemStatus::default());
+    library.item("0002", ItemStatus::default());
+    library.rules(&[
+        ("reservesallowed", ""),
+        ("maxissueqty", "5"),
+        ("issuelength", "7"),
+        ("fine", "3.00"),
+        ("chargeperiod", "1"),
+    ]);
+    library
+        .lend("0002", "2026-11-01T10:00:00-03:00", false)
+        .unwrap();
+    // Two days late: 6.00 owed, above `maxoutstanding` 5.00.
+    library
+        .give_back("0002", library.central, "2026-11-10T10:00:00-03:00")
+        .unwrap();
+    assert_eq!(
+        library.hold(library.patron, "0001", HoldLevel::Record, library.central),
+        Err(HoldRefused::Rules(HoldRefusal::DebtLimit {
+            owed: Money(600),
+            limit: Money(500)
+        }))
     );
 }
