@@ -1,0 +1,9 @@
+{# The notes of a board; `notes` is not empty. #}
+{% for note in notes %}
+  <article class="postit {{ note.color }}">
+    <p class="note-top"><span>{{ t.get(note.kind_key) }}</span>{% if note.public && note.edit.is_some() %}<span class="note-badge">{{ t.get("board-opac-badge") }}</span>{% endif %}</p>
+    <p class="note-text">{{ note.text }}</p>
+    <p class="postit-meta"><span>{% if let Some(author) = note.author %}{{ author }}{% else %}{{ t.get("opac-welcome-author") }}{% endif %}</span><span>{{ note.day }}</span></p>
+    {% if let Some(edit) = note.edit %}<p class="postit-actions"><a class="note-mini" href="{{ edit }}">{{ t.get("board-edit") }}</a></p>{% endif %}
+  </article>
+{% endfor %}

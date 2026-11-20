@@ -957,3 +957,22 @@ a.module-card:hover, a.module-card:focus-visible { transform: translateY(-2px); 
 @media (max-width: 64rem) { .opac-home { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .opac-home .recent { grid-column: 1 / -1; grid-row: 1; } }
 @media (max-width: 46rem) { .opac-home { grid-template-columns: minmax(0, 1fr); } }
 @media (prefers-reduced-motion: reduce) { .recent-card a { transition: none; } .recent-card a:hover { transform: none; } }
+/* Notice board (docs/specs/interface/mural.md): the draft's colours in turn. */
+.note-stack { display: grid; gap: 14px; }
+.note-text { white-space: pre-line; }
+.note-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding-right: 20px; }
+.note-badge { padding: 1px 6px; border: 1px solid currentColor; border-radius: 999px; font-size: 9px; letter-spacing: 0.04em; }
+.postit.note-pink { border-color: rgba(203, 114, 150, 0.26); background: #ffd4e7; color: #5a3b4b; }
+.postit.note-green { border-color: rgba(95, 145, 78, 0.24); background: #d8efb6; color: #33513f; }
+.postit:nth-child(even) { transform: rotate(0.8deg); }
+.postit-actions { display: flex; justify-content: flex-end; margin: 8px 0 0; }
+.note-mini { padding: 4px 9px; border: 1px solid rgba(120, 90, 20, 0.18); border-radius: 7px; background: rgba(255, 255, 255, 0.3); color: inherit; font-size: 11px; font-weight: 650; text-decoration: none; }
+.note-mini:hover, .note-mini:focus-visible { background: rgba(255, 255, 255, 0.55); }
+.board-form { max-width: 640px; }
+.board-form form { display: grid; gap: 8px; }
+.board-form textarea, .board-form select { width: 100%; padding: 9px 11px; border: 1px solid var(--elzevir-color-border-strong); border-radius: 9px; background: var(--elzevir-color-surface); color: var(--elzevir-color-text); font: inherit; }
+.board-form .check-line { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.board-form .form-actions { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
+.board-form button { padding: 8px 16px; border: 0; border-radius: 9px; background: var(--elzevir-color-primary); color: var(--elzevir-color-primary-text); font: inherit; font-weight: 700; cursor: pointer; }
+.board-remove { margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--elzevir-color-border); }
+.board-form button.danger { background: transparent; border: 1px solid var(--elzevir-color-error); color: var(--elzevir-color-error); }

@@ -4,6 +4,7 @@
 //! Templates never contain interface text: every string comes from Fluent through [`I18n`]
 //! (English first, then Brazilian Portuguese; docs/arquitetura/04-decisoes.md, §1 item 7).
 
+mod board;
 mod staff_bar;
 mod staff_calendar;
 mod staff_catalog;
@@ -16,6 +17,7 @@ mod staff_record_fields;
 mod staff_record_form;
 mod staff_registries;
 
+pub use board::{BoardCard, KindChoice, StaffBoardNote, note_color};
 pub use staff_bar::{BarLink, BarScope, ScopeKind, StaffBar};
 pub use staff_calendar::{DayCell, EntryLine, StaffCalendar};
 pub use staff_catalog::{
@@ -188,6 +190,8 @@ pub struct OpacHome<'a> {
     pub t: &'a I18n,
     /// The Instances catalogued last, newest first.
     pub recent: Vec<RecentCard>,
+    /// The public notes of the board, newest first; empty shows the welcome note.
+    pub notes: Vec<BoardCard>,
 }
 
 /// One Instance of the home page's "last catalogued" strip.
@@ -430,6 +434,10 @@ pub struct StaffHome<'a> {
     pub t: &'a I18n,
     /// The modules this operator may see, in the draft's order; placeholders have no link.
     pub modules: Vec<BarLink>,
+    /// The notes of the board, newest first; empty shows the welcome note.
+    pub notes: Vec<BoardCard>,
+    /// Whether the board is connected, so notes can be written.
+    pub board: bool,
 }
 
 #[cfg(test)]
@@ -468,6 +476,8 @@ mod tests {
             include_str!("../templates/staff_notice_rules.html"),
             include_str!("../templates/staff_print_notices.html"),
             include_str!("../templates/staff_calendar.html"),
+            include_str!("../templates/staff_board_note.html"),
+            include_str!("../templates/board_notes.html"),
         ];
         let mut missing = Vec::new();
         for source in templates {

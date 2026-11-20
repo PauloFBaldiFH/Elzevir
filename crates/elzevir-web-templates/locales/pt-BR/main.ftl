@@ -744,3 +744,23 @@ notice-hold-body =
 
     { $library }
 notice-hold-item = - { $title } ({ $barcode })
+board-new-title = Novo recado
+board-edit-title = Editar recado
+board-text = Texto do recado
+board-text-placeholder = Escreva um comunicado para o mural…
+board-kind = Tipo
+board-kind-staff = Equipe
+board-kind-institutional = Institucional
+board-kind-personal = Pessoal
+board-kind-urgent = Urgente
+board-public = Mostrar também no catálogo online (OPAC)
+board-public-admin = Só administradores publicam recados no OPAC.
+board-save = Salvar recado
+board-cancel = Cancelar
+board-remove = Remover recado
+board-edit = Editar
+board-opac-badge = OPAC
+board-error-empty = O recado não pode ficar vazio.
+board-error-long = O recado passa de 1.400 caracteres.
+board-error-full = O mural já guarda 50 recados. Remova um antigo antes.
+board-error-stale = Outra pessoa mudou este recado enquanto você editava. Seu texto está abaixo; salve de novo para substituir o dela.

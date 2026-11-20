@@ -1,0 +1,29 @@
+{% extends "staff_base.html" %}
+{% block scope %}{% endblock %}
+{% block title %}{% if remove.is_some() %}{{ t.get("board-edit-title") }}{% else %}{{ t.get("board-new-title") }}{% endif %}{% endblock %}
+{% block content %}
+<div class="registries board-form">
+<h1>{% if remove.is_some() %}{{ t.get("board-edit-title") }}{% else %}{{ t.get("board-new-title") }}{% endif %}</h1>
+{% if let Some(message) = refused %}<p class="codes-alert codes-refused" role="alert">{{ message }}</p>{% endif %}
+<form method="post" action="{{ action }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="row_version" value="{{ row_version }}">
+  <label for="note-text">{{ t.get("board-text") }}</label>
+  <textarea id="note-text" name="text" rows="6" maxlength="1400" required placeholder="{{ t.get("board-text-placeholder") }}">{{ text }}</textarea>
+  <label for="note-kind">{{ t.get("board-kind") }}</label>
+  <select id="note-kind" name="kind">{% for kind in kinds %}<option value="{{ kind.value }}"{% if kind.selected %} selected{% endif %}>{{ t.get(kind.label_key) }}</option>{% endfor %}</select>
+  <label class="check-line"><input type="checkbox" name="public" value="1"{% if public %} checked{% endif %}{% if !may_publish %} disabled{% endif %}> {{ t.get("board-public") }}</label>
+  {% if !may_publish %}<p class="form-hint">{{ t.get("board-public-admin") }}</p>{% endif %}
+  <div class="form-actions">
+    <button type="submit">{{ t.get("board-save") }}</button>
+    <a href="/equipe">{{ t.get("board-cancel") }}</a>
+  </div>
+</form>
+{% if let Some(url) = remove %}
+<form method="post" action="{{ url }}" class="board-remove">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <button type="submit" class="danger">{{ t.get("board-remove") }}</button>
+</form>
+{% endif %}
+</div>
+{% endblock %}

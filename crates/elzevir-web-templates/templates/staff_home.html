@@ -7,13 +7,13 @@
 <aside class="mural" aria-labelledby="mural-title">
   <div class="heading-line">
     <h2 class="eyebrow" id="mural-title">{{ t.get("home-mural") }}</h2>
-    <button type="button" class="sub-action" disabled title="{{ t.get("bar-soon") }}">{{ t.get("home-new-note") }}</button>
+    {% if board %}<a class="sub-action" href="/equipe/mural/nova">{{ t.get("home-new-note") }}</a>{% else %}<button type="button" class="sub-action" disabled title="{{ t.get("bar-soon") }}">{{ t.get("home-new-note") }}</button>{% endif %}
   </div>
-  <article class="postit note-blue">
+  {% if notes.is_empty() %}<article class="postit note-blue">
     <p class="note-top">{{ t.get("home-welcome-kind") }}</p>
     <p class="note-text">{{ t.get("home-welcome-text") }}</p>
     <p class="postit-meta"><span>{{ t.get("home-welcome-author") }}</span><span>{{ t.get("home-welcome-when") }}</span></p>
-  </article>
+  </article>{% else %}<div class="note-stack">{% include "board_notes.html" %}</div>{% endif %}
 </aside>
 <section class="modules-area" aria-labelledby="modules-title">
   <div class="heading-line">

@@ -9,6 +9,7 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
+use crate::board::{BoardCommand, BoardOutput, BoardRefusal};
 use crate::catalog::{CatalogCommand, CatalogOutput, CatalogRefusal};
 use crate::circulation_rules::{CirculationCommand, CirculationOutput, CirculationRefusal};
 use crate::patrons::{CategoryChange, PatronCommand, PatronOutput, PatronRefusal};
@@ -25,6 +26,8 @@ pub enum WriteCommand {
     Patrons(PatronCommand),
     /// Circulation: rules, and later loans.
     Circulation(CirculationCommand),
+    /// The notice board of the homes.
+    Board(BoardCommand),
 }
 
 /// Staff account commands.
@@ -52,6 +55,8 @@ pub enum WriteOutput {
     Patrons(PatronOutput),
     /// A circulation command succeeded.
     Circulation(CirculationOutput),
+    /// A board command succeeded.
+    Board(BoardOutput),
 }
 
 /// Why a command was refused.
@@ -69,6 +74,9 @@ pub enum WriteRefusal {
     /// A circulation command was refused.
     #[error(transparent)]
     Circulation(#[from] CirculationRefusal),
+    /// A board command was refused.
+    #[error(transparent)]
+    Board(#[from] BoardRefusal),
 }
 
 impl WriteCommand {
@@ -138,6 +146,9 @@ impl WriteCommand {
             Self::Circulation(CirculationCommand::QueueOverdueNotices { .. }) => {
                 "circ.queue_overdue_notices"
             }
+            Self::Board(BoardCommand::Add(_)) => "board.add",
+            Self::Board(BoardCommand::Update { .. }) => "board.update",
+            Self::Board(BoardCommand::Remove { .. }) => "board.remove",
         }
     }
 
@@ -163,7 +174,11 @@ impl WriteCommand {
                 | CirculationCommand::MarkNotice { .. },
             )
             | Self::Patrons(PatronCommand::View(_)) => Permission::Circulation,
-            Self::Staff(_) | Self::Circulation(_) => Permission::Administration,
+            // Koha: `tools.edit_additional_contents` for all news; here the staff notes are
+            // the whole team's, as in the draft, and only what the public sees needs
+            // administration (docs/specs/interface/mural.md, item 3).
+            Self::Board(command) if !command.is_public() => Permission::StaffInterface,
+            Self::Staff(_) | Self::Circulation(_) | Self::Board(_) => Permission::Administration,
             Self::Catalog(_) => Permission::Cataloguing,
             Self::Patrons(_) => Permission::Patrons,
         }
