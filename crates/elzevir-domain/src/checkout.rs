@@ -7,7 +7,8 @@
 
 use elzevir_data::RuleKind;
 
-use crate::catalog::{BranchId, PolicyId};
+use crate::account::{DebtCheck, DebtSettings, check_debt};
+use crate::catalog::{BranchId, Money, PolicyId};
 use crate::circulation_rules::{CirculationRule, RuleScopeKey, effective_rule};
 use crate::due_date::{DaysMode, HardDueDate, HardDueDateCompare, LengthUnit, LoanRule};
 use crate::patron::PatronCategoryId;
@@ -320,6 +321,8 @@ pub struct CheckoutSettings {
     pub lost_item: LostItemCheckout,
     /// `AutoReturnCheckedOutItems` (Koha: off).
     pub auto_return_checked_out: bool,
+    /// What debts do.
+    pub debt: DebtSettings,
 }
 
 impl Default for CheckoutSettings {
@@ -329,6 +332,7 @@ impl Default for CheckoutSettings {
             allow_not_for_loan_override: false,
             lost_item: LostItemCheckout::Alert,
             auto_return_checked_out: false,
+            debt: DebtSettings::default(),
         }
     }
 }
@@ -341,6 +345,8 @@ pub enum Impossible {
     Suspended(SuspensionEnd),
     /// The patron's registration has expired (`EXPIRED`).
     PatronExpired,
+    /// The patron owes more than the limit (`DEBT`).
+    Debt(Money),
     /// A loan limit, when it cannot be overridden (`TOO_MANY`).
     TooMany(TooMany),
     /// The Item is not for loan (`NOT_FOR_LOAN`).
@@ -358,6 +364,8 @@ pub enum Confirm {
     Renew,
     /// Another patron has the Item; it is returned first (`ISSUED_TO_ANOTHER`).
     IssuedToAnother,
+    /// The patron owes this (`DEBT`).
+    Debt(Money),
     /// The limit is zero (`PATRON_CANT`).
     PatronCannotBorrow,
     /// A loan limit, when it can be overridden (`TOO_MANY`).
@@ -403,6 +411,8 @@ pub struct CheckoutFacts {
     pub suspended: Option<SuspensionEnd>,
     /// Whether the patron's registration has expired today.
     pub patron_expired: bool,
+    /// What the patron owes: the outstanding debits.
+    pub owed: Money,
     /// The Item.
     pub item: ItemFacts,
     /// The loan limit the checkout would pass, from [`too_many`].
@@ -411,9 +421,9 @@ pub struct CheckoutFacts {
 
 /// Whether a checkout may happen.
 ///
-/// Koha: `C4::Circulation::CanBookBeIssued`, for the patron's suspension and expiry, the
-/// Item's current loan, the loan limits and the Item's status. Debts, overdues and holds
-/// come with their tasks (doc 03, tasks 3.7 and 3.8).
+/// Koha: `C4::Circulation::CanBookBeIssued`, for the patron's suspension, expiry and debt,
+/// the Item's current loan, the loan limits and the Item's status. Overdues and holds come
+/// with their tasks (doc 03, task 3.8).
 #[must_use]
 pub fn check_checkout(facts: &CheckoutFacts, settings: &CheckoutSettings) -> CheckoutCheck {
     let mut check = CheckoutCheck::default();
@@ -422,6 +432,11 @@ pub fn check_checkout(facts: &CheckoutFacts, settings: &CheckoutSettings) -> Che
     }
     if facts.patron_expired {
         check.impossible.push(Impossible::PatronExpired);
+    }
+    match check_debt(facts.owed, &settings.debt) {
+        DebtCheck::Impossible(owed) => check.impossible.push(Impossible::Debt(owed)),
+        DebtCheck::Confirm(owed) => check.confirm.push(Confirm::Debt(owed)),
+        DebtCheck::Clear => {}
     }
     match facts.item.on_loan {
         Some(LoanHolder::ThisPatron) => check.confirm.push(Confirm::Renew),
@@ -742,6 +757,7 @@ mod tests {
         let facts = CheckoutFacts {
             suspended: Some(SuspensionEnd::Day(jiff::civil::date(2026, 12, 1))),
             patron_expired: true,
+            owed: Money(0),
             item: ItemFacts {
                 not_for_loan: -1,
                 withdrawn: 1,
@@ -773,6 +789,7 @@ mod tests {
             allow_not_for_loan_override: true,
             lost_item: LostItemCheckout::Confirm,
             auto_return_checked_out: true,
+            debt: DebtSettings::default(),
         };
         let check = check_checkout(&facts, &strict);
         assert_eq!(
@@ -799,6 +816,7 @@ mod tests {
         let renewing = CheckoutFacts {
             suspended: None,
             patron_expired: false,
+            owed: Money(0),
             item: ItemFacts {
                 on_loan: Some(LoanHolder::ThisPatron),
                 ..ItemFacts::default()

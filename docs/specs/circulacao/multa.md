@@ -49,5 +49,5 @@ Nenhum. O zero com *recall* sem `recall_overdue_fine` e a regra dos segundos do 
 ## 6. Fora do escopo
 
 - Plugins `overwrite_calc_fine`.
-- Lançamento da multa na conta (`UpdateFine`), multa acumulada pelo cron (`fines.pl`), suspensão por atraso (`finedays`).
+- Lançamento da multa na conta: [conta.md](conta.md). Multa acumulada pelo cron (`fines.pl`): tarefa 3.7. Suspensão por atraso: [suspensao.md](suspensao.md).
 - Distinguir *recall* do exemplar e *recall* do registro: hoje basta "o registro tem um *recall* em atraso", que dá o mesmo valor nos dois casos.

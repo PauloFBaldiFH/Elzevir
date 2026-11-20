@@ -1,6 +1,6 @@
 # Devolução
 
-> Status: tarefa 3.5, partes a, c e d (devolução sem multa; a suspensão está em [suspensao.md](suspensao.md)). A multa vem com a conta do leitor (3.7) e a reserva encontrada na devolução com as reservas (3.8). Base: Koha 26.05.05.
+> Status: tarefa 3.5, partes a, c e d; a suspensão está em [suspensao.md](suspensao.md) e a multa em [conta.md](conta.md) (3.7). A reserva encontrada na devolução vem com as reservas (3.8). Base: Koha 26.05.05.
 
 ## 1. Comportamento
 

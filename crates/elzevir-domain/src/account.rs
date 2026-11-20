@@ -1,0 +1,378 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! A patron's account: what they owe and how an overdue fine is charged
+//! (docs/specs/circulacao/conta.md).
+
+use elzevir_data::RuleKind;
+
+use crate::catalog::Money;
+use crate::checkout::perl_whole;
+use crate::circulation_rules::{CirculationRule, RuleScopeKey, effective_rule};
+use crate::due_date::LengthUnit;
+use crate::fine::FineRule;
+
+/// Why a patron owes something.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DebitType {
+    /// An overdue fine (`OVERDUE`).
+    Overdue,
+}
+
+impl DebitType {
+    /// The code stored in the account, Koha's.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::Overdue => "OVERDUE",
+        }
+    }
+
+    /// The type of a stored code.
+    #[must_use]
+    pub fn from_code(code: &str) -> Option<Self> {
+        (code == "OVERDUE").then_some(Self::Overdue)
+    }
+}
+
+/// Where an overdue fine stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum OverdueStatus {
+    /// The Item is still on loan, so the fine may still grow (`UNRETURNED`).
+    Unreturned,
+    /// The Item came back; the fine no longer changes (`RETURNED`).
+    Returned,
+}
+
+impl OverdueStatus {
+    /// The code stored in the account, Koha's.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::Unreturned => "UNRETURNED",
+            Self::Returned => "RETURNED",
+        }
+    }
+}
+
+/// What charging an overdue fine does to the account.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FineUpdate {
+    /// Nothing changes.
+    Nothing,
+    /// A new fine of this amount.
+    Charge(Money),
+    /// The loan's fine becomes this amount.
+    Adjust(Money),
+}
+
+/// How the loan's fine changes when it is worth `amount`.
+///
+/// `charged` is the loan's fine still growing, if any; `overdue_outstanding` is what the
+/// patron still owes in overdue fines, that one included; `max_fine` is `MaxFine`. A new
+/// fine of zero is not charged, and the loan's fine only changes when the cents change.
+///
+/// Koha: `C4::Overdues::UpdateFine`
+#[must_use]
+pub fn update_fine(
+    amount: Money,
+    charged: Option<Money>,
+    overdue_outstanding: Money,
+    max_fine: Option<Money>,
+) -> FineUpdate {
+    let mut amount = amount.0;
+    if let Some(Money(max)) = max_fine.filter(|max| max.0 != 0) {
+        let max_increase = max - overdue_outstanding.0;
+        if max_increase <= 0 {
+            return FineUpdate::Nothing;
+        }
+        match charged {
+            Some(Money(before)) if amount - before > max_increase => amount = before + max_increase,
+            None if amount > max_increase => amount = max_increase,
+            _ => {}
+        }
+    }
+    match charged {
+        Some(Money(before)) if before == amount => FineUpdate::Nothing,
+        Some(_) => FineUpdate::Adjust(Money(amount)),
+        None if amount == 0 => FineUpdate::Nothing,
+        None => FineUpdate::Charge(Money(amount)),
+    }
+}
+
+/// What a fine still owes after its amount changes from `before` to `after`.
+///
+/// What was paid stays paid; a fine that goes below what was paid owes nothing.
+///
+/// Koha: `Koha::Account::Line::adjust`
+#[must_use]
+pub fn adjusted_outstanding(before: Money, outstanding: Money, after: Money) -> Money {
+    Money((outstanding.0 + after.0 - before.0).max(0))
+}
+
+/// The fine part of the rules that apply at `at`, for loans counted in `unit`.
+///
+/// Missing whole numbers are 0 and missing or empty amounts are none, as Koha reads them.
+///
+/// Koha: `C4::Overdues::CalcFine` (the rules it reads).
+#[must_use]
+pub fn fine_rule(rules: &[CirculationRule], at: &RuleScopeKey, unit: LengthUnit) -> FineRule {
+    let value = |kind| effective_rule(rules, kind, at).map(|rule| rule.value.as_str());
+    let whole = |kind| value(kind).map_or(0, perl_whole);
+    let amount = |kind| value(kind).and_then(rule_money);
+    FineRule {
+        unit,
+        grace: whole(RuleKind::Firstremind),
+        charge_period: whole(RuleKind::Chargeperiod),
+        charge_at_start: whole(RuleKind::ChargeperiodChargeAt) == 1,
+        fine: amount(RuleKind::Fine),
+        cap: amount(RuleKind::Overduefinescap),
+        cap_to_replacement_price: whole(RuleKind::CapFineToReplacementPrice) == 1,
+        recall_fine: amount(RuleKind::RecallOverdueFine),
+    }
+}
+
+/// An amount written in a rule (`0.50`, `1`, `2.5`), in cents; `None` when empty.
+///
+/// Like Perl, the leading number counts and the rest is ignored; past the cents, the amount
+/// is rounded half away from zero, as Koha shows prices.
+#[must_use]
+pub fn rule_money(value: &str) -> Option<Money> {
+    let text = value.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let (negative, text) = text
+        .strip_prefix('-')
+        .map_or((false, text), |rest| (true, rest));
+    let digits = |part: &str| {
+        part.find(|c: char| !c.is_ascii_digit())
+            .map_or(part.len(), |end| end)
+    };
+    let whole_end = digits(text);
+    let whole: i64 = text.get(..whole_end)?.parse().unwrap_or(0);
+    let fraction = text
+        .get(whole_end..)
+        .and_then(|rest| rest.strip_prefix('.'))
+        .map_or("", |rest| rest.get(..digits(rest)).unwrap_or(""));
+    let mut tenths = fraction.bytes().map(|b| i64::from(b - b'0'));
+    let cents = tenths.next().unwrap_or(0) * 10 + tenths.next().unwrap_or(0);
+    let round_up = i64::from(tenths.next().unwrap_or(0) >= 5);
+    let cents = whole.saturating_mul(100).saturating_add(cents + round_up);
+    Some(Money(if negative { -cents } else { cents }))
+}
+
+/// The library's settings for debts, with Koha's defaults.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DebtSettings {
+    /// `noissuescharge` (Koha: 5): above it the patron cannot borrow; zero or none never
+    /// blocks.
+    pub limit: Option<Money>,
+    /// `AllowFineOverride` (Koha: off): the staff may confirm past the limit.
+    pub allow_override: bool,
+    /// `AllFinesNeedOverride` (Koha: on): any debt asks the staff to confirm.
+    pub all_need_override: bool,
+    /// `MaxFine` (Koha: none): the most a patron owes in overdue fines.
+    pub max_fine: Option<Money>,
+}
+
+impl Default for DebtSettings {
+    fn default() -> Self {
+        Self {
+            limit: Some(Money(500)),
+            allow_override: false,
+            all_need_override: true,
+            max_fine: None,
+        }
+    }
+}
+
+/// What a patron's debt does to a checkout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DebtCheck {
+    /// Nothing.
+    Clear,
+    /// The staff must confirm (`DEBT` in `needsconfirmation`).
+    Confirm(Money),
+    /// The checkout cannot happen (`DEBT` in `issuingimpossible`).
+    Impossible(Money),
+}
+
+/// What the patron's debt, the outstanding debits, does to a checkout.
+///
+/// Koha: `C4::Circulation::CanBookBeIssued` (`DEBT`, with `IssuingInProcess` off) and
+/// `Koha::Patron::is_patron_inside_charge_limits`.
+#[must_use]
+pub fn check_debt(owed: Money, settings: &DebtSettings) -> DebtCheck {
+    let over = settings
+        .limit
+        .is_some_and(|limit| limit.0 != 0 && owed > limit);
+    if over && settings.allow_override {
+        DebtCheck::Confirm(owed)
+    } else if over {
+        DebtCheck::Impossible(owed)
+    } else if owed.0 > 0 && settings.all_need_override {
+        DebtCheck::Confirm(owed)
+    } else {
+        DebtCheck::Clear
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rule_amounts_read_like_perl_numbers() {
+        assert_eq!(rule_money(""), None);
+        assert_eq!(rule_money("1"), Some(Money(100)));
+        assert_eq!(rule_money("0.50"), Some(Money(50)));
+        assert_eq!(rule_money("2.5"), Some(Money(250)));
+        assert_eq!(rule_money("0.005"), Some(Money(1)));
+        assert_eq!(rule_money("0.004"), Some(Money(0)));
+        assert_eq!(rule_money("3 reais"), Some(Money(300)));
+        assert_eq!(rule_money("abc"), Some(Money(0)));
+        assert_eq!(rule_money("-1.25"), Some(Money(-125)));
+    }
+
+    // Koha's t/db_dependent/Overdues.t, "UpdateFine tests".
+    #[test]
+    fn a_fine_is_charged_once_and_then_adjusted() {
+        assert_eq!(
+            update_fine(Money(0), None, Money(0), None),
+            FineUpdate::Nothing
+        );
+        assert_eq!(
+            update_fine(Money(50), None, Money(0), None),
+            FineUpdate::Charge(Money(50))
+        );
+        assert_eq!(
+            update_fine(Money(50), Some(Money(50)), Money(50), None),
+            FineUpdate::Nothing
+        );
+        assert_eq!(
+            update_fine(Money(80), Some(Money(50)), Money(50), None),
+            FineUpdate::Adjust(Money(80))
+        );
+        assert_eq!(
+            update_fine(Money(0), Some(Money(50)), Money(50), None),
+            FineUpdate::Adjust(Money(0))
+        );
+    }
+
+    // Koha's t/db_dependent/Overdues.t, "UpdateFine tests", with `MaxFine` 100.
+    #[test]
+    fn max_fine_follows_kohas_sequence() {
+        let max = Some(Money(10_000));
+        let fine = |amount, charged, owed| update_fine(Money(amount), charged, Money(owed), max);
+        assert_eq!(fine(5000, None, 0), FineUpdate::Charge(Money(5000)));
+        assert_eq!(
+            fine(8000, Some(Money(5000)), 5000),
+            FineUpdate::Adjust(Money(8000))
+        );
+        // A second Item: only 20 are left under the cap.
+        assert_eq!(fine(3000, None, 8000), FineUpdate::Charge(Money(2000)));
+        assert_eq!(fine(4000, Some(Money(2000)), 10_000), FineUpdate::Nothing);
+        // 30 paid on the first fine: the second may grow again.
+        assert_eq!(
+            fine(3000, Some(Money(2000)), 7000),
+            FineUpdate::Adjust(Money(3000))
+        );
+        // The first Item, renewed and late again, gets a new fine capped at 20.
+        assert_eq!(fine(3000, None, 8000), FineUpdate::Charge(Money(2000)));
+    }
+
+    #[test]
+    fn max_fine_caps_what_the_patron_owes_in_fines() {
+        let max = Some(Money(300));
+        // 2.00 owed elsewhere: a new fine of 5.00 becomes 1.00.
+        assert_eq!(
+            update_fine(Money(500), None, Money(200), max),
+            FineUpdate::Charge(Money(100))
+        );
+        // At the cap nothing changes, not even a decrease.
+        assert_eq!(
+            update_fine(Money(0), Some(Money(100)), Money(300), max),
+            FineUpdate::Nothing
+        );
+        // The loan's 1.00 counts in what is owed: it grows by the 1.00 left.
+        assert_eq!(
+            update_fine(Money(500), Some(Money(100)), Money(200), max),
+            FineUpdate::Adjust(Money(200))
+        );
+        assert_eq!(
+            update_fine(Money(500), None, Money(0), Some(Money(0))),
+            FineUpdate::Charge(Money(500))
+        );
+    }
+
+    #[test]
+    fn an_adjusted_fine_keeps_what_was_paid() {
+        assert_eq!(
+            adjusted_outstanding(Money(100), Money(100), Money(300)),
+            Money(300)
+        );
+        assert_eq!(
+            adjusted_outstanding(Money(300), Money(100), Money(400)),
+            Money(200)
+        );
+        assert_eq!(
+            adjusted_outstanding(Money(300), Money(100), Money(100)),
+            Money(0)
+        );
+    }
+
+    #[test]
+    fn debts_block_or_ask_like_koha() {
+        let settings = DebtSettings::default();
+        assert_eq!(check_debt(Money(0), &settings), DebtCheck::Clear);
+        assert_eq!(
+            check_debt(Money(500), &settings),
+            DebtCheck::Confirm(Money(500))
+        );
+        assert_eq!(
+            check_debt(Money(501), &settings),
+            DebtCheck::Impossible(Money(501))
+        );
+        let lenient = DebtSettings {
+            allow_override: true,
+            all_need_override: false,
+            ..settings
+        };
+        assert_eq!(check_debt(Money(300), &lenient), DebtCheck::Clear);
+        assert_eq!(
+            check_debt(Money(501), &lenient),
+            DebtCheck::Confirm(Money(501))
+        );
+        let no_limit = DebtSettings {
+            limit: Some(Money(0)),
+            all_need_override: false,
+            ..settings
+        };
+        assert_eq!(check_debt(Money(10_000), &no_limit), DebtCheck::Clear);
+    }
+
+    #[test]
+    fn the_fine_rule_reads_the_rules_like_koha() {
+        let at = RuleScopeKey {
+            branch: None,
+            category: None,
+            policy: None,
+        };
+        let rule = |kind, value: &str| CirculationRule {
+            kind,
+            scope: at,
+            value: value.to_owned(),
+        };
+        let rules = [
+            rule(RuleKind::Fine, "0.25"),
+            rule(RuleKind::Chargeperiod, "1"),
+            rule(RuleKind::Firstremind, "2"),
+            rule(RuleKind::Overduefinescap, ""),
+        ];
+        let read = fine_rule(&rules, &at, LengthUnit::Days);
+        assert_eq!(read.fine, Some(Money(25)));
+        assert_eq!((read.charge_period, read.grace), (1, 2));
+        assert_eq!(read.cap, None);
+        assert!(!read.charge_at_start && !read.cap_to_replacement_price);
+        assert_eq!(fine_rule(&[], &at, LengthUnit::Days).fine, None);
+    }
+}

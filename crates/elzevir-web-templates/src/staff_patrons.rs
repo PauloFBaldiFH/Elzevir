@@ -59,6 +59,8 @@ pub struct StaffPatron<'a> {
     pub csrf: &'a str,
     /// The text of the suspension, while it holds.
     pub suspended: Option<String>,
+    /// What the patron owes, when they owe something.
+    pub owed: Option<String>,
     /// The patron's loans, the first due first.
     pub loans: Vec<LoanLine>,
     /// The branches the desk may be at, and the one it is at.

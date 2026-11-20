@@ -24,7 +24,7 @@ use elzevir_app::loans::{
 use elzevir_app::patrons::{
     CategoryChange, PatronCommand, PatronFields, PatronOutput, ReadingHistory,
 };
-use elzevir_domain::catalog::{BranchId, InstanceId};
+use elzevir_domain::catalog::{BranchId, InstanceId, Money};
 use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome, TransferReason};
 use elzevir_domain::checkout::{Alert, Confirm, Impossible, TooManyReason};
 use elzevir_domain::circulation_rules::RuleScopeKey;
@@ -450,6 +450,7 @@ fn a_returned_item_goes_home_and_its_transfer_arrives() {
                 reason: TransferReason::ReturnToHome,
             },
             suspended_until: None,
+            fine: None,
         }
     );
     assert_eq!(library.read::<i64>("SELECT count(*) FROM loans"), 0);
@@ -648,4 +649,61 @@ fn a_late_return_suspends_the_patron_from_borrowing() {
         library.read::<String>("SELECT expires FROM patron_restrictions"),
         "2026-12-30"
     );
+}
+
+#[test]
+fn a_late_return_charges_its_fine_and_debts_hold_back_checkouts() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(&dir);
+    for barcode in ["0001", "0002", "0003"] {
+        library.item(barcode, ItemStatus::default());
+    }
+    library.rules(&[
+        ("maxissueqty", "5"),
+        ("issuelength", "7"),
+        ("fine", "0.50"),
+        ("chargeperiod", "1"),
+    ]);
+    library
+        .lend("0001", "2026-11-19T10:00:00-03:00", false)
+        .unwrap();
+    // Due on the 26th, back on the 30th: four days at 0.50.
+    let back = library
+        .give_back("0001", library.central, "2026-11-30T10:00:00-03:00")
+        .unwrap();
+    assert_eq!(back.fine, Some(Money(200)));
+    assert_eq!(
+        library.read::<String>(
+            "SELECT debit_type || ' ' || status || ' ' || amount || ' ' || outstanding
+             FROM account_lines"
+        ),
+        "OVERDUE RETURNED 200 200"
+    );
+    assert_eq!(
+        library.read::<String>("SELECT kind || ' ' || amount FROM account_offsets"),
+        "CREATE 200"
+    );
+    // Any debt asks the staff first (`AllFinesNeedOverride`).
+    assert_eq!(
+        library.lend("0002", "2026-12-01T10:00:00-03:00", false),
+        Err(CheckoutRefusal::NeedsConfirmation(vec![Confirm::Debt(
+            Money(200)
+        )]))
+    );
+    library
+        .lend("0002", "2026-12-01T10:00:00-03:00", true)
+        .unwrap();
+    // Due on the 8th, back on the 20th: twelve days, 6.00; 8.00 is over the limit of 5.00.
+    let back = library
+        .give_back("0002", library.central, "2026-12-20T10:00:00-03:00")
+        .unwrap();
+    assert_eq!(back.fine, Some(Money(600)));
+    assert_eq!(
+        library.lend("0003", "2026-12-21T10:00:00-03:00", true),
+        Err(CheckoutRefusal::Impossible(vec![Impossible::Debt(Money(
+            800
+        ))]))
+    );
+    // One fine per late return.
+    assert_eq!(library.read::<i64>("SELECT count(*) FROM account_lines"), 2);
 }

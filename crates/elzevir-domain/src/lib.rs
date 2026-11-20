@@ -3,6 +3,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod account;
 pub mod calendar;
 pub mod call_number;
 pub mod catalog;

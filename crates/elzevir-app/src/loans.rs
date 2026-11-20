@@ -2,7 +2,7 @@
 //! Lending an Item to a patron and taking it back (docs/specs/circulacao/emprestimo.md,
 //! docs/specs/circulacao/devolucao.md).
 
-use elzevir_domain::catalog::{BranchId, ItemId};
+use elzevir_domain::catalog::{BranchId, ItemId, Money};
 use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome};
 use elzevir_domain::checkout::{Alert, Confirm, Impossible};
 use elzevir_domain::patron::PatronId;
@@ -121,6 +121,8 @@ pub struct CheckedIn {
     pub destination: Destination,
     /// When the patron's suspension ends, when a late return suspended them.
     pub suspended_until: Option<Date>,
+    /// The overdue fine the late return charged, as it stands now.
+    pub fine: Option<Money>,
 }
 
 /// Why a checkin did not happen.
@@ -236,6 +238,13 @@ pub trait LoanDesk: Send + Sync {
         patron: PatronId,
         today: Date,
     ) -> Result<Option<SuspensionEnd>, CirculationDeskError>;
+
+    /// What the patron owes: the outstanding debits.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn owed(&self, patron: PatronId) -> Result<Money, CirculationDeskError>;
 
     /// The branch an Item is at, as the desk of a checkout from its pill.
     ///

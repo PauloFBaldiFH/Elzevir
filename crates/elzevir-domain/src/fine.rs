@@ -37,6 +37,27 @@ pub enum FinesCalendar {
     NoFinesWhenClosed,
 }
 
+/// The library's settings for overdue fines, with Koha's defaults.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FineSettings {
+    /// `CalculateFinesOnReturn` (Koha: on): a late return charges its fine.
+    pub on_return: bool,
+    /// `finesCalendar` (Koha: closed days do not count).
+    pub calendar: FinesCalendar,
+    /// `FinesIncludeGracePeriod` (Koha: on).
+    pub include_grace: bool,
+}
+
+impl Default for FineSettings {
+    fn default() -> Self {
+        Self {
+            on_return: true,
+            calendar: FinesCalendar::NoFinesWhenClosed,
+            include_grace: true,
+        }
+    }
+}
+
 /// Everything `calc_fine` reads besides the dates.
 #[derive(Debug, Clone, Copy)]
 pub struct FineContext<'a> {
