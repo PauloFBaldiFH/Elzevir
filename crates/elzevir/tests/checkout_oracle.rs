@@ -18,7 +18,7 @@ use elzevir_app::catalog::ItemStatus;
 use elzevir_app::circulation_rules::{CirculationCommand, CirculationOutput, CirculationRefusal};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::loans::{CheckedOut, CheckoutRefusal, CheckoutRequest};
-use elzevir_domain::checkout::{Confirm, Impossible, TooMany, TooManyReason};
+use elzevir_domain::checkout::{Confirm, HeldFor, Impossible, TooMany, TooManyReason};
 use elzevir_domain::circulation_rules::RuleScopeKey;
 use elzevir_domain::suspension::SuspensionEnd;
 use elzevir_store::CommandFailed;
@@ -206,6 +206,9 @@ fn elzevir_keys(outcome: &Result<CheckedOut, CheckoutRefusal>) -> Keys {
                     }
                     Confirm::NotForLoan(_) => "NOT_FOR_LOAN_FORCING",
                     Confirm::Lost(_) => "ITEM_LOST",
+                    Confirm::Held(HeldFor::Waiting) => "RESERVE_WAITING",
+                    Confirm::Held(HeldFor::InTransit) => "TRANSFERRED",
+                    Confirm::Held(HeldFor::Reserved) => "RESERVED",
                 };
                 keys.confirms.insert(key.to_owned());
             }

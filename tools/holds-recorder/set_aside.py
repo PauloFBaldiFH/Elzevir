@@ -9,7 +9,9 @@ Reads the same variables as tools/circ-rules-recorder/record.py and never prints
 For two records with an Item on the shelf at MAIN, the recorder places a record hold for
 the sample patron, checks the Item in at MAIN (`circ/returns.pl`), notes whether Koha found
 the hold, confirms it as the staff do (`cud-affect_reserve`) and reads the hold back: the
-first time with an empty `holds_pickup_period` rule, the second with three days. Afterwards it cancels
+first time with an empty `holds_pickup_period` rule, the second with three days. Then it
+asks whether lending the Item to the sample patron needs a hold confirmation, lends it
+(`POST /api/v1/checkouts`), notes whether the hold was filled, and checks the Item in. Afterwards it cancels
 every hold of the sample patron and puts the rules back, checking that they are as they
 were. Use it only on the disposable test instance, and only with its sample patron.
 """
@@ -41,7 +43,11 @@ PREFERENCES = {
     "UseBranchTransferLimits": "0",
 }
 RULES = {"reservesallowed", "holds_per_record", "holdallowed", "hold_fulfillment_policy",
-         "holds_pickup_period", "returnbranch"}
+         "holds_pickup_period", "returnbranch", "fill_other_biblio_holds_policy",
+         "maxissueqty", "maxonsiteissueqty", "patron_maxissueqty", "patron_maxonsiteissueqty",
+         "issuelength", "lengthunit", "daysmode", "hardduedate", "hardduedatecompare"}
+# The hold confirmations of `CanBookBeIssued`.
+HELD = {"RESERVE_WAITING", "RESERVED", "TRANSFERRED"}
 TOUCHED = {"reservesallowed", "holds_pickup_period"}
 
 
@@ -53,9 +59,11 @@ class Recorder:
     def preference(self, name):
         return self.oracle.get("/cgi-bin/koha/svc/config/systempreferences?" + urllib.parse.urlencode({"pref": name}))["value"]
 
-    def rules(self):
+    def rules(self, item_types):
         rules = []
         for raw in self.oracle.get("/api/v1/circulation_rules?effective=false"):
+            if raw["context"]["item_type_id"] not in {"*", *item_types}:
+                continue
             kept = {name: value for name, value in present(raw).items() if name in RULES}
             if kept:
                 rules.append({"context": raw["context"], "rules": kept})
@@ -106,6 +114,19 @@ class Recorder:
         }).encode()
         self.oracle.open("/cgi-bin/koha/circ/returns.pl", data=form)
 
+    def held_confirm(self, item):
+        query = urllib.parse.urlencode({"patron_id": PATRON, "item_id": item["item_id"]})
+        answer = self.oracle.get(f"/api/v1/checkouts/availability?{query}")
+        return bool(HELD & set(answer.get("confirms") or {}))
+
+    def lend(self, item):
+        body = json.dumps({"item_id": item["item_id"], "patron_id": PATRON}).encode()
+        headers = {**self.json_headers}
+        self.oracle.open("/api/v1/checkouts", data=body, method="POST", headers=headers)
+
+    def loans(self):
+        return self.oracle.get("/api/v1/checkouts?" + urllib.parse.urlencode({"patron_id": PATRON}))
+
     def cancel(self, hold):
         self.oracle.open(f"/api/v1/holds/{hold}", method="DELETE", headers=self.json_headers)
 
@@ -131,8 +152,15 @@ def steps(recorder):
         if found == hold:
             recorder.affect(item, hold)
         after = next(found_hold for found_hold in recorder.holds() if found_hold["hold_id"] == hold)
+        # The holder borrows the Item: Koha asks nothing about the hold and fills it.
+        held_confirm = recorder.held_confirm(item)
+        recorder.lend(item)
+        filled = all(found_hold["hold_id"] != hold for found_hold in recorder.holds())
+        recorder.check_in(item)
         record["steps"].append({
-            "rules": recorder.rules(),
+            "rules": recorder.rules({item["item_type_id"]}),
+            "held_confirm": held_confirm,
+            "filled": filled,
             "at": at,
             "found": found == hold,
             "status": after["status"],
@@ -159,14 +187,20 @@ def main():
         sys.exit("the sample patron already has holds: cancel them first")
     if oracle.get(f"/api/v1/patrons/{PATRON}")["restricted"]:
         sys.exit("the sample patron is restricted: lift it first")
+    if recorder.loans():
+        sys.exit("the sample patron already has loans: return them first")
     try:
         record = steps(recorder)
     finally:
         for hold in recorder.holds():
             recorder.cancel(hold["hold_id"])
         oracle.put_rules(CONTEXT, {name: before.get(name) for name in TOUCHED})
+        for loan in recorder.loans():
+            recorder.check_in(oracle.get(f"/api/v1/items/{loan['item_id']}"))
         if recorder.holds():
             sys.exit("the sample patron still has holds: cancel them by hand")
+        if recorder.loans():
+            sys.exit("the sample patron still has loans: return them by hand")
         if oracle.get("/api/v1/circulation_rules?effective=false") != before_rules:
             sys.exit("the oracle's rules did not come back as they were: check them by hand")
     json.dump({

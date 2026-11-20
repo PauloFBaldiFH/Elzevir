@@ -819,7 +819,11 @@ fn a_returned_item_is_set_aside_for_its_hold_at_the_checkin_desk() {
         &store,
         WriteCommand::Circulation(CirculationCommand::SetRules(RuleChange {
             scope: RuleScopeKey::default(),
-            values: vec![("reservesallowed".to_owned(), Some("3".to_owned()))],
+            values: vec![
+                ("reservesallowed".to_owned(), Some("3".to_owned())),
+                ("maxissueqty".to_owned(), Some("5".to_owned())),
+                ("issuelength".to_owned(), Some("7".to_owned())),
+            ],
         })),
     );
     store.shutdown().unwrap();
@@ -867,6 +871,19 @@ fn a_returned_item_is_set_aside_for_its_hold_at_the_checkin_desk() {
     );
     let shown = request(address, "GET", &record, &cir, "");
     assert!(shown.contains("Waiting until"), "{shown}");
+    // The patron borrows it: the hold is filled and leaves the record.
+    let lent = request(
+        address,
+        "POST",
+        &format!("{record}/circulacao"),
+        &form,
+        &format!("csrf={token}&op=lend&barcode=0001&desk={desk}"),
+    );
+    assert_status(&lent, 200);
+    assert!(
+        lent.contains("Lent until") && !lent.contains("Waiting until"),
+        "{lent}"
+    );
     assert_status(
         &request(
             address,

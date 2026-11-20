@@ -374,6 +374,20 @@ pub enum Confirm {
     NotForLoan(i64),
     /// The Item is lost (`ITEM_LOST`).
     Lost(i64),
+    /// The Item answers another patron's hold (`RESERVE_WAITING`, `TRANSFERRED`,
+    /// `RESERVED`).
+    Held(HeldFor),
+}
+
+/// How the Item answers another patron's hold.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeldFor {
+    /// It waits for them at the pickup branch (`RESERVE_WAITING`).
+    Waiting,
+    /// It is in transit to their pickup branch (`TRANSFERRED`).
+    InTransit,
+    /// It may fill their hold (`RESERVED`).
+    Reserved,
 }
 
 /// Something the staff are told without stopping the checkout.
@@ -417,13 +431,14 @@ pub struct CheckoutFacts {
     pub item: ItemFacts,
     /// The loan limit the checkout would pass, from [`too_many`].
     pub too_many: Option<TooMany>,
+    /// The hold of another patron the Item answers, if any.
+    pub held_for_another: Option<HeldFor>,
 }
 
 /// Whether a checkout may happen.
 ///
 /// Koha: `C4::Circulation::CanBookBeIssued`, for the patron's suspension, expiry and debt,
-/// the Item's current loan, the loan limits and the Item's status. Overdues and holds come
-/// with their tasks (doc 03, task 3.8).
+/// the Item's current loan, the loan limits, the Item's status and the holds it answers.
 #[must_use]
 pub fn check_checkout(facts: &CheckoutFacts, settings: &CheckoutSettings) -> CheckoutCheck {
     let mut check = CheckoutCheck::default();
@@ -479,6 +494,9 @@ pub fn check_checkout(facts: &CheckoutFacts, settings: &CheckoutSettings) -> Che
             LostItemCheckout::Alert => check.alerts.push(Alert::Lost(item.lost)),
             LostItemCheckout::Nothing => {}
         }
+    }
+    if let Some(held) = facts.held_for_another {
+        check.confirm.push(Confirm::Held(held));
     }
     check
 }
@@ -766,6 +784,7 @@ mod tests {
                 on_loan: Some(LoanHolder::AnotherPatron),
             },
             too_many: Some(limit.clone()),
+            held_for_another: Some(HeldFor::Reserved),
         };
         let check = check_checkout(&facts, &CheckoutSettings::default());
         assert_eq!(
@@ -779,7 +798,11 @@ mod tests {
         );
         assert_eq!(
             check.confirm,
-            [Confirm::IssuedToAnother, Confirm::TooMany(limit.clone())]
+            [
+                Confirm::IssuedToAnother,
+                Confirm::TooMany(limit.clone()),
+                Confirm::Held(HeldFor::Reserved)
+            ]
         );
         assert_eq!(check.alerts, [Alert::Lost(1)]);
         assert!(!check.is_possible());
@@ -801,7 +824,14 @@ mod tests {
                 Impossible::Withdrawn
             ]
         );
-        assert_eq!(check.confirm, [Confirm::NotForLoan(-1), Confirm::Lost(1)]);
+        assert_eq!(
+            check.confirm,
+            [
+                Confirm::NotForLoan(-1),
+                Confirm::Lost(1),
+                Confirm::Held(HeldFor::Reserved)
+            ]
+        );
         assert_eq!(check.alerts, [Alert::ReturnedFromAnother]);
     }
 
@@ -822,6 +852,7 @@ mod tests {
                 ..ItemFacts::default()
             },
             too_many: Some(zero.clone()),
+            held_for_another: None,
         };
         assert_eq!(
             check_checkout(&renewing, &CheckoutSettings::default()).confirm,

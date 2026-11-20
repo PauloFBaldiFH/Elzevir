@@ -45,19 +45,28 @@
       "patron_category_id": "*"
      },
      "rules": {
+      "daysmode": "Datedue",
+      "hardduedate": "",
+      "hardduedatecompare": "-1",
       "holds_per_record": "",
       "holds_pickup_period": "",
+      "issuelength": "14",
+      "lengthunit": "days",
+      "maxissueqty": "4",
+      "maxonsiteissueqty": "4",
       "reservesallowed": "3"
      }
     }
    ],
-   "at": "2026-11-20T02:39:56+00:00",
+   "held_confirm": false,
+   "filled": true,
+   "at": "2026-11-20T09:30:13+00:00",
    "found": true,
    "status": "W",
    "priority": 0,
    "item_set": true,
-   "waiting_date": "2026-11-19",
-   "expiration_date": "2026-11-26"
+   "waiting_date": "2026-11-20",
+   "expiration_date": "2026-11-27"
   },
   {
    "rules": [
@@ -68,19 +77,28 @@
       "patron_category_id": "*"
      },
      "rules": {
+      "daysmode": "Datedue",
+      "hardduedate": "",
+      "hardduedatecompare": "-1",
       "holds_per_record": "",
       "holds_pickup_period": "3",
+      "issuelength": "14",
+      "lengthunit": "days",
+      "maxissueqty": "4",
+      "maxonsiteissueqty": "4",
       "reservesallowed": "3"
      }
     }
    ],
-   "at": "2026-11-20T02:40:00+00:00",
+   "held_confirm": false,
+   "filled": true,
+   "at": "2026-11-20T09:30:20+00:00",
    "found": true,
    "status": "W",
    "priority": 0,
    "item_set": true,
-   "waiting_date": "2026-11-19",
-   "expiration_date": "2026-11-22"
+   "waiting_date": "2026-11-20",
+   "expiration_date": "2026-11-23"
   }
  ]
 }
