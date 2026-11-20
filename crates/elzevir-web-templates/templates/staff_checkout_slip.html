@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ t.get(title_key) }}{% endblock %}
+{% block content %}
+<div class="checkout-slip">
+<p class="print-hide"><a href="{{ record }}">{{ t.get("slip-back") }}</a> · {{ t.get("slip-print-hint") }}</p>
+<h1>{{ t.get(title_key) }}</h1>
+<p>{{ name }}<br>{{ t.get("patron-cardnumber") }}: {{ cardnumber }}<br>{{ printed }}</p>
+{% for section in sections %}
+<h2>{{ t.get(section.heading_key) }}</h2>
+{% if section.lines.is_empty() %}<p>{{ t.get("slip-none") }}</p>{% else %}
+<ul class="slip-lines">
+{% for line in section.lines %}<li>{{ line.title }}<br><code>{{ line.barcode }}</code> · {{ t.get_with("loans-due", "date", line.due) }}</li>{% endfor %}
+</ul>
+{% endif %}
+{% endfor %}
+</div>
+{% endblock %}

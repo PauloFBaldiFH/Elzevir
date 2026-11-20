@@ -883,6 +883,48 @@ fn printed_notices_are_listed_and_marked_as_sent() {
 }
 
 #[test]
+fn the_checkout_slip_lists_loans_out_and_overdue_and_the_quick_slip_todays() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    stock(data.path());
+    restricted_for_overdues(data.path(), ana);
+    let (server, address) = start(data.path());
+    let cir = sign_in(address, "cir");
+    let record = format!("/equipe/leitores/{ana}");
+    let page = request(address, "GET", &record, &cir, "");
+    assert!(
+        page.contains(&format!("href=\"{record}/recibo?rapido=1\"")),
+        "{page}"
+    );
+    let lei = sign_in(address, "lei");
+    assert_status(
+        &request(address, "GET", &format!("{record}/recibo"), &lei, ""),
+        403,
+    );
+    let slip = request(address, "GET", &format!("{record}/recibo"), &cir, "");
+    assert_status(&slip, 200);
+    let overdue = slip.split_once("<h2>Overdue</h2>").unwrap().1;
+    assert!(overdue.contains("<code>0001</code>"), "{slip}");
+    assert!(
+        slip.contains("<h2>Checked out</h2>\n<p>None.</p>"),
+        "{slip}"
+    );
+    // Lent weeks ago: nothing on the quick slip.
+    let quick = request(
+        address,
+        "GET",
+        &format!("{record}/recibo?rapido=1"),
+        &cir,
+        "",
+    );
+    assert!(
+        quick.contains("<h1>Quick slip</h1>") && !quick.contains("<code>0001</code>"),
+        "{quick}"
+    );
+    drop(server);
+}
+
+#[test]
 fn holds_are_placed_listed_and_cancelled_on_the_record() {
     let data = tempfile::tempdir().unwrap();
     let ana = library(data.path());

@@ -271,3 +271,44 @@ pub struct PatronFormValues {
     /// Whether the reading history is kept.
     pub history_kept: bool,
 }
+
+/// The checkout slip of a patron, to print (docs/specs/circulacao/avisos.md, items 38 to
+/// 40).
+#[derive(Template)]
+#[template(path = "staff_checkout_slip.html")]
+pub struct StaffCheckoutSlip<'a> {
+    /// Interface texts.
+    pub t: &'a I18n,
+    /// Message key of the title: the slip or the quick slip.
+    pub title_key: &'static str,
+    /// The patron's name.
+    pub name: String,
+    /// The patron's card number.
+    pub cardnumber: String,
+    /// When it was printed, as shown.
+    pub printed: String,
+    /// The patron's record, to go back.
+    pub record: String,
+    /// Its parts.
+    pub sections: Vec<SlipSection>,
+}
+
+/// One part of a slip, such as the overdue loans.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlipSection {
+    /// Message key of its heading.
+    pub heading_key: &'static str,
+    /// Its loans.
+    pub lines: Vec<SlipLine>,
+}
+
+/// One loan on a slip.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlipLine {
+    /// The title.
+    pub title: String,
+    /// The barcode.
+    pub barcode: String,
+    /// When it is due, as shown.
+    pub due: String,
+}

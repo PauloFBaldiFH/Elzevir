@@ -11,6 +11,7 @@ use elzevir_app::staff::StaffId;
 use elzevir_domain::catalog::{BranchId, ItemId, Money};
 use elzevir_domain::patron::PatronId;
 use elzevir_domain::suspension::{RestrictionKind, SuspensionEnd};
+use jiff::Zoned;
 use jiff::civil::Date;
 use rusqlite::OptionalExtension;
 
@@ -25,25 +26,32 @@ impl LoanDesk for ElzevirStore {
         self.readers()
             .read(|c| {
                 let mut statement = c.prepare_cached(
-                    "SELECT coalesce(i.barcode, ''), n.title, l.due, l.renewals, l.on_site
+                    "SELECT coalesce(i.barcode, ''), n.title, l.due, l.renewals, l.on_site,
+                            l.issued_at, l.renewed_at
                      FROM loans l
                      JOIN items i ON i.id = l.item_id
                      JOIN instances n ON n.id = i.instance_id
                      WHERE l.patron_id = ?1",
                 )?;
                 let rows = statement.query_map([patron.0], |row| {
-                    let due: String = row.get(2)?;
-                    let due = due.parse().map_err(|error: jiff::Error| {
-                        rusqlite::Error::FromSqlConversionFailure(
-                            2,
-                            rusqlite::types::Type::Text,
-                            error.into(),
-                        )
-                    })?;
+                    let moment = |index: usize, text: String| {
+                        text.parse::<Zoned>().map_err(|error| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                index,
+                                rusqlite::types::Type::Text,
+                                error.into(),
+                            )
+                        })
+                    };
                     Ok(PatronLoan {
                         barcode: row.get(0)?,
                         title: row.get(1)?,
-                        due,
+                        due: moment(2, row.get(2)?)?,
+                        issued: moment(5, row.get(5)?)?,
+                        renewed: row
+                            .get::<_, Option<String>>(6)?
+                            .map(|text| moment(6, text))
+                            .transpose()?,
                         renewals: row.get(3)?,
                         on_site: row.get(4)?,
                     })

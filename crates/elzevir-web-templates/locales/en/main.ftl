@@ -925,6 +925,14 @@ loans-renewals = { $count ->
 }
 loans-renew = Renew
 loans-return = Return
+slip-title = Checkout slip
+slip-quick-title = Quick slip
+slip-out = Checked out
+slip-overdue = Overdue
+slip-today = Checked out or renewed today
+slip-none = None.
+slip-back = Back to the record
+slip-print-hint = Print this page with the browser.
 checkout-title = Lend
 checkout-barcode = Item barcode
 checkout-lend = Lend

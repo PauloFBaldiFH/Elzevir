@@ -1,6 +1,6 @@
 # Avisos
 
-> Status: tarefa 3.9, partes a (regras de aviso de atraso e fila de avisos), b (suspensão por aviso), c (envio por e-mail), d (aviso de reserva disponível), e (tela das regras de aviso), f (avisos impressos) e g (textos editáveis). Base: Koha 26.05.05. A parte seguinte traz o recibo.
+> Status: tarefa 3.9, partes a (regras de aviso de atraso e fila de avisos), b (suspensão por aviso), c (envio por e-mail), d (aviso de reserva disponível), e (tela das regras de aviso), f (avisos impressos), g (textos editáveis) e h (recibo de empréstimo). Base: Koha 26.05.05.
 
 ## 1. Comportamento
 
@@ -65,6 +65,12 @@
 36. Marcadores: `{name}` (o leitor), `{library}` (a unidade) e `{items}` (uma linha por exemplar, no formato do item 20) em todos; `{date}` (até quando retirar) só no aviso de reserva. O assunto é uma linha só, com até 200 caracteres; o corpo tem até 8.000. Texto vazio, assunto com mais de uma linha ou chave que não abre um marcador do aviso são recusados sem gravar nada, e a tela volta com o motivo e o que foi digitado.
 37. O texto vale no envio, para o e-mail e para o impresso, também para os avisos que já estavam na fila; os dados entram como estão, sem que um marcador dentro deles seja preenchido de novo.
 
+### Recibo de empréstimo
+
+38. A ficha do leitor tem dois links, que abrem numa aba nova: "Recibo de empréstimo" e "Recibo rápido" (`/equipe/leitores/{id}/recibo`, com `?rapido=1` no rápido), com a permissão de circulação. Abrir um recibo fica no registro de auditoria como abrir a ficha.
+39. O recibo traz o nome e o cartão do leitor, a data e a hora, e duas partes: "Emprestados", com os empréstimos que vencem depois de agora, e "Em atraso", com os que venceram (Koha: `IssueSlip`, carta `ISSUESLIP`). Cada linha tem o título, o código de barras e o vencimento; uma parte sem empréstimos diz "Nenhum".
+40. O recibo rápido traz só os empréstimos feitos ou renovados hoje, no fuso da biblioteca (Koha: `ISSUEQSLIP`). Impressos pelo navegador, os dois tiram o cabeçalho e o link de volta. As notícias do recibo do Koha ficam de fora.
+
 ## 2. Origem no Koha
 
 - `misc/cronjobs/overdue_notices.pl` com `-t` (`debian/koha-common.cron.daily`), `C4::Overdues::GetBranchcodesWithOverdueRules`, `GetOverdueMessageTransportTypes`.
@@ -72,6 +78,7 @@
 - Tabelas `overduerules` e `overduerules_transport_types`; `message_queue` (`C4::Letters::EnqueueLetter`).
 - `C4::Reserves::ModReserveAffect` e `_koha_notify_reserve` (`Hold_Filled`, carta `HOLD`; impresso quando falta o e-mail).
 - `misc/cronjobs/gather_print_notices.pl` (impressos).
+- `C4::Members::IssueSlip` (recibos `ISSUESLIP` e `ISSUEQSLIP`).
 - `tools/letter.pl` e as cartas `ODUE`, `ODUE2`, `ODUE3` e `HOLD` (textos).
 - `misc/cronjobs/process_message_queue.pl` (`*/15` em `debian/koha-common.cron.d`), `C4::Letters::SendQueuedMessages` e `_set_message_status`.
 - `Koha::Patron::Debarments::AddUniqueDebarment`, `UpdateBorrowerDebarmentFlags` (`9999-12-31` quando alguma restrição não tem fim), `DelUniqueDebarment`.
@@ -79,7 +86,7 @@
 
 ## 3. Paridade
 
-`exigida` nos dias de disparo. A corrida do Koha é um script de cron, que o gravador não alcança pela API; a prova é por testes contra o código lido: `crates/elzevir-domain/src/notice.rs` (dias com e sem calendário, nível que dispara, meios) e `crates/elzevir-store/tests/notices.rs` (regras da unidade e de qualquer unidade, categoria sem regra, atraso exato, um aviso por dia, e-mail que vira impresso, exemplar perdido fora, nível que suspende sem meio, empréstimo recusado até a equipe retirar, corrida repetida no dia que não suspende de novo, avisos de e-mail pendentes com seus exemplares, marcados como enviados). `crates/elzevir-store/tests/checkout.rs` testa o aviso de reserva: sem preferência nada sai, em trânsito nada sai, ao chegar sai um impresso para o leitor sem e-mail, e separar de novo não repete. A tela é testada em `crates/elzevir/tests/circulation_rules.rs` (gravar e ler uma regra, dias inválidos, preferência de reserva, sem permissão), e os impressos em `crates/elzevir/tests/patrons.rs` (listar, marcar como enviado). Os textos são testados em `crates/elzevir-domain/src/notice_text.rs` (marcadores e recusas), no envio (texto da biblioteca no lugar do padrão) e na tela (gravar, recusar, voltar ao padrão). O envio é testado contra um servidor SMTP falso em `crates/elzevir/src/notice_mail.rs` (aceito, recusado, fora do ar) e o texto nas duas línguas.
+`exigida` nos dias de disparo. A corrida do Koha é um script de cron, que o gravador não alcança pela API; a prova é por testes contra o código lido: `crates/elzevir-domain/src/notice.rs` (dias com e sem calendário, nível que dispara, meios) e `crates/elzevir-store/tests/notices.rs` (regras da unidade e de qualquer unidade, categoria sem regra, atraso exato, um aviso por dia, e-mail que vira impresso, exemplar perdido fora, nível que suspende sem meio, empréstimo recusado até a equipe retirar, corrida repetida no dia que não suspende de novo, avisos de e-mail pendentes com seus exemplares, marcados como enviados). `crates/elzevir-store/tests/checkout.rs` testa o aviso de reserva: sem preferência nada sai, em trânsito nada sai, ao chegar sai um impresso para o leitor sem e-mail, e separar de novo não repete. A tela é testada em `crates/elzevir/tests/circulation_rules.rs` (gravar e ler uma regra, dias inválidos, preferência de reserva, sem permissão), e os impressos em `crates/elzevir/tests/patrons.rs` (listar, marcar como enviado). O recibo é testado em `crates/elzevir-web/src/checkout_slip.rs` (as partes e o rápido) e em `crates/elzevir/tests/patrons.rs` (contra o servidor). Os textos são testados em `crates/elzevir-domain/src/notice_text.rs` (marcadores e recusas), no envio (texto da biblioteca no lugar do padrão) e na tela (gravar, recusar, voltar ao padrão). O envio é testado contra um servidor SMTP falso em `crates/elzevir/src/notice_mail.rs` (aceito, recusado, fora do ar) e o texto nas duas línguas.
 
 ## 4. Casos de borda
 

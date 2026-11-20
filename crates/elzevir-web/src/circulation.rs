@@ -52,7 +52,7 @@ pub(crate) fn now(state: &AppState) -> Zoned {
 }
 
 /// A due date as shown: the day, and the time unless it is the end of the day.
-fn due_text(t: &I18n, due: &Zoned) -> String {
+pub(crate) fn due_text(t: &I18n, due: &Zoned) -> String {
     let day = shown(t, due.date());
     if (due.hour(), due.minute()) == (23, 59) {
         day
@@ -250,6 +250,10 @@ pub(crate) fn routes() -> axum::Router<AppState> {
             post(crate::patron_holds::change),
         )
         .route(
+            "/equipe/leitores/{id}/recibo",
+            get(crate::checkout_slip::slip),
+        )
+        .route(
             "/equipe/leitores/{id}/restricoes",
             post(crate::patron_holds::lift_restriction),
         )
@@ -399,7 +403,7 @@ fn restriction_rows(
         .collect()
 }
 
-fn unavailable(error: CirculationDeskError) -> elzevir_app::patrons::PatronDeskError {
+pub(crate) fn unavailable(error: CirculationDeskError) -> elzevir_app::patrons::PatronDeskError {
     match error {
         CirculationDeskError::Busy => elzevir_app::patrons::PatronDeskError::Busy,
         other => elzevir_app::patrons::PatronDeskError::Unavailable(other.to_string()),
