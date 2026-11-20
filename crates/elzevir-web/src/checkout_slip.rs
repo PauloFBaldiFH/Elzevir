@@ -115,11 +115,15 @@ fn section(t: &I18n, heading_key: &'static str, loans: &[&PatronLoan]) -> SlipSe
 #[cfg(test)]
 mod tests {
     use super::*;
+    use elzevir_domain::catalog::ItemId;
 
     fn loan(barcode: &str, issued: &str, renewed: Option<&str>, due: &str) -> PatronLoan {
         let at = |text: &str| -> Zoned { format!("{text}[America/Sao_Paulo]").parse().unwrap() };
         PatronLoan {
+            item: ItemId(1),
             barcode: barcode.to_owned(),
+            call_number: None,
+            branch_name: "Central".to_owned(),
             title: "Dom Casmurro".to_owned(),
             due: at(due),
             issued: at(issued),

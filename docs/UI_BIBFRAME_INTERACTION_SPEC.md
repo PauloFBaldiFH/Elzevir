@@ -30,6 +30,8 @@
 20. [Mecânicas pelo olhar do catalogador](#20-mecânicas-pelo-olhar-do-catalogador)
 21. [Importação universal na interface da equipe](#21-importação-universal-na-interface-da-equipe)
 22. [Cabeçalho da equipe e tema](#22-cabeçalho-da-equipe-e-tema)
+23. [Início do OPAC](#23-início-do-opac)
+24. [Zoom: modo compacto e modo completo](#24-zoom-modo-compacto-e-modo-completo)
 
 ## 1. Princípios
 
@@ -323,6 +325,7 @@ Meta: 60 FPS nas transições e resposta perceptível < 100 ms num computador si
 | `M` | Modo mesclar (alternativa ao arraste) |
 | `Ctrl+D` | Na grade, copiar a célula de cima |
 | `Alt+↑` / `Alt+↓` | Reordenar o chip ou a linha selecionada |
+| `Alt+Z` | Alternar entre o modo compacto e o completo (§24) |
 | `?` | Mostrar os atalhos |
 
 Atalhos de letra só valem fora de campos de texto. Nenhum atalho conflita com os do navegador mais comuns (`Ctrl+N` só é capturado com o foco dentro da lista).
@@ -454,6 +457,7 @@ O acervo e o leitor ficam em lados opostos de um **muro** visual na borda direit
 2. À esquerda, só os exemplares **emprestados a esse leitor**, ligados à ficha por cordinhas laranja, nada mais do acervo.
 3. Cada bipe envia o empréstimo pelas mesmas regras do fluxo 1; no sucesso, o exemplar entra na lista e a cordinha nova se desenha animada; na recusa, o motivo aparece na caixa.
 4. Renovar e devolver ficam em cada exemplar da lista, também pelos comandos de circulação.
+5. Cartões, cordinhas, modos compacto e completo e a travessia animada de volta ao acervo: §24.
 
 ### 18.4 Ficha do leitor e LGPD
 
@@ -605,3 +609,113 @@ Partimos do rascunho v2 do OPAC (Paulo, 2026-11-20), com três ajustes pedidos p
 5. **Rolagem.** Sem script, a faixa rola de lado. O script `elzevir-opac.js` mostra os botões "anterior" e "próximo", que andam uma tela por vez.
 6. **Conta do leitor.** Por enquanto é um placeholder: os campos e o botão ficam desabilitados, com o aviso de que a entrada do leitor vem depois (tarefa 3.10). A entrada será pelo número do cartão, nunca pelo nome.
 7. **Mural.** Os recados ficam guardados no servidor ([mural](specs/interface/mural.md)). O OPAC mostra só os recados públicos, e a nota de boas-vindas fixa aparece quando não há nenhum.
+
+## 24. Zoom: modo compacto e modo completo
+
+Proposta de Paulo, 2026-11-20. Os empréstimos aparecem como cartões à esquerda da ficha do leitor, ligados a ela por cordinhas. Clicar num cartão atravessa para o acervo com animação. Leitores e registros bibliográficos têm um modo compacto e um modo completo, alternados por um botão de Zoom ou `Alt+Z`. Esta seção completa a §18.3 e a §20 item 2, e vale sobre o que estiver em conflito com elas.
+
+### 24.1 Dois modos, um botão
+
+1. **Modo compacto.** É o modo para percorrer muitos registros: identificação, situação e as ações de balcão, sem o resto.
+2. **Modo completo.** Mostra todos os detalhes do cadastro e do uso do leitor, ou da ficha bibliográfica.
+3. **Botão Zoom.** Fica na barra da tela, à direita: ícone de lupa com "+" no modo compacto e "−" no completo, com a dica "Mostrar completo (Alt+Z)" ou "Mostrar compacto (Alt+Z)" e `aria-pressed`.
+4. **Atalho `Alt+Z`.** Faz o mesmo que o botão e vale também dentro de campo de texto, porque usa `Alt`, como os escopos (§22 item 6). O `Alt+Z` não estava reservado.
+5. **Onde vale.** Na ficha do leitor (`/equipe/leitores/{id}`), na lista de leitores (`/equipe/leitores?q=`) e na listagem do acervo (`/equipe/acervo`). Cada uma dessas três telas tem o seu modo.
+6. **Modo inicial.** As listas abrem no compacto. A ficha do leitor abre no completo, porque quem abre uma ficha quer atender aquele leitor.
+7. **O modo fica só neste navegador**, por tela, num cookie próprio da tela (`elzevir_zoom_patron` para a ficha, caminho `/equipe`). É conveniência visual:
+   - o servidor lê o cookie só para abrir a página no modo certo, sem piscar no outro; valor desconhecido vale o modo inicial;
+   - o HTML tem tudo nos dois modos; o modo é só o atributo `data-zoom` do contêiner;
+   - trocar de modo não faz pedido ao servidor nem muda a URL: o script troca o atributo e regrava o cookie.
+8. **Sem JavaScript.** Cada tela fica no modo inicial, e todo registro tem link para os seus detalhes.
+9. **Nenhum modo perde função.** Identificação, situação, as ações de circulação e o caminho para os detalhes existem nos dois modos. No compacto, as ações viram botões só com ícone, com dica e nome acessível. O que o compacto esconde está sempre a um `Alt+Z` ou a um clique.
+
+### 24.2 Ficha do leitor
+
+1. **Disposição.** Os cartões de empréstimo ficam à esquerda, as cordinhas no meio e a ficha à direita (§18.3). A ficha mantém o tom azul de leitores (§22 item 8) e as cordinhas, o laranja de circulação.
+2. **Cabeçalho, igual nos dois modos.** Tem:
+   - um círculo com as iniciais do leitor;
+   - o nome;
+   - as etiquetas de categoria, carteirinha e unidade;
+   - as etiquetas de situação, cada uma com ícone e texto (nunca só cor): "em dia", "N em atraso", "suspenso até DD/MM", "deve R$ X" e "inscrição vencida";
+   - os botões compactos, com dica: Editar, Reservar, Recibo, Recibo rápido e Zoom.
+3. **Caixa de empréstimo, igual nos dois modos.** Fica logo abaixo do cabeçalho: campo do código de barras com foco, botão "Emprestar" e unidade do balcão. As recusas aparecem nela.
+4. **Compacto.** O cabeçalho e a caixa de empréstimo, mais uma linha de contagens que são links:
+   - reservas, que leva à seção de reservas;
+   - multas e pagamentos, que leva à seção da conta;
+   - validade da inscrição.
+
+   Seguir um desses links troca para o modo completo e desce até a seção. A suspensão aparece com o botão "Retirar", como hoje.
+5. **Completo.** O compacto, mais três colunas de dados (a grade vira uma coluna em tela estreita):
+   - **Contato:** e-mail, celular, endereço e nascimento;
+   - **Uso da biblioteca:** inscrito em, válido até e histórico de leitura (guardado ou não, pela escolha do leitor);
+   - **Identificação:** carteirinha, CPF mascarado (`***.482.917-**`) e nota da equipe. O botão "Mostrar CPF" mostra o CPF completo por ação explícita e grava a abertura no `audit_log` (§18.4).
+
+   Abaixo das colunas ficam as seções que já existem: reservas (com "Reservar" e "Cancelar") e multas e pagamentos (com "Pagar" e "Abonar").
+6. **Só campos que o modelo guarda.** Marcas do Koha que o Elzevir não tem (leitor protegido, endereço em dúvida, cartão perdido) não aparecem. Se entrarem no modelo, vão para a coluna Identificação. Não há campo de perfil de leitura (§18.4).
+
+### 24.3 Cartões de empréstimo e cordinhas
+
+1. **Um cartão por empréstimo aberto.** Os atrasados vêm primeiro e, dentro de cada grupo, os que vencem antes.
+2. **A urgência vem do servidor.** Ela é decidida numa função só da camada de aplicação, nunca no template:
+   - **em atraso:** o vencimento já passou;
+   - **vence logo:** vence hoje ou nos próximos 2 dias corridos;
+   - **no prazo:** o resto.
+
+   A urgência dá a cor da etiqueta da data: vermelho, laranja ou verde, cada uma com ícone e texto.
+3. **Compacto.** Título em uma linha (o resto vira "…", com o título inteiro na dica), tombo e data de devolução. "Renovar" e "Devolver" viram botões só com ícone, com dica.
+4. **Completo.** Mais número de chamada, unidade do exemplar e renovações restantes, com "Renovar" e "Devolver" em botões com texto.
+5. **Cordinhas.** Uma curva liga cada cartão à porta da ficha, na altura do cabeçalho:
+   - laranja para empréstimo no prazo ou vencendo logo, vermelha para atraso;
+   - pontos nas pontas, na cor da etiqueta;
+   - decorativas (`aria-hidden`): o cartão diz a situação em texto.
+
+   O script desenha as cordinhas como no acervo (§2) e as refaz ao trocar o modo, ao redimensionar a tela e quando um empréstimo entra ou sai. Um empréstimo novo desenha a sua cordinha com animação (§18.3 item 3).
+6. **Muitos empréstimos.** A coluna mostra até 12 cartões e um cartão "+N empréstimos" com uma cordinha só. Esse cartão abre os demais na própria coluna, com rolagem.
+7. **Celular** (largura menor que 720 px): os cartões ficam empilhados abaixo da ficha, sem cordinhas.
+
+### 24.4 Travessia para o acervo
+
+1. **O link.** O título do cartão é um link para `GET /equipe/acervo?q={tombo}`. Pela regra do campo único (§20 item 1), o tombo conhecido abre a grade daquele exemplar. A URL leva só o tombo, nada do leitor.
+2. **O muro continua no servidor.** O acervo não sabe de onde o operador veio:
+   - nenhum parâmetro, cookie ou estado leva o leitor;
+   - o servidor não lê o `Referer`;
+   - a página é a mesma de quem chegou pela busca.
+3. **Animação da ida.** É uma transição de página do navegador (View Transitions entre documentos, `@view-transition { navigation: auto; }`):
+   - o cartão e a linha do exemplar na grade têm o mesmo nome de transição, `item-{id do exemplar}`, então o cartão desliza até virar a linha;
+   - o resto da tela desliza para a direita, porque o acervo fica do lado esquerdo do muro (§18).
+
+   O nome de transição é o id do exemplar, que já está no HTML do acervo. Num navegador sem esse recurso, a navegação é comum.
+4. **A volta.** É pelo botão Voltar do navegador ou pela seta → do exemplar emprestado (§18.2 item 5). A seta reabre a ficha pelo servidor e grava a abertura no `audit_log`. A animação é a inversa.
+
+### 24.5 Acervo
+
+1. **Compacto** é a linha-família de hoje (§20 item 2), sem mudança.
+2. **Completo** abre todas as famílias da página com os blocos e as cordas (§2), só para leitura.
+   - O foco 80/20 e a edição (§3, §4) continuam por família: clicar ou dar `Enter` num bloco foca aquela família, e o `Esc` volta ao modo em que a tela estava.
+   - O tamanho da página não muda (§11).
+   - As cordas só são desenhadas nas famílias visíveis na tela.
+3. **Nos dois modos ficam:** a caixa de seleção do lote, o sinal de disponibilidade, a grade de exemplares, "Emprestar" na pílula disponível (§18.2) e a exportação.
+
+### 24.6 Lista de leitores
+
+1. **Compacto.** Uma linha por leitor: iniciais, nome (link para a ficha), carteirinha, categoria, etiquetas de situação e validade.
+2. **Completo.** Um cartão por leitor com, além disso:
+   - a unidade;
+   - os empréstimos (quantos e quantos em atraso);
+   - as reservas;
+   - o débito.
+3. **Dados pessoais só na ficha.** A lista não mostra contato, endereço nem CPF em nenhum modo, porque seriam dados pessoais de muitos leitores de uma vez, sem a abertura registrada no `audit_log` que a ficha grava.
+
+### 24.7 Animação e acessibilidade
+
+1. **Trocar de modo.** Usa a transição da própria página (`document.startViewTransition`) quando o navegador tem, ou uma transição de altura e opacidade em CSS, de 200 a 250 ms. As cordinhas acompanham e são redesenhadas no fim.
+2. **Menos movimento.** Com `prefers-reduced-motion: reduce` não há animação: a troca de modo é instantânea e a travessia não desliza.
+3. **Teclado.** O foco fica no mesmo elemento depois da troca. O botão Zoom anuncia o modo ("Modo completo" ou "Modo compacto") por `aria-pressed` e por uma região `aria-live` discreta.
+4. **Textos.** Tudo pelo Fluent, inglês primeiro, depois pt-BR, incluindo as dicas e o atalho.
+5. **Código.** Todo o script fica nos arquivos locais. A política de segurança (`default-src 'self'`) não muda.
+
+### 24.8 Fora desta etapa
+
+- Zoom no OPAC.
+- Arrastar cartões de empréstimo.
+- Escolher o modo inicial no `elzevir.toml`.

@@ -219,7 +219,7 @@
         </article>
         <ul class="items-stack">
           {% for pill in instance.pills %}
-          <li class="item-pill {{ pill.signal_class }}" data-parent="i{{ instance.id }}"{% if loop.first %} data-cord-label="{{ t.get("staff-cord-items") }}"{% endif %}>{% include "staff_item_pill.html" %}</li>
+          <li class="item-pill {{ pill.signal_class }}" data-item="{{ pill.item }}" data-parent="i{{ instance.id }}"{% if loop.first %} data-cord-label="{{ t.get("staff-cord-items") }}"{% endif %}>{% include "staff_item_pill.html" %}</li>
           {% endfor %}
           {% if instance.more_items > 0 %}
           <li class="item-pill more-items" data-parent="i{{ instance.id }}"><a href="/record/{{ instance.id }}">{{ instance.more_items_text(t) }}</a></li>

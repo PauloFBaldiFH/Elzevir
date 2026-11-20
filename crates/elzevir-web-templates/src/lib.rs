@@ -47,8 +47,9 @@ pub use staff_notice_rules::{
 };
 pub use staff_patrons::{
     AccountRow, AsideForm, CategoryLine, DeskOption, HoldRow, LoanLine, Notice, PasswordSection,
-    PatronFormValues, PatronLine, RestrictionRow, SlipLine, SlipSection, StaffCheckin,
-    StaffCheckoutSlip, StaffPatron, StaffPatronCategories, StaffPatronForm, StaffPatrons,
+    PatronFormValues, PatronHeader, PatronLine, RestrictionRow, SlipLine, SlipSection,
+    StaffCheckin, StaffCheckoutSlip, StaffPatron, StaffPatronCategories, StaffPatronForm,
+    StaffPatrons, StatusChip,
 };
 pub use staff_record_fields::{FieldEntry, FieldGroup, FieldValue, ItemFields, RecordFields};
 pub use staff_record_form::{
@@ -502,6 +503,7 @@ mod tests {
             include_str!("../templates/opac_login.html"),
             include_str!("../templates/opac_account.html"),
             include_str!("../templates/opac_hold.html"),
+            include_str!("../templates/zoom_toggle.html"),
         ];
         let mut missing = Vec::new();
         for source in templates {

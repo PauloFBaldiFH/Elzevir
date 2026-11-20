@@ -33,6 +33,7 @@ mod opac;
 mod opac_account;
 mod opac_holds;
 mod patron_account;
+mod patron_card;
 mod patron_form;
 mod patron_holds;
 mod patron_login;

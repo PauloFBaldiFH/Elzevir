@@ -13,7 +13,7 @@ use elzevir_app::circulation_rules::{
     CirculationCommand, CirculationDeskError, CirculationOutput, CirculationRefusal,
 };
 use elzevir_app::loans::{
-    CheckedIn, CheckinRequest, CheckoutRefusal, CheckoutRequest, LoanDesk, PatronLoan, RenewRequest,
+    CheckedIn, CheckinRequest, CheckoutRefusal, CheckoutRequest, LoanDesk, RenewRequest,
 };
 use elzevir_app::patrons::{PatronCommand, PatronDesk};
 use elzevir_app::staff::Permission;
@@ -24,13 +24,14 @@ use elzevir_domain::hold::HoldMatch;
 use elzevir_domain::patron::{PatronId, is_expired};
 use elzevir_domain::suspension::{RestrictionKind, SuspensionEnd};
 use elzevir_web_templates::{
-    AsideForm, DeskOption, I18n, LoanLine, Notice, RestrictionRow, StaffCheckin, StaffPatron,
+    AsideForm, DeskOption, I18n, Notice, RestrictionRow, StaffCheckin, StaffPatron,
 };
 use jiff::Zoned;
 use serde::Deserialize;
 
 use crate::patron_account::account_rows;
-use crate::patrons::{failed, full_name, record_rows, shown, today};
+use crate::patron_card::{ZoomScreen, header, loan_line, zoom};
+use crate::patrons::{failed, full_name, shown, today};
 use crate::security::tokens_match;
 use crate::session::ActiveSession;
 use crate::{AppState, render};
@@ -304,6 +305,7 @@ pub(crate) async fn record(
             page(
                 &state,
                 &session,
+                &headers,
                 (patrons, loans),
                 PatronId(id),
                 Outcome::default(),
@@ -317,6 +319,7 @@ pub(crate) async fn record(
 pub(crate) async fn page(
     state: &AppState,
     session: &ActiveSession,
+    headers: &HeaderMap,
     (patrons, loans): (Arc<dyn PatronDesk>, Arc<dyn LoanDesk>),
     id: PatronId,
     outcome: Outcome,
@@ -355,14 +358,16 @@ pub(crate) async fn page(
     } else {
         StatusCode::OK
     };
+    let expired = patron
+        .fields
+        .expires
+        .is_some_and(|expires| is_expired(expires, day));
     let mut response = render(&StaffPatron {
         t,
         name: full_name(&patron.fields.surname, patron.fields.first_name.as_deref()),
-        rows: record_rows(t, &patron),
-        expired: patron
-            .fields
-            .expires
-            .is_some_and(|expires| is_expired(expires, day)),
+        header: header(t, &patron, &current, &moment, (owed, expired)),
+        zoom: zoom(headers, ZoomScreen::PatronRecord),
+        expired,
         edit_url: session
             .identity
             .can(Permission::Patrons)
@@ -412,18 +417,6 @@ pub(crate) fn unavailable(error: CirculationDeskError) -> elzevir_app::patrons::
     match error {
         CirculationDeskError::Busy => elzevir_app::patrons::PatronDeskError::Busy,
         other => elzevir_app::patrons::PatronDeskError::Unavailable(other.to_string()),
-    }
-}
-
-fn loan_line(t: &I18n, loan: &PatronLoan, now: &Zoned, lent: Option<&str>) -> LoanLine {
-    LoanLine {
-        barcode: loan.barcode.clone(),
-        title: loan.title.clone(),
-        due: due_text(t, &loan.due),
-        overdue: loan.due.timestamp() < now.timestamp(),
-        renewals: (loan.renewals > 0)
-            .then(|| t.get_numbers("loans-renewals", &[("count", u64::from(loan.renewals))])),
-        new: lent == Some(loan.barcode.as_str()),
     }
 }
 
@@ -532,7 +525,15 @@ pub(crate) async fn circulate(
             return StatusCode::SERVICE_UNAVAILABLE.into_response();
         }
     }
-    page(&state, &session, (patrons, loans), patron, outcome).await
+    page(
+        &state,
+        &session,
+        &headers,
+        (patrons, loans),
+        patron,
+        outcome,
+    )
+    .await
 }
 
 /// `GET /equipe/circulacao/devolucao`: the checkin desk.

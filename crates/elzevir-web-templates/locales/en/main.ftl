@@ -745,6 +745,26 @@ patron-staff-note = Staff note
 patron-reading-history = Reading history
 patron-history-kept = Kept, with the patron's consent
 patron-history-not-kept = Not kept
+patron-status-overdue = { $count ->
+    [one] 1 overdue
+   *[other] { $count } overdue
+}
+patron-status-owes = Owes { $amount }
+patron-status-expired = Enrolment over
+patron-status-clear = In good standing
+patron-group-contact = Contact
+patron-group-usage = Library use
+patron-group-identity = Identification
+patron-group-empty = Nothing recorded.
+loan-due-late = Overdue · { $date }
+loan-due-soon = Due soon · { $date }
+loan-due-ok = Due { $date }
+checkout-placeholder = Scan or type the item barcode to lend…
+zoom-label = Zoom
+zoom-show-full = Show full view (Alt+Z)
+zoom-show-compact = Show compact view (Alt+Z)
+zoom-mode-full = Full view
+zoom-mode-compact = Compact view
 patron-categories-title = Patron categories
 patron-categories-intro = Each category says how long its patrons stay enrolled: a number of months, or until a fixed date. Fill in one of the two.
 patron-category-months = Months

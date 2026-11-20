@@ -2,51 +2,83 @@
 {% block scope %}leitores{% endblock %}
 {% block title %}{{ name }}{% endblock %}
 {% block content %}
+<div class="patron-page" data-zoom="{{ zoom }}" data-zoom-screen="patron">
+<div class="patron-toolbar">
+  <nav class="patron-crumbs"><a href="/equipe/leitores">{{ t.get("patrons-back") }}</a> · <a href="/equipe/circulacao/devolucao">{{ t.get("checkin-title") }}</a></nav>
+  {% include "zoom_toggle.html" %}
+</div>
 <form method="post" action="/equipe/leitores/{{ id }}/circulacao" class="wall">
 <input type="hidden" name="csrf" value="{{ csrf }}">
-<article class="patron-record wall-patron">
-<p><a href="/equipe/leitores">{{ t.get("patrons-back") }}</a> · <a href="/equipe/circulacao/devolucao">{{ t.get("checkin-title") }}</a></p>
-<h1>{{ name }}</h1>
-{% if let Some(url) = edit_url %}<p><a href="{{ url }}">{{ t.get("patron-edit") }}</a></p>{% endif %}
+<article class="patron-record wall-patron" aria-labelledby="patron-name">
+<span class="cord-port patron-port" aria-hidden="true"></span>
+<div class="patron-head">
+  <span class="patron-initials" aria-hidden="true">{{ header.initials }}</span>
+  <div class="patron-who">
+    <p class="patron-tags"><span class="tag tag-patrons">{{ header.category }}</span><span class="tag">{{ t.get("patron-cardnumber") }} {{ header.cardnumber }}</span><span class="tag tag-catalog">{{ header.branch }}</span></p>
+    <h1 id="patron-name">{{ header.display_name }}</h1>
+    <p class="patron-status">{% for chip in header.status %}<span class="status-chip tone-{{ chip.tone }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ chip.icon }}"></use></svg>{{ chip.text }}</span>{% endfor %}</p>
+  </div>
+  <div class="patron-tools">
+    {% if let Some(url) = edit_url %}<a class="icon-button" href="{{ url }}" title="{{ t.get("patron-edit") }}" aria-label="{{ t.get("patron-edit") }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-edit"></use></svg></a>{% endif %}
+    <a class="icon-button" href="#hold-barcode" data-zoom-to="full" title="{{ t.get("holds-place") }}" aria-label="{{ t.get("holds-place") }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#circ-hold"></use></svg></a>
+    <a class="icon-button" href="/equipe/leitores/{{ id }}/recibo" target="_blank" rel="noopener" title="{{ t.get("slip-title") }}" aria-label="{{ t.get("slip-title") }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#circ-slip"></use></svg></a>
+    <a class="icon-button" href="/equipe/leitores/{{ id }}/recibo?rapido=1" target="_blank" rel="noopener" title="{{ t.get("slip-quick-title") }}" aria-label="{{ t.get("slip-quick-title") }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#circ-quick-slip"></use></svg></a>
+  </div>
+</div>
 {% if expired %}<p class="codes-alert codes-refused" role="alert">{{ t.get("patron-expired-alert") }}</p>{% endif %}
-{% if let Some(owed) = owed %}<p class="codes-alert patron-owed">{{ owed }}</p>{% endif %}
 <fieldset class="checkout-box">
-  <legend>{{ t.get("checkout-title") }}</legend>
-  <label for="checkout-barcode">{{ t.get("checkout-barcode") }}</label>
-  <input type="text" id="checkout-barcode" name="barcode" value="{{ barcode }}" maxlength="64" autocomplete="off" autofocus>
+  <legend class="visually-hidden">{{ t.get("checkout-title") }}</legend>
+  <label for="checkout-barcode" class="visually-hidden">{{ t.get("checkout-barcode") }}</label>
+  <input type="text" id="checkout-barcode" name="barcode" value="{{ barcode }}" maxlength="64" autocomplete="off" autofocus placeholder="{{ t.get("checkout-placeholder") }}">
+  <label for="checkout-desk" class="visually-hidden">{{ t.get("circulation-desk") }}</label>
+  <select id="checkout-desk" name="desk" title="{{ t.get("circulation-desk") }}">{% for desk in desks %}<option value="{{ desk.id }}"{% if desk.selected %} selected{% endif %}>{{ desk.name }}</option>{% endfor %}</select>
   <button type="submit" name="op" value="lend">{{ t.get("checkout-lend") }}</button>
   {% if confirm %}<button type="submit" name="op" value="confirm">{{ t.get("checkout-confirm") }}</button>{% endif %}
-  <label for="checkout-desk">{{ t.get("circulation-desk") }}</label>
-  <select id="checkout-desk" name="desk">{% for desk in desks %}<option value="{{ desk.id }}"{% if desk.selected %} selected{% endif %}>{{ desk.name }}</option>{% endfor %}</select>
 </fieldset>
 {% for restriction in restrictions %}<p class="codes-alert codes-refused" role="alert">{{ restriction.text }} <button type="submit" formaction="/equipe/leitores/{{ id }}/restricoes" name="lift" value="{{ restriction.kind }}">{{ t.get("restriction-lift") }}</button></p>{% endfor %}
 {% for notice in notices %}<p class="codes-alert{% if notice.refused %} codes-refused{% endif %}" role="{% if notice.refused %}alert{% else %}status{% endif %}">{{ notice.text }}</p>{% endfor %}
-<dl class="patron-fields">
-{% for (label, value) in rows %}
-  <dt>{{ t.get(label) }}</dt><dd>{{ value }}</dd>
-{% endfor %}
-</dl>
+<p class="patron-summary z-compact">
+  <a href="#holds-title" data-zoom-to="full">{{ t.get_numbers("holds-title", [("count", holds.len() as u64)]) }}</a>
+  {% if let Some(owed) = owed %}<a href="#account-title" data-zoom-to="full">{{ owed }}</a>{% endif %}
+  {% if let Some(expires) = header.expires %}<span>{{ t.get("patron-expires") }} <strong>{{ expires }}</strong></span>{% endif %}
+</p>
+<div class="patron-columns z-full">
+  <section aria-labelledby="patron-group-contact">
+    <h2 class="column-head" id="patron-group-contact">{{ t.get("patron-group-contact") }}</h2>
+    {% if header.contact.is_empty() %}<p class="patron-fields-empty">{{ t.get("patron-group-empty") }}</p>{% else %}<dl class="patron-fields">{% for (label, value) in header.contact %}<dt>{{ t.get(label) }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}
+  </section>
+  <section aria-labelledby="patron-group-usage">
+    <h2 class="column-head" id="patron-group-usage">{{ t.get("patron-group-usage") }}</h2>
+    {% if header.usage.is_empty() %}<p class="patron-fields-empty">{{ t.get("patron-group-empty") }}</p>{% else %}<dl class="patron-fields">{% for (label, value) in header.usage %}<dt>{{ t.get(label) }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}
+  </section>
+  <section aria-labelledby="patron-group-identity">
+    <h2 class="column-head" id="patron-group-identity">{{ t.get("patron-group-identity") }}</h2>
+    {% if header.identity.is_empty() %}<p class="patron-fields-empty">{{ t.get("patron-group-empty") }}</p>{% else %}<dl class="patron-fields">{% for (label, value) in header.identity %}<dt>{{ t.get(label) }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}
+  </section>
+</div>
 </article>
 {# After the record, so Enter in the barcode box lends; the stylesheet puts it on the left. #}
 <section class="wall-loans" aria-labelledby="loans-title">
   <h2 id="loans-title">{{ t.get_numbers("loans-title", [("count", loans.len() as u64)]) }}</h2>
-  <p class="slip-links"><a href="/equipe/leitores/{{ id }}/recibo" target="_blank" rel="noopener">{{ t.get("slip-title") }}</a> · <a href="/equipe/leitores/{{ id }}/recibo?rapido=1" target="_blank" rel="noopener">{{ t.get("slip-quick-title") }}</a></p>
   {% if loans.is_empty() %}<p class="form-hint">{{ t.get("loans-none") }}</p>{% endif %}
   <ol class="loan-list">
   {% for loan in loans %}
-    <li class="loan{% if loan.overdue %} loan-overdue{% endif %}{% if loan.new %} loan-new{% endif %}">
-      <span class="loan-title">{{ loan.title }}</span>
-      <span class="loan-meta"><code>{{ loan.barcode }}</code> · {{ t.get_with("loans-due", "date", loan.due) }}{% if loan.overdue %} <strong>{{ t.get("loans-overdue") }}</strong>{% endif %}{% if let Some(renewals) = loan.renewals %} · {{ renewals }}{% endif %}</span>
+    <li class="loan urgency-{{ loan.urgency }}{% if loan.new %} loan-new{% endif %}" data-item="{{ loan.item }}">
+      <span class="loan-top"><a class="loan-title" href="{{ loan.catalog_url }}" data-cross="{{ loan.item }}" title="{{ loan.title }}">{{ loan.title }}</a><span class="due-chip tone-{{ loan.urgency }}">{{ loan.due }}</span></span>
+      <span class="loan-meta"><code>{{ loan.barcode }}</code><span class="z-full"> · {{ loan.place }}</span></span>
+      <span class="loan-meta z-full">{{ loan.renewals_left }}{% if let Some(renewals) = loan.renewals %} · {{ renewals }}{% endif %}</span>
       <span class="loan-actions">
-        <button type="submit" name="op" value="renew:{{ loan.barcode }}">{{ t.get("loans-renew") }}</button>
-        <button type="submit" name="op" value="return:{{ loan.barcode }}">{{ t.get("loans-return") }}</button>
+        <button type="submit" name="op" value="renew:{{ loan.barcode }}" title="{{ t.get("loans-renew") }}" aria-label="{{ t.get("loans-renew") }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#mod-renew"></use></svg><span class="z-full">{{ t.get("loans-renew") }}</span></button>
+        <button type="submit" name="op" value="return:{{ loan.barcode }}" title="{{ t.get("loans-return") }}" aria-label="{{ t.get("loans-return") }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#circ-return"></use></svg><span class="z-full">{{ t.get("loans-return") }}</span></button>
       </span>
+      <span class="cord-port loan-port" aria-hidden="true"></span>
     </li>
   {% endfor %}
   </ol>
 </section>
+<svg class="wall-cords" aria-hidden="true" focusable="false"></svg>
 </form>
-<section class="patron-holds" aria-labelledby="holds-title">
+<section class="patron-holds z-full" aria-labelledby="holds-title">
   <h2 id="holds-title">{{ t.get_numbers("holds-title", [("count", holds.len() as u64)]) }}</h2>
   <form method="post" action="/equipe/leitores/{{ id }}/reservas">
   <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -75,7 +107,7 @@
   </form>
 </section>
 {% if !account.is_empty() %}
-<section class="patron-account" aria-labelledby="account-title">
+<section class="patron-account z-full" aria-labelledby="account-title">
   <h2 id="account-title">{{ t.get("account-title") }}</h2>
   <form method="post" action="/equipe/leitores/{{ id }}/conta">
   <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -100,4 +132,5 @@
   </form>
 </section>
 {% endif %}
+</div>
 {% endblock %}
