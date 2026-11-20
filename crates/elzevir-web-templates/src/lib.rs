@@ -19,7 +19,10 @@ mod staff_record_form;
 mod staff_registries;
 
 pub use board::{BoardCard, KindChoice, StaffBoardNote, note_color};
-pub use opac_account::{OpacAccount, OpacLoan, OpacLogin, OpacNotice, PatronPanel};
+pub use opac_account::{
+    OpacAccount, OpacHoldForm, OpacHoldRow, OpacLoan, OpacLogin, OpacNotice, PatronPanel,
+    PickupChoice,
+};
 pub use staff_bar::{BarLink, BarScope, ScopeKind, StaffBar};
 pub use staff_calendar::{DayCell, EntryLine, StaffCalendar};
 pub use staff_catalog::{
@@ -387,6 +390,8 @@ pub struct OpacRecord<'a> {
     pub body: &'a str,
     /// Items, read for each request: loans, transfers and holds change without the record.
     pub items: Vec<ItemLine>,
+    /// Where a patron places a hold on the record, when holds are open on the OPAC.
+    pub hold_url: Option<String>,
 }
 
 /// The page for a record that does not exist.
@@ -496,6 +501,7 @@ mod tests {
             include_str!("../templates/patron_panel.html"),
             include_str!("../templates/opac_login.html"),
             include_str!("../templates/opac_account.html"),
+            include_str!("../templates/opac_hold.html"),
         ];
         let mut missing = Vec::new();
         for source in templates {

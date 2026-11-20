@@ -1125,6 +1125,7 @@ hold-error-day-limit = The patron placed as many holds today as allowed.
 hold-error-too-many = The patron has as many holds as the rules allow.
 hold-error-not-reservable = This item cannot be held.
 hold-error-other-branch = Only patrons of the item's branch may hold it.
+hold-error-set-aside = The item is set aside for the patron; only the desk can cancel it now.
 
 ## Overdue notices by e-mail (docs/specs/circulacao/avisos.md)
 
@@ -1196,7 +1197,30 @@ opac-login-unavailable = Sign-in is unavailable right now; try again shortly.
 opac-account-branch = Library
 opac-account-category = Category
 opac-account-expires = Enrolment valid until
-opac-account-soon = Your holds will show here soon.
+opac-hold-place = Place a hold
+opac-hold-hint = The first copy to come free is set aside for you at the library you choose; we let you know when it is waiting.
+opac-hold-confirm = Confirm hold
+opac-hold-back = Back to the record
+opac-hold-waiting = Waiting for you until { $date }
+opac-holds-none = You have no holds.
+opac-hold-placed = Hold placed. You will be told when the item is waiting.
+opac-hold-cancelled = Hold cancelled.
+opac-hold-set-aside = This item is already set aside for you; to cancel, please ask at the library desk.
+opac-hold-unavailable = This record cannot be held online.
+opac-hold-pickup = The item cannot be picked up at that library; choose another.
+opac-hold-unknown = This hold was not found on your account.
+opac-hold-restricted = While a restriction holds, holds are placed at the library desk.
+opac-hold-debt = You owe more than the limit for placing holds; please pay at the library desk.
+opac-hold-already = You already have a hold on this record.
+opac-hold-too-many = You have as many holds as allowed.
+opac-hold-not-allowed = This record cannot be held under the library's rules.
+opac-history-title = Reading history
+opac-history-kept = The library keeps a record of the items you return, as you agreed.
+opac-history-not-kept = The library does not keep a record of the items you return.
+opac-history-start = Keep my reading history
+opac-history-stop = Stop keeping my reading history
+opac-history-started = From now on, the items you return are kept in your reading history.
+opac-history-stopped = From now on, the items you return are not kept.
 opac-renewals-left = { $count ->
     [0] No renewals left
     [one] One renewal left

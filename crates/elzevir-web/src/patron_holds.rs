@@ -193,9 +193,12 @@ pub(crate) async fn change(
             pickup,
             at,
         }),
-        Asked::Cancel(hold) => {
-            CirculationCommand::CancelHold(HoldCancellation { patron, hold, at })
-        }
+        Asked::Cancel(hold) => CirculationCommand::CancelHold(HoldCancellation {
+            patron,
+            hold,
+            at,
+            by_patron: false,
+        }),
     };
     let mut outcome = Outcome {
         desk,

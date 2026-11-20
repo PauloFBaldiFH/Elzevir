@@ -158,14 +158,32 @@ impl LoanDesk for ElzevirStore {
             ..request
         };
         // No staff member acts: the audit log keeps the patron inside the command.
-        match wait(
-            self.submit(WriteCommand::Circulation(CirculationCommand::Renew(
-                request,
-            ))),
-        )? {
+        match self.patron_command(CirculationCommand::Renew(request))? {
             CirculationOutput::Renewed(renewed) => Ok(renewed),
             _ => Err(unavailable(&"the writer answered with another result")),
         }
+    }
+
+    fn patron_hold(
+        &self,
+        command: CirculationCommand,
+    ) -> Result<CirculationOutput, CirculationDeskError> {
+        // Only what a patron may ask for passes without a staff member behind it.
+        match command {
+            CirculationCommand::PlaceHold(_) | CirculationCommand::CancelHold(_) => {
+                self.patron_command(command)
+            }
+            _ => Err(unavailable(&"not a hold command")),
+        }
+    }
+}
+
+impl ElzevirStore {
+    fn patron_command(
+        &self,
+        command: CirculationCommand,
+    ) -> Result<CirculationOutput, CirculationDeskError> {
+        wait(self.submit(WriteCommand::Circulation(command)))
     }
 }
 

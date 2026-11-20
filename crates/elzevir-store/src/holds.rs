@@ -221,15 +221,18 @@ pub(crate) fn place_hold(connection: &Connection, request: &HoldRequest) -> Appl
 ///
 /// Koha: `Koha::Hold::cancel`.
 pub(crate) fn cancel_hold(connection: &Connection, request: &HoldCancellation) -> Applied {
-    let instance: i64 = connection
+    let (instance, set_aside): (i64, bool) = connection
         .query_row(
-            "SELECT instance_id FROM holds WHERE id = ?1 AND patron_id = ?2",
+            "SELECT instance_id, found IS NOT NULL FROM holds WHERE id = ?1 AND patron_id = ?2",
             params![request.hold.0, request.patron.0],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .optional()
         .map_err(storage)?
         .ok_or_else(|| refused(HoldRefused::UnknownHold))?;
+    if request.by_patron && set_aside {
+        return Err(refused(HoldRefused::SetAside));
+    }
     end_hold(
         connection,
         request.hold.0,

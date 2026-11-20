@@ -3,7 +3,10 @@
 {% block content %}
 {{ body|safe }}
 <section class="record-items">
+  <div class="record-items-head">
   <h2>{{ t.get("opac-record-items") }}</h2>
+  {% if let Some(url) = hold_url %}<a class="button-link" href="{{ url }}">{{ t.get("opac-hold-place") }}</a>{% endif %}
+  </div>
   {% if items.is_empty() %}
   <p class="muted">{{ t.get("opac-record-no-items") }}</p>
   {% else %}

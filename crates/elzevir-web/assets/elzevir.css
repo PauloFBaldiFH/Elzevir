@@ -550,6 +550,7 @@ a.field-value:hover { text-decoration: underline; }
 .chip-identifier { text-decoration: none; color: var(--auth-accent); border-color: var(--auth-border); }
 a.chip-identifier:hover { text-decoration: underline; }
 .entity-pill .badge-icon { width: 12px; height: 12px; margin-right: 4px; vertical-align: -2px; }
+.items .badge-icon { width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; }
 .item-signal::after { content: " ·"; font-weight: 600; opacity: 0.6; }
 .item-pill.more-items { justify-content: center; border: 1.5px dashed var(--inst-accent); background: var(--hub-bg); font-weight: 700; }
 .item-pill.more-items a { color: inherit; text-decoration: none; }
@@ -957,6 +958,7 @@ a.module-card:hover, a.module-card:focus-visible { transform: translateY(-2px); 
 /* Patron sign-in and account (docs/specs/opac/conta-do-leitor.md). */
 .patron-login-form { display: grid; gap: 12px; margin-top: 16px; }
 .patron-login-form input { min-height: 42px; border-color: var(--elzevir-color-border-strong); border-radius: 9px; }
+.patron-login-form select { min-height: 42px; padding: 0.5rem 0.75rem; font: inherit; color: inherit; background: var(--elzevir-color-surface); border: 1px solid var(--elzevir-color-border-strong); border-radius: 9px; }
 .patron-login-form button { min-height: 42px; border-radius: 9px; font-weight: 700; justify-self: stretch; }
 .login-error { margin: 12px 0 0; padding: 8px 11px; border: 1px solid var(--elzevir-color-error); border-radius: 9px; color: var(--elzevir-color-error); font-size: 13.5px; }
 .patron-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; }
@@ -976,6 +978,9 @@ button.quiet { border: 1px solid var(--elzevir-color-border-strong); background:
 .opac-loans li.overdue strong { color: var(--elzevir-color-error); }
 .opac-loans li { grid-template-columns: minmax(0, 1fr) auto; }
 .opac-loans li > span { grid-column: 1; }
+.record-items-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.record-items-head h2 { margin: 0; }
+.hold-record-title { font-size: 1.35rem; line-height: 1.3; overflow-wrap: anywhere; }
 .loan-renew { grid-column: 2; grid-row: 1 / span 2; align-self: center; margin: 0; }
 .opac-owed { margin: 0 0 10px; font-weight: 700; color: var(--elzevir-color-error); }
 .table-scroll { overflow-x: auto; }

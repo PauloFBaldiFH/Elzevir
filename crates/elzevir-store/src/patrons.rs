@@ -50,6 +50,27 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &PatronCommand) -> Applied {
             }
             PatronOutput::PasswordSet(*patron)
         }
+        PatronCommand::SetReadingHistory {
+            patron,
+            reading_history,
+        } => {
+            // The version moves, so a staff edit begun before does not undo the choice.
+            let changed = tx
+                .connection()
+                .execute(
+                    "UPDATE patrons SET reading_history = ?1, row_version = row_version + 1
+                     WHERE id = ?2",
+                    params![
+                        i64::from(*reading_history == ReadingHistory::Kept),
+                        patron.0
+                    ],
+                )
+                .map_err(StoreError::from)?;
+            if changed == 0 {
+                return Err(refused(PatronRefusal::UnknownPatron));
+            }
+            PatronOutput::ReadingHistorySet(*patron)
+        }
     };
     Ok(WriteOutput::Patrons(output))
 }

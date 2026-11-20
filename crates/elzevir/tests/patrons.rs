@@ -1329,3 +1329,131 @@ fn the_patron_renews_a_loan_on_the_opac_while_renewals_are_left() {
     assert_status(&visitor, 303);
     assert!(visitor.contains("location: /conta/entrar"));
 }
+
+/// The value of the first `selected` option of the page.
+fn selected_option(page: &str) -> &str {
+    page.split_once("\" selected>")
+        .unwrap()
+        .0
+        .rsplit_once("value=\"")
+        .unwrap()
+        .1
+}
+
+#[test]
+fn the_patron_places_and_cancels_a_hold_from_the_opac_record() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    stock(data.path());
+    let store = open(data.path());
+    submit(
+        &store,
+        WriteCommand::Circulation(CirculationCommand::SetRules(RuleChange {
+            scope: RuleScopeKey::default(),
+            values: vec![("reservesallowed".to_owned(), Some("3".to_owned()))],
+        })),
+    );
+    store.shutdown().unwrap();
+    let (_server, address) = start_with_password(data.path(), ana);
+    // The cached record page offers the same link to everyone and nothing of the patron.
+    let record = request(address, "GET", "/record/1", "", "");
+    assert_status(&record, 200);
+    assert!(
+        record.contains("href=\"/conta/reservar/1\"") && record.contains("Dom Casmurro"),
+        "{record}"
+    );
+    let visitor = request(address, "GET", "/conta/reservar/1", "", "");
+    assert_status(&visitor, 303);
+    assert!(visitor.contains("location: /conta/entrar"));
+
+    let patron = patron_sign_in(address);
+    let signed_record = request(address, "GET", "/record/1", &patron, "");
+    assert!(!signed_record.contains("Ana") && !signed_record.contains("000123"));
+    let form = request(address, "GET", "/conta/reservar/1", &patron, "");
+    assert_status(&form, 200);
+    assert!(
+        form.contains("no-store") && form.contains("Confirm hold"),
+        "{form}"
+    );
+    let (token, pickup) = (csrf(&form).to_owned(), selected_option(&form).to_owned());
+    let headers = format!("{patron}Content-Type: application/x-www-form-urlencoded\r\n");
+    let post = |path: &str, body: &str| request(address, "POST", path, &headers, body);
+    assert_status(
+        &post("/conta/reservar/1", &format!("csrf=forged&pickup={pickup}")),
+        403,
+    );
+    let placed = post(
+        "/conta/reservar/1",
+        &format!("csrf={token}&pickup={pickup}"),
+    );
+    assert_status(&placed, 303);
+    assert!(
+        placed.contains("location: /conta?aviso=reserva#holds-title"),
+        "{placed}"
+    );
+    let again = post(
+        "/conta/reservar/1",
+        &format!("csrf={token}&pickup={pickup}"),
+    );
+    assert_status(&again, 422);
+    assert!(
+        again.contains("You already have a hold on this record."),
+        "{again}"
+    );
+    let page = request(address, "GET", "/conta?aviso=reserva", &patron, "");
+    assert!(
+        page.contains("Hold placed.") && page.contains("1 hold") && page.contains("Place 1"),
+        "{page}"
+    );
+    let cancel = page
+        .split_once("action=\"/conta/reservas/")
+        .unwrap()
+        .1
+        .split_once('"')
+        .unwrap()
+        .0
+        .to_owned();
+    let cancelled = post(
+        &format!("/conta/reservas/{cancel}"),
+        &format!("csrf={token}"),
+    );
+    assert_status(&cancelled, 303);
+    let page = request(
+        address,
+        "GET",
+        "/conta?aviso=reserva_cancelada",
+        &patron,
+        "",
+    );
+    assert!(
+        page.contains("Hold cancelled.") && page.contains("You have no holds."),
+        "{page}"
+    );
+}
+
+#[test]
+fn the_patron_chooses_whether_returns_are_kept_in_their_history() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    let (_server, address) = start_with_password(data.path(), ana);
+    let patron = patron_sign_in(address);
+    let page = request(address, "GET", "/conta", &patron, "");
+    assert!(
+        page.contains("does not keep a record") && page.contains("Keep my reading history"),
+        "{page}"
+    );
+    let headers = format!("{patron}Content-Type: application/x-www-form-urlencoded\r\n");
+    let choose = |body: String| request(address, "POST", "/conta/historico", &headers, &body);
+    assert_status(&choose("csrf=forged&keep=1".to_owned()), 403);
+    let kept = choose(format!("csrf={}&keep=1", csrf(&page)));
+    assert_status(&kept, 303);
+    assert!(kept.contains("aviso=historico_sim"), "{kept}");
+    let page = request(address, "GET", "/conta?aviso=historico_sim", &patron, "");
+    assert!(
+        page.contains("From now on, the items you return are kept")
+            && page.contains("Stop keeping my reading history"),
+        "{page}"
+    );
+    let stopped = choose(format!("csrf={}", csrf(&page)));
+    assert!(stopped.contains("aviso=historico_nao"), "{stopped}");
+}

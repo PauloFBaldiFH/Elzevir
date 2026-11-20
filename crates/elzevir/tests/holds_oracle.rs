@@ -211,6 +211,7 @@ fn holds_are_placed_and_refused_as_the_oracle_did() {
                         patron: library.patron,
                         hold: placed[*cancelled].unwrap(),
                         at: at(),
+                        by_patron: false,
                     })),
                 )
                 .unwrap();

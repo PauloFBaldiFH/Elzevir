@@ -31,6 +31,7 @@ mod new_record;
 mod notice_rules;
 mod opac;
 mod opac_account;
+mod opac_holds;
 mod patron_account;
 mod patron_form;
 mod patron_holds;
@@ -351,6 +352,15 @@ fn patron_routes() -> Router<AppState> {
     Router::new()
         .route("/conta", get(opac_account::account))
         .route("/conta/renovar", post(opac_account::renew))
+        .route(
+            "/conta/reservar/{id}",
+            get(opac_holds::hold_form).post(opac_holds::place_hold),
+        )
+        .route(
+            "/conta/reservas/{hold}/cancelar",
+            post(opac_holds::cancel_hold),
+        )
+        .route("/conta/historico", post(opac_holds::set_history))
         .route(
             "/conta/entrar",
             get(patron_login::login_form).post(patron_login::log_in_patron),
