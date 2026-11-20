@@ -672,6 +672,13 @@ main:has(.import-workspace) { max-width: 90rem; }
 .account-lines .account-money { text-align: right; font-variant-numeric: tabular-nums; }
 .account-pay { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
 .account-pay input { width: 8rem; }
+.patron-holds { margin-top: 2rem; }
+.hold-list { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: .5rem; }
+.hold { display: grid; gap: .25rem; padding: .5rem .75rem; border: 1px solid var(--elzevir-color-border); border-radius: var(--elzevir-radius); }
+.hold-title { font-weight: 600; }
+.hold-meta { color: var(--elzevir-color-muted); }
+.hold button, .hold-place button, .hold-place select, .hold-place input[type="text"] { font: inherit; padding: 4px 10px; border: 1px solid var(--elzevir-color-border); border-radius: 6px; justify-self: start; }
+.hold-place { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 
 /* The wall (interface §18): the patron's loans on the left, tied to the record by orange cords. */
 .wall { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 3rem; align-items: start; }

@@ -63,6 +63,8 @@ pub struct StaffPatron<'a> {
     pub owed: Option<String>,
     /// The lines of the account, newest first.
     pub account: Vec<AccountRow>,
+    /// The patron's holds, oldest first.
+    pub holds: Vec<HoldRow>,
     /// The patron's loans, the first due first.
     pub loans: Vec<LoanLine>,
     /// The branches the desk may be at, and the one it is at.
@@ -107,6 +109,23 @@ pub struct AccountRow {
     pub outstanding: String,
     /// Whether it still owes, so it can be chosen for a payment.
     pub payable: bool,
+}
+
+/// One of the patron's holds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HoldRow {
+    /// The hold's id, for cancelling it.
+    pub id: i64,
+    /// The Instance's title.
+    pub title: String,
+    /// The Item's barcode, for an Item hold.
+    pub barcode: Option<String>,
+    /// The pickup branch's name.
+    pub pickup: String,
+    /// The day it was placed, as shown.
+    pub day: String,
+    /// Its place in the queue.
+    pub position: String,
 }
 
 /// A branch the desk may be at.

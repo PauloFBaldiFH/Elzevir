@@ -32,6 +32,12 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CirculationCommand) -> Applied {
         CirculationCommand::Checkin(request) => crate::returns::checkin(tx.connection(), request),
         CirculationCommand::Renew(request) => crate::renewals::renew(tx.connection(), request),
         CirculationCommand::Pay(request) => crate::accounts::pay(tx.connection(), request),
+        CirculationCommand::PlaceHold(request) => {
+            crate::holds::place_hold(tx.connection(), request)
+        }
+        CirculationCommand::CancelHold(request) => {
+            crate::holds::cancel_hold(tx.connection(), request)
+        }
         CirculationCommand::ChargeOverdues { at } => {
             crate::overdue_fines::charge_overdues(tx.connection(), at)
         }

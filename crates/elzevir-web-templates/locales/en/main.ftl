@@ -943,3 +943,31 @@ circulation-busy = The system is busy. Try again.
 pill-cardnumber = Card number
 pill-to-patron = Open the patron who has it
 pill-unknown-patron = No patron has this card number.
+holds-title = { $count ->
+    [0] Holds
+    [one] 1 hold
+   *[other] { $count } holds
+}
+holds-position = Place { $position } in the queue
+holds-pickup = pick up at { $branch }
+holds-cancel = Cancel
+holds-place-title = Place a hold
+holds-level-record = Any item of the record
+holds-level-item = This item
+holds-pickup-label = Pick up at
+holds-place = Place hold
+hold-placed = Hold placed, place { $position } in the queue.
+hold-cancelled = Hold cancelled.
+hold-error-unknown-branch = No such pickup branch.
+hold-error-unknown-hold = This patron has no such hold.
+hold-error-pickup = The item cannot be picked up at this branch.
+hold-error-restricted = The patron is suspended and cannot place holds.
+hold-error-debt = The patron owes more than the limit for holds.
+hold-error-hold-limit = The patron has as many holds as allowed.
+hold-error-item-already = The patron already has a hold on this item.
+hold-error-not-allowed = The circulation rules allow no holds here.
+hold-error-record-limit = The patron has as many holds on this record as allowed.
+hold-error-day-limit = The patron placed as many holds today as allowed.
+hold-error-too-many = The patron has as many holds as the rules allow.
+hold-error-not-reservable = This item cannot be held.
+hold-error-other-branch = Only patrons of the item's branch may hold it.

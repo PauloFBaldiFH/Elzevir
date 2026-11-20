@@ -538,3 +538,31 @@ circulation-busy = O sistema está ocupado. Tente de novo.
 pill-cardnumber = Carteirinha
 pill-to-patron = Abrir o leitor que está com ele
 pill-unknown-patron = Nenhum leitor tem esta carteirinha.
+holds-title = { $count ->
+    [0] Reservas
+    [one] 1 reserva
+   *[other] { $count } reservas
+}
+holds-position = { $position }º na fila
+holds-pickup = retirar em { $branch }
+holds-cancel = Cancelar
+holds-place-title = Reservar
+holds-level-record = Qualquer exemplar do registro
+holds-level-item = Este exemplar
+holds-pickup-label = Retirar em
+holds-place = Reservar
+hold-placed = Reserva feita, { $position }º na fila.
+hold-cancelled = Reserva cancelada.
+hold-error-unknown-branch = Unidade de retirada inexistente.
+hold-error-unknown-hold = Este leitor não tem essa reserva.
+hold-error-pickup = O exemplar não pode ser retirado nesta unidade.
+hold-error-restricted = O leitor está suspenso e não pode reservar.
+hold-error-debt = O leitor deve mais que o limite para reservar.
+hold-error-hold-limit = O leitor já tem o máximo de reservas.
+hold-error-item-already = O leitor já reservou este exemplar.
+hold-error-not-allowed = As regras de circulação não permitem reservas aqui.
+hold-error-record-limit = O leitor já tem o máximo de reservas neste registro.
+hold-error-day-limit = O leitor já fez o máximo de reservas de hoje.
+hold-error-too-many = O leitor já tem o máximo de reservas que as regras permitem.
+hold-error-not-reservable = Este exemplar não pode ser reservado.
+hold-error-other-branch = Só leitores da unidade do exemplar podem reservá-lo.
