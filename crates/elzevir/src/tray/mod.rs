@@ -16,13 +16,12 @@
 mod linux;
 
 use std::path::PathBuf;
-use std::time::Duration;
 
 use crate::server_config::ServeArgs;
 
 /// How often the tray looks at the server.
 #[cfg(target_os = "linux")]
-const POLL: Duration = Duration::from_secs(3);
+const POLL: std::time::Duration = std::time::Duration::from_secs(3);
 
 /// Arguments of `elzevir tray`.
 #[derive(clap::Args)]
