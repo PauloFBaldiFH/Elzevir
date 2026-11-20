@@ -1513,3 +1513,73 @@ fn a_patron_who_owes_too_much_places_no_hold() {
         }))
     );
 }
+
+/// Each notice as kind, transport, address, last day and the barcodes it lists.
+fn notices(library: &Library) -> String {
+    library
+        .read::<Option<String>>(
+            "SELECT group_concat(line, ' | ') FROM (
+             SELECT n.kind || ' ' || n.transport || ' ' || coalesce(n.to_address, '-') || ' '
+                    || coalesce(n.hold_until, '-') || ' '
+                    || (SELECT group_concat(i.barcode) FROM notice_items x
+                        JOIN items i ON i.id = x.item_id WHERE x.notice_id = n.id) AS line
+             FROM notices n ORDER BY n.id)",
+        )
+        .unwrap_or_default()
+}
+
+#[test]
+fn a_hold_starting_to_wait_queues_its_notice_once_by_the_category_preference() {
+    let dir = tempfile::tempdir().unwrap();
+    let (library, _, first, second) = two_holds(&dir);
+    let category = elzevir_domain::patron::PatronCategoryId(
+        library.read::<i64>("SELECT category_id FROM patrons LIMIT 1"),
+    );
+    // No preference: no notice.
+    library
+        .set_aside(
+            second.hold,
+            "0002",
+            (library.central, "2026-11-20T11:00:00-03:00"),
+        )
+        .unwrap();
+    assert_eq!(notices(&library), "");
+    submit(
+        &library.store,
+        WriteCommand::Circulation(CirculationCommand::SetHoldNotice {
+            category,
+            transports: elzevir_domain::notice::Transports {
+                email: true,
+                print: false,
+            },
+        }),
+    )
+    .unwrap();
+    // In transit to its pickup branch: no notice yet.
+    library
+        .set_aside(
+            first.hold,
+            "0001",
+            (library.central, "2026-11-20T11:00:00-03:00"),
+        )
+        .unwrap();
+    assert_eq!(notices(&library), "");
+    // Arrived: it waits, and Bia, without an e-mail, gets a paper notice with the last day.
+    library
+        .set_aside(
+            first.hold,
+            "0001",
+            (library.annex, "2026-11-21T09:00:00-03:00"),
+        )
+        .unwrap();
+    assert_eq!(notices(&library), "HOLD print - 2026-11-24 0001");
+    // Set aside again while it waits: no second notice.
+    library
+        .set_aside(
+            first.hold,
+            "0001",
+            (library.annex, "2026-11-21T10:00:00-03:00"),
+        )
+        .unwrap();
+    assert_eq!(notices(&library), "HOLD print - 2026-11-24 0001");
+}

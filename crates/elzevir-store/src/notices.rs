@@ -8,19 +8,20 @@ use std::collections::{BTreeMap, HashMap};
 use elzevir_app::circulation_rules::{CirculationOutput, OverdueNoticeRule};
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
 use elzevir_app::notices::{
-    NoticeId, NoticeItem, NoticeOutcome, NoticeQueue, NoticeQueueError, PendingEmail,
+    NoticeAbout, NoticeId, NoticeItem, NoticeOutcome, NoticeQueue, NoticeQueueError, PendingEmail,
 };
 use elzevir_domain::calendar::Calendar;
+use elzevir_domain::catalog::BranchId;
 use elzevir_domain::circulation_rules::RuleScopeKey;
 use elzevir_domain::notice::{
     NoticeLevel, NoticeSettings, OverdueLevel, Transport, Transports, checked_levels, days_overdue,
     sends_on, transports, triggered,
 };
-use elzevir_domain::patron::PatronId;
+use elzevir_domain::patron::{PatronCategoryId, PatronId};
 use jiff::Zoned;
 use jiff::civil::Date;
 use rusqlite::types::Type;
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::calendar::read_calendar;
 use crate::circulation_rules::scope_exists;
@@ -331,12 +332,12 @@ pub(crate) fn pending_emails(
     limit: usize,
 ) -> rusqlite::Result<Vec<PendingEmail>> {
     let mut statement = connection.prepare_cached(
-        "SELECT n.id, n.to_address, p.first_name, p.surname, b.name, b.email, n.level
+        "SELECT n.id, n.to_address, p.first_name, p.surname, b.name, b.email, n.level,
+                n.hold_until
          FROM notices n
          JOIN patrons p ON p.id = n.patron_id
          JOIN branches b ON b.id = n.branch_id
-         WHERE n.status = 'pending' AND n.transport = 'email' AND n.kind = 'OVERDUE'
-           AND n.to_address IS NOT NULL
+         WHERE n.status = 'pending' AND n.transport = 'email' AND n.to_address IS NOT NULL
          ORDER BY n.id LIMIT ?1",
     )?;
     let limit = i64::try_from(limit).unwrap_or(i64::MAX);
@@ -344,8 +345,8 @@ pub(crate) fn pending_emails(
         .query_map([limit], |row| {
             let first: Option<String> = row.get(2)?;
             let surname: String = row.get(3)?;
-            let level = NoticeLevel::from_number(row.get(6)?).ok_or_else(|| {
-                rusqlite::Error::FromSqlConversionFailure(6, Type::Integer, "no such level".into())
+            let about = about(row.get(6)?, row.get(7)?).ok_or_else(|| {
+                rusqlite::Error::FromSqlConversionFailure(6, Type::Integer, "no such notice".into())
             })?;
             Ok(PendingEmail {
                 id: NoticeId(row.get(0)?),
@@ -355,7 +356,7 @@ pub(crate) fn pending_emails(
                 reply_to: row
                     .get::<_, Option<String>>(5)?
                     .filter(|email| !email.trim().is_empty()),
-                level,
+                about,
                 items: Vec::new(),
             })
         })?
@@ -369,6 +370,15 @@ pub(crate) fn pending_emails(
         .collect()
 }
 
+/// What a stored notice is about: an overdue level, or the last day of a waiting hold.
+fn about(level: Option<i64>, hold_until: Option<String>) -> Option<NoticeAbout> {
+    match (level, hold_until) {
+        (Some(level), None) => NoticeLevel::from_number(level).map(NoticeAbout::Overdue),
+        (None, Some(until)) => until.parse().ok().map(NoticeAbout::HoldWaiting),
+        _ => None,
+    }
+}
+
 fn notice_items(connection: &Connection, notice: NoticeId) -> rusqlite::Result<Vec<NoticeItem>> {
     let mut statement = connection.prepare_cached(
         "SELECT coalesce(i.barcode, ''), n.title, x.due
@@ -380,10 +390,13 @@ fn notice_items(connection: &Connection, notice: NoticeId) -> rusqlite::Result<V
     )?;
     statement
         .query_map([notice.0], |row| {
-            let due: String = row.get(2)?;
-            let due = due.parse().map_err(|error: jiff::Error| {
-                rusqlite::Error::FromSqlConversionFailure(2, Type::Text, error.into())
-            })?;
+            let due: Option<String> = row.get(2)?;
+            let due = due
+                .map(|due| due.parse())
+                .transpose()
+                .map_err(|error: jiff::Error| {
+                    rusqlite::Error::FromSqlConversionFailure(2, Type::Text, error.into())
+                })?;
             Ok(NoticeItem {
                 barcode: row.get(0)?,
                 title: row.get(1)?,
@@ -399,4 +412,108 @@ impl NoticeQueue for ElzevirStore {
             .read(|c| pending_emails(c, limit))
             .map_err(|error| NoticeQueueError(error.to_string()))
     }
+}
+
+/// Applies `circ.set_hold_notice`: how patrons of a category hear of a hold waiting for
+/// them; neither transport removes the preference.
+///
+/// Koha: the `Hold_Filled` messaging preference of the category.
+pub(crate) fn set_hold_notice(
+    connection: &Connection,
+    category: PatronCategoryId,
+    wanted: Transports,
+) -> Applied {
+    scope_exists(
+        connection,
+        &RuleScopeKey {
+            branch: None,
+            category: Some(category),
+            policy: None,
+        },
+    )?;
+    connection
+        .execute(
+            "DELETE FROM hold_notice_preferences WHERE category_id = ?1",
+            [category.0],
+        )
+        .map_err(storage)?;
+    if wanted.email || wanted.print {
+        connection
+            .execute(
+                "INSERT INTO hold_notice_preferences (category_id, email, print)
+                 VALUES (?1, ?2, ?3)",
+                params![category.0, wanted.email, wanted.print],
+            )
+            .map_err(storage)?;
+    }
+    Ok(WriteOutput::Circulation(CirculationOutput::HoldNoticeSet))
+}
+
+/// A hold now waiting at its pickup branch, for its notice.
+pub(crate) struct WaitingHold {
+    /// Whose it is.
+    pub(crate) patron: PatronId,
+    /// Where it waits.
+    pub(crate) pickup: BranchId,
+    /// The Item set aside.
+    pub(crate) item: i64,
+    /// Its last day to be picked up.
+    pub(crate) until: Date,
+}
+
+/// Queues the notice of a hold that has just started waiting, by the transports of the
+/// patron's category: an e-mail to a patron without one goes on paper, once.
+///
+/// Koha: `C4::Reserves::_koha_notify_reserve`, called by `ModReserveAffect` unless the hold
+/// was already waiting.
+pub(crate) fn queue_hold_notice(
+    connection: &Connection,
+    hold: &WaitingHold,
+    at: &Zoned,
+) -> rusqlite::Result<()> {
+    let wanted: Option<(Transports, Option<String>)> = connection
+        .query_row(
+            "SELECT h.email, h.print, p.email FROM patrons p
+             JOIN hold_notice_preferences h ON h.category_id = p.category_id
+             WHERE p.id = ?1",
+            [hold.patron.0],
+            |row| {
+                Ok((
+                    Transports {
+                        email: row.get(0)?,
+                        print: row.get(1)?,
+                    },
+                    row.get(2)?,
+                ))
+            },
+        )
+        .optional()?;
+    let Some((wanted, email)) = wanted else {
+        return Ok(());
+    };
+    let email = email.filter(|email| !email.trim().is_empty());
+    for transport in transports(wanted, email.is_some()) {
+        let address = (transport == Transport::Email)
+            .then(|| email.as_deref().map(str::trim))
+            .flatten();
+        connection.execute(
+            "INSERT INTO notices (patron_id, kind, branch_id, transport, to_address, day,
+                                  created_at, hold_until)
+             VALUES (?1, 'HOLD', ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                hold.patron.0,
+                hold.pickup.0,
+                transport.as_str(),
+                address,
+                at.date().to_string(),
+                at.to_string(),
+                hold.until.to_string()
+            ],
+        )?;
+        connection.execute(
+            "INSERT INTO notice_items (notice_id, item_id, due) VALUES (?1, ?2, NULL)",
+            params![connection.last_insert_rowid(), hold.item],
+        )?;
+    }
+    Ok(())
 }

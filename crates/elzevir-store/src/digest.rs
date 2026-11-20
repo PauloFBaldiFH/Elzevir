@@ -70,7 +70,8 @@ fn tables(connection: &Connection) -> Result<Vec<String>, rusqlite::Error> {
                             'loans', 'returned_loans', 'transfers',
                             'patron_restrictions', 'account_lines', 'account_offsets',
                             'holds', 'ended_holds', 'overdue_notice_rules',
-                            'notices', 'notice_items', 'daily_runs')
+                            'notices', 'notice_items', 'daily_runs',
+                            'hold_notice_preferences')
          ORDER BY name",
     )?;
     statement

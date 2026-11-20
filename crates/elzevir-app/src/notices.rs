@@ -3,6 +3,7 @@
 
 use elzevir_domain::notice::NoticeLevel;
 use jiff::Zoned;
+use jiff::civil::Date;
 use serde::{Deserialize, Serialize};
 
 /// `notices.id`.
@@ -36,11 +37,20 @@ pub struct NoticeItem {
     pub title: String,
     /// The Item's barcode.
     pub barcode: String,
-    /// When it was due.
-    pub due: Zoned,
+    /// When it was due, in an overdue notice.
+    pub due: Option<Zoned>,
 }
 
-/// An overdue notice waiting to go out by e-mail.
+/// What a notice is about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoticeAbout {
+    /// Items overdue, at this level.
+    Overdue(NoticeLevel),
+    /// A hold waiting to be picked up until this day.
+    HoldWaiting(Date),
+}
+
+/// A notice waiting to go out by e-mail.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingEmail {
     /// The notice.
@@ -53,8 +63,8 @@ pub struct PendingEmail {
     pub library: String,
     /// The branch's e-mail address, for replies.
     pub reply_to: Option<String>,
-    /// Which notice.
-    pub level: NoticeLevel,
+    /// What it is about.
+    pub about: NoticeAbout,
     /// The Items, the first due first.
     pub items: Vec<NoticeItem>,
 }

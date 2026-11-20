@@ -20,6 +20,7 @@ use rusqlite::types::Type;
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::circulation_rules::read_rules;
+use crate::notices::{WaitingHold, queue_hold_notice};
 use crate::restrictions::restricted;
 use crate::{CommandFailed, StoreError};
 
@@ -366,12 +367,15 @@ struct Aside {
     pickup: BranchId,
     category: i64,
     waiting_since: Option<String>,
+    patron: PatronId,
+    waiting: bool,
 }
 
 fn find_aside(connection: &Connection, hold: HoldId) -> rusqlite::Result<Option<Aside>> {
     connection
         .query_row(
-            "SELECT h.instance_id, h.item_id, h.pickup_id, p.category_id, h.waiting_since
+            "SELECT h.instance_id, h.item_id, h.pickup_id, p.category_id, h.waiting_since,
+                    h.patron_id, h.found = 'W'
              FROM holds h JOIN patrons p ON p.id = h.patron_id WHERE h.id = ?1",
             [hold.0],
             |row| {
@@ -381,6 +385,8 @@ fn find_aside(connection: &Connection, hold: HoldId) -> rusqlite::Result<Option<
                     pickup: BranchId(row.get(2)?),
                     category: row.get(3)?,
                     waiting_since: row.get(4)?,
+                    patron: PatronId(row.get(5)?),
+                    waiting: row.get::<_, Option<bool>>(6)?.unwrap_or(false),
                 })
             },
         )
@@ -451,43 +457,58 @@ pub(crate) fn set_hold_aside(connection: &Connection, request: &HoldAside) -> Ap
                 )
                 .map_err(storage)?;
         }
+        if !hold.waiting {
+            let waiting = WaitingHold {
+                patron: hold.patron,
+                pickup: hold.pickup,
+                item,
+                until: expires,
+            };
+            queue_hold_notice(connection, &waiting, &request.at).map_err(storage)?;
+        }
         SetAside {
             found: Found::Waiting,
             pickup: hold.pickup,
             expires_on: Some(expires),
         }
     } else {
-        connection
-            .execute(
-                "UPDATE holds SET found = 'T', priority = 0, item_id = ?2 WHERE id = ?1",
-                params![request.hold.0, item],
-            )
-            .map_err(storage)?;
-        // Koha: `ModItemTransfer` replaces the open transfer with this one; Elzevir keeps no
-        // cancelled transfers.
-        connection
-            .execute(
-                "DELETE FROM transfers WHERE item_id = ?1 AND arrived_at IS NULL",
-                [item],
-            )
-            .map_err(storage)?;
-        connection
-            .execute(
-                "INSERT INTO transfers (item_id, from_branch, to_branch, reason, sent_at)
-                 VALUES (?1, ?2, ?3, 'Reserve', ?4)",
-                params![item, request.desk.0, hold.pickup.0, at],
-            )
-            .map_err(storage)?;
-        SetAside {
-            found: Found::InTransit,
-            pickup: hold.pickup,
-            expires_on: None,
-        }
+        send_in_transit(connection, request, &hold, item).map_err(storage)?
     };
     fix_priority(connection, instance).map_err(storage)?;
     Ok(WriteOutput::Circulation(CirculationOutput::HoldSetAside(
         set_aside,
     )))
+}
+
+/// Sends the Item in transit to the hold's pickup branch: the hold is set aside in transit,
+/// and the Item's open transfer is replaced by one for the hold.
+fn send_in_transit(
+    connection: &Connection,
+    request: &HoldAside,
+    hold: &Aside,
+    item: i64,
+) -> rusqlite::Result<SetAside> {
+    let at = request.at.to_string();
+    connection.execute(
+        "UPDATE holds SET found = 'T', priority = 0, item_id = ?2 WHERE id = ?1",
+        params![request.hold.0, item],
+    )?;
+    // Koha: `ModItemTransfer` replaces the open transfer with this one; Elzevir keeps no
+    // cancelled transfers.
+    connection.execute(
+        "DELETE FROM transfers WHERE item_id = ?1 AND arrived_at IS NULL",
+        [item],
+    )?;
+    connection.execute(
+        "INSERT INTO transfers (item_id, from_branch, to_branch, reason, sent_at)
+             VALUES (?1, ?2, ?3, 'Reserve', ?4)",
+        params![item, request.desk.0, hold.pickup.0, at],
+    )?;
+    Ok(SetAside {
+        found: Found::InTransit,
+        pickup: hold.pickup,
+        expires_on: None,
+    })
 }
 
 /// Another patron's hold, or the patron's own, that an Item answers at checkout.
