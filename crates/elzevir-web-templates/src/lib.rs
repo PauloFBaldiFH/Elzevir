@@ -4,6 +4,7 @@
 //! Templates never contain interface text: every string comes from Fluent through [`I18n`]
 //! (English first, then Brazilian Portuguese; docs/arquitetura/04-decisoes.md, §1 item 7).
 
+mod staff_bar;
 mod staff_calendar;
 mod staff_catalog;
 mod staff_circulation_rules;
@@ -15,6 +16,7 @@ mod staff_record_fields;
 mod staff_record_form;
 mod staff_registries;
 
+pub use staff_bar::{BarLink, BarScope, StaffBar};
 pub use staff_calendar::{DayCell, EntryLine, StaffCalendar};
 pub use staff_catalog::{
     ActiveFilter, AuthorityLine, BatchChoices, Cord, FacetMenu, FacetOption, FacetStrip,

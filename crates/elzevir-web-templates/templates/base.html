@@ -6,17 +6,20 @@
   <title>{% block title %}{% endblock %} · {{ t.get("app-name") }}</title>
   <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
   <link rel="stylesheet" href="/static/elzevir.css">
+  <script src="/static/elzevir-theme.js"></script>
   <script src="/static/htmx.min.js" defer></script>
+  {% block shell_head %}{% endblock %}
   {% block head %}{% endblock %}
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="/">{{ t.get("app-name") }}</a>
+  {% block header %}<header class="topbar">
+    <a class="brand" href="/"><img src="/static/elzevir-mark.svg" alt="" width="30" height="24"><span>{{ t.get("app-name") }}</span></a>
     <nav>
       <a href="/">{{ t.get("nav-catalog") }}</a>
       <a href="/equipe">{{ t.get("nav-staff") }}</a>
+      <button type="button" class="bar-theme" data-theme-toggle hidden aria-label="{{ t.get("bar-theme") }}" title="{{ t.get("bar-theme") }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-theme"></use></svg></button>
     </nav>
-  </header>
+  </header>{% endblock %}
   <main>
     {% block content %}{% endblock %}
   </main>

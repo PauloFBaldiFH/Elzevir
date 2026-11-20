@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use axum::Form;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use elzevir_app::circulation_rules::{
@@ -530,11 +530,37 @@ pub(crate) async fn circulate(
 }
 
 /// `GET /equipe/circulacao/devolucao`: the checkin desk.
-pub(crate) async fn checkin_desk(State(state): State<AppState>, headers: HeaderMap) -> Response {
+pub(crate) async fn checkin_desk(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(prefill): Query<CheckinPrefill>,
+) -> Response {
     match open(&state, &headers) {
-        Ok((session, _, _)) => checkin_page(&state, &session, None, (Vec::new(), None)).await,
+        Ok((session, _, _)) => {
+            let view = CheckinView {
+                barcode: prefill.codigo.trim(),
+                ..CheckinView::default()
+            };
+            checkin_page(&state, &session, None, view).await
+        }
         Err(response) => *response,
     }
+}
+
+/// The barcode the staff header sends to the desk (interface §22 item 2).
+#[derive(Deserialize)]
+pub(crate) struct CheckinPrefill {
+    #[serde(default)]
+    codigo: String,
+}
+
+/// What the desk shows besides its form: the last action's notices, the hold to set aside
+/// and a barcode to fill in.
+#[derive(Default)]
+pub(crate) struct CheckinView<'a> {
+    pub(crate) notices: Vec<Notice>,
+    pub(crate) aside: Option<AsideForm>,
+    pub(crate) barcode: &'a str,
 }
 
 /// The checkin desk, with what the last action did and, when the Item answers a hold, the
@@ -543,7 +569,11 @@ pub(crate) async fn checkin_page(
     state: &AppState,
     session: &ActiveSession,
     desk: Option<BranchId>,
-    (notices, aside): (Vec<Notice>, Option<AsideForm>),
+    CheckinView {
+        notices,
+        aside,
+        barcode,
+    }: CheckinView<'_>,
 ) -> Response {
     let desks = match desks(state, desk).await {
         Ok(desks) => desks,
@@ -557,6 +587,7 @@ pub(crate) async fn checkin_page(
         desks,
         notices,
         aside,
+        barcode,
     });
     if refused && response.status() == StatusCode::OK {
         *response.status_mut() = StatusCode::UNPROCESSABLE_ENTITY;
@@ -620,7 +651,17 @@ pub(crate) async fn check_in(
             return StatusCode::SERVICE_UNAVAILABLE.into_response();
         }
     };
-    checkin_page(&state, &session, Some(desk), (notices, aside)).await
+    checkin_page(
+        &state,
+        &session,
+        Some(desk),
+        CheckinView {
+            notices,
+            aside,
+            barcode: "",
+        },
+    )
+    .await
 }
 
 #[cfg(test)]

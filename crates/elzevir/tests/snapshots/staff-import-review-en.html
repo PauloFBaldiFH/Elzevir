@@ -6,17 +6,21 @@
   <title>Import catalog records · Elzevir</title>
   <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
   <link rel="stylesheet" href="/static/elzevir.css">
+  <script src="/static/elzevir-theme.js"></script>
   <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/elzevir-staff.js" defer></script>
   <script src="/static/elzevir-import.js" defer></script>
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="/">Elzevir</a>
-    <nav>
-      <a href="/">Catalog</a>
-      <a href="/equipe">Staff</a>
-    </nav>
-  </header>
+  <header class="topbar staff-bar" id="staff-bar" hx-get="/equipe/barra?escopo=acervo" hx-trigger="load" hx-swap="outerHTML">
+  <a class="staff-brand" href="/equipe"><img src="/static/elzevir-mark.svg" alt="" width="30" height="24"><span>Elzevir</span></a>
+  <form class="bar-search" action="/equipe/busca" method="get" role="search">
+    <select name="escopo" aria-label="Search in"><option value="acervo">Catalog</option><option value="leitores">Patrons</option><option value="devolucao">Checkin</option></select>
+    <input type="search" name="q" maxlength="200" aria-label="Search term">
+    <button type="submit">Search</button>
+  </form>
+  <nav><a href="/equipe">Staff</a> <a href="/">Catalog</a></nav>
+</header>
   <main>
 
 <section id="import-workspace" class="import-workspace" hx-history="false">

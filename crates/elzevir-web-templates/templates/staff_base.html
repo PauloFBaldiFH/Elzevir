@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block shell_head %}<script src="/static/elzevir-staff.js" defer></script>{% endblock %}
+{% block header %}<header class="topbar staff-bar" id="staff-bar" hx-get="/equipe/barra?escopo={% block scope %}acervo{% endblock %}" hx-trigger="load" hx-swap="outerHTML">
+  <a class="staff-brand" href="/equipe"><img src="/static/elzevir-mark.svg" alt="" width="30" height="24"><span>{{ t.get("app-name") }}</span></a>
+  <form class="bar-search" action="/equipe/busca" method="get" role="search">
+    <select name="escopo" aria-label="{{ t.get("bar-scopes") }}"><option value="acervo">{{ t.get("bar-scope-catalog") }}</option><option value="leitores">{{ t.get("bar-scope-patrons") }}</option><option value="devolucao">{{ t.get("bar-scope-checkin") }}</option></select>
+    <input type="search" name="q" maxlength="200" aria-label="{{ t.get("bar-query") }}">
+    <button type="submit">{{ t.get("bar-search") }}</button>
+  </form>
+  <nav><a href="/equipe">{{ t.get("nav-staff") }}</a> <a href="/">{{ t.get("nav-catalog") }}</a></nav>
+</header>{% endblock %}

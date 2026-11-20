@@ -29,6 +29,7 @@
 19. [Decisões do esboço v9](#19-decisões-do-esboço-v9)
 20. [Mecânicas pelo olhar do catalogador](#20-mecânicas-pelo-olhar-do-catalogador)
 21. [Importação universal na interface da equipe](#21-importação-universal-na-interface-da-equipe)
+22. [Cabeçalho da equipe e tema](#22-cabeçalho-da-equipe-e-tema)
 
 ## 1. Princípios
 
@@ -568,3 +569,18 @@ O servidor exige sessão, permissão e CSRF em mudanças e confirmação;
 valida instituição, operador e id opaco do lote. Conteúdo enviado aparece
 escapado. A web chama portas de `elzevir-app`; não lê MARC ou SQLite
 diretamente, não inicia a CLI e não decide casamento no navegador.
+
+## 22. Cabeçalho da equipe e tema
+
+Base: rascunho de tela inicial de Paulo (`elzevir-home-v11`, 2026-11-20), adaptado ao servidor.
+
+1. **Um cabeçalho em toda tela da equipe** (menos o login), com o símbolo do Elzevir (`docs/marca`, sem o nome em tamanho pequeno), o botão "Novo", a barra de busca, o botão de tema e o operador com "Sair".
+2. **A barra tem escopos.** Cada escopo diz o que a caixa procura ou faz: Leitores (nome, CPF ou cartão), Acervo (título, autor, ISBN ou assunto) e Devolução (código de barras do exemplar). Enviar a barra vai para `/equipe/busca?escopo=…&q=…`, que leva à tela do escopo (`/equipe/leitores?q=`, `/equipe/acervo?q=`, `/equipe/circulacao/devolucao?codigo=`). A devolução abre o balcão com o código preenchido e o botão em foco: a unidade do balcão continua escolhida ali, e nada muda sem o operador confirmar.
+3. **Permissão.** Um escopo ou item do "Novo" só aparece para quem pode usar a tela dele, e `/equipe/busca` recusa (403) um escopo sem permissão; um escopo desconhecido é pedido inválido (400). Leitores pede circulação ou leitores (muro, §18); Devolução pede circulação; Acervo vale para toda a equipe.
+4. **"Novo"** abre um menu com o que o operador pode criar: registro (catalogação) e leitor (leitores).
+5. **Um só registro.** Escopos e itens do "Novo" ficam declarados numa lista no servidor, cada um com nome, ícone, atalho, permissão e rota. As funções dos roadmaps 2 e 3 entram como novas linhas quando existirem; até lá não aparecem.
+6. **Atalhos** (fora de campos de texto também valem, por usar `Alt`): `Alt+U` Leitores, `Alt+C` Acervo, `Alt+D` Devolução, `Alt+N` abre o "Novo"; `/` vai para a barra. Ficam reservados para as funções futuras: `Alt+A` Autoridades, `Alt+P` Repositórios, `Alt+R` Renovação, `Alt+I` IA, `Alt+L` Listas.
+7. **Cada tela escolhe o escopo inicial** (o acervo começa em Acervo, a ficha do leitor em Leitores, o balcão em Devolução); a tela inicial, ou uma tela cujo escopo o operador não tem, começa no primeiro escopo permitido.
+8. **Cores por domínio**, como variáveis do CSS nos temas claro e escuro: laranja para circulação, verde-azulado para acervo, azul para leitores e ardósia para gestão.
+9. **Tema.** Sem escolha, segue o sistema (`prefers-color-scheme`). O botão alterna claro e escuro e guarda a escolha só neste navegador; vale também no OPAC.
+10. **Sem script, funciona.** A barra é um formulário com os escopos como opções; o JavaScript só troca o texto de ajuda e cuida dos atalhos e do tema. Fontes e ícones são locais (a política de segurança não permite nada de fora).

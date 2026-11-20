@@ -1,4 +1,5 @@
-{% extends "base.html" %}
+{% extends "staff_base.html" %}
+{% block scope %}leitores{% endblock %}
 {% block title %}{{ t.get("patron-categories-title") }}{% endblock %}
 {% macro period(months, until) %}
 <label>{{ t.get("patron-category-months") }} <input type="number" name="months" value="{{ months }}" min="1" max="999"></label>

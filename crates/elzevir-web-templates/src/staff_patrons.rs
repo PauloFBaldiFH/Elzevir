@@ -182,6 +182,8 @@ pub struct StaffCheckin<'a> {
     pub notices: Vec<Notice>,
     /// Setting the Item aside, when it answers a hold.
     pub aside: Option<AsideForm>,
+    /// Barcode to prefill, when the staff header sent one (interface §22 item 2).
+    pub barcode: &'a str,
 }
 
 /// The patron categories.

@@ -1,0 +1,23 @@
+<header class="topbar staff-bar" id="staff-bar">
+  <a class="staff-brand" href="/equipe"><img src="/static/elzevir-mark.svg" alt="" width="30" height="24"><span>{{ t.get("app-name") }}</span></a>
+  {% if !scopes.is_empty() %}<form class="bar-search" action="/equipe/busca" method="get" role="search">
+    <fieldset class="bar-scopes">
+      <legend class="visually-hidden">{{ t.get("bar-scopes") }}</legend>
+      {% for scope in scopes %}<label class="bar-scope tone-{{ scope.tone }}" title="{{ t.get(scope.label_key) }} (Alt+{{ scope.shortcut.to_ascii_uppercase() }})"><input type="radio" name="escopo" value="{{ scope.key }}" data-shortcut="{{ scope.shortcut }}" data-hint="{{ t.get(scope.hint_key) }}"{% if scope.selected %} checked{% endif %}><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ scope.icon }}"></use></svg><span>{{ t.get(scope.label_key) }}</span></label>{% endfor %}
+    </fieldset>
+    <input type="search" name="q" id="bar-query" maxlength="200" autocomplete="off" placeholder="{{ t.get(self.hint_key()) }}" aria-label="{{ t.get("bar-query") }}" aria-keyshortcuts="/">
+    <button type="submit" class="bar-go" aria-label="{{ t.get("bar-search") }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-search"></use></svg></button>
+  </form>{% endif %}
+  {% if !new_entries.is_empty() %}<details class="bar-new">
+    <summary data-shortcut="n" title="{{ t.get("bar-new") }} (Alt+N)"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-new"></use></svg><span>{{ t.get("bar-new") }}</span></summary>
+    <ul>{% for entry in new_entries %}<li><a class="tone-{{ entry.tone }}" href="{{ entry.href }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ entry.icon }}"></use></svg>{{ t.get(entry.label_key) }}</a></li>{% endfor %}</ul>
+  </details>{% endif %}
+  <div class="bar-end">
+    <button type="button" class="bar-theme" data-theme-toggle hidden aria-label="{{ t.get("bar-theme") }}" title="{{ t.get("bar-theme") }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-theme"></use></svg></button>
+    <span class="bar-login">{{ login }}</span>
+    <form action="/equipe/logout" method="post" class="bar-logout">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button type="submit">{{ t.get("staff-home-logout") }}</button>
+    </form>
+  </div>
+</header>

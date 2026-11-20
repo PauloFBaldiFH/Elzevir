@@ -156,6 +156,28 @@ async fn static_assets_are_served() {
     assert!(body(css).await.contains("--elzevir-color-primary"));
     let js = send(&app, get("/static/htmx.min.js", None)).await;
     assert_eq!(js.status(), StatusCode::OK);
+    for path in [
+        "/static/elzevir-mark.svg",
+        "/static/elzevir-theme.js",
+        "/static/elzevir-staff.js",
+    ] {
+        assert_eq!(
+            send(&app, get(path, None)).await.status(),
+            StatusCode::OK,
+            "{path}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn staff_screens_load_the_header_and_the_sign_in_form_does_not() {
+    let app = app();
+    let form = send(&app, get("/equipe/login", None)).await;
+    assert!(!body(form).await.contains("/equipe/barra"));
+    assert_eq!(
+        send(&app, get("/equipe/barra", None)).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
 }
 
 #[tokio::test]

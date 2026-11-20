@@ -110,7 +110,16 @@ pub(crate) async fn set_aside(
             return StatusCode::SERVICE_UNAVAILABLE.into_response();
         }
     };
-    checkin_page(&state, &session, Some(desk), (notices, None)).await
+    checkin_page(
+        &state,
+        &session,
+        Some(desk),
+        crate::circulation::CheckinView {
+            notices,
+            ..crate::circulation::CheckinView::default()
+        },
+    )
+    .await
 }
 
 /// What the hold form asked for.
