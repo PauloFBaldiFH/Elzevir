@@ -2518,12 +2518,12 @@
       "nota": "Serviços externos de enriquecimento (capas, resenhas) ficam para depois da v1."
     },
     "OverdueNoticeCalendar": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Desligado, o padrão do Koha: o atraso do aviso conta dias de calendário. O domínio já conta os dias fechados se for ligado (docs/specs/circulacao/avisos.md, item 9)."
     },
     "OverdueNoticeFrom": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "cron, o padrão: o aviso sai pela unidade do balcão do empréstimo (docs/specs/circulacao/avisos.md, item 6)."
     },
     "OverduesBlockCirc": {
       "destino": "revisar",

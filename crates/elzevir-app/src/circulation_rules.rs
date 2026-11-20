@@ -2,10 +2,13 @@
 //! Setting and reading circulation rules (docs/specs/circulacao/regras.md).
 
 pub use elzevir_data::RuleKind;
+use elzevir_domain::catalog::BranchId;
 use elzevir_domain::circulation_rules::{
     CirculationRule, RuleScopeKey, RuleValueError, checked_value,
 };
 use elzevir_domain::long_overdue::LongOverdueSettings;
+use elzevir_domain::notice::{LevelsError, OverdueLevel};
+use elzevir_domain::patron::PatronCategoryId;
 use jiff::Zoned;
 use serde::{Deserialize, Serialize};
 
@@ -62,6 +65,25 @@ pub enum CirculationCommand {
         /// When, in the library's time zone.
         at: Zoned,
     },
+    /// Replaces the overdue notice levels of one scope (docs/specs/circulacao/avisos.md).
+    SetOverdueNoticeRule(OverdueNoticeRule),
+    /// Queues the overdue notices due today: the daily run
+    /// (docs/specs/circulacao/avisos.md).
+    QueueOverdueNotices {
+        /// When, in the library's time zone.
+        at: Zoned,
+    },
+}
+
+/// The overdue notice levels of a branch, or of any branch, for a patron category.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OverdueNoticeRule {
+    /// The branch, `None` for any branch.
+    pub branch: Option<BranchId>,
+    /// The patron category.
+    pub category: PatronCategoryId,
+    /// The levels; none removes the rule.
+    pub levels: Vec<OverdueLevel>,
 }
 
 /// New values for some rules at one scope.
@@ -110,6 +132,13 @@ pub enum CirculationOutput {
     HoldsExpired {
         /// Holds cancelled.
         cancelled: usize,
+    },
+    /// An overdue notice rule was stored or removed.
+    OverdueNoticeRuleSet,
+    /// How many overdue notices the daily run queued.
+    OverdueNoticesQueued {
+        /// Notices queued.
+        queued: usize,
     },
 }
 
@@ -181,6 +210,9 @@ pub enum CirculationRefusal {
     /// A hold was refused, or could not be cancelled.
     #[error(transparent)]
     Hold(#[from] HoldRefused),
+    /// The levels of an overdue notice rule do not fit together.
+    #[error(transparent)]
+    NoticeLevels(#[from] LevelsError),
 }
 
 impl CirculationRefusal {
@@ -212,6 +244,7 @@ impl CirculationRefusal {
             Self::Renew(refusal) => refusal.message_key(),
             Self::Pay(refusal) => refusal.message_key(),
             Self::Hold(refusal) => refusal.message_key(),
+            Self::NoticeLevels(_) => "notices-error-levels",
         }
     }
 }

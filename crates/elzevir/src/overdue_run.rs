@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! The run of overdue fines, long overdue Items and expired holds while the server is up
-//! (docs/specs/circulacao/conta.md, docs/specs/circulacao/reservas.md).
+//! The run of overdue fines, overdue notices, long overdue Items and expired holds while the
+//! server is up (docs/specs/circulacao/conta.md, docs/specs/circulacao/avisos.md,
+//! docs/specs/circulacao/reservas.md).
 //!
-//! Koha runs `misc/cronjobs/fines.pl`, `longoverdue.pl` and
+//! Koha runs `misc/cronjobs/fines.pl`, `overdue_notices.pl -t`, `longoverdue.pl` and
 //! `holds/cancel_expired_holds.pl` from cron; here the server runs
 //! them when it starts and then every hour, so no system scheduler is needed. A run only
 //! changes a fine when its cents change, and an Item already lost is left alone, so
@@ -44,7 +45,7 @@ fn count(value: usize) -> u64 {
     u64::try_from(value).unwrap_or(u64::MAX)
 }
 
-/// Runs the overdue fines, and then the long overdue Items and the expired holds when they
+/// Runs the overdue fines and queues the overdue notices, and then the long overdue Items and the expired holds when they
 /// are configured, now and then every hour, until `shutdown` turns true.
 pub(crate) async fn run(
     store: Arc<ElzevirStore>,
@@ -78,6 +79,20 @@ pub(crate) async fn run(
                 };
             logging::emit(&instance, event);
         }
+        let event = match submit(
+            &store,
+            CirculationCommand::QueueOverdueNotices { at: at.clone() },
+        )
+        .await
+        {
+            Some(CirculationOutput::OverdueNoticesQueued { queued }) => {
+                Event::OverdueNoticesQueued {
+                    queued: count(queued),
+                }
+            }
+            _ => Event::OverdueNoticesFailed,
+        };
+        logging::emit(&instance, event);
         if let Some(settings) = long_overdue {
             let event = match submit(&store, CirculationCommand::MarkLongOverdue { at, settings })
                 .await

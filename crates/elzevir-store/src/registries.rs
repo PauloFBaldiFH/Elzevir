@@ -39,7 +39,8 @@ const BRANCHES: Table = Table {
                  + (SELECT count(*) FROM sublocations WHERE branch_id = ?1)
                  + (SELECT count(*) FROM collections WHERE branch_id = ?1)
                  + (SELECT count(*) FROM patrons WHERE branch_id = ?1)
-                 + (SELECT count(*) FROM circulation_rules WHERE branch_id = ?1)",
+                 + (SELECT count(*) FROM circulation_rules WHERE branch_id = ?1)
+                 + (SELECT count(*) FROM overdue_notice_rules WHERE branch_id = ?1)",
     delete: "DELETE FROM branches WHERE id = ?1",
 };
 
