@@ -83,11 +83,14 @@ pub(crate) fn resolve(mut args: ServeArgs) -> Result<(Settings, Option<PathBuf>)
             if !crate::init::confirm_setup(&messages)? {
                 return Err(messages.get("setup-cancelled"));
             }
-            let init = crate::init::InitArgs::first_use(
+            let mut init = crate::init::InitArgs::first_use(
                 args.lang.clone(),
                 args.listen,
                 args.insecure_cookies,
             );
+            // Nothing is written yet, so the chosen port goes into the new server.toml.
+            init.listen =
+                crate::listen_port::ensure(init.listen, None, language(args.lang.as_deref()))?;
             crate::init::run(&init)?;
             println!(
                 "elzevir: {}",
@@ -120,6 +123,8 @@ pub(crate) fn start(args: ServeArgs, no_self_update: bool) -> Result<(), String>
             "start requires an interactive terminal; use serve for unattended startup".into(),
         );
     }
+    // A --listen override is never written back to server.toml.
+    let explicit_listen = args.listen.is_some();
     let (settings, config) = resolve(args)?;
     if matches!(
         crate::status::inspect(&settings.data_dir).state,
@@ -127,6 +132,9 @@ pub(crate) fn start(args: ServeArgs, no_self_update: bool) -> Result<(), String>
     ) {
         return crate::panel_cli::connected(&settings, config, false, no_self_update, || false);
     }
+    let mut settings = settings;
+    let saved = config.as_deref().filter(|_| !explicit_listen);
+    settings.listen = crate::listen_port::ensure(settings.listen, saved, &settings.lang)?;
     let control = crate::shutdown::Control::default();
     std::thread::scope(|scope| {
         let (ready, started) = std::sync::mpsc::sync_channel(1);

@@ -106,5 +106,11 @@ diretório padrão em terminal. `start` executa o servidor e o painel na
 mesma instância e encerra o servidor de forma ordenada ao sair do painel.
 `elzevir` sem subcomando equivale a `elzevir start`, para que o uso diário
 não exija lembrar comandos.
+Se a porta configurada estiver ocupada, `start` (e o primeiro uso) abre
+na TUI o aviso "Porta em uso" com a próxima porta livre já preenchida.
+Enter aceita; outra porta pode ser digitada (1024 a 65535). A porta
+escolhida é testada antes de fechar o aviso e gravada no `server.toml`,
+exceto quando veio de `--listen`, que nunca reescreve o arquivo. Esc
+cancela. Sem terminal interativo, o erro pede `--listen`.
 `--lang` seleciona o idioma explicitamente. Locales em português selecionam
 pt-BR por padrão.

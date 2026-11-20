@@ -34,6 +34,7 @@ mod import_service;
 mod init;
 mod installation;
 mod koha_codes;
+mod listen_port;
 mod local_artifacts;
 mod local_disk;
 mod logging;

@@ -286,6 +286,21 @@ pub(crate) fn relocate(source: &str, directory: &Path) -> Result<String, String>
     toml::to_string_pretty(&config).map_err(|_| "cannot relocate server configuration".to_owned())
 }
 
+/// Changes only the listen port, as chosen in the port-conflict dialog.
+pub(crate) fn with_port(source: &str, port: u16) -> Result<String, String> {
+    let mut config: FileConfig =
+        toml::from_str(source).map_err(|_| "invalid server configuration")?;
+    config.server.listen.set_port(port);
+    config
+        .validate()
+        .map_err(|_| "invalid server configuration")?;
+    config
+        .staff
+        .validate(Some(config.server.listen))
+        .map_err(|_| "invalid access policy for the new port")?;
+    toml::to_string_pretty(&config).map_err(|_| "cannot encode server configuration".to_owned())
+}
+
 /// Sets the host boundary required by a public tunnel while retaining server settings.
 pub(crate) fn with_hosts(source: &str, catalog: &str, staff: &str) -> Result<String, String> {
     let mut config: FileConfig =

@@ -310,3 +310,10 @@ tab-access = Acesso
 tab-backup = Backup
 tab-updates = Versões
 tab-restart = Reinício
+
+port-title = Porta em uso
+port-busy = Outro programa já usa a porta { $port }, então o Elzevir não consegue abrir nela. Escolha outra porta; a sugerida abaixo está livre e fica gravada no server.toml.
+port-field = Porta:
+port-use = Usar esta porta [Enter]
+port-invalid = Digite um número de 1024 a 65535.
+port-still-busy = A porta { $port } também está em uso. Escolha outra.
