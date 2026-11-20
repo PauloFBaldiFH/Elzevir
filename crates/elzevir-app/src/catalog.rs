@@ -1244,6 +1244,29 @@ pub trait CatalogReader: Send + Sync {
     ///
     /// When storage fails.
     fn codes(&self) -> Result<CodeLists, CatalogReadError>;
+
+    /// The `limit` Instances catalogued last, newest first, leaving out those hidden from
+    /// the OPAC (docs/specs/opac/busca-e-registro.md, home page).
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn recent_instances(&self, limit: usize) -> Result<Vec<RecentInstance>, CatalogReadError>;
+}
+
+/// What the OPAC home shows of an Instance catalogued recently.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecentInstance {
+    /// The Instance.
+    pub id: InstanceId,
+    /// Its title.
+    pub title: String,
+    /// The first contributor of its Work, if any.
+    pub contributor: Option<String>,
+    /// Its date of publication.
+    pub date: Option<String>,
+    /// The call number of its first Item that has one, or else the Work's classification.
+    pub call_number: Option<String>,
 }
 
 /// The catalog could not be read.

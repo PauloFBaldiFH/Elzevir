@@ -1,7 +1,42 @@
 {% extends "base.html" %}
 {% block title %}{{ t.get("opac-home-title") }}{% endblock %}
+{% block head %}<script src="/static/elzevir-opac.js" defer></script>{% endblock %}
 {% block content %}
-<h1>{{ t.get("opac-home-title") }}</h1>
-{% include "opac_search_form.html" %}
-<div id="results"></div>
+<div class="wide opac-home">
+<h1 class="visually-hidden">{{ t.get("opac-home-title") }}</h1>
+<aside class="mural" aria-labelledby="mural-title">
+  <h2 class="eyebrow" id="mural-title">{{ t.get("home-mural") }}</h2>
+  <article class="postit note-yellow">
+    <p class="note-top">{{ t.get("opac-welcome-kind") }}</p>
+    <p class="note-text">{{ t.get("opac-welcome-text") }}</p>
+    <p class="postit-meta"><span>{{ t.get("opac-welcome-author") }}</span><span>{{ t.get("opac-product") }}</span></p>
+  </article>
+</aside>
+<section class="panel recent" aria-labelledby="recent-title">
+  <h2 class="eyebrow" id="recent-title">{{ t.get("opac-recent") }}</h2>
+  {% if recent.is_empty() %}<p class="muted">{{ t.get("opac-recent-none") }}</p>{% else %}
+  <ol class="recent-strip" id="recent-strip" tabindex="0" aria-label="{{ t.get("opac-recent") }}">{% for card in recent %}
+    <li class="recent-card"><a href="/record/{{ card.id }}">
+      {% if let Some(call_number) = card.call_number %}<span class="call-pill">{{ call_number }}</span>{% endif %}
+      <strong class="recent-title">{{ card.title }}</strong>
+      <span class="recent-meta">{% if let Some(contributor) = card.contributor %}{{ contributor }}{% endif %}{% if card.contributor.is_some() && card.date.is_some() %} · {% endif %}{% if let Some(date) = card.date %}{{ date }}{% endif %}</span>
+    </a></li>{% endfor %}
+  </ol>
+  <div class="recent-nav" hidden>
+    <button type="button" class="icon-btn" data-recent="-1" aria-label="{{ t.get("opac-recent-previous") }}" title="{{ t.get("opac-recent-previous") }}">‹</button>
+    <button type="button" class="icon-btn" data-recent="1" aria-label="{{ t.get("opac-recent-next") }}" title="{{ t.get("opac-recent-next") }}">›</button>
+  </div>{% endif %}
+</section>
+<section class="panel patron-login" aria-labelledby="login-title">
+  <p class="eyebrow">{{ t.get("opac-account") }}</p>
+  <h2 id="login-title">{{ t.get("opac-login-title") }}</h2>
+  <p class="muted">{{ t.get("opac-login-hint") }}</p>
+  <form class="login-placeholder" aria-describedby="login-soon">
+    <input type="text" disabled placeholder="{{ t.get("opac-login-card") }}" aria-label="{{ t.get("opac-login-card") }}">
+    <input type="password" disabled placeholder="{{ t.get("opac-login-password") }}" aria-label="{{ t.get("opac-login-password") }}">
+    <button type="button" disabled>{{ t.get("opac-login-submit") }}</button>
+  </form>
+  <p class="muted" id="login-soon">{{ t.get("opac-login-soon") }}</p>
+</section>
+</div>
 {% endblock %}

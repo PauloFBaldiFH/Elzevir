@@ -4,6 +4,10 @@
 
 ## 1. Comportamento
 
+### Início: `GET /`
+
+Mostra a busca no cabeçalho, o mural, as 12 Instâncias mais novas não ocultas no OPAC e o espaço da conta do leitor ([interface, §23](../../UI_BIBFRAME_INTERACTION_SPEC.md#23-início-do-opac)). Uma falha na leitura das Instâncias deixa a caixa vazia e não derruba a página.
+
 ### Busca: `GET /search?q=&page=`
 
 1. O texto é aparado e cortado em **256 caracteres**; o resto é ignorado. Texto vazio mostra a página sem lista.
@@ -11,7 +15,7 @@
 3. Cada resultado mostra título, autor principal, data, conteúdo e suporte com ícone, número de chamada e disponibilidade. Os quatro primeiros vêm guardados no índice, sem consulta ao SQLite ([busca](../catalogo/busca.md), item 4).
 4. A **disponibilidade da página inteira sai de uma só consulta** ao SQLite: `CatalogReader::item_statuses` lê o estado de todos os exemplares das Instâncias da página. Um exemplar está disponível quando não está indisponível para empréstimo, danificado, perdido, retirado nem restrito, não está emprestado, não está em trânsito e não aguarda na estante de reservas (`ItemState::is_available`). A linha diz "N de M disponíveis", "Nenhum exemplar disponível" ou "Sem exemplares".
 5. Links "Anterior" e "Próxima" levam o texto codificado para URL. "Próxima" só aparece se há mais resultados e a página seguinte não passa de 500.
-6. **HTMX:** o formulário pede `/search` com `hx-get`. Com o cabeçalho `HX-Request`, a resposta é só a lista (`<section id="results">`), que substitui a anterior. Sem ele, a página inteira. A URL vai para o histórico (`hx-push-url`), então voltar e recarregar funcionam sem JavaScript.
+6. **HTMX:** na página de resultados, o formulário do cabeçalho pede `/search` com `hx-get`; nas outras páginas ele envia normalmente. Com o cabeçalho `HX-Request`, a resposta é só a lista (`<section id="results">`), que substitui a anterior. Sem ele, a página inteira. A URL vai para o histórico (`hx-push-url`), então voltar e recarregar funcionam sem JavaScript.
 
 ### Registro: `GET /record/{id}`
 

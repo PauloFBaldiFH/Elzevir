@@ -49,13 +49,12 @@ use std::time::Duration;
 
 use askama::Template;
 use axum::Router;
-use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use elzevir_app::memory::MemoryProbe;
 use elzevir_app::staff::StaffDirectory;
-use elzevir_web_templates::{I18n, OpacHome};
+use elzevir_web_templates::I18n;
 
 pub use access::{AccessError, AccessPolicy, normalize_hostname, restrict_access};
 pub use catalog::StaffPorts;
@@ -209,17 +208,9 @@ impl AppState {
 /// All routes, with security headers on every response.
 pub fn router(state: AppState) -> Router {
     Router::new()
-        .route("/", get(opac_home))
+        .route("/", get(opac::home))
         .route("/search", get(opac::search))
         .route("/record/{id}", get(opac::record))
-        .route("/static/elzevir.css", get(assets::stylesheet))
-        .route("/static/htmx.min.js", get(assets::htmx))
-        .route("/static/elzevir-catalog.js", get(assets::catalog_script))
-        .route("/static/elzevir-import.js", get(assets::import_script))
-        .route("/static/elzevir-icons.svg", get(assets::icons))
-        .route("/static/elzevir-mark.svg", get(assets::mark))
-        .route("/static/elzevir-theme.js", get(assets::theme_script))
-        .route("/static/elzevir-staff.js", get(assets::staff_script))
         .route("/equipe/barra", get(staff_bar::bar))
         .route("/equipe/busca", get(staff_bar::search))
         .route("/equipe", get(staff::home))
@@ -302,12 +293,27 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/equipe/login", get(staff::login_form).post(staff::log_in))
         .route("/equipe/logout", post(staff::log_out))
+        .merge(static_routes())
         .merge(admin_routes())
         .merge(authority_routes())
         .merge(importing::routes())
         .merge(circulation::routes())
         .layer(axum::middleware::map_response(security::headers))
         .with_state(state)
+}
+
+/// The stylesheet, scripts and images, all served from the binary.
+fn static_routes() -> Router<AppState> {
+    Router::new()
+        .route("/static/elzevir.css", get(assets::stylesheet))
+        .route("/static/htmx.min.js", get(assets::htmx))
+        .route("/static/elzevir-catalog.js", get(assets::catalog_script))
+        .route("/static/elzevir-import.js", get(assets::import_script))
+        .route("/static/elzevir-icons.svg", get(assets::icons))
+        .route("/static/elzevir-mark.svg", get(assets::mark))
+        .route("/static/elzevir-theme.js", get(assets::theme_script))
+        .route("/static/elzevir-staff.js", get(assets::staff_script))
+        .route("/static/elzevir-opac.js", get(assets::opac_script))
 }
 
 /// Administration: memory report, registries, circulation rules and calendars.
@@ -365,13 +371,6 @@ fn authority_routes() -> Router<AppState> {
             "/equipe/acervo/autoridade/{id}/campos",
             get(authorities::agent_form),
         )
-}
-
-async fn opac_home(State(state): State<AppState>) -> Response {
-    render(&OpacHome {
-        t: &state.inner.i18n,
-        query: "",
-    })
 }
 
 /// Renders a template, or answers 500 without leaking the error to the visitor.

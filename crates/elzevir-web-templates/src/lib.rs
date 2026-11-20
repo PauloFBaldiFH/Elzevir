@@ -186,8 +186,23 @@ impl I18n {
 pub struct OpacHome<'a> {
     /// Interface texts.
     pub t: &'a I18n,
-    /// Text of the search box (empty on the home page).
-    pub query: &'a str,
+    /// The Instances catalogued last, newest first.
+    pub recent: Vec<RecentCard>,
+}
+
+/// One Instance of the home page's "last catalogued" strip.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecentCard {
+    /// The Instance, for the link to its record.
+    pub id: i64,
+    /// Its title.
+    pub title: String,
+    /// Its first contributor.
+    pub contributor: Option<String>,
+    /// Its date of publication.
+    pub date: Option<String>,
+    /// Its call number.
+    pub call_number: Option<String>,
 }
 
 /// A categorical value with its icon (docs/specs/catalogo/bibframe-completo.md, items 15
@@ -428,7 +443,6 @@ mod tests {
         let templates = [
             include_str!("../templates/base.html"),
             include_str!("../templates/opac_home.html"),
-            include_str!("../templates/opac_search_form.html"),
             include_str!("../templates/opac_results.html"),
             include_str!("../templates/opac_results_list.html"),
             include_str!("../templates/opac_record.html"),
@@ -436,6 +450,8 @@ mod tests {
             include_str!("../templates/opac_not_found.html"),
             include_str!("../templates/staff_login.html"),
             include_str!("../templates/staff_home.html"),
+            include_str!("../templates/staff_bar.html"),
+            include_str!("../templates/staff_base.html"),
             include_str!("../templates/staff_catalog.html"),
             include_str!("../templates/staff_record_fields.html"),
             include_str!("../templates/staff_record_form.html"),

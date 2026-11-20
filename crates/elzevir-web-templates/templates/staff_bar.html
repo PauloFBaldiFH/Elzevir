@@ -25,6 +25,7 @@
       <button type="button" class="tool-btn" disabled title="{{ t.get("bar-lists") }} · Alt+L · {{ t.get("bar-soon") }}">{% call icon("tool-lists") %}{% endcall %}<span>{{ t.get("bar-lists") }}</span></button>
       {% call soon("tool-chat", "bar-chat") %}{% endcall %}
       {% call soon("mod-calendar", "bar-calendar") %}{% endcall %}
+      <a class="icon-btn" href="/" aria-label="{{ t.get("nav-to-opac") }}" title="{{ t.get("nav-to-opac") }}">{% call icon("nav-opac") %}{% endcall %}</a>
       <button type="button" class="icon-btn" data-theme-toggle hidden aria-label="{{ t.get("bar-theme") }}" title="{{ t.get("bar-theme") }}">{% call icon("bar-theme") %}{% endcall %}</button>
       {% call soon("mod-bell", "bar-notifications") %}{% endcall %}
       <span class="top-divider" aria-hidden="true"></span>

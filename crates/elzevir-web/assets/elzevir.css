@@ -205,7 +205,7 @@ body {
 .tone-patrons { --tone: var(--elzevir-tone-patrons); --tone-soft: var(--elzevir-tone-patrons-soft); --tone-border: var(--elzevir-tone-patrons-border); }
 .tone-admin { --tone: var(--elzevir-tone-admin); --tone-soft: var(--elzevir-tone-admin-soft); --tone-border: var(--elzevir-tone-admin-border); }
 /* Staff header (§22), after the home-v11 draft: brand row, then the search row. */
-.staff-bar { position: sticky; top: 0; z-index: 40; display: block; padding: 0; background: var(--elzevir-color-surface); border-bottom: 1px solid var(--elzevir-color-border); box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04); }
+.staff-bar, .opac-bar { position: sticky; top: 0; z-index: 40; display: block; padding: 0; background: var(--elzevir-color-surface); border-bottom: 1px solid var(--elzevir-color-border); box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04); }
 .top-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 60px; padding: 10px clamp(14px, 1.75vw, 38px); border-bottom: 1px solid var(--elzevir-color-border); }
 .brand-side, .top-tools { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .icon-btn, .user-chip { display: flex; align-items: center; justify-content: center; gap: 7px; height: 36px; border: 1px solid var(--elzevir-color-border); border-radius: 10px; background: var(--elzevir-color-surface); color: var(--elzevir-color-muted); cursor: pointer; }
@@ -933,3 +933,27 @@ a.module-card:hover, a.module-card:focus-visible { transform: translateY(-2px); 
 @media (max-width: 64rem) { .module-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 46rem) { .staff-home { grid-template-columns: 1fr; } .module-grid { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .module-card { transition: none; } a.module-card:hover { transform: none; } }
+/* OPAC home (spec de UI §23), after opac-v2: notice board, a narrow strip of the titles
+   catalogued last and the patron sign-in. */
+.opac-home { display: grid; grid-template-columns: clamp(240px, 18vw, 300px) minmax(0, 820px) clamp(270px, 20vw, 330px); justify-content: center; gap: clamp(16px, 1.75vw, 32px); align-items: start; padding: 24px clamp(14px, 1.75vw, 38px) 60px; }
+.panel { padding: 16px 18px 18px; border: 1px solid var(--elzevir-color-border); border-radius: 14px; background: var(--elzevir-color-surface); box-shadow: 0 2px 12px rgba(15, 23, 42, 0.045); }
+.postit.note-yellow { border-color: rgba(178, 150, 48, 0.3); background: #fff0a8; color: #5c4810; }
+.postit.note-yellow .postit-meta { border-top-color: rgba(120, 90, 20, 0.22); }
+.recent-strip { display: flex; gap: 16px; margin: 0; padding: 14px 4px 18px; overflow-x: auto; list-style: none; scroll-snap-type: x mandatory; scrollbar-width: thin; background: radial-gradient(ellipse at center, var(--elzevir-tone-catalog-soft), transparent 70%); }
+.recent-card { flex: 0 0 150px; scroll-snap-align: center; }
+.recent-card a { display: flex; flex-direction: column; justify-content: space-between; gap: 8px; height: 210px; padding: 12px 12px 12px 15px; border: 1.5px solid var(--elzevir-color-border); border-left: 5px solid var(--elzevir-tone-catalog); border-radius: 6px 10px 10px 6px; background: var(--elzevir-color-surface); color: var(--elzevir-color-text); text-decoration: none; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08); transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s; }
+.recent-card a:hover, .recent-card a:focus-visible { transform: translateY(-4px); border-color: var(--elzevir-tone-catalog); box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14); }
+.call-pill { align-self: flex-start; max-width: 100%; padding: 2px 8px; overflow: hidden; border: 1px solid var(--elzevir-tone-catalog-border); border-radius: 999px; background: var(--elzevir-tone-catalog-soft); color: var(--elzevir-tone-catalog); font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.recent-title { display: -webkit-box; margin-top: auto; overflow: hidden; font-size: 14px; line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
+.recent-meta { color: var(--elzevir-color-muted); font-size: 11.5px; }
+.recent-nav { display: flex; justify-content: flex-end; gap: 8px; }
+.recent-nav[hidden] { display: none; }
+.patron-login h2 { margin: 0 0 4px; font-size: 18px; }
+.patron-login .eyebrow { margin-bottom: 8px; }
+.login-placeholder { display: grid; gap: 12px; margin-top: 16px; }
+.login-placeholder input { min-height: 42px; border-color: var(--elzevir-color-border-strong); border-radius: 9px; }
+.login-placeholder button { min-height: 42px; border-radius: 9px; font-weight: 700; }
+.login-placeholder :disabled { cursor: not-allowed; opacity: 0.6; }
+@media (max-width: 64rem) { .opac-home { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .opac-home .recent { grid-column: 1 / -1; grid-row: 1; } }
+@media (max-width: 46rem) { .opac-home { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .recent-card a { transition: none; } .recent-card a:hover { transform: none; } }

@@ -291,6 +291,42 @@ fn an_instance_hidden_from_the_opac_is_found_only_by_the_staff() {
 /// docs/specs/catalogo/autoridades.md: a renamed agent shows in the OPAC, the search and
 /// the exported MARC of every record that names it.
 #[test]
+fn the_home_shows_the_newest_public_instances_first() {
+    let (_dir, store) = imported();
+    let store = Arc::new(store);
+    let index = Arc::new(TantivyIndex::in_memory(Parallelism::Serial).unwrap());
+    let app = app(&store, &index);
+    let recent = store.recent_instances(12).unwrap();
+    assert_eq!(recent.len(), 12);
+    assert!(recent.windows(2).all(|pair| pair[0].id.0 > pair[1].id.0));
+    // Every record of the export has items, so each card has a call number.
+    assert!(recent.iter().all(|card| card.call_number.is_some()));
+    let newest = recent[0].id;
+    let (status, home) = get(&app, "/");
+    assert_eq!(status, StatusCode::OK);
+    assert!(home.contains(&format!("href=\"/record/{}\"", newest.0)));
+
+    let version = store.instance(newest).unwrap().unwrap().version;
+    store
+        .submit(WriteCommand::Catalog(CatalogCommand::UpdateInstance(
+            Box::new(InstanceUpdate {
+                instance: newest,
+                row_version: version,
+                changes: vec![InstanceChange::OpacHidden(true)],
+            }),
+        )))
+        .unwrap()
+        .wait()
+        .unwrap();
+    let after = store.recent_instances(12).unwrap();
+    assert_eq!(after.len(), 12);
+    assert!(after.iter().all(|card| card.id != newest));
+    assert_eq!(after[0].id, recent[1].id);
+    let (_, home) = get(&app, "/");
+    assert!(!home.contains(&format!("href=\"/record/{}\"", newest.0)));
+}
+
+#[test]
 fn a_renamed_agent_changes_every_record_that_names_it() {
     use elzevir_app::authorities::AuthorityReader;
     use elzevir_app::catalog::{AgentChange, AgentUpdate, CatalogRefusal};

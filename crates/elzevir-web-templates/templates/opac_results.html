@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{{ t.get("opac-results-title") }}{% endblock %}
+{% block search_value %}{{ query }}{% endblock %}
+{# On the results page the header form swaps only the list (spec busca-e-registro item 6). #}
+{% block search_hx %} hx-get="/search" hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-push-url="true"{% endblock %}
 {% block content %}
 <h1>{{ t.get("opac-home-title") }}</h1>
-{% include "opac_search_form.html" %}
 {% block results %}{% include "opac_results_list.html" %}{% endblock %}
 {% endblock %}
