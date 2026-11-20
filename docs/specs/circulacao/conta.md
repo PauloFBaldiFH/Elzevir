@@ -1,6 +1,6 @@
 # Conta do leitor
 
-> Status: tarefa 3.7, partes a (multa lançada na devolução e dívida no empréstimo), b (pagamento e abono) e c (multa diária). Exemplar perdido e a gravação no oráculo vêm nas próximas partes. Base: Koha 26.05.05.
+> Status: tarefa 3.7, partes a (multa lançada na devolução e dívida no empréstimo), b (pagamento e abono) e c (multa diária). Exemplar perdido vem na próxima parte. Base: Koha 26.05.05.
 
 ## 1. Comportamento
 
@@ -35,7 +35,7 @@
 
 ## 3. Paridade
 
-`exigida`. Prova, por enquanto: `crates/elzevir-domain/src/account.rs` (a sequência de `MaxFine` de `Overdues.t`, leitura das regras, dívida) `crates/elzevir-store/tests/checkout.rs` (multa lançada na devolução, confirmação e recusa por dívida, pagamento do mais antigo, abono dos marcados, limites do valor, multa diária crescendo e parada no dia fechado) e `crates/elzevir/tests/patrons.rs` (a conta na ficha, pagamento e abono pelo formulário). A gravação no oráculo vem com a multa diária.
+`exigida`. Prova, por enquanto: `crates/elzevir-domain/src/account.rs` (a sequência de `MaxFine` de `Overdues.t`, leitura das regras, dívida) `crates/elzevir-store/tests/checkout.rs` (multa lançada na devolução, confirmação e recusa por dívida, pagamento do mais antigo, abono dos marcados, limites do valor, multa diária crescendo e parada no dia fechado) e `crates/elzevir/tests/patrons.rs` (a conta na ficha, pagamento e abono pelo formulário). `crates/elzevir/tests/checkin_oracle.rs` reproduz `scenarios/circulacao/multa-conta.koha.json` (gravado por `tools/fines-recorder/record.py`): duas devoluções atrasadas com fim de semana no atraso dão as mesmas multas que o Koha, a dívida pede a mesma confirmação (`DEBT`), o pagamento sem linhas marcadas quita na mesma ordem e o abono da linha marcada deixa os mesmos saldos. O `fines.pl` não roda pela web, então a multa diária é comparada só pelo cálculo, que é o mesmo da devolução.
 
 ## 4. Casos de borda
 

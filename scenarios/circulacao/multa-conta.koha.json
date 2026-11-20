@@ -1,0 +1,295 @@
+{
+ "koha_version": "26.05.05.000",
+ "spec": [
+  "docs/specs/circulacao/conta.md"
+ ],
+ "recorder": "tools/fines-recorder/record.py",
+ "patron": {
+  "category": "B",
+  "library": "MAIN"
+ },
+ "preferences": {
+  "CircControl": "ItemHomeLibrary",
+  "HomeOrHoldingBranch": "holdingbranch",
+  "useDaysMode": "Calendar",
+  "finesCalendar": "noFinesWhenClosed",
+  "FinesIncludeGracePeriod": "1",
+  "CalculateFinesOnReturn": "1",
+  "MaxFine": "",
+  "noissuescharge": "5",
+  "AllowFineOverride": "0",
+  "AllFinesNeedOverride": "1",
+  "AccountAutoReconcile": "0",
+  "RequirePaymentType": "0",
+  "SpecifyReturnDate": "1",
+  "finesMode": "production"
+ },
+ "items": [
+  {
+   "barcode": "D01",
+   "item_type": "DV",
+   "home_library": "MAIN",
+   "holding_library": "MAIN"
+  },
+  {
+   "barcode": "D02",
+   "item_type": "DV",
+   "home_library": "MAIN",
+   "holding_library": "MAIN"
+  },
+  {
+   "barcode": "D03",
+   "item_type": "DV",
+   "home_library": "MAIN",
+   "holding_library": "MAIN"
+  }
+ ],
+ "rules": [
+  {
+   "context": {
+    "item_type_id": "*",
+    "library_id": "MAIN",
+    "patron_category_id": "*"
+   },
+   "rules": {
+    "cap_fine_to_replacement_price": "",
+    "chargeperiod": "1",
+    "chargeperiod_charge_at": "1",
+    "daysmode": "Datedue",
+    "fine": "1.00",
+    "finedays": "",
+    "firstremind": "0",
+    "hardduedate": "",
+    "hardduedatecompare": "-1",
+    "issuelength": "14",
+    "lengthunit": "days",
+    "maxissueqty": "4",
+    "maxonsiteissueqty": "4",
+    "maxsuspensiondays": "",
+    "norenewalbefore": "",
+    "overduefinescap": "40.00",
+    "renewalperiod": "14",
+    "renewalsallowed": "5",
+    "suspension_chargeperiod": "1"
+   }
+  },
+  {
+   "context": {
+    "item_type_id": "DV",
+    "library_id": "MAIN",
+    "patron_category_id": "*"
+   },
+   "rules": {
+    "chargeperiod": "1",
+    "fine": "0.50",
+    "finedays": "0",
+    "firstremind": "0"
+   }
+  }
+ ],
+ "calendar": {
+  "weekly_closed": [
+   0,
+   6
+  ],
+  "annual": [
+   [
+    1,
+    1
+   ],
+   [
+    1,
+    22
+   ],
+   [
+    2,
+    16
+   ],
+   [
+    2,
+    17
+   ],
+   [
+    2,
+    18
+   ],
+   [
+    3,
+    21
+   ],
+   [
+    4,
+    3
+   ],
+   [
+    4,
+    21
+   ],
+   [
+    5,
+    1
+   ],
+   [
+    6,
+    4
+   ],
+   [
+    6,
+    5
+   ],
+   [
+    9,
+    7
+   ],
+   [
+    10,
+    12
+   ],
+   [
+    11,
+    2
+   ],
+   [
+    11,
+    15
+   ],
+   [
+    11,
+    20
+   ],
+   [
+    12,
+    25
+   ]
+  ],
+  "closed": [
+   "2026-04-20",
+   "2026-04-30",
+   "2026-06-26",
+   "2026-08-21",
+   "2026-09-25",
+   "2026-10-13",
+   "2026-10-23",
+   "2026-11-23",
+   "2026-11-24",
+   "2026-12-24",
+   "2026-12-31"
+  ],
+  "open": []
+ },
+ "checkouts": [
+  {
+   "at": "2026-11-19T22:33:02-03:00",
+   "due": "2026-12-03T23:59:00-03:00",
+   "returned": "2026-12-07T10:00:00-03:00",
+   "library": "MAIN"
+  },
+  {
+   "at": "2026-11-19T22:33:03-03:00",
+   "due": "2026-12-03T23:59:00-03:00",
+   "returned": "2026-12-10T10:00:00-03:00",
+   "library": "MAIN"
+  }
+ ],
+ "fines": [
+  {
+   "account_line_id": 1441,
+   "debit_type": null,
+   "credit_type": null,
+   "status": "RETURNED",
+   "amount": 1.0,
+   "amount_outstanding": 1.0,
+   "item_id": 28133
+  },
+  {
+   "account_line_id": 1442,
+   "debit_type": null,
+   "credit_type": null,
+   "status": "RETURNED",
+   "amount": 2.5,
+   "amount_outstanding": 2.5,
+   "item_id": 28134
+  }
+ ],
+ "debt": {
+  "at": "2026-11-20T01:33:12+00:00",
+  "answer": {
+   "blockers": {},
+   "confirms": {
+    "DEBT": 3.5
+   },
+   "warnings": {}
+  }
+ },
+ "payment": {
+  "amount": "3.00",
+  "credit": 1443
+ },
+ "after_payment": [
+  {
+   "account_line_id": 1441,
+   "debit_type": null,
+   "credit_type": null,
+   "status": "RETURNED",
+   "amount": 1.0,
+   "amount_outstanding": 0.0,
+   "item_id": 28133
+  },
+  {
+   "account_line_id": 1442,
+   "debit_type": null,
+   "credit_type": null,
+   "status": "RETURNED",
+   "amount": 2.5,
+   "amount_outstanding": 0.5,
+   "item_id": 28134
+  }
+ ],
+ "writeoff": {
+  "amount": 0.5,
+  "lines": [
+   1442
+  ],
+  "credit": 1444
+ },
+ "after_writeoff": [
+  {
+   "account_line_id": 1441,
+   "debit_type": null,
+   "credit_type": null,
+   "status": "RETURNED",
+   "amount": 1.0,
+   "amount_outstanding": 0.0,
+   "item_id": 28133
+  },
+  {
+   "account_line_id": 1442,
+   "debit_type": null,
+   "credit_type": null,
+   "status": "RETURNED",
+   "amount": 2.5,
+   "amount_outstanding": 0.0,
+   "item_id": 28134
+  }
+ ],
+ "credits": [
+  {
+   "account_line_id": 1443,
+   "debit_type": null,
+   "credit_type": null,
+   "status": null,
+   "amount": -3.0,
+   "amount_outstanding": 0.0,
+   "item_id": null
+  },
+  {
+   "account_line_id": 1444,
+   "debit_type": null,
+   "credit_type": null,
+   "status": null,
+   "amount": -0.5,
+   "amount_outstanding": 0.0,
+   "item_id": null
+  }
+ ]
+}

@@ -2,7 +2,9 @@
 //! A loan renewed and returned late on the Koha oracle is renewed, refused and suspended
 //! the same way by `circ.renew`, `circ.checkin` and `circ.checkout`
 //! (docs/specs/circulacao/renovacao.md, docs/specs/circulacao/suspensao.md;
-//! `scenarios/circulacao/devolucao-renovacao.koha.json`).
+//! `scenarios/circulacao/devolucao-renovacao.koha.json`); and two late returns are fined,
+//! hold back the next checkout and are paid and written off the same way
+//! (docs/specs/circulacao/conta.md; `scenarios/circulacao/multa-conta.koha.json`).
 
 #![expect(
     clippy::unwrap_used,
@@ -16,15 +18,18 @@ mod oracle;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use elzevir_app::accounts::{AccountLineId, LineKind, PaymentRequest};
 use elzevir_app::calendar::{CalendarAction, CalendarChange, HolidayText};
 use elzevir_app::catalog::ItemStatus;
 use elzevir_app::circulation_rules::{CirculationCommand, CirculationOutput, CirculationRefusal};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::loans::{
-    CheckinRequest, CheckoutRefusal, CheckoutRequest, RenewRefusal, RenewRequest,
+    CheckinRequest, CheckoutRefusal, CheckoutRequest, LoanDesk, RenewRefusal, RenewRequest,
 };
+use elzevir_domain::account::{CreditType, rule_money};
 use elzevir_domain::calendar::{AnnualHoliday, DatedEntry};
-use elzevir_domain::checkout::Impossible;
+use elzevir_domain::catalog::Money;
+use elzevir_domain::checkout::{Confirm, Impossible};
 use elzevir_domain::renewal::RenewalRefusal;
 use elzevir_domain::suspension::SuspensionEnd;
 use elzevir_store::CommandFailed;
@@ -96,15 +101,20 @@ fn zoned(text: &str) -> Zoned {
         .unwrap()
 }
 
-fn library(dir: &tempfile::TempDir, recording: &Recording) -> Library {
+fn library(
+    dir: &tempfile::TempDir,
+    patron: &RecordedPatron,
+    items: &[&RecordedItem],
+    rules: &[&RecordedRules],
+) -> Library {
     let mut codes = BTreeSet::new();
-    codes.insert((true, recording.patron.library.clone()));
-    for item in [&recording.item, &recording.other_item] {
+    codes.insert((true, patron.library.clone()));
+    for item in items {
         codes.insert((true, item.home_library.clone()));
         codes.insert((true, item.holding_library.clone()));
         codes.insert((false, item.item_type.clone()));
     }
-    for rules in recording.rules.iter().chain(&recording.renewal_rules) {
+    for rules in rules {
         for (is_branch, code) in [
             (true, &rules.context.library),
             (false, &rules.context.item_type),
@@ -114,13 +124,8 @@ fn library(dir: &tempfile::TempDir, recording: &Recording) -> Library {
             }
         }
     }
-    let library = Library::new(
-        dir,
-        &codes,
-        &recording.patron.library,
-        &recording.patron.category,
-    );
-    for item in [&recording.item, &recording.other_item] {
+    let library = Library::new(dir, &codes, &patron.library, &patron.category);
+    for item in items {
         library.add_item(
             &item.barcode,
             (&item.home_library, &item.holding_library),
@@ -245,7 +250,16 @@ fn a_renewed_late_loan_is_answered_as_the_oracle_answered() {
     let recording: Recording =
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     let dir = tempfile::tempdir().unwrap();
-    let library = library(&dir, &recording);
+    let library = library(
+        &dir,
+        &recording.patron,
+        &[&recording.item, &recording.other_item],
+        &recording
+            .rules
+            .iter()
+            .chain(&recording.renewal_rules)
+            .collect::<Vec<_>>(),
+    );
     let desk = &recording.patron.library;
     set_calendar(&library, desk, &recording.calendar);
     library.set_rules(&recording.rules).unwrap();
@@ -332,4 +346,199 @@ fn a_renewed_late_loan_is_answered_as_the_oracle_answered() {
         koha_keys,
         BTreeSet::from(["DEBARRED", "USERBLOCKEDWITHENDDATE"])
     );
+}
+
+#[derive(Deserialize)]
+struct FinesRecording {
+    patron: RecordedPatron,
+    items: Vec<RecordedItem>,
+    rules: Vec<RecordedRules>,
+    calendar: RecordedCalendar,
+    checkouts: Vec<RecordedLoan>,
+    fines: Vec<RecordedLine>,
+    debt: Asked,
+    payment: RecordedCredit,
+    after_payment: Vec<RecordedLine>,
+    writeoff: RecordedCredit,
+    after_writeoff: Vec<RecordedLine>,
+    credits: Vec<RecordedLine>,
+}
+
+#[derive(Deserialize)]
+struct RecordedLoan {
+    at: String,
+    due: String,
+    returned: String,
+}
+
+#[derive(Deserialize)]
+struct RecordedLine {
+    status: Option<String>,
+    amount: Value,
+    amount_outstanding: Value,
+}
+
+#[derive(Deserialize)]
+struct RecordedCredit {
+    amount: Value,
+}
+
+/// A recorded amount in cents, read from its decimal text as a rule amount is.
+fn cents(amount: &Value) -> Money {
+    let text = match amount {
+        Value::String(text) => text.clone(),
+        other => other.to_string(),
+    };
+    rule_money(&text).unwrap()
+}
+
+/// Our lines of one side, oldest first, as `(id, amount, outstanding)`.
+fn lines(library: &Library, debit: bool) -> Vec<(AccountLineId, Money, Money)> {
+    let mut lines: Vec<_> = library
+        .store
+        .account(library.patron)
+        .unwrap()
+        .into_iter()
+        .filter(|line| matches!(line.kind, LineKind::Debit(_)) == debit)
+        .map(|line| (line.id, line.amount, line.outstanding))
+        .collect();
+    lines.sort();
+    lines
+}
+
+fn debits(library: &Library) -> Vec<(AccountLineId, Money, Money)> {
+    lines(library, true)
+}
+
+fn same_lines(ours: &[(AccountLineId, Money, Money)], koha: &[RecordedLine], when: &str) {
+    let ours: Vec<_> = ours
+        .iter()
+        .map(|&(_, amount, left)| (amount, left))
+        .collect();
+    let koha: Vec<_> = koha
+        .iter()
+        .map(|line| (cents(&line.amount), cents(&line.amount_outstanding)))
+        .collect();
+    assert_eq!(ours, koha, "{when}");
+}
+
+fn credit(library: &Library, kind: CreditType, amount: Money, lines: Vec<AccountLineId>, at: &str) {
+    let Ok(WriteOutput::Circulation(CirculationOutput::Paid(_))) = circulate(
+        library,
+        CirculationCommand::Pay(PaymentRequest {
+            patron: library.patron,
+            kind,
+            amount,
+            lines,
+            desk: library.branches["MAIN"],
+            at: zoned(at),
+        }),
+    ) else {
+        panic!("the {kind:?} failed");
+    };
+}
+
+#[test]
+fn late_returns_are_fined_and_settled_as_the_oracle_did() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../scenarios/circulacao/multa-conta.koha.json");
+    let recording: FinesRecording =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(
+        &dir,
+        &recording.patron,
+        &recording.items.iter().collect::<Vec<_>>(),
+        &recording.rules.iter().collect::<Vec<_>>(),
+    );
+    let desk = &recording.patron.library;
+    set_calendar(&library, desk, &recording.calendar);
+    library.set_rules(&recording.rules).unwrap();
+
+    for (item, loan) in recording.items.iter().zip(&recording.checkouts) {
+        let Ok(WriteOutput::Circulation(CirculationOutput::CheckedOut(lent))) =
+            checkout(&library, &item.barcode, desk, &loan.at)
+        else {
+            panic!("the checkout failed");
+        };
+        assert!(
+            same_due(&lent.due, &loan.due),
+            "due {}, Koha {}",
+            lent.due,
+            loan.due
+        );
+    }
+    for ((item, loan), koha) in recording
+        .items
+        .iter()
+        .zip(&recording.checkouts)
+        .zip(&recording.fines)
+    {
+        let Ok(WriteOutput::Circulation(CirculationOutput::CheckedIn(back))) = circulate(
+            &library,
+            CirculationCommand::Checkin(CheckinRequest {
+                barcode: item.barcode.clone(),
+                desk: library.branches[desk],
+                at: zoned(&loan.returned),
+            }),
+        ) else {
+            panic!("the checkin failed");
+        };
+        assert_eq!(back.fine, Some(cents(&koha.amount)), "{}", item.barcode);
+        assert_eq!(koha.status.as_deref(), Some("RETURNED"));
+    }
+    same_lines(&debits(&library), &recording.fines, "fines");
+
+    // The debt asks for confirmation (`DEBT` among Koha's confirmations).
+    let koha_debt = &recording.debt.answer["confirms"]["DEBT"];
+    let asked = checkout(
+        &library,
+        &recording.items[2].barcode,
+        desk,
+        &recording.debt.at,
+    );
+    assert_eq!(
+        asked.unwrap_err(),
+        CirculationRefusal::Checkout(CheckoutRefusal::NeedsConfirmation(vec![Confirm::Debt(
+            cents(koha_debt)
+        )]))
+    );
+    assert!(
+        recording.debt.answer["blockers"]
+            .as_object()
+            .unwrap()
+            .is_empty()
+    );
+
+    // A payment without lines settles the oldest fine first.
+    let at = &recording.debt.at;
+    credit(
+        &library,
+        CreditType::Payment,
+        cents(&recording.payment.amount),
+        Vec::new(),
+        at,
+    );
+    let after_payment = debits(&library);
+    same_lines(
+        &after_payment,
+        &recording.after_payment,
+        "after the payment",
+    );
+    // The write-off of the line Koha chose, the second fine.
+    let second = after_payment.last().unwrap().0;
+    credit(
+        &library,
+        CreditType::Writeoff,
+        cents(&recording.writeoff.amount),
+        vec![second],
+        at,
+    );
+    same_lines(
+        &debits(&library),
+        &recording.after_writeoff,
+        "after the write-off",
+    );
+
+    same_lines(&lines(&library, false), &recording.credits, "credits");
 }
