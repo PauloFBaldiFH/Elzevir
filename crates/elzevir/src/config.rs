@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use elzevir_domain::call_number::{AuthorTable, MAX_TABLE_LINES, TableReport};
+use elzevir_domain::long_overdue::{DEFAULT_MAX_DAYS, LongOverdueSettings};
 use jiff::tz::TimeZone;
 use serde::Deserialize;
 
@@ -27,6 +28,49 @@ pub(crate) struct Config {
     /// The library itself.
     #[serde(default)]
     library: Library,
+    /// Circulation settings that are not rules.
+    #[serde(default)]
+    circulation: Circulation,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Circulation {
+    /// Declaring long overdue Items lost; off when absent (docs/specs/circulacao/conta.md).
+    long_overdue: Option<LongOverdue>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LongOverdue {
+    /// Days past due after which the Item is lost.
+    days: u32,
+    /// The lost status it gets; 1 when absent.
+    lost_status: Option<i64>,
+    /// Charge the patron and end the loan; off when absent.
+    charge: Option<bool>,
+    /// Due dates older than this many days are left alone; 366 when absent.
+    max_days: Option<u32>,
+    /// End the loan even without charging; off when absent.
+    mark_returned: Option<bool>,
+}
+
+impl LongOverdue {
+    /// The settings, or why they cannot be.
+    fn settings(&self) -> Result<LongOverdueSettings, &'static str> {
+        let lost_status = self.lost_status.unwrap_or(1);
+        // Koha skips a range whose lost value is zero, since zero is "not lost".
+        if lost_status <= 0 {
+            return Err("lost_status must be above zero");
+        }
+        Ok(LongOverdueSettings {
+            days: self.days,
+            max_days: self.max_days.unwrap_or(DEFAULT_MAX_DAYS),
+            lost_status,
+            charge: self.charge.unwrap_or(false),
+            mark_returned: self.mark_returned.unwrap_or(false),
+        })
+    }
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -53,6 +97,8 @@ pub(crate) struct Loaded {
     pub(crate) table_report: Option<(PathBuf, TableReport)>,
     /// The library's time zone.
     pub(crate) time_zone: TimeZone,
+    /// How long overdue Items are declared lost, when they are.
+    pub(crate) long_overdue: Option<LongOverdueSettings>,
 }
 
 /// Reads `data_dir/elzevir.toml` and what it points to; no file is no configuration.
@@ -67,11 +113,20 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
             .map_err(|e| format!("{}: library.time_zone: {e}", path.display()))?,
         None => TimeZone::system(),
     };
+    let long_overdue = match &config.circulation.long_overdue {
+        Some(section) => Some(
+            section
+                .settings()
+                .map_err(|e| format!("{}: circulation.long_overdue: {e}", path.display()))?,
+        ),
+        None => None,
+    };
     let Some(table) = config.call_number.author_table else {
         return Ok(Loaded {
             author_table: None,
             table_report: None,
             time_zone,
+            long_overdue,
         });
     };
     let table_path = data_dir.join(table);
@@ -87,6 +142,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         author_table: Some(Arc::new(table)),
         table_report: Some((table_path, report)),
         time_zone,
+        long_overdue,
     })
 }
 
@@ -176,5 +232,38 @@ mod tests {
         assert_eq!(zone.iana_name(), Some("America/Sao_Paulo"));
         std::fs::write(&config, "[library]\ntime_zone = \"Mars/Olympus\"\n").unwrap();
         assert!(load(dir.path()).unwrap_err().contains("library.time_zone"));
+    }
+
+    #[test]
+    fn long_overdue_is_off_unless_its_days_are_given() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(load(dir.path()).unwrap().long_overdue, None);
+        let config = dir.path().join("elzevir.toml");
+        std::fs::write(&config, "[circulation.long_overdue]\ndays = 60\n").unwrap();
+        assert_eq!(
+            load(dir.path()).unwrap().long_overdue,
+            Some(LongOverdueSettings {
+                days: 60,
+                max_days: 366,
+                lost_status: 1,
+                charge: false,
+                mark_returned: false,
+            })
+        );
+        std::fs::write(
+            &config,
+            "[circulation.long_overdue]\ndays = 60\nlost_status = 2\ncharge = true\n",
+        )
+        .unwrap();
+        let settings = load(dir.path()).unwrap().long_overdue.unwrap();
+        assert_eq!((settings.lost_status, settings.charge), (2, true));
+        std::fs::write(
+            &config,
+            "[circulation.long_overdue]\ndays = 60\nlost_status = 0\n",
+        )
+        .unwrap();
+        assert!(load(dir.path()).unwrap_err().contains("lost_status"));
+        std::fs::write(&config, "[circulation.long_overdue]\nlost_status = 1\n").unwrap();
+        assert!(load(dir.path()).unwrap_err().contains("days"));
     }
 }

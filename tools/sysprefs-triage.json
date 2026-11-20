@@ -850,28 +850,28 @@
       "nota": "Decidir na spec de catalogação (Fase 1)."
     },
     "DefaultLongOverdueChargeValue": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "config",
+      "nota": "charge em elzevir.toml [circulation.long_overdue] (docs/specs/circulacao/conta.md, itens 20 a 26)."
     },
     "DefaultLongOverdueDays": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "config",
+      "nota": "days em elzevir.toml [circulation.long_overdue] (docs/specs/circulacao/conta.md, itens 20 a 26)."
     },
     "DefaultLongOverdueLostValue": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "config",
+      "nota": "lost_status em elzevir.toml [circulation.long_overdue] (docs/specs/circulacao/conta.md, itens 20 a 26)."
     },
     "DefaultLongOverduePatronCategories": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Sem filtro por categoria: o atraso longo vale para todos (docs/specs/circulacao/conta.md, §5)."
     },
     "DefaultLongOverdueSkipLostStatuses": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Só o exemplar que já tem a situação de perda configurada é ignorado (docs/specs/circulacao/conta.md, §5)."
     },
     "DefaultLongOverdueSkipPatronCategories": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Sem filtro por categoria: o atraso longo vale para todos (docs/specs/circulacao/conta.md, §5)."
     },
     "DefaultPatronSearchFields": {
       "destino": "revisar",
@@ -1746,8 +1746,8 @@
       "nota": "Decidir na spec de catalogação (Fase 1)."
     },
     "MarkLostItemsAsReturned": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Padrão do Koha para a rotina: a perda cobrada termina o empréstimo; mark_returned no elzevir.toml faz o mesmo sem cobrança (conta.md, item 22)."
     },
     "MaxComponentRecords": {
       "destino": "revisar",

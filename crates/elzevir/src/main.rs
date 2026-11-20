@@ -452,6 +452,7 @@ fn serve_controlled(
             Arc::clone(&probe),
         )?;
         let time_zone = loaded.time_zone.clone();
+        let long_overdue = loaded.long_overdue;
         let app = web_app(
             &store,
             index,
@@ -469,6 +470,7 @@ fn serve_controlled(
         let fines = runtime.spawn(overdue_run::run(
             Arc::clone(&store),
             time_zone,
+            long_overdue,
             instance.clone(),
             control.receiver(),
         ));

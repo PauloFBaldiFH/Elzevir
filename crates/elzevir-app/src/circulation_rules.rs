@@ -5,6 +5,7 @@ pub use elzevir_data::RuleKind;
 use elzevir_domain::circulation_rules::{
     CirculationRule, RuleScopeKey, RuleValueError, checked_value,
 };
+use elzevir_domain::long_overdue::LongOverdueSettings;
 use jiff::Zoned;
 use serde::{Deserialize, Serialize};
 
@@ -39,6 +40,14 @@ pub enum CirculationCommand {
     ChargeOverdues {
         /// When, in the library's time zone.
         at: Zoned,
+    },
+    /// Declares lost the Items on loan long past their due date, and charges for them when
+    /// the settings say so (docs/specs/circulacao/conta.md).
+    MarkLongOverdue {
+        /// When, in the library's time zone.
+        at: Zoned,
+        /// The library's settings.
+        settings: LongOverdueSettings,
     },
 }
 
@@ -76,6 +85,17 @@ pub enum CirculationOutput {
     Paid(Paid),
     /// The daily run went through the overdue loans.
     OverduesCharged(OverduesCharged),
+    /// What the run of long overdue Items did.
+    LongOverdueMarked(LongOverdueMarked),
+}
+
+/// What the run of long overdue Items did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LongOverdueMarked {
+    /// Items declared lost.
+    pub lost: usize,
+    /// Of those, the ones charged for.
+    pub charged: usize,
 }
 
 /// What the daily run of overdue fines did.

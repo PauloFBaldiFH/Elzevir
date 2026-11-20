@@ -119,6 +119,9 @@ impl WriteCommand {
             Self::Circulation(CirculationCommand::Renew(_)) => "circ.renew",
             Self::Circulation(CirculationCommand::Pay(_)) => "circ.pay",
             Self::Circulation(CirculationCommand::ChargeOverdues { .. }) => "circ.charge_overdues",
+            Self::Circulation(CirculationCommand::MarkLongOverdue { .. }) => {
+                "circ.mark_long_overdue"
+            }
         }
     }
 

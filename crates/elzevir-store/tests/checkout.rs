@@ -14,7 +14,8 @@ use elzevir_app::catalog::{
     NewRecord, RecordItems,
 };
 use elzevir_app::circulation_rules::{
-    CirculationCommand, CirculationOutput, CirculationRefusal, OverduesCharged, RuleChange,
+    CirculationCommand, CirculationOutput, CirculationRefusal, LongOverdueMarked, OverduesCharged,
+    RuleChange,
 };
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
@@ -30,6 +31,7 @@ use elzevir_domain::catalog::{BranchId, InstanceId, Money};
 use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome, TransferReason};
 use elzevir_domain::checkout::{Alert, Confirm, Impossible, TooManyReason};
 use elzevir_domain::circulation_rules::RuleScopeKey;
+use elzevir_domain::long_overdue::{DEFAULT_MAX_DAYS, LongOverdueSettings};
 use elzevir_domain::patron::{Enrolment, PatronId};
 use elzevir_domain::renewal::RenewalRefusal;
 use elzevir_domain::suspension::SuspensionEnd;
@@ -149,6 +151,10 @@ fn library(dir: &tempfile::TempDir) -> Library {
 
 impl Library {
     fn item(&self, barcode: &str, status: ItemStatus) {
+        self.priced_item(barcode, status, None);
+    }
+
+    fn priced_item(&self, barcode: &str, status: ItemStatus, replacement_price: Option<Money>) {
         submit(
             &self.store,
             WriteCommand::Catalog(CatalogCommand::AddItem(Box::new(NewItem {
@@ -163,7 +169,7 @@ impl Library {
                     location: None,
                     collection: None,
                     price: None,
-                    replacement_price: None,
+                    replacement_price,
                     copy_number: None,
                     status,
                     acquired_on: None,
@@ -907,5 +913,112 @@ fn the_daily_run_grows_the_fine_of_a_loan_still_out_except_on_closed_days() {
     assert_eq!(
         charge_overdues(&library, "2026-12-02T10:00:00-03:00"),
         OverduesCharged::default()
+    );
+}
+
+fn mark_long_overdue(
+    library: &Library,
+    at: &str,
+    settings: LongOverdueSettings,
+) -> LongOverdueMarked {
+    let at: Zoned = format!("{at}[America/Sao_Paulo]").parse().unwrap();
+    match submit(
+        &library.store,
+        WriteCommand::Circulation(CirculationCommand::MarkLongOverdue { at, settings }),
+    ) {
+        Ok(WriteOutput::Circulation(CirculationOutput::LongOverdueMarked(done))) => done,
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn long_overdue_items_are_declared_lost_and_charged_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(&dir);
+    library.priced_item("0001", ItemStatus::default(), Some(Money(4500)));
+    library.item("0002", ItemStatus::default());
+    library.rules(&[
+        ("maxissueqty", "5"),
+        ("issuelength", "7"),
+        ("fine", "0.50"),
+        ("chargeperiod", "1"),
+        ("lost_item_processing_fee", "3.00"),
+    ]);
+    // Both due on Thursday the 26th of November, and fined two days later.
+    for barcode in ["0001", "0002"] {
+        library
+            .lend(barcode, "2026-11-19T10:00:00-03:00", false)
+            .unwrap();
+    }
+    charge_overdues(&library, "2026-11-28T10:00:00-03:00");
+    let flagged = LongOverdueSettings {
+        days: 30,
+        max_days: DEFAULT_MAX_DAYS,
+        lost_status: 2,
+        charge: false,
+        mark_returned: false,
+    };
+    // Thirty days after midnight of the due day is not yet "more than" thirty days.
+    assert_eq!(
+        mark_long_overdue(&library, "2026-12-26T10:00:00-03:00", flagged),
+        LongOverdueMarked::default()
+    );
+    assert_eq!(
+        mark_long_overdue(&library, "2026-12-27T10:00:00-03:00", flagged),
+        LongOverdueMarked {
+            lost: 2,
+            charged: 0
+        }
+    );
+    let state = || {
+        library.read::<String>(
+            "SELECT (SELECT group_concat(lost, ' ') FROM items ORDER BY id) || ' | ' ||
+                    (SELECT count(*) FROM loans) || ' out | ' ||
+                    (SELECT group_concat(debit_type || ' ' || coalesce(status, '-') || ' '
+                                         || amount, ', ')
+                     FROM account_lines ORDER BY id)",
+        )
+    };
+    // Lost without a charge: the loans go on, and the fines stop growing.
+    assert_eq!(
+        state(),
+        "2 2 | 2 out | OVERDUE UNRETURNED 100, OVERDUE UNRETURNED 100"
+    );
+    assert_eq!(
+        charge_overdues(&library, "2026-12-28T10:00:00-03:00"),
+        OverduesCharged::default()
+    );
+    // Charging with another lost status: the fines stop as LOST, the fee and the
+    // replacement price are charged, and the loans end.
+    let charged = LongOverdueSettings {
+        lost_status: 1,
+        charge: true,
+        ..flagged
+    };
+    assert_eq!(
+        mark_long_overdue(&library, "2026-12-28T10:00:00-03:00", charged),
+        LongOverdueMarked {
+            lost: 2,
+            charged: 2
+        }
+    );
+    assert_eq!(
+        state(),
+        "1 1 | 0 out | OVERDUE LOST 100, OVERDUE LOST 100, PROCESSING - 300, \
+         LOST - 4500, PROCESSING - 300"
+    );
+    assert_eq!(
+        library.read::<String>(
+            "SELECT group_concat(return_branch_id || ' ' || returned_at, ', ') FROM returned_loans"
+        ),
+        format!(
+            "{0} 2026-12-28T10:00:00-03:00[America/Sao_Paulo], \
+             {0} 2026-12-28T10:00:00-03:00[America/Sao_Paulo]",
+            library.annex.0
+        )
+    );
+    assert_eq!(
+        mark_long_overdue(&library, "2026-12-29T10:00:00-03:00", charged),
+        LongOverdueMarked::default()
     );
 }

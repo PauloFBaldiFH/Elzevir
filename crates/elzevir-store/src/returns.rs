@@ -4,6 +4,7 @@
 use elzevir_app::circulation_rules::{CirculationOutput, CirculationRefusal, RuleKind};
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
 use elzevir_app::loans::{CheckedIn, CheckinRefusal, CheckinRequest, checked_barcode};
+use elzevir_domain::account::OverdueStatus;
 use elzevir_domain::catalog::{BranchId, Money, PolicyId};
 use elzevir_domain::checkin::{
     CheckinFacts, CheckinSettings, Destination, LoanOutcome, LostOutcome, OpenTransfer,
@@ -198,7 +199,13 @@ fn fine_late(
         };
         fine = update_overdue_fine(connection, rules, &late, &request.at, FineMoment::Return)?;
     }
-    close_overdue(connection, loan.patron, item.id, &request.at.to_string())?;
+    close_overdue(
+        connection,
+        loan.patron,
+        item.id,
+        OverdueStatus::Returned,
+        &request.at.to_string(),
+    )?;
     Ok(fine)
 }
 
@@ -211,6 +218,19 @@ fn end_loan(
     loan: &Loan,
     request: &CheckinRequest,
 ) -> rusqlite::Result<()> {
+    close_loan(connection, loan.id, &request.at.to_string(), request.desk)
+}
+
+/// Moves a loan to the returned loans, returned at `at` in `branch`, without its patron
+/// unless the patron keeps a reading history.
+///
+/// Koha: `C4::Circulation::MarkIssueReturned` (`privacy` 2 anonymizes at once).
+pub(crate) fn close_loan(
+    connection: &Connection,
+    loan: i64,
+    at: &str,
+    branch: BranchId,
+) -> rusqlite::Result<()> {
     connection.execute(
         "INSERT INTO returned_loans (item_id, patron_id, branch_id, issued_at, due, on_site,
                                      returned_at, return_branch_id, renewals)
@@ -219,9 +239,9 @@ fn end_loan(
                 l.branch_id, l.issued_at, l.due, l.on_site, ?2, ?3, l.renewals
          FROM loans l JOIN patrons p ON p.id = l.patron_id
          WHERE l.id = ?1",
-        params![loan.id, request.at.to_string(), request.desk.0],
+        params![loan, at, branch.0],
     )?;
-    connection.execute("DELETE FROM loans WHERE id = ?1", [loan.id])?;
+    connection.execute("DELETE FROM loans WHERE id = ?1", [loan])?;
     Ok(())
 }
 

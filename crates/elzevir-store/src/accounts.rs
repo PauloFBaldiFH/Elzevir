@@ -78,7 +78,42 @@ fn offset(
     Ok(())
 }
 
-/// The loan whose overdue fine is charged.
+/// Adds a debit about the loan, with its `CREATE` movement.
+///
+/// Koha: `Koha::Account::add_debit`.
+pub(crate) fn add_debit(
+    connection: &Connection,
+    loan: &OverdueLoan,
+    kind: DebitType,
+    status: Option<OverdueStatus>,
+    amount: Money,
+    at: &str,
+) -> rusqlite::Result<()> {
+    connection.execute(
+        "INSERT INTO account_lines (patron_id, debit_type, status, amount, outstanding,
+                                    item_id, loan_id, branch_id, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?4, ?5, ?6, ?7, ?8, ?8)",
+        params![
+            loan.patron.0,
+            kind.code(),
+            status.map(OverdueStatus::code),
+            amount.0,
+            loan.item,
+            loan.loan,
+            loan.branch.0,
+            at
+        ],
+    )?;
+    offset(
+        connection,
+        connection.last_insert_rowid(),
+        "CREATE",
+        amount.0,
+        at,
+    )
+}
+
+/// The loan a debit is about.
 pub(crate) struct OverdueLoan {
     /// `loans.id`.
     pub(crate) loan: i64,
@@ -116,30 +151,16 @@ pub(crate) fn charge_overdue(
         max_fine,
     );
     match (update, current) {
-        (FineUpdate::Charge(Money(amount)), _) => {
-            connection.execute(
-                "INSERT INTO account_lines (patron_id, debit_type, status, amount, outstanding,
-                                            item_id, loan_id, branch_id, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?4, ?5, ?6, ?7, ?8, ?8)",
-                params![
-                    loan.patron.0,
-                    DebitType::Overdue.code(),
-                    OverdueStatus::Unreturned.code(),
-                    amount,
-                    loan.item,
-                    loan.loan,
-                    loan.branch.0,
-                    at
-                ],
-            )?;
-            offset(
+        (FineUpdate::Charge(amount), _) => {
+            add_debit(
                 connection,
-                connection.last_insert_rowid(),
-                "CREATE",
+                loan,
+                DebitType::Overdue,
+                Some(OverdueStatus::Unreturned),
                 amount,
                 at,
             )?;
-            Ok(Some(Money(amount)))
+            Ok(Some(amount))
         }
         (FineUpdate::Adjust(after), Some(line)) => {
             let outstanding = adjusted_outstanding(line.amount, line.outstanding, after);
@@ -161,14 +182,15 @@ pub(crate) fn charge_overdue(
     }
 }
 
-/// Stops the growing fine of the patron's Item: it is `RETURNED` now, or gone when it was
-/// zero and nothing was paid on it.
+/// Stops the growing fine of the patron's Item: it gets `status` (`RETURNED` or `LOST`),
+/// or is gone when it was zero and nothing was paid on it.
 ///
 /// Koha: `C4::Circulation::_FixOverduesOnReturn` (without forgiving the fine).
 pub(crate) fn close_overdue(
     connection: &Connection,
     patron: PatronId,
     item: i64,
+    status: OverdueStatus,
     at: &str,
 ) -> rusqlite::Result<()> {
     let line: Option<(i64, i64)> = connection
@@ -200,7 +222,7 @@ pub(crate) fn close_overdue(
     } else {
         connection.execute(
             "UPDATE account_lines SET status = ?2, updated_at = ?3 WHERE id = ?1",
-            params![id, OverdueStatus::Returned.code(), at],
+            params![id, status.code(), at],
         )?;
     }
     Ok(())

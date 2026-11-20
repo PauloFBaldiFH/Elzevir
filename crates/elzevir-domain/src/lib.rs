@@ -13,6 +13,7 @@ pub mod circulation;
 pub mod circulation_rules;
 pub mod due_date;
 pub mod fine;
+pub mod long_overdue;
 pub mod patron;
 pub mod renewal;
 pub mod statement;
