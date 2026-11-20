@@ -3,7 +3,7 @@
 //!
 //! Linux follows the freedesktop.org specifications: an application entry
 //! with `Terminal=true` lets the desktop open its own terminal, whichever it
-//! is. An autostart entry starts the server in the background at login.
+//! is. An autostart entry runs the tray at login, which starts the server.
 //! Windows shortcuts are created by `install.ps1`.
 
 use std::path::{Path, PathBuf};
@@ -109,12 +109,12 @@ fn exec_path(executable: &Path) -> Result<String, String> {
         .ok_or_else(|| "the executable path cannot be written in a launcher".to_owned())
 }
 
-/// Login entry: no window, the server simply starts (Paulo, 2026-11-20).
+/// Login entry: the tray starts the server and shows its state (Paulo, 2026-11-20).
 fn autostart_entry(executable: &Path) -> Result<String, String> {
     let english = elzevir_panel::Messages::new("en").map_err(|error| error.to_string())?;
     Ok(format!(
         "[Desktop Entry]\nType=Application\nVersion=1.5\nName=Elzevir\n\
-         Comment={}\nExec={} background\nIcon=elzevir\nTerminal=false\n\
+         Comment={}\nExec={} tray\nIcon=elzevir\nTerminal=false\n\
          NoDisplay=true\nX-GNOME-Autostart-enabled=true\n",
         english.get("desktop-autostart"),
         exec_path(executable)?,
@@ -244,7 +244,7 @@ mod tests {
         assert!(text.contains("Comment[pt_BR]=Abrir o painel do Elzevir\n"));
         assert!(entry(Path::new("/bad\npath")).is_err());
         let login = autostart_entry(Path::new("/opt/elzevir/elzevir")).unwrap();
-        assert!(login.contains("Exec=\"/opt/elzevir/elzevir\" background\n"));
+        assert!(login.contains("Exec=\"/opt/elzevir/elzevir\" tray\n"));
         assert!(login.contains("Terminal=false\n"));
     }
 
