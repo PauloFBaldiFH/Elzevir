@@ -11,8 +11,9 @@ use elzevir_app::patrons::{
     PatronFields, PatronOutput, PatronQuery, PatronRow, ReadingHistory,
 };
 use elzevir_app::staff::StaffId;
-use elzevir_domain::catalog::BranchId;
+use elzevir_domain::catalog::{BranchId, Money};
 use elzevir_domain::patron::{Cpf, Enrolment, PatronCategoryId, PatronId};
+use jiff::Zoned;
 use jiff::civil::Date;
 use rusqlite::{OptionalExtension, Row, params};
 
@@ -77,9 +78,17 @@ fn patron_of(row: &Row<'_>) -> rusqlite::Result<Patron> {
 
 /// `?1` the card number, `?2` the CPF digits, `?3` a `LIKE` pattern for names (or
 /// `NULL`), `?4` the most rows.
-const SEARCH: &str = "SELECT p.id, p.cardnumber, p.surname, p.first_name, c.name, p.expires
+// Unit separator between due moments: a zoned date-time never holds it.
+const SEARCH: &str = "SELECT p.id, p.cardnumber, p.surname, p.first_name, c.name, p.expires,
+                             b.name,
+                             (SELECT group_concat(l.due, char(31)) FROM loans l
+                              WHERE l.patron_id = p.id),
+                             (SELECT count(*) FROM holds h WHERE h.patron_id = p.id),
+                             (SELECT coalesce(sum(a.outstanding), 0) FROM account_lines a
+                              WHERE a.patron_id = p.id AND a.debit_type IS NOT NULL)
                       FROM patrons p
                       JOIN patron_categories c ON c.id = p.category_id
+                      JOIN branches b ON b.id = p.branch_id
                       WHERE p.cardnumber = ?1
                          OR p.cpf = ?2
                          OR (?3 IS NOT NULL
@@ -87,6 +96,23 @@ const SEARCH: &str = "SELECT p.id, p.cardnumber, p.surname, p.first_name, c.name
                                   OR coalesce(p.first_name, '') || ' ' || p.surname LIKE ?3 ESCAPE '\\'))
                       ORDER BY p.surname, p.first_name, p.id
                       LIMIT ?4";
+
+/// The due moments `SEARCH` joins with the unit separator.
+fn dues(joined: Option<&str>) -> rusqlite::Result<Vec<Zoned>> {
+    joined
+        .into_iter()
+        .flat_map(|text| text.split('\u{1f}'))
+        .map(|text| {
+            text.parse::<Zoned>().map_err(|error| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    7,
+                    rusqlite::types::Type::Text,
+                    error.into(),
+                )
+            })
+        })
+        .collect()
+}
 
 /// `%text%` with the `LIKE` wildcards of `text` escaped.
 fn contains(text: &str) -> String {
@@ -146,6 +172,10 @@ impl PatronDesk for ElzevirStore {
                             first_name: row.get(3)?,
                             category_name: row.get(4)?,
                             expires: day(&row.get::<_, String>(5)?)?,
+                            branch_name: row.get(6)?,
+                            loans_due: dues(row.get::<_, Option<String>>(7)?.as_deref())?,
+                            holds: row.get(8)?,
+                            owed: Money(row.get(9)?),
                         })
                     })?;
                 rows.collect::<rusqlite::Result<Vec<_>>>()

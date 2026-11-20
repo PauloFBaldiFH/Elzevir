@@ -698,13 +698,13 @@ Proposta de Paulo, 2026-11-20. Os empréstimos aparecem como cartões à esquerd
 
 ### 24.6 Lista de leitores
 
-1. **Compacto.** Uma linha por leitor: iniciais, nome (link para a ficha), carteirinha, categoria, etiquetas de situação e validade.
+1. **Compacto.** Uma linha por leitor: iniciais, nome (link para a ficha), carteirinha, categoria, etiquetas de situação e validade. As etiquetas são as da ficha (§24.2 item 2), calculadas pela mesma função: atrasos, débito e inscrição vencida aparecem já no compacto.
 2. **Completo.** Um cartão por leitor com, além disso:
    - a unidade;
-   - os empréstimos (quantos e quantos em atraso);
-   - as reservas;
-   - o débito.
-3. **Dados pessoais só na ficha.** A lista não mostra contato, endereço nem CPF em nenhum modo, porque seriam dados pessoais de muitos leitores de uma vez, sem a abertura registrada no `audit_log` que a ficha grava.
+   - quantos empréstimos abertos;
+   - quantas reservas abertas.
+3. **Zoom próprio.** O modo fica no cookie `elzevir_zoom_patrons`; a lista abre no compacto.
+4. **Dados pessoais só na ficha.** A lista não mostra contato, endereço nem CPF em nenhum modo, porque seriam dados pessoais de muitos leitores de uma vez, sem a abertura registrada no `audit_log` que a ficha grava.
 
 ### 24.7 Animação e acessibilidade
 

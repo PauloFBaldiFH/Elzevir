@@ -18,6 +18,8 @@ pub struct StaffPatrons<'a> {
     pub searched: bool,
     /// The patrons found.
     pub rows: Vec<PatronLine>,
+    /// The zoom the list opens in, `compact` or `full` (interface §24.6).
+    pub zoom: &'static str,
     /// Whether the person may manage categories.
     pub can_manage: bool,
 }
@@ -35,8 +37,16 @@ pub struct PatronLine {
     pub category: String,
     /// Expiry date as shown.
     pub expires: String,
-    /// Whether the enrolment is over.
-    pub expired: bool,
+    /// Up to two initials.
+    pub initials: String,
+    /// Name of the home branch, shown in the full view.
+    pub branch: String,
+    /// How the patron stands, as on the record.
+    pub status: Vec<StatusChip>,
+    /// "N loans", shown in the full view.
+    pub loans: String,
+    /// "N holds", shown in the full view.
+    pub holds: String,
 }
 
 /// The patron's record, behind the wall.

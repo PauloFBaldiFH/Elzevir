@@ -260,20 +260,29 @@ pub enum LoanUrgency {
 /// Days ahead that still count as "due soon".
 pub const DUE_SOON_DAYS: i64 = 2;
 
+impl LoanUrgency {
+    /// The urgency of a loan due at `due`, at `now`, counted in calendar days of the due
+    /// date's time zone.
+    #[must_use]
+    pub fn of(due: &Zoned, now: &Zoned) -> Self {
+        if due.timestamp() < now.timestamp() {
+            return Self::Overdue;
+        }
+        let today = now.with_time_zone(due.time_zone().clone()).date();
+        let days = (due.date() - today).get_days();
+        if i64::from(days) <= DUE_SOON_DAYS {
+            Self::DueSoon
+        } else {
+            Self::OnTime
+        }
+    }
+}
+
 impl PatronLoan {
-    /// The loan's urgency at `now`, counted in calendar days of the due date's time zone.
+    /// The loan's urgency at `now` ([`LoanUrgency::of`]).
     #[must_use]
     pub fn urgency(&self, now: &Zoned) -> LoanUrgency {
-        if self.due.timestamp() < now.timestamp() {
-            return LoanUrgency::Overdue;
-        }
-        let today = now.with_time_zone(self.due.time_zone().clone()).date();
-        let days = (self.due.date() - today).get_days();
-        if i64::from(days) <= DUE_SOON_DAYS {
-            LoanUrgency::DueSoon
-        } else {
-            LoanUrgency::OnTime
-        }
+        LoanUrgency::of(&self.due, now)
     }
 }
 

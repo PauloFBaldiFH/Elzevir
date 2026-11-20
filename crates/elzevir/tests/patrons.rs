@@ -227,6 +227,16 @@ fn the_record_is_behind_the_wall_and_every_opening_is_logged() {
     let found = request(address, "GET", "/equipe/leitores?q=silva", &cir, "");
     assert_status(&found, 200);
     assert!(found.contains(&format!("href=\"/equipe/leitores/{ana}\">Silva, Ana")));
+    // The list opens compact; the full view adds counts, never contact or CPF (§24.6).
+    assert!(found.contains(r#"data-zoom="compact" data-zoom-screen="patrons""#));
+    assert!(found.contains("No loans") && found.contains("No holds"));
+    assert!(found.contains("In good standing"));
+    for personal in ["ana@example.org", "982.247", "52998224725"] {
+        assert!(!found.contains(personal), "{personal}");
+    }
+    let full = format!("{}; elzevir_zoom_patrons=full\r\n", cir.trim_end());
+    let zoomed = request(address, "GET", "/equipe/leitores?q=silva", &full, "");
+    assert!(zoomed.contains(r#"data-zoom="full" data-zoom-screen="patrons""#));
     // A card number found alone goes straight to the record.
     let scanned = request(address, "GET", "/equipe/leitores?q=000123", &cir, "");
     assert_status(&scanned, 303);

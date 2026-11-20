@@ -726,6 +726,10 @@ patrons-title = Patrons
 patrons-search-label = Card number, CPF or name
 patrons-search = Search
 patrons-search-hint = A card number or a CPF finds the patron exactly; two letters or more search inside names.
+patrons-found = { $count ->
+    [one] 1 patron found
+   *[other] { $count } patrons found
+}
 patrons-none = No patron found.
 patrons-back = Back to patrons
 patron-cardnumber = Card number
@@ -756,6 +760,16 @@ patron-group-contact = Contact
 patron-group-usage = Library use
 patron-group-identity = Identification
 patron-group-empty = Nothing recorded.
+patron-list-loans = { $count ->
+    [0] No loans
+    [one] 1 loan
+   *[other] { $count } loans
+}
+patron-list-holds = { $count ->
+    [0] No holds
+    [one] 1 hold
+   *[other] { $count } holds
+}
 loan-due-late = Overdue · { $date }
 loan-due-soon = Due soon · { $date }
 loan-due-ok = Due { $date }

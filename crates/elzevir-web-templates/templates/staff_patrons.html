@@ -11,14 +11,27 @@
 </form>
 <p class="form-hint">{{ t.get("patrons-search-hint") }}</p>
 {% if !rows.is_empty() %}
-<table class="patron-results">
-  <thead><tr><th>{{ t.get("patron-cardnumber") }}</th><th>{{ t.get("patron-name") }}</th><th>{{ t.get("patron-category") }}</th><th>{{ t.get("patron-expires") }}</th></tr></thead>
-  <tbody>
+<div class="patron-list-page" data-zoom="{{ zoom }}" data-zoom-screen="patrons">
+<div class="patron-toolbar">
+  <p class="muted" role="status">{{ t.get_numbers("patrons-found", [("count", rows.len() as u64)]) }}</p>
+  {% include "zoom_toggle.html" %}
+</div>
+{# Contact, address and CPF stay on the record, where opening it is audited (§24.6). #}
+<ul class="patron-list">
   {% for row in rows %}
-    <tr><td>{{ row.cardnumber }}</td><td><a href="/equipe/leitores/{{ row.id }}">{{ row.name }}</a></td><td>{{ row.category }}</td><td>{{ row.expires }}{% if row.expired %} <strong class="patron-expired">{{ t.get("patron-expired") }}</strong>{% endif %}</td></tr>
+  <li class="patron-line">
+    <span class="patron-initials" aria-hidden="true">{{ row.initials }}</span>
+    <span class="patron-line-who">
+      <a class="patron-line-name" href="/equipe/leitores/{{ row.id }}">{{ row.name }}</a>
+      <span class="patron-line-tags"><span class="tag">{{ t.get("patron-cardnumber") }} {{ row.cardnumber }}</span><span class="tag tag-patrons">{{ row.category }}</span><span class="tag tag-catalog z-full">{{ row.branch }}</span></span>
+    </span>
+    <span class="patron-status">{% for chip in row.status %}<span class="status-chip tone-{{ chip.tone }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ chip.icon }}"></use></svg>{{ chip.text }}</span>{% endfor %}</span>
+    <span class="patron-line-counts z-full"><span>{{ row.loans }}</span><span>{{ row.holds }}</span></span>
+    <span class="patron-line-expires">{{ t.get("patron-expires") }} <strong>{{ row.expires }}</strong></span>
+  </li>
   {% endfor %}
-  </tbody>
-</table>
+</ul>
+</div>
 {% else if searched %}
 <p role="status">{{ t.get("patrons-none") }}</p>
 {% endif %}
