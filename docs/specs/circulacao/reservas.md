@@ -1,6 +1,6 @@
 # Reservas
 
-> Status: tarefa 3.8, partes a (pedir, fila e cancelar, pela ficha do leitor), b (a devolução encontra a reserva e a equipe separa o exemplar) c (o empréstimo pergunta antes de levar o exemplar de outro leitor e atende a reserva de quem o leva) e d (a reserva que passou do prazo de retirada é cancelada). A disponibilidade no OPAC vem na próxima parte. Base: Koha 26.05.05.
+> Status: tarefa 3.8, partes a (pedir, fila e cancelar, pela ficha do leitor), b (a devolução encontra a reserva e a equipe separa o exemplar) c (o empréstimo pergunta antes de levar o exemplar de outro leitor e atende a reserva de quem o leva) d (a reserva que passou do prazo de retirada é cancelada) e e (o OPAC mostra o exemplar reservado ou em trânsito, [busca-e-registro.md](../opac/busca-e-registro.md), itens 4 e 7). Base: Koha 26.05.05.
 
 ## 1. Comportamento
 

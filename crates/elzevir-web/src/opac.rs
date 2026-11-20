@@ -8,16 +8,17 @@ use askama::Template;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
-use elzevir_app::catalog::{CatalogReader, CodeLists, ItemStatus, ItemView};
+use elzevir_app::catalog::{CatalogReader, CodeLists, ItemStatus, ItemView, Movement, ShelfSignal};
 use elzevir_app::opac::{self, RecordPage, ResultsPage};
 use elzevir_app::search::SearchIndex;
 use elzevir_domain::catalog::{InstanceId, NoteKind};
 use elzevir_web_templates::{
-    IconText, ItemLine, OpacNotFound, OpacRecord, OpacRecordBody, OpacResults, ResultLine,
+    I18n, IconText, ItemLine, OpacNotFound, OpacRecord, OpacRecordBody, OpacResults, ResultLine,
 };
 use serde::Deserialize;
 
 use crate::icons::{agent_icon, material_badges, signal_icon};
+use crate::patrons::shown;
 use crate::{AppState, render};
 
 /// Record bodies kept at most; past this the cache starts over. A body is a few kilobytes,
@@ -148,19 +149,23 @@ pub(crate) async fn record(State(state): State<AppState>, Path(id): Path<String>
     let worker_state = state.clone();
     let rendered = tokio::task::spawn_blocking(move || rendered_record(&worker_state, id)).await;
     match rendered {
-        Ok(Ok(Some(record))) => render(&OpacRecord {
+        Ok(Ok(Some((record, items)))) => render(&OpacRecord {
             t: &state.inner.i18n,
             title: &record.title,
             body: &record.body,
+            items,
         }),
         Ok(Ok(None)) => not_found(&state),
         _ => unavailable(),
     }
 }
 
-/// The record from the cache when its version has not changed, or read and rendered.
-/// `Err` when the catalog or the template failed.
-fn rendered_record(state: &AppState, id: InstanceId) -> Result<Option<Arc<RenderedRecord>>, ()> {
+/// A record's body and its Items as shown now.
+type Shown = (Arc<RenderedRecord>, Vec<ItemLine>);
+
+/// The record from the cache when its version has not changed, or read and rendered, with
+/// its Items read now. `Err` when the catalog or the template failed.
+fn rendered_record(state: &AppState, id: InstanceId) -> Result<Option<Shown>, ()> {
     let catalog = &*state.inner.opac.catalog;
     let cache = &state.inner.records;
     // The version is read before the record: if the record changes in between, the newer
@@ -168,27 +173,31 @@ fn rendered_record(state: &AppState, id: InstanceId) -> Result<Option<Arc<Render
     let Some(version) = catalog.record_version(id).map_err(drop)? else {
         return Ok(None);
     };
+    let codes = catalog.codes().map_err(drop)?;
+    let t = &state.inner.i18n;
+    let lines = |items: &[ItemView]| -> Vec<ItemLine> {
+        items
+            .iter()
+            .map(|item| item_line(t, item, &codes))
+            .collect()
+    };
     if let Some(record) = cache.get(id, version) {
-        return Ok(Some(record));
+        let items = catalog.items(id).map_err(drop)?;
+        return Ok(Some((record, lines(&items))));
     }
     let Some(page) = opac::record(catalog, id).map_err(drop)? else {
         return Ok(None);
     };
-    let codes = catalog.codes().map_err(drop)?;
-    let body = record_body(state, &page, &codes).render().map_err(drop)?;
+    let body = record_body(state, &page).render().map_err(drop)?;
     let record = Arc::new(RenderedRecord {
         title: page.instance.title,
         body,
     });
     cache.put(id, version, Arc::clone(&record));
-    Ok(Some(record))
+    Ok(Some((record, lines(&page.items))))
 }
 
-fn record_body<'a>(
-    state: &'a AppState,
-    page: &'a RecordPage,
-    codes: &CodeLists,
-) -> OpacRecordBody<'a> {
+fn record_body<'a>(state: &'a AppState, page: &'a RecordPage) -> OpacRecordBody<'a> {
     let instance = &page.instance;
     let publication = match (&instance.publisher, &instance.date) {
         (Some(publisher), Some(date)) => Some(format!("{publisher}, {date}")),
@@ -226,11 +235,6 @@ fn record_body<'a>(
             .chain(instance.typed_notes.iter().map(String::as_str))
             .collect(),
         contents: notes(&instance.notes, |kind| kind == NoteKind::Contents),
-        items: page
-            .items
-            .iter()
-            .map(|item| item_line(item, codes))
-            .collect(),
     }
 }
 
@@ -244,14 +248,37 @@ fn notes(notes: &[(NoteKind, String)], keep: impl Fn(NoteKind) -> bool) -> Vec<&
 }
 
 /// One Item, with names in place of codes (exemplares.md, item 29).
-fn item_line(item: &ItemView, codes: &CodeLists) -> ItemLine {
+fn item_line(t: &I18n, item: &ItemView, codes: &CodeLists) -> ItemLine {
+    let state = item.state();
+    let moving = state.status.lost == 0 && (state.on_loan || state.movement != Movement::Shelved);
     ItemLine {
         branch: codes.branch(item.home_branch).to_owned(),
         location: item.location.map(|id| codes.location(id).to_owned()),
         call_number: item.call_number.clone(),
-        available: item.status.is_available(),
-        status: status_key(item.status),
-        icon: signal_icon(item.status.signal()),
+        available: state.is_available(),
+        status: status_text(t, item),
+        icon: if moving {
+            signal_icon(ShelfSignal::OnLoan)
+        } else {
+            signal_icon(item.status.signal())
+        },
+    }
+}
+
+/// An Item's status as the public reads it: lost first, then where it is in circulation
+/// (on loan with its due day, in transit, on the hold shelf), then the gravest status
+/// number; never who has it (busca-e-registro.md, item 7).
+///
+/// Koha: the order of `item-status.inc` in the OPAC.
+fn status_text(t: &I18n, item: &ItemView) -> String {
+    if item.status.lost != 0 {
+        return t.get(status_key(item.status));
+    }
+    match (item.due, item.movement) {
+        (Some(due), _) => t.get_with("item-status-on-loan", "date", &shown(t, due)),
+        (None, Movement::InTransit) => t.get("item-status-in-transit"),
+        (None, Movement::OnHoldShelf) => t.get("item-status-on-hold"),
+        (None, Movement::Shelved) => t.get(status_key(item.status)),
     }
 }
 
@@ -293,7 +320,7 @@ mod tests {
 
     #[test]
     fn every_status_has_a_message() {
-        let t = elzevir_web_templates::I18n::english().unwrap();
+        let t = I18n::english().unwrap();
         let statuses = [
             ItemStatus::default(),
             ItemStatus {

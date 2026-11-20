@@ -97,6 +97,7 @@ fn family(n: i64, title: &str, lost: bool) -> Family {
                     location: None,
                     status,
                     due: None,
+                    movement: elzevir_app::catalog::Movement::Shelved,
                 }],
             }],
         }],

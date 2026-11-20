@@ -2334,8 +2334,8 @@
       "nota": "Decidir na spec do OPAC: aparência vai para tokens de design, comportamento para elzevir.toml ou fixo."
     },
     "OPACShowCheckoutName": {
-      "destino": "revisar",
-      "nota": "Decidir na spec do OPAC: aparência vai para tokens de design, comportamento para elzevir.toml ou fixo."
+      "destino": "fixo",
+      "nota": "Desligada: o OPAC nunca mostra quem tem o exemplar (docs/specs/opac/busca-e-registro.md, itens 7 e 13; LGPD)."
     },
     "OPACShowHoldQueueDetails": {
       "destino": "revisar",

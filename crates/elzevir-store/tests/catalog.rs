@@ -8,8 +8,9 @@
 )]
 
 use elzevir_app::catalog::{
-    CatalogCommand, CatalogOutput, CatalogReader, CatalogRefusal, ItemData, ItemStatus, ItemView,
-    NewContribution, NewIdentifier, NewInstance, NewItem, NewRecord, NewSubject, NewWorkRelation,
+    CatalogCommand, CatalogOutput, CatalogReader, CatalogRefusal, ItemData, ItemState, ItemStatus,
+    ItemView, NewContribution, NewIdentifier, NewInstance, NewItem, NewRecord, NewSubject,
+    NewWorkRelation,
 };
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
@@ -265,6 +266,7 @@ fn items_are_added_and_listed_in_creation_order() {
         location: Some(stacks),
         status: ItemStatus::default(),
         due: None,
+        movement: elzevir_app::catalog::Movement::Shelved,
     };
     assert_eq!(items, [expected(first, "0001"), expected(second, "0002")]);
     assert!(store.items(InstanceId(instance.0 + 1)).unwrap().is_empty());
@@ -292,16 +294,19 @@ fn adding_an_item_moves_the_record_version_and_statuses_come_per_page() {
     );
 
     let mut statuses = store.item_statuses(&[first, second]).unwrap();
-    statuses.sort_by_key(|(_, status)| status.lost);
+    statuses.sort_by_key(|(_, state)| state.status.lost);
     assert_eq!(
         statuses,
         [
-            (first, ItemStatus::default()),
+            (first, ItemState::default()),
             (
                 first,
-                ItemStatus {
-                    lost: 1,
-                    ..ItemStatus::default()
+                ItemState {
+                    status: ItemStatus {
+                        lost: 1,
+                        ..ItemStatus::default()
+                    },
+                    ..ItemState::default()
                 }
             ),
         ]

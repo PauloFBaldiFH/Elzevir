@@ -72,6 +72,9 @@ item-status-damaged = Damaged
 item-status-lost = Lost
 item-status-withdrawn = Withdrawn
 item-status-restricted = Restricted
+item-status-on-loan = On loan, due { $date }
+item-status-in-transit = In transit
+item-status-on-hold = On hold for a reader
 
 ## Content and carrier, as their icons say them (bibframe-completo.md, item 15)
 content-text = Text
