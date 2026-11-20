@@ -117,6 +117,7 @@ impl WriteCommand {
             Self::Circulation(CirculationCommand::Checkout(_)) => "circ.checkout",
             Self::Circulation(CirculationCommand::Checkin(_)) => "circ.checkin",
             Self::Circulation(CirculationCommand::Renew(_)) => "circ.renew",
+            Self::Circulation(CirculationCommand::Pay(_)) => "circ.pay",
         }
     }
 
@@ -127,11 +128,13 @@ impl WriteCommand {
         match self {
             // Koha: `parameters.manage_circ_rules` for the rules, `tools.edit_calendar` for
             // the calendar; both are the administrators' here. A checkout is the desk's
-            // (Koha: `circulate_remaining_permissions`).
+            // (Koha: `circulate_remaining_permissions`), and so is a payment (Koha:
+            // `updatecharges`).
             Self::Circulation(
                 CirculationCommand::Checkout(_)
                 | CirculationCommand::Checkin(_)
-                | CirculationCommand::Renew(_),
+                | CirculationCommand::Renew(_)
+                | CirculationCommand::Pay(_),
             )
             | Self::Patrons(PatronCommand::View(_)) => Permission::Circulation,
             Self::Staff(_) | Self::Circulation(_) => Permission::Administration,

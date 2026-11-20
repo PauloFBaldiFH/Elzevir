@@ -7,6 +7,7 @@
     reason = "integration test: helper functions fail the test on error"
 )]
 
+use elzevir_app::accounts::{AccountLineId, Paid, PayRefusal, PaymentRequest};
 use elzevir_app::calendar::{CalendarAction, CalendarChange, HolidayText};
 use elzevir_app::catalog::{
     CatalogCommand, CatalogOutput, CatalogReader, ItemData, ItemStatus, NewInstance, NewItem,
@@ -24,6 +25,7 @@ use elzevir_app::loans::{
 use elzevir_app::patrons::{
     CategoryChange, PatronCommand, PatronFields, PatronOutput, ReadingHistory,
 };
+use elzevir_domain::account::{CreditType, PaymentRefusal};
 use elzevir_domain::catalog::{BranchId, InstanceId, Money};
 use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome, TransferReason};
 use elzevir_domain::checkout::{Alert, Confirm, Impossible, TooManyReason};
@@ -706,4 +708,115 @@ fn a_late_return_charges_its_fine_and_debts_hold_back_checkouts() {
     );
     // One fine per late return.
     assert_eq!(library.read::<i64>("SELECT count(*) FROM account_lines"), 2);
+}
+
+fn pay(
+    library: &Library,
+    kind: CreditType,
+    amount: i64,
+    lines: &[i64],
+) -> Result<Paid, PayRefusal> {
+    let at: Zoned = "2026-12-22T10:00:00-03:00[America/Sao_Paulo]"
+        .parse()
+        .unwrap();
+    match submit(
+        &library.store,
+        WriteCommand::Circulation(CirculationCommand::Pay(PaymentRequest {
+            patron: library.patron,
+            kind,
+            amount: Money(amount),
+            lines: lines.iter().copied().map(AccountLineId).collect(),
+            desk: library.central,
+            at,
+        })),
+    ) {
+        Ok(WriteOutput::Circulation(CirculationOutput::Paid(done))) => Ok(done),
+        Err(CommandFailed::Rejected(WriteRefusal::Circulation(CirculationRefusal::Pay(
+            refusal,
+        )))) => Err(refusal),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn payments_settle_the_oldest_debits_first_and_write_offs_the_chosen_ones() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(&dir);
+    for barcode in ["0001", "0002"] {
+        library.item(barcode, ItemStatus::default());
+    }
+    library.rules(&[
+        ("maxissueqty", "5"),
+        ("issuelength", "7"),
+        ("fine", "0.50"),
+        ("chargeperiod", "1"),
+    ]);
+    // Two fines: 2.00 (line 1), then 6.00 (line 2).
+    library
+        .lend("0001", "2026-11-19T10:00:00-03:00", false)
+        .unwrap();
+    library
+        .give_back("0001", library.central, "2026-11-30T10:00:00-03:00")
+        .unwrap();
+    library
+        .lend("0002", "2026-12-01T10:00:00-03:00", true)
+        .unwrap();
+    library
+        .give_back("0002", library.central, "2026-12-20T10:00:00-03:00")
+        .unwrap();
+    let outstanding = || {
+        library.read::<String>(
+            "SELECT group_concat(outstanding, ' ') FROM account_lines
+             WHERE debit_type IS NOT NULL ORDER BY id",
+        )
+    };
+    assert_eq!(
+        pay(&library, CreditType::Payment, 0, &[]),
+        Err(PayRefusal::Amount(PaymentRefusal::NotPositive))
+    );
+    assert_eq!(
+        pay(&library, CreditType::Payment, 801, &[]),
+        Err(PayRefusal::Amount(PaymentRefusal::OverDue {
+            due: Money(800)
+        }))
+    );
+    // 3.00 with nothing chosen: the older fine first.
+    let paid = pay(&library, CreditType::Payment, 300, &[]).unwrap();
+    assert_eq!(paid.owed, Money(500));
+    assert_eq!(outstanding(), "0 500");
+    // Line 1 owes nothing now, so it cannot be chosen.
+    assert_eq!(
+        pay(&library, CreditType::Payment, 100, &[1]),
+        Err(PayRefusal::UnknownLine)
+    );
+    assert_eq!(
+        pay(&library, CreditType::Writeoff, 600, &[2]),
+        Err(PayRefusal::Amount(PaymentRefusal::OverDue {
+            due: Money(500)
+        }))
+    );
+    let written = pay(&library, CreditType::Writeoff, 500, &[2]).unwrap();
+    assert_eq!(written.owed, Money(0));
+    assert_eq!(outstanding(), "0 0");
+    assert_eq!(
+        library.read::<String>(
+            "SELECT group_concat(credit_type || ' ' || amount || ' ' || outstanding, ', ')
+             FROM account_lines WHERE credit_type IS NOT NULL ORDER BY id"
+        ),
+        "PAYMENT -300 0, WRITEOFF -500 0"
+    );
+    assert_eq!(
+        library.read::<String>(
+            "SELECT group_concat(credit_id || '>' || debit_id || ' ' || amount, ', ')
+             FROM account_offsets WHERE kind = 'APPLY' ORDER BY id"
+        ),
+        format!(
+            "{}>1 -200, {}>2 -100, {}>2 -500",
+            paid.credit.0, paid.credit.0, written.credit.0
+        )
+    );
+    // Paid up, the patron borrows without being asked.
+    library
+        .lend("0001", "2026-12-22T10:00:00-03:00", false)
+        .unwrap();
 }

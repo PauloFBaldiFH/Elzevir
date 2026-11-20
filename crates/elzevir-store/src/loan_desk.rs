@@ -2,6 +2,7 @@
 //! The circulation desk port: a patron's loans and suspension, and the circulation
 //! commands (interface §18.3).
 
+use elzevir_app::accounts::AccountLine;
 use elzevir_app::circulation_rules::{CirculationCommand, CirculationDeskError, CirculationOutput};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::loans::{LoanDesk, PatronLoan};
@@ -78,6 +79,12 @@ impl LoanDesk for ElzevirStore {
     fn owed(&self, patron: PatronId) -> Result<Money, CirculationDeskError> {
         self.readers()
             .read(|c| crate::accounts::owed(c, patron))
+            .map_err(|error| unavailable(&error))
+    }
+
+    fn account(&self, patron: PatronId) -> Result<Vec<AccountLine>, CirculationDeskError> {
+        self.readers()
+            .read(|c| crate::accounts::lines(c, patron))
             .map_err(|error| unavailable(&error))
     }
 

@@ -665,6 +665,14 @@ main:has(.import-workspace) { max-width: 90rem; }
 .calendar-state, .calendar-title { display: block; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .calendar h2 a { text-decoration: none; padding: 0 8px; }
 
+/* The patron's account, under the wall. */
+.patron-account { margin-top: 2rem; }
+.account-lines { border-collapse: collapse; width: 100%; }
+.account-lines th, .account-lines td { padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--elzevir-color-border); text-align: left; }
+.account-lines .account-money { text-align: right; font-variant-numeric: tabular-nums; }
+.account-pay { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.account-pay input { width: 8rem; }
+
 /* The wall (interface §18): the patron's loans on the left, tied to the record by orange cords. */
 .wall { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 3rem; align-items: start; }
 .wall-loans { order: -1; }

@@ -27,6 +27,7 @@ mod importing;
 mod items;
 mod new_record;
 mod opac;
+mod patron_account;
 mod patron_form;
 mod patrons;
 mod pill_loans;

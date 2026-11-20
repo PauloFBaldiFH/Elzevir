@@ -12,6 +12,7 @@ use jiff::Zoned;
 use jiff::civil::Date;
 use serde::{Deserialize, Serialize};
 
+use crate::accounts::AccountLine;
 use crate::circulation_rules::{CirculationCommand, CirculationDeskError, CirculationOutput};
 use crate::staff::StaffId;
 
@@ -245,6 +246,13 @@ pub trait LoanDesk: Send + Sync {
     ///
     /// When storage fails.
     fn owed(&self, patron: PatronId) -> Result<Money, CirculationDeskError>;
+
+    /// The patron's account, newest line first.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn account(&self, patron: PatronId) -> Result<Vec<AccountLine>, CirculationDeskError>;
 
     /// The branch an Item is at, as the desk of a checkout from its pill.
     ///

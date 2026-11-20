@@ -61,6 +61,8 @@ pub struct StaffPatron<'a> {
     pub suspended: Option<String>,
     /// What the patron owes, when they owe something.
     pub owed: Option<String>,
+    /// The lines of the account, newest first.
+    pub account: Vec<AccountRow>,
     /// The patron's loans, the first due first.
     pub loans: Vec<LoanLine>,
     /// The branches the desk may be at, and the one it is at.
@@ -88,6 +90,23 @@ pub struct LoanLine {
     pub renewals: Option<String>,
     /// Whether it was just lent, so its cord is drawn.
     pub new: bool,
+}
+
+/// A line of the patron's account as shown.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AccountRow {
+    /// The line's id, for the payment form.
+    pub id: i64,
+    /// The day it was made.
+    pub day: String,
+    /// What it is, with the Item's barcode.
+    pub description: String,
+    /// The amount, negative for a credit.
+    pub amount: String,
+    /// What is left of it.
+    pub outstanding: String,
+    /// Whether it still owes, so it can be chosen for a payment.
+    pub payable: bool,
 }
 
 /// A branch the desk may be at.

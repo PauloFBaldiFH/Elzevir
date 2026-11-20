@@ -7,6 +7,7 @@ use elzevir_domain::circulation_rules::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::accounts::{Paid, PayRefusal, PaymentRequest};
 use crate::calendar::CalendarChange;
 use crate::loans::{
     CheckedIn, CheckedOut, CheckinRefusal, CheckinRequest, CheckoutRefusal, CheckoutRequest,
@@ -30,6 +31,8 @@ pub enum CirculationCommand {
     Checkin(CheckinRequest),
     /// Renews a loan (docs/specs/circulacao/renovacao.md).
     Renew(RenewRequest),
+    /// Pays or writes off what a patron owes (docs/specs/circulacao/conta.md).
+    Pay(PaymentRequest),
 }
 
 /// New values for some rules at one scope.
@@ -62,6 +65,8 @@ pub enum CirculationOutput {
     CheckedIn(CheckedIn),
     /// A loan was renewed.
     Renewed(Renewed),
+    /// A payment or write-off was made.
+    Paid(Paid),
 }
 
 /// Why a circulation command was refused.
@@ -108,6 +113,9 @@ pub enum CirculationRefusal {
     /// A renewal was refused.
     #[error(transparent)]
     Renew(#[from] RenewRefusal),
+    /// A payment or write-off was refused.
+    #[error(transparent)]
+    Pay(#[from] PayRefusal),
 }
 
 impl CirculationRefusal {
@@ -137,6 +145,7 @@ impl CirculationRefusal {
             Self::Checkout(refusal) => refusal.message_key(),
             Self::Checkin(refusal) => refusal.message_key(),
             Self::Renew(refusal) => refusal.message_key(),
+            Self::Pay(refusal) => refusal.message_key(),
         }
     }
 }

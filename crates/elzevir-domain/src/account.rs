@@ -33,6 +33,90 @@ impl DebitType {
     }
 }
 
+/// Why a patron owes less.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum CreditType {
+    /// The patron paid (`PAYMENT`).
+    Payment,
+    /// The library let the debt go (`WRITEOFF`).
+    Writeoff,
+}
+
+impl CreditType {
+    /// The code stored in the account, Koha's.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::Payment => "PAYMENT",
+            Self::Writeoff => "WRITEOFF",
+        }
+    }
+
+    /// The type of a stored code.
+    #[must_use]
+    pub fn from_code(code: &str) -> Option<Self> {
+        match code {
+            "PAYMENT" => Some(Self::Payment),
+            "WRITEOFF" => Some(Self::Writeoff),
+            _ => None,
+        }
+    }
+}
+
+/// How much of a credit goes to each debit, in the order given, and what is left of it.
+///
+/// Each debit takes what it still owes, while the credit lasts; the debits are
+/// `(id, outstanding)` and only those that take something come back.
+///
+/// Koha: `Koha::Account::Line::apply`
+#[must_use]
+pub fn apply_credit(credit: Money, debits: &[(i64, Money)]) -> (Vec<(i64, Money)>, Money) {
+    let mut left = credit.0;
+    let mut applied = Vec::new();
+    for &(id, Money(owed)) in debits {
+        if left <= 0 {
+            break;
+        }
+        let cancelled = owed.min(left);
+        if cancelled > 0 {
+            applied.push((id, Money(cancelled)));
+            left -= cancelled;
+        }
+    }
+    (applied, Money(left))
+}
+
+/// Why a payment or a write-off cannot happen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum PaymentRefusal {
+    /// Nothing, or less than nothing.
+    #[error("the amount must be more than zero")]
+    NotPositive,
+    /// More than what is owed (Koha: `error_over`).
+    #[error("the amount is more than the {due:?} owed")]
+    OverDue {
+        /// What is owed in the debits chosen, or in all of them.
+        due: Money,
+    },
+}
+
+/// Whether `amount` may be paid or written off against `due`.
+///
+/// # Errors
+///
+/// [`PaymentRefusal`] when it is not positive or more than is due.
+///
+/// Koha: `members/paycollect.pl`.
+pub const fn check_payment(amount: Money, due: Money) -> Result<(), PaymentRefusal> {
+    if amount.0 <= 0 {
+        Err(PaymentRefusal::NotPositive)
+    } else if amount.0 > due.0 {
+        Err(PaymentRefusal::OverDue { due })
+    } else {
+        Ok(())
+    }
+}
+
 /// Where an overdue fine stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OverdueStatus {
@@ -219,6 +303,41 @@ pub fn check_debt(owed: Money, settings: &DebtSettings) -> DebtCheck {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_credit_pays_the_debits_in_order_while_it_lasts() {
+        let debits = [
+            (1, Money(200)),
+            (2, Money(0)),
+            (3, Money(600)),
+            (4, Money(100)),
+        ];
+        assert_eq!(
+            apply_credit(Money(500), &debits),
+            (vec![(1, Money(200)), (3, Money(300))], Money(0))
+        );
+        assert_eq!(
+            apply_credit(Money(1000), &debits),
+            (
+                vec![(1, Money(200)), (3, Money(600)), (4, Money(100))],
+                Money(100)
+            )
+        );
+        assert_eq!(apply_credit(Money(50), &[]), (vec![], Money(50)));
+    }
+
+    #[test]
+    fn a_payment_is_positive_and_no_more_than_is_due() {
+        assert_eq!(
+            check_payment(Money(0), Money(100)),
+            Err(PaymentRefusal::NotPositive)
+        );
+        assert_eq!(
+            check_payment(Money(101), Money(100)),
+            Err(PaymentRefusal::OverDue { due: Money(100) })
+        );
+        assert_eq!(check_payment(Money(100), Money(100)), Ok(()));
+    }
 
     #[test]
     fn rule_amounts_read_like_perl_numbers() {
