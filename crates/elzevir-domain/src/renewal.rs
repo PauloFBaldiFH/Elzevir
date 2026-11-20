@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Whether a loan may be renewed (docs/specs/circulacao/renovacao.md).
 //!
-//! Holds, fines and restrictions that block a renewal come with their tasks (doc 03,
-//! tasks 3.7 and 3.8, and the suspensions of task 3.5).
+//! Restrictions do not block a renewal (`RestrictionBlockRenewing` is off by default); the
+//! OPAC refuses a restricted patron before asking (docs/specs/opac/conta-do-leitor.md).
 
 use elzevir_data::RuleKind;
 use jiff::{Span, Zoned};
 
+use crate::catalog::Money;
 use crate::checkout::{perl_number_ceiling, perl_whole};
 use crate::circulation_rules::{CirculationRule, RuleScopeKey, effective_rule};
 
@@ -37,13 +38,19 @@ pub struct RenewalSettings {
     pub overdues: OverduesBlockRenewing,
     /// `NoRenewalBeforePrecision`.
     pub precision: NoRenewalBeforePrecision,
+    /// `FineNoRenewals`: a balance above it blocks; `None` never blocks.
+    pub fine_limit: Option<Money>,
 }
+
+/// Koha's default `FineNoRenewals`, 100 in the currency.
+pub const DEFAULT_FINE_LIMIT: Money = Money(10_000);
 
 impl Default for RenewalSettings {
     fn default() -> Self {
         Self {
             overdues: OverduesBlockRenewing::Allow,
             precision: NoRenewalBeforePrecision::ExactTime,
+            fine_limit: Some(DEFAULT_FINE_LIMIT),
         }
     }
 }
@@ -63,6 +70,11 @@ pub struct RenewalFacts<'a> {
     pub on_site: bool,
     /// Whether another loan of the patron is overdue.
     pub other_overdue: bool,
+    /// The patron's balance: debits less unused credits (`FineNoRenewalsIncludeCredits` on,
+    /// Koha's default).
+    pub balance: Money,
+    /// Whether a hold waits for this Item, on it or on its record (Koha: `on_reserve`).
+    pub on_hold: bool,
     /// When the renewal is asked for.
     pub now: Zoned,
 }
@@ -79,6 +91,15 @@ pub enum RenewalRefusal {
     /// An overdue loan blocks it (Koha: `overdue`).
     #[error("an overdue loan blocks the renewal")]
     Overdue,
+    /// The patron owes more than `FineNoRenewals` (Koha: `too_much_owing`).
+    #[error("the patron owes {owed:?}, more than the renewal limit")]
+    TooMuchOwing {
+        /// The balance.
+        owed: Money,
+    },
+    /// Someone else is waiting for the Item (Koha: `on_reserve`); not overridden.
+    #[error("the item is on hold")]
+    OnHold,
     /// It is too soon (Koha: `too_soon`).
     #[error("too soon to renew")]
     TooSoon {
@@ -87,8 +108,16 @@ pub enum RenewalRefusal {
     },
 }
 
+/// How many renewals the rules allow the loan at `at` (`renewalsallowed`, read as a Perl
+/// number; missing, empty or zero allows none).
+#[must_use]
+pub fn renewals_allowed(rules: &[CirculationRule], at: &RuleScopeKey) -> u64 {
+    effective_rule(rules, RuleKind::Renewalsallowed, at)
+        .map_or(0, |rule| perl_number_ceiling(rule.value.as_str()))
+}
+
 /// Whether the loan in `facts` may be renewed; `override_limit` is the staff overriding
-/// the count, the overdue block and the earliest date.
+/// the count, the overdue and fine blocks and the earliest date, but not a hold.
 ///
 /// Like Koha, a missing, empty or zero `renewalsallowed` allows none, and its value is
 /// read as a Perl number.
@@ -98,7 +127,7 @@ pub enum RenewalRefusal {
 /// [`RenewalRefusal`] with the first reason, in Koha's order.
 ///
 /// Koha: `C4::Circulation::CanBookBeRenewed`, `C4::Circulation::GetSoonestRenewDate`,
-/// without holds, recalls, bookings, fines, restrictions and automatic renewals.
+/// without recalls, bookings, unseen renewals and automatic renewals.
 pub fn can_renew(
     facts: &RenewalFacts<'_>,
     settings: &RenewalSettings,
@@ -107,12 +136,27 @@ pub fn can_renew(
     if facts.on_site {
         return Err(RenewalRefusal::OnSite);
     }
+    if !override_limit {
+        limits(facts, settings)?;
+    }
+    if facts.on_hold {
+        return Err(RenewalRefusal::OnHold);
+    }
     if override_limit {
         return Ok(());
     }
     let value = |kind| effective_rule(facts.rules, kind, &facts.at).map(|rule| rule.value.as_str());
-    let allowed = value(RuleKind::Renewalsallowed).map_or(0, perl_number_ceiling);
-    if u64::from(facts.renewals) >= allowed {
+    if let Some(soonest) = soonest(facts, *settings, value(RuleKind::Norenewalbefore))
+        && soonest > facts.now
+    {
+        return Err(RenewalRefusal::TooSoon { soonest });
+    }
+    Ok(())
+}
+
+/// The count, the overdue block and the fine block, which the staff may override.
+fn limits(facts: &RenewalFacts<'_>, settings: &RenewalSettings) -> Result<(), RenewalRefusal> {
+    if u64::from(facts.renewals) >= renewals_allowed(facts.rules, &facts.at) {
         return Err(RenewalRefusal::TooMany);
     }
     let this_overdue = facts.due < facts.now;
@@ -124,10 +168,13 @@ pub fn can_renew(
     if blocked {
         return Err(RenewalRefusal::Overdue);
     }
-    if let Some(soonest) = soonest(facts, *settings, value(RuleKind::Norenewalbefore))
-        && soonest > facts.now
+    if settings
+        .fine_limit
+        .is_some_and(|limit| facts.balance.0 > limit.0)
     {
-        return Err(RenewalRefusal::TooSoon { soonest });
+        return Err(RenewalRefusal::TooMuchOwing {
+            owed: facts.balance,
+        });
     }
     Ok(())
 }
@@ -188,6 +235,8 @@ mod tests {
             renewals: 0,
             on_site: false,
             other_overdue: false,
+            balance: Money(0),
+            on_hold: false,
             now: on(20, 10),
         }
     }
@@ -280,5 +329,54 @@ mod tests {
             rule(RuleKind::Norenewalbefore, ""),
         ];
         assert_eq!(check(&facts(&empty)), Ok(()));
+    }
+
+    #[test]
+    fn a_balance_over_the_limit_blocks_and_a_hold_blocks_even_an_override() {
+        let rules = [rule(RuleKind::Renewalsallowed, "2")];
+        let owing = |cents| RenewalFacts {
+            balance: Money(cents),
+            ..facts(&rules)
+        };
+        assert_eq!(check(&owing(10_000)), Ok(()));
+        assert_eq!(
+            check(&owing(10_001)),
+            Err(RenewalRefusal::TooMuchOwing {
+                owed: Money(10_001)
+            })
+        );
+        assert_eq!(
+            can_renew(&owing(10_001), &RenewalSettings::default(), true),
+            Ok(())
+        );
+        let no_limit = RenewalSettings {
+            fine_limit: None,
+            ..RenewalSettings::default()
+        };
+        assert_eq!(can_renew(&owing(90_000), &no_limit, false), Ok(()));
+        let held = RenewalFacts {
+            on_hold: true,
+            ..facts(&rules)
+        };
+        assert_eq!(check(&held), Err(RenewalRefusal::OnHold));
+        assert_eq!(
+            can_renew(&held, &RenewalSettings::default(), true),
+            Err(RenewalRefusal::OnHold)
+        );
+        // The count comes before the hold, as in Koha.
+        let used = RenewalFacts {
+            renewals: 2,
+            ..held
+        };
+        assert_eq!(check(&used), Err(RenewalRefusal::TooMany));
+    }
+
+    #[test]
+    fn the_rule_says_how_many_renewals_are_allowed() {
+        assert_eq!(renewals_allowed(&[], &AT), 0);
+        assert_eq!(
+            renewals_allowed(&[rule(RuleKind::Renewalsallowed, "3")], &AT),
+            3
+        );
     }
 }

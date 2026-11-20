@@ -125,6 +125,7 @@ mod tests {
             issued: at(issued),
             renewed: renewed.map(at),
             renewals: u32::from(renewed.is_some()),
+            renewals_left: 0,
             on_site: false,
         }
     }

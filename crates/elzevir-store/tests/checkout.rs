@@ -272,6 +272,7 @@ impl Library {
                 barcode: barcode.to_owned(),
                 override_limit,
                 at,
+                by_patron: None,
             })),
         ) {
             Ok(WriteOutput::Circulation(CirculationOutput::Renewed(done))) => Ok(done),
@@ -1585,4 +1586,92 @@ fn a_hold_starting_to_wait_queues_its_notice_once_by_the_category_preference() {
         )
         .unwrap();
     assert_eq!(notices(&library), "HOLD print - 2026-11-24 0001");
+}
+
+#[test]
+fn fines_over_the_limit_and_holds_block_a_renewal_and_the_opac_renews_only_its_own() {
+    use elzevir_app::circulation_rules::CirculationDeskError;
+    use elzevir_app::loans::LoanDesk;
+
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(&dir);
+    for barcode in ["0001", "0002"] {
+        library.item(barcode, ItemStatus::default());
+    }
+    library.rules(&[
+        ("maxissueqty", "5"),
+        ("issuelength", "7"),
+        ("renewalperiod", "7"),
+        ("renewalsallowed", "3"),
+        ("fine", "60"),
+        ("chargeperiod", "1"),
+        ("finedays", "1"),
+        ("reservesallowed", "5"),
+    ]);
+    for barcode in ["0001", "0002"] {
+        library
+            .lend(barcode, "2026-11-19T10:00:00-03:00", false)
+            .unwrap();
+    }
+    let loans = library.store.loans(library.patron).unwrap();
+    assert_eq!(
+        loans
+            .iter()
+            .map(|loan| loan.renewals_left)
+            .collect::<Vec<_>>(),
+        [3, 3]
+    );
+    // Due on the 26th, back on the 28th: 120.00, over Koha's `FineNoRenewals` of 100.
+    library
+        .give_back("0002", library.central, "2026-11-28T10:00:00-03:00")
+        .unwrap();
+    let at = "2026-11-28T11:00:00-03:00";
+    assert_eq!(
+        library.renew("0001", at, false),
+        Err(RenewRefusal::Refused(RenewalRefusal::TooMuchOwing {
+            owed: Money(12_000)
+        }))
+    );
+    assert_eq!(library.renew("0001", at, true).unwrap().renewals, 1);
+    assert_eq!(
+        library.store.loans(library.patron).unwrap()[0].renewals_left,
+        2
+    );
+
+    // The late return suspended Ana: the OPAC sends her to the desk.
+    let own = |patron| {
+        library.store.renew_own(
+            patron,
+            RenewRequest {
+                barcode: "0001".to_owned(),
+                override_limit: true,
+                at: format!("{at}[America/Sao_Paulo]").parse().unwrap(),
+                by_patron: None,
+            },
+        )
+    };
+    let refusal = |result: Result<Renewed, CirculationDeskError>| match result {
+        Err(CirculationDeskError::Refused(CirculationRefusal::Renew(refusal))) => refusal,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(refusal(own(library.patron)), RenewRefusal::Restricted);
+    // Someone else's loan is no loan at all.
+    let bruno = library.another_patron("000200", library.central);
+    assert_eq!(refusal(own(bruno)), RenewRefusal::NotOnLoan);
+
+    // A hold Bruno waits on blocks even the staff overriding the limits.
+    library
+        .hold(bruno, "0001", HoldLevel::Record, library.central)
+        .unwrap();
+    assert_eq!(
+        library.renew("0001", at, true),
+        Err(RenewRefusal::Refused(RenewalRefusal::OnHold))
+    );
+    // The patron is not logged as a staff member.
+    assert_eq!(
+        library.read::<Option<i64>>(
+            "SELECT actor FROM audit_log WHERE kind = 'circ.renew' ORDER BY seq DESC LIMIT 1"
+        ),
+        None
+    );
 }

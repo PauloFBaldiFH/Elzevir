@@ -974,6 +974,9 @@ button.quiet { border: 1px solid var(--elzevir-color-border-strong); background:
 .opac-loans .loan-title { font-weight: 650; }
 .opac-loans .loan-meta { color: var(--elzevir-color-muted); font-size: 13.5px; }
 .opac-loans li.overdue strong { color: var(--elzevir-color-error); }
+.opac-loans li { grid-template-columns: minmax(0, 1fr) auto; }
+.opac-loans li > span { grid-column: 1; }
+.loan-renew { grid-column: 2; grid-row: 1 / span 2; align-self: center; margin: 0; }
 .opac-owed { margin: 0 0 10px; font-weight: 700; color: var(--elzevir-color-error); }
 .table-scroll { overflow-x: auto; }
 @media (max-width: 46rem) { .opac-account { grid-template-columns: minmax(0, 1fr); } }

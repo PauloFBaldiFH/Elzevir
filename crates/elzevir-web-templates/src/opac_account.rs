@@ -4,7 +4,7 @@
 
 use askama::Template;
 
-use crate::{AccountRow, I18n, LoanLine};
+use crate::{AccountRow, I18n};
 
 /// What the "Patron account" panel shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,8 +61,38 @@ pub struct OpacAccount<'a> {
     pub restrictions: Vec<String>,
     /// What the patron owes, when something.
     pub owed: Option<String>,
+    /// What happened to a renewal just asked for.
+    pub notice: Option<OpacNotice>,
+    /// Whether the patron may renew here: no restriction holds.
+    pub can_renew: bool,
     /// The loans, the first due first.
-    pub loans: Vec<LoanLine>,
+    pub loans: Vec<OpacLoan>,
     /// The account's lines, newest first.
     pub account: Vec<AccountRow>,
+}
+
+/// A loan on the patron's account page.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpacLoan {
+    /// The Item's barcode, posted by the renewal button.
+    pub barcode: String,
+    /// The Instance's title.
+    pub title: String,
+    /// The due date as shown.
+    pub due: String,
+    /// Whether it is overdue now.
+    pub overdue: bool,
+    /// The renewals left, as shown.
+    pub renewals_left: String,
+    /// Whether the renewal button is offered.
+    pub renewable: bool,
+}
+
+/// What the account page says after a renewal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpacNotice {
+    /// Whether it was refused.
+    pub refused: bool,
+    /// What it says.
+    pub text: String,
 }

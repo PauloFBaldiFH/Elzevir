@@ -941,6 +941,9 @@ renew-error-on-site = A loan inside the library is not renewed.
 renew-error-too-many = This loan has no renewals left.
 renew-error-overdue = An overdue loan blocks the renewal.
 renew-error-too-soon = It is too soon to renew this loan.
+renew-error-too-much-owing = The patron owes more than the limit for renewing.
+renew-error-on-hold = Someone is waiting for this item; it cannot be renewed.
+renew-error-restricted = A restricted patron renews at the desk.
 
 ## Calendar (docs/specs/circulacao/calendario.md)
 calendar-title = Calendar
@@ -1194,6 +1197,23 @@ opac-account-branch = Library
 opac-account-category = Category
 opac-account-expires = Enrolment valid until
 opac-account-soon = Your holds will show here soon.
+opac-renewals-left = { $count ->
+    [0] No renewals left
+    [one] One renewal left
+   *[other] { $count } renewals left
+}
+opac-renewed = Renewed “{ $title }”; it is now due { $date }.
+opac-renewed-plain = The loan was renewed.
+opac-renew-at-desk = While a restriction holds, loans are renewed at the library desk.
+opac-renew-no-loan = This loan was not found on your account.
+opac-renew-on-site = A loan inside the library is not renewed.
+opac-renew-too-many = This loan has no renewals left.
+opac-renew-overdue = Overdue loans block renewals; please return them.
+opac-renew-owing = You owe more than the limit for renewing; please pay at the library desk.
+opac-renew-on-hold = Someone else is waiting for this item, so it cannot be renewed.
+opac-renew-too-soon = It is too soon to renew this loan.
+opac-renew-no-due-date = The library has no open day for a new due date; please ask at the desk.
+opac-renew-restricted = While a restriction holds, loans are renewed at the library desk.
 opac-owes = You owe { $amount }.
 opac-suspended = Your borrowing is suspended until { $date }.
 opac-suspended-lifted = Your borrowing is suspended; please talk to the library.

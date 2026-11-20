@@ -162,6 +162,10 @@ pub struct RenewRequest {
     pub override_limit: bool,
     /// When, in the library's time zone.
     pub at: Zoned,
+    /// The patron renewing their own loan on the OPAC: the loan must be theirs and no
+    /// restriction may hold (docs/specs/opac/conta-do-leitor.md). `None` at the desk.
+    #[serde(default)]
+    pub by_patron: Option<PatronId>,
 }
 
 /// A renewal that happened.
@@ -190,6 +194,10 @@ pub enum RenewRefusal {
     /// The rules give no due date (the calendar has no open day).
     #[error("no due date can be found")]
     NoDueDate,
+    /// A patron with a restriction renews only at the desk (Koha: `opac-user.pl` hides the
+    /// renewal from a debarred patron).
+    #[error("a restricted patron renews at the desk")]
+    Restricted,
 }
 
 impl RenewRefusal {
@@ -203,7 +211,10 @@ impl RenewRefusal {
             Self::Refused(RenewalRefusal::TooMany) => "renew-error-too-many",
             Self::Refused(RenewalRefusal::Overdue) => "renew-error-overdue",
             Self::Refused(RenewalRefusal::TooSoon { .. }) => "renew-error-too-soon",
+            Self::Refused(RenewalRefusal::TooMuchOwing { .. }) => "renew-error-too-much-owing",
+            Self::Refused(RenewalRefusal::OnHold) => "renew-error-on-hold",
             Self::NoDueDate => "checkout-error-no-due-date",
+            Self::Restricted => "renew-error-restricted",
         }
     }
 }
@@ -223,6 +234,8 @@ pub struct PatronLoan {
     pub renewed: Option<Zoned>,
     /// How many times it was renewed.
     pub renewals: u32,
+    /// How many more renewals the rules allow (Koha: `GetRenewCount`, `renewsleft`).
+    pub renewals_left: u32,
     /// A loan to be used inside the library.
     pub on_site: bool,
 }
@@ -293,4 +306,16 @@ pub trait LoanDesk: Send + Sync {
         actor: StaffId,
         command: CirculationCommand,
     ) -> Result<CirculationOutput, CirculationDeskError>;
+
+    /// The patron renews their own loan on the OPAC; no staff member acts
+    /// (docs/specs/opac/conta-do-leitor.md).
+    ///
+    /// # Errors
+    ///
+    /// [`CirculationDeskError::Refused`] with the refusal, or why storage failed.
+    fn renew_own(
+        &self,
+        patron: PatronId,
+        request: RenewRequest,
+    ) -> Result<Renewed, CirculationDeskError>;
 }

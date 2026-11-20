@@ -202,8 +202,8 @@
       "nota": "Coberto pela plataforma do Elzevir (painel, elzevir.toml de servidor, sessões, SMTP)."
     },
     "AllowRenewalIfOtherItemsAvailable": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Fixo desligado, como o padrão do Koha: qualquer reserva que o exemplar atenderia bloqueia a renovação (docs/specs/circulacao/renovacao.md)."
     },
     "AllowRenewalLimitOverride": {
       "destino": "revisar",
@@ -1206,8 +1206,8 @@
       "nota": "Interface da equipe redesenhada; preferências viram tokens de design ou somem."
     },
     "FineNoRenewals": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Fixo no padrão do Koha, 100 na moeda: saldo acima bloqueia a renovação (docs/specs/circulacao/renovacao.md)."
     },
     "FineNoRenewalsBlockAutoRenew": {
       "destino": "revisar",
@@ -1218,8 +1218,8 @@
       "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
     },
     "FineNoRenewalsIncludeCredits": {
-      "destino": "revisar",
-      "nota": "Decidir na spec do OPAC: aparência vai para tokens de design, comportamento para elzevir.toml ou fixo."
+      "destino": "fixo",
+      "nota": "Fixo ligado, como o padrão do Koha: o saldo desconta créditos não usados (docs/specs/circulacao/renovacao.md)."
     },
     "FineNotifyAtCheckin": {
       "destino": "revisar",
@@ -1258,8 +1258,8 @@
       "nota": "Serviços externos de enriquecimento (capas, resenhas) ficam para depois da v1."
     },
     "FutureHoldsBlockRenewals": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Fixo desligado, como o padrão do Koha; o Elzevir ainda não tem reserva com data futura (docs/specs/circulacao/renovacao.md)."
     },
     "GenerateAuthorityField667": {
       "destino": "revisar",
@@ -2274,8 +2274,8 @@
       "nota": "Decidir na spec do OPAC: aparência vai para tokens de design, comportamento para elzevir.toml ou fixo."
     },
     "OpacRenewalAllowed": {
-      "destino": "revisar",
-      "nota": "Decidir na spec do OPAC: aparência vai para tokens de design, comportamento para elzevir.toml ou fixo."
+      "destino": "fixo",
+      "nota": "Fixo ligado, como o padrão do Koha: o leitor renova pela própria conta (docs/specs/opac/conta-do-leitor.md)."
     },
     "OpacRenewalBranch": {
       "destino": "revisar",

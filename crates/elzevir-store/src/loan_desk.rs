@@ -6,15 +6,18 @@ use elzevir_app::accounts::AccountLine;
 use elzevir_app::circulation_rules::{CirculationCommand, CirculationDeskError, CirculationOutput};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::holds::PatronHold;
-use elzevir_app::loans::{LoanDesk, PatronLoan};
+use elzevir_app::loans::{LoanDesk, PatronLoan, RenewRequest, Renewed};
 use elzevir_app::staff::StaffId;
-use elzevir_domain::catalog::{BranchId, ItemId, Money};
-use elzevir_domain::patron::PatronId;
+use elzevir_domain::catalog::{BranchId, ItemId, Money, PolicyId};
+use elzevir_domain::circulation_rules::RuleScopeKey;
+use elzevir_domain::patron::{PatronCategoryId, PatronId};
+use elzevir_domain::renewal::renewals_allowed;
 use elzevir_domain::suspension::{RestrictionKind, SuspensionEnd};
 use jiff::Zoned;
 use jiff::civil::Date;
 use rusqlite::OptionalExtension;
 
+use crate::circulation_rules::read_rules;
 use crate::{CommandFailed, ElzevirStore, SubmitError};
 
 fn unavailable(error: &dyn std::fmt::Display) -> CirculationDeskError {
@@ -25,12 +28,15 @@ impl LoanDesk for ElzevirStore {
     fn loans(&self, patron: PatronId) -> Result<Vec<PatronLoan>, CirculationDeskError> {
         self.readers()
             .read(|c| {
+                let rules = read_rules(c)?;
                 let mut statement = c.prepare_cached(
                     "SELECT coalesce(i.barcode, ''), n.title, l.due, l.renewals, l.on_site,
-                            l.issued_at, l.renewed_at
+                            l.issued_at, l.renewed_at, i.holding_branch, p.category_id,
+                            i.policy_id
                      FROM loans l
                      JOIN items i ON i.id = l.item_id
                      JOIN instances n ON n.id = i.instance_id
+                     JOIN patrons p ON p.id = l.patron_id
                      WHERE l.patron_id = ?1",
                 )?;
                 let rows = statement.query_map([patron.0], |row| {
@@ -43,6 +49,15 @@ impl LoanDesk for ElzevirStore {
                             )
                         })
                     };
+                    let renewals: u32 = row.get(3)?;
+                    // The same rules as the renewal: the branch holding the Item, the
+                    // patron's category and the Item's policy (Koha: `GetRenewCount`).
+                    let at = RuleScopeKey {
+                        branch: Some(BranchId(row.get(7)?)),
+                        category: Some(PatronCategoryId(row.get(8)?)),
+                        policy: Some(PolicyId(row.get(9)?)),
+                    };
+                    let allowed = renewals_allowed(&rules, &at);
                     Ok(PatronLoan {
                         barcode: row.get(0)?,
                         title: row.get(1)?,
@@ -52,7 +67,9 @@ impl LoanDesk for ElzevirStore {
                             .get::<_, Option<String>>(6)?
                             .map(|text| moment(6, text))
                             .transpose()?,
-                        renewals: row.get(3)?,
+                        renewals,
+                        renewals_left: u32::try_from(allowed.saturating_sub(u64::from(renewals)))
+                            .unwrap_or(u32::MAX),
                         on_site: row.get(4)?,
                     })
                 })?;
@@ -128,19 +145,43 @@ impl LoanDesk for ElzevirStore {
         actor: StaffId,
         command: CirculationCommand,
     ) -> Result<CirculationOutput, CirculationDeskError> {
-        let pending = self
-            .submit_as(actor.0, WriteCommand::Circulation(command))
-            .map_err(|error| match error {
-                SubmitError::Busy => CirculationDeskError::Busy,
-                SubmitError::Closed => unavailable(&error),
-            })?;
-        match pending.wait() {
-            Ok(WriteOutput::Circulation(output)) => Ok(output),
-            Ok(_) => Err(unavailable(&"the writer answered with another result")),
-            Err(CommandFailed::Rejected(WriteRefusal::Circulation(refusal))) => {
-                Err(CirculationDeskError::Refused(refusal))
-            }
-            Err(failure) => Err(unavailable(&failure)),
+        wait(self.submit_as(actor.0, WriteCommand::Circulation(command)))
+    }
+
+    fn renew_own(
+        &self,
+        patron: PatronId,
+        request: RenewRequest,
+    ) -> Result<Renewed, CirculationDeskError> {
+        let request = RenewRequest {
+            by_patron: Some(patron),
+            ..request
+        };
+        // No staff member acts: the audit log keeps the patron inside the command.
+        match wait(
+            self.submit(WriteCommand::Circulation(CirculationCommand::Renew(
+                request,
+            ))),
+        )? {
+            CirculationOutput::Renewed(renewed) => Ok(renewed),
+            _ => Err(unavailable(&"the writer answered with another result")),
         }
+    }
+}
+
+fn wait(
+    pending: Result<crate::Pending<crate::ElzevirHandler>, SubmitError>,
+) -> Result<CirculationOutput, CirculationDeskError> {
+    let pending = pending.map_err(|error| match error {
+        SubmitError::Busy => CirculationDeskError::Busy,
+        SubmitError::Closed => unavailable(&error),
+    })?;
+    match pending.wait() {
+        Ok(WriteOutput::Circulation(output)) => Ok(output),
+        Ok(_) => Err(unavailable(&"the writer answered with another result")),
+        Err(CommandFailed::Rejected(WriteRefusal::Circulation(refusal))) => {
+            Err(CirculationDeskError::Refused(refusal))
+        }
+        Err(failure) => Err(unavailable(&failure)),
     }
 }

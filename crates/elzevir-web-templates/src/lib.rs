@@ -19,7 +19,7 @@ mod staff_record_form;
 mod staff_registries;
 
 pub use board::{BoardCard, KindChoice, StaffBoardNote, note_color};
-pub use opac_account::{OpacAccount, OpacLogin, PatronPanel};
+pub use opac_account::{OpacAccount, OpacLoan, OpacLogin, OpacNotice, PatronPanel};
 pub use staff_bar::{BarLink, BarScope, ScopeKind, StaffBar};
 pub use staff_calendar::{DayCell, EntryLine, StaffCalendar};
 pub use staff_catalog::{

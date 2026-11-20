@@ -17,15 +17,18 @@
 {% for restriction in restrictions %}<p class="codes-alert codes-refused" role="alert">{{ restriction }}</p>{% endfor %}
 <section class="panel" aria-labelledby="loans-title">
   <h2 id="loans-title">{{ t.get_numbers("loans-title", [("count", loans.len() as u64)]) }}</h2>
+  {% if let Some(notice) = notice %}<p class="codes-alert {% if notice.refused %}codes-refused{% else %}codes-saved{% endif %}" role="{% if notice.refused %}alert{% else %}status{% endif %}">{{ notice.text }}</p>{% endif %}
   {% if loans.is_empty() %}<p class="muted">{{ t.get("opac-loans-none") }}</p>{% else %}
   <ul class="opac-loans">
   {% for loan in loans %}
     <li{% if loan.overdue %} class="overdue"{% endif %}>
       <span class="loan-title">{{ loan.title }}</span>
-      <span class="loan-meta"><code>{{ loan.barcode }}</code> · {{ t.get_with("loans-due", "date", loan.due) }}{% if loan.overdue %} <strong>{{ t.get("loans-overdue") }}</strong>{% endif %}{% if let Some(renewals) = loan.renewals %} · {{ renewals }}{% endif %}</span>
+      <span class="loan-meta"><code>{{ loan.barcode }}</code> · {{ t.get_with("loans-due", "date", loan.due) }}{% if loan.overdue %} <strong>{{ t.get("loans-overdue") }}</strong>{% endif %} · {{ loan.renewals_left }}</span>
+      {% if can_renew && loan.renewable %}<form method="post" action="/conta/renovar" class="loan-renew"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="barcode" value="{{ loan.barcode }}"><button type="submit" class="quiet">{{ t.get("loans-renew") }}</button></form>{% endif %}
     </li>
   {% endfor %}
   </ul>
+  {% if !can_renew %}<p class="muted">{{ t.get("opac-renew-at-desk") }}</p>{% endif %}
   {% endif %}
 </section>
 <section class="panel" aria-labelledby="fines-title">
