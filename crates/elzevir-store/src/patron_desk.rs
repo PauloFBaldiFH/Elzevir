@@ -223,8 +223,28 @@ impl PatronAccounts for ElzevirStore {
                     category_name: patron.category_name,
                     // A stored patron always has its expiry (`patrons.expires` is NOT NULL).
                     expires: patron.fields.expires.unwrap_or(patron.fields.enrolled),
+                    reading_history: patron.fields.reading_history,
                 })
             })
+    }
+
+    fn set_reading_history(
+        &self,
+        id: PatronId,
+        choice: ReadingHistory,
+    ) -> Result<(), PatronAccountError> {
+        let command = WriteCommand::Patrons(PatronCommand::SetReadingHistory {
+            patron: id,
+            reading_history: choice,
+        });
+        // No staff member acts: the audit log keeps the patron inside the command.
+        let pending = self
+            .submit(command)
+            .map_err(|error| PatronAccountError(error.to_string()))?;
+        match pending.wait() {
+            Ok(_) => Ok(()),
+            Err(failure) => Err(PatronAccountError(failure.to_string())),
+        }
     }
 }
 

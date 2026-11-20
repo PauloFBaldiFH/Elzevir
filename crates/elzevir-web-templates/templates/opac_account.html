@@ -14,10 +14,10 @@
   <form method="post" action="/conta/sair"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="quiet">{{ t.get("opac-sign-out") }}</button></form>
 </section>
 <div class="account-main">
+{% if let Some(notice) = notice %}<p class="codes-alert {% if notice.refused %}codes-refused{% else %}codes-saved{% endif %}" role="{% if notice.refused %}alert{% else %}status{% endif %}">{{ notice.text }}</p>{% endif %}
 {% for restriction in restrictions %}<p class="codes-alert codes-refused" role="alert">{{ restriction }}</p>{% endfor %}
 <section class="panel" aria-labelledby="loans-title">
   <h2 id="loans-title">{{ t.get_numbers("loans-title", [("count", loans.len() as u64)]) }}</h2>
-  {% if let Some(notice) = notice %}<p class="codes-alert {% if notice.refused %}codes-refused{% else %}codes-saved{% endif %}" role="{% if notice.refused %}alert{% else %}status{% endif %}">{{ notice.text }}</p>{% endif %}
   {% if loans.is_empty() %}<p class="muted">{{ t.get("opac-loans-none") }}</p>{% else %}
   <ul class="opac-loans">
   {% for loan in loans %}
@@ -48,7 +48,28 @@
   <p class="muted">{{ t.get("opac-fines-hint") }}</p>
   {% endif %}
 </section>
-<p class="muted">{{ t.get("opac-account-soon") }}</p>
+<section class="panel" aria-labelledby="holds-title">
+  <h2 id="holds-title">{{ t.get_numbers("holds-title", [("count", holds.len() as u64)]) }}</h2>
+  {% if holds.is_empty() %}<p class="muted">{{ t.get("opac-holds-none") }}</p>{% else %}
+  <ul class="opac-loans">
+  {% for hold in holds %}
+    <li>
+      <span class="loan-title">{{ hold.title }}</span>
+      <span class="loan-meta">{{ hold.status }} · {{ t.get_with("holds-pickup", "branch", hold.pickup) }}</span>
+      {% if hold.cancelable %}<form method="post" action="/conta/reservas/{{ hold.id }}/cancelar" class="loan-renew"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="quiet">{{ t.get("holds-cancel") }}</button></form>{% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+<section class="panel" aria-labelledby="history-title">
+  <h2 id="history-title">{{ t.get("opac-history-title") }}</h2>
+  <p class="muted">{% if keeps_history %}{{ t.get("opac-history-kept") }}{% else %}{{ t.get("opac-history-not-kept") }}{% endif %}</p>
+  <form method="post" action="/conta/historico">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% if keeps_history %}<button type="submit" class="quiet">{{ t.get("opac-history-stop") }}</button>{% else %}<input type="hidden" name="keep" value="1"><button type="submit" class="quiet">{{ t.get("opac-history-start") }}</button>{% endif %}
+  </form>
+</section>
 </div>
 </div>
 {% endblock %}

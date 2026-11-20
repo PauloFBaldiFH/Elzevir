@@ -318,4 +318,15 @@ pub trait LoanDesk: Send + Sync {
         patron: PatronId,
         request: RenewRequest,
     ) -> Result<Renewed, CirculationDeskError>;
+
+    /// Places or cancels a hold the signed-in patron asks for on the OPAC; no staff member
+    /// acts. The caller puts that patron in the command, and only hold commands pass.
+    ///
+    /// # Errors
+    ///
+    /// [`CirculationDeskError::Refused`] with the refusal, or why storage failed.
+    fn patron_hold(
+        &self,
+        command: CirculationCommand,
+    ) -> Result<CirculationOutput, CirculationDeskError>;
 }

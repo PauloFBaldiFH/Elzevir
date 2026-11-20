@@ -69,6 +69,10 @@ pub struct OpacAccount<'a> {
     pub loans: Vec<OpacLoan>,
     /// The account's lines, newest first.
     pub account: Vec<AccountRow>,
+    /// The patron's holds, oldest first.
+    pub holds: Vec<OpacHoldRow>,
+    /// Whether the patron agreed to keep the reading history.
+    pub keeps_history: bool,
 }
 
 /// A loan on the patron's account page.
@@ -95,4 +99,50 @@ pub struct OpacNotice {
     pub refused: bool,
     /// What it says.
     pub text: String,
+}
+
+/// A hold on the patron's account page.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpacHoldRow {
+    /// The hold's id, posted by the cancel button.
+    pub id: i64,
+    /// The Instance's title.
+    pub title: String,
+    /// The pickup branch's name.
+    pub pickup: String,
+    /// Its place in the queue, or that it waits, as shown.
+    pub status: String,
+    /// Whether the patron may cancel it here: it is not set aside yet.
+    pub cancelable: bool,
+}
+
+/// A pickup branch to choose.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PickupChoice {
+    /// The branch's id.
+    pub id: i64,
+    /// Its name.
+    pub name: String,
+    /// Whether it is chosen.
+    pub selected: bool,
+}
+
+/// `GET /conta/reservar/{id}`: placing a hold on a record.
+#[derive(Template)]
+#[template(path = "opac_hold.html")]
+pub struct OpacHoldForm<'a> {
+    /// Interface texts.
+    pub t: &'a I18n,
+    /// Anti-forgery token of the patron's session.
+    pub csrf: &'a str,
+    /// Where the form posts.
+    pub action: String,
+    /// The record's page, to go back.
+    pub record_url: String,
+    /// The Instance's title.
+    pub title: String,
+    /// The pickup branches.
+    pub pickups: Vec<PickupChoice>,
+    /// Why the hold was refused, as shown.
+    pub error: Option<String>,
 }

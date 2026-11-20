@@ -1156,6 +1156,7 @@ fn holds_queue_up_per_record_and_close_up_when_one_is_cancelled() {
                 at: "2026-11-21T09:00:00-03:00[America/Sao_Paulo]"
                     .parse()
                     .unwrap(),
+                by_patron: false,
             })),
         )
     };
@@ -1433,6 +1434,42 @@ fn a_hold_waiting_past_its_last_day_is_cancelled() {
         "CANCELLED 1"
     );
     assert_eq!(expire("2026-11-25T00:30:00-03:00"), 0);
+}
+
+#[test]
+fn a_patron_cancels_only_a_hold_not_yet_set_aside() {
+    let dir = tempfile::tempdir().unwrap();
+    let (library, bia, first, _) = two_holds(&dir);
+    library
+        .set_aside(
+            first.hold,
+            "0001",
+            (library.annex, "2026-11-20T11:00:00-03:00"),
+        )
+        .unwrap();
+    let cancel = |by_patron| {
+        submit(
+            &library.store,
+            WriteCommand::Circulation(CirculationCommand::CancelHold(HoldCancellation {
+                patron: bia,
+                hold: first.hold,
+                at: "2026-11-21T09:00:00-03:00[America/Sao_Paulo]"
+                    .parse()
+                    .unwrap(),
+                by_patron,
+            })),
+        )
+    };
+    // From the OPAC the waiting hold stays; the desk may still cancel it.
+    assert!(matches!(
+        cancel(true),
+        Err(CommandFailed::Rejected(WriteRefusal::Circulation(
+            CirculationRefusal::Hold(HoldRefused::SetAside)
+        )))
+    ));
+    assert_eq!(queue(&library), "0W1 1--");
+    cancel(false).unwrap();
+    assert_eq!(queue(&library), "1--");
 }
 
 #[test]

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ t.get("opac-hold-place") }}{% endblock %}
+{% block content %}
+<div class="opac-narrow">
+<section class="panel" aria-labelledby="hold-title">
+  <p class="eyebrow">{{ t.get("opac-hold-place") }}</p>
+  <h1 id="hold-title" class="hold-record-title">{{ title }}</h1>
+  {% if let Some(error) = error %}<p class="login-error" role="alert">{{ error }}</p>{% endif %}
+  <form method="post" action="{{ action }}" class="patron-login-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="pickup">{{ t.get("holds-pickup-label") }}</label>
+    <select id="pickup" name="pickup">
+    {% for pickup in pickups %}<option value="{{ pickup.id }}"{% if pickup.selected %} selected{% endif %}>{{ pickup.name }}</option>{% endfor %}
+    </select>
+    <p class="muted">{{ t.get("opac-hold-hint") }}</p>
+    <button type="submit">{{ t.get("opac-hold-confirm") }}</button>
+  </form>
+  <p><a href="{{ record_url }}">{{ t.get("opac-hold-back") }}</a></p>
+</section>
+</div>
+{% endblock %}

@@ -9,6 +9,7 @@
 
 use elzevir_app::catalog::CatalogCommand;
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
+use elzevir_app::patron_account::PatronAccounts;
 use elzevir_app::patrons::{
     CategoryChange, PatronCommand, PatronField, PatronFields, PatronOutput, PatronRefusal,
     PatronUpdate, ReadingHistory,
@@ -238,6 +239,49 @@ fn an_edit_needs_the_version_it_read() {
             })),
         )),
         PatronRefusal::UnknownPatron
+    );
+}
+
+#[test]
+fn the_patron_chooses_their_reading_history_with_no_staff_actor() {
+    let dir = tempfile::tempdir().unwrap();
+    let (store, branch, category) = library(&dir);
+    let PatronOutput::Added(patron) = add(&store, fields(branch, category)).unwrap() else {
+        panic!("not added");
+    };
+    store
+        .set_reading_history(patron, ReadingHistory::Kept)
+        .unwrap();
+    assert_eq!(
+        store.account(patron).unwrap().unwrap().reading_history,
+        ReadingHistory::Kept
+    );
+    assert_eq!(
+        read::<String>(
+            &store,
+            "SELECT reading_history || ' ' || row_version FROM patrons"
+        ),
+        "1 2"
+    );
+    assert_eq!(
+        read::<i64>(
+            &store,
+            "SELECT count(*) FROM audit_log
+             WHERE kind = 'patrons.set_reading_history' AND actor IS NULL"
+        ),
+        1
+    );
+    store
+        .set_reading_history(patron, ReadingHistory::NotKept)
+        .unwrap();
+    assert_eq!(
+        read::<i64>(&store, "SELECT reading_history FROM patrons"),
+        0
+    );
+    assert!(
+        store
+            .set_reading_history(PatronId(99), ReadingHistory::Kept)
+            .is_err()
     );
 }
 

@@ -5,6 +5,7 @@
 use elzevir_domain::patron::PatronId;
 use jiff::civil::Date;
 
+use crate::patrons::ReadingHistory;
 use crate::staff::{DECOY_HASH, verify_password};
 
 /// What signing in compares: the patron and their password hash, if any.
@@ -40,6 +41,8 @@ pub struct PatronAccount {
     pub category_name: String,
     /// Last day of the enrolment.
     pub expires: Date,
+    /// Whether the returned loans are kept, as the patron agreed.
+    pub reading_history: ReadingHistory,
 }
 
 /// Reading patron accounts failed.
@@ -63,6 +66,16 @@ pub trait PatronAccounts: Send + Sync {
     /// # Errors
     /// [`PatronAccountError`] when storage fails.
     fn account(&self, id: PatronId) -> Result<Option<PatronAccount>, PatronAccountError>;
+
+    /// Records the patron's own choice about the reading history; no staff member acts.
+    ///
+    /// # Errors
+    /// [`PatronAccountError`] when storage fails or the patron is gone.
+    fn set_reading_history(
+        &self,
+        id: PatronId,
+        choice: ReadingHistory,
+    ) -> Result<(), PatronAccountError>;
 }
 
 /// Why signing in was refused.
@@ -125,6 +138,14 @@ mod tests {
 
         fn account(&self, _: PatronId) -> Result<Option<PatronAccount>, PatronAccountError> {
             Ok(None)
+        }
+
+        fn set_reading_history(
+            &self,
+            _: PatronId,
+            _: ReadingHistory,
+        ) -> Result<(), PatronAccountError> {
+            Ok(())
         }
     }
 

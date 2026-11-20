@@ -184,6 +184,9 @@ pub(crate) async fn record(State(state): State<AppState>, Path(id): Path<String>
             t: &state.inner.i18n,
             title: &record.title,
             body: &record.body,
+            // The same link for everyone: the hold page asks who is signed in.
+            hold_url: (state.accounts.is_some() && state.loans.is_some() && !items.is_empty())
+                .then(|| format!("/conta/reservar/{}", id.0)),
             items,
         }),
         Ok(Ok(None)) => not_found(&state),

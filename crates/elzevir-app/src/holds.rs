@@ -43,6 +43,10 @@ pub struct HoldCancellation {
     pub hold: HoldId,
     /// When, in the library's time zone.
     pub at: Zoned,
+    /// The patron cancels on the OPAC: a hold already set aside is cancelled only at the
+    /// desk (Koha: `Koha::Hold::is_cancelable_from_opac`).
+    #[serde(default)]
+    pub by_patron: bool,
 }
 
 /// A hold placed.
@@ -109,6 +113,9 @@ pub enum HoldRefused {
     /// The library's rules refuse it.
     #[error(transparent)]
     Rules(#[from] HoldRefusal),
+    /// The hold is waiting or in transit, so only the desk cancels it.
+    #[error("the hold is already set aside")]
+    SetAside,
 }
 
 impl HoldRefused {
@@ -121,6 +128,7 @@ impl HoldRefused {
             Self::UnknownBranch => "hold-error-unknown-branch",
             Self::UnknownHold => "hold-error-unknown-hold",
             Self::WrongItem => "hold-error-wrong-item",
+            Self::SetAside => "hold-error-set-aside",
             Self::Rules(refusal) => match refusal {
                 HoldRefusal::PickupNotValid => "hold-error-pickup",
                 HoldRefusal::Restricted => "hold-error-restricted",

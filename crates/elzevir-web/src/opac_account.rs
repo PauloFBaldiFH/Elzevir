@@ -8,7 +8,9 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
 use elzevir_app::accounts::AccountLine;
 use elzevir_app::circulation_rules::{CirculationDeskError, CirculationRefusal};
+use elzevir_app::holds::PatronHold;
 use elzevir_app::loans::{LoanDesk, PatronLoan, RenewRefusal, RenewRequest};
+use elzevir_app::patrons::ReadingHistory;
 use elzevir_domain::catalog::Money;
 use elzevir_domain::patron::PatronId;
 use elzevir_domain::renewal::RenewalRefusal;
@@ -30,6 +32,7 @@ struct Circulation {
     restrictions: Vec<(RestrictionKind, SuspensionEnd)>,
     owed: Money,
     lines: Vec<AccountLine>,
+    holds: Vec<PatronHold>,
 }
 
 fn circulation(
@@ -43,6 +46,7 @@ fn circulation(
             restrictions: Vec::new(),
             owed: Money(0),
             lines: Vec::new(),
+            holds: Vec::new(),
         });
     };
     Ok(Circulation {
@@ -50,6 +54,7 @@ fn circulation(
         restrictions: desk.restrictions(patron, today)?,
         owed: desk.owed(patron)?,
         lines: desk.account(patron)?,
+        holds: desk.holds(patron)?,
     })
 }
 
@@ -60,6 +65,8 @@ pub(crate) struct AccountParams {
     renovado: Option<String>,
     /// Why the renewal was refused, as one of the codes of [`refusal_code`].
     recusa: Option<String>,
+    /// What a hold or history form did, as one of the codes of [`done_key`].
+    aviso: Option<String>,
 }
 
 /// `GET /conta`: the patron's own account (spec, items 12 to 16).
@@ -120,6 +127,8 @@ pub(crate) async fn account(
             .map(|loan| loan_line(t, loan, &moment))
             .collect(),
         account: account_rows(t, &circulation.lines),
+        holds: crate::opac_holds::hold_rows(t, &circulation.holds),
+        keeps_history: account.reading_history == ReadingHistory::Kept,
     }))
 }
 
@@ -162,10 +171,29 @@ fn notice(t: &I18n, params: &AccountParams, loans: &[PatronLoan]) -> Option<Opac
             text,
         });
     }
+    if let Some((refused, key)) = params.aviso.as_deref().and_then(done_key) {
+        return Some(OpacNotice {
+            refused,
+            text: t.get(key),
+        });
+    }
     let key = refusal_key(params.recusa.as_deref()?)?;
     Some(OpacNotice {
         refused: true,
         text: t.get(key),
+    })
+}
+
+/// The notice of a hold or history form after the redirect: whether it was refused, and
+/// its text.
+fn done_key(code: &str) -> Option<(bool, &'static str)> {
+    Some(match code {
+        "reserva" => (false, "opac-hold-placed"),
+        "reserva_cancelada" => (false, "opac-hold-cancelled"),
+        "reserva_separada" => (true, "opac-hold-set-aside"),
+        "historico_sim" => (false, "opac-history-started"),
+        "historico_nao" => (false, "opac-history-stopped"),
+        _ => return None,
     })
 }
 

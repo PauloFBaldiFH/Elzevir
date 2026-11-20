@@ -41,6 +41,14 @@ pub enum PatronCommand {
         /// The Argon2id hash; `None` takes the OPAC access away.
         password_hash: Option<String>,
     },
+    /// The patron gives or takes back their consent to keep the reading history, on the
+    /// OPAC (docs/specs/opac/conta-do-leitor.md). Only the loans returned afterwards follow it.
+    SetReadingHistory {
+        /// The patron.
+        patron: PatronId,
+        /// The choice.
+        reading_history: ReadingHistory,
+    },
 }
 
 /// One change to the patron categories.
@@ -133,6 +141,8 @@ pub enum PatronOutput {
     Viewed(PatronId),
     /// The patron's OPAC password was set or taken away.
     PasswordSet(PatronId),
+    /// The patron's choice about the reading history was recorded.
+    ReadingHistorySet(PatronId),
 }
 
 /// A field of the patron form, to name the one refused.

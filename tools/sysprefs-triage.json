@@ -1986,8 +1986,8 @@
       "nota": "Decidir na spec do OPAC: aparência vai para tokens de design, comportamento para elzevir.toml ou fixo."
     },
     "OPACAllowHoldDateInFuture": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Fixo desligado: o leitor não reserva com data futura pelo OPAC (docs/specs/opac/conta-do-leitor.md)."
     },
     "OpacAllowPublicListCreation": {
       "destino": "revisar",
@@ -2002,8 +2002,8 @@
       "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
     },
     "OPACAllowUserToChooseBranch": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Fixo ligado: o leitor escolhe a unidade de retirada, com a própria já escolhida (docs/specs/opac/conta-do-leitor.md)."
     },
     "OPACAmazonCoverImages": {
       "destino": "fora-v1",
@@ -2126,8 +2126,8 @@
       "nota": "Decidir na spec do OPAC: aparência vai para tokens de design, comportamento para elzevir.toml ou fixo."
     },
     "OPACHoldRequests": {
-      "destino": "revisar",
-      "nota": "Decidir na spec do OPAC: aparência vai para tokens de design, comportamento para elzevir.toml ou fixo."
+      "destino": "fixo",
+      "nota": "Fixo ligado: o leitor reserva pela própria conta, com as regras do balcão (docs/specs/opac/conta-do-leitor.md)."
     },
     "OPACHoldsHistory": {
       "destino": "revisar",
@@ -2262,8 +2262,8 @@
       "nota": "Decidir na spec do OPAC: aparência vai para tokens de design, comportamento para elzevir.toml ou fixo."
     },
     "OPACPrivacy": {
-      "destino": "revisar",
-      "nota": "Decidir na spec do OPAC: aparência vai para tokens de design, comportamento para elzevir.toml ou fixo."
+      "destino": "fixo",
+      "nota": "Fixo ligado: o leitor escolhe se o histórico de leitura é guardado (docs/specs/opac/conta-do-leitor.md)."
     },
     "OpacPublic": {
       "destino": "revisar",
