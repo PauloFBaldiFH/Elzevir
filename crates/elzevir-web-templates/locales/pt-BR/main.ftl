@@ -338,6 +338,26 @@ rules-error-unknown-branch = Essa unidade não existe mais.
 rules-error-unknown-category = Essa categoria de leitor não existe mais.
 rules-error-unknown-policy = Essa política de circulação não existe mais.
 notices-error-levels = Cada nível de aviso aparece uma vez só, depois de pelo menos um dia e depois do nível anterior.
+notices-title = Avisos
+notices-intro = Os avisos de atraso saem uma vez por dia, no dia em que o empréstimo tem exatamente os dias de atraso do nível. Uma unidade sem regra própria usa as regras de qualquer unidade.
+notices-overdue = Avisos de atraso
+notices-overdue-empty = Nenhuma regra de aviso de atraso: nenhum leitor recebe aviso de atraso.
+notices-levels = Níveis
+notices-level = Nível
+notices-level-days = Nível { $level }: { $days ->
+    [one] { $days } dia
+   *[other] { $days } dias
+}
+notices-days = Dias de atraso
+notices-days-hint = Deixe os dias em branco para não ter o nível. Sem nenhum nível, a regra é apagada.
+notices-email = E-mail
+notices-print = Impresso
+notices-restrict = Suspende o leitor
+notices-rule = Regra desta unidade e categoria
+notices-no-categories = Crie antes uma categoria de leitor.
+notices-holds = Aviso de reserva disponível
+notices-holds-hint = Como os leitores de cada categoria ficam sabendo da reserva que os aguarda. E-mail para leitor sem endereço vira impresso.
+notices-error-days = Os dias de atraso são um número inteiro maior que zero.
 rule-kind-article_request_fee = Taxa de pedido de artigo
 rule-kind-article_requests = Pedidos de artigo
 rule-kind-auto_renew = Renovação automática

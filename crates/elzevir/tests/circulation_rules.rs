@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! The circulation rules screen, through the running server (docs/specs/circulacao/regras.md,
-//! items 8 to 13).
+//! The circulation rules and notices screens, through the running server
+//! (docs/specs/circulacao/regras.md, items 8 to 13; avisos.md, items 28 to 30).
 #![expect(
     clippy::unwrap_used,
     clippy::panic,
@@ -286,4 +286,102 @@ fn rules_are_changed_by_scope_and_say_where_their_value_comes_from() {
         .unwrap();
     // One from the setup, one from the screen.
     assert_eq!(changes, 2);
+}
+
+fn count(data: &Path, sql: &str) -> i64 {
+    open(data)
+        .readers()
+        .read(|c| c.query_row(sql, [], |row| row.get(0)))
+        .unwrap()
+}
+
+#[test]
+fn notice_rules_and_hold_notices_are_set_on_their_screen() {
+    let data = tempfile::tempdir().unwrap();
+    let (branch, category, _policy) = library(data.path());
+    let (server, address) = start(data.path());
+    let adm = sign_in(address, "adm");
+    let cat = sign_in(address, "cat");
+    assert_status(
+        &request(address, "GET", "/equipe/admin/avisos", &cat, ""),
+        403,
+    );
+    assert!(request(address, "GET", "/equipe", &adm, "").contains("/equipe/admin/avisos"));
+
+    let page = request(address, "GET", "/equipe/admin/avisos", &adm, "");
+    assert_status(&page, 200);
+    assert!(page.contains("No overdue notice rule yet"), "{page}");
+    let headers = format!("{adm}Content-Type: application/x-www-form-urlencoded\r\n");
+    let token = csrf(&page).to_owned();
+    let post = |path: &str, fields: &str| {
+        request(
+            address,
+            "POST",
+            path,
+            &headers,
+            &format!("csrf={token}&{fields}"),
+        )
+    };
+
+    // Days that are not a number come back as typed, and nothing is stored.
+    let refused = post(
+        "/equipe/admin/avisos",
+        &format!("branch={branch}&category={category}&d1=tr%C3%AAs&e1=1&d2=&d3="),
+    );
+    assert_status(&refused, 422);
+    assert!(refused.contains("Days overdue are a whole number above zero."));
+    assert!(refused.contains("value=\"três\""));
+    // Levels out of order are refused by the command, also without storing.
+    let refused = post(
+        "/equipe/admin/avisos",
+        &format!("branch={branch}&category={category}&d1=10&d2=5&d3="),
+    );
+    assert_status(&refused, 422);
+    assert!(refused.contains("after the level before it"), "{refused}");
+
+    let saved = post(
+        "/equipe/admin/avisos",
+        &format!("branch={branch}&category={category}&d1=3&e1=1&d2=&d3=10&p3=1&r3=1"),
+    );
+    assert_status(&saved, 303);
+    let page = request(address, "GET", location(&saved), &adm, "");
+    assert!(
+        page.contains("Level 1: 3 days, E-mail<br>Level 3: 10 days, Print, Restricts the patron")
+    );
+    assert!(page.contains("name=\"d3\" value=\"10\""));
+    assert!(page.contains("name=\"r3\" value=\"1\" checked"));
+
+    // Only the category that changed goes to the writer.
+    let saved = post("/equipe/admin/avisos/reservas", &format!("p.{category}=1"));
+    assert_status(&saved, 303);
+    let page = request(address, "GET", location(&saved), &adm, "");
+    assert!(page.contains(&format!("name=\"p.{category}\" value=\"1\" checked")));
+    assert!(!page.contains(&format!("name=\"e.{category}\" value=\"1\" checked")));
+    assert_status(
+        &post("/equipe/admin/avisos/reservas", &format!("p.{category}=1")),
+        303,
+    );
+    drop(server);
+
+    assert_eq!(
+        count(
+            data.path(),
+            "SELECT count(*) FROM overdue_notice_rules WHERE restricts"
+        ),
+        1
+    );
+    assert_eq!(
+        count(
+            data.path(),
+            "SELECT count(*) FROM audit_log WHERE kind = 'circ.set_hold_notice'"
+        ),
+        1
+    );
+    assert_eq!(
+        count(
+            data.path(),
+            "SELECT count(*) FROM audit_log WHERE kind = 'circ.set_overdue_notice_rules'"
+        ),
+        1
+    );
 }

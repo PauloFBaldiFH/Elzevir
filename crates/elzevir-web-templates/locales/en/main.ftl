@@ -746,6 +746,26 @@ rules-error-unknown-branch = That branch no longer exists.
 rules-error-unknown-category = That patron category no longer exists.
 rules-error-unknown-policy = That circulation policy no longer exists.
 notices-error-levels = Each notice level appears once, after at least one day and after the level before it.
+notices-title = Notices
+notices-intro = Overdue notices go out once a day, on the day a loan is exactly as many days late as a level says. A branch with no rule of its own uses the rules of any branch.
+notices-overdue = Overdue notices
+notices-overdue-empty = No overdue notice rule yet: no patron gets overdue notices.
+notices-levels = Levels
+notices-level = Level
+notices-level-days = Level { $level }: { $days ->
+    [one] { $days } day
+   *[other] { $days } days
+}
+notices-days = Days overdue
+notices-days-hint = Leave the days empty for no level. With no level at all, the rule is removed.
+notices-email = E-mail
+notices-print = Print
+notices-restrict = Restricts the patron
+notices-rule = Rule for this branch and category
+notices-no-categories = Create a patron category first.
+notices-holds = Hold waiting notice
+notices-holds-hint = How patrons of each category hear that a hold is waiting for them. E-mail to a patron without an address goes on paper.
+notices-error-days = Days overdue are a whole number above zero.
 rule-kind-article_request_fee = Article request fee
 rule-kind-article_requests = Article requests
 rule-kind-auto_renew = Automatic renewal

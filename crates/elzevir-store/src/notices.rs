@@ -5,7 +5,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 
-use elzevir_app::circulation_rules::{CirculationOutput, OverdueNoticeRule};
+use elzevir_app::circulation_rules::{CirculationOutput, NoticeRules, OverdueNoticeRule};
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
 use elzevir_app::notices::{
     NoticeAbout, NoticeId, NoticeItem, NoticeOutcome, NoticeQueue, NoticeQueueError, PendingEmail,
@@ -109,6 +109,35 @@ fn read_rules(connection: &Connection) -> rusqlite::Result<Rules> {
         rules.entry(scope).or_default().push(level);
     }
     Ok(rules)
+}
+
+/// Every overdue notice rule, "any branch" first, and the hold notice preferences, for the
+/// notices screen.
+pub(crate) fn notice_rules(connection: &Connection) -> rusqlite::Result<NoticeRules> {
+    let mut overdue: Vec<OverdueNoticeRule> = read_rules(connection)?
+        .into_iter()
+        .map(|((branch, category), levels)| OverdueNoticeRule {
+            branch: branch.map(BranchId),
+            category: PatronCategoryId(category),
+            levels,
+        })
+        .collect();
+    overdue.sort_by_key(|rule| (rule.branch, rule.category));
+    let mut statement = connection.prepare(
+        "SELECT category_id, email, print FROM hold_notice_preferences ORDER BY category_id",
+    )?;
+    let holds = statement
+        .query_map([], |row| {
+            Ok((
+                PatronCategoryId(row.get(0)?),
+                Transports {
+                    email: row.get(1)?,
+                    print: row.get(2)?,
+                },
+            ))
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(NoticeRules { overdue, holds })
 }
 
 /// The levels for a patron category at a branch: the branch's rules, or the rules of any

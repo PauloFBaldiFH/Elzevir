@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}{{ t.get("notices-title") }}{% endblock %}
+{% block content %}
+<div class="registries circulation-rules">
+<h1>{{ t.get("notices-title") }}</h1>
+<p class="form-hint">{{ t.get("notices-intro") }}</p>
+{% if saved %}<p class="codes-alert codes-saved" role="status">{{ t.get("rules-saved") }}</p>{% endif %}
+{% if let Some(message) = refused %}<p class="codes-alert codes-refused" role="alert">{{ message }}</p>{% endif %}
+<h2>{{ t.get("notices-overdue") }}</h2>
+{% if rules.is_empty() %}<p class="form-hint">{{ t.get("notices-overdue-empty") }}</p>{% else %}
+<div class="rules-scroll">
+<table class="rules-overview">
+  <thead><tr>
+    <th scope="col">{{ t.get("rules-branch") }}</th>
+    <th scope="col">{{ t.get("rules-category") }}</th>
+    <th scope="col">{{ t.get("notices-levels") }}</th>
+    <th scope="col"></th>
+  </tr></thead>
+  <tbody>
+  {% for rule in rules %}
+    <tr{% if rule.current %} aria-current="true"{% endif %}>
+      <td>{{ rule.branch }}</td><td>{{ rule.category }}</td>
+      <td>{% for level in rule.levels %}{{ level }}{% if !loop.last %}<br>{% endif %}{% endfor %}</td>
+      <td><a href="{{ rule.url }}">{{ t.get("rules-open") }}</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% if categories.is_empty() %}<p class="form-hint">{{ t.get("notices-no-categories") }}</p>{% else %}
+<h3 id="notice-rule">{{ t.get("notices-rule") }}</h3>
+<form method="get" action="/equipe/admin/avisos#notice-rule" class="rules-chooser">
+  <label>{{ t.get("rules-branch") }} <select name="branch">{% for choice in branches %}<option value="{{ choice.id }}"{% if choice.chosen %} selected{% endif %}>{{ choice.name }}</option>{% endfor %}</select></label>
+  <label>{{ t.get("rules-category") }} <select name="category">{% for choice in categories %}<option value="{{ choice.id }}"{% if choice.chosen %} selected{% endif %}>{{ choice.name }}</option>{% endfor %}</select></label>
+  <button type="submit">{{ t.get("rules-open") }}</button>
+</form>
+<form method="post" action="/equipe/admin/avisos">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% for choice in branches %}{% if choice.chosen %}<input type="hidden" name="branch" value="{{ choice.id }}">{% endif %}{% endfor %}
+  {% for choice in categories %}{% if choice.chosen %}<input type="hidden" name="category" value="{{ choice.id }}">{% endif %}{% endfor %}
+  <p class="form-hint">{{ t.get("notices-days-hint") }}</p>
+  <table class="rules-grid">
+    <thead><tr>
+      <th scope="col">{{ t.get("notices-level") }}</th>
+      <th scope="col">{{ t.get("notices-days") }}</th>
+      <th scope="col">{{ t.get("notices-email") }}</th>
+      <th scope="col">{{ t.get("notices-print") }}</th>
+      <th scope="col">{{ t.get("notices-restrict") }}</th>
+    </tr></thead>
+    <tbody>
+    {% for level in levels %}
+      <tr>
+        <th scope="row"><label for="notice-d{{ level.number }}">{{ level.number }}</label></th>
+        <td><input type="text" inputmode="numeric" id="notice-d{{ level.number }}" name="d{{ level.number }}" value="{{ level.delay }}" maxlength="5" size="5"></td>
+        <td><input type="checkbox" name="e{{ level.number }}" value="1"{% if level.email %} checked{% endif %} aria-label="{{ t.get("notices-email") }}"></td>
+        <td><input type="checkbox" name="p{{ level.number }}" value="1"{% if level.print %} checked{% endif %} aria-label="{{ t.get("notices-print") }}"></td>
+        <td><input type="checkbox" name="r{{ level.number }}" value="1"{% if level.restrict %} checked{% endif %} aria-label="{{ t.get("notices-restrict") }}"></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p><button type="submit">{{ t.get("rules-save") }}</button></p>
+</form>
+<h2 id="notice-holds">{{ t.get("notices-holds") }}</h2>
+<p class="form-hint">{{ t.get("notices-holds-hint") }}</p>
+<form method="post" action="/equipe/admin/avisos/reservas">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <table class="rules-grid">
+    <thead><tr>
+      <th scope="col">{{ t.get("rules-category") }}</th>
+      <th scope="col">{{ t.get("notices-email") }}</th>
+      <th scope="col">{{ t.get("notices-print") }}</th>
+    </tr></thead>
+    <tbody>
+    {% for row in holds %}
+      <tr>
+        <th scope="row">{{ row.name }}</th>
+        <td><input type="checkbox" name="e.{{ row.category }}" value="1"{% if row.email %} checked{% endif %} aria-label="{{ t.get("notices-email") }}"></td>
+        <td><input type="checkbox" name="p.{{ row.category }}" value="1"{% if row.print %} checked{% endif %} aria-label="{{ t.get("notices-print") }}"></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p><button type="submit">{{ t.get("rules-save") }}</button></p>
+</form>
+{% endif %}
+</div>
+{% endblock %}

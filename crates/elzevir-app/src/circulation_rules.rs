@@ -112,6 +112,46 @@ pub struct OverdueNoticeRule {
     pub levels: Vec<OverdueLevel>,
 }
 
+/// The overdue notice rules and the hold notice preferences, for the notices screen.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NoticeRules {
+    /// Every overdue notice rule, levels in order.
+    pub overdue: Vec<OverdueNoticeRule>,
+    /// How each patron category with a preference hears of a waiting hold.
+    pub holds: Vec<(PatronCategoryId, Transports)>,
+}
+
+/// A change the notices screen makes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NoticeChange {
+    /// `circ.set_overdue_notice_rules`.
+    Overdue(OverdueNoticeRule),
+    /// `circ.set_hold_notice`.
+    Hold {
+        /// The patron category.
+        category: PatronCategoryId,
+        /// How the notice goes out; neither is no notice.
+        transports: Transports,
+    },
+}
+
+impl NoticeChange {
+    /// The command that makes the change.
+    #[must_use]
+    pub fn command(self) -> CirculationCommand {
+        match self {
+            Self::Overdue(rule) => CirculationCommand::SetOverdueNoticeRule(rule),
+            Self::Hold {
+                category,
+                transports,
+            } => CirculationCommand::SetHoldNotice {
+                category,
+                transports,
+            },
+        }
+    }
+}
+
 /// New values for some rules at one scope.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RuleChange {
@@ -347,6 +387,24 @@ pub trait RuleBook: Send + Sync {
         &self,
         actor: StaffId,
         change: RuleChange,
+    ) -> Result<CirculationOutput, CirculationDeskError>;
+
+    /// The overdue notice rules and the hold notice preferences.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn notice_rules(&self) -> Result<NoticeRules, CirculationDeskError>;
+
+    /// Makes `change` as `actor`.
+    ///
+    /// # Errors
+    ///
+    /// [`CirculationDeskError::Refused`] with the refusal, or why storage failed.
+    fn set_notice_rule(
+        &self,
+        actor: StaffId,
+        change: NoticeChange,
     ) -> Result<CirculationOutput, CirculationDeskError>;
 }
 
