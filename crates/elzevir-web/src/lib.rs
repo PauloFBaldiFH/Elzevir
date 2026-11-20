@@ -9,6 +9,7 @@ mod access;
 mod assets;
 mod authorities;
 mod batch;
+mod board;
 mod calendar;
 mod catalog;
 mod checkout_slip;
@@ -102,6 +103,7 @@ pub struct AppState {
     rules: Option<Arc<dyn elzevir_app::circulation_rules::RuleBook>>,
     calendar: Option<Arc<dyn elzevir_app::calendar::CalendarBook>>,
     notices: Option<Arc<dyn elzevir_app::notices::NoticeQueue>>,
+    board: Option<Arc<dyn elzevir_app::board::NoticeBoard>>,
 }
 
 struct Inner {
@@ -139,6 +141,7 @@ impl AppState {
             rules: None,
             calendar: None,
             notices: None,
+            board: None,
             inner: Arc::new(Inner {
                 staff,
                 memory,
@@ -201,6 +204,14 @@ impl AppState {
     #[must_use]
     pub fn with_notices(mut self, queue: Arc<dyn elzevir_app::notices::NoticeQueue>) -> Self {
         self.notices = Some(queue);
+        self
+    }
+
+    /// Connects the notice board (docs/specs/interface/mural.md). Without it both homes
+    /// show their welcome note and the note pages answer 404.
+    #[must_use]
+    pub fn with_board(mut self, board: Arc<dyn elzevir_app::board::NoticeBoard>) -> Self {
+        self.board = Some(board);
         self
     }
 }
@@ -294,12 +305,25 @@ pub fn router(state: AppState) -> Router {
         .route("/equipe/login", get(staff::login_form).post(staff::log_in))
         .route("/equipe/logout", post(staff::log_out))
         .merge(static_routes())
+        .merge(board_routes())
         .merge(admin_routes())
         .merge(authority_routes())
         .merge(importing::routes())
         .merge(circulation::routes())
         .layer(axum::middleware::map_response(security::headers))
         .with_state(state)
+}
+
+/// The notice board's form (docs/specs/interface/mural.md, item 7).
+fn board_routes() -> Router<AppState> {
+    Router::new()
+        .route("/equipe/mural", post(board::add_note))
+        .route("/equipe/mural/nova", get(board::new_note))
+        .route(
+            "/equipe/mural/{id}",
+            get(board::edit_note).post(board::update_note),
+        )
+        .route("/equipe/mural/{id}/remover", post(board::remove_note))
 }
 
 /// The stylesheet, scripts and images, all served from the binary.

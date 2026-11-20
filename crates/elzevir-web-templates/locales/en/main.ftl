@@ -1151,3 +1151,23 @@ notice-hold-body =
 
     { $library }
 notice-hold-item = - { $title } ({ $barcode })
+board-new-title = New note
+board-edit-title = Edit note
+board-text = Note text
+board-text-placeholder = Write a message for the board…
+board-kind = Kind
+board-kind-staff = Team
+board-kind-institutional = Institutional
+board-kind-personal = Personal
+board-kind-urgent = Urgent
+board-public = Also show on the online catalog (OPAC)
+board-public-admin = Only administrators publish notes on the OPAC.
+board-save = Save note
+board-cancel = Cancel
+board-remove = Remove note
+board-edit = Edit
+board-opac-badge = OPAC
+board-error-empty = The note cannot be empty.
+board-error-long = The note is longer than 1,400 characters.
+board-error-full = The board already keeps 50 notes. Remove an old one first.
+board-error-stale = Someone changed this note meanwhile. Your text is below; save again to replace theirs.

@@ -4,6 +4,7 @@
 pub mod accounts;
 pub mod authorities;
 pub mod batch;
+pub mod board;
 pub mod calendar;
 pub mod call_number;
 pub mod catalog;

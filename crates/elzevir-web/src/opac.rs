@@ -88,8 +88,10 @@ pub(crate) async fn home(State(state): State<AppState>) -> Response {
         Ok(Ok(recent)) => recent,
         Ok(Err(_)) | Err(_) => Vec::new(),
     };
+    let notes = crate::board::opac_cards(&state).await;
     render(&OpacHome {
         t: &state.inner.i18n,
+        notes,
         recent: recent
             .into_iter()
             .map(|instance| RecentCard {

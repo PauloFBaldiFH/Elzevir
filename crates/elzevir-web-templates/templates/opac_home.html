@@ -6,11 +6,11 @@
 <h1 class="visually-hidden">{{ t.get("opac-home-title") }}</h1>
 <aside class="mural" aria-labelledby="mural-title">
   <h2 class="eyebrow" id="mural-title">{{ t.get("home-mural") }}</h2>
-  <article class="postit note-yellow">
+  {% if notes.is_empty() %}<article class="postit note-yellow">
     <p class="note-top">{{ t.get("opac-welcome-kind") }}</p>
     <p class="note-text">{{ t.get("opac-welcome-text") }}</p>
     <p class="postit-meta"><span>{{ t.get("opac-welcome-author") }}</span><span>{{ t.get("opac-product") }}</span></p>
-  </article>
+  </article>{% else %}<div class="note-stack">{% include "board_notes.html" %}</div>{% endif %}
 </aside>
 <section class="panel recent" aria-labelledby="recent-title">
   <h2 class="eyebrow" id="recent-title">{{ t.get("opac-recent") }}</h2>

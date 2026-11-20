@@ -21,9 +21,12 @@ pub(crate) async fn home(State(state): State<AppState>, headers: HeaderMap) -> R
     let Some(session) = current_session(&state, &headers) else {
         return Redirect::to("/equipe/login").into_response();
     };
+    let notes = crate::board::staff_cards(&state, &session).await;
     render(&StaffHome {
         t: &state.inner.i18n,
         modules: crate::staff_bar::home_modules(&state, &session),
+        notes,
+        board: state.board.is_some(),
     })
 }
 
