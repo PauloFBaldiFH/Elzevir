@@ -37,11 +37,21 @@
 15. **Débitos.** A página mostra o total devido, quando há, e as linhas da conta, a mais nova primeiro: dia, o que é (multa por atraso, item perdido, taxa, pagamento, abono, com o código de barras do item quando a linha é de um item), valor e saldo. O pagamento é só no balcão.
 16. Os dados vêm das mesmas consultas da ficha do leitor na equipe, mas abrir a própria conta não grava no `audit_log`: o registro de abertura é para a equipe que vê dado alheio. Reservas entram na parte d.
 
+### Renovação (parte c)
+
+17. Cada empréstimo mostra quantas renovações ainda restam pelas regras (Koha: `GetRenewCount`, `renewsleft`) e, quando resta alguma e não é empréstimo local, o botão "Renovar".
+18. `POST /conta/renovar`, com o token da sessão do leitor e o código de barras, renova pelo comando `circ.renew`, com as mesmas regras e na mesma ordem do balcão ([renovacao.md](../circulacao/renovacao.md)), sem passar por cima de nada. O comando leva o leitor (`by_patron`) e não tem ator da equipe no `audit_log`.
+19. Recusas próprias do OPAC, antes das regras:
+   - empréstimo de outra pessoa é tratado como sem empréstimo, para a página não revelar nada sobre ele;
+   - leitor com restrição valendo hoje (suspensão ou bloqueio por atraso) não renova pelo OPAC. A página não mostra os botões e diz para renovar no balcão. Koha: `opac-user.pl` esconde a renovação do leitor com `debarred`.
+20. Depois de renovar, a página volta para `/conta`. Se deu certo, diz o título e a nova data de devolução; se não, diz o motivo em texto para o leitor.
+
 ## 2. Origem no Koha
 
 - Entrada: `C4::Auth::checkpw` e `opac-user.pl`. No Koha, o leitor entra pelo `userid` ou pela carteirinha, e aqui entra só pela carteirinha.
 - Tentativas: preferência `FailedLoginAttempts`. O Koha trava a conta no banco até a equipe destravar. Aqui o bloqueio é temporário e fica na memória do servidor, porque um bloqueio permanente deixaria qualquer pessoa trancar a conta de outra só errando a senha.
 - Tamanho da senha: `minPasswordLength` e `RequireStrongPassword`. Aqui o mínimo é fixo em 8 caracteres.
+- Renovação: `opac-renew.pl` e `opac-user.pl`. `OpacRenewalAllowed` fica fixo ligado. `BlockExpiredPatronOpacActions` vazio, como no padrão do Koha: inscrição vencida não impede renovar. Como `ReturnBeforeExpiry` está desligado, a nova data pode passar da validade da inscrição.
 
 Não é área de paridade.
 

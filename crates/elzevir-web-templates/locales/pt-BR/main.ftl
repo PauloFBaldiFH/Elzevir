@@ -531,6 +531,9 @@ renew-error-on-site = Empréstimo para uso local não é renovado.
 renew-error-too-many = Este empréstimo não tem mais renovações.
 renew-error-overdue = Um empréstimo atrasado impede a renovação.
 renew-error-too-soon = Ainda é cedo para renovar este empréstimo.
+renew-error-too-much-owing = O leitor deve mais do que o limite para renovar.
+renew-error-on-hold = Alguém está esperando este item; ele não pode ser renovado.
+renew-error-restricted = Leitor com restrição renova no balcão.
 
 ## Calendário (docs/specs/circulacao/calendario.md)
 calendar-title = Calendário
@@ -787,6 +790,23 @@ opac-account-branch = Biblioteca
 opac-account-category = Categoria
 opac-account-expires = Inscrição válida até
 opac-account-soon = Suas reservas vão aparecer aqui em breve.
+opac-renewals-left = { $count ->
+    [0] Nenhuma renovação restante
+    [one] Uma renovação restante
+   *[other] { $count } renovações restantes
+}
+opac-renewed = “{ $title }” renovado; a devolução agora é em { $date }.
+opac-renewed-plain = O empréstimo foi renovado.
+opac-renew-at-desk = Enquanto houver restrição, a renovação é feita no balcão da biblioteca.
+opac-renew-no-loan = Este empréstimo não está na sua conta.
+opac-renew-on-site = Empréstimo para uso local não é renovado.
+opac-renew-too-many = Este empréstimo não tem mais renovações.
+opac-renew-overdue = Empréstimos em atraso bloqueiam a renovação; devolva-os.
+opac-renew-owing = Você deve mais do que o limite para renovar; pague no balcão da biblioteca.
+opac-renew-on-hold = Outra pessoa está esperando este item, então ele não pode ser renovado.
+opac-renew-too-soon = Ainda é cedo para renovar este empréstimo.
+opac-renew-no-due-date = A biblioteca não tem dia aberto para a nova devolução; pergunte no balcão.
+opac-renew-restricted = Enquanto houver restrição, a renovação é feita no balcão da biblioteca.
 opac-owes = Você deve { $amount }.
 opac-suspended = Seus empréstimos estão suspensos até { $date }.
 opac-suspended-lifted = Seus empréstimos estão suspensos; fale com a biblioteca.

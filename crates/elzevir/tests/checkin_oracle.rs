@@ -217,6 +217,7 @@ fn renew(library: &Library, barcode: &str, at: &str) -> Result<(Zoned, u32), Ren
             barcode: barcode.to_owned(),
             override_limit: false,
             at: zoned(at),
+            by_patron: None,
         }),
     ) {
         Ok(WriteOutput::Circulation(CirculationOutput::Renewed(done))) => {
@@ -234,6 +235,9 @@ fn renewal_error(refusal: &RenewRefusal) -> &'static str {
         RenewRefusal::Refused(RenewalRefusal::TooMany) => "too_many",
         RenewRefusal::Refused(RenewalRefusal::Overdue) => "overdue",
         RenewRefusal::Refused(RenewalRefusal::OnSite) => "onsite_checkout",
+        RenewRefusal::Refused(RenewalRefusal::TooMuchOwing { .. }) => "too_much_owing",
+        RenewRefusal::Refused(RenewalRefusal::OnHold) => "on_reserve",
+        RenewRefusal::Restricted => "restriction",
         RenewRefusal::UnknownBarcode | RenewRefusal::NotOnLoan => "no_checkout",
         RenewRefusal::NoDueDate => "no_due_date",
     }

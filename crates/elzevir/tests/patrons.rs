@@ -1192,27 +1192,8 @@ fn the_patron_sees_their_loans_restriction_and_fines_on_the_opac() {
     stock(data.path());
     late_return(data.path(), ana);
     restricted_for_overdues(data.path(), ana);
-    let store = open(data.path());
-    submit(
-        &store,
-        WriteCommand::Patrons(PatronCommand::SetPassword {
-            patron: PatronId(ana),
-            password_hash: Some(hash_password("leitura-segura").unwrap()),
-        }),
-    );
-    store.shutdown().unwrap();
-    let (_server, address) = start(data.path());
-    let form = request(address, "GET", "/conta/entrar", "", "");
-    let cookie = session_cookie(&form, "elzevir_patron_csrf");
-    let signed = request(
-        address,
-        "POST",
-        "/conta/entrar",
-        &format!("Cookie: {cookie}\r\nContent-Type: application/x-www-form-urlencoded\r\n"),
-        &format!("csrf={}&card=000123&password=leitura-segura", csrf(&form)),
-    );
-    assert_status(&signed, 303);
-    let patron = format!("Cookie: {}\r\n", session_cookie(&signed, "elzevir_patron"));
+    let (_server, address) = start_with_password(data.path(), ana);
+    let patron = patron_sign_in(address);
     let page = request(address, "GET", "/conta", &patron, "");
     assert_status(&page, 200);
     for shown in [
@@ -1237,4 +1218,114 @@ fn the_patron_sees_their_loans_restriction_and_fines_on_the_opac() {
     ] {
         assert!(!page.contains(absent), "{absent}");
     }
+}
+
+/// Gives Ana an OPAC password and starts the server.
+fn start_with_password(data: &Path, ana: i64) -> (Server, SocketAddr) {
+    let store = open(data);
+    submit(
+        &store,
+        WriteCommand::Patrons(PatronCommand::SetPassword {
+            patron: PatronId(ana),
+            password_hash: Some(hash_password("leitura-segura").unwrap()),
+        }),
+    );
+    store.shutdown().unwrap();
+    start(data)
+}
+
+/// Signs Ana in on the OPAC and returns the `Cookie:` header line of her session.
+fn patron_sign_in(address: SocketAddr) -> String {
+    let form = request(address, "GET", "/conta/entrar", "", "");
+    let cookie = session_cookie(&form, "elzevir_patron_csrf");
+    let signed = request(
+        address,
+        "POST",
+        "/conta/entrar",
+        &format!("Cookie: {cookie}\r\nContent-Type: application/x-www-form-urlencoded\r\n"),
+        &format!("csrf={}&card=000123&password=leitura-segura", csrf(&form)),
+    );
+    assert_status(&signed, 303);
+    format!("Cookie: {}\r\n", session_cookie(&signed, "elzevir_patron"))
+}
+
+#[test]
+fn the_patron_renews_a_loan_on_the_opac_while_renewals_are_left() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    stock(data.path());
+    let store = open(data.path());
+    submit(
+        &store,
+        WriteCommand::Circulation(CirculationCommand::SetRules(RuleChange {
+            scope: RuleScopeKey::default(),
+            values: vec![
+                ("renewalsallowed".to_owned(), Some("1".to_owned())),
+                ("renewalperiod".to_owned(), Some("7".to_owned())),
+            ],
+        })),
+    );
+    submit(
+        &store,
+        WriteCommand::Circulation(CirculationCommand::Checkout(CheckoutRequest {
+            patron: PatronId(ana),
+            barcode: "0001".to_owned(),
+            desk: BranchId(1),
+            on_site: false,
+            confirmed: true,
+            at: "2026-11-19T10:00:00-03:00[America/Sao_Paulo]"
+                .parse()
+                .unwrap(),
+        })),
+    );
+    store.shutdown().unwrap();
+    let (_server, address) = start_with_password(data.path(), ana);
+    let patron = patron_sign_in(address);
+    let page = request(address, "GET", "/conta", &patron, "");
+    assert!(page.contains("One renewal left"), "{page}");
+    assert!(page.contains("action=\"/conta/renovar\""));
+    let token = csrf(&page).to_owned();
+    let renew = |token: &str, barcode: &str| {
+        request(
+            address,
+            "POST",
+            "/conta/renovar",
+            &format!("{patron}Content-Type: application/x-www-form-urlencoded\r\n"),
+            &format!("csrf={token}&barcode={barcode}"),
+        )
+    };
+    assert_status(&renew("forged", "0001"), 403);
+    let renewed = renew(&token, "0001");
+    assert_status(&renewed, 303);
+    assert!(
+        renewed.contains("location: /conta?renovado=0001#loans-title"),
+        "{renewed}"
+    );
+    let page = request(address, "GET", "/conta?renovado=0001", &patron, "");
+    assert!(
+        page.contains("Renewed “Dom Casmurro”; it is now due 2026-12-03."),
+        "{page}"
+    );
+    assert!(page.contains("No renewals left"));
+    assert!(!page.contains("action=\"/conta/renovar\""));
+
+    let again = renew(&token, "0001");
+    assert!(
+        again.contains("location: /conta?recusa=too_many"),
+        "{again}"
+    );
+    let page = request(address, "GET", "/conta?recusa=too_many", &patron, "");
+    assert!(page.contains("This loan has no renewals left."));
+    let unknown = renew(&token, "9999");
+    assert!(unknown.contains("recusa=no_loan"), "{unknown}");
+    // Without a patron session the renewal leads to the sign-in form.
+    let visitor = request(
+        address,
+        "POST",
+        "/conta/renovar",
+        "Content-Type: application/x-www-form-urlencoded\r\n",
+        &format!("csrf={token}&barcode=0001"),
+    );
+    assert_status(&visitor, 303);
+    assert!(visitor.contains("location: /conta/entrar"));
 }

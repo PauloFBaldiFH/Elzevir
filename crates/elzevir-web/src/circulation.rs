@@ -470,6 +470,7 @@ pub(crate) async fn circulate(
             barcode: barcode.to_owned(),
             override_limit: false,
             at,
+            by_patron: None,
         }),
         Some(("return", barcode)) => CirculationCommand::Checkin(CheckinRequest {
             barcode: barcode.to_owned(),

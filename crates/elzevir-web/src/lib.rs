@@ -350,6 +350,7 @@ pub fn router(state: AppState) -> Router {
 fn patron_routes() -> Router<AppState> {
     Router::new()
         .route("/conta", get(opac_account::account))
+        .route("/conta/renovar", post(opac_account::renew))
         .route(
             "/conta/entrar",
             get(patron_login::login_form).post(patron_login::log_in_patron),
