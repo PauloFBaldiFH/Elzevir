@@ -21,6 +21,7 @@ mod cloud_cli;
 mod cloud_plans;
 mod cloudflare;
 mod config;
+mod desktop;
 mod diagnostic_logs;
 mod diagnostics;
 mod file_owner;
@@ -103,6 +104,8 @@ enum Command {
     HostJob(host_jobs::Args),
     /// Install or inspect optional operational tools.
     Tools(tools_cli::Args),
+    /// Add or remove the desktop launcher that opens the panel.
+    Desktop(desktop::Args),
     /// Manage a free address through an explicitly compatible broker.
     Address(broker_cli::Args),
     /// Configure cloud connections through the institution worker.
@@ -189,6 +192,7 @@ fn main() -> ExitCode {
     let result = match command {
         Command::HostJob(args) => host_jobs::run(&args),
         Command::Tools(args) => tools_cli::run(args),
+        Command::Desktop(args) => desktop::run(&args),
         Command::Address(args) => broker_cli::run(args),
         Command::Cloud(args) => cloud_cli::run(args),
         Command::Tunnel(args) => tunnel_cli::run(args),

@@ -34,8 +34,16 @@ pré-release.
 
 Sem opções de serviço, a instalação rápida grava o binário no PATH do
 usuário, cria o diretório de dados local, verifica a versão e o subcomando
-`panel` e exibe os caminhos e o próximo passo (`elzevir start`, que no
-primeiro uso pede o nome da biblioteca e a senha do administrador). No
+`panel` e exibe os caminhos e o comando para abrir o painel depois
+(`elzevir`). Em seguida cria o atalho "Elzevir", que abre o painel
+(`elzevir start`): no Linux com sessão gráfica, `elzevir desktop install`
+grava `elzevir.desktop` com `Terminal=true` no menu de aplicativos e na
+pasta da área de trabalho indicada por `user-dirs.dirs`, com o ícone SVG
+da marca; no Windows, o instalador cria `Elzevir.lnk` no menu Iniciar e na
+área de trabalho. Falha no atalho só gera aviso. Por fim, se houver
+terminal, o instalador abre o painel, que no primeiro uso mostra o
+assistente da biblioteca e do administrador; `--no-launch`/`-NoLaunch`
+evita isso. `elzevir desktop remove` apaga o atalho e o ícone. No
 Linux, o script executado por `curl | bash` não altera o PATH do terminal
 que o chamou; a mensagem final diz isso e mostra o caminho completo. Reinstalar preserva os dados da instituição.
 Com as opções de serviço, o fluxo gerenciado exige o gerenciador suportado

@@ -12,6 +12,7 @@ plan=false
 firewall=false
 download_only=
 managed=false
+launch=true
 repository=https://github.com/PauloFBaldiFH/Elzevir
 api=https://api.github.com/repos/PauloFBaldiFH/Elzevir
 version_pattern='^v(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
@@ -55,8 +56,9 @@ while [[ $# -gt 0 ]]; do
         --listen) value "$@"; listen=$2; managed=true; shift 2 ;;
         --download-only) value "$@"; download_only=$2; shift 2 ;;
         --dry-run) plan=true; shift ;;
+        --no-launch) launch=false; shift ;;
         --open-firewall) firewall=true; managed=true; shift ;;
-        --help) printf '%s\n' 'Usage: bash install.sh [--version TAG] [--dry-run] [--download-only NEW_DIRECTORY]' 'Managed service: sudo bash install.sh --name "Library" [--id library] [--login admin] [--listen 127.0.0.1:7390] [--open-firewall]'; exit 0 ;;
+        --help) printf '%s\n' 'Usage: bash install.sh [--version TAG] [--dry-run] [--no-launch] [--download-only NEW_DIRECTORY]' 'Managed service: sudo bash install.sh --name "Library" [--id library] [--login admin] [--listen 127.0.0.1:7390] [--open-firewall]'; exit 0 ;;
         *) fail "unknown option: $1" ;;
     esac
 done
@@ -188,7 +190,20 @@ if ! $managed; then
         command=$binary
     fi
     if "$binary" start --help >/dev/null 2>&1; then
-        printf '\nNext step:\n    %s start\n' "$command"
+        if [[ -n ${DISPLAY:-}${WAYLAND_DISPLAY:-} ]] && "$binary" desktop --help >/dev/null 2>&1; then
+            # The launcher is a convenience; a failure must not undo the installation.
+            if "$binary" desktop install; then
+                printf '\nElzevir is in the application menu and on the desktop.\n'
+            else
+                printf '\nThe desktop launcher could not be created; use the command below.\n'
+            fi
+        fi
+        printf '\nTo open the panel later:\n    %s\n' "$command"
+        # curl | bash leaves stdin on the pipe; the panel reads the terminal itself.
+        if $launch && { : </dev/tty; } 2>/dev/null; then
+            printf 'Opening the panel now. The first start asks for the library name and the administrator password.\n'
+            exec "$binary" start </dev/tty
+        fi
         printf 'The first start asks for the library name and the administrator password,\n'
         printf 'then serves the catalog and opens the panel, which shows its address.\n'
     else
