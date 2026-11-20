@@ -38,6 +38,9 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CirculationCommand) -> Applied {
         CirculationCommand::CancelHold(request) => {
             crate::holds::cancel_hold(tx.connection(), request)
         }
+        CirculationCommand::SetHoldAside(request) => {
+            crate::holds::set_hold_aside(tx.connection(), request)
+        }
         CirculationCommand::ChargeOverdues { at } => {
             crate::overdue_fines::charge_overdues(tx.connection(), at)
         }

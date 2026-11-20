@@ -10,6 +10,147 @@ use crate::checkout::perl_whole;
 use crate::circulation_rules::{CirculationRule, RuleScopeKey, effective_rule};
 use crate::patron::PatronCategoryId;
 
+/// One hold.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
+pub struct HoldId(pub i64);
+
+/// A hold set aside for its patron.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Found {
+    /// Waiting at the pickup branch (`W`).
+    Waiting,
+    /// In transit to the pickup branch (`T`).
+    InTransit,
+}
+
+impl Found {
+    /// The code stored, Koha's.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::Waiting => "W",
+            Self::InTransit => "T",
+        }
+    }
+
+    /// The state of a stored code.
+    #[must_use]
+    pub fn from_code(code: &str) -> Option<Self> {
+        [Self::Waiting, Self::InTransit]
+            .into_iter()
+            .find(|found| found.code() == code)
+    }
+}
+
+/// A hold in an Instance's queue, as `hold_for_item` sees it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QueuedHold {
+    /// Which hold.
+    pub id: HoldId,
+    /// The branch of its patron, whose rules apply.
+    pub patron_branch: BranchId,
+    /// Where it is picked up.
+    pub pickup: BranchId,
+    /// Its place in the queue; 0 when set aside.
+    pub priority: u32,
+    /// Set aside, or not yet.
+    pub found: Option<Found>,
+    /// The Item it asks for or was set aside with.
+    pub item: Option<ItemId>,
+}
+
+/// The hold an Item answers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HoldMatch {
+    /// The Item is waiting for this hold.
+    Waiting(HoldId),
+    /// The Item is in transit for this hold.
+    InTransit(HoldId),
+    /// The Item can fill this hold, the first in the queue it may fill.
+    Reserved(HoldId),
+}
+
+impl HoldMatch {
+    /// The hold.
+    #[must_use]
+    pub const fn hold(self) -> HoldId {
+        match self {
+            Self::Waiting(hold) | Self::InTransit(hold) | Self::Reserved(hold) => hold,
+        }
+    }
+}
+
+/// The hold the Item answers, if any: a hold already set aside with it, or else the first
+/// hold in the queue the rules let it fill. `queue` holds the Instance's holds.
+///
+/// Koha: `C4::Reserves::CheckReserves` and `_Findgroupreserve` (without the holds queue,
+/// `LocalHoldsPriority`, item groups and hold groups; `TrapHoldsOnOrder` on).
+#[must_use]
+pub fn hold_for_item(
+    rules: &[CirculationRule],
+    queue: &[QueuedHold],
+    item: &HoldItem,
+    not_for_loan: i64,
+) -> Option<HoldMatch> {
+    if not_for_loan > 0 {
+        return None;
+    }
+    let mut candidates: Vec<&QueuedHold> = queue
+        .iter()
+        .filter(|hold| hold.item.is_none() || hold.item == Some(item.id))
+        .collect();
+    candidates.sort_by_key(|hold| (hold.priority, hold.id));
+    for hold in &candidates {
+        match hold.found {
+            Some(Found::Waiting) => return Some(HoldMatch::Waiting(hold.id)),
+            Some(Found::InTransit) => return Some(HoldMatch::InTransit(hold.id)),
+            None => {}
+        }
+    }
+    candidates
+        .into_iter()
+        .filter(|hold| hold.found.is_none() && hold.priority > 0)
+        .find(|hold| may_fill(rules, hold, item))
+        .map(|hold| HoldMatch::Reserved(hold.id))
+}
+
+/// Whether the rules let the Item fill the hold. Without hold groups, no Item fills a hold
+/// whose rules ask for one.
+fn may_fill(rules: &[CirculationRule], hold: &QueuedHold, item: &HoldItem) -> bool {
+    let scope = RuleScopeKey {
+        branch: Some(hold.patron_branch),
+        category: None,
+        policy: Some(item.policy),
+    };
+    let allowed = rule_value(rules, RuleKind::Holdallowed, &scope).unwrap_or("from_any_library");
+    let fulfillment = rule_value(rules, RuleKind::HoldFulfillmentPolicy, &scope).unwrap_or("any");
+    let allowed_ok = match allowed {
+        "not_allowed" | "from_local_hold_group" => false,
+        "from_home_library" => item.home == hold.patron_branch,
+        _ => true,
+    };
+    let pickup_ok = match fulfillment {
+        "holdgroup" => false,
+        "homebranch" => hold.pickup == item.home,
+        "holdingbranch" => hold.pickup == item.holding,
+        _ => true,
+    };
+    allowed_ok && pickup_ok
+}
+
+/// How many days a waiting hold waits: the rule `holds_pickup_period`, or
+/// `ReservesMaxPickUpDelay` (7).
+///
+/// Koha: `Koha::Hold::set_waiting` (`ExcludeHolidaysFromMaxPickUpDelay` off).
+#[must_use]
+pub fn pickup_days(rules: &[CirculationRule], at: &RuleScopeKey) -> u32 {
+    rule_value(rules, RuleKind::HoldsPickupPeriod, at)
+        .filter(|value| !value.is_empty())
+        .map_or(7, perl_whole)
+}
+
 /// Why a hold cannot be placed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum HoldRefusal {
@@ -457,6 +598,76 @@ mod tests {
             today: today(),
         };
         check_hold(&facts, target, CENTRAL, &HoldSettings::default())
+    }
+
+    fn queued(id: i64, priority: u32, found: Option<Found>, item: Option<i64>) -> QueuedHold {
+        QueuedHold {
+            id: HoldId(id),
+            patron_branch: CENTRAL,
+            pickup: CENTRAL,
+            priority,
+            found,
+            item: item.map(ItemId),
+        }
+    }
+
+    #[test]
+    fn an_item_answers_its_own_set_aside_hold_first_then_the_queue() {
+        let book = item(1, CENTRAL, BOOK);
+        let queue = [
+            queued(1, 1, None, Some(2)),
+            queued(2, 2, None, None),
+            queued(3, 3, None, Some(1)),
+        ];
+        assert_eq!(
+            hold_for_item(&[], &queue, &book, 0),
+            Some(HoldMatch::Reserved(HoldId(2)))
+        );
+        let waiting = [queued(4, 0, Some(Found::Waiting), Some(1)), queue[1]];
+        assert_eq!(
+            hold_for_item(&[], &waiting, &book, 0),
+            Some(HoldMatch::Waiting(HoldId(4)))
+        );
+        assert_eq!(hold_for_item(&[], &queue, &book, 1), None, "not for loan");
+        assert_eq!(
+            hold_for_item(&[], &queue, &book, -1).map(HoldMatch::hold),
+            Some(HoldId(2))
+        );
+    }
+
+    #[test]
+    fn the_rules_skip_holds_the_item_may_not_fill() {
+        let annex_book = item(1, ANNEX, BOOK);
+        let queue = [
+            queued(1, 1, None, None),
+            QueuedHold {
+                patron_branch: ANNEX,
+                pickup: ANNEX,
+                ..queued(2, 2, None, None)
+            },
+        ];
+        let home_only = [rule(RuleKind::Holdallowed, None, "from_home_library")];
+        assert_eq!(
+            hold_for_item(&home_only, &queue, &annex_book, 0),
+            Some(HoldMatch::Reserved(HoldId(2)))
+        );
+        let at_home = [rule(RuleKind::HoldFulfillmentPolicy, None, "homebranch")];
+        assert_eq!(
+            hold_for_item(&at_home, &queue, &annex_book, 0),
+            Some(HoldMatch::Reserved(HoldId(2)))
+        );
+        let none = [rule(RuleKind::Holdallowed, None, "not_allowed")];
+        assert_eq!(hold_for_item(&none, &queue, &annex_book, 0), None);
+    }
+
+    #[test]
+    fn a_hold_waits_seven_days_unless_a_rule_says_otherwise() {
+        let scope = RuleScopeKey::default();
+        assert_eq!(pickup_days(&[], &scope), 7);
+        assert_eq!(
+            pickup_days(&[rule(RuleKind::HoldsPickupPeriod, None, "3")], &scope),
+            3
+        );
     }
 
     #[test]

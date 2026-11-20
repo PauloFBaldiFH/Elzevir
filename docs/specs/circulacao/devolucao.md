@@ -1,6 +1,6 @@
 # Devolução
 
-> Status: tarefa 3.5, partes a, c e d; a suspensão está em [suspensao.md](suspensao.md) e a multa em [conta.md](conta.md) (3.7). A reserva encontrada na devolução vem com as reservas (3.8). Base: Koha 26.05.05.
+> Status: tarefa 3.5, partes a, c e d; a suspensão está em [suspensao.md](suspensao.md) e a multa em [conta.md](conta.md) (3.7). A reserva encontrada na devolução está em [reservas.md](reservas.md), itens 13 a 15 (3.8b). Base: Koha 26.05.05.
 
 ## 1. Comportamento
 
@@ -19,6 +19,7 @@
    - uma transferência aberta para a unidade do balcão chega (Koha: `TransferArrived`);
    - uma transferência aberta para outra unidade continua, e a resposta avisa para onde o exemplar deve ir (`WrongTransfer`);
    - sem transferência aberta, se a unidade de volta é outra, o exemplar é enviado a ela (`AutomaticItemReturn` ligado, o padrão); com ele desligado, a resposta só avisa (`NeedsTransfer`). O motivo é `ReturnToHome` ou `ReturnToHolding`.
+   - o exemplar que atende a uma reserva não é enviado nem avisado (Koha: `ResFound`); o que fazer com ele vem da reserva.
 9. Os empréstimos encerrados e as transferências não entram no resumo da importação.
 
 ## 2. Origem no Koha

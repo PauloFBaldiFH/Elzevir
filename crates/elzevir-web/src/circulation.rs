@@ -20,9 +20,12 @@ use elzevir_app::staff::Permission;
 use elzevir_domain::catalog::{BranchId, Money};
 use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome};
 use elzevir_domain::checkout::{Alert, Confirm, Impossible, TooMany};
+use elzevir_domain::hold::HoldMatch;
 use elzevir_domain::patron::{PatronId, is_expired};
 use elzevir_domain::suspension::SuspensionEnd;
-use elzevir_web_templates::{DeskOption, I18n, LoanLine, Notice, StaffCheckin, StaffPatron};
+use elzevir_web_templates::{
+    AsideForm, DeskOption, I18n, LoanLine, Notice, StaffCheckin, StaffPatron,
+};
 use jiff::Zoned;
 use serde::Deserialize;
 
@@ -189,6 +192,14 @@ fn checkin_notices(
         LostOutcome::StaysLost => notices.push(refused(t.get("checkin-kept-lost"))),
         LostOutcome::NotLost => {}
     }
+    if let Some(hold) = done.hold {
+        let pickup = branch_name(hold.pickup);
+        notices.push(refused(match hold.found {
+            HoldMatch::Reserved(_) => t.get_with("checkin-hold-reserved", "branch", &pickup),
+            HoldMatch::InTransit(_) => t.get_with("checkin-hold-in-transit", "branch", &pickup),
+            HoldMatch::Waiting(_) => t.get("checkin-hold-waiting"),
+        }));
+    }
     let (key, branch) = match done.destination {
         Destination::Stays => return notices,
         Destination::Sent { to, .. } => ("checkin-send", to),
@@ -238,6 +249,10 @@ pub(crate) fn routes() -> axum::Router<AppState> {
         .route(
             "/equipe/circulacao/devolucao",
             get(checkin_desk).post(check_in),
+        )
+        .route(
+            "/equipe/circulacao/devolucao/reserva",
+            post(crate::patron_holds::set_aside),
         )
         .route("/equipe/acervo/emprestar", post(crate::pill_loans::lend))
         .route(
@@ -483,16 +498,18 @@ pub(crate) async fn circulate(
 /// `GET /equipe/circulacao/devolucao`: the checkin desk.
 pub(crate) async fn checkin_desk(State(state): State<AppState>, headers: HeaderMap) -> Response {
     match open(&state, &headers) {
-        Ok((session, _, _)) => checkin_page(&state, &session, None, Vec::new()).await,
+        Ok((session, _, _)) => checkin_page(&state, &session, None, (Vec::new(), None)).await,
         Err(response) => *response,
     }
 }
 
-async fn checkin_page(
+/// The checkin desk, with what the last action did and, when the Item answers a hold, the
+/// button that sets it aside.
+pub(crate) async fn checkin_page(
     state: &AppState,
     session: &ActiveSession,
     desk: Option<BranchId>,
-    notices: Vec<Notice>,
+    (notices, aside): (Vec<Notice>, Option<AsideForm>),
 ) -> Response {
     let desks = match desks(state, desk).await {
         Ok(desks) => desks,
@@ -505,6 +522,7 @@ async fn checkin_page(
         csrf: &session.csrf,
         desks,
         notices,
+        aside,
     });
     if refused && response.status() == StatusCode::OK {
         *response.status_mut() = StatusCode::UNPROCESSABLE_ENTITY;
@@ -543,12 +561,22 @@ pub(crate) async fn check_in(
     let actor = session.identity.id;
     let done = tokio::task::spawn_blocking(move || loans.circulate(actor, command)).await;
     let t = &state.inner.i18n;
+    let mut aside = None;
     let notices = match done {
         Ok(Ok(CirculationOutput::CheckedIn(back))) => {
             let names = match desks(&state, None).await {
                 Ok(names) => names,
                 Err(response) => return response,
             };
+            // A hold already waiting here needs nothing more.
+            aside = back
+                .hold
+                .filter(|hold| !matches!(hold.found, HoldMatch::Waiting(_)))
+                .map(|hold| AsideForm {
+                    hold: hold.found.hold().0,
+                    barcode: form.barcode.trim().to_owned(),
+                    desk: desk.0,
+                });
             checkin_notices(t, form.barcode.trim(), &back, &names)
         }
         Ok(Ok(_)) => Vec::new(),
@@ -558,7 +586,7 @@ pub(crate) async fn check_in(
             return StatusCode::SERVICE_UNAVAILABLE.into_response();
         }
     };
-    checkin_page(&state, &session, Some(desk), notices).await
+    checkin_page(&state, &session, Some(desk), (notices, aside)).await
 }
 
 #[cfg(test)]

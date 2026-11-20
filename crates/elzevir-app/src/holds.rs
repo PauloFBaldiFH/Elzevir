@@ -2,15 +2,13 @@
 //! Placing and cancelling holds at the desk (docs/specs/circulacao/reservas.md).
 
 use elzevir_domain::catalog::BranchId;
-use elzevir_domain::hold::HoldRefusal;
+use elzevir_domain::hold::{Found, HoldMatch, HoldRefusal};
 use elzevir_domain::patron::PatronId;
 use jiff::Zoned;
 use jiff::civil::Date;
 use serde::{Deserialize, Serialize};
 
-/// One hold.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct HoldId(pub i64);
+pub use elzevir_domain::hold::HoldId;
 
 /// What a hold asks for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -56,6 +54,39 @@ pub struct HoldPlaced {
     pub priority: u32,
 }
 
+/// The hold a checked-in Item answers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CheckinHold {
+    /// The hold, and whether it is already set aside.
+    pub found: HoldMatch,
+    /// Where it is picked up.
+    pub pickup: BranchId,
+}
+
+/// An Item set aside at the desk for a hold the checkin found.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HoldAside {
+    /// Which hold.
+    pub hold: HoldId,
+    /// The Item's barcode.
+    pub barcode: String,
+    /// The desk's branch, where the Item is.
+    pub desk: BranchId,
+    /// When, in the library's time zone.
+    pub at: Zoned,
+}
+
+/// What setting an Item aside did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SetAside {
+    /// Waiting here, or in transit to the pickup branch.
+    pub found: Found,
+    /// Where it is picked up.
+    pub pickup: BranchId,
+    /// The last day to pick it up, when it is waiting.
+    pub expires_on: Option<Date>,
+}
+
 /// Why a hold was not placed or cancelled.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum HoldRefused {
@@ -71,6 +102,10 @@ pub enum HoldRefused {
     /// The patron has no such hold.
     #[error("no such hold")]
     UnknownHold,
+    /// The Item cannot fill this hold: it is of another Instance, or the hold asks for
+    /// another Item.
+    #[error("the item cannot fill this hold")]
+    WrongItem,
     /// The library's rules refuse it.
     #[error(transparent)]
     Rules(#[from] HoldRefusal),
@@ -85,6 +120,7 @@ impl HoldRefused {
             Self::UnknownBarcode => "checkout-error-unknown-barcode",
             Self::UnknownBranch => "hold-error-unknown-branch",
             Self::UnknownHold => "hold-error-unknown-hold",
+            Self::WrongItem => "hold-error-wrong-item",
             Self::Rules(refusal) => match refusal {
                 HoldRefusal::PickupNotValid => "hold-error-pickup",
                 HoldRefusal::Restricted => "hold-error-restricted",
@@ -117,6 +153,10 @@ pub struct PatronHold {
     pub pickup: String,
     /// The day it was placed.
     pub placed_on: Date,
-    /// Its place in the queue.
+    /// Its place in the queue; 0 when set aside.
     pub priority: u32,
+    /// Set aside for the patron, or not yet.
+    pub found: Option<Found>,
+    /// The last day to pick it up, when it is waiting.
+    pub expires_on: Option<Date>,
 }

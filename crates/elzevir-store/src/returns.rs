@@ -5,7 +5,7 @@ use elzevir_app::circulation_rules::{CirculationOutput, CirculationRefusal, Rule
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
 use elzevir_app::loans::{CheckedIn, CheckinRefusal, CheckinRequest, checked_barcode};
 use elzevir_domain::account::OverdueStatus;
-use elzevir_domain::catalog::{BranchId, Money, PolicyId};
+use elzevir_domain::catalog::{BranchId, ItemId, Money, PolicyId};
 use elzevir_domain::checkin::{
     CheckinFacts, CheckinSettings, Destination, LoanOutcome, LostOutcome, OpenTransfer,
     ReturnPolicy, TransferReason, checkin as decide,
@@ -13,6 +13,7 @@ use elzevir_domain::checkin::{
 use elzevir_domain::circulation_rules::CirculationRule;
 use elzevir_domain::circulation_rules::{RuleScopeKey, effective_rule};
 use elzevir_domain::fine::FineSettings;
+use elzevir_domain::hold::HoldItem;
 use elzevir_domain::patron::PatronId;
 use elzevir_domain::suspension::{LateReturn, SuspensionSettings, suspension_until};
 use jiff::Zoned;
@@ -22,6 +23,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use crate::accounts::close_overdue;
 use crate::calendar::read_calendar;
 use crate::circulation_rules::read_rules;
+use crate::holds::{CheckinItem, hold_at_checkin, revert_waiting};
 use crate::loans::find_patron;
 use crate::overdue_fines::{FineMoment, LateLoan, update_overdue_fine};
 use crate::restrictions::{suspend, suspension};
@@ -47,6 +49,8 @@ struct Item {
     withdrawn: i64,
     lost: i64,
     replacement_price: Option<i64>,
+    instance: i64,
+    not_for_loan: i64,
 }
 
 struct Loan {
@@ -59,7 +63,7 @@ fn find_item(connection: &Connection, barcode: &str) -> rusqlite::Result<Option<
     connection
         .query_row(
             "SELECT id, home_branch, holding_branch, policy_id, withdrawn, lost,
-                    replacement_price_cents
+                    replacement_price_cents, instance_id, not_for_loan
              FROM items WHERE barcode = ?1",
             [barcode],
             |row| {
@@ -71,6 +75,8 @@ fn find_item(connection: &Connection, barcode: &str) -> rusqlite::Result<Option<
                     withdrawn: row.get(4)?,
                     lost: row.get(5)?,
                     replacement_price: row.get(6)?,
+                    instance: row.get(7)?,
+                    not_for_loan: row.get(8)?,
                 })
             },
         )
@@ -264,6 +270,22 @@ pub(crate) fn checkin(connection: &Connection, request: &CheckinRequest) -> Appl
     let loan = find_loan(connection, item.id).map_err(storage)?;
     let transfer = open_transfer(connection, item.id).map_err(storage)?;
     let rules = read_rules(connection).map_err(storage)?;
+    // Koha looks for the hold once the Item is at the desk's branch.
+    let hold = if item.withdrawn == 0 {
+        let at_desk = CheckinItem {
+            item: HoldItem {
+                id: ItemId(item.id),
+                home: item.home,
+                holding: request.desk,
+                policy: item.policy,
+            },
+            instance: item.instance,
+            not_for_loan: item.not_for_loan,
+        };
+        hold_at_checkin(connection, &rules, &at_desk).map_err(storage)?
+    } else {
+        None
+    };
     let facts = CheckinFacts {
         desk: request.desk,
         home: item.home,
@@ -273,6 +295,7 @@ pub(crate) fn checkin(connection: &Connection, request: &CheckinRequest) -> Appl
         due: loan.as_ref().map(|loan| loan.due.clone()),
         transfer: transfer.map(|(_, transfer)| transfer),
         policy: return_policy(&rules, &item),
+        held: hold.is_some(),
         at: request.at.clone(),
     };
     let done = decide(&facts, &CheckinSettings::default())
@@ -324,6 +347,10 @@ pub(crate) fn checkin(connection: &Connection, request: &CheckinRequest) -> Appl
         }
         _ => {}
     }
+    let hold = hold
+        .map(|found| revert_waiting(connection, found, request.desk, item.instance))
+        .transpose()
+        .map_err(storage)?;
     Ok(WriteOutput::Circulation(CirculationOutput::CheckedIn(
         CheckedIn {
             patron,
@@ -332,6 +359,7 @@ pub(crate) fn checkin(connection: &Connection, request: &CheckinRequest) -> Appl
             destination: done.destination,
             suspended_until,
             fine,
+            hold,
         },
     )))
 }

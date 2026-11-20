@@ -9,13 +9,15 @@ use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use elzevir_app::circulation_rules::{CirculationCommand, CirculationDeskError, CirculationOutput};
-use elzevir_app::holds::{HoldCancellation, HoldId, HoldLevel, HoldRequest, PatronHold};
+use elzevir_app::holds::{HoldAside, HoldCancellation, HoldId, HoldLevel, HoldRequest, PatronHold};
 use elzevir_domain::catalog::BranchId;
+use elzevir_domain::hold::Found;
 use elzevir_domain::patron::PatronId;
 use elzevir_web_templates::{HoldRow, I18n};
+use serde::Deserialize;
 
 use crate::AppState;
-use crate::circulation::{Outcome, now, ok, open, page, refusal_notices, refused};
+use crate::circulation::{Outcome, checkin_page, now, ok, open, page, refusal_notices, refused};
 use crate::patrons::shown;
 use crate::security::tokens_match;
 
@@ -29,9 +31,84 @@ pub(crate) fn hold_rows(t: &I18n, holds: &[PatronHold]) -> Vec<HoldRow> {
             barcode: hold.barcode.clone(),
             pickup: hold.pickup.clone(),
             day: shown(t, hold.placed_on),
-            position: hold.priority.to_string(),
+            status: match (hold.found, hold.expires_on) {
+                (Some(Found::Waiting), Some(until)) => {
+                    t.get_with("holds-waiting", "date", &shown(t, until))
+                }
+                (Some(_), _) => t.get("holds-in-transit"),
+                (None, _) => t.get_with("holds-position", "position", &hold.priority.to_string()),
+            },
         })
         .collect()
+}
+
+/// The checkin desk's button for a hold.
+#[derive(Deserialize)]
+pub(crate) struct AsideFields {
+    csrf: String,
+    hold: i64,
+    barcode: String,
+    desk: i64,
+}
+
+/// `POST /equipe/circulacao/devolucao/reserva`: sets the checked-in Item aside for the hold
+/// it answers, and shows the checkin desk again with where the Item goes.
+pub(crate) async fn set_aside(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Form(form): Form<AsideFields>,
+) -> Response {
+    let (session, _, loans) = match open(&state, &headers) {
+        Ok(opened) => opened,
+        Err(response) => return *response,
+    };
+    if !tokens_match(&session.csrf, &form.csrf) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let desk = BranchId(form.desk);
+    let command = CirculationCommand::SetHoldAside(HoldAside {
+        hold: HoldId(form.hold),
+        barcode: form.barcode,
+        desk,
+        at: now(&state),
+    });
+    let actor = session.identity.id;
+    let done = tokio::task::spawn_blocking(move || loans.circulate(actor, command)).await;
+    let t = &state.inner.i18n;
+    let notices = match done {
+        Ok(Ok(CirculationOutput::HoldSetAside(aside))) => match aside.expires_on {
+            Some(until) if aside.found == Found::Waiting => vec![ok(t.get_with(
+                "hold-set-aside-waiting",
+                "date",
+                &shown(t, until),
+            ))],
+            _ => {
+                let catalog = Arc::clone(&state.inner.opac.catalog);
+                let Ok(Ok(codes)) = tokio::task::spawn_blocking(move || catalog.codes()).await
+                else {
+                    return StatusCode::SERVICE_UNAVAILABLE.into_response();
+                };
+                let branch = codes
+                    .branches
+                    .into_iter()
+                    .find(|branch| branch.id == aside.pickup)
+                    .map(|branch| branch.name)
+                    .unwrap_or_default();
+                vec![refused(t.get_with(
+                    "hold-set-aside-transit",
+                    "branch",
+                    &branch,
+                ))]
+            }
+        },
+        Ok(Ok(_)) => Vec::new(),
+        Ok(Err(CirculationDeskError::Refused(refusal))) => refusal_notices(t, &refusal),
+        Ok(Err(CirculationDeskError::Busy)) => vec![refused(t.get("circulation-busy"))],
+        Ok(Err(CirculationDeskError::Unavailable(_))) | Err(_) => {
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
+    };
+    checkin_page(&state, &session, Some(desk), (notices, None)).await
 }
 
 /// What the hold form asked for.

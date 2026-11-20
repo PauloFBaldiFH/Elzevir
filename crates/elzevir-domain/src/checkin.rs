@@ -2,8 +2,8 @@
 //! What a checkin does to an Item: whether its loan ends, whether it is found, and where
 //! it must go next (docs/specs/circulacao/devolucao.md).
 //!
-//! Fines and suspensions on return come with the patron's account (doc 03, task 3.7) and
-//! restrictions; holds found on return come with holds (task 3.8).
+//! Fines, suspensions and the hold an Item answers are worked out by their own modules; the
+//! checkin only learns whether a hold keeps the Item here.
 
 use jiff::Zoned;
 
@@ -94,6 +94,8 @@ pub struct CheckinFacts {
     pub transfer: Option<OpenTransfer>,
     /// The `returnbranch` rule.
     pub policy: ReturnPolicy,
+    /// The Item answers a hold, so it is not sent back (Koha: `ResFound`).
+    pub held: bool,
     /// When.
     pub at: Zoned,
 }
@@ -181,7 +183,7 @@ pub enum CheckinRefusal {
 ///
 /// Koha: `C4::Circulation::AddReturn`, with `AllowReturnToBranch` `anywhere`,
 /// `CircControlReturnsBranch` `ItemHomeLibrary` and no branch transfer limits (the
-/// defaults); without holds, recalls, fines and suspensions, which come with their tasks.
+/// defaults); without recalls. Holds, fines and suspensions are decided elsewhere.
 pub fn checkin(
     facts: &CheckinFacts,
     settings: &CheckinSettings,
@@ -213,6 +215,7 @@ pub fn checkin(
         (Some(transfer), _) => Destination::WrongBranch { to: transfer.to },
         (None, Some(reason))
             if return_branch != facts.desk
+                && !facts.held
                 && loan != LoanOutcome::KeptLost
                 && lost != LostOutcome::StaysLost =>
         {
@@ -262,12 +265,22 @@ mod tests {
             due: Some(at(20)),
             transfer: None,
             policy: ReturnPolicy::Home,
+            held: false,
             at: at(19),
         }
     }
 
     fn run(facts: &CheckinFacts) -> Checkin {
         checkin(facts, &CheckinSettings::default()).unwrap()
+    }
+
+    #[test]
+    fn an_item_that_answers_a_hold_stays() {
+        let held = run(&CheckinFacts {
+            held: true,
+            ..facts()
+        });
+        assert_eq!(held.destination, Destination::Stays);
     }
 
     #[test]

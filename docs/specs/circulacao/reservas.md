@@ -1,6 +1,6 @@
 # Reservas
 
-> Status: tarefa 3.8, parte a (pedir, fila e cancelar, pela ficha do leitor). Atender a reserva na devolução, a retirada pelo leitor, o fim da espera e a disponibilidade no OPAC vêm nas próximas partes. Base: Koha 26.05.05.
+> Status: tarefa 3.8, partes a (pedir, fila e cancelar, pela ficha do leitor) e b (a devolução encontra a reserva e a equipe separa o exemplar). A retirada pelo leitor no empréstimo, o fim da espera e a disponibilidade no OPAC vêm nas próximas partes. Base: Koha 26.05.05.
 
 ## 1. Comportamento
 
@@ -24,8 +24,15 @@
 7. A reserva guarda o dia em que foi feita, a unidade de retirada e, na reserva de exemplar, o exemplar. Ela não fica pronta para retirada ao ser feita, mesmo com o exemplar na estante (`ReservesNeedReturns` ligado, o padrão).
 8. **Cancelar.** A equipe cancela uma reserva na ficha do leitor. A reserva sai da fila e vai para o histórico de reservas com o dia do cancelamento; as posições de quem estava atrás sobem.
 9. O histórico guarda o leitor só quando o leitor mantém histórico de leitura, como os empréstimos devolvidos.
-10. A ficha do leitor lista as reservas, da mais antiga à mais nova, com a posição na fila, o título, o exemplar (reserva de exemplar), a unidade de retirada e o dia.
+10. A ficha do leitor lista as reservas, da mais antiga à mais nova, com a posição na fila (ou "aguarda retirada até D", ou "em trânsito"), o título, o exemplar (reserva de exemplar ou reserva já separada), a unidade de retirada e o dia.
 11. A recusa mostra o motivo. Uma reserva feita mostra a posição na fila.
+12. **Separada.** Uma reserva separada para o leitor sai da fila (posição 0) e fica com um exemplar: "aguardando" na unidade de retirada, ou "em trânsito" para ela. A fila das outras se renumera 1, 2, 3...; uma reserva nova entra depois só das que não foram separadas.
+13. **Qual reserva o exemplar atende** (Koha: `CheckReserves`). Exemplar com situação "não emprestável" positiva não atende nenhuma. Entre as reservas da Instância que são de registro ou deste exemplar: primeiro a reserva já separada com ele (aguardando ou em trânsito); senão, a de menor posição que as regras deixam o exemplar atender, olhadas com a unidade do leitor da reserva e a política do exemplar: `holdallowed` "não permitido" não deixa; "só da unidade do exemplar" só deixa quando a unidade do leitor é a do exemplar; "do grupo local" não deixa, por não haver grupos. `hold_fulfillment_policy` "unidade do exemplar" exige retirada na unidade do exemplar; "unidade onde está" exige retirada onde ele está (a da devolução); "grupo" não deixa.
+14. **Na devolução** (Koha: `AddReturn`), o exemplar não baixado procura a reserva pelo item 13, já na unidade da devolução. Se a encontra:
+    1. a reserva que aguarda em outra unidade volta para a fila na posição 1 (as outras descem uma), deixa de aguardar e esquece o exemplar, a não ser que seja reserva de exemplar; a devolução a trata como reserva ainda não separada;
+    2. o exemplar não é mandado de volta à unidade de origem (item 7 de `devolucao.md`); a transferência que chega continua chegando;
+    3. a tela de devolução diz que o exemplar atende a uma reserva e onde ela é retirada, sem dados do leitor, e oferece o botão "Separar para a reserva"; a reserva que já aguarda ali só é avisada.
+15. **Separar** (Koha: `ModReserveAffect`, confirmado na tela de devolução). O exemplar precisa ser da Instância da reserva e, na reserva de exemplar, o próprio. Se a retirada é na unidade da devolução, a reserva passa a aguardar: guarda o dia em que começou a aguardar (o que já tinha, se já aguardava) e o último dia para retirar, esse dia mais `holds_pickup_period` (unidade de retirada, categoria do leitor, política do exemplar; sem regra, 7 dias de `ReservesMaxPickUpDelay`), em dias corridos; a transferência aberta do exemplar chega. Senão, a reserva fica em trânsito e o exemplar é mandado da unidade da devolução para a de retirada, com motivo `Reserve`, no lugar da transferência aberta. A tela diz o último dia ou para onde mandar.
 
 ## 2. Origem no Koha
 
@@ -33,11 +40,12 @@
 - `C4::Reserves::CanBookBeReserved`, `CanItemBeReserved`, `CalculatePriority`, `AddReserve`, `FixPriority`.
 - `Koha::Item::pickup_locations`, `Koha::Biblio::pickup_locations`, `C4::Circulation::GetBranchItemRule`.
 - `Koha::Hold::cancel`.
+- `C4::Reserves::CheckReserves`, `ModReserveAffect`, `C4::Circulation::AddReturn`; `Koha::Hold::set_waiting`, `set_transfer`, `revert_found`; `circ/returns.pl`.
 - Testes: `reference/koha/t/db_dependent/Reserves.t`, `Holds.t`.
 
 ## 3. Paridade
 
-`exigida`. Prova: `crates/elzevir-domain/src/hold.rs` (cada recusa do item 4, unidades de retirada), `crates/elzevir-store/tests/checkout.rs` (fila, posições depois do cancelamento, dívida) e `crates/elzevir/tests/patrons.rs` (pedir e cancelar pela ficha). `crates/elzevir/tests/holds_oracle.rs` reproduz `scenarios/circulacao/reservas.koha.json` (gravado por `tools/holds-recorder/record.py` pela API REST de reservas do Koha): sem reservas permitidas, reserva de registro, segunda reserva no mesmo registro, reserva de exemplar repetida, limite por dia, limite total, cancelamento e a fila que sobra dão as mesmas respostas e posições que o Koha. A unidade de retirada não entra na gravação, porque o oráculo tem uma unidade só.
+`exigida`. Prova: `crates/elzevir-domain/src/hold.rs` (cada recusa do item 4, unidades de retirada), `crates/elzevir-store/tests/checkout.rs` (fila, posições depois do cancelamento, dívida) e `crates/elzevir/tests/patrons.rs` (pedir e cancelar pela ficha; separar na devolução). A parte b tem prova em `crates/elzevir-domain/src/hold.rs` (item 13) e `crates/elzevir-store/tests/checkout.rs` (itens 14 e 15: separar aguardando, voltar à fila, trânsito e chegada). `crates/elzevir/tests/holds_aside_oracle.rs` reproduz `scenarios/circulacao/reservas-devolucao.koha.json` (gravado por `tools/holds-recorder/set_aside.py` com `circ/returns.pl`): a devolução encontra a reserva de registro, e separar a deixa aguardando, na posição 0, com o exemplar e o mesmo último dia que o Koha, com `holds_pickup_period` vazio (7 dias) e com 3. O trânsito para outra unidade não entra na gravação, porque o oráculo tem uma unidade só. `crates/elzevir/tests/holds_oracle.rs` reproduz `scenarios/circulacao/reservas.koha.json` (gravado por `tools/holds-recorder/record.py` pela API REST de reservas do Koha): sem reservas permitidas, reserva de registro, segunda reserva no mesmo registro, reserva de exemplar repetida, limite por dia, limite total, cancelamento e a fila que sobra dão as mesmas respostas e posições que o Koha. A unidade de retirada não entra na gravação, porque o oráculo tem uma unidade só.
 
 ## 4. Casos de borda
 
@@ -45,10 +53,13 @@
 2. Dívida igual a `maxoutstanding`: não recusa (o Koha compara com "maior que").
 3. Crédito não usado diminui a dívida do item 3.3, ao contrário do empréstimo, que só olha os débitos.
 4. Duas reservas de registro do mesmo leitor na mesma Instância: a segunda é recusada pelo padrão de `holds_per_record`.
+5. Exemplar de reserva em trânsito devolvido na unidade de retirada: a transferência chega e a devolução aponta a mesma reserva; separar a faz aguardar.
+6. Separar de novo uma reserva que já aguarda ali mantém o dia em que começou a aguardar.
+7. Exemplar baixado: a devolução é recusada antes (`BlockReturnOfWithdrawnItems`); mesmo sem o bloqueio, ele não procura reserva.
 
 ## 5. Configuração
 
-`maxoutstanding`, `maxreserves`, `ReservesControlBranch`, `ReservesNeedReturns`, `AllowHoldsOnDamagedItems` e `AllowHoldsOnPatronsPossessions` seguem os padrões do Koha até chegarem ao `elzevir.toml`. As regras dos itens 4 e 5 são regras de circulação comuns.
+`maxoutstanding`, `maxreserves`, `ReservesControlBranch`, `ReservesNeedReturns`, `AllowHoldsOnDamagedItems`, `AllowHoldsOnPatronsPossessions`, `ReservesMaxPickUpDelay` (7), `ExcludeHolidaysFromMaxPickUpDelay` (desligada), `ConfirmFutureHolds` (0), `LocalHoldsPriority` (nenhuma), `TrapHoldsOnOrder` (ligada) e `HoldsAutoFill` (desligada: a equipe confirma) seguem os padrões do Koha até chegarem ao `elzevir.toml`. As regras dos itens 4 e 5 são regras de circulação comuns.
 
 ## 6. Fora desta parte
 
@@ -56,3 +67,4 @@
 - Reserva por tipo de material e por grupo de exemplares; grupos de unidades; limites de transferência entre unidades.
 - Taxa de reserva (`HoldFeeMode`); restrição de idade; reservas de leitores pela internet.
 - Passar por cima das regras (`AllowHoldPolicyOverride`).
+- Fila de reservas calculada (`RealTimeHoldsQueue`), lista de exemplares a buscar, mesa de retirada (`desk_id`) e avisos ao leitor (tarefa 3.9).

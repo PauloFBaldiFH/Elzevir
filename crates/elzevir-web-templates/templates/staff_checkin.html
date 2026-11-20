@@ -13,5 +13,12 @@
 </form>
 <p class="form-hint">{{ t.get("checkin-hint") }}</p>
 {% for notice in notices %}<p class="codes-alert{% if notice.refused %} codes-refused{% endif %}" role="{% if notice.refused %}alert{% else %}status{% endif %}">{{ notice.text }}</p>{% endfor %}
+{% if let Some(aside) = aside %}<form method="post" action="/equipe/circulacao/devolucao/reserva" class="hold-aside">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="hold" value="{{ aside.hold }}">
+  <input type="hidden" name="barcode" value="{{ aside.barcode }}">
+  <input type="hidden" name="desk" value="{{ aside.desk }}">
+  <button type="submit" autofocus>{{ t.get("checkin-hold-set-aside") }}</button>
+</form>{% endif %}
 </div>
 {% endblock %}
