@@ -991,3 +991,20 @@ hold-error-day-limit = The patron placed as many holds today as allowed.
 hold-error-too-many = The patron has as many holds as the rules allow.
 hold-error-not-reservable = This item cannot be held.
 hold-error-other-branch = Only patrons of the item's branch may hold it.
+
+## Overdue notices by e-mail (docs/specs/circulacao/avisos.md)
+
+notice-overdue-subject-1 = Overdue items at { $library }
+notice-overdue-subject-2 = Second notice: overdue items at { $library }
+notice-overdue-subject-3 = Last notice: overdue items at { $library }
+notice-overdue-body =
+    Dear { $name },
+
+    According to our records, these items borrowed from { $library } are overdue:
+
+    { $items }
+
+    Please return or renew them as soon as possible.
+
+    { $library }
+notice-overdue-item = - { $title } ({ $barcode }), due { $date }

@@ -26,6 +26,7 @@ pub mod marc_mapping;
 pub mod matching;
 pub mod material;
 pub mod memory;
+pub mod notices;
 pub mod opac;
 pub mod parallelism;
 pub mod patrons;

@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Overdue notice rules and the queue of notices (docs/specs/circulacao/avisos.md).
+//! Overdue notice rules, the queue of notices and what the sender reads from it
+//! (docs/specs/circulacao/avisos.md).
 
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 
 use elzevir_app::circulation_rules::{CirculationOutput, OverdueNoticeRule};
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
+use elzevir_app::notices::{
+    NoticeId, NoticeItem, NoticeOutcome, NoticeQueue, NoticeQueueError, PendingEmail,
+};
 use elzevir_domain::calendar::Calendar;
 use elzevir_domain::circulation_rules::RuleScopeKey;
 use elzevir_domain::notice::{
@@ -21,7 +25,7 @@ use rusqlite::{Connection, params};
 use crate::calendar::read_calendar;
 use crate::circulation_rules::scope_exists;
 use crate::restrictions::restrict_for_overdues;
-use crate::{CommandFailed, StoreError};
+use crate::{CommandFailed, ElzevirStore, StoreError};
 
 type Applied = Result<WriteOutput, CommandFailed<WriteRefusal>>;
 
@@ -300,4 +304,99 @@ fn enqueue(
         )?;
     }
     Ok(true)
+}
+
+/// Applies `circ.mark_notice`: a pending notice becomes sent or failed.
+///
+/// Koha: `C4::Letters::_set_message_status`.
+pub(crate) fn mark(
+    connection: &Connection,
+    notice: NoticeId,
+    outcome: NoticeOutcome,
+    at: &Zoned,
+) -> Applied {
+    connection
+        .execute(
+            "UPDATE notices SET status = ?2, sent_at = ?3
+             WHERE id = ?1 AND status = 'pending'",
+            params![notice.0, outcome.as_str(), at.to_string()],
+        )
+        .map_err(storage)?;
+    Ok(WriteOutput::Circulation(CirculationOutput::NoticeMarked))
+}
+
+/// The oldest overdue notices still pending by e-mail, at most `limit`, with their Items.
+pub(crate) fn pending_emails(
+    connection: &Connection,
+    limit: usize,
+) -> rusqlite::Result<Vec<PendingEmail>> {
+    let mut statement = connection.prepare_cached(
+        "SELECT n.id, n.to_address, p.first_name, p.surname, b.name, b.email, n.level
+         FROM notices n
+         JOIN patrons p ON p.id = n.patron_id
+         JOIN branches b ON b.id = n.branch_id
+         WHERE n.status = 'pending' AND n.transport = 'email' AND n.kind = 'OVERDUE'
+           AND n.to_address IS NOT NULL
+         ORDER BY n.id LIMIT ?1",
+    )?;
+    let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+    let notices = statement
+        .query_map([limit], |row| {
+            let first: Option<String> = row.get(2)?;
+            let surname: String = row.get(3)?;
+            let level = NoticeLevel::from_number(row.get(6)?).ok_or_else(|| {
+                rusqlite::Error::FromSqlConversionFailure(6, Type::Integer, "no such level".into())
+            })?;
+            Ok(PendingEmail {
+                id: NoticeId(row.get(0)?),
+                to: row.get(1)?,
+                name: first.map_or_else(|| surname.clone(), |first| format!("{first} {surname}")),
+                library: row.get(4)?,
+                reply_to: row
+                    .get::<_, Option<String>>(5)?
+                    .filter(|email| !email.trim().is_empty()),
+                level,
+                items: Vec::new(),
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    notices
+        .into_iter()
+        .map(|mut notice| {
+            notice.items = notice_items(connection, notice.id)?;
+            Ok(notice)
+        })
+        .collect()
+}
+
+fn notice_items(connection: &Connection, notice: NoticeId) -> rusqlite::Result<Vec<NoticeItem>> {
+    let mut statement = connection.prepare_cached(
+        "SELECT coalesce(i.barcode, ''), n.title, x.due
+         FROM notice_items x
+         JOIN items i ON i.id = x.item_id
+         JOIN instances n ON n.id = i.instance_id
+         WHERE x.notice_id = ?1
+         ORDER BY x.due, i.barcode",
+    )?;
+    statement
+        .query_map([notice.0], |row| {
+            let due: String = row.get(2)?;
+            let due = due.parse().map_err(|error: jiff::Error| {
+                rusqlite::Error::FromSqlConversionFailure(2, Type::Text, error.into())
+            })?;
+            Ok(NoticeItem {
+                barcode: row.get(0)?,
+                title: row.get(1)?,
+                due,
+            })
+        })?
+        .collect()
+}
+
+impl NoticeQueue for ElzevirStore {
+    fn pending_emails(&self, limit: usize) -> Result<Vec<PendingEmail>, NoticeQueueError> {
+        self.readers()
+            .read(|c| pending_emails(c, limit))
+            .map_err(|error| NoticeQueueError(error.to_string()))
+    }
 }

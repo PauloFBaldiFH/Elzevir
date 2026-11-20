@@ -767,6 +767,10 @@ const MIGRATIONS: &[&str] = &[
          name TEXT PRIMARY KEY,
          day  TEXT NOT NULL
      );",
+    // 56: when the sender sent a notice, or gave up on it (docs/specs/circulacao/avisos.md,
+    // part c).
+    "ALTER TABLE notices ADD COLUMN sent_at TEXT;
+     CREATE INDEX notices_pending ON notices (id) WHERE status = 'pending';",
 ];
 
 /// The migration that creates `match_keys`.

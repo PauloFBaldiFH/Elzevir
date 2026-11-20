@@ -17,6 +17,7 @@ use elzevir_app::circulation_rules::{
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::loans::{CheckoutRefusal, CheckoutRequest};
+use elzevir_app::notices::{NoticeOutcome, NoticeQueue};
 use elzevir_app::patrons::{
     CategoryChange, PatronCommand, PatronFields, PatronOutput, ReadingHistory,
 };
@@ -511,4 +512,72 @@ fn a_restricting_level_blocks_the_patron_until_the_staff_lift_it() {
         })
         .unwrap();
     assert_eq!(restricted, 0);
+}
+
+#[test]
+fn the_sender_reads_pending_emails_with_their_items_and_marks_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(&dir);
+    let ana = library.patron("1", library.adults, Some("ana@example.org"));
+    let bia = library.patron("2", library.adults, None);
+    library.lend("0001", ana, library.central, "2026-11-02");
+    library.lend("0002", ana, library.central, "2026-11-02");
+    library.lend("0003", bia, library.central, "2026-11-02");
+    library
+        .rule(
+            None,
+            library.adults,
+            vec![level(NoticeLevel::First, 3, EMAIL)],
+        )
+        .unwrap();
+    assert_eq!(library.run("2026-11-19"), 2);
+
+    // Bia has no e-mail: her notice is on paper and the sender does not see it.
+    let pending = library.store.pending_emails(10).unwrap();
+    assert_eq!(pending.len(), 1);
+    let notice = &pending[0];
+    assert_eq!(
+        (
+            notice.to.as_str(),
+            notice.name.as_str(),
+            notice.library.as_str()
+        ),
+        ("ana@example.org", "Silva", "Central")
+    );
+    assert_eq!(notice.level, NoticeLevel::First);
+    let barcodes: Vec<_> = notice
+        .items
+        .iter()
+        .map(|item| item.barcode.as_str())
+        .collect();
+    assert_eq!(barcodes, ["0001", "0002"]);
+    assert_eq!(notice.items[0].title, "Dom Casmurro");
+
+    let mark = |outcome| {
+        submit(
+            &library.store,
+            WriteCommand::Circulation(CirculationCommand::MarkNotice {
+                notice: notice.id,
+                outcome,
+                at: at("2026-11-19"),
+            }),
+        )
+        .unwrap()
+    };
+    mark(NoticeOutcome::Sent);
+    assert!(library.store.pending_emails(10).unwrap().is_empty());
+    // A notice already sent stays sent.
+    mark(NoticeOutcome::Failed);
+    let status: String = library
+        .store
+        .readers()
+        .read(|c| {
+            c.query_row(
+                "SELECT status FROM notices WHERE transport = 'email'",
+                [],
+                |row| row.get(0),
+            )
+        })
+        .unwrap();
+    assert_eq!(status, "sent");
 }

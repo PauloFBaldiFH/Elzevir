@@ -52,6 +52,12 @@ name = "doctest-file"
 version = "=1.1.1"
 allow = ["0BSD"]
 
+# lettre's quoted-printable encoder, for the e-mail notices: 0BSD, as above.
+[[licenses.exceptions]]
+name = "quoted_printable"
+version = "=0.5.2"
+allow = ["0BSD"]
+
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
