@@ -5,6 +5,7 @@
 //! (English first, then Brazilian Portuguese; docs/arquitetura/04-decisoes.md, §1 item 7).
 
 mod board;
+mod opac_account;
 mod staff_bar;
 mod staff_calendar;
 mod staff_catalog;
@@ -18,6 +19,7 @@ mod staff_record_form;
 mod staff_registries;
 
 pub use board::{BoardCard, KindChoice, StaffBoardNote, note_color};
+pub use opac_account::{OpacAccount, OpacLogin, PatronPanel};
 pub use staff_bar::{BarLink, BarScope, ScopeKind, StaffBar};
 pub use staff_calendar::{DayCell, EntryLine, StaffCalendar};
 pub use staff_catalog::{
@@ -41,9 +43,9 @@ pub use staff_notice_rules::{
     StaffPrintNotices,
 };
 pub use staff_patrons::{
-    AccountRow, AsideForm, CategoryLine, DeskOption, HoldRow, LoanLine, Notice, PatronFormValues,
-    PatronLine, RestrictionRow, SlipLine, SlipSection, StaffCheckin, StaffCheckoutSlip,
-    StaffPatron, StaffPatronCategories, StaffPatronForm, StaffPatrons,
+    AccountRow, AsideForm, CategoryLine, DeskOption, HoldRow, LoanLine, Notice, PasswordSection,
+    PatronFormValues, PatronLine, RestrictionRow, SlipLine, SlipSection, StaffCheckin,
+    StaffCheckoutSlip, StaffPatron, StaffPatronCategories, StaffPatronForm, StaffPatrons,
 };
 pub use staff_record_fields::{FieldEntry, FieldGroup, FieldValue, ItemFields, RecordFields};
 pub use staff_record_form::{
@@ -192,6 +194,8 @@ pub struct OpacHome<'a> {
     pub recent: Vec<RecentCard>,
     /// The public notes of the board, newest first; empty shows the welcome note.
     pub notes: Vec<BoardCard>,
+    /// The "Patron account" panel.
+    pub panel: PatronPanel,
 }
 
 /// One Instance of the home page's "last catalogued" strip.
@@ -489,6 +493,9 @@ mod tests {
             include_str!("../templates/staff_calendar.html"),
             include_str!("../templates/staff_board_note.html"),
             include_str!("../templates/board_notes.html"),
+            include_str!("../templates/patron_panel.html"),
+            include_str!("../templates/opac_login.html"),
+            include_str!("../templates/opac_account.html"),
         ];
         let mut missing = Vec::new();
         for source in templates {

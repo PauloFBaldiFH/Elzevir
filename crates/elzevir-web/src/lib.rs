@@ -33,6 +33,8 @@ mod opac;
 mod patron_account;
 mod patron_form;
 mod patron_holds;
+mod patron_login;
+mod patron_password;
 mod patrons;
 mod pill_loans;
 mod print_notices;
@@ -105,6 +107,7 @@ pub struct AppState {
     notices: Option<Arc<dyn elzevir_app::notices::NoticeQueue>>,
     board: Option<Arc<dyn elzevir_app::board::NoticeBoard>>,
     pending: Option<Arc<dyn elzevir_app::pending::PendingReader>>,
+    accounts: Option<Arc<dyn elzevir_app::patron_account::PatronAccounts>>,
 }
 
 struct Inner {
@@ -114,6 +117,8 @@ struct Inner {
     staff_ports: StaffPorts,
     records: opac::RecordCache,
     sessions: Sessions,
+    patron_sessions: session::SessionStore<elzevir_app::patron_account::PatronIdentity>,
+    attempts: patron_login::Attempts,
     i18n: I18n,
     config: WebConfig,
 }
@@ -144,6 +149,7 @@ impl AppState {
             notices: None,
             board: None,
             pending: None,
+            accounts: None,
             inner: Arc::new(Inner {
                 staff,
                 memory,
@@ -151,6 +157,8 @@ impl AppState {
                 staff_ports,
                 records: opac::RecordCache::default(),
                 sessions: Sessions::new(config.session_idle),
+                patron_sessions: session::SessionStore::new(patron_login::PATRON_IDLE),
+                attempts: patron_login::Attempts::default(),
                 i18n,
                 config,
             }),
@@ -222,6 +230,17 @@ impl AppState {
     #[must_use]
     pub fn with_pending(mut self, reader: Arc<dyn elzevir_app::pending::PendingReader>) -> Self {
         self.pending = Some(reader);
+        self
+    }
+
+    /// Connects the patron accounts of the OPAC (docs/specs/opac/conta-do-leitor.md).
+    /// Without them the sign-in panel stays a placeholder and `/conta` answers 404.
+    #[must_use]
+    pub fn with_patron_accounts(
+        mut self,
+        accounts: Arc<dyn elzevir_app::patron_account::PatronAccounts>,
+    ) -> Self {
+        self.accounts = Some(accounts);
         self
     }
 }
@@ -316,12 +335,29 @@ pub fn router(state: AppState) -> Router {
         .route("/equipe/logout", post(staff::log_out))
         .merge(static_routes())
         .merge(board_routes())
+        .merge(patron_routes())
         .merge(admin_routes())
         .merge(authority_routes())
         .merge(importing::routes())
         .merge(circulation::routes())
         .layer(axum::middleware::map_response(security::headers))
         .with_state(state)
+}
+
+/// The patron's side of the OPAC and the staff setting their password
+/// (docs/specs/opac/conta-do-leitor.md).
+fn patron_routes() -> Router<AppState> {
+    Router::new()
+        .route("/conta", get(patron_login::account))
+        .route(
+            "/conta/entrar",
+            get(patron_login::login_form).post(patron_login::log_in_patron),
+        )
+        .route("/conta/sair", post(patron_login::log_out_patron))
+        .route(
+            "/equipe/leitores/{id}/senha",
+            post(patron_password::set_password),
+        )
 }
 
 /// The notice board's form (docs/specs/interface/mural.md, item 7).

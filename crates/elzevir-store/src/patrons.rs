@@ -34,6 +34,22 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &PatronCommand) -> Applied {
             }
             PatronOutput::Viewed(*patron)
         }
+        PatronCommand::SetPassword {
+            patron,
+            password_hash,
+        } => {
+            let changed = tx
+                .connection()
+                .execute(
+                    "UPDATE patrons SET password_hash = ?1 WHERE id = ?2",
+                    params![password_hash, patron.0],
+                )
+                .map_err(StoreError::from)?;
+            if changed == 0 {
+                return Err(refused(PatronRefusal::UnknownPatron));
+            }
+            PatronOutput::PasswordSet(*patron)
+        }
     };
     Ok(WriteOutput::Patrons(output))
 }

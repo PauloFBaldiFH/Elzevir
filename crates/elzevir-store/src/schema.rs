@@ -834,6 +834,9 @@ const MIGRATIONS: &[&str] = &[
          day         TEXT NOT NULL,
          row_version INTEGER NOT NULL DEFAULT 1
      ) STRICT;",
+    // 60: the patron's OPAC password, as an Argon2id hash (docs/specs/opac/
+    // conta-do-leitor.md, items 1 to 4); NULL is no OPAC access.
+    "ALTER TABLE patrons ADD COLUMN password_hash TEXT;",
 ];
 
 /// The migration that creates `match_keys`.
