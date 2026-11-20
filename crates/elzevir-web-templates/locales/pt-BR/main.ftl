@@ -764,3 +764,15 @@ board-error-empty = O recado não pode ficar vazio.
 board-error-long = O recado passa de 1.400 caracteres.
 board-error-full = O mural já guarda 50 recados. Remova um antigo antes.
 board-error-stale = Outra pessoa mudou este recado enquanto você editava. Seu texto está abaixo; salve de novo para substituir o dela.
+home-pending-overdue = { $count ->
+    [one] 1 empréstimo em atraso
+   *[other] { $count } empréstimos em atraso
+}
+home-pending-holds = { $count ->
+    [one] 1 reserva na estante
+   *[other] { $count } reservas na estante
+}
+home-pending-notices = { $count ->
+    [one] 1 aviso para imprimir
+   *[other] { $count } avisos para imprimir
+}

@@ -21,6 +21,7 @@ use elzevir_app::notices::{NoticeAbout, NoticeOutcome, NoticeQueue};
 use elzevir_app::patrons::{
     CategoryChange, PatronCommand, PatronFields, PatronOutput, ReadingHistory,
 };
+use elzevir_app::pending::{PendingCounts, PendingReader};
 use elzevir_domain::catalog::{BranchId, InstanceId};
 use elzevir_domain::checkout::Impossible;
 use elzevir_domain::circulation_rules::RuleScopeKey;
@@ -557,6 +558,17 @@ fn the_sender_and_the_print_screen_read_pending_notices_with_their_items() {
         .collect();
     assert_eq!(barcodes, ["0001", "0002"]);
     assert_eq!(notice.items[0].title, "Dom Casmurro");
+    // The staff home counts the desk's work at a time, naming no patron.
+    let counts = |day| library.store.pending(at(day).timestamp()).unwrap();
+    assert_eq!(
+        counts("2026-11-19"),
+        PendingCounts {
+            overdue: 3,
+            waiting_holds: 0,
+            notices_to_print: 1,
+        }
+    );
+    assert_eq!(counts("2026-11-03").overdue, 0);
 
     let mark = |outcome| {
         submit(

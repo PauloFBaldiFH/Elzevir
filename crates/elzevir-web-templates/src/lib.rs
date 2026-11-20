@@ -438,6 +438,17 @@ pub struct StaffHome<'a> {
     pub notes: Vec<BoardCard>,
     /// Whether the board is connected, so notes can be written.
     pub board: bool,
+    /// Pending work shown on the module cards; only counts above zero.
+    pub pending: Vec<PendingChip>,
+}
+
+/// One count of pending work on a module card (interface spec, §22 item 14).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingChip {
+    /// The Fluent key of the module's name, which says on which card it goes.
+    pub module: &'static str,
+    /// The count in words.
+    pub text: String,
 }
 
 #[cfg(test)]

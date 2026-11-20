@@ -45,6 +45,7 @@ mod notices;
 mod overdue_fines;
 mod patron_desk;
 mod patrons;
+mod pending;
 mod places;
 mod preview;
 mod readers;

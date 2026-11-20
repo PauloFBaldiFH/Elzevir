@@ -30,6 +30,7 @@ use elzevir_app::loans::{
 use elzevir_app::patrons::{
     CategoryChange, PatronCommand, PatronFields, PatronOutput, ReadingHistory,
 };
+use elzevir_app::pending::PendingReader;
 use elzevir_domain::account::{CreditType, PaymentRefusal};
 use elzevir_domain::catalog::{BranchId, InstanceId, Money};
 use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome, TransferReason};
@@ -1320,6 +1321,8 @@ fn a_hold_waiting_elsewhere_goes_back_to_the_queue_and_its_item_in_transit() {
         )
         .unwrap();
     assert_eq!(queue(&library), "0W1 0W2");
+    let now: jiff::Timestamp = "2026-11-22T15:00:00Z".parse().unwrap();
+    assert_eq!(library.store.pending(now).unwrap().waiting_holds, 2);
     let shown = library.store.holds(bia).unwrap();
     assert_eq!(
         (shown[0].found, shown[0].expires_on),

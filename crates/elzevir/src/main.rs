@@ -414,7 +414,8 @@ fn web_app(
     .with_rules(Arc::clone(store) as _)
     .with_calendar(Arc::clone(store) as _)
     .with_notices(Arc::clone(store) as _)
-    .with_board(Arc::clone(store) as _);
+    .with_board(Arc::clone(store) as _)
+    .with_pending(Arc::clone(store) as _);
     Ok(WebRuntime {
         router: elzevir_web::router(state.clone()),
         state,

@@ -587,6 +587,12 @@ Base: rascunho de tela inicial de Paulo (`elzevir-home-v11`, 2026-11-20), adapta
 11. **Tela inicial como no rascunho.** À esquerda fica o mural de recados, com a nota de boas-vindas. À direita ficam os nove módulos do rascunho, na mesma ordem e sem títulos de grupo: Circulação, Usuários, Catalogação, Autoridades, Repositórios, Seriados e Aquisições, Relatórios, Ferramentas e Administração. O menu hambúrguer, no canto superior esquerdo, lista os mesmos módulos e, abaixo deles, as telas que já existem (importação, avisos impressos, unidades e políticas, regras, avisos e calendário).
 13. **Placeholders (Paulo, 2026-11-20).** O que o rascunho mostra e ainda não existe aparece desabilitado, com a marca "em breve", e não leva a lugar nenhum. Isso vale para módulos, escopos (Autoridades, Repositórios e Renovação, que respondem 404 em `/equipe/busca`), itens do "Novo", IA, Listas, Chat, Calendário, Notificações, pesquisa avançada, "Mostrar todos" e "Personalizar". Cada um vira uma entrada real do registro quando a tela existir.
 12. **Página pontilhada.** O fundo de todas as telas, da equipe e do OPAC, é o pontilhado claro do rascunho, com cores próprias no tema escuro. O OPAC usa o mesmo símbolo, com o rótulo "Catálogo Online · OPAC".
+14. **Pendências nos módulos.** Para quem tem permissão de circulação, o cartão Circulação da tela inicial mostra três contagens:
+    - empréstimos em atraso, sem contar exemplares perdidos;
+    - reservas esperando na estante;
+    - avisos na fila de impressão.
+
+    São só números, de uma leitura no pool (`PendingReader`), sem nome de leitor. Contagem zero não aparece. Se a leitura falhar, o cartão fica sem contagem e a página abre normalmente. O atraso é calculado na hora do pedido, comparando o vencimento guardado com o instante atual.
 
 ## 23. Início do OPAC
 
