@@ -7,7 +7,8 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use elzevir_app::catalog::{
-    CatalogReadError, CatalogReader, CodeLists, InstanceView, ItemStatus, ItemView, Named, Place,
+    CatalogReadError, CatalogReader, CodeLists, InstanceView, ItemState, ItemStatus, ItemView,
+    Named, Place,
 };
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::listing::{CatalogListing, Family, FamilyCursor, FamilyHead};
@@ -61,14 +62,14 @@ impl CatalogReader for Catalog {
     fn item_statuses(
         &self,
         instances: &[InstanceId],
-    ) -> Result<Vec<(InstanceId, ItemStatus)>, CatalogReadError> {
+    ) -> Result<Vec<(InstanceId, ItemState)>, CatalogReadError> {
         Ok(instances
             .iter()
             .flat_map(|id| {
                 self.items(*id)
                     .unwrap_or_default()
                     .into_iter()
-                    .map(move |item| (*id, item.status))
+                    .map(move |item| (*id, item.state()))
             })
             .collect())
     }

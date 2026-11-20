@@ -695,6 +695,7 @@ mod tests {
             location: None,
             status,
             due: None,
+            movement: crate::catalog::Movement::Shelved,
         }
     }
 

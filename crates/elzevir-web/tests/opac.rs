@@ -14,7 +14,7 @@ use std::sync::atomic::Ordering;
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use elzevir_app::catalog::{InstanceView, ItemStatus, ItemView};
+use elzevir_app::catalog::{InstanceView, ItemStatus, ItemView, Movement};
 use elzevir_app::material::{CarrierKind, ContentKind, Material};
 use elzevir_app::memory::{MemoryProbe, MemoryReport};
 use elzevir_app::search::SearchHit;
@@ -93,6 +93,7 @@ fn item(id: i64, status: ItemStatus) -> ItemView {
         location: Some(SublocationId(1)),
         status,
         due: None,
+        movement: Movement::Shelved,
     }
 }
 
@@ -286,6 +287,36 @@ async fn a_new_version_is_rendered_again() {
     assert_eq!(catalog.reads.load(Ordering::SeqCst), 2);
     assert_ne!(before, after);
     assert_eq!(after.matches(">Available<").count(), 2);
+}
+
+#[tokio::test]
+async fn loans_transfers_and_holds_show_at_once_without_a_new_version() {
+    let catalog = Arc::new(catalog());
+    let app = app(Arc::clone(&catalog), vec![hit(1, "Perfil")]);
+    let (_, before) = get(&app, "/record/1", false).await;
+    assert!(before.contains(">Available<"));
+    {
+        let mut records = catalog.records.lock().unwrap();
+        let items = &mut records.get_mut(&1).unwrap().2;
+        items[0].due = Some(jiff::civil::date(2026, 12, 4));
+        items.push(ItemView {
+            movement: Movement::InTransit,
+            ..item(3, ItemStatus::default())
+        });
+        items.push(ItemView {
+            movement: Movement::OnHoldShelf,
+            ..item(4, ItemStatus::default())
+        });
+    }
+    let (_, after) = get(&app, "/record/1", false).await;
+    // The body comes from the cache; only the Items are read again.
+    assert_eq!(catalog.reads.load(Ordering::SeqCst), 1);
+    assert!(after.contains("On loan, due 2026-12-04"), "{after}");
+    assert!(after.contains("In transit") && after.contains("On hold for a reader"));
+    assert!(!after.contains(">Available<"));
+    assert!(after.contains("elzevir-icons.svg#status-on-loan"));
+    let (_, results) = get(&app, "/search?q=perfil", false).await;
+    assert!(results.contains("No copies available"), "{results}");
 }
 
 #[tokio::test]

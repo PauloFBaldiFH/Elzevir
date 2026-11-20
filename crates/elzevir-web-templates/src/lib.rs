@@ -299,8 +299,8 @@ pub struct ItemLine {
     pub call_number: Option<String>,
     /// Whether it is available.
     pub available: bool,
-    /// Message key of its status.
-    pub status: &'static str,
+    /// Its status, as shown.
+    pub status: String,
     /// Symbol of its status's icon in `/static/elzevir-icons.svg`.
     pub icon: &'static str,
 }
@@ -342,8 +342,6 @@ pub struct OpacRecordBody<'a> {
     pub notes: Vec<&'a str>,
     /// Contents notes.
     pub contents: Vec<&'a str>,
-    /// Items.
-    pub items: Vec<ItemLine>,
 }
 
 /// A record page around an already rendered body.
@@ -356,6 +354,8 @@ pub struct OpacRecord<'a> {
     pub title: &'a str,
     /// The rendered [`OpacRecordBody`].
     pub body: &'a str,
+    /// Items, read for each request: loans, transfers and holds change without the record.
+    pub items: Vec<ItemLine>,
 }
 
 /// The page for a record that does not exist.

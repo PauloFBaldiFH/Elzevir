@@ -3,8 +3,9 @@
 
 use elzevir_app::catalog::{
     AuthorityLink, CatalogCommand, CatalogOutput, CatalogReadError, CatalogReader, CatalogRefusal,
-    CodeLists, InstanceView, ItemData, ItemStatus, ItemView, NamePart, NewContribution,
-    NewIdentifier, NewInstance, NewInstanceOfWork, NewNote, NewRecord, NewSubject, NewWorkRelation,
+    CodeLists, InstanceView, ItemData, ItemState, ItemStatus, ItemView, Movement, NamePart,
+    NewContribution, NewIdentifier, NewInstance, NewInstanceOfWork, NewNote, NewRecord, NewSubject,
+    NewWorkRelation,
 };
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
 use elzevir_app::history::touched;
@@ -807,13 +808,13 @@ impl CatalogReader for ElzevirStore {
     fn items(&self, instance: InstanceId) -> Result<Vec<ItemView>, CatalogReadError> {
         self.readers()
             .read(|c| {
-                let mut statement = c.prepare(
+                let mut statement = c.prepare(&format!(
                     "SELECT items.id, barcode, inventory_number, home_branch, policy_id,
-                            call_number, sublocation_id, not_for_loan, damaged, lost, withdrawn,
-                            restricted, loans.due
-                     FROM items LEFT JOIN loans ON loans.item_id = items.id
-                     WHERE instance_id = ?1 ORDER BY items.id",
-                )?;
+                                call_number, sublocation_id, not_for_loan, damaged, lost,
+                                withdrawn, restricted, loans.due, {MOVEMENT}
+                         FROM items LEFT JOIN loans ON loans.item_id = items.id
+                         WHERE instance_id = ?1 ORDER BY items.id"
+                ))?;
                 statement
                     .query_map(params![instance.0], |row| {
                         Ok(ItemView {
@@ -826,6 +827,7 @@ impl CatalogReader for ElzevirStore {
                             location: row.get::<_, Option<i64>>(6)?.map(SublocationId),
                             status: status_at(row, 7)?,
                             due: due_day(row, 12)?,
+                            movement: movement_at(row, 13)?,
                         })
                     })?
                     .collect::<Result<Vec<_>, _>>()
@@ -849,15 +851,17 @@ impl CatalogReader for ElzevirStore {
     fn item_statuses(
         &self,
         instances: &[InstanceId],
-    ) -> Result<Vec<(InstanceId, ItemStatus)>, CatalogReadError> {
+    ) -> Result<Vec<(InstanceId, ItemState)>, CatalogReadError> {
         if instances.is_empty() {
             return Ok(Vec::new());
         }
         // One placeholder per Instance: the values are still bound as parameters.
         let placeholders = vec!["?"; instances.len()].join(", ");
         let sql = format!(
-            "SELECT instance_id, not_for_loan, damaged, lost, withdrawn, restricted
-             FROM items WHERE instance_id IN ({placeholders}) ORDER BY id"
+            "SELECT items.instance_id, not_for_loan, damaged, lost, withdrawn, restricted,
+                    loans.id IS NOT NULL, {MOVEMENT}
+             FROM items LEFT JOIN loans ON loans.item_id = items.id
+             WHERE items.instance_id IN ({placeholders}) ORDER BY items.id"
         );
         self.readers()
             .read(|c| {
@@ -865,7 +869,16 @@ impl CatalogReader for ElzevirStore {
                 statement
                     .query_map(
                         rusqlite::params_from_iter(instances.iter().map(|id| id.0)),
-                        |row| Ok((InstanceId(row.get(0)?), status_at(row, 1)?)),
+                        |row| {
+                            Ok((
+                                InstanceId(row.get(0)?),
+                                ItemState {
+                                    status: status_at(row, 1)?,
+                                    on_loan: row.get(6)?,
+                                    movement: movement_at(row, 7)?,
+                                },
+                            ))
+                        },
                     )?
                     .collect::<Result<Vec<_>, _>>()
             })
@@ -877,6 +890,25 @@ impl CatalogReader for ElzevirStore {
             .read(crate::items::code_lists)
             .map_err(|e| CatalogReadError(e.to_string()))
     }
+}
+
+/// The column that says whether an Item of `items` is in transit (1) or on the hold shelf
+/// (2): a hold waiting with it wins over its transfer. Only constants, no outside data.
+pub(crate) const MOVEMENT: &str = "CASE
+        WHEN EXISTS (SELECT 1 FROM holds WHERE holds.item_id = items.id AND holds.found = 'W')
+            THEN 2
+        WHEN EXISTS (SELECT 1 FROM transfers
+                     WHERE transfers.item_id = items.id AND transfers.arrived_at IS NULL)
+            THEN 1
+        ELSE 0 END";
+
+/// The [`MOVEMENT`] column at `index`.
+pub(crate) fn movement_at(row: &rusqlite::Row<'_>, index: usize) -> rusqlite::Result<Movement> {
+    Ok(match row.get::<_, i64>(index)? {
+        2 => Movement::OnHoldShelf,
+        1 => Movement::InTransit,
+        _ => Movement::Shelved,
+    })
 }
 
 /// The five status columns, starting at `first`.

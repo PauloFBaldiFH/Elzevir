@@ -710,8 +710,8 @@ pub struct ItemStatus {
 }
 
 impl ItemStatus {
-    /// Whether the Item can be lent and is on the shelf as far as the catalog knows: every
-    /// status is 0. Loans arrive with circulation (Phase 3) and will also count.
+    /// Whether every status is 0: the Item can be lent when it is on the shelf (see
+    /// [`ItemState::is_available`]).
     ///
     /// Koha: the OPAC shows an Item as available unless it is not for loan, damaged, lost,
     /// withdrawn or restricted (`opac-detail.pl`, `Koha::Item`).
@@ -722,6 +722,41 @@ impl ItemStatus {
             && self.lost == 0
             && self.withdrawn == 0
             && self.restricted == 0
+    }
+}
+
+/// Where an Item moves in circulation, apart from a loan; never for whom.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Movement {
+    /// On its shelf.
+    #[default]
+    Shelved,
+    /// In transit between branches.
+    InTransit,
+    /// Waiting on the hold shelf for a patron's hold.
+    OnHoldShelf,
+}
+
+/// What the public catalog knows of an Item's availability.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ItemState {
+    /// Its status numbers.
+    pub status: ItemStatus,
+    /// Whether it is on loan.
+    pub on_loan: bool,
+    /// Whether it is in transit or on the hold shelf.
+    pub movement: Movement,
+}
+
+impl ItemState {
+    /// Whether the Item is on the shelf and can be lent: every status 0, not on loan, not
+    /// in transit and not waiting for a hold.
+    ///
+    /// Koha: `opac-detail.pl` and `item-status.inc` show "Available" only when the Item is
+    /// not lost, checked out, in transit, waiting, withdrawn, not for loan or damaged.
+    #[must_use]
+    pub const fn is_available(&self) -> bool {
+        self.status.is_available() && !self.on_loan && matches!(self.movement, Movement::Shelved)
     }
 }
 
@@ -1054,9 +1089,21 @@ pub struct ItemView {
     pub status: ItemStatus,
     /// The day it is due, while it is on loan; never who has it.
     pub due: Option<Date>,
+    /// Whether it is in transit or on the hold shelf.
+    pub movement: Movement,
 }
 
 impl ItemView {
+    /// What the public catalog knows of its availability.
+    #[must_use]
+    pub const fn state(&self) -> ItemState {
+        ItemState {
+            status: self.status,
+            on_loan: self.due.is_some(),
+            movement: self.movement,
+        }
+    }
+
     /// The signal shown: on loan wins over its status, which the loan keeps.
     #[must_use]
     pub const fn signal(&self) -> ShelfSignal {
@@ -1189,7 +1236,7 @@ pub trait CatalogReader: Send + Sync {
     fn item_statuses(
         &self,
         instances: &[InstanceId],
-    ) -> Result<Vec<(InstanceId, ItemStatus)>, CatalogReadError>;
+    ) -> Result<Vec<(InstanceId, ItemState)>, CatalogReadError>;
 
     /// The code tables, for showing names in place of codes.
     ///

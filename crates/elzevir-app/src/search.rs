@@ -642,7 +642,7 @@ mod tests {
         fn item_statuses(
             &self,
             _: &[InstanceId],
-        ) -> Result<Vec<(InstanceId, crate::catalog::ItemStatus)>, CatalogReadError> {
+        ) -> Result<Vec<(InstanceId, crate::catalog::ItemState)>, CatalogReadError> {
             Ok(Vec::new())
         }
 

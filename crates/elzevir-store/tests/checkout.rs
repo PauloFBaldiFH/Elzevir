@@ -10,8 +10,8 @@
 use elzevir_app::accounts::{AccountLineId, Paid, PayRefusal, PaymentRequest};
 use elzevir_app::calendar::{CalendarAction, CalendarChange, HolidayText};
 use elzevir_app::catalog::{
-    CatalogCommand, CatalogOutput, CatalogReader, ItemData, ItemStatus, NewInstance, NewItem,
-    NewRecord, RecordItems,
+    CatalogCommand, CatalogOutput, CatalogReader, ItemData, ItemStatus, Movement, NewInstance,
+    NewItem, NewRecord, RecordItems,
 };
 use elzevir_app::circulation_rules::{
     CirculationCommand, CirculationOutput, CirculationRefusal, LongOverdueMarked, OverduesCharged,
@@ -1429,6 +1429,60 @@ fn a_hold_waiting_past_its_last_day_is_cancelled() {
         "CANCELLED 1"
     );
     assert_eq!(expire("2026-11-25T00:30:00-03:00"), 0);
+}
+
+#[test]
+fn the_public_catalog_sees_loans_transfers_and_the_hold_shelf() {
+    let dir = tempfile::tempdir().unwrap();
+    let (library, _, first, second) = two_holds(&dir);
+    library.rules(&[("maxissueqty", "5"), ("issuelength", "7")]);
+    let states = || {
+        library
+            .store
+            .item_statuses(&[library.instance])
+            .unwrap()
+            .into_iter()
+            .map(|(_, state)| (state.on_loan, state.movement, state.is_available()))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        states(),
+        [
+            (false, Movement::Shelved, true),
+            (false, Movement::Shelved, true)
+        ]
+    );
+    // 0001 waits at the annex; 0002 goes in transit to the central branch for Caio.
+    library
+        .set_aside(
+            first.hold,
+            "0001",
+            (library.annex, "2026-11-20T11:00:00-03:00"),
+        )
+        .unwrap();
+    library
+        .set_aside(
+            second.hold,
+            "0002",
+            (library.annex, "2026-11-20T11:00:00-03:00"),
+        )
+        .unwrap();
+    assert_eq!(
+        states(),
+        [
+            (false, Movement::OnHoldShelf, false),
+            (false, Movement::InTransit, false)
+        ]
+    );
+    let items = library.store.items(library.instance).unwrap();
+    assert_eq!(
+        items.iter().map(|item| item.movement).collect::<Vec<_>>(),
+        [Movement::OnHoldShelf, Movement::InTransit]
+    );
+    library
+        .lend("0001", "2026-11-20T12:00:00-03:00", true)
+        .unwrap();
+    assert_eq!(states()[0], (true, Movement::OnHoldShelf, false));
 }
 
 #[test]

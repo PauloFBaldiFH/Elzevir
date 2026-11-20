@@ -578,3 +578,6 @@ hold-error-day-limit = O leitor já fez o máximo de reservas de hoje.
 hold-error-too-many = O leitor já tem o máximo de reservas que as regras permitem.
 hold-error-not-reservable = Este exemplar não pode ser reservado.
 hold-error-other-branch = Só leitores da unidade do exemplar podem reservá-lo.
+item-status-on-loan = Emprestado, devolução em { $date }
+item-status-in-transit = Em trânsito
+item-status-on-hold = Reservado para um leitor

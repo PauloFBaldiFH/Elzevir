@@ -37,27 +37,4 @@
     {% for note in notes %}<dd>{{ note }}</dd>{% endfor %}
     {% endif %}
   </dl>
-  <h2>{{ t.get("opac-record-items") }}</h2>
-  {% if items.is_empty() %}
-  <p class="muted">{{ t.get("opac-record-no-items") }}</p>
-  {% else %}
-  <table class="items">
-    <thead><tr>
-      <th>{{ t.get("opac-record-item-branch") }}</th>
-      <th>{{ t.get("opac-record-item-location") }}</th>
-      <th>{{ t.get("opac-record-item-call-number") }}</th>
-      <th>{{ t.get("opac-record-item-status") }}</th>
-    </tr></thead>
-    <tbody>
-      {% for item in items %}
-      <tr>
-        <td>{{ item.branch }}</td>
-        <td>{% if let Some(location) = item.location %}{{ location }}{% endif %}</td>
-        <td>{% if let Some(call_number) = item.call_number %}{{ call_number }}{% endif %}</td>
-        <td class="{% if item.available %}available{% else %}unavailable{% endif %}"><svg class="badge-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ item.icon }}"></use></svg>{{ t.get(item.status) }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
 </article>

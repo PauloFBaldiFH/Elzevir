@@ -29,7 +29,7 @@ pub struct ResultRow {
     pub hit: SearchHit,
     /// Items of the Instance.
     pub items: u32,
-    /// Items available ([`crate::catalog::ItemStatus::is_available`]).
+    /// Items available ([`crate::catalog::ItemState::is_available`]).
     pub available: u32,
 }
 
@@ -105,10 +105,10 @@ where
     )?;
     let instances: Vec<InstanceId> = results.hits.iter().map(|hit| hit.instance).collect();
     let mut counts: BTreeMap<InstanceId, (u32, u32)> = BTreeMap::new();
-    for (instance, status) in catalog.item_statuses(&instances)? {
+    for (instance, state) in catalog.item_statuses(&instances)? {
         let (items, available) = counts.entry(instance).or_default();
         *items = items.saturating_add(1);
-        if status.is_available() {
+        if state.is_available() {
             *available = available.saturating_add(1);
         }
     }
