@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ t.get("opac-my-account") }}{% endblock %}
 {% block content %}
-<div class="opac-narrow">
+<div class="opac-account">
 <section class="panel account-card" aria-labelledby="account-title">
   <p class="eyebrow">{{ t.get("opac-account") }}</p>
   <h1 id="account-title">{{ name }}</h1>
@@ -11,8 +11,41 @@
     <dt>{{ t.get("opac-account-category") }}</dt><dd>{{ category_name }}</dd>
     <dt>{{ t.get("opac-account-expires") }}</dt><dd>{{ expires }}</dd>
   </dl>
-  <p class="muted">{{ t.get("opac-account-soon") }}</p>
   <form method="post" action="/conta/sair"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="quiet">{{ t.get("opac-sign-out") }}</button></form>
 </section>
+<div class="account-main">
+{% for restriction in restrictions %}<p class="codes-alert codes-refused" role="alert">{{ restriction }}</p>{% endfor %}
+<section class="panel" aria-labelledby="loans-title">
+  <h2 id="loans-title">{{ t.get_numbers("loans-title", [("count", loans.len() as u64)]) }}</h2>
+  {% if loans.is_empty() %}<p class="muted">{{ t.get("opac-loans-none") }}</p>{% else %}
+  <ul class="opac-loans">
+  {% for loan in loans %}
+    <li{% if loan.overdue %} class="overdue"{% endif %}>
+      <span class="loan-title">{{ loan.title }}</span>
+      <span class="loan-meta"><code>{{ loan.barcode }}</code> · {{ t.get_with("loans-due", "date", loan.due) }}{% if loan.overdue %} <strong>{{ t.get("loans-overdue") }}</strong>{% endif %}{% if let Some(renewals) = loan.renewals %} · {{ renewals }}{% endif %}</span>
+    </li>
+  {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+<section class="panel" aria-labelledby="fines-title">
+  <h2 id="fines-title">{{ t.get("opac-fines-title") }}</h2>
+  {% if let Some(owed) = owed %}<p class="opac-owed">{{ owed }}</p>{% endif %}
+  {% if account.is_empty() %}<p class="muted">{{ t.get("opac-fines-none") }}</p>{% else %}
+  <div class="table-scroll">
+  <table class="account-lines">
+    <thead><tr><th scope="col">{{ t.get("account-day") }}</th><th scope="col">{{ t.get("account-description") }}</th><th scope="col">{{ t.get("account-amount") }}</th><th scope="col">{{ t.get("account-outstanding") }}</th></tr></thead>
+    <tbody>
+    {% for line in account %}
+      <tr><td>{{ line.day }}</td><td>{{ line.description }}</td><td class="account-money">{{ line.amount }}</td><td class="account-money">{{ line.outstanding }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted">{{ t.get("opac-fines-hint") }}</p>
+  {% endif %}
+</section>
+<p class="muted">{{ t.get("opac-account-soon") }}</p>
+</div>
 </div>
 {% endblock %}

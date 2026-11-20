@@ -11,7 +11,7 @@ use axum::extract::State;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Redirect, Response};
 use elzevir_app::patron_account::{PatronIdentity, PatronLoginRefused, log_in};
-use elzevir_web_templates::{OpacAccount, OpacLogin, PatronPanel};
+use elzevir_web_templates::{OpacLogin, PatronPanel};
 use serde::Deserialize;
 
 use crate::security::{random_token, tokens_match};
@@ -85,7 +85,7 @@ pub(crate) fn current_patron(
 }
 
 /// Pages with a patron's data are never stored by a cache (spec, item 11).
-fn no_store(mut response: Response) -> Response {
+pub(crate) fn no_store(mut response: Response) -> Response {
     response
         .headers_mut()
         .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
@@ -255,32 +255,6 @@ pub(crate) async fn log_out_patron(
         Some(_) => (StatusCode::FORBIDDEN, "invalid form token").into_response(),
         None => Redirect::to("/").into_response(),
     }
-}
-
-/// `GET /conta`: the patron's own account (spec, item 12).
-pub(crate) async fn account(State(state): State<AppState>, headers: HeaderMap) -> Response {
-    let Some(accounts) = state.accounts.clone() else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
-    let Some(session) = current_patron(&state, &headers) else {
-        return Redirect::to("/conta/entrar").into_response();
-    };
-    let patron = session.identity.id;
-    let account = match tokio::task::spawn_blocking(move || accounts.account(patron)).await {
-        Ok(Ok(Some(account))) => account,
-        // The patron was removed while signed in.
-        Ok(Ok(None)) => return Redirect::to("/conta/entrar").into_response(),
-        Ok(Err(_)) | Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
-    };
-    no_store(render(&OpacAccount {
-        t: &state.inner.i18n,
-        csrf: &session.csrf,
-        name: account.name,
-        cardnumber: account.cardnumber,
-        branch_name: account.branch_name,
-        category_name: account.category_name,
-        expires: account.expires.strftime("%d/%m/%Y").to_string(),
-    }))
 }
 
 #[cfg(test)]

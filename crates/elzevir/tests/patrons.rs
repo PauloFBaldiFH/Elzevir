@@ -1184,3 +1184,57 @@ fn checked(bar: &str, key: &str) -> bool {
         .and_then(|(_, rest)| rest.split_once('>'))
         .is_some_and(|(attributes, _)| attributes.ends_with(" checked"))
 }
+
+#[test]
+fn the_patron_sees_their_loans_restriction_and_fines_on_the_opac() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    stock(data.path());
+    late_return(data.path(), ana);
+    restricted_for_overdues(data.path(), ana);
+    let store = open(data.path());
+    submit(
+        &store,
+        WriteCommand::Patrons(PatronCommand::SetPassword {
+            patron: PatronId(ana),
+            password_hash: Some(hash_password("leitura-segura").unwrap()),
+        }),
+    );
+    store.shutdown().unwrap();
+    let (_server, address) = start(data.path());
+    let form = request(address, "GET", "/conta/entrar", "", "");
+    let cookie = session_cookie(&form, "elzevir_patron_csrf");
+    let signed = request(
+        address,
+        "POST",
+        "/conta/entrar",
+        &format!("Cookie: {cookie}\r\nContent-Type: application/x-www-form-urlencoded\r\n"),
+        &format!("csrf={}&card=000123&password=leitura-segura", csrf(&form)),
+    );
+    assert_status(&signed, 303);
+    let patron = format!("Cookie: {}\r\n", session_cookie(&signed, "elzevir_patron"));
+    let page = request(address, "GET", "/conta", &patron, "");
+    assert_status(&page, 200);
+    for shown in [
+        "One loan",
+        "Dom Casmurro",
+        "<code>0001</code>",
+        "overdue",
+        "blocked because of overdue items",
+        // The open loan keeps accruing on the real clock, so only the returned one is exact.
+        "You owe ",
+        "Overdue fine · 0001</td><td class=\"account-money\">5.00</td>",
+        "Fines are paid at the library desk.",
+    ] {
+        assert!(page.contains(shown), "{shown}: {page}");
+    }
+    // The patron reads; paying and lifting stay at the desk.
+    for absent in [
+        "name=\"line\"",
+        "name=\"amount\"",
+        "/equipe/leitores",
+        "restricoes",
+    ] {
+        assert!(!page.contains(absent), "{absent}");
+    }
+}
