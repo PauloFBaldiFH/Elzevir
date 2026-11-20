@@ -25,6 +25,13 @@ instaladores pedem à API do GitHub a release publicada mais nova
 `--version`/`-Version` permite fixar outra tag. O SHA-256 é verificado
 antes da extração segura e da execução.
 
+O executável (`elzevir update` e a seção Atualizações do painel) lê a lista
+de releases (`releases?per_page=30`), descarta rascunhos e tags fora do
+SemVer e escolhe a de maior precedência. Pré-releases só entram quando a
+versão em execução já é um pré-lançamento: uma instalação alfa recebe a
+alfa seguinte ou a estável, e uma instalação estável nunca é levada a uma
+pré-release.
+
 Sem opções de serviço, a instalação rápida grava o binário no PATH do
 usuário, cria o diretório de dados local, verifica a versão e o subcomando
 `panel` e exibe os caminhos e o próximo passo (`elzevir start`, que no
