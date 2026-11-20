@@ -1,4 +1,5 @@
-{% extends "base.html" %}
+{% extends "staff_base.html" %}
+{% block scope %}devolucao{% endblock %}
 {% block title %}{{ t.get("checkin-title") }}{% endblock %}
 {% block content %}
 <div class="patrons">
@@ -6,8 +7,8 @@
 <form method="post" action="/equipe/circulacao/devolucao" class="checkout-box">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <label for="checkin-barcode">{{ t.get("checkout-barcode") }}</label>
-  <input type="text" id="checkin-barcode" name="barcode" maxlength="64" autocomplete="off" autofocus>
-  <button type="submit">{{ t.get("loans-return") }}</button>
+  <input type="text" id="checkin-barcode" name="barcode" maxlength="64" autocomplete="off" value="{{ barcode }}"{% if barcode.is_empty() %} autofocus{% endif %}>
+  <button type="submit"{% if !barcode.is_empty() %} autofocus{% endif %}>{{ t.get("loans-return") }}</button>
   <label for="checkin-desk">{{ t.get("circulation-desk") }}</label>
   <select id="checkin-desk" name="desk">{% for desk in desks %}<option value="{{ desk.id }}"{% if desk.selected %} selected{% endif %}>{{ desk.name }}</option>{% endfor %}</select>
 </form>

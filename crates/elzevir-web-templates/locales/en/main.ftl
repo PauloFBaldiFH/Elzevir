@@ -7,6 +7,21 @@ app-name = Elzevir
 nav-catalog = Catalog
 nav-staff = Staff
 
+## Staff header (interface §22)
+bar-scopes = Search in
+bar-query = Search term
+bar-search = Search
+bar-scope-patrons = Patrons
+bar-scope-catalog = Catalog
+bar-scope-checkin = Checkin
+bar-hint-patrons = Name, CPF or card number
+bar-hint-catalog = Title, author, subject or ISBN
+bar-hint-checkin = Item barcode
+bar-new = New
+bar-new-record = Bibliographic record
+bar-new-patron = Patron
+bar-theme = Switch between light and dark
+
 ## OPAC
 opac-home-title = Library catalog
 opac-home-search-label = Search the catalog

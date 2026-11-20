@@ -1084,3 +1084,85 @@ fn a_returned_item_is_set_aside_for_its_hold_at_the_checkin_desk() {
     );
     drop(server);
 }
+
+#[test]
+fn the_staff_header_offers_only_permitted_scopes_and_dispatches_the_search() {
+    let data = tempfile::tempdir().unwrap();
+    library(data.path());
+    let (server, address) = start(data.path());
+    let cir = sign_in(address, "cir");
+    let bar = request(address, "GET", "/equipe/barra?escopo=devolucao", &cir, "");
+    assert_status(&bar, 200);
+    assert!(
+        bar.contains(r#"value="leitores""#)
+            && bar.contains(r#"value="acervo""#)
+            && bar.contains(
+                r#"value="devolucao" data-shortcut="d" data-hint="Item barcode" checked"#
+            )
+            && bar.contains(r#"placeholder="Item barcode""#)
+            && !bar.contains("/equipe/acervo/nova"),
+        "{bar}"
+    );
+    let found = request(
+        address,
+        "GET",
+        "/equipe/busca?escopo=leitores&q=Ana%20Silva",
+        &cir,
+        "",
+    );
+    assert_status(&found, 303);
+    assert!(
+        found.contains("location: /equipe/leitores?q=Ana%20Silva"),
+        "{found}"
+    );
+    let scanned = request(
+        address,
+        "GET",
+        "/equipe/busca?escopo=devolucao&q=0001",
+        &cir,
+        "",
+    );
+    assert!(
+        scanned.contains("location: /equipe/circulacao/devolucao?codigo=0001"),
+        "{scanned}"
+    );
+    let desk = request(
+        address,
+        "GET",
+        "/equipe/circulacao/devolucao?codigo=0001",
+        &cir,
+        "",
+    );
+    assert!(desk.contains(r#"value="0001">"#), "{desk}");
+    // Cataloguers see the catalog and "New record", never the patron side of the wall.
+    let cat = sign_in(address, "cat");
+    let bar = request(address, "GET", "/equipe/barra?escopo=leitores", &cat, "");
+    assert!(
+        bar.contains("/equipe/acervo/nova")
+            && !bar.contains(r#"value="leitores""#)
+            && !bar.contains("/equipe/leitores/novo")
+            && bar.contains(r#"value="acervo" data-shortcut="c" data-hint="Title, author, subject or ISBN" checked"#),
+        "{bar}"
+    );
+    assert_status(
+        &request(
+            address,
+            "GET",
+            "/equipe/busca?escopo=leitores&q=Ana",
+            &cat,
+            "",
+        ),
+        403,
+    );
+    assert_status(
+        &request(address, "GET", "/equipe/busca?escopo=nada&q=x", &cat, ""),
+        400,
+    );
+    let lei = sign_in(address, "lei");
+    let bar = request(address, "GET", "/equipe/barra", &lei, "");
+    assert!(
+        bar.contains("/equipe/leitores/novo") && !bar.contains(r#"value="devolucao""#),
+        "{bar}"
+    );
+    drop(server);
+}

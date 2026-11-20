@@ -41,6 +41,7 @@ mod registries;
 mod security;
 mod session;
 mod staff;
+mod staff_bar;
 
 use elzevir_domain::call_number::AuthorTable;
 use std::sync::Arc;
@@ -216,6 +217,11 @@ pub fn router(state: AppState) -> Router {
         .route("/static/elzevir-catalog.js", get(assets::catalog_script))
         .route("/static/elzevir-import.js", get(assets::import_script))
         .route("/static/elzevir-icons.svg", get(assets::icons))
+        .route("/static/elzevir-mark.svg", get(assets::mark))
+        .route("/static/elzevir-theme.js", get(assets::theme_script))
+        .route("/static/elzevir-staff.js", get(assets::staff_script))
+        .route("/equipe/barra", get(staff_bar::bar))
+        .route("/equipe/busca", get(staff_bar::search))
         .route("/equipe", get(staff::home))
         .route("/equipe/acervo", get(catalog::catalog))
         .route("/equipe/leitores", get(patrons::search))
