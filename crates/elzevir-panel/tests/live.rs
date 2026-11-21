@@ -9,7 +9,11 @@ use elzevir_panel::{
 use ratatui::{Terminal, backend::TestBackend};
 
 fn screen(panel: &Panel, language: &str) -> String {
-    let mut terminal = Terminal::new(TestBackend::new(140, 30)).unwrap();
+    sized_screen(panel, language, 140, 30)
+}
+
+fn sized_screen(panel: &Panel, language: &str, width: u16, height: u16) -> String {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     let messages = Messages::new(language).unwrap();
     terminal
         .draw(|frame| draw(frame, panel, &messages, true))
@@ -18,7 +22,7 @@ fn screen(panel: &Panel, language: &str) -> String {
         .backend()
         .buffer()
         .content
-        .chunks(140)
+        .chunks(usize::from(width))
         .map(|row| {
             row.iter()
                 .map(ratatui::buffer::Cell::symbol)
@@ -370,6 +374,7 @@ fn public_tunnel_test_and_log_tabs_never_conflate_a_gate_with_a_failure() {
             elzevir_panel::TunnelState::Configured(elzevir_panel::Tunnel {
                 catalog: "https://catalog.example.org/".to_owned(),
                 staff: "https://staff.example.org/equipe".to_owned(),
+                staff_tested_at: None,
                 catalog_check: elzevir_panel::PublicCheck::Ok,
                 staff_check: elzevir_panel::PublicCheck::Protected,
                 tested_at: Some("2026-11-17T00:00:00Z".to_owned()),
@@ -484,6 +489,9 @@ fn domain_flow_distinguishes_registration_connector_and_public_test_results() {
             catalog: Some("fictional.elzevir.app".to_owned()),
             staff: Some("fictional-admin.elzevir.app".to_owned()),
             failure: None,
+            registration_at: None,
+            connector_at: "2026-11-17T00:00:00Z".into(),
+            poll_seconds: None,
             connector: ConnectorState::Stopped,
             staff_allow_cidrs: vec!["192.0.2.0/24".to_owned()],
             remote_status: None,
@@ -518,7 +526,7 @@ fn registration_form_explains_the_default_broker_in_both_languages() {
     })));
     for language in ["en", "pt-BR"] {
         let rendered = screen(&panel, language);
-        assert!(rendered.contains("broker.elzevir.app"));
+        assert!(rendered.contains("broker.elzevir.app"), "{rendered}");
         assert!(!rendered.contains("broker-url"));
     }
 }
@@ -648,5 +656,289 @@ fn local_backup_form_shows_scope_codec_and_destination() {
     ));
     for language in ["en", "pt-BR"] {
         insta::assert_snapshot!(format!("local_backup_{language}"), screen(&panel, language));
+    }
+}
+
+#[test]
+fn assisted_restore_review_defaults_to_back_and_requires_a_choice() {
+    use elzevir_panel::{BackupScope, Form, ObservationRequest, Operation, RestoreReview};
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut panel = connected();
+    panel.section = elzevir_panel::Section::Backup;
+    let review = RestoreReview {
+        token: "local-review".into(),
+        id: "00112233445566778899aabbccddeeff".into(),
+        file: "biblioteca.age".into(),
+        created: "2026-11-20T22:30:00Z".into(),
+        scope: BackupScope::Database,
+        schema: 1,
+        managed: false,
+    };
+    let event = |code| Event::Key(KeyEvent::new(code, KeyModifiers::NONE));
+    panel.form = Some(Form::new(Operation::ApplyRestore(review.clone())));
+    for lang in ["pt-BR", "en"] {
+        insta::assert_snapshot!(format!("restore_review_{lang}"), screen(&panel, lang));
+    }
+    panel.handle(&Event::Paste("y\n".into()), 140, 30);
+    panel.handle(&event(KeyCode::Enter), 140, 30);
+    assert!(panel.diagnostics.requested.is_none());
+    panel.form = Some(Form::new(Operation::ApplyRestore(review.clone())));
+    panel.handle(&event(KeyCode::Right), 140, 30);
+    for (width, height) in [(79, 24), (80, 17)] {
+        panel.handle(&event(KeyCode::Enter), width, height);
+        panel.handle(&event(KeyCode::Char('y')), width, height);
+        assert!(panel.form.is_some());
+        assert!(panel.diagnostics.requested.is_none());
+    }
+    for height in [18, 24] {
+        for (lang, impact, choice) in [
+            ("en", "Database only", "Back"),
+            ("pt-BR", "Somente banco", "Voltar"),
+        ] {
+            let shown = sized_screen(&panel, lang, 80, height);
+            for label in ["biblioteca.age", impact, choice] {
+                assert!(shown.contains(label), "{shown}");
+            }
+        }
+    }
+    panel.handle(&event(KeyCode::Enter), 80, 18);
+    assert_eq!(
+        panel.diagnostics.requested,
+        Some(ObservationRequest::Operate(Operation::ApplyRestore(review)))
+    );
+}
+
+#[test]
+fn pasted_restore_fields_cannot_trigger_navigation_or_submission() {
+    use ratatui::crossterm::event::Event;
+    let mut panel = connected();
+    panel.form = Some(elzevir_panel::Form::new(
+        elzevir_panel::Operation::Restore {
+            input: String::new(),
+            key: String::new(),
+        },
+    ));
+    panel.handle(&Event::Paste("'/media/a b.age'".into()), 140, 30);
+    assert_eq!(
+        panel.form.as_ref().unwrap().values.first().unwrap(),
+        "'/media/a b.age'"
+    );
+    panel.handle(&Event::Paste("y\nq".into()), 140, 30);
+    assert!(
+        panel
+            .form
+            .as_ref()
+            .unwrap()
+            .values
+            .first()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(panel.diagnostics.requested.is_none());
+    assert!(!panel.quit);
+}
+
+fn displayed_files(panel: &mut Panel) -> Option<&mut Vec<(String, u64)>> {
+    let Mode::Live(state) = &mut panel.mode else {
+        return None;
+    };
+    Some(
+        &mut state
+            .snapshot
+            .as_mut()?
+            .operations
+            .cloud
+            .as_mut()?
+            .remote
+            .as_mut()?
+            .files,
+    )
+}
+
+#[test]
+fn cloud_tabs_show_destination_quota_pending_status_and_bound_actions() {
+    use elzevir_panel::{
+        CloudConnection, CloudOperation, CloudPlan, CloudTarget, CloudView, Operation,
+        RemoteCommand, RemotePage,
+    };
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut panel = connected();
+    panel.section = elzevir_panel::Section::Backup;
+    let target = CloudTarget {
+        plan: "a".repeat(32),
+        connection: "b".repeat(32),
+        folder: "Acervo/noite".into(),
+    };
+    if let Mode::Live(state) = &mut panel.mode {
+        state.snapshot.as_mut().unwrap().operations.cloud = Some(CloudView {
+            plans: vec![CloudPlan {
+                id: target.plan.clone(),
+                name: "Noite".into(),
+                connection: target.connection.clone(),
+                folder: target.folder.clone(),
+                keep: 7,
+                daily: None,
+                retention_pending: false,
+            }],
+            connections: vec![CloudConnection {
+                id: target.connection.clone(),
+                name: "Biblioteca".into(),
+                provider: "s3".into(),
+                ready: true,
+                test_failed: false,
+                tested_at: None,
+            }],
+            transfers: vec![(target.clone(), "c".repeat(32), "cloud-unconfirmed".into())],
+            remote: Some(RemotePage {
+                target: target.clone(),
+                page: 1,
+                pages: 1,
+                files: vec![("c".repeat(32), 128), ("d".repeat(32), 256)],
+                free: None,
+            }),
+            ..Default::default()
+        });
+    }
+    let key = |panel: &mut Panel, c| {
+        panel.handle(
+            &Event::Key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)),
+            140,
+            30,
+        );
+    };
+    for tab in ["connections", "plans", "files", "history"] {
+        insta::assert_snapshot!(format!("cloud_{tab}_pt_BR"), screen(&panel, "pt-BR"));
+        key(&mut panel, ']');
+    }
+    key(&mut panel, '.');
+    displayed_files(&mut panel).unwrap().reverse();
+    key(&mut panel, 'D');
+    assert_eq!(
+        panel.form.take().unwrap().operation,
+        Operation::Cloud(CloudOperation::Remote(
+            target.clone(),
+            RemoteCommand::Download("d".repeat(32))
+        ))
+    );
+    key(&mut panel, 'D');
+    displayed_files(&mut panel)
+        .unwrap()
+        .retain(|(id, _)| *id != "d".repeat(32));
+    panel.submit_form();
+    assert!(panel.diagnostics.requested.is_none());
+    assert_eq!(panel.cloud_tab, 2);
+    key(&mut panel, 'D');
+    assert!(panel.form.is_none());
+    assert!(screen(&panel, "pt-BR").contains("saiu da lista"));
+    key(&mut panel, '.');
+    key(&mut panel, 'D');
+    assert!(
+        matches!(panel.form.take().unwrap().operation,Operation::Cloud(CloudOperation::Remote(_,RemoteCommand::Download(id))) if id == "c".repeat(32))
+    );
+    key(&mut panel, '+');
+    key(&mut panel, 'M');
+    assert!(
+        matches!(panel.form.take().unwrap().operation,Operation::Cloud(CloudOperation::SendGroup(targets,_)) if targets==[target])
+    );
+}
+
+#[test]
+fn narrow_and_ascii_sharing_show_only_the_catalog_and_escape_returns_to_addresses() {
+    use elzevir_panel::{PublicCheck, Section, Tunnel, TunnelState, TunnelTab};
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut panel = connected();
+    panel.section = Section::Addresses;
+    panel.tunnel_tab = TunnelTab::Share;
+    if let Mode::Live(state) = &mut panel.mode {
+        state.snapshot.as_mut().unwrap().operations.tunnel = TunnelState::Configured(Tunnel {
+            catalog: "https://public.elzevir.app/".into(),
+            staff: "https://staff.elzevir.app/equipe".into(),
+            catalog_check: PublicCheck::NotRun,
+            staff_check: PublicCheck::NotRun,
+            tested_at: None,
+            staff_tested_at: None,
+            logs: elzevir_panel::TunnelLog::default(),
+        });
+    }
+    for (width, ascii) in [(52, false), (120, true)] {
+        let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
+        terminal
+            .draw(|frame| draw(frame, &panel, &Messages::new("pt-BR").unwrap(), ascii))
+            .unwrap();
+        let buffer = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect::<String>();
+        assert!(buffer.contains("https://public.elzevir.app/"));
+        assert!(!buffer.contains("staff.elzevir.app"));
+        assert!(!buffer.contains(['▀', '▄', '█']));
+    }
+    panel.handle(
+        &Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+        52,
+        24,
+    );
+    assert_eq!(panel.tunnel_tab, TunnelTab::Addresses);
+}
+
+#[test]
+fn managing_addresses_exposes_saved_enrollment_and_reports_disabled_staff() {
+    use elzevir_panel::{AddressOperation, Operation, RemoteAddress, Section, TunnelTab};
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut panel = connected();
+    panel.section = Section::Addresses;
+    if let Mode::Live(state) = &mut panel.mode {
+        state.snapshot.as_mut().unwrap().operations.remote_address = Some(RemoteAddress {
+            at: "2026-11-20T12:00:00Z".into(),
+            listed: false,
+            staff_remote: false,
+        });
+    }
+    let press = |panel: &mut Panel, code| {
+        panel.handle(
+            &Event::Key(KeyEvent::new(code, KeyModifiers::NONE)),
+            140,
+            30,
+        );
+    };
+    press(&mut panel, KeyCode::Char(']'));
+    assert_eq!(panel.tunnel_tab, TunnelTab::Manage);
+    let rendered = screen(&panel, "en");
+    assert!(rendered.contains("Remote staff access: disabled"));
+    insta::assert_snapshot!("manage_addresses", rendered);
+    press(&mut panel, KeyCode::Char('S'));
+    assert!(panel.form.is_none());
+    press(&mut panel, KeyCode::Char('G'));
+    assert!(matches!(
+        panel.form.as_ref().unwrap().operation,
+        Operation::Address(AddressOperation::Resume { .. })
+    ));
+    press(&mut panel, KeyCode::Esc);
+    press(&mut panel, KeyCode::Char('g'));
+    assert!(!panel.form.as_ref().unwrap().labels.contains(&"broker-url"));
+    press(&mut panel, KeyCode::F(2));
+    assert_eq!(
+        panel.form.as_ref().unwrap().labels.last(),
+        Some(&"broker-url")
+    );
+}
+
+#[test]
+fn advanced_broker_field_stays_visible_at_compact_sizes() {
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut panel = connected();
+    panel.section = elzevir_panel::Section::Addresses;
+    for code in [KeyCode::Char('g'), KeyCode::F(2), KeyCode::Char('Z')] {
+        panel.handle(&Event::Key(KeyEvent::new(code, KeyModifiers::NONE)), 80, 18);
+    }
+    for height in [18, 24] {
+        for lang in ["en", "pt-BR"] {
+            let shown = sized_screen(&panel, lang, 80, height);
+            assert!(shown.contains("Broker HTTPS"), "{shown}");
+            assert!(shown.contains("Z▏"), "{shown}");
+        }
     }
 }

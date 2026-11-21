@@ -85,6 +85,8 @@ pub struct Tunnel {
     pub staff: String,
     /// UTC time of the last explicit test.
     pub tested_at: Option<String>,
+    /// UTC time of the most recent staff request.
+    pub staff_tested_at: Option<String>,
     /// Most recent catalog response.
     pub catalog_check: PublicCheck,
     /// Most recent staff response.
@@ -106,8 +108,12 @@ pub enum TunnelState {
 /// Selected detail tab within Addresses.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum TunnelTab {
-    /// Public addresses and explicit test results.
+    /// Local and public address overview.
     #[default]
+    Addresses,
+    /// Enrollment and connector management.
+    Manage,
+    /// Explicit public test results.
     Test,
     /// Redacted connector log projection.
     Log,

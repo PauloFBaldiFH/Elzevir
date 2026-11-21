@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Terminal administration interface.
 
+mod access_actions;
 mod address_operations;
 mod address_view;
 pub use address_operations::AddressOperation;
@@ -10,7 +11,10 @@ mod cloud;
 mod dashboard;
 mod domain;
 pub use backup_options::{BackupOptions, BackupProfile, BackupScope};
-pub use cloud::{CloudConnection, CloudOperation, CloudPlan, CloudQuestion, CloudView};
+pub use cloud::{
+    CloudConnection, CloudOperation, CloudPlan, CloudQuestion, CloudTarget, CloudView,
+    RemoteCommand, RemotePage,
+};
 pub use domain::{ConnectorState, DomainPhase, DomainStatus};
 mod diagnostic_view;
 mod diagnostics;
@@ -21,6 +25,7 @@ mod operations;
 mod port;
 pub use port::{MIN_PORT, PortForm, PortStep, Refusal, choose_port};
 mod folder_picker;
+mod restore_paths;
 mod runtime;
 mod service_view;
 mod setup;
@@ -42,7 +47,7 @@ pub use live::{
     Component, Details, Host, Institution, LiveState, Mode, ServerStatus, Snapshot, Storage,
 };
 pub use messages::Messages;
-pub use operations::{Form, Job, Operation, Operations, ServerAction};
+pub use operations::{Form, Job, Operation, Operations, RestoreReview, ServerAction};
 pub use runtime::{run, run_live, run_live_until};
 pub use view::draw;
 
@@ -140,6 +145,18 @@ pub struct Panel {
     pub diagnostics: DiagnosticAction,
     /// Bounded operation form and explicit confirmation.
     pub form: Option<Form>,
+    /// Cloud backup tab (connections, plans, files or history).
+    pub cloud_tab: usize,
+    /// Index of the plan whose connection and folder are displayed.
+    pub cloud_plan: usize,
+    /// Identity and destination of the selected remote backup.
+    pub cloud_file: Option<(CloudTarget, String)>,
+    /// Reviewed destinations marked for a single upload.
+    pub cloud_targets: Vec<CloudTarget>,
+    /// Most recent desktop or clipboard action feedback.
+    pub access_notice: Option<&'static str>,
+    /// Available terminal-host actions.
+    pub access_help: Option<&'static str>,
     /// Selected public tunnel detail tab.
     pub tunnel_tab: TunnelTab,
     /// Vertical dashboard scroll offset.
@@ -167,11 +184,61 @@ impl Panel {
             ..Self::default()
         }
     }
+    fn sharing_catalog(&self) -> bool {
+        self.section == Section::Addresses
+            && self.tunnel_tab == TunnelTab::Share
+            && self.form.is_none()
+            && matches!(self.mode, Mode::Live(_))
+    }
+
+    fn size_warning(&self, width: u16, height: u16) -> bool {
+        view::too_small(width, height) && !self.sharing_catalog()
+    }
+
+    fn handle_size_warning(&mut self, event: &Event) {
+        if let Event::Key(key) = event
+            && key.kind == KeyEventKind::Press
+        {
+            match key.code {
+                KeyCode::Char('q') => self.quit = true,
+                KeyCode::Char('Q') if self.live_addresses() => {
+                    self.tunnel_tab = TunnelTab::Share;
+                }
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.quit = true;
+                }
+                _ => {}
+            }
+        }
+    }
+
     /// Applies an input event using the same geometry as the renderer.
     pub fn handle(&mut self, event: &Event, width: u16, height: u16) {
+        if self.size_warning(width, height) {
+            if self.form.is_none() {
+                self.handle_size_warning(event);
+            }
+            return;
+        }
         if self.form.is_some() && self.handle_form(event) {
             return;
         }
+        if self.section == Section::Addresses && self.tunnel_tab == TunnelTab::Share {
+            if let Event::Key(key) = event
+                && key.kind != KeyEventKind::Release
+            {
+                match key.code {
+                    KeyCode::Char('Q') | KeyCode::Esc => self.tunnel_tab = TunnelTab::Addresses,
+                    KeyCode::Char('q') => self.quit = true,
+                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        self.quit = true;
+                    }
+                    _ => {}
+                }
+            }
+            return;
+        }
+
         let previous = self.section;
         match event {
             Event::Key(key) if key.kind != KeyEventKind::Release => {
@@ -307,30 +374,214 @@ impl Panel {
         })
     }
 
+    fn remote_page(&self) -> Option<&RemotePage> {
+        let view = self.cloud_view()?;
+        let plan = view
+            .plans
+            .get(self.cloud_plan)
+            .or_else(|| view.plans.first())?;
+        view.remote.as_ref().filter(|r| r.target == plan.target())
+    }
+
+    fn initialize_cloud_file(&mut self) {
+        if self.cloud_file.is_none()
+            && let Some(r) = self.remote_page()
+            && let Some((id, _)) = r.files.first()
+        {
+            self.cloud_file = Some((r.target.clone(), id.clone()));
+        }
+    }
+
+    fn step_cloud_file(&mut self, forward: bool) {
+        let Some(r) = self.remote_page() else { return };
+        let current = r.selected_index(self.cloud_file.as_ref());
+        let index = current.map_or_else(
+            || {
+                if forward {
+                    0
+                } else {
+                    r.files.len().saturating_sub(1)
+                }
+            },
+            |i| cycle(i, r.files.len(), forward),
+        );
+        if let Some((id, _)) = r.files.get(index) {
+            self.cloud_file = Some((r.target.clone(), id.clone()));
+        }
+    }
+
+    fn cloud_navigation(&mut self, key: char) -> bool {
+        self.initialize_cloud_file();
+        match key {
+            '[' | ']' => {
+                self.cloud_tab = (self.cloud_tab + if key == ']' { 1 } else { 3 }) % 4;
+            }
+            ',' | '.' => {
+                self.step_cloud_file(key == '.');
+            }
+            '<' | '>' => {
+                self.cloud_file = None;
+                let count = self.cloud_view().map_or(0, |v| v.plans.len()).max(1);
+                self.cloud_plan = cycle(self.cloud_plan, count, key == '>');
+            }
+            'l' | 'D' | 'U' | 'O' | 'u' | '+' | 'M' => {
+                let Mode::Live(state) = &self.mode else {
+                    return false;
+                };
+                let Some(snapshot) = &state.snapshot else {
+                    return false;
+                };
+                let Some(view) = &snapshot.operations.cloud else {
+                    return true;
+                };
+                let Some(plan) = view
+                    .plans
+                    .get(self.cloud_plan)
+                    .or_else(|| view.plans.first())
+                else {
+                    return true;
+                };
+                let target = plan.target();
+                if key == 'O' {
+                    if let Some((download, path)) = &view.download
+                        && download == &target
+                    {
+                        self.form = Some(Form::new(Operation::Restore {
+                            input: path.to_string_lossy().into_owned(),
+                            key: String::new(),
+                        }));
+                    }
+                    return true;
+                }
+                if key == '+' {
+                    if self.cloud_targets.contains(&target) {
+                        self.cloud_targets.retain(|t| t != &target);
+                    } else if self.cloud_targets.len() < 16 {
+                        self.cloud_targets.push(target);
+                    }
+                    return true;
+                }
+                if key == 'M' {
+                    if !self.cloud_targets.is_empty() {
+                        self.form = Some(Form::new(Operation::Cloud(CloudOperation::SendGroup(
+                            self.cloud_targets.clone(),
+                            snapshot
+                                .operations
+                                .managed_ids
+                                .last()
+                                .cloned()
+                                .unwrap_or_default(),
+                        ))));
+                    }
+                    return true;
+                }
+                let listing = view.remote.as_ref().filter(|r| r.target == target);
+                let cmd = match key {
+                    'l' => RemoteCommand::Browse(listing.map_or(1, |r| r.page)),
+                    'D' => {
+                        let Some((id, _)) = listing
+                            .and_then(|r| r.files.get(r.selected_index(self.cloud_file.as_ref())?))
+                        else {
+                            self.cloud_tab = 2;
+                            self.scroll = 0;
+                            return true;
+                        };
+                        RemoteCommand::Download(id.clone())
+                    }
+                    'u' => RemoteCommand::Create,
+                    _ => RemoteCommand::Send(
+                        view.transfers
+                            .iter()
+                            .find(|(t, _, s)| *t == target && s != "cloud-verified")
+                            .map(|(_, id, _)| id)
+                            .or_else(|| snapshot.operations.managed_ids.last())
+                            .cloned()
+                            .unwrap_or_default(),
+                    ),
+                };
+                self.form = Some(Form::new(Operation::Cloud(CloudOperation::Remote(
+                    target, cmd,
+                ))));
+            }
+            _ => return false,
+        }
+        self.scroll = 0;
+        true
+    }
+    fn connector_action_available(&self, key: char) -> bool {
+        if !matches!(key, 'P' | 'S') {
+            return true;
+        }
+        let Mode::Live(state) = &self.mode else {
+            return false;
+        };
+        let observed = state
+            .snapshot
+            .as_ref()
+            .filter(|_| state.age_seconds <= 5)
+            .and_then(|s| s.operations.domain.as_ref())
+            .map(|d| d.connector);
+        matches!(
+            (key, observed),
+            ('P', Some(ConnectorState::Running)) | ('S', Some(ConnectorState::Stopped))
+        )
+    }
+    fn address_navigation(&mut self, key: char) -> bool {
+        match key {
+            key @ ('[' | ']') => {
+                use TunnelTab::{Addresses, Log, Manage, Test};
+                let tabs = [Addresses, Manage, Test, Log];
+                let i = tabs
+                    .iter()
+                    .position(|tab| *tab == self.tunnel_tab)
+                    .unwrap_or(0);
+                self.tunnel_tab = tabs
+                    .get(cycle(i, tabs.len(), key == ']'))
+                    .copied()
+                    .unwrap_or(Addresses);
+            }
+            'Q' => {
+                self.access_notice = None;
+                self.tunnel_tab = if self.tunnel_tab == TunnelTab::Share {
+                    TunnelTab::Addresses
+                } else {
+                    TunnelTab::Share
+                };
+            }
+            'm' => self.tunnel_tab = TunnelTab::Manage,
+            'h' => {
+                self.tunnel_tab = TunnelTab::Log;
+            }
+            _ => return false,
+        }
+        self.scroll = 0;
+        true
+    }
     fn begin_operation(&mut self, key: char) -> bool {
         if !matches!(&self.mode, Mode::Live(_)) || self.palette || self.diagnostics.pending {
             return false;
         }
+        if (self.section == Section::Addresses && self.address_navigation(key))
+            || (self.section == Section::Backup && self.cloud_navigation(key))
+        {
+            return true;
+        }
         let operation = match (self.section, key) {
-            (Section::Addresses, 'Q') => {
-                self.tunnel_tab = if self.tunnel_tab == TunnelTab::Share {
-                    TunnelTab::Test
-                } else {
-                    TunnelTab::Share
-                };
-                self.scroll = 0;
-                return true;
-            }
-            (Section::Addresses, 'h') => {
-                self.tunnel_tab = TunnelTab::Log;
-                self.scroll = 0;
-                return true;
+            (Section::Addresses, 'T') => {
+                self.tunnel_tab = TunnelTab::Test;
+                Operation::TestStaff
             }
             (Section::Addresses, 't') => {
                 self.tunnel_tab = TunnelTab::Test;
                 Operation::TestTunnel
             }
             (Section::Addresses, key) if address_operations::shortcut(key).is_some() => {
+                if !self.connector_action_available(key) {
+                    self.access_notice = Some("address-connector-unavailable");
+                    self.scroll = 0;
+                    return true;
+                }
+                self.tunnel_tab = TunnelTab::Manage;
                 Operation::Address(
                     address_operations::shortcut(key).unwrap_or(AddressOperation::Refresh),
                 )
@@ -343,6 +594,19 @@ impl Panel {
                 service: "elzevir".to_owned(),
                 protocol: "auto".to_owned(),
             },
+            (Section::Backup, 'R') => {
+                let Mode::Live(state) = &self.mode else {
+                    return false;
+                };
+                let Some(review) = state
+                    .snapshot
+                    .as_ref()
+                    .and_then(|s| s.operations.review.clone())
+                else {
+                    return false;
+                };
+                Operation::ApplyRestore(review)
+            }
             (Section::Backup, key) if cloud::shortcut(key, self.cloud_view()).is_some() => {
                 Operation::Cloud(
                     cloud::shortcut(key, self.cloud_view()).unwrap_or(CloudOperation::Providers),
@@ -379,7 +643,7 @@ impl Panel {
             },
             _ => return false,
         };
-        if matches!(operation, Operation::TestTunnel) {
+        if matches!(operation, Operation::TestTunnel | Operation::TestStaff) {
             self.diagnostics.requested = Some(ObservationRequest::Operate(operation));
             self.diagnostics.pending = true;
         } else {
@@ -388,10 +652,30 @@ impl Panel {
         true
     }
 
-    /// Submits the open form as its primary button does: all fields are
-    /// visible at once, so pressing it is the explicit confirmation.
+    /// Confirms the current form using the same validation as its primary button.
     pub fn submit_form(&mut self) {
+        if let Some(Operation::Cloud(CloudOperation::Remote(target, RemoteCommand::Download(id)))) =
+            self.form.as_ref().map(|form| &form.operation)
+            && !self
+                .remote_page()
+                .is_some_and(|r| r.target == *target && r.files.iter().any(|(file, _)| file == id))
+        {
+            self.form = None;
+            self.cloud_tab = 2;
+            self.scroll = 0;
+            return;
+        }
         if let Some(form) = &mut self.form {
+            if matches!(form.operation, Operation::Restore { .. })
+                && form
+                    .values
+                    .iter()
+                    .zip(&form.checks)
+                    .any(|(v, c)| c.resolved(v).is_none())
+            {
+                form.notice = Some("restore-check-paths");
+                return;
+            }
             form.field = form.labels.len();
         }
         self.diagnostics.requested = self
@@ -403,6 +687,12 @@ impl Panel {
     }
 
     fn handle_form(&mut self, event: &Event) -> bool {
+        if let Event::Paste(value) = event {
+            if let Some(form) = &mut self.form {
+                form.paste(value);
+            }
+            return true;
+        }
         let Event::Key(key) = event else {
             return true;
         };
@@ -418,6 +708,29 @@ impl Panel {
         let Some(form) = &mut self.form else {
             return false;
         };
+        if key.code == KeyCode::F(2) && form.open_broker_settings() {
+            return true;
+        }
+        if let Operation::Cloud(CloudOperation::SendGroup(targets, _)) = &form.operation
+            && matches!(key.code, KeyCode::PageUp | KeyCode::PageDown)
+        {
+            let count = targets.len().max(1);
+            form.target_page = cycle(form.target_page, count, key.code == KeyCode::PageDown);
+            return true;
+        }
+        if matches!(form.operation, Operation::ApplyRestore(_)) && key.code == KeyCode::Enter {
+            self.submit_form();
+            return true;
+        }
+        if matches!(form.operation, Operation::Restore { .. })
+            && let Some(check) = form.checks.get_mut(form.field)
+        {
+            if matches!(key.code, KeyCode::F(7 | 8)) {
+                check.choose(key.code == KeyCode::F(8));
+                return true;
+            }
+            form.notice = None;
+        }
         if form.confirming() {
             if key.code == KeyCode::Char('y') {
                 self.submit_form();
@@ -474,6 +787,10 @@ impl Panel {
         }
         true
     }
+}
+
+fn cycle(current: usize, count: usize, forward: bool) -> usize {
+    (current % count + if forward { 1 } else { count - 1 }) % count
 }
 
 fn backup_operation(key: char, observed: Option<&Operations>) -> Operation {

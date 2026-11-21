@@ -10,6 +10,8 @@ pub enum Operation {
     Cloud(crate::CloudOperation),
     /// Explicitly test the configured public HTTPS endpoints.
     TestTunnel,
+    /// Test only the public staff endpoint.
+    TestStaff,
     /// Publish separate catalog/staff hostnames through the selected Cloudflare account.
     CloudflareSetup {
         /// Catalog hostname.
@@ -89,6 +91,8 @@ pub enum Operation {
         /// Private recovery key path.
         key: String,
     },
+    /// Apply the session-bound review after confirmation.
+    ApplyRestore(RestoreReview),
     /// Replace local retention and optional daily scheduling.
     Policy {
         /// Number of snapshots retained.
@@ -107,6 +111,7 @@ impl Operation {
         match self {
             Self::Address(action) => action.key(),
             Self::Cloud(action) => action.key(),
+            Self::TestStaff => "op-staff-test",
             Self::TestTunnel => "op-tunnel-test",
             Self::CloudflareSetup { .. } => "op-cloudflare-setup",
             Self::CloudflareLogin => "op-cloudflare-login",
@@ -123,7 +128,8 @@ impl Operation {
             Self::VerifyLatest => "op-backup-verify",
             Self::ExportLatest { .. } => "op-backup-export",
             Self::ExportKey { .. } => "op-key-export",
-            Self::Restore { .. } => "op-restore",
+            Self::Restore { .. } => "restore-validate",
+            Self::ApplyRestore(_) => "op-restore",
             Self::Policy { .. } => "op-policy",
         }
     }
@@ -167,9 +173,32 @@ pub struct Job {
     pub at: String,
 }
 
+/// Public metadata of a fully authenticated archive.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RestoreReview {
+    /// One-use handle bound to the operator session.
+    pub token: String,
+    /// Archive identity.
+    pub id: String,
+    /// Archive basename.
+    pub file: String,
+    /// Manifest timestamp.
+    pub created: String,
+    /// Schema of the snapshot database.
+    pub schema: i64,
+    /// Authenticated backup scope.
+    pub scope: crate::BackupScope,
+    /// The artifact belongs to the selected institution's catalog.
+    pub managed: bool,
+}
+
 /// Operational state from the selected institution.
 #[derive(Debug, Clone, Default)]
 pub struct Operations {
+    /// Completed validation awaiting review.
+    pub review: Option<RestoreReview>,
+    /// Identities in the institution's local ownership catalog.
+    pub managed_ids: Vec<String>,
     /// Operator-visible default managed backup directory.
     pub backup_folder: Option<std::path::PathBuf>,
     /// Retention, when the policy could be read.
@@ -208,6 +237,11 @@ pub struct Form {
     pub field: usize,
     /// Values under edit, at most eight fields of 512 Unicode scalar values each.
     pub values: Vec<String>,
+    /// Current restore path check for each input.
+    pub(crate) target_page: usize,
+    pub(crate) checks: [crate::restore_paths::Checked; 2],
+    /// Localized paste feedback.
+    pub(crate) notice: Option<&'static str>,
     /// Translation keys for the fields.
     pub labels: Vec<&'static str>,
 }
@@ -216,6 +250,7 @@ pub struct Form {
 #[must_use]
 pub(crate) fn choices(label: &str) -> Option<&'static [(&'static str, &'static str)]> {
     match label {
+        "restore-decision" => Some(&[("back", "restore-back"), ("apply", "restore-apply")]),
         "backup-scope" => Some(&[("full", "backup-full"), ("database", "backup-db")]),
         "backup-compression" => Some(&[
             ("fast", "backup-fast"),
@@ -228,11 +263,32 @@ pub(crate) fn choices(label: &str) -> Option<&'static [(&'static str, &'static s
 }
 
 impl Form {
+    pub(crate) fn open_broker_settings(&mut self) -> bool {
+        if !matches!(
+            self.operation,
+            Operation::Address(crate::AddressOperation::Enroll { .. })
+        ) {
+            return false;
+        }
+        if self.labels.last() != Some(&"broker-url") {
+            self.labels.push("broker-url");
+            self.values.push(String::new());
+        }
+        self.field = self.labels.len() - 1;
+        true
+    }
     /// Creates the fields appropriate for one explicit action.
     #[must_use]
     pub fn new(operation: Operation) -> Self {
         let (labels, values) = match &operation {
-            Operation::Address(action) => action.fields(),
+            Operation::Address(action) => {
+                let (mut labels, mut values) = action.fields();
+                if matches!(action,crate::AddressOperation::Enroll { base,.. } if base.is_empty()) {
+                    labels.pop();
+                    values.pop();
+                }
+                (labels, values)
+            }
             Operation::Cloud(action) => action.fields(),
             Operation::CloudflareSetup {
                 catalog,
@@ -273,6 +329,7 @@ impl Form {
                 vec![name.clone(), listen.clone(), language.clone()],
             ),
             Operation::Server(_)
+            | Operation::TestStaff
             | Operation::TestTunnel
             | Operation::CloudflareLogin
             | Operation::InstallCloudflared
@@ -301,6 +358,7 @@ impl Form {
                     folder.clone(),
                 ],
             ),
+            Operation::ApplyRestore(_) => (vec!["restore-decision"], vec!["back".into()]),
             Operation::Restore { input, key } => {
                 (vec!["op-input", "op-key"], vec![input.clone(), key.clone()])
             }
@@ -312,8 +370,33 @@ impl Form {
         Self {
             operation,
             field: 0,
+            target_page: 0,
+            checks: Default::default(),
+            notice: None,
             values,
             labels,
+        }
+    }
+    pub(crate) fn paste(&mut self, value: &str) {
+        let Some(field) = self.values.get_mut(self.field) else {
+            return;
+        };
+        if matches!(self.operation, Operation::Restore { .. }) {
+            if crate::restore_paths::single(value) {
+                value.clone_into(field);
+                self.notice = None;
+            } else {
+                field.clear();
+                self.notice = Some("restore-single");
+            }
+        } else if self
+            .labels
+            .get(self.field)
+            .is_some_and(|label| choices(label).is_none())
+            && !value.chars().any(char::is_control)
+            && field.chars().count() + value.chars().count() <= 512
+        {
+            field.push_str(value);
         }
     }
     /// Whether all fields are ready for explicit confirmation.
@@ -344,6 +427,7 @@ impl Form {
                 protocol: values.next()?,
             },
             Operation::Server(action) => Operation::Server(action),
+            Operation::TestStaff => Operation::TestStaff,
             Operation::TestTunnel => Operation::TestTunnel,
             Operation::CloudflareLogin => Operation::CloudflareLogin,
             Operation::InstallCloudflared => Operation::InstallCloudflared,
@@ -388,9 +472,15 @@ impl Form {
             Operation::ExportKey { .. } => Operation::ExportKey {
                 output: values.next()?,
             },
+            Operation::ApplyRestore(review) => {
+                if values.next()? != "apply" {
+                    return None;
+                }
+                Operation::ApplyRestore(review)
+            }
             Operation::Restore { .. } => Operation::Restore {
-                input: values.next()?,
-                key: values.next()?,
+                input: self.checks[0].resolved(&values.next()?)?,
+                key: self.checks[1].resolved(&values.next()?)?,
             },
             Operation::Policy { .. } => Operation::Policy {
                 keep: values.next()?,

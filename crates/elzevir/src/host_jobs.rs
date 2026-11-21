@@ -16,6 +16,7 @@ pub(crate) enum Task {
         folder: PathBuf,
     },
     Restore {
+        reviewed: String,
         input: PathBuf,
         key: PathBuf,
         config: Option<PathBuf>,
@@ -29,6 +30,7 @@ pub(crate) enum Task {
         setup: crate::broker::Setup,
     },
     TestTunnel,
+    TestStaff,
     CloudflareSetup {
         setup: crate::cloudflare::Setup,
     },
@@ -96,6 +98,7 @@ fn action(task: &Task) -> &'static str {
         Task::CloudflareLogin => "cloudflare_login",
         Task::Broker { .. } => "broker",
         Task::TestTunnel => "tunnel_test",
+        Task::TestStaff => "staff_test",
         Task::CloudflareSetup { .. } => "cloudflare_setup",
         Task::InstallTool { tool } => match tool {
             crate::managed_tools::Tool::Cloudflared => "install_cloudflared",
@@ -355,8 +358,19 @@ pub(crate) fn run(args: &Args) -> Result<(), String> {
         Ok(())
     });
     let result = execute(&ticket.directory, ticket.task, Some(progress));
-    if result.as_ref().is_err_and(|error| error.starts_with("B1:")) {
+    if let Err(error) = &result
+        && matches!(
+            error.as_str(),
+            crate::managed_restore::BEFORE
+                | crate::managed_restore::RECOVERED
+                | crate::managed_restore::PENDING
+        )
+    {
+        error.as_str()
+    } else if result.as_ref().is_err_and(|error| error.starts_with("B1:")) {
         "unsupported"
+    } else if receipt.action == "restore" && result.is_err() {
+        crate::managed_restore::BEFORE
     } else if result.is_ok() {
         "completed"
     } else {
@@ -431,9 +445,12 @@ fn execute(
                 &folder.join(format!("elzevir-{id}.age")),
             )
         }
-        Task::Restore { input, key, config } => {
-            crate::managed_restore::execute(directory, &input, &key, config.as_deref())
-        }
+        Task::Restore {
+            input,
+            key,
+            config,
+            reviewed,
+        } => crate::managed_restore::execute(directory, &input, &key, config.as_deref(), &reviewed),
         Task::Restart { name } => {
             crate::service::native_action("restart", &name)?;
             wait_healthy(directory)
@@ -441,6 +458,7 @@ fn execute(
         Task::Reboot => reboot(),
         Task::CloudflareLogin => crate::cloudflare::login(directory, progress),
         Task::Broker { setup } => crate::broker::execute(directory, &setup, progress.as_ref()),
+        Task::TestStaff => crate::tunnel_observe::test_staff(directory),
         Task::TestTunnel => crate::tunnel_observe::test(directory),
         Task::CloudflareSetup { setup } => crate::cloudflare::configure(directory, &setup),
         Task::InstallTool { tool } => crate::managed_tool_update::execute(directory, tool),
@@ -570,7 +588,15 @@ fn receipts_all(directory: &Path) -> Result<Vec<Receipt>, String> {
         if receipt.id != id
             || !matches!(
                 receipt.state.as_str(),
-                "queued" | "running" | "completed" | "failed" | "unsupported" | "interrupted"
+                "queued"
+                    | "running"
+                    | "completed"
+                    | "failed"
+                    | "unsupported"
+                    | "interrupted"
+                    | crate::managed_restore::BEFORE
+                    | crate::managed_restore::RECOVERED
+                    | crate::managed_restore::PENDING
             )
             || !matches!(
                 receipt.action.as_str(),
@@ -584,6 +610,7 @@ fn receipts_all(directory: &Path) -> Result<Vec<Receipt>, String> {
                     | "install_rclone"
                     | "cloudflare_login"
                     | "cloudflare_setup"
+                    | "staff_test"
                     | "tunnel_test"
                     | "broker"
             )
@@ -636,7 +663,12 @@ pub(crate) fn wait(directory: &Path, id: &str) -> Result<(), String> {
         }
         match receipt.state.as_str() {
             "completed" => return Ok(()),
-            "failed" | "unsupported" | "interrupted" => {
+            "failed"
+            | "unsupported"
+            | "interrupted"
+            | crate::managed_restore::BEFORE
+            | crate::managed_restore::RECOVERED
+            | crate::managed_restore::PENDING => {
                 return Err("host operation failed; inspect the recovery files".to_owned());
             }
             _ => std::thread::sleep(std::time::Duration::from_millis(200)),

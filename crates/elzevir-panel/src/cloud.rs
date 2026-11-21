@@ -1,8 +1,64 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Pure cloud-connection forms and safe provider observations.
+/// Destination shown in the confirmation and checked again by the worker.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CloudTarget {
+    /// Plan identity.
+    pub plan: String,
+    /// Connection identity.
+    pub connection: String,
+    /// Relative folder.
+    pub folder: String,
+}
+/// Work against one explicitly selected destination.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum RemoteCommand {
+    /// Create a new backup for the selected plan.
+    Create,
+    /// List a one-based page.
+    Browse(u16),
+    /// Download the selected encrypted artifact.
+    Download(String),
+    /// Send an existing local artifact.
+    Send(String),
+}
+/// Bounded result of an explicit remote folder inspection.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct RemotePage {
+    /// Exact destination inspected.
+    pub target: CloudTarget,
+    /// Current one-based page.
+    pub page: u16,
+    /// Number of pages including an empty page.
+    pub pages: u16,
+    /// Object identity and encrypted size.
+    pub files: Vec<(String, u64)>,
+    /// Available quota, when reported by the provider.
+    pub free: Option<u64>,
+}
+
+impl RemotePage {
+    pub(crate) fn selected_index(
+        &self,
+        selection: Option<&(CloudTarget, String)>,
+    ) -> Option<usize> {
+        let (target, id) = selection?;
+        if *target != self.target {
+            return None;
+        }
+        self.files.iter().position(|(file, _)| file == id)
+    }
+}
+
 /// Confirmed cloud connection intention; sensitive values have no debug representation.
 #[derive(Clone, PartialEq, Eq)]
 pub enum CloudOperation {
+    /// Browse, transfer or retrieve at the reviewed destination.
+    Remote(CloudTarget, RemoteCommand),
+    /// Send one authenticated snapshot to the explicitly marked destinations.
+    SendGroup(Vec<CloudTarget>, String),
     /// Refresh available rclone providers.
     Providers,
     /// Begin a provider-generated configuration session.
@@ -85,6 +141,13 @@ impl std::fmt::Debug for CloudOperation {
 impl CloudOperation {
     pub(crate) const fn key(&self) -> &'static str {
         match self {
+            Self::SendGroup(..) => "cloud-send-group",
+            Self::Remote(_, cmd) => match cmd {
+                RemoteCommand::Create => "cloud-run-plan",
+                RemoteCommand::Browse(_) => "cloud-browse",
+                RemoteCommand::Send(_) => "cloud-send",
+                RemoteCommand::Download(_) => "cloud-download",
+            },
             Self::Plan { .. } => "cloud-plan",
             Self::RunPlan { .. } => "cloud-run-plan",
             Self::DisablePlan { .. } => "cloud-disable-plan",
@@ -99,6 +162,12 @@ impl CloudOperation {
     }
     pub(crate) fn fields(&self) -> (Vec<&'static str>, Vec<String>) {
         match self {
+            Self::SendGroup(_, id) => (vec!["cloud-artifact"], vec![id.clone()]),
+            Self::Remote(_, cmd) => match cmd {
+                RemoteCommand::Create | RemoteCommand::Download(_) => (vec![], vec![]),
+                RemoteCommand::Browse(page) => (vec!["cloud-page"], vec![page.to_string()]),
+                RemoteCommand::Send(id) => (vec!["cloud-artifact"], vec![id.clone()]),
+            },
             Self::Plan {
                 id,
                 name,
@@ -161,6 +230,16 @@ impl CloudOperation {
     pub(crate) fn finish(self, values: Vec<String>) -> Option<Self> {
         let mut values = values.into_iter();
         Some(match self {
+            Self::SendGroup(targets, _) => Self::SendGroup(targets, values.next()?),
+            Self::Remote(target, cmd) => Self::Remote(
+                target,
+                match cmd {
+                    RemoteCommand::Create => RemoteCommand::Create,
+                    RemoteCommand::Browse(_) => RemoteCommand::Browse(values.next()?.parse().ok()?),
+                    RemoteCommand::Send(_) => RemoteCommand::Send(values.next()?),
+                    RemoteCommand::Download(id) => RemoteCommand::Download(id),
+                },
+            ),
             Self::Plan { .. } => Self::Plan {
                 id: values.next()?,
                 name: values.next()?,
@@ -213,6 +292,8 @@ pub struct CloudConnection {
     pub provider: String,
     /// Whether configuration finished.
     pub ready: bool,
+    /// Most recent test failed.
+    pub test_failed: bool,
     /// Most recent completed fictitious upload test.
     pub tested_at: Option<String>,
 }
@@ -239,6 +320,15 @@ pub struct CloudQuestion {
 /// Bounded cloud metadata; no credentials or provider state.
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct CloudView {
+    /// Most recent successful folder listing.
+    pub remote: Option<RemotePage>,
+    /// Transfers with their exact destination, identity and localized outcome.
+    pub transfers: Vec<(CloudTarget, String, String)>,
+    /// Private encrypted download available to the restore wizard.
+    pub download: Option<(CloudTarget, std::path::PathBuf)>,
+    /// Result of the most recent remote read.
+    pub notice: Option<(CloudTarget, String)>,
+
     /// Provider names and static descriptions.
     pub providers: Vec<(String, String)>,
     /// Connection states.
@@ -266,6 +356,16 @@ pub struct CloudPlan {
     pub daily: Option<String>,
     /// Verified copies still awaiting retention cleanup.
     pub retention_pending: bool,
+}
+
+impl CloudPlan {
+    pub(crate) fn target(&self) -> CloudTarget {
+        CloudTarget {
+            plan: self.id.clone(),
+            connection: self.connection.clone(),
+            folder: self.folder.clone(),
+        }
+    }
 }
 
 pub(crate) fn shortcut(key: char, view: Option<&CloudView>) -> Option<CloudOperation> {

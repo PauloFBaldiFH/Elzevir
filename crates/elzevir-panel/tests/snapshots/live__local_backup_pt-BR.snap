@@ -8,12 +8,12 @@ Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:
 |  x Diagnóstico           ||Em execução                                                                     ||Biblioteca de teste         |
 |  a Endereços e acesso    ||                                                                                ||                            |
 |> b Backup e agendamentos ||n Criar · v Verificar · e Exportar · k Chave · o Restaurar · s Agendar          ||Listener configurado        |
-|  u Atualizações          ||p provedores · c conectar · a responder ao provedor · y camada crypt · t teste  ||127.0.0.1:0                 |
-|  r Serviço               ||com+Operação com confirmação--------------------------------------------------+ ||                            |
-|                          ||g c| Criar backup cifrado                                                     |·||Listener observado          |
-|                          ||C r| Biblioteca de teste                                                      | ||127.0.0.1:8080              |
-|                          ||Cóp| Sessões ativas observadas da equipe: Não lido                            | ||                            |
-|                          ||Bac| Espaço de trabalho estimado: 12 MiB                                      | ||Última consulta: há 0       |
+|  u Atualizações          ||Cópias mantidas: Não lido                                                       ||127.0.0.1:0                 |
+|  r Serviço               ||Bac+Operação com confirmação--------------------------------------------------+ ||                            |
+|                          ||[Co| Criar backup cifrado                                                     | ||Listener observado          |
+|                          ||[ ]| Biblioteca de teste                                                      | ||127.0.0.1:8080              |
+|                          ||   | Sessões ativas observadas da equipe: Não lido                            | ||                            |
+|                          ||   | Espaço de trabalho estimado: 12 MiB                                      | ||Última consulta: há 0       |
 |                          ||   |                                                                          | ||segundos                    |
 |                          ||   | Escopo                                                                   | ||                            |
 |                          ||   |         Instituição completa                    Somente banco            | ||Observações somente de      |

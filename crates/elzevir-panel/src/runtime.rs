@@ -80,10 +80,18 @@ pub(crate) fn with_terminal<T>(
     let terminal = ratatui::try_init()?;
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        drop(execute!(io::stdout(), DisableMouseCapture));
+        drop(execute!(
+            io::stdout(),
+            event::DisableBracketedPaste,
+            DisableMouseCapture
+        ));
         previous(info);
     }));
-    execute!(io::stdout(), EnableMouseCapture)?;
+    execute!(
+        io::stdout(),
+        event::EnableBracketedPaste,
+        EnableMouseCapture
+    )?;
     let result = action(terminal);
     let restored = guard.restore();
     let value = result?;
@@ -97,7 +105,11 @@ struct TerminalGuard {
 
 impl TerminalGuard {
     fn restore(mut self) -> io::Result<()> {
-        let mouse = execute!(io::stdout(), DisableMouseCapture);
+        let mouse = execute!(
+            io::stdout(),
+            event::DisableBracketedPaste,
+            DisableMouseCapture
+        );
         let terminal = ratatui::try_restore();
         self.active = false;
         mouse.and(terminal)
@@ -108,10 +120,28 @@ impl Drop for TerminalGuard {
     fn drop(&mut self) {
         // Emergency restoration also covers partial terminal initialization.
         if self.active {
-            drop(execute!(io::stdout(), DisableMouseCapture));
+            drop(execute!(
+                io::stdout(),
+                event::DisableBracketedPaste,
+                DisableMouseCapture
+            ));
             drop(ratatui::try_restore());
         }
     }
+}
+
+fn new_restore_review(
+    previous: Option<&Snapshot>,
+    current: &Snapshot,
+) -> Option<crate::RestoreReview> {
+    let review = current.operations.review.as_ref()?;
+    if previous
+        .and_then(|s| s.operations.review.as_ref())
+        .is_some_and(|r| r.token == review.token)
+    {
+        return None;
+    }
+    Some(review.clone())
 }
 
 fn interact(
@@ -122,10 +152,13 @@ fn interact(
     worker: Option<&Worker>,
     stopping: impl Fn() -> bool,
 ) -> io::Result<()> {
+    let mut access = crate::access_actions::Actions::detect();
+    panel.access_help = Some(access.help());
     let mut scene = crate::ui::Scene::default();
     let mut picker: Option<crate::folder_picker::Picker> = None;
     let mut observed_at: Option<Instant> = None;
     let mut action_sequence = None;
+    let mut path_probe = crate::restore_paths::Probe::default();
     let tick = Duration::from_millis(150);
     let mut last_tick = Instant::now();
     while !panel.quit && !stopping() {
@@ -133,7 +166,15 @@ fn interact(
             if let Some((snapshot, at, completed)) = worker.take()
                 && let Mode::Live(state) = &mut panel.mode
             {
+                let review = new_restore_review(state.snapshot.as_ref(), &snapshot);
                 state.snapshot = Some(snapshot);
+                if let Some(review) = review
+                    && panel.form.is_none()
+                    && panel.section == crate::Section::Backup
+                {
+                    panel.form = Some(crate::Form::new(crate::Operation::ApplyRestore(review)));
+                }
+                panel.initialize_cloud_file();
                 observed_at = Some(at);
                 if action_sequence.is_some_and(|requested| completed >= requested) {
                     panel.diagnostics.pending = false;
@@ -156,6 +197,8 @@ fn interact(
         if let Some(active) = &mut picker {
             active.poll();
         }
+        access.poll(&mut panel);
+        path_probe.poll(panel.form.as_mut());
         let drawn = terminal
             .draw(|frame| {
                 if let Some(active) = &picker {
@@ -168,7 +211,15 @@ fn interact(
             .area;
         if event::poll(tick.saturating_sub(last_tick.elapsed()))? {
             let input = event::read()?;
-            if handle_picker(&input, &mut picker, &mut panel) {
+            let size = terminal.size()?;
+            if size != ratatui::layout::Size::new(drawn.width, drawn.height) {
+                continue;
+            }
+            if picker.is_none() && panel.size_warning(size.width, size.height) {
+                panel.handle(&input, size.width, size.height);
+                continue;
+            }
+            if handle_picker(&input, &mut picker, &mut panel) || access.handle(&input, &mut panel) {
                 continue;
             }
             match input {
@@ -176,10 +227,7 @@ fn interact(
                     let point = (mouse.column, mouse.row).into();
                     scene.pointer = Some(point);
                     match mouse.kind {
-                        MouseEventKind::Down(MouseButton::Left)
-                            if terminal.size()?
-                                == ratatui::layout::Size::new(drawn.width, drawn.height) =>
-                        {
+                        MouseEventKind::Down(MouseButton::Left) => {
                             if let Some(action) = scene.hit(point) {
                                 action.apply(&mut panel, drawn);
                             }
@@ -211,10 +259,23 @@ fn handle_picker(
     panel: &mut Panel,
 ) -> bool {
     if let Some(active) = picker {
+        if let Event::Paste(path) = input {
+            active.paste(path);
+            return true;
+        }
         if let Event::Key(key) = input
             && key.kind == event::KeyEventKind::Press
         {
-            if key.code == event::KeyCode::Esc {
+            if key.code == event::KeyCode::F(6)
+                && panel.form.as_ref().is_some_and(|f| {
+                    matches!(f.operation, crate::Operation::Restore { .. }) && f.field == 0
+                })
+            {
+                *picker = None;
+                panel.form = None;
+                panel.cloud_tab = 2;
+                panel.scroll = 0;
+            } else if key.code == event::KeyCode::Esc {
                 *picker = None;
             } else if let Some(mut path) = active.key(key.code) {
                 if let Some(form) = &mut panel.form {
@@ -237,7 +298,9 @@ fn handle_picker(
         && let Some(form) = &mut panel.form
         && matches!(
             form.operation,
-            crate::Operation::BackupNow { .. } | crate::Operation::ExportLatest { .. }
+            crate::Operation::BackupNow { .. }
+                | crate::Operation::ExportLatest { .. }
+                | crate::Operation::Restore { .. }
         )
         && let Mode::Live(state) = &panel.mode
         && let Some(folder) = state
@@ -245,6 +308,18 @@ fn handle_picker(
             .as_ref()
             .and_then(|s| s.operations.backup_folder.clone())
     {
+        if matches!(form.operation, crate::Operation::Restore { .. }) {
+            if form.field < 2
+                && let Some(s) = &state.snapshot
+            {
+                *picker = Some(crate::folder_picker::Picker::files(
+                    folder,
+                    form.field == 0,
+                    &s.operations.managed_ids,
+                ));
+            }
+            return true;
+        }
         form.field = form.values.len().saturating_sub(1);
         *picker = Some(crate::folder_picker::Picker::new(folder));
         return true;

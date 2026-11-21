@@ -169,7 +169,7 @@ pub(crate) fn action_bar(
     }
     let contextual: &[(&str, char)] = match panel.section {
         Section::Diagnostics => &[("ui-verify", 'v'), ("ui-export", 'e')],
-        Section::Addresses => &[("ui-test", 'v'), ("ui-share", 'Q'), ("ui-config", 's')],
+        Section::Addresses => &[("ui-test", 't'), ("ui-share", 'Q'), ("ui-config", 'm')],
         Section::Backup => &[("ui-new", 'n'), ("ui-verify", 'v'), ("ui-config", 's')],
         Section::Updates => &[("ui-search", 'c'), ("ui-install", 'i'), ("ui-recover", 'r')],
         // The service section has its own big buttons.
@@ -191,7 +191,11 @@ pub(crate) fn action_bar(
                 format!(
                     "{} [{}]",
                     label(messages.get(key), ascii),
-                    shortcut.to_ascii_uppercase()
+                    if panel.section == Section::Addresses {
+                        shortcut
+                    } else {
+                        shortcut.to_ascii_uppercase()
+                    }
                 ),
                 Action::Key(KeyCode::Char(shortcut)),
                 false,

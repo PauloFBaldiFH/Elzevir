@@ -76,6 +76,12 @@ pub struct DomainStatus {
     pub staff: Option<String>,
     /// Classified Fluent error key; never a remote error payload.
     pub failure: Option<&'static str>,
+    /// Time when the local service state was sampled.
+    pub connector_at: String,
+    /// Broker-selected device polling interval while authorization is outstanding.
+    pub poll_seconds: Option<u32>,
+    /// Time the persisted registration stage was last saved.
+    pub registration_at: Option<String>,
     /// Local connector service observation.
     pub connector: ConnectorState,
     /// Last remotely observed staff restrictions.

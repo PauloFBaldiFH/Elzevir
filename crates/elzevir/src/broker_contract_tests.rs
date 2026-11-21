@@ -212,6 +212,30 @@ fn pending_registration_respects_advertised_intervals_and_resumes_provisioning()
     assert_eq!(connector.connects.get(), 1);
 }
 #[test]
+fn resume_reopens_the_saved_identity_without_a_second_authorization_request() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut setup = tests::fixture(directory.path());
+    let wire = Wire::new(false);
+    let clock = Clock::new();
+    let settings = crate::server_config::ServeArgs::for_status(Some(setup.config.clone()), None)
+        .resolve()
+        .unwrap();
+    let original = begin(directory.path(), &setup, &settings, &wire, &clock)
+        .unwrap()
+        .key()
+        .unwrap()
+        .public();
+    setup.action = Action::Resume;
+    let connector = ConnectorFake::new();
+    execute_with_clock(directory.path(), &setup, &wire, &connector, None, &clock).unwrap();
+    assert_eq!(
+        load(directory.path()).unwrap().key().unwrap().public(),
+        original
+    );
+    assert_eq!(connector.connects.get(), 1);
+    assert!(wire.replies.borrow().is_empty());
+}
+#[test]
 fn denied_expired_or_wrong_domain_never_enroll_or_start_a_connector() {
     for status in ["denied", "expired", "wrong_domain"] {
         let directory = tempfile::tempdir().unwrap();

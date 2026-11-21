@@ -21,34 +21,30 @@ pub(crate) fn rows(
     if let Some(result) = operations.and_then(|operations| operations.result) {
         rows.push(Line::from(messages.get(result)));
     }
-    rows.extend(domain_rows(operations, messages));
-    rows.extend(remote_rows(operations, messages));
-    if let Some(operations) = operations {
-        for job in operations
-            .jobs
-            .iter()
-            .filter(|job| {
-                matches!(
-                    job.action,
-                    "op-cloudflare-login"
-                        | "op-cloudflare-setup"
-                        | "op-tunnel-test"
-                        | "broker-operation"
-                )
-            })
-            .take(3)
-        {
-            rows.push(Line::from(format!(
-                "{}: {}",
-                messages.get(job.action),
-                messages.get(job.state)
-            )));
-        }
+    if matches!(tab, TunnelTab::Addresses | TunnelTab::Manage) {
+        rows.extend(domain_rows(operations, messages));
+        rows.extend(remote_rows(operations, messages));
     }
+    job_rows(operations, messages, &mut rows);
     match operations.map(|operations| &operations.tunnel) {
         Some(TunnelState::Configured(tunnel)) => {
             rows.push(row(messages, "tunnel-catalog", Some(text(&tunnel.catalog))));
             rows.push(row(messages, "tunnel-staff", Some(text(&tunnel.staff))));
+            if tab == TunnelTab::Addresses {
+                rows.push(row(
+                    messages,
+                    "tunnel-catalog-check",
+                    Some(check(messages, tunnel.catalog_check)),
+                ));
+                rows.push(row(
+                    messages,
+                    "tunnel-tested-at",
+                    tunnel.tested_at.as_deref().map(text),
+                ));
+            }
+            if !matches!(tab, TunnelTab::Test | TunnelTab::Log) {
+                return rows;
+            }
             rows.push(Line::from(messages.get(if tab == TunnelTab::Test {
                 "tunnel-tab-test"
             } else {
@@ -59,6 +55,11 @@ pub(crate) fn rows(
                     messages,
                     "tunnel-catalog-check",
                     Some(check(messages, tunnel.catalog_check)),
+                ));
+                rows.push(row(
+                    messages,
+                    "address-staff-at",
+                    tunnel.staff_tested_at.as_deref().map(text),
                 ));
                 rows.push(row(
                     messages,
@@ -100,6 +101,32 @@ pub(crate) fn rows(
     }
     rows.push(Line::default());
     rows
+}
+
+fn job_rows(operations: Option<&Operations>, messages: &Messages, rows: &mut Vec<Line<'static>>) {
+    if let Some(operations) = operations {
+        for job in operations
+            .jobs
+            .iter()
+            .filter(|job| {
+                matches!(
+                    job.action,
+                    "op-cloudflare-login"
+                        | "op-cloudflare-setup"
+                        | "op-tunnel-test"
+                        | "op-staff-test"
+                        | "broker-operation"
+                )
+            })
+            .take(3)
+        {
+            rows.push(Line::from(format!(
+                "{}: {}",
+                messages.get(job.action),
+                messages.get(job.state)
+            )));
+        }
+    }
 }
 
 fn remote_rows(operations: Option<&Operations>, messages: &Messages) -> Vec<Line<'static>> {
@@ -148,9 +175,26 @@ fn domain_rows(operations: Option<&Operations>, messages: &Messages) -> Vec<Line
         ));
         rows.push(row(
             messages,
+            "address-registration-at",
+            domain.registration_at.as_deref().map(text),
+        ));
+        rows.push(row(
+            messages,
             "domain-connector",
             Some(messages.get(domain.connector.key())),
         ));
+        rows.push(row(
+            messages,
+            "address-connector-at",
+            Some(text(&domain.connector_at)),
+        ));
+        if let Some(interval) = domain.poll_seconds {
+            rows.push(row(
+                messages,
+                "address-interval",
+                Some(interval.to_string()),
+            ));
+        }
         if let Some(status) = domain.remote_status {
             rows.push(row(
                 messages,

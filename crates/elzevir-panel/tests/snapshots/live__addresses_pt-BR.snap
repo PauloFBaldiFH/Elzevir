@@ -7,18 +7,17 @@ Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://catalog.ex
 |  d Painel de controle    |+Endereços e acesso--------------------------------------------------------------++Instituição selecionada-----+
 |  x Diagnóstico           ||Em execução                                                                     ||Biblioteca de teste         |
 |> a Endereços e acesso    ||                                                                                ||                            |
-|  b Backup e agendamentos ||l Entrar na Cloudflare · s Domínio próprio · t Teste · h Log                    ||Listener configurado        |
-|  u Atualizações          ||g registrar/retomar *.elzevir.app · c consultar broker · w/W equipe             ||127.0.0.1:0                 |
-|  r Serviço               ||ligar/desligar · k exportar recuperação · o recuperar · n renovar · z           ||                            |
-|                          ||desvincular domínio · Q QR                                                      ||Listener observado          |
-|                          ||Domínio & Túnel (*.elzevir.app)                                                 ||127.0.0.1:8080              |
-|                          ||Estado do cadastro indisponível                                                 ||                            |
-|                          ||Não foi possível observar a configuração do túnel público.                      ||Última consulta: há 0       |
-|                          ||                                                                                ||segundos                    |
-|                          ||Modo no arquivo carregado: Mesmo endereço                                       ||                            |
-|                          ||Modo em execução: Nomes de host separados                                       ||Observações somente de      |
-|                          ||Nome de host do catálogo: catalog.example                                       ||leitura                     |
-|                          ||Nome de host da equipe: staff.example                                           ||                            |
+|  b Backup e agendamentos ||[Endereços e acesso] | Configurar e gerenciar | Teste | Registro                ||Listener configurado        |
+|  u Atualizações          ||[ / ] abas · Q compartilhar catálogo · t testar HTTPS público · T HTTPS da      ||127.0.0.1:0                 |
+|  r Serviço               ||equipe                                                                          ||                            |
+|                          ||Domínio & Túnel (*.elzevir.app)                                                 ||Listener observado          |
+|                          ||Estado do cadastro indisponível                                                 ||127.0.0.1:8080              |
+|                          ||Não foi possível observar a configuração do túnel público.                      ||                            |
+|                          ||                                                                                ||Última consulta: há 0       |
+|                          ||Modo no arquivo carregado: Mesmo endereço                                       ||segundos                    |
+|                          ||Modo em execução: Nomes de host separados                                       ||                            |
+|                          ||Nome de host do catálogo: catalog.example                                       ||Observações somente de      |
+|                          ||Nome de host da equipe: staff.example                                           ||leitura                     |
 |                          ||Catálogo (neste computador): http://catalog.example:8080/                       ||                            |
 |                          ||Equipe (neste computador): http://staff.example:8080/equipe                     ||                            |
 |                          ||Teste HTTP do catálogo: OK                                                      ||                            |
@@ -28,6 +27,7 @@ Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://catalog.ex
 |                          ||Testes feitos nesta máquina; DNS, TLS e acesso remoto não foram testados.       ||                            |
 |                          ||                                                                                ||                            |
 |                          ||Alternativas nas interfaces locais (sem teste de outro computador)              ||                            |
+|                          ||Sem alternativas IP para este bind; nomes exigem DNS/hosts no cliente.          ||                            |
 |                          |+--------------------------------------------------------------------------------++----------------------------+
-+--------------------------+         Testar [V]               Compartilhar [Q]             Configurar [S]               Atualizar [F]
++--------------------------+         Testar [t]               Compartilhar [Q]             Configurar [m]               Atualizar [f]
 Tab/setas: navegar | f: atualizar | PgUp/PgDn: rolar | Ctrl+P: paleta | q/Ctrl+C: sair

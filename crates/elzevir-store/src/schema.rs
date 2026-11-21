@@ -1669,6 +1669,30 @@ mod tests {
     }
 
     #[test]
+    fn restore_preflight_accepts_legacy_and_current_images_and_refuses_future_schema() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("snapshot.sqlite");
+        let original = Connection::open(&path).unwrap();
+        original.execute_batch(MIGRATIONS.first().unwrap()).unwrap();
+        original.pragma_update(None, "user_version", 1).unwrap();
+        drop(original);
+        assert_eq!(crate::inspect_snapshot(&path).unwrap().schema_version, 1);
+        drop(open_writer(&path).unwrap());
+        assert_eq!(
+            crate::inspect_snapshot(&path).unwrap().schema_version,
+            latest_version()
+        );
+        Connection::open(&path)
+            .unwrap()
+            .pragma_update(None, "user_version", latest_version() + 1)
+            .unwrap();
+        assert!(matches!(
+            crate::inspect_snapshot(&path),
+            Err(StoreError::SchemaTooNew { .. })
+        ));
+    }
+
+    #[test]
     fn newer_schema_is_refused() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("elzevir.db");

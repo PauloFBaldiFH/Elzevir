@@ -65,7 +65,7 @@ elzevir operations --config CAMINHO/server.toml list
 elzevir backup key --data-dir CAMINHO/data --output DESTINO-NOVO/backup.key
 ```
 
-A cópia contém uma imagem SQLite consistente, configurações e segredos
+A cópia completa contém uma imagem SQLite consistente, configurações e segredos
 cifrados com age. A chave de recuperação fica fora do arquivo. Exporte-a
 explicitamente para um destino privado separado: o arquivo cifrado sozinho
 não permite restauração. Índice, logs e certificado mestre Cloudflare não
@@ -74,6 +74,17 @@ entram no backup. O índice é reconstruído ao restaurar.
 A seção Backup permite criar, verificar, exportar, restaurar e definir
 retenção/agenda local e de nuvem. No painel, a restauração gerenciada para o
 serviço, preserva os arquivos anteriores e verifica saúde após reiniciar.
+Em **Backup**, pressione `o` e use `F2` no campo da cópia ou da chave.
+`F4` lista as cópias gerenciadas da instituição. `F3` abre a pasta pessoal
+no host do painel. Use `F5` para incluir arquivos com outras extensões.
+Em SSH, os dois caminhos devem existir no servidor. Colar um caminho só
+preenche o campo. F7 escolhe a forma literal e F8 a interpretada quando
+ambas identificam arquivos. **Validar cópia** autentica o pacote e verifica
+o banco antes de abrir a revisão. O foco começa em **Voltar**. Para aplicar,
+selecione **Restaurar** com a seta e confirme com Enter.
+**Somente banco** preserva as configurações e credenciais da instalação e
+reconstrói o índice. O histórico distingue falha antes da troca, retorno à
+instalação anterior e recuperação pendente.
 Falha de saúde provoca tentativa de retorno à instalação anterior. O comando
 backup restore é offline e exige servidor parado e --confirm-restore.
 
@@ -92,6 +103,25 @@ A configuração rclone roda na conta limitada do servidor; mantenha o serviço
 em execução para responder aos formulários pelo canal administrativo local.
 Transferências usam nomes próprios e retenção de artefatos reconhecidos, sem
 sync/purge sobre o remoto. Falha de envio preserva a cópia local.
+
+Em **Backup**, `[` e `]` alternam entre **Conexões**, **Planos**, **Na nuvem**
+e **Histórico**. Use `<` e `>` para selecionar o plano. A confirmação mostra
+a conexão e a pasta. Em **Planos**, `u` cria uma cópia nova e `U` envia ou
+confere uma cópia local por ID. Para usar o mesmo arquivo em vários planos,
+marque cada destino com `+` e pressione `M`. PgUp/PgDn percorrem os destinos na confirmação.
+
+**Envio a confirmar** registra uma transferência cujo resultado ainda precisa
+ser conferido. Use `U` com o mesmo ID. O serviço compara o SHA-256 remoto
+e mantém a cópia local disponível para nova tentativa. A retenção só remove
+objetos registrados e com conteúdo conferido. Registros antigos sem SHA-256
+permanecem no remoto.
+
+Em **Na nuvem**, use `l` para consultar uma página de até 20 arquivos, `,` e
+`.` para selecionar e `D` para baixar. A consulta admite até 8.192 entradas e
+2 MiB de metadados por pasta. O painel mostra **Indisponível** se o provedor
+omitir a quota. O arquivo baixado fica em `DATA_DIR/cloud-downloads` após
+verificação de tamanho e SHA-256. Use `O` para informar a chave e iniciar
+**Validar cópia**. O serviço continua ativo até a confirmação de restauração.
 
 Domínio é opcional e pode ser escolhido posteriormente, sem recompilar.
 Domínio próprio requer autorização da conta Cloudflare e dois hostnames
