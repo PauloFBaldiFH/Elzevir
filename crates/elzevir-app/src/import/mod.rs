@@ -6,6 +6,7 @@
 //! to a serial one (docs/arquitetura/03-estrategia-reconstrucao.md, §1.2 items 2 and 8).
 
 pub mod batches;
+pub mod biblivre;
 pub mod containers;
 pub mod edits;
 pub mod koha_sql;
@@ -32,6 +33,8 @@ pub use crate::parallelism::Parallelism;
 /// Settings of one import.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImportOptions {
+    /// Explicit interpretation of Biblivre local holdings.
+    pub biblivre: Option<biblivre::Profile>,
     /// Stable source installation for local identifiers.
     pub origin: Option<String>,
     /// Visibility explicitly selected for local notes.
@@ -57,6 +60,7 @@ pub struct ImportOptions {
 impl Default for ImportOptions {
     fn default() -> Self {
         Self {
+            biblivre: None,
             limits: Limits::default(),
             parallelism: Parallelism::Serial,
             chunk: NonZeroUsize::new(1024).unwrap_or(NonZeroUsize::MIN),
@@ -121,6 +125,9 @@ pub enum RecordRejected {
 /// Why one record of the file was not imported. The import goes on with the next one.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RecordFailure {
+    /// A Biblivre holding or its source identity cannot be interpreted unambiguously.
+    #[error("Biblivre: {0}")]
+    Biblivre(String),
     /// Authority and holdings records cannot be ingested as bibliographic descriptions.
     #[error("expected a bibliographic record")]
     NotBibliographic,
@@ -511,7 +518,7 @@ fn prepare(
     };
     (
         place,
-        to_model(raw.bytes, &options.limits, &options.translations).map(|mut record| {
+        to_model(raw.bytes, &options.limits, &options.translations).and_then(|mut record| {
             for note in &mut record.instance.notes {
                 if note.kind == elzevir_domain::catalog::NoteKind::Local {
                     note.visibility = options.local_note_visibility;
@@ -530,7 +537,10 @@ fn prepare(
                 .and_then(|index| options.reviewed.get(index))
                 .cloned()
                 .map(Box::new);
-            record
+            if let Some(profile) = &options.biblivre {
+                profile.map(&mut record)?;
+            }
+            Ok(record)
         }),
     )
 }

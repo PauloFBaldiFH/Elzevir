@@ -91,7 +91,8 @@ pub(crate) fn execute(
             selection.map_err(BatchError::Invalid)?;
             if batch.archive.is_none()
                 && (recipe.archive.is_some()
-                    || (batch.is_table() && !recipe.edits.is_empty())
+                    || (batch.is_table()
+                        && (!recipe.edits.is_empty() || recipe.biblivre.is_some()))
                     || (!batch.is_table() && recipe.table.is_some()))
             {
                 return Err(BatchError::Refused(BatchRefusal::IncompatibleRecipe));
@@ -216,6 +217,7 @@ fn close(batch: &mut Batch) {
 
 fn options(batch: &Batch) -> ImportOptions {
     ImportOptions {
+        biblivre: batch.recipe.biblivre.as_deref().cloned(),
         matching: batch.recipe.matching,
         origin: batch.recipe.origin.clone(),
         local_note_visibility: batch.recipe.local_note_visibility,
@@ -373,7 +375,7 @@ fn prepare_archive(
 }
 
 fn check_table_recipe(recipe: &Recipe) -> Result<(), BatchError> {
-    if !recipe.edits.is_empty() {
+    if !recipe.edits.is_empty() || recipe.biblivre.is_some() {
         return Err(BatchError::Refused(BatchRefusal::EditsNotForSpreadsheet));
     }
     Ok(())

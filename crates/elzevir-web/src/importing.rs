@@ -751,6 +751,7 @@ fn show_batch(
             .as_ref()
             .is_some_and(|preview| preview.report.issues.is_empty());
     let interrupted = batch.state == BatchState::Confirming;
+    let biblivre = preview.as_ref().and_then(|p| biblivre_form(p, &recipe));
     let preview =
         preview.map(|preview| preview_page(t, &batch.id, page, &preview, recipe.matching));
     let revision = batch.revision;
@@ -815,6 +816,7 @@ fn show_batch(
             rules,
             matching,
             local_notes,
+            biblivre,
             origin,
             excluded,
         })),
@@ -825,6 +827,44 @@ fn show_batch(
 }
 
 /// One choice per plain member and per worksheet of a workbook, in inventory order.
+fn biblivre_form(
+    preview: &BatchPreview,
+    recipe: &Recipe,
+) -> Option<elzevir_web_templates::BiblivreForm> {
+    use elzevir_app::import::biblivre::DateUse;
+    let profile = recipe.biblivre.as_ref();
+    if profile.is_none()
+        && !preview
+            .rendered
+            .source
+            .iter()
+            .any(|s| s.before.lines().any(|l| l.starts_with("949  ")))
+    {
+        return None;
+    }
+    let codes = preview.codes.as_ref()?;
+    Some(elzevir_web_templates::BiblivreForm {
+        branches: codes
+            .branches
+            .iter()
+            .map(|b| (b.id.0, b.name.clone()))
+            .collect(),
+        policies: codes
+            .policies
+            .iter()
+            .map(|p| (p.id.0, p.name.clone()))
+            .collect(),
+        selected: profile.map_or((0, 0, 0), |p| {
+            (p.home_branch.0, p.holding_branch.0, p.policy.0)
+        }),
+        date: match profile.map(|p| p.date) {
+            Some(DateUse::Acquisition) => "acquisition",
+            Some(DateUse::SourceOnly) => "source_only",
+            None => "",
+        },
+    })
+}
+
 fn archive_choices(
     t: &I18n,
     inventory: &Inventory,

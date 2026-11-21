@@ -34,9 +34,9 @@ pub use staff_circulation_rules::{
     Choice, RuleGroupPart, RuleRow, ScopeLine, StaffCirculationRules,
 };
 pub use staff_import::{
-    ImportBatchLink, ImportChoice, ImportColumn, ImportColumns, ImportDetail, ImportDraft,
-    ImportMatching, ImportPage, ImportPreview, ImportReceipt, ImportRule, ImportSample,
-    ImportUpload, ImportView, RecordBlocks,
+    BiblivreForm, ImportBatchLink, ImportChoice, ImportColumn, ImportColumns, ImportDetail,
+    ImportDraft, ImportMatching, ImportPage, ImportPreview, ImportReceipt, ImportRule,
+    ImportSample, ImportUpload, ImportView, RecordBlocks,
 };
 pub use staff_item_grid::{
     GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid, SuggestedCallNumber,

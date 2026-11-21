@@ -758,6 +758,7 @@ impl Draft {
         Ok((
             record,
             Some(NativeItem {
+                acquired_on: None,
                 fields,
                 description: item,
             }),

@@ -350,7 +350,7 @@ pub(crate) fn native_item_fields(item: &NativeItem, codes: &CodeLists) -> ItemFi
         location: fields.location.map(|id| codes.location(id).to_owned()),
         collection: fields.collection.map(|id| codes.collection(id).to_owned()),
         copy_number: fields.copy_number.clone(),
-        acquired_on: None,
+        acquired_on: item.acquired_on.clone(),
         signal_class,
         signal_key,
         signal_icon: signal_icon(signal_of),
@@ -468,6 +468,7 @@ mod tests {
             ..CodeLists::default()
         };
         let item = NativeItem {
+            acquired_on: None,
             fields: Fields {
                 barcode: Some("000123".into()),
                 inventory_number: None,

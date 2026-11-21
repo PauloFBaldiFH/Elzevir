@@ -194,6 +194,13 @@ fn read_error(error: impl std::fmt::Display) -> CatalogReadError {
 }
 
 impl PreviewCatalog for Snapshot<'_> {
+    fn biblivre_scope(
+        &self,
+        record: &elzevir_app::catalog::NewRecord,
+        items: &[elzevir_app::catalog::NativeItem],
+    ) -> Result<elzevir_app::matching::MatchScope, CatalogReadError> {
+        crate::biblivre::scope(self.0, record, items).map_err(read_error)
+    }
     fn scope(
         &self,
         record: &elzevir_app::catalog::NewRecord,

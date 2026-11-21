@@ -962,3 +962,211 @@ fn mixed_stream_detects_format_for_each_bibliographic_record_and_refuses_authori
             .any(|n| n.text == "Team only" && !n.is_public())
     );
 }
+
+fn biblivre_options() -> ImportOptions {
+    use elzevir_app::import::biblivre::{DateUse, Profile};
+    use elzevir_domain::catalog::{BranchId, PolicyId};
+    ImportOptions {
+        origin: Some("biblioteca-A".into()),
+        biblivre: Some(Profile {
+            date: DateUse::Acquisition,
+            home_branch: BranchId(1),
+            holding_branch: BranchId(1),
+            policy: PolicyId(1),
+        }),
+        ..ImportOptions::default()
+    }
+}
+
+fn biblivre_record(control: &str, subfields: &str) -> String {
+    format!(
+        "=LDR  00000nam a2200000 a 4500\n=001  {control}\n=245  10$aLivro\n=949  \\\\{subfields}\n"
+    )
+}
+
+#[test]
+fn biblivre_requires_unambiguous_source_fields_and_native_destinations() {
+    use elzevir_app::import::biblivre::DateUse;
+    let dir = tempfile::tempdir().unwrap();
+    let store = open(&dir);
+    seed(&store);
+    let options = biblivre_options();
+    let review = |source: &str, options: &ImportOptions| {
+        store
+            .readers()
+            .preview_import(source.as_bytes(), options.clone())
+            .unwrap()
+    };
+    let good = biblivre_record("007", "$a00023$y2024-02-29");
+    for (input, message) in [
+        (biblivre_record("007", "$y2024-02-29"), "missing tombo"),
+        (biblivre_record("007", "$a23$a24"), "repeated tombo"),
+        (
+            biblivre_record("007", "$a23$y2025-02-29"),
+            "expected YYYY-MM-DD",
+        ),
+        (
+            biblivre_record("007", "$a23$y2025-03-01$y2025-01-03"),
+            "repeated acquisition date",
+        ),
+        (
+            good.replace("=001  007", "=001  007\n=001  008"),
+            "expected one nonempty 001",
+        ),
+        (
+            format!("{good}\n{}", biblivre_record("008", "$a00023")),
+            "duplicate Biblivre tombo",
+        ),
+        (
+            format!("{good}\n{}", biblivre_record("007", "$a00024")),
+            "duplicate Biblivre control number",
+        ),
+        (
+            format!("{good}=952  \\\\$aSynthetic branch$ySynthetic policy\n"),
+            "952 holdings",
+        ),
+    ] {
+        let r = review(&input, &options);
+        assert!(
+            r.issues.iter().any(|issue| issue.reason.contains(message)),
+            "{message}: {:?}",
+            r.issues
+                .iter()
+                .map(|issue| &issue.reason)
+                .collect::<Vec<_>>()
+        );
+    }
+    let mut invalid = options.clone();
+    invalid.origin = None;
+    assert!(!review(&good, &invalid).issues.is_empty());
+    let profile = invalid.biblivre.as_mut().unwrap();
+    profile.home_branch.0 = 99;
+    invalid.origin.clone_from(&options.origin);
+    assert!(
+        review(&good, &invalid)
+            .issues
+            .iter()
+            .any(|i| i.reason.contains("destination"))
+    );
+    let mut manual = options;
+    manual.biblivre.as_mut().unwrap().date = DateUse::SourceOnly;
+    let ambiguous_date = biblivre_record("007", "$a00023$y03/04/05");
+    let report = review(&ambiguous_date, &manual);
+    assert!(report.issues.is_empty());
+    let sample = &report.samples.first().unwrap().record;
+    let item = sample
+        .items
+        .entries()
+        .find_map(|entry| match entry {
+            elzevir_app::catalog::RecordItem::Native(item) => Some(item),
+            elzevir_app::catalog::RecordItem::Marc(_) => None,
+        })
+        .unwrap();
+    assert_eq!(item.fields.inventory_number.as_deref(), Some("00023"));
+    assert_eq!(item.acquired_on, None);
+    assert!(
+        sample
+            .instance
+            .original
+            .as_ref()
+            .unwrap()
+            .bytes
+            .windows(8)
+            .any(|w| w == b"03/04/05")
+    );
+}
+
+#[test]
+fn biblivre_revalidates_tombo_ownership_and_isolates_installations() {
+    use elzevir_app::import::import_marc_text;
+    let dir = tempfile::tempdir().unwrap();
+    let store = open(&dir);
+    seed(&store);
+    let review = |src: &str, options: &ImportOptions| {
+        let r = store
+            .readers()
+            .preview_import(src.as_bytes(), options.clone())
+            .unwrap();
+        let mut approved = options.clone();
+        approved.reviewed = r.scopes.into_iter().map(|(_, scope)| scope).collect();
+        (r.issues, approved)
+    };
+    let options = biblivre_options();
+    let first = biblivre_record("001", "$a00023$y2025-03-01");
+    let other = biblivre_record("002", "$a00023$y2025-03-01");
+    let (_, stale) = review(&other, &options);
+    let (_, approved) = review(&first, &options);
+    assert_eq!(
+        import_marc_text(first.as_bytes(), &store, &options)
+            .unwrap()
+            .failures
+            .len(),
+        1
+    );
+    assert_eq!(
+        import_marc_text(first.as_bytes(), &store, &approved)
+            .unwrap()
+            .items,
+        1
+    );
+    assert_eq!(
+        import_marc_text(other.as_bytes(), &store, &stale)
+            .unwrap()
+            .failures
+            .len(),
+        1
+    );
+    assert!(!review(&other, &options).0.is_empty());
+    let changed = biblivre_record("001", "$a00024$y2025-03-02");
+    assert!(!review(&changed, &options).0.is_empty());
+    let second_installation = ImportOptions {
+        origin: Some("biblioteca-B".into()),
+        ..options
+    };
+    let (issues, approved) = review(&first, &second_installation);
+    assert!(issues.is_empty());
+    let second = import_marc_text(first.as_bytes(), &store, &approved).unwrap();
+    assert_eq!((second.imported, second.items), (1, 1));
+}
+
+#[test]
+fn biblivre_can_attach_to_one_previously_imported_instance_but_refuses_two() {
+    use elzevir_app::import::import_marc_text;
+    let dir = tempfile::tempdir().unwrap();
+    let store = open(&dir);
+    seed(&store);
+    let options = biblivre_options();
+    let legacy = ImportOptions {
+        biblivre: None,
+        ..options.clone()
+    };
+    let source = biblivre_record("001", "$a00023$y2025-03-01");
+    let bibliography = import_marc_text(source.as_bytes(), &store, &legacy).unwrap();
+    assert_eq!((bibliography.imported, bibliography.items), (1, 0));
+    let preview = store
+        .readers()
+        .preview_import(source.as_bytes(), options.clone())
+        .unwrap();
+    assert!(preview.issues.is_empty());
+    assert_eq!((preview.matches.len(), preview.items), (1, 1));
+    let approved = ImportOptions {
+        reviewed: preview.scopes.into_iter().map(|(_, scope)| scope).collect(),
+        ..options.clone()
+    };
+    let linked = import_marc_text(source.as_bytes(), &store, &approved).unwrap();
+    assert_eq!(
+        (linked.imported, linked.matched.len(), linked.items),
+        (0, 1, 1)
+    );
+    import_marc_text(source.as_bytes(), &store, &legacy).unwrap();
+    let ambiguous = store
+        .readers()
+        .preview_import(source.as_bytes(), options)
+        .unwrap();
+    assert!(!ambiguous.issues.is_empty());
+    let total: i64 = store
+        .readers()
+        .read(|c| c.query_row("SELECT count(*) FROM items", [], |r| r.get(0)))
+        .unwrap();
+    assert_eq!(total, 1);
+}

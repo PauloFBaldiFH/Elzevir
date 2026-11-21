@@ -264,6 +264,17 @@ import-items-matches = Acrescentar só nos registros encontrados
 import-items-new = Acrescentar só nos registros novos
 import-items-replace = Substituir os exemplares dos registros encontrados
 import-items-ignore = Não importar exemplares
+import-biblivre = Exemplares do Biblivre (949)
+import-biblivre-tombo = Ao aplicar este perfil, cada 949$a identifica um tombo da instalação de origem. O exemplar ficará sem código de barras. Os demais subcampos permanecem no registro original.
+import-biblivre-date = Interpretação de 949$y
+import-biblivre-source = Preservar apenas no original
+import-biblivre-acquired = Data de aquisição (AAAA-MM-DD)
+import-biblivre-home = Biblioteca proprietária
+import-biblivre-holding = Biblioteca detentora
+import-biblivre-policy = Política de circulação
+import-biblivre-apply = Aplicar perfil e revisar os exemplares
+import-biblivre-remove = Remover perfil Biblivre
+import-biblivre-required = Informe a instalação, o uso da data, as duas bibliotecas e a política de circulação.
 import-matching-save = Salvar casamento
 import-advanced = Avançado: editar a receita em JSON
 

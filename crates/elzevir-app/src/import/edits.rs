@@ -27,6 +27,9 @@ const RECORD_OVERHEAD: usize = 26;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Recipe {
+    /// Opt-in interpretation of local Biblivre holdings.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub biblivre: Option<Box<super::biblivre::Profile>>,
     /// Stable source installation for local identifiers.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<String>,
@@ -233,6 +236,24 @@ impl Recipe {
             return Err(PreviewError::Edit(
                 "invalid source installation identifier".into(),
             ));
+        }
+        if let Some(profile) = &self.biblivre {
+            if self.origin.is_none()
+                || !profile.valid()
+                || self.matching.is_some()
+                || self.table.is_some()
+            {
+                return Err(PreviewError::Edit("Biblivre requires an installation, native destination registries and its own matching by control number".into()));
+            }
+            if self
+                .edits
+                .iter()
+                .any(|e| matches!(e.tag.as_str(), "001" | "003" | "949" | "952"))
+            {
+                return Err(PreviewError::Edit(
+                    "Biblivre identity and holding fields cannot be edited in this profile".into(),
+                ));
+            }
         }
         if self.table.is_some() && !self.edits.is_empty() {
             return Err(PreviewError::Edit(

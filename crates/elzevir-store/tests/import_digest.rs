@@ -81,6 +81,7 @@ fn the_staff_export_keeps_the_fixed_import_digest() {
         limits: Limits::default(),
         parallelism: Parallelism::Threads(NonZeroUsize::new(4).unwrap()),
         chunk: NonZeroUsize::new(32).unwrap(),
+        biblivre: None,
         local_note_visibility: None,
         origin: None,
         reviewed: Vec::new(),

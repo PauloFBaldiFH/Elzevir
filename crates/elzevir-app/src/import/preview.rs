@@ -27,6 +27,19 @@ pub const MAX_PREVIEW_RECORDS: usize = 3;
 
 /// Read-only catalog queries used for predictions.
 pub trait PreviewCatalog {
+    /// Resolves Biblivre source identities and destination registries in this snapshot.
+    ///
+    /// # Errors
+    /// Returns a catalog read failure.
+    fn biblivre_scope(
+        &self,
+        _record: &NewRecord,
+        _items: &[crate::catalog::NativeItem],
+    ) -> Result<crate::matching::MatchScope, CatalogReadError> {
+        Err(CatalogReadError(
+            "this catalog cannot review Biblivre holdings".into(),
+        ))
+    }
     /// All matching Instances and affected catalog rows in this read snapshot.
     ///
     /// # Errors
@@ -211,6 +224,8 @@ fn inspection<'a>(
         catalog,
         from,
         keys: BTreeMap::new(),
+        controls: BTreeSet::new(),
+        tombos: BTreeSet::new(),
         barcodes: BTreeSet::new(),
         report: PreviewReport {
             detection: Detection {
@@ -382,6 +397,8 @@ struct Inspection<'a> {
     catalog: Option<&'a dyn PreviewCatalog>,
     from: u64,
     keys: BTreeMap<MatchKey, u64>,
+    controls: BTreeSet<(String, String)>,
+    tombos: BTreeSet<String>,
     barcodes: BTreeSet<String>,
     report: PreviewReport,
 }
@@ -440,7 +457,11 @@ impl Inspection<'_> {
                 record: Box::new(record.clone()),
             });
         }
-        let decision = self.predict(place, record)?;
+        let decision = if let crate::catalog::RecordItems::Biblivre { biblivre } = &record.items {
+            self.biblivre(place, record, biblivre)?
+        } else {
+            self.predict(place, record)?
+        };
         if decision.record != RecordAction::Ignore {
             for (kind, description) in [
                 (EntityKind::Work, &record.work_description),
@@ -470,6 +491,67 @@ impl Inspection<'_> {
             }
         }
         Ok(())
+    }
+
+    fn biblivre(
+        &mut self,
+        place: RawPlace,
+        record: &NewRecord,
+        items: &[crate::catalog::NativeItem],
+    ) -> Result<Decision, CatalogReadError> {
+        let scope = match self.catalog {
+            Some(catalog) => catalog.biblivre_scope(record, items)?,
+            None => crate::matching::MatchScope {
+                conflict: Some(
+                    "Biblivre requires destination library and policy registries".into(),
+                ),
+                ..Default::default()
+            },
+        };
+        if let Some(control) = crate::matching::source_control_number(record)
+            && !self.controls.insert(control)
+        {
+            self.issue(
+                place,
+                None,
+                IssueKind::InvalidRecord,
+                "duplicate Biblivre control number in this batch",
+            );
+        }
+        for (position, item) in items.iter().enumerate() {
+            if let Some(number) = &item.fields.inventory_number
+                && !self.tombos.insert(number.clone())
+            {
+                self.issue(
+                    place,
+                    Some(position),
+                    IssueKind::InvalidRecord,
+                    format!("duplicate Biblivre tombo {number} in this batch"),
+                );
+            }
+        }
+        let action = match scope.result() {
+            crate::matching::MatchResult::Unique(id) => {
+                self.report.matches.push((place.index, id));
+                RecordAction::Ignore
+            }
+            crate::matching::MatchResult::Absent => RecordAction::CreateNew,
+            result => {
+                let message = match result {
+                    crate::matching::MatchResult::Conflict(reason) => reason,
+                    _ => "ambiguous Biblivre control number",
+                };
+                self.issue(place, None, IssueKind::InvalidRecord, message);
+                RecordAction::Ignore
+            }
+        };
+        self.report.items += items.len().saturating_sub(scope.existing_tombos.len()) as u64;
+        self.report.scopes.push((place.index, scope));
+        // The profile has already reviewed every tombo including exemplars without barcodes.
+        Ok(Decision {
+            record: action,
+            items: ItemsDecision::Ignore,
+        })
     }
 
     fn predict(

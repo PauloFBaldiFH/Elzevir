@@ -193,6 +193,12 @@ impl Matching {
 /// Catalog rows whose identity or version matters to the review.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MatchScope {
+    /// ID, version and display name of the reviewed Biblivre home, holding library and policy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub biblivre_registries: Option<Box<[(i64, i64, String); 3]>>,
+    /// Biblivre tombos already linked to this Instance and checked on review.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub existing_tombos: std::collections::BTreeSet<String>,
     /// All distinct candidate Instance identifiers.
     pub candidates: Vec<elzevir_domain::catalog::InstanceId>,
     /// Work ID, Work version, sibling Instance ID and Instance version.
