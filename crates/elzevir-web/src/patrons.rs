@@ -12,11 +12,12 @@ use elzevir_app::patrons::{
     CategoryChange, PatronCommand, PatronDesk, PatronDeskError, PatronQuery, PatronRefusal,
 };
 use elzevir_app::staff::Permission;
-use elzevir_domain::patron::{Enrolment, PatronCategoryId, is_expired};
-use elzevir_web_templates::{CategoryLine, I18n, PatronLine, StaffPatronCategories, StaffPatrons};
+use elzevir_domain::patron::{Enrolment, PatronCategoryId};
+use elzevir_web_templates::{CategoryLine, I18n, StaffPatronCategories, StaffPatrons};
 use jiff::civil::Date;
 use serde::Deserialize;
 
+use crate::patron_card::{ZoomScreen, patron_line, zoom};
 use crate::security::tokens_match;
 use crate::session::ActiveSession;
 use crate::staff::current_session;
@@ -115,22 +116,16 @@ pub(crate) async fn search(
         return Redirect::to(&format!("/equipe/leitores/{}", only.id.0)).into_response();
     }
     let t = &state.inner.i18n;
-    let today = today(&state);
+    let now = jiff::Timestamp::now().to_zoned(state.inner.config.time_zone.clone());
     render(&StaffPatrons {
         t,
         query: &params.q,
         searched: query.is_some(),
         rows: rows
             .into_iter()
-            .map(|row| PatronLine {
-                id: row.id.0,
-                name: full_name(&row.surname, row.first_name.as_deref()),
-                cardnumber: row.cardnumber,
-                category: row.category_name,
-                expires: shown(t, row.expires),
-                expired: is_expired(row.expires, today),
-            })
+            .map(|row| patron_line(t, row, &now))
             .collect(),
+        zoom: zoom(&headers, ZoomScreen::PatronList),
         can_manage: session.identity.can(Permission::Patrons),
     })
 }

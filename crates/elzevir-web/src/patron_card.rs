@@ -4,14 +4,14 @@
 
 use axum::http::HeaderMap;
 use elzevir_app::loans::{LoanUrgency, PatronLoan};
-use elzevir_app::patrons::{Patron, ReadingHistory};
+use elzevir_app::patrons::{Patron, PatronRow, ReadingHistory};
 use elzevir_domain::catalog::Money;
-use elzevir_domain::patron::Cpf;
-use elzevir_web_templates::{I18n, LoanLine, PatronHeader, StatusChip};
+use elzevir_domain::patron::{Cpf, is_expired};
+use elzevir_web_templates::{I18n, LoanLine, PatronHeader, PatronLine, StatusChip};
 use jiff::Zoned;
 
 use crate::circulation::{due_text, money};
-use crate::patrons::shown;
+use crate::patrons::{full_name, shown};
 use crate::staff::cookie;
 use crate::staff_bar::query_value;
 
@@ -20,18 +20,22 @@ use crate::staff_bar::query_value;
 pub(crate) enum ZoomScreen {
     /// The patron's record, which opens full.
     PatronRecord,
+    /// The patron search, which opens compact.
+    PatronList,
 }
 
 impl ZoomScreen {
     const fn cookie(self) -> &'static str {
         match self {
             Self::PatronRecord => "elzevir_zoom_patron",
+            Self::PatronList => "elzevir_zoom_patrons",
         }
     }
 
     const fn default(self) -> &'static str {
         match self {
             Self::PatronRecord => "full",
+            Self::PatronList => "compact",
         }
     }
 }
@@ -153,6 +157,49 @@ pub(crate) fn header(
             ("patron-cpf", fields.cpf.as_ref().map(Cpf::masked)),
             ("patron-staff-note", fields.staff_note.clone()),
         ]),
+    }
+}
+
+/// One patron of the search: a line in the compact view, a card in the full one. Nothing
+/// personal beyond the name and card number, and no titles (interface §24.6).
+pub(crate) fn patron_line(t: &I18n, row: PatronRow, now: &Zoned) -> PatronLine {
+    let overdue = row
+        .loans_due
+        .iter()
+        .filter(|due| LoanUrgency::of(due, now) == LoanUrgency::Overdue)
+        .count();
+    let expired = is_expired(row.expires, now.date());
+    let count = |key: &str, count: u64| t.get_numbers(key, &[("count", count)]);
+    let loans = row.loans_due.len();
+    PatronLine {
+        id: row.id.0,
+        initials: initials(&row.surname, row.first_name.as_deref()),
+        name: full_name(&row.surname, row.first_name.as_deref()),
+        status: status(t, overdue, row.owed, expired),
+        loans,
+        loans_text: count(
+            "patron-list-loans",
+            u64::try_from(loans).unwrap_or(u64::MAX),
+        ),
+        next_due: row.loans_due.iter().min().map(|due| due_text(t, due)),
+        holds: row.holds,
+        holds_text: count("patron-list-holds", u64::from(row.holds)),
+        waiting: (row.holds_waiting > 0)
+            .then(|| count("patron-list-waiting", u64::from(row.holds_waiting))),
+        owed: if row.owed.0 > 0 {
+            money(t, row.owed)
+        } else {
+            "—".to_owned()
+        },
+        enrolled: shown(t, row.enrolled),
+        history_key: match row.reading_history {
+            ReadingHistory::Kept => "patron-history-kept",
+            ReadingHistory::NotKept => "patron-history-not-kept",
+        },
+        cardnumber: row.cardnumber,
+        category: row.category_name,
+        branch: row.branch_name,
+        expires: shown(t, row.expires),
     }
 }
 

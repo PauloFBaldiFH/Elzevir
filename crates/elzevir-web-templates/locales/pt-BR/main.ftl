@@ -310,6 +310,10 @@ patrons-title = Leitores
 patrons-search-label = Carteirinha, CPF ou nome
 patrons-search = Buscar
 patrons-search-hint = Carteirinha ou CPF acham o leitor exato; com duas letras ou mais, a busca procura dentro dos nomes.
+patrons-found = { $count ->
+    [one] 1 leitor encontrado
+   *[other] { $count } leitores encontrados
+}
 patrons-none = Nenhum leitor encontrado.
 patrons-back = Voltar aos leitores
 patron-cardnumber = Carteirinha
@@ -340,6 +344,25 @@ patron-group-contact = Contato
 patron-group-usage = Uso da biblioteca
 patron-group-identity = Identificação
 patron-group-empty = Nada registrado.
+patron-list-loans = { $count ->
+    [0] Nenhum empréstimo
+    [one] 1 empréstimo
+   *[other] { $count } empréstimos
+}
+patron-list-holds = { $count ->
+    [0] Nenhuma reserva
+    [one] 1 reserva
+   *[other] { $count } reservas
+}
+patron-list-waiting = { $count ->
+    [one] 1 aguardando retirada
+   *[other] { $count } aguardando retirada
+}
+patron-list-loans-label = Empréstimos
+patron-list-holds-label = Reservas
+patron-list-next-due = Próximo vencimento
+patron-list-owed = Débito
+patron-list-open = Abrir ficha
 loan-due-late = Atrasado · { $date }
 loan-due-soon = Vence logo · { $date }
 loan-due-ok = Dev. { $date }

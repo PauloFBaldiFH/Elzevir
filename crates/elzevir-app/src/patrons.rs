@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Patron and patron category commands (docs/specs/circulacao/leitores.md).
 
-use elzevir_domain::catalog::BranchId;
+use elzevir_domain::catalog::{BranchId, Money};
 use elzevir_domain::patron::{Cpf, Enrolment, MAX_ENROLMENT_MONTHS, PatronCategoryId, PatronId};
+use jiff::Zoned;
 use jiff::civil::Date;
 use serde::{Deserialize, Serialize};
 
@@ -395,6 +396,20 @@ pub struct PatronRow {
     pub category_name: String,
     /// Last day of the enrolment.
     pub expires: Date,
+    /// Name of the patron's home branch.
+    pub branch_name: String,
+    /// When each open loan is due.
+    pub loans_due: Vec<Zoned>,
+    /// Open holds.
+    pub holds: u32,
+    /// Holds set aside, waiting for the patron.
+    pub holds_waiting: u32,
+    /// Day of the enrolment.
+    pub enrolled: Date,
+    /// Whether returns are kept in the reading history.
+    pub reading_history: ReadingHistory,
+    /// What the patron owes.
+    pub owed: Money,
 }
 
 /// A patron category with how many patrons it has.

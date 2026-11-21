@@ -11,14 +11,41 @@
 </form>
 <p class="form-hint">{{ t.get("patrons-search-hint") }}</p>
 {% if !rows.is_empty() %}
-<table class="patron-results">
-  <thead><tr><th>{{ t.get("patron-cardnumber") }}</th><th>{{ t.get("patron-name") }}</th><th>{{ t.get("patron-category") }}</th><th>{{ t.get("patron-expires") }}</th></tr></thead>
-  <tbody>
+<div class="patron-list-page" data-zoom="{{ zoom }}" data-zoom-screen="patrons">
+<div class="patron-toolbar">
+  <p class="muted" role="status">{{ t.get_numbers("patrons-found", [("count", rows.len() as u64)]) }}</p>
+  {% include "zoom_toggle.html" %}
+</div>
+{# Contact, address, CPF and titles stay on the record, where opening it is audited (§24.6). #}
+<ul class="patron-list">
+  <li class="patron-list-head z-compact" aria-hidden="true"><span></span><span>{{ t.get("patron-name") }}</span><span>{{ t.get("patron-cardnumber") }}</span><span>{{ t.get("patron-category") }}</span><span>{{ t.get("patron-branch") }}</span><span>{{ t.get("patron-list-loans-label") }}</span><span>{{ t.get("patron-list-holds-label") }}</span><span>{{ t.get("patron-list-owed") }}</span><span></span><span>{{ t.get("patron-expires") }}</span></li>
   {% for row in rows %}
-    <tr><td>{{ row.cardnumber }}</td><td><a href="/equipe/leitores/{{ row.id }}">{{ row.name }}</a></td><td>{{ row.category }}</td><td>{{ row.expires }}{% if row.expired %} <strong class="patron-expired">{{ t.get("patron-expired") }}</strong>{% endif %}</td></tr>
+  <li class="patron-line">
+    <span class="patron-initials" aria-hidden="true">{{ row.initials }}</span>
+    <span class="patron-line-name"><a href="/equipe/leitores/{{ row.id }}">{{ row.name }}</a></span>
+    <span class="patron-line-card z-compact">{{ row.cardnumber }}</span>
+    <span class="z-compact" title="{{ row.category }}">{{ row.category }}</span>
+    <span class="z-compact" title="{{ row.branch }}">{{ row.branch }}</span>
+    <span class="patron-line-count z-compact" title="{{ row.loans_text }}">{{ row.loans }}</span>
+    <span class="patron-line-count z-compact" title="{{ row.holds_text }}">{{ row.holds }}</span>
+    <span class="patron-line-count z-compact">{{ row.owed }}</span>
+    <span class="patron-status">{% for chip in row.status %}<span class="status-chip tone-{{ chip.tone }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ chip.icon }}"></use></svg>{{ chip.text }}</span>{% endfor %}</span>
+    <span class="z-compact">{{ row.expires }}</span>
+    <span class="patron-line-tags z-full"><span class="tag">{{ t.get("patron-cardnumber") }} {{ row.cardnumber }}</span><span class="tag tag-patrons">{{ row.category }}</span><span class="tag tag-catalog">{{ row.branch }}</span></span>
+    <a class="patron-line-open z-full" href="/equipe/leitores/{{ row.id }}">{{ t.get("patron-list-open") }}</a>
+    <dl class="patron-facts z-full">
+      <div><dt>{{ t.get("patron-list-loans-label") }}</dt><dd>{{ row.loans_text }}</dd></div>
+      <div><dt>{{ t.get("patron-list-next-due") }}</dt><dd>{% if let Some(due) = row.next_due %}{{ due }}{% else %}—{% endif %}</dd></div>
+      <div><dt>{{ t.get("patron-list-holds-label") }}</dt><dd>{{ row.holds_text }}{% if let Some(waiting) = row.waiting %}<br><small>{{ waiting }}</small>{% endif %}</dd></div>
+      <div><dt>{{ t.get("patron-list-owed") }}</dt><dd>{{ row.owed }}</dd></div>
+      <div><dt>{{ t.get("patron-enrolled") }}</dt><dd>{{ row.enrolled }}</dd></div>
+      <div><dt>{{ t.get("patron-expires") }}</dt><dd>{{ row.expires }}</dd></div>
+      <div><dt>{{ t.get("patron-reading-history") }}</dt><dd>{{ t.get(row.history_key) }}</dd></div>
+    </dl>
+  </li>
   {% endfor %}
-  </tbody>
-</table>
+</ul>
+</div>
 {% else if searched %}
 <p role="status">{{ t.get("patrons-none") }}</p>
 {% endif %}

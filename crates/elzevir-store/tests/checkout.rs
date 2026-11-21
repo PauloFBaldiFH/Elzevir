@@ -1712,3 +1712,33 @@ fn fines_over_the_limit_and_holds_block_a_renewal_and_the_opac_renews_only_its_o
         None
     );
 }
+
+#[test]
+fn the_patron_search_counts_open_loans_and_holds() {
+    use elzevir_app::patrons::{PatronDesk, PatronQuery};
+    let dir = tempfile::tempdir().unwrap();
+    let (library, bia, _, _) = two_holds(&dir);
+    library.rules(&[("maxissueqty", "5"), ("issuelength", "7")]);
+    library
+        .lend_to(bia, "0002", "2026-11-20T10:00:00-03:00", true)
+        .unwrap();
+    let rows = library
+        .store
+        .search(&PatronQuery::parse("000124").unwrap())
+        .unwrap();
+    let [row] = rows.as_slice() else {
+        panic!("{rows:?}");
+    };
+    // The checkout filled Bia's hold on the record; Caio still waits.
+    assert_eq!((row.loans_due.len(), row.holds, row.owed), (1, 0, Money(0)));
+    assert_eq!(row.loans_due[0].date(), date(2026, 11, 27));
+    assert_eq!(row.branch_name, "Central");
+    let rows = library
+        .store
+        .search(&PatronQuery::parse("000125").unwrap())
+        .unwrap();
+    let [caio] = rows.as_slice() else {
+        panic!("{rows:?}");
+    };
+    assert_eq!((caio.loans_due.len(), caio.holds), (0, 1));
+}
