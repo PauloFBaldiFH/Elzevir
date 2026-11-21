@@ -25,6 +25,10 @@ impl CommandHandler for ElzevirHandler {
         command.kind()
     }
 
+    fn audit_payload(command: &WriteCommand) -> impl serde::Serialize {
+        command.audit_payload()
+    }
+
     fn apply(
         &mut self,
         tx: &WriteTx<'_>,

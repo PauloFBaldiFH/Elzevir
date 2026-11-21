@@ -59,23 +59,31 @@ fn created_staff_can_log_in_and_logins_are_unique() {
 }
 
 #[test]
-fn the_audit_log_never_holds_a_plain_password() {
+fn staff_creation_audits_the_actor_action_and_login_without_the_password_hash() {
     let dir = tempfile::tempdir().unwrap();
     let store = open(&dir);
     store
-        .submit(create(
-            "bia",
-            "plain-text-password",
-            &[Permission::StaffInterface],
-        ))
+        .submit_as(
+            7,
+            create("bia", "plain-text-password", &[Permission::StaffInterface]),
+        )
         .unwrap()
         .wait()
         .unwrap();
-    let logged: String = store
+    let (actor, kind, payload): (i64, String, String) = store
         .readers()
-        .read(|c| c.query_row("SELECT command FROM audit_log", [], |r| r.get(0)))
+        .read(|c| {
+            c.query_row("SELECT actor, kind, command FROM audit_log", [], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            })
+        })
         .unwrap();
-    assert!(logged.contains("staff_interface"));
-    assert!(logged.contains("$argon2id$"));
-    assert!(!logged.contains("plain-text-password"));
+    assert_eq!(actor, 7);
+    assert_eq!(kind, "staff.create");
+    assert!(!payload.contains("$argon2id$"));
+    assert!(!payload.contains("plain-text-password"));
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&payload).unwrap(),
+        serde_json::json!({"target": "bia"})
+    );
 }

@@ -526,12 +526,34 @@ where
     C: CatalogReader + ?Sized,
     I: SearchIndex + ?Sized,
 {
+    index_pending_until(log, catalog, index, options, || false)
+}
+
+/// Indexes pending effects until the outbox is empty or `should_stop` returns true.
+/// The check runs before each batch. Cancellation leaves completed batches and their
+/// cursors committed and returns their report.
+///
+/// # Errors
+///
+/// [`IndexError`] when the outbox, the catalog or the index fails.
+pub fn index_pending_until<L, C, I>(
+    log: &L,
+    catalog: &C,
+    index: &I,
+    options: &IndexOptions,
+    mut should_stop: impl FnMut() -> bool,
+) -> Result<IndexReport, IndexError>
+where
+    L: EffectLog + ?Sized,
+    C: CatalogReader + ?Sized,
+    I: SearchIndex + ?Sized,
+{
     let mut report = IndexReport::default();
-    loop {
+    while !should_stop() {
         let cursor = index.cursor()?;
         let effects = log.after(cursor, options.batch.get())?;
         let Some(last) = effects.last().map(|logged| logged.id) else {
-            return Ok(report);
+            break;
         };
         report.effects = report.effects.saturating_add(len(effects.len()));
         let mut seen = BTreeSet::new();
@@ -561,6 +583,7 @@ where
         report.removed = report.removed.saturating_add(len(batch.removals.len()));
         index.apply(batch)?;
     }
+    Ok(report)
 }
 
 type Built = (InstanceId, Result<Option<SearchDocument>, CatalogReadError>);

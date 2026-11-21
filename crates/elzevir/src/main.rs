@@ -77,12 +77,13 @@ use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
+use std::sync::mpsc::{self, RecvTimeoutError, Sender, TryRecvError};
 use std::time::Duration;
 
 use clap::{Parser, Subcommand};
 use elzevir_app::commands::{StaffCommand, WriteCommand, WriteOutput};
 use elzevir_app::parallelism::Parallelism;
-use elzevir_app::search::{IndexOptions, index_pending};
+use elzevir_app::search::{IndexOptions, SearchIndex, index_pending_until};
 use elzevir_app::staff::{Permission, hash_password};
 use elzevir_search::TantivyIndex;
 use elzevir_store::{ElzevirHandler, ElzevirStore, StoreConfig};
@@ -334,21 +335,22 @@ fn open_index(data_dir: &Path) -> Result<(TantivyIndex, Parallelism), String> {
 /// only moves with a successful commit, so nothing is lost.
 fn spawn_indexer(
     store: Arc<ElzevirStore>,
-    index: Arc<TantivyIndex>,
-    parallelism: Parallelism,
+    index: Arc<impl SearchIndex + 'static>,
+    options: IndexOptions,
     probe: Arc<health::Probe>,
 ) -> Result<Indexer, String> {
-    let options = IndexOptions {
-        parallelism,
-        batch: INDEX_BATCH,
-    };
-    let (stop, receiver) = std::sync::mpsc::channel();
+    let (stop, receiver) = mpsc::channel();
     let instance = probe.instance().to_owned();
     let task = std::thread::Builder::new()
         .name("elzevir-indexer".to_owned())
         .spawn(move || {
             loop {
-                if let Ok(report) = index_pending(&*store, &*store, &*index, &options) {
+                // Dropping the sender wakes an idle worker and stops an active one before
+                // it fetches another batch.
+                let result = index_pending_until(&*store, &*store, &*index, &options, || {
+                    matches!(receiver.try_recv(), Err(TryRecvError::Disconnected))
+                });
+                if let Ok(report) = result {
                     probe.indexed(true);
                     if report.effects > 0 {
                         logging::emit(
@@ -363,7 +365,7 @@ fn spawn_indexer(
                     logging::emit(probe.instance(), logging::Event::IndexerFailed);
                 }
                 match receiver.recv_timeout(INDEX_INTERVAL) {
-                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(RecvTimeoutError::Timeout) => {}
                     _ => break,
                 }
             }
@@ -378,7 +380,7 @@ fn spawn_indexer(
 
 struct Indexer {
     instance: String,
-    stop: Option<std::sync::mpsc::Sender<()>>,
+    stop: Option<Sender<()>>,
     task: Option<std::thread::JoinHandle<()>>,
 }
 
@@ -529,7 +531,10 @@ fn serve_controlled(
         let indexer = spawn_indexer(
             Arc::clone(&store),
             Arc::clone(&index),
-            parallelism,
+            IndexOptions {
+                parallelism,
+                batch: INDEX_BATCH,
+            },
             Arc::clone(&probe),
         )?;
         let background = Background {
@@ -780,7 +785,56 @@ fn panel_text(value: &str, limit: usize) -> String {
 
 #[cfg(test)]
 mod indexer_tests {
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicI64, Ordering};
+
     use super::*;
+    use elzevir_app::catalog::{CatalogCommand, WorkChange};
+    use elzevir_app::creating::new_record;
+    use elzevir_app::search::{
+        FacetCounts, IndexBatch, SearchError, SearchQuery, SearchResults, SearchScope,
+    };
+
+    struct PausedIndex {
+        cursor: AtomicI64,
+        batch_started: Sender<()>,
+        finish_batch: Mutex<mpsc::Receiver<()>>,
+    }
+
+    impl SearchIndex for PausedIndex {
+        fn cursor(&self) -> Result<i64, SearchError> {
+            Ok(self.cursor.load(Ordering::Relaxed))
+        }
+
+        fn apply(&self, batch: IndexBatch) -> Result<(), SearchError> {
+            if self.cursor()? == 0 {
+                self.batch_started
+                    .send(())
+                    .map_err(|e| SearchError(e.to_string()))?;
+                self.finish_batch
+                    .lock()
+                    .map_err(|e| SearchError(e.to_string()))?
+                    .recv_timeout(Duration::from_secs(5))
+                    .map_err(|e| SearchError(e.to_string()))?;
+            }
+            self.cursor.store(batch.cursor, Ordering::Relaxed);
+            Ok(())
+        }
+
+        fn search(
+            &self,
+            _: &SearchQuery<'_>,
+            _: SearchScope,
+            _: usize,
+            _: usize,
+        ) -> Result<SearchResults, SearchError> {
+            Err(SearchError("search is unused in this test".to_owned()))
+        }
+
+        fn facets(&self, _: &SearchQuery<'_>, _: SearchScope) -> Result<FacetCounts, SearchError> {
+            Err(SearchError("facets are unused in this test".to_owned()))
+        }
+    }
 
     #[test]
     fn stopping_the_indexer_releases_its_store_references() {
@@ -791,8 +845,61 @@ mod indexer_tests {
         let (index, parallelism) = open_index(root.path()).unwrap();
         let probe = Arc::new(health::Probe::new(Arc::clone(&store)).unwrap());
         {
-            let _worker = spawn_indexer(store, Arc::new(index), parallelism, probe).unwrap();
+            let options = IndexOptions {
+                parallelism,
+                batch: INDEX_BATCH,
+            };
+            let _worker = spawn_indexer(store, Arc::new(index), options, probe).unwrap();
         }
         assert!(weak.upgrade().is_none());
+    }
+
+    #[test]
+    fn stopping_the_indexer_joins_after_the_current_batch_with_effects_pending() {
+        let root = tempfile::tempdir().unwrap();
+        let data = open_store(root.path()).unwrap();
+        let store = Arc::new(data.store);
+        for title in ["First work", "Second work"] {
+            let record = new_record(vec![WorkChange::Title(title.to_owned())], vec![]).unwrap();
+            store
+                .submit(WriteCommand::Catalog(CatalogCommand::AddRecord(Box::new(
+                    record,
+                ))))
+                .unwrap()
+                .wait()
+                .unwrap();
+        }
+        let probe = Arc::new(health::Probe::new(Arc::clone(&store)).unwrap());
+        let (batch_started, started) = mpsc::channel();
+        let (finish, finish_batch) = mpsc::channel();
+        let index = Arc::new(PausedIndex {
+            cursor: AtomicI64::new(0),
+            batch_started,
+            finish_batch: Mutex::new(finish_batch),
+        });
+        let options = IndexOptions {
+            parallelism: Parallelism::Serial,
+            batch: NonZeroUsize::MIN,
+        };
+        let mut worker =
+            spawn_indexer(Arc::clone(&store), Arc::clone(&index), options, probe).unwrap();
+
+        started.recv_timeout(Duration::from_secs(5)).unwrap();
+        // Signal before letting the blocked commit complete, without waiting for join yet.
+        drop(worker.stop.take());
+        finish.send(()).unwrap();
+        let (joined, done) = mpsc::channel();
+        let shutdown = std::thread::spawn(move || {
+            drop(worker);
+            joined.send(()).unwrap();
+        });
+        done.recv_timeout(Duration::from_secs(5)).unwrap();
+        shutdown.join().unwrap();
+        assert_eq!(index.cursor().unwrap(), 1);
+
+        let resumed =
+            elzevir_app::search::index_pending(&*store, &*store, &*index, &options).unwrap();
+        assert_eq!(resumed.effects, 1);
+        assert_eq!(index.cursor().unwrap(), 2);
     }
 }
