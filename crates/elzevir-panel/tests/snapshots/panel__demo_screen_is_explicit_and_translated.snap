@@ -3,13 +3,13 @@ source: crates/elzevir-panel/tests/panel.rs
 expression: "screen(&panel, \"en\", 120, 24)"
 ---
 🦀  Elzevir TUI  0.1.0-alpha.2  ·  Fictitious institution
-╭Sections──────────────────╮    1 Home         2 Health       3 Access       4 Backup        5 Updates      6 Restart
+╭Sections──────────────────╮    1 Home         2 Health       3 Access       4 Backup        5 Updates      6 Service
 │▌ d Dashboard             │╭Dashboard───────────────────────────────────────────────────╮╭Selected institution────────╮
 │  x Diagnostics           ││DEMONSTRATION - simulated data                              ││Demonstration library       │
 │  a Addresses and access  ││                                                            ││                            │
 │  b Backups and schedules ││Service status, addresses and health will appear here when  ││Fictitious institution      │
 │  u Updates               ││connected.                                                  ││                            │
-│  r Restart               ││                                                            ││Server status: not read     │
+│  r Service               ││                                                            ││Server status: not read     │
 │                          ││Demo only. No operation is available and no system changes  ││                            │
 │                          ││are made.                                                   ││| Demo animation            │
 │                          ││                                                            ││                            │

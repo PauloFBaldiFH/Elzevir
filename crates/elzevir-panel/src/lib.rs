@@ -38,7 +38,7 @@ pub use live::{
     Component, Details, Host, Institution, LiveState, Mode, ServerStatus, Snapshot, Storage,
 };
 pub use messages::Messages;
-pub use operations::{Form, Job, Operation, Operations};
+pub use operations::{Form, Job, Operation, Operations, ServerAction};
 pub use runtime::{run, run_live, run_live_until};
 pub use view::draw;
 
@@ -283,6 +283,12 @@ impl Panel {
             None
         }
     }
+    /// Whether the selected institution runs under a service manager.
+    #[must_use]
+    pub fn managed(&self) -> bool {
+        matches!(&self.mode, Mode::Live(state) if state.institution.managed)
+    }
+
     fn begin_operation(&mut self, key: char) -> bool {
         if !matches!(&self.mode, Mode::Live(_)) || self.palette || self.diagnostics.pending {
             return false;
@@ -332,6 +338,9 @@ impl Panel {
                     None
                 },
             ),
+            (Section::Restart, 'i') if !self.managed() => Operation::Server(ServerAction::Start),
+            (Section::Restart, 'p') if !self.managed() => Operation::Server(ServerAction::Stop),
+            (Section::Restart, 't') if !self.managed() => Operation::Server(ServerAction::Restart),
             (Section::Restart, 't') => Operation::Restart {
                 name: "elzevir".to_owned(),
             },

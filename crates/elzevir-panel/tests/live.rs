@@ -522,3 +522,56 @@ fn registration_form_explains_the_default_broker_in_both_languages() {
         assert!(!rendered.contains("broker-url"));
     }
 }
+
+#[test]
+fn the_service_section_starts_and_stops_a_personal_server_and_restarts_a_managed_one() {
+    use elzevir_panel::{Operation, Section, ServerAction};
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let press = |panel: &mut Panel, key| {
+        panel.handle(
+            &Event::Key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::NONE)),
+            140,
+            30,
+        );
+    };
+    let chosen = |key| {
+        let mut panel = connected();
+        panel.section = Section::Restart;
+        press(&mut panel, key);
+        panel.form.take().and_then(elzevir_panel::Form::finish)
+    };
+    assert_eq!(chosen('i'), Some(Operation::Server(ServerAction::Start)));
+    assert_eq!(chosen('p'), Some(Operation::Server(ServerAction::Stop)));
+    assert_eq!(chosen('t'), Some(Operation::Server(ServerAction::Restart)));
+    for language in ["en", "pt-BR"] {
+        let mut panel = connected();
+        panel.section = Section::Restart;
+        let messages = Messages::new(language).unwrap();
+        for key in [
+            "op-server-help",
+            "op-server-start",
+            "op-server-stop",
+            "op-server-restart",
+        ] {
+            assert_ne!(messages.get(key), key);
+        }
+        let shown = screen(&panel, language);
+        assert!(shown.contains(&messages.get("op-server-help")), "{shown}");
+    }
+
+    let mut managed = Panel::live(Institution {
+        managed: true,
+        ..Institution::default()
+    });
+    managed.section = Section::Restart;
+    press(&mut managed, 'p');
+    assert!(
+        managed.form.is_none(),
+        "the service manager stops a managed server"
+    );
+    press(&mut managed, 't');
+    assert!(matches!(
+        managed.form.take().map(|form| form.operation),
+        Some(Operation::Restart { .. })
+    ));
+}

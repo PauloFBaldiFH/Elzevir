@@ -87,7 +87,7 @@ pub(crate) fn draw(
         rows.extend(crate::operation_view::rows(
             snapshot,
             panel.diagnostics.pending,
-            panel.section,
+            (panel.section, panel.managed()),
             messages,
         ));
     } else {

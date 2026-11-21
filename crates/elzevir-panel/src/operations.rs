@@ -43,6 +43,9 @@ pub enum Operation {
         /// Managed service name.
         name: String,
     },
+    /// Start, stop or restart the background server of a personal
+    /// installation, which has no service manager.
+    Server(ServerAction),
     /// Restart the selected managed service.
     Restart {
         /// Managed service name.
@@ -97,6 +100,7 @@ impl Operation {
             Self::CheckUpdates => "op-update-check",
             Self::RecoverUpdate { .. } => "op-update-recover",
             Self::Update { .. } => "op-update",
+            Self::Server(action) => action.key(),
             Self::Restart { .. } => "op-restart",
             Self::Reboot => "op-reboot",
             Self::BackupNow => "op-backup-now",
@@ -105,6 +109,29 @@ impl Operation {
             Self::ExportKey { .. } => "op-key-export",
             Self::Restore { .. } => "op-restore",
             Self::Policy { .. } => "op-policy",
+        }
+    }
+}
+
+/// What to do with a personal installation's server.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServerAction {
+    /// Start it in the background; nothing happens when it already runs.
+    Start,
+    /// Stop it in order; the catalog and the staff interface go offline.
+    Stop,
+    /// Stop, then start again.
+    Restart,
+}
+
+impl ServerAction {
+    /// Translation key of the confirmation.
+    #[must_use]
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Start => "op-server-start",
+            Self::Stop => "op-server-stop",
+            Self::Restart => "op-server-restart",
         }
     }
 }
@@ -201,7 +228,8 @@ impl Form {
                 (vec!["op-executable"], vec![executable.clone()])
             }
             Operation::Restart { name } => (vec!["op-service"], vec![name.clone()]),
-            Operation::TestTunnel
+            Operation::Server(_)
+            | Operation::TestTunnel
             | Operation::CloudflareLogin
             | Operation::InstallCloudflared
             | Operation::InstallRclone
@@ -254,6 +282,7 @@ impl Form {
                 service: values.next()?,
                 protocol: values.next()?,
             },
+            Operation::Server(action) => Operation::Server(action),
             Operation::TestTunnel => Operation::TestTunnel,
             Operation::CloudflareLogin => Operation::CloudflareLogin,
             Operation::InstallCloudflared => Operation::InstallCloudflared,

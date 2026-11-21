@@ -17,6 +17,17 @@ Reinício e atualização exigem confirmação; a indisponibilidade de observaç
 de sessões nunca é apresentada como zero sessões. A operação de sistema é
 executada por cliente privilegiado, fora do processo que será parado.
 
+Seção Serviço (antes "Reiniciar", atalho `r`). Na instalação pessoal, sem
+gerenciador de serviços, `i` inicia o servidor em segundo plano, `p` o para e
+`t` o reinicia (para e inicia de novo). Cada ação pede confirmação, roda no
+trabalhador do painel e termina ali: o painel espera o servidor responder (ou
+liberar a trava, ao parar) e mostra "Pronto", com o estado real no topo, ou
+"recusada". Parar deixa o painel aberto, mostrando o servidor parado. Na
+instalação gerenciada (registro de instalação do executável presente), o
+gerenciador de serviços é o dono do processo: o painel só oferece `t`, que
+reinicia o serviço pelo auxiliar privilegiado, e recusa iniciar e parar. Em
+ambas, `m` reinicia o computador.
+
 A contagem de sessões é calculada no próprio estado em memória do servidor,
 expurgando as expiradas sem renovar seu prazo. A resposta administrativa só
 contém o número, nunca identificadores, logins ou cookies. A contagem exibida é

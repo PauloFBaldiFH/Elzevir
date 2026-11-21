@@ -3,13 +3,13 @@ source: crates/elzevir-panel/tests/live.rs
 expression: text
 ---
 Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
-+Sections------------------+      1 Home            2 Health          3 Access           4 Backup           5 Updates         6 Restart
++Sections------------------+      1 Home            2 Health          3 Access           4 Backup           5 Updates         6 Service
 |  d Dashboard             |+Diagnostics---------------------------------------------------------------------++Selected institution--------+
 |> x Diagnostics           ||Running                                                                         ||Biblioteca de teste         |
 |  a Addresses and access  ||                                                                                ||                            |
 |  b Backups and schedules ||Database: OK                                                                    ||Configured listener         |
 |  u Updates               ||Indexer: OK                                                                     ||127.0.0.1:0                 |
-|  r Restart               ||SQLite quick_check: OK                                                          ||                            |
+|  r Service               ||SQLite quick_check: OK                                                          ||                            |
 |                          ||Catalog HTTP (local): Failed                                                    ||Observed listener           |
 |                          ||Free space (bytes): 104857600                                                   ||127.0.0.1:8080              |
 |                          ||Free space check: OK                                                            ||                            |
