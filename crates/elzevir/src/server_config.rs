@@ -19,7 +19,7 @@ pub(crate) fn default_listen() -> SocketAddr {
 }
 
 /// The existing server flags plus an optional configuration file.
-#[derive(clap::Args, Default)]
+#[derive(clap::Args, Clone, Default)]
 pub(crate) struct ServeArgs {
     /// TOML configuration file (paths inside it are relative to its directory).
     #[arg(long)]

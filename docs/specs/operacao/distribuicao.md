@@ -40,7 +40,14 @@ usuário, cria o diretório de dados local, verifica a versão e o subcomando
 grava `elzevir.desktop` com `Terminal=true` no menu de aplicativos e na
 pasta da área de trabalho indicada por `user-dirs.dirs`, com o ícone SVG
 da marca; no Windows, o instalador cria `Elzevir.lnk` no menu Iniciar e na
-área de trabalho. Falha no atalho só gera aviso. Por fim, se houver
+área de trabalho. No Windows, quando a release traz `elzevir-tray.exe`
+(asset separado do ZIP, com SHA-256 no `SHA256SUMS`, porque os
+atualizadores anteriores aceitam só os três arquivos do pacote), o
+instalador o grava ao lado de `elzevir.exe`, cria na pasta Inicializar o
+atalho "Elzevir (server)" para ele e já abre o ícone. Sem esse asset, o
+atalho roda `elzevir background` com o console minimizado. A atualização
+pelo próprio executável ainda não troca `elzevir-tray.exe`, que só repassa
+para `elzevir.exe tray`. Falha no atalho só gera aviso. Por fim, se houver
 terminal, o instalador abre o painel, que no primeiro uso mostra o
 assistente da biblioteca e do administrador; `--no-launch`/`-NoLaunch`
 evita isso. `elzevir desktop remove` apaga o atalho e o ícone. No

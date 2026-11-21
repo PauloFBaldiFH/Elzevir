@@ -48,7 +48,18 @@ pub(crate) fn interactive() -> bool {
     io::stdin().is_terminal() && io::stdout().is_terminal()
 }
 
-pub(crate) fn resolve(mut args: ServeArgs) -> Result<(Settings, Option<PathBuf>), String> {
+pub(crate) fn resolve(args: ServeArgs) -> Result<(Settings, Option<PathBuf>), String> {
+    let ask = interactive();
+    resolve_or_ask(args, ask)
+}
+
+/// The institution, when it exists already; never asks anything, even from
+/// a terminal (the tray's console on Windows is a hidden one).
+pub(crate) fn existing(args: ServeArgs) -> Result<(Settings, Option<PathBuf>), String> {
+    resolve_or_ask(args, false)
+}
+
+fn resolve_or_ask(mut args: ServeArgs, ask: bool) -> Result<(Settings, Option<PathBuf>), String> {
     if args.config.is_some() || args.data_dir.is_some() {
         let config = args.config.clone();
         return args
@@ -75,7 +86,7 @@ pub(crate) fn resolve(mut args: ServeArgs) -> Result<(Settings, Option<PathBuf>)
             }
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            if !interactive() {
+            if !ask {
                 return Err("run elzevir init first, or use an interactive terminal (panel --demo is also available)".into());
             }
             let messages = elzevir_panel::Messages::new(language(args.lang.as_deref()))

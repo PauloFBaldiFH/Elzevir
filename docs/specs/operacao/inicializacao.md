@@ -107,9 +107,10 @@ plano (`elzevir background`, processo separado do terminal) e abre o painel
 ligado a ele; fechar o painel não para o servidor (Paulo, 2026-11-20).
 `elzevir background` inicia o servidor da instituição padrão sem abrir
 nada e não faz nada se ele já estiver rodando. No login, o servidor sobe
-pela bandeja no Linux (`elzevir tray`, pela entrada em `~/.config/autostart`
-criada por `elzevir desktop install`) e pelo atalho na pasta Inicializar do
-Windows (`elzevir background`).
+pela bandeja: no Linux, pela entrada em `~/.config/autostart` criada por
+`elzevir desktop install`; no Windows, pelo atalho na pasta Inicializar
+para `elzevir-tray.exe`. Instalações sem esse programa usam o atalho para
+`elzevir background`.
 `elzevir stop` pede pelo canal administrativo local a parada ordenada.
 
 `elzevir tray` é o ícone de bandeja. Ao abrir, inicia o servidor se ele
@@ -124,8 +125,24 @@ depois de iniciar o servidor. O painel abre pelo atalho do menu
 (`gio launch`), que usa o terminal preferido do desktop, ou pelo primeiro
 terminal conhecido encontrado. No login do Linux, a entrada de autoinício
 roda `elzevir tray`.
+No Windows o ícone fica na área de notificação (Win32, via `tray-icon` e
+`winit`). Todo programa de console ganha uma janela preta no Windows, por
+isso o login abre `elzevir-tray.exe`: um programa sem console que só
+inicia `elzevir.exe tray` com o console oculto. O painel abre num console
+novo (no Windows Terminal, quando ele é o terminal padrão); catálogo e
+equipe abrem no navegador padrão.
+A bandeja nunca roda o assistente de primeiro uso. Se a instituição ainda
+não existe, mostra "não configurado" e passa a mostrar o servidor assim que
+o painel a cria.
 A atualização pessoal para o servidor em segundo plano antes de trocar o
-executável e o inicia de novo depois, mesmo se a atualização falhar.
+executável e o inicia de novo depois, mesmo se a atualização falhar. No
+Windows, um programa em execução (a bandeja, ou o painel que pediu a
+atualização) não pode ser substituído, mas pode ser renomeado: a
+atualização move o executável para `elzevir.old`, coloca o novo no lugar e
+volta o antigo se isso falhar. A bandeja aberta continua na versão antiga
+até o próximo login. O `elzevir.old` da atualização anterior é apagado na
+seguinte; se ainda estiver em uso, a atualização recusa e pede para fechar
+a bandeja e o painel.
 `elzevir` sem subcomando equivale a `elzevir start`, para que o uso diário
 não exija lembrar comandos.
 Se a porta configurada estiver ocupada, `start` (e o primeiro uso) abre
