@@ -5,22 +5,29 @@
 //! The state and the menu are decided here, platform-free and tested; each
 //! platform only draws them and reports which entry was chosen.
 #![cfg_attr(
-    not(target_os = "linux"),
+    not(any(target_os = "linux", target_os = "windows")),
     allow(
         dead_code,
-        reason = "only the Linux icon uses the shared core so far; elsewhere the tray only starts the server"
+        reason = "macOS has no icon yet; there the tray only starts the server"
     )
 )]
 
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(target_os = "linux")]
+use linux as desktop;
+#[cfg(target_os = "windows")]
+mod windows;
+#[cfg(target_os = "windows")]
+use windows as desktop;
 
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use crate::server_config::ServeArgs;
 
 /// How often the tray looks at the server.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 const POLL: std::time::Duration = std::time::Duration::from_secs(3);
 
 /// Arguments of `elzevir tray`.
@@ -173,21 +180,35 @@ impl Labels {
 
 /// What the platform tray needs from the institution.
 pub(crate) struct Institution {
-    serve: Option<(crate::server_config::Settings, Option<PathBuf>)>,
+    args: ServeArgs,
+    /// Found once it exists: the tray may start before the panel's first
+    /// use creates it.
+    found: std::sync::OnceLock<(crate::server_config::Settings, Option<PathBuf>)>,
 }
 
 impl Institution {
-    fn resolve(args: ServeArgs) -> Self {
-        // Before the first use there is nothing to serve; the tray still
-        // offers the panel, whose wizard creates the institution.
-        Self {
-            serve: crate::first_use::resolve(args).ok(),
+    fn new(args: ServeArgs) -> Self {
+        let institution = Self {
+            args,
+            found: std::sync::OnceLock::new(),
+        };
+        institution.serve();
+        institution
+    }
+
+    fn serve(&self) -> Option<&(crate::server_config::Settings, Option<PathBuf>)> {
+        if self.found.get().is_none()
+            && let Ok(found) = crate::first_use::existing(self.args.clone())
+        {
+            // Another thread may have found it first; both found the same.
+            self.found.set(found).ok();
         }
+        self.found.get()
     }
 
     /// The current state, read from the server itself.
     pub(crate) fn state(&self) -> State {
-        match &self.serve {
+        match self.serve() {
             None => State::NotConfigured,
             Some((settings, _)) => {
                 State::observed(crate::status::inspect(&settings.data_dir).state)
@@ -197,25 +218,98 @@ impl Institution {
 
     /// Catalog and staff addresses of the running server.
     pub(crate) fn urls(&self) -> (Option<String>, Option<String>) {
-        self.serve.as_ref().map_or((None, None), |(settings, _)| {
+        self.serve().map_or((None, None), |(settings, _)| {
             crate::addresses::local_urls(&crate::status::inspect(&settings.data_dir))
         })
     }
 
     pub(crate) fn start(&self) -> Result<(), String> {
-        let (settings, config) = self.serve.as_ref().ok_or("institution not configured")?;
+        let (settings, config) = self.serve().ok_or("institution not configured")?;
         crate::background::launch(settings, config.as_deref())
     }
 
     pub(crate) fn stop(&self) -> Result<(), String> {
-        let (settings, _) = self.serve.as_ref().ok_or("institution not configured")?;
+        let (settings, _) = self.serve().ok_or("institution not configured")?;
         crate::background::stop(&settings.data_dir).map(drop)
+    }
+}
+
+/// Carries out the operator's choices. A start or stop in progress is shown
+/// instead of the observed state, which lags behind it.
+pub(crate) struct Controller {
+    institution: Arc<Institution>,
+    transition: Arc<Mutex<Option<State>>>,
+}
+
+impl Controller {
+    fn new(institution: Institution) -> Self {
+        Self {
+            institution: Arc::new(institution),
+            transition: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// The state the icon shows now.
+    pub(crate) fn shown(&self) -> State {
+        self.transition
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .unwrap_or_else(|| self.institution.state())
+    }
+
+    /// Runs `action`; `done` is called once a start or stop has finished,
+    /// so the icon can redraw at once. `Quit` is the platform loop's own.
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    pub(crate) fn act(&self, action: Action, done: impl Fn() + Send + 'static) {
+        match action {
+            Action::OpenPanel => desktop::open_panel(),
+            Action::OpenCatalog => desktop::open_url(self.institution.urls().0),
+            Action::OpenStaff => desktop::open_url(self.institution.urls().1),
+            Action::Start | Action::Stop => self.switch(action == Action::Start, done),
+            Action::Quit => {}
+        }
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    fn switch(&self, start: bool, done: impl Fn() + Send + 'static) {
+        let showing = if start {
+            State::Starting
+        } else {
+            State::Stopping
+        };
+        *self
+            .transition
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(showing);
+        let institution = Arc::clone(&self.institution);
+        let finished = Arc::clone(&self.transition);
+        // Starting can take up to a minute; the icon keeps answering.
+        let spawned = std::thread::Builder::new()
+            .name("elzevir-tray-action".into())
+            .spawn(move || {
+                let result = if start {
+                    institution.start()
+                } else {
+                    institution.stop()
+                };
+                if let Err(error) = result {
+                    eprintln!("elzevir: {error}");
+                }
+                *finished.lock().unwrap_or_else(PoisonError::into_inner) = None;
+                done();
+            });
+        if spawned.is_err() {
+            *self
+                .transition
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner) = None;
+        }
     }
 }
 
 /// `elzevir tray`: started at login; also starts the server.
 pub(crate) fn run(args: Args) -> Result<(), String> {
-    let institution = Institution::resolve(args.serve);
+    let institution = Institution::new(args.serve);
     if institution.state() == State::Stopped {
         // At login the server starts even where no tray can be shown.
         if let Err(error) = institution.start() {
@@ -223,23 +317,22 @@ pub(crate) fn run(args: Args) -> Result<(), String> {
         }
     }
     let language = crate::first_use::language(args_language(&institution)).to_owned();
-    platform(institution, &language)
+    platform(&Controller::new(institution), &language)
 }
 
 fn args_language(institution: &Institution) -> Option<&str> {
     institution
-        .serve
-        .as_ref()
+        .serve()
         .map(|(settings, _)| settings.lang.as_str())
 }
 
-#[cfg(target_os = "linux")]
-fn platform(institution: Institution, language: &str) -> Result<(), String> {
-    linux::run(institution, language, POLL)
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+fn platform(controller: &Controller, language: &str) -> Result<(), String> {
+    desktop::run(controller, language, POLL)
 }
 
-#[cfg(not(target_os = "linux"))]
-fn platform(_: Institution, _: &str) -> Result<(), String> {
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+fn platform(_: &Controller, _: &str) -> Result<(), String> {
     // The server was started above; the icon itself comes in a later change.
     Err("the system tray is not available on this system yet".into())
 }

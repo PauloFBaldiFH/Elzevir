@@ -18,6 +18,7 @@ param($InstallerParameters)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $script:OpenPanel = $null
+$script:OpenTray = $null
 function Test-ElzevirVersion([string] $Version) {
     if ($Version.Length -gt 40 -or $Version -cnotmatch '\Av(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})(?:-(?<preview>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?\z') { return $false }
     return $Matches['preview'] -cnotmatch '(^|\.)0[0-9]+(\.|$)'
@@ -186,7 +187,7 @@ function New-ElzevirShortcut([string] $Folder, [string] $Target, [string] $Argum
         return $false
     }
 }
-function Install-ElzevirForUser([string] $Payload, [string] $BinDirectory, [string] $Data, [string] $Version) {
+function Install-ElzevirForUser([string] $Payload, [string] $BinDirectory, [string] $Data, [string] $Version, [string] $Tray) {
     $source = Join-Path $Payload 'elzevir.exe'
     $reported = Invoke-ElzevirNative $source @('--version')
     if ($reported -cne "elzevir $($Version.Substring(1))") { throw 'Package version mismatch' }
@@ -225,10 +226,21 @@ function Install-ElzevirForUser([string] $Payload, [string] $BinDirectory, [stri
         $menu = New-ElzevirShortcut ([Environment]::GetFolderPath('Programs')) $destination 'start'
         $desktop = New-ElzevirShortcut ([Environment]::GetFolderPath('Desktop')) $destination 'start'
         if ($menu -or $desktop) { Write-Output 'Elzevir is in the Start menu and on the desktop.' }
-        # The server starts at sign-in; 7 keeps its short-lived console minimized.
-        & $destination background --help *> $null
-        if ($LASTEXITCODE -eq 0 -and (New-ElzevirShortcut ([Environment]::GetFolderPath('Startup')) $destination 'background' 'Elzevir (server)' 7)) {
-            Write-Output 'The Elzevir server starts when you sign in.'
+        # The server starts at sign-in: through the tray icon, which starts it and
+        # opens no console, or else directly, with its short-lived console minimized.
+        $startup = [Environment]::GetFolderPath('Startup')
+        $trayDestination = Join-Path $BinDirectory 'elzevir-tray.exe'
+        if ($Tray) {
+            try { Copy-Item -LiteralPath $Tray -Destination $trayDestination -Force } catch { $Tray = $null }
+        }
+        if ($Tray -and (New-ElzevirShortcut $startup $trayDestination '' 'Elzevir (server)')) {
+            Write-Output 'The Elzevir server and its notification-area icon start when you sign in.'
+            $script:OpenTray = $trayDestination
+        } else {
+            & $destination background --help *> $null
+            if ($LASTEXITCODE -eq 0 -and (New-ElzevirShortcut $startup $destination 'background' 'Elzevir (server)' 7)) {
+                Write-Output 'The Elzevir server starts when you sign in.'
+            }
         }
         $global:LASTEXITCODE = 0
         Write-Output ''
@@ -318,6 +330,15 @@ try {
     $payload = Join-Path $temporary 'payload'
     New-Item -ItemType Directory -Path $payload | Out-Null
     Expand-ElzevirPackage $package $payload
+    # elzevir-tray.exe is a separate asset; releases before it have none.
+    $tray = $null
+    $trayName = "elzevir-tray-$Version-$target.exe"
+    if (-not $managed -and -not $DownloadOnly -and ([IO.File]::ReadAllText($sumsPath) -split '\s+') -ccontains $trayName) {
+        $trayExpected = Get-ElzevirChecksum ([IO.File]::ReadAllText($sumsPath)) $trayName
+        $tray = Join-Path $payload 'elzevir-tray.exe'
+        Save-ElzevirDownload "$base/$trayName" $tray 16777216
+        if ((Get-FileHash -LiteralPath $tray -Algorithm SHA256).Hash.ToLowerInvariant() -cne $trayExpected) { throw 'Tray launcher checksum mismatch; nothing was installed' }
+    }
     if ($DownloadOnly) {
         if (Test-Path -LiteralPath $DownloadOnly) { throw 'Download destination must be new' }
         New-Item -ItemType Directory -Path $DownloadOnly | Out-Null
@@ -327,9 +348,13 @@ try {
         return
     }
     if (-not $managed) {
-        Install-ElzevirForUser $payload $installRoot $data $Version
+        Install-ElzevirForUser $payload $installRoot $data $Version $tray
         # The download is not needed while the panel runs.
         Remove-Item -LiteralPath $temporary -Recurse -Force
+        if ($script:OpenTray -and -not $NoLaunch) {
+            # The icon is a convenience; the panel opens without it.
+            try { Start-Process -FilePath $script:OpenTray } catch { Write-Output 'The notification-area icon appears at the next sign-in.' }
+        }
         if ($script:OpenPanel -and -not $NoLaunch -and [Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
             Write-Output 'Opening the panel now.'
             & $script:OpenPanel start

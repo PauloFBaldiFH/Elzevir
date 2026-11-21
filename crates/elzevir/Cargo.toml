@@ -70,6 +70,10 @@ rustix = { version = "1", features = ["fs", "process"] }
 [target.'cfg(target_os = "windows")'.dependencies]
 widestring = "1"
 windows-service = "=0.8.1"
+# Notification-area icon and its menu, driven by winit's message loop: both
+# safe Rust over the Win32 API, so no unsafe code of our own.
+tray-icon = { version = "0.26.1", default-features = false }
+winit = { version = "0.30.13", default-features = false }
 
 [[bench]]
 name = "opac"

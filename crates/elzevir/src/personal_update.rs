@@ -176,26 +176,70 @@ fn require_personal(
 }
 
 fn publish(staged: &Path, executable: &Path) -> Result<(), String> {
-    let start = std::time::Instant::now();
-    loop {
-        match std::fs::rename(staged, executable) {
-            Ok(()) => return Ok(()),
-            // The Windows helper may be ready before the launching image exits.
-            Err(error)
-                if cfg!(windows)
-                    && error.kind() == std::io::ErrorKind::PermissionDenied
-                    && start.elapsed() < std::time::Duration::from_secs(10) =>
-            {
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
-            Err(error) => return Err(format!("cannot replace the executable atomically: {error}")),
+    match std::fs::rename(staged, executable) {
+        Ok(()) => Ok(()),
+        // Windows cannot replace a program that is running (the tray, or the
+        // panel that asked for the update), but it can rename it: the
+        // running copy goes on from the new name and the next start runs
+        // the update.
+        Err(error) if cfg!(windows) && error.kind() == std::io::ErrorKind::PermissionDenied => {
+            set_aside(staged, executable)
+        }
+        Err(error) => Err(format!("cannot replace the executable atomically: {error}")),
+    }
+}
+
+/// Moves the installed program to `<name>.old`, then the staged one in its
+/// place; puts the old one back if that fails.
+fn set_aside(staged: &Path, executable: &Path) -> Result<(), String> {
+    let aside = executable.with_extension("old");
+    match std::fs::remove_file(&aside) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => {
+            return Err(
+                "the program replaced by the last update is still running; close the tray icon and the panel, then update again"
+                    .into(),
+            );
         }
     }
+    std::fs::rename(executable, &aside)
+        .map_err(|error| format!("cannot move the running program aside: {error}"))?;
+    std::fs::rename(staged, executable).or_else(|error| {
+        std::fs::rename(&aside, executable)
+            .map_err(|_| format!("cannot restore the program from {}", aside.display()))?;
+        Err(format!("cannot replace the executable: {error}"))
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::newer;
+
+    #[test]
+    fn a_program_set_aside_makes_room_for_the_update_and_replaces_an_older_one() {
+        let directory = tempfile::tempdir().unwrap();
+        let executable = directory.path().join("elzevir.exe");
+        let staged = directory.path().join("staged.exe");
+        let aside = directory.path().join("elzevir.old");
+        std::fs::write(&aside, b"two updates ago").unwrap();
+        std::fs::write(&executable, b"running").unwrap();
+        std::fs::write(&staged, b"update").unwrap();
+        super::set_aside(&staged, &executable).unwrap();
+        assert_eq!(std::fs::read(&executable).unwrap(), b"update");
+        assert_eq!(std::fs::read(&aside).unwrap(), b"running");
+        assert!(!staged.exists());
+    }
+
+    #[test]
+    fn a_failed_replacement_puts_the_program_back() {
+        let directory = tempfile::tempdir().unwrap();
+        let executable = directory.path().join("elzevir.exe");
+        std::fs::write(&executable, b"running").unwrap();
+        let missing = directory.path().join("missing.exe");
+        assert!(super::set_aside(&missing, &executable).is_err());
+        assert_eq!(std::fs::read(&executable).unwrap(), b"running");
+    }
 
     #[cfg(target_os = "linux")]
     #[test]
