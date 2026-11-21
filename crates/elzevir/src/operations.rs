@@ -21,6 +21,8 @@ pub(crate) enum Task {
     ConfigureCloud,
     CloudBackup {
         plan: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<elzevir_panel::CloudTarget>,
     },
     Verify {
         id: String,
@@ -160,9 +162,22 @@ impl Client {
         self.enqueue(task, None)
     }
     pub(crate) fn cloud(&self, action: &crate::cloud::Action) -> Result<Job, String> {
+        if let crate::cloud::Action::Remote {
+            target,
+            command: elzevir_panel::RemoteCommand::Create,
+        } = action
+        {
+            return self.submit(Task::CloudBackup {
+                plan: target.plan.clone(),
+                target: Some(target.clone()),
+            });
+        }
         if let crate::cloud::Action::RunPlan { id } = action {
             crate::cloud_plans::get(&self.0.directory, id)?;
-            return self.submit(Task::CloudBackup { plan: id.clone() });
+            return self.submit(Task::CloudBackup {
+                plan: id.clone(),
+                target: None,
+            });
         }
         self.enqueue(Task::ConfigureCloud, Some(action))
     }
@@ -410,14 +425,19 @@ impl Client {
     ) -> Result<(), String> {
         let control = self.0.cancellation.control();
         match &job.task {
-            Task::CloudBackup { plan } => crate::cloud_plans::execute(
-                &self.0.directory,
-                plan,
-                &job.id,
-                config,
-                store.readers(),
-                Arc::clone(&control),
-            )?,
+            Task::CloudBackup { plan, target } => {
+                if let Some(t) = target {
+                    crate::cloud_plans::reviewed(&self.0.directory, t)?;
+                }
+                crate::cloud_plans::execute(
+                    &self.0.directory,
+                    plan,
+                    &job.id,
+                    config,
+                    store.readers(),
+                    Arc::clone(&control),
+                )?;
+            }
             Task::ConfigureCloud => {
                 crate::cloud::execute_queued(&self.0.directory, &job.id, Arc::clone(&control))?;
             }
@@ -465,7 +485,10 @@ fn claim_due(
         })
     } else if let Some((id, date)) = crate::cloud_plans::due(directory, at, &history.last_cloud)? {
         history.last_cloud.insert(id.clone(), date);
-        Some(Task::CloudBackup { plan: id })
+        Some(Task::CloudBackup {
+            plan: id,
+            target: None,
+        })
     } else {
         None
     };

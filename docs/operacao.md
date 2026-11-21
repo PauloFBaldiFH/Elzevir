@@ -104,6 +104,25 @@ em execução para responder aos formulários pelo canal administrativo local.
 Transferências usam nomes próprios e retenção de artefatos reconhecidos, sem
 sync/purge sobre o remoto. Falha de envio preserva a cópia local.
 
+Em **Backup**, `[` e `]` alternam entre **Conexões**, **Planos**, **Na nuvem**
+e **Histórico**. Use `<` e `>` para selecionar o plano. A confirmação mostra
+a conexão e a pasta. Em **Planos**, `u` cria uma cópia nova e `U` envia ou
+confere uma cópia local por ID. Para usar o mesmo arquivo em vários planos,
+marque cada destino com `+` e pressione `M`. PgUp/PgDn percorrem os destinos na confirmação.
+
+**Envio a confirmar** registra uma transferência cujo resultado ainda precisa
+ser conferido. Use `U` com o mesmo ID. O serviço compara o SHA-256 remoto
+e mantém a cópia local disponível para nova tentativa. A retenção só remove
+objetos registrados e com conteúdo conferido. Registros antigos sem SHA-256
+permanecem no remoto.
+
+Em **Na nuvem**, use `l` para consultar uma página de até 20 arquivos, `,` e
+`.` para selecionar e `D` para baixar. A consulta admite até 8.192 entradas e
+2 MiB de metadados por pasta. O painel mostra **Indisponível** se o provedor
+omitir a quota. O arquivo baixado fica em `DATA_DIR/cloud-downloads` após
+verificação de tamanho e SHA-256. Use `O` para informar a chave e iniciar
+**Validar cópia**. O serviço continua ativo até a confirmação de restauração.
+
 Domínio é opcional e pode ser escolhido posteriormente, sem recompilar.
 Domínio próprio requer autorização da conta Cloudflare e dois hostnames
 distintos para catálogo/equipe. Para endereço gratuito, abra **Endereços e acesso**

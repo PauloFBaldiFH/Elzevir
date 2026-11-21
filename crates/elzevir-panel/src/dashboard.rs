@@ -81,12 +81,7 @@ pub(crate) fn draw(
     } else if panel.section == Section::Addresses {
         rows.extend(address_rows(panel, snapshot, state, messages));
     } else if matches!(panel.section, Section::Backup | Section::Updates) {
-        rows.extend(crate::operation_view::rows(
-            snapshot,
-            panel.diagnostics.pending,
-            panel.section,
-            messages,
-        ));
+        rows.extend(crate::operation_view::rows(snapshot, panel, messages));
     } else if panel.section == Section::Restart {
         // The service view draws its state and buttons over this block.
         rows.clear();
