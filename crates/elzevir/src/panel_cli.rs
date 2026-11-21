@@ -86,7 +86,12 @@ fn managed() -> bool {
         .is_some_and(|record| std::fs::symlink_metadata(record).is_ok())
 }
 
+struct PreparedRestore {
+    review: elzevir_panel::RestoreReview,
+    task: crate::host_jobs::Task,
+}
 struct Collector {
+    restore: Option<PreparedRestore>,
     directory: PathBuf,
     system: Option<sysinfo::System>,
     cpu_at: Option<Instant>,
@@ -105,6 +110,7 @@ impl Collector {
             directory,
             system: None,
             cpu_at: None,
+            restore: None,
             cpu: None,
             diagnostics: crate::diagnostics::Context::default(),
             operation_result: None,
@@ -211,6 +217,8 @@ impl Collector {
         self.observe_request(request);
         let mut result = elzevir_panel::Operations {
             result: self.operation_result,
+            review: self.restore.as_ref().map(|r| r.review.clone()),
+            managed_ids: crate::local_artifacts::ids(&self.directory).unwrap_or_default(),
             backup_folder: Some(self.directory.join("backups")),
             latest: self.latest.as_ref().map(|release| release.tag_name.clone()),
             update_available: self.latest.as_ref().is_some_and(|release| {
@@ -312,6 +320,9 @@ impl Collector {
                             "running" => "op-running",
                             "interrupted" => "op-interrupted",
                             "completed" => "op-completed",
+                            crate::managed_restore::BEFORE => "restore-before",
+                            crate::managed_restore::RECOVERED => "restore-recovered",
+                            crate::managed_restore::PENDING => "restore-pending",
                             "unsupported" => "broker-unsupported",
                             _ => "op-failed",
                         },
@@ -370,6 +381,12 @@ impl Collector {
                 Err(_) if matches!(operation, elzevir_panel::Operation::Settings { .. }) => {
                     "settings-invalid"
                 }
+                Ok(()) if matches!(operation, elzevir_panel::Operation::Restore { .. }) => {
+                    "restore-ready"
+                }
+                Err(_) if matches!(operation, elzevir_panel::Operation::Restore { .. }) => {
+                    "restore-invalid"
+                }
                 Ok(()) => "op-submitted",
                 Err(error) if error.starts_with("B1:") => "broker-unsupported",
                 Err(_) => "op-refused",
@@ -377,6 +394,43 @@ impl Collector {
         }
     }
 
+    fn validate_restore(&mut self, input: &str, key: &str) -> Result<(), String> {
+        self.restore = None;
+        let input = crate::installation::absolute(Path::new(input))?;
+        let key = crate::installation::absolute(Path::new(key))?;
+        let extracted = crate::backup_archive::extract(&input, &key)?;
+        let m = extracted.manifest.clone();
+        crate::backup_cli::prepare(extracted, &self.directory, true)?;
+        let reviewed = crate::managed_restore::signature(&m)?;
+        let managed = crate::local_artifacts::ids(&self.directory)
+            .unwrap_or_default()
+            .contains(&m.id)
+            && crate::backup_cli::artifact(&self.directory, &m.id)?
+                .canonicalize()
+                .is_ok_and(|owned| owned == input);
+        self.restore = Some(PreparedRestore {
+            review: elzevir_panel::RestoreReview {
+                token: crate::backup_archive::identifier()?,
+                id: m.id,
+                created: m.created_at,
+                scope: m.scope,
+                schema: m.database_schema,
+                managed,
+                file: input
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned(),
+            },
+            task: crate::host_jobs::Task::Restore {
+                input,
+                key,
+                config: self.config.clone(),
+                reviewed,
+            },
+        });
+        Ok(())
+    }
     fn operate(&mut self, operation: &elzevir_panel::Operation) -> Result<(), String> {
         use elzevir_panel::Operation;
         if let Operation::Cloud(action) = operation {
@@ -406,11 +460,28 @@ impl Collector {
                 identity.to_string().expose_secret().as_bytes(),
             );
         }
+        if let Operation::Restore { input, key } = operation {
+            return self.validate_restore(input, key);
+        }
+        if let Operation::ApplyRestore(review) = operation {
+            let prepared = self
+                .restore
+                .take()
+                .filter(|r| r.review == *review)
+                .ok_or("restore review expired")?;
+            crate::host_jobs::launch(&self.directory, prepared.task)?;
+            return Ok(());
+        }
         let host = self.host_operation(operation)?;
         if let Some(task) = host {
             crate::host_jobs::launch(&self.directory, task)?;
             return Ok(());
         }
+        self.daemon_operation(operation)
+    }
+
+    fn daemon_operation(&mut self, operation: &elzevir_panel::Operation) -> Result<(), String> {
+        use elzevir_panel::Operation;
         let info = crate::runtime_info::read(&self.directory.join(crate::runtime_info::NAME))?;
         match operation {
             Operation::BackupNow { options, folder } => {
@@ -459,6 +530,7 @@ impl Collector {
             | Operation::Cloud(_)
             | Operation::Server(_)
             | Operation::Settings { .. }
+            | Operation::ApplyRestore(_)
             | Operation::Restore { .. }
             | Operation::Restart { .. }
             | Operation::Reboot
@@ -625,11 +697,6 @@ impl Collector {
                     config: journal.config,
                 })
             }
-            Operation::Restore { input, key } => Some(crate::host_jobs::Task::Restore {
-                input: input.into(),
-                key: key.into(),
-                config: self.config.clone(),
-            }),
             Operation::Restart { name } => {
                 Some(crate::host_jobs::Task::Restart { name: name.clone() })
             }
@@ -642,6 +709,41 @@ impl Collector {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn validating_a_replaced_archive_leaves_the_active_institution_and_clears_review() {
+        let directory = tempfile::tempdir().unwrap();
+        let data = crate::open_store(directory.path()).unwrap();
+        let mut collector = Collector::new(directory.path().into());
+        let source = directory.path().join("old.age");
+        let key = directory.path().join("fixture.key");
+        crate::backup_archive::write_new(
+            &source,
+            include_bytes!("../tests/data/gzip-v1/library.age"),
+        )
+        .unwrap();
+        crate::backup_archive::write_new(&key, include_bytes!("../tests/data/gzip-v1/fixture.key"))
+            .unwrap();
+        collector
+            .validate_restore(source.to_str().unwrap(), key.to_str().unwrap())
+            .unwrap();
+        let reviewed = collector.restore.as_ref().unwrap().review.clone();
+        assert!(!reviewed.managed);
+        std::fs::write(&source, b"partial archive").unwrap();
+        assert!(
+            collector
+                .validate_restore(source.to_str().unwrap(), key.to_str().unwrap())
+                .is_err()
+        );
+        assert!(
+            collector
+                .operate(&elzevir_panel::Operation::ApplyRestore(reviewed))
+                .is_err()
+        );
+        assert!(!directory.path().join("host-jobs").exists());
+        assert!(crate::backup_cli::lock(directory.path()).is_err());
+        data.store.shutdown().unwrap();
+    }
 
     #[test]
     fn sampling_neither_initializes_nor_opens_a_database() {

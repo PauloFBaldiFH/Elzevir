@@ -33,6 +33,9 @@ fn load(directory: &Path) -> Result<Catalog, String> {
     }
     Ok(catalog)
 }
+pub(crate) fn ids(directory: &Path) -> Result<Vec<String>, String> {
+    Ok(load(directory)?.ids)
+}
 fn save(directory: &Path, catalog: &Catalog) -> Result<(), String> {
     crate::broker::publish(
         directory,

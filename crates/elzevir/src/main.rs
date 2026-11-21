@@ -262,7 +262,7 @@ fn main() -> ExitCode {
 /// Fields drop in order, so the store closes before the lock is released.
 pub(crate) struct DataDir {
     pub(crate) store: ElzevirStore,
-    _lock: std::fs::File,
+    _lock: InstitutionLock,
 }
 
 pub(crate) fn open_store(data_dir: &Path) -> Result<DataDir, String> {
@@ -283,7 +283,17 @@ pub(crate) fn open_store(data_dir: &Path) -> Result<DataDir, String> {
     Ok(DataDir { store, _lock: lock })
 }
 
-fn lock_data(data_dir: &Path) -> Result<std::fs::File, String> {
+pub(crate) struct InstitutionLock(std::fs::File);
+impl Drop for InstitutionLock {
+    fn drop(&mut self) {
+        // A concurrent fork can briefly retain a duplicate descriptor until exec.
+        // Explicitly unlock the open file description before closing our handle.
+        if self.0.unlock().is_err() {
+            tracing::warn!(event = "institution.unlock_failed");
+        }
+    }
+}
+fn lock_data(data_dir: &Path) -> Result<InstitutionLock, String> {
     let lock_path = data_dir.join("elzevir.lock");
     let lock = std::fs::OpenOptions::new()
         .create(true)
@@ -298,7 +308,7 @@ fn lock_data(data_dir: &Path) -> Result<std::fs::File, String> {
         ),
         std::fs::TryLockError::Error(e) => format!("cannot lock {}: {e}", lock_path.display()),
     })?;
-    Ok(lock)
+    Ok(InstitutionLock(lock))
 }
 
 /// How often the indexer looks for new effects in the outbox.

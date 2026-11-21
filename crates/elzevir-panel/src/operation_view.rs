@@ -100,6 +100,9 @@ fn backup_rows(operations: Option<&crate::Operations>, messages: &Messages) -> V
         ),
     ];
     if let Some(operations) = operations {
+        if operations.review.is_some() {
+            rows.insert(0, Line::from(messages.get("restore-ready")));
+        }
         for uri in &operations.authorization_uris {
             rows.push(row(messages, "op-authorize-uri", Some(text(uri))));
         }
@@ -223,7 +226,14 @@ pub(crate) fn form(
         buttons,
         [
             (
-                crate::ui::label(messages.get("ui-save"), ascii),
+                crate::ui::label(
+                    messages.get(match form.operation {
+                        crate::Operation::Restore { .. } => "restore-validate",
+                        crate::Operation::ApplyRestore(_) => "restore-confirm",
+                        _ => "ui-save",
+                    }),
+                    ascii,
+                ),
                 Action::Submit,
                 true,
             ),
@@ -251,6 +261,44 @@ fn form_header(panel: &Panel, form: &crate::Form, messages: &Messages) -> Vec<Li
                 .and_then(|snapshot| snapshot.operations.sessions)
                 .map(|count| count.to_string()),
         ));
+    }
+    if matches!(form.operation, crate::Operation::Restore { .. }) {
+        header.push(Line::from(messages.get("restore-keys")));
+        for (i, check) in form.checks.iter().enumerate() {
+            if let (Some(value), Some(label)) = (form.values.get(i), form.labels.get(i)) {
+                header.push(row(
+                    messages,
+                    label,
+                    Some(messages.get(check.status(value))),
+                ));
+            }
+        }
+        if let Some(notice) = form.notice {
+            header.push(Line::from(messages.get(notice)));
+        }
+    }
+    if let crate::Operation::ApplyRestore(review) = &form.operation {
+        header.push(Line::from(text(&review.file)));
+        header.push(Line::from(format!(
+            "{}   {}",
+            text(&review.id),
+            text(&review.created)
+        )));
+        header.push(row(
+            messages,
+            "restore-schema",
+            Some(review.schema.to_string()),
+        ));
+        header.push(Line::from(messages.get(if review.managed {
+            "restore-managed"
+        } else {
+            "restore-unknown"
+        })));
+        header.push(Line::from(messages.get(match review.scope {
+            crate::BackupScope::Database => "restore-db-impact",
+            crate::BackupScope::Full => "restore-full-impact",
+        })));
+        header.push(Line::from(messages.get("restore-outage")));
     }
     if matches!(form.operation, crate::Operation::BackupNow { .. })
         && let crate::Mode::Live(state) = &panel.mode

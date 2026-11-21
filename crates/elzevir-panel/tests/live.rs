@@ -650,3 +650,65 @@ fn local_backup_form_shows_scope_codec_and_destination() {
         insta::assert_snapshot!(format!("local_backup_{language}"), screen(&panel, language));
     }
 }
+
+#[test]
+fn assisted_restore_review_defaults_to_back_and_requires_a_choice() {
+    use elzevir_panel::{BackupScope, Form, ObservationRequest, Operation, RestoreReview};
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut panel = connected();
+    panel.section = elzevir_panel::Section::Backup;
+    let review = RestoreReview {
+        token: "local-review".into(),
+        id: "00112233445566778899aabbccddeeff".into(),
+        file: "biblioteca.age".into(),
+        created: "2026-11-20T22:30:00Z".into(),
+        scope: BackupScope::Database,
+        schema: 1,
+        managed: false,
+    };
+    let event = |code| Event::Key(KeyEvent::new(code, KeyModifiers::NONE));
+    panel.form = Some(Form::new(Operation::ApplyRestore(review.clone())));
+    for lang in ["pt-BR", "en"] {
+        insta::assert_snapshot!(format!("restore_review_{lang}"), screen(&panel, lang));
+    }
+    panel.handle(&Event::Paste("y\n".into()), 140, 30);
+    panel.handle(&event(KeyCode::Enter), 140, 30);
+    assert!(panel.diagnostics.requested.is_none());
+    panel.form = Some(Form::new(Operation::ApplyRestore(review.clone())));
+    panel.handle(&event(KeyCode::Right), 140, 30);
+    panel.handle(&event(KeyCode::Enter), 140, 30);
+    assert_eq!(
+        panel.diagnostics.requested,
+        Some(ObservationRequest::Operate(Operation::ApplyRestore(review)))
+    );
+}
+
+#[test]
+fn pasted_restore_fields_cannot_trigger_navigation_or_submission() {
+    use ratatui::crossterm::event::Event;
+    let mut panel = connected();
+    panel.form = Some(elzevir_panel::Form::new(
+        elzevir_panel::Operation::Restore {
+            input: String::new(),
+            key: String::new(),
+        },
+    ));
+    panel.handle(&Event::Paste("'/media/a b.age'".into()), 140, 30);
+    assert_eq!(
+        panel.form.as_ref().unwrap().values.first().unwrap(),
+        "'/media/a b.age'"
+    );
+    panel.handle(&Event::Paste("y\nq".into()), 140, 30);
+    assert!(
+        panel
+            .form
+            .as_ref()
+            .unwrap()
+            .values
+            .first()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(panel.diagnostics.requested.is_none());
+    assert!(!panel.quit);
+}
