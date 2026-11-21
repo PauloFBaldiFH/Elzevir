@@ -153,7 +153,8 @@ pub(crate) fn action_bar(
         Section::Addresses => &[("ui-test", 'v'), ("ui-share", 'Q'), ("ui-config", 's')],
         Section::Backup => &[("ui-new", 'n'), ("ui-verify", 'v'), ("ui-config", 's')],
         Section::Updates => &[("ui-search", 'c'), ("ui-install", 'i'), ("ui-recover", 'r')],
-        Section::Restart => &[("ui-restart", 't')],
+        Section::Restart if panel.managed() => &[("ui-restart", 't')],
+        Section::Restart => &[("ui-start", 'i'), ("ui-stop", 'p'), ("ui-restart", 't')],
     };
     let controls: Vec<_> = contextual
         .iter()

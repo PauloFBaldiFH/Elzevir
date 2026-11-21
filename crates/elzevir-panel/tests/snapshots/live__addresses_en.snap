@@ -3,13 +3,13 @@ source: crates/elzevir-panel/tests/live.rs
 expression: text
 ---
 Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://catalog.example:8080/
-+Sections------------------+      1 Home            2 Health          3 Access           4 Backup           5 Updates         6 Restart
++Sections------------------+      1 Home            2 Health          3 Access           4 Backup           5 Updates         6 Service
 |  d Dashboard             |+Addresses and access------------------------------------------------------------++Selected institution--------+
 |  x Diagnostics           ||Running                                                                         ||Biblioteca de teste         |
 |> a Addresses and access  ||                                                                                ||                            |
 |  b Backups and schedules ||l Cloudflare login · s Own domain · t Test · h Log                              ||Configured listener         |
 |  u Updates               ||g register/resume *.elzevir.app · c refresh broker · w/W staff on/off · k export||127.0.0.1:0                 |
-|  r Restart               ||recovery · o recover · n renew · z unlink domain · Q share QR                   ||                            |
+|  r Service               ||recovery · o recover · n renew · z unlink domain · Q share QR                   ||                            |
 |                          ||Domain & Tunnel (*.elzevir.app)                                                 ||Observed listener           |
 |                          ||Registration status unavailable                                                 ||127.0.0.1:8080              |
 |                          ||Public tunnel configuration could not be observed.                              ||                            |

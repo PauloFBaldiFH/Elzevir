@@ -105,8 +105,9 @@ fn detach(command: &mut std::process::Command) {
     command.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
 }
 
-/// Starts the background server again from `executable`, e.g. after an update
-/// replaced the program this process was started from.
+/// Starts the background server from `executable` and waits until it
+/// answers: after an update replaced the program this process was started
+/// from, or from the panel.
 pub(crate) fn restart(executable: &Path, directory: &Path, config: &Path) -> Result<(), String> {
     let mut command = std::process::Command::new(executable);
     command.arg("background");
@@ -124,7 +125,7 @@ pub(crate) fn restart(executable: &Path, directory: &Path, config: &Path) -> Res
     if status.success() && running(directory) {
         Ok(())
     } else {
-        Err("the updated server did not start; open the panel to start it".into())
+        Err("the server did not start; see the logs in the data directory".into())
     }
 }
 

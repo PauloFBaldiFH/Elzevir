@@ -3,13 +3,13 @@ source: crates/elzevir-panel/tests/live.rs
 expression: "screen(&panel, \"pt-BR\")"
 ---
 Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
-+Seções--------------------+     1 Início            2 Saúde          3 Acesso           4 Backup           5 Versões        6 Reinício
++Seções--------------------+     1 Início            2 Saúde          3 Acesso           4 Backup           5 Versões         6 Serviço
 |> d Painel de controle    |+Painel de controle--------------------------------------------------------------++Instituição selecionada-----+
 |  x Diagnóstico           ||Em execução                                                                     ||Biblioteca de teste         |
 |  a Endereços e acesso    ||                                                                                ||                            |
 |  b Backup e agendamentos ||Versão: 0.0.0                                                                   ||Listener configurado        |
 |  u Atualizações          ||PID: 42                                                                         ||127.0.0.1:0                 |
-|  r Reiniciar             ||Tempo em execução (segundos): 123                                               ||                            |
+|  r Serviço               ||Tempo em execução (segundos): 123                                               ||                            |
 |                          ||Banco: OK                                                                       ||Listener observado          |
 |                          ||Indexador: OK                                                                   ||127.0.0.1:8080              |
 |                          ||                                                                                ||                            |

@@ -12,6 +12,9 @@ pub struct Institution {
     pub configured_listen: Option<SocketAddr>,
     /// Staff topology loaded at panel startup, when a file was supplied.
     pub configured_access: Option<crate::StaffAccess>,
+    /// Run by the system's service manager; otherwise a personal
+    /// installation whose server the panel starts and stops itself.
+    pub managed: bool,
 }
 
 /// Last observed component state.

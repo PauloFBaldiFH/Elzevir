@@ -13,7 +13,7 @@ use ratatui::{
 pub(crate) fn rows(
     snapshot: Option<&Snapshot>,
     pending: bool,
-    section: crate::Section,
+    (section, managed): (crate::Section, bool),
     messages: &Messages,
 ) -> Vec<Line<'static>> {
     let operations = snapshot.map(|snapshot| &snapshot.operations);
@@ -28,7 +28,11 @@ pub(crate) fn rows(
             ),
         ],
         _ => vec![
-            Line::from(messages.get("op-restart-help")),
+            Line::from(messages.get(if managed {
+                "op-restart-help"
+            } else {
+                "op-server-help"
+            })),
             row(
                 messages,
                 "op-sessions",

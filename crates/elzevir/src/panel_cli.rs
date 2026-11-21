@@ -56,6 +56,7 @@ pub(crate) fn connected(
         configured_access: config
             .as_ref()
             .map(|_| crate::addresses::presentation(&settings.staff)),
+        managed: managed(),
     };
     let mut collector = Collector::new(settings.data_dir.clone());
     collector.config = config;
@@ -73,6 +74,15 @@ pub(crate) fn connected(
         stopping,
     )
     .map_err(|error| error.to_string())
+}
+
+/// Whether this program belongs to an installation run by the system's
+/// service manager (`install.sh`/`install.ps1` with service options).
+fn managed() -> bool {
+    std::env::current_exe()
+        .ok()
+        .and_then(|executable| crate::installation::record_path(&executable).ok())
+        .is_some_and(|record| std::fs::symlink_metadata(record).is_ok())
 }
 
 struct Collector {
@@ -314,6 +324,10 @@ impl Collector {
         }
         if let ObservationRequest::Operate(operation) = request {
             self.operation_result = Some(match self.operate(operation) {
+                // Starting and stopping finish here; there is no job to follow.
+                Ok(()) if matches!(operation, elzevir_panel::Operation::Server(_)) => {
+                    "op-server-done"
+                }
                 Ok(()) => "op-submitted",
                 Err(error) if error.starts_with("B1:") => "broker-unsupported",
                 Err(_) => "op-refused",
@@ -327,6 +341,9 @@ impl Collector {
             let info = crate::runtime_info::read(&self.directory.join(crate::runtime_info::NAME))?;
             crate::admin::cloud(&info, crate::cloud::intention(action)?)?;
             return Ok(());
+        }
+        if let Operation::Server(action) = operation {
+            return self.server(*action);
         }
         if matches!(operation, Operation::CheckUpdates) {
             self.latest = Some(crate::release::latest(&crate::release::Metadata)?);
@@ -393,6 +410,7 @@ impl Collector {
             }
             Operation::Address(_)
             | Operation::Cloud(_)
+            | Operation::Server(_)
             | Operation::Restore { .. }
             | Operation::Restart { .. }
             | Operation::Reboot
@@ -413,6 +431,28 @@ impl Collector {
 }
 
 impl Collector {
+    /// Starts, stops or restarts a personal installation's server, which
+    /// has no service manager to ask.
+    fn server(&self, action: elzevir_panel::ServerAction) -> Result<(), String> {
+        use elzevir_panel::ServerAction;
+        if managed() {
+            return Err("the service manager starts and stops this server".into());
+        }
+        if matches!(action, ServerAction::Stop | ServerAction::Restart) {
+            crate::background::stop(&self.directory)?;
+        }
+        if matches!(action, ServerAction::Start | ServerAction::Restart) {
+            let executable =
+                std::env::current_exe().map_err(|_| "cannot locate the elzevir executable")?;
+            let config = self
+                .config
+                .clone()
+                .unwrap_or_else(|| self.directory.join(crate::first_use::CONFIG));
+            crate::background::restart(&executable, &self.directory, &config)?;
+        }
+        Ok(())
+    }
+
     fn host_operation(
         &self,
         operation: &elzevir_panel::Operation,
