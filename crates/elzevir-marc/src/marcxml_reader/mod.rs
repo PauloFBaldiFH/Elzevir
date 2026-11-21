@@ -88,6 +88,9 @@ pub struct MarcXmlError {
 pub struct MarcXmlReader<R> {
     reader: NsReader<Bounded<R>>,
     buffer: Vec<u8>,
+    original: Vec<u8>,
+    declares_utf8: bool,
+    bom_bytes: u64,
     state: State,
     limits: XmlLimits,
     index: u64,
@@ -101,6 +104,8 @@ impl<R: BufRead> MarcXmlReader<R> {
         let mut reader = NsReader::from_reader(Bounded {
             inner: input,
             left: 0,
+            raw: Vec::new(),
+            start: 0,
         });
         reader.config_mut().expand_empty_elements = true;
         reader.config_mut().check_comments = true;
@@ -108,6 +113,9 @@ impl<R: BufRead> MarcXmlReader<R> {
         Self {
             reader,
             buffer: Vec::new(),
+            original: Vec::new(),
+            declares_utf8: false,
+            bom_bytes: 0,
             state: State::default(),
             limits,
             index: 0,
@@ -119,11 +127,22 @@ impl<R: BufRead> MarcXmlReader<R> {
     /// Start of the most recently begun record, for per-record import failures.
     #[must_use]
     pub const fn record_offset(&self) -> u64 {
-        self.record_start
+        self.record_start + self.bom_bytes
+    }
+
+    /// Exact XML bytes from the opening record element through its closing tag.
+    pub fn take_record_bytes(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.original)
+    }
+
+    /// Whether the XML declaration explicitly specifies UTF-8.
+    #[must_use]
+    pub const fn declares_utf8(&self) -> bool {
+        self.declares_utf8
     }
 
     fn budget(&self, offset: u64) -> (usize, &'static str) {
-        let position = usize::try_from(offset).unwrap_or(usize::MAX);
+        let position = usize::try_from(offset.saturating_add(self.bom_bytes)).unwrap_or(usize::MAX);
         let mut bound = (
             self.limits
                 .max_element_bytes
@@ -150,6 +169,9 @@ impl<R: BufRead> MarcXmlReader<R> {
             self.buffer.clear();
             let offset = self.reader.buffer_position();
             let bound = self.budget(offset);
+            if self.state.record.is_none() {
+                self.reader.get_mut().discard_before(offset);
+            }
             let fail = |problem| MarcXmlError {
                 index: self.index,
                 offset,
@@ -159,22 +181,13 @@ impl<R: BufRead> MarcXmlReader<R> {
             let (namespace, event) = self
                 .reader
                 .read_resolved_event_into(&mut self.buffer)
-                .map_err(|error| {
-                    // quick-xml diagnostics may contain names/values, so retain only the category.
-                    fail(match error {
-                        quick_xml::Error::Io(error)
-                            if error.get_ref().is_some_and(
-                                <dyn std::error::Error + Send + Sync>::is::<BudgetExceeded>,
-                            ) =>
-                        {
-                            XmlProblem::Limit(bound.1)
-                        }
-                        quick_xml::Error::Io(_) => XmlProblem::Input,
-                        _ => XmlProblem::Invalid("XML syntax"),
-                    })
-                })?;
+                .map_err(|error| fail(xml_error(error, bound.1)))?;
             let valid_namespace = matches!(namespace, ResolveResult::Bound(ns) if ns.as_ref() == b"http://www.loc.gov/MARC21/slim");
             let end = self.reader.buffer_position();
+            if offset == 0 && self.bom_bytes == 0 {
+                // quick-xml counts positions after the BOM; the capture saw physical bytes.
+                self.bom_bytes = self.reader.get_mut().strip_bom();
+            }
             if end.saturating_sub(offset) > u64::try_from(bound.0).unwrap_or(u64::MAX) {
                 return Err(fail(XmlProblem::Limit(bound.1)));
             }
@@ -198,6 +211,14 @@ impl<R: BufRead> MarcXmlReader<R> {
                 }
                 Event::End(_) => {
                     if let Some(record) = self.state.end().map_err(fail)? {
+                        let input = self.reader.get_mut();
+                        let len = usize::try_from(end.saturating_sub(self.record_start))
+                            .map_err(|_| fail(XmlProblem::Limit("record bytes")))?;
+                        self.original = input
+                            .raw
+                            .get(..len)
+                            .ok_or_else(|| fail(XmlProblem::Input))?
+                            .to_vec();
                         self.index = self.index.saturating_add(1);
                         return Ok(Some(record));
                     }
@@ -222,24 +243,12 @@ impl<R: BufRead> MarcXmlReader<R> {
                     )
                     .map_err(fail)?,
                 Event::GeneralRef(reference) => {
-                    let value = if let Some(character) = reference
-                        .resolve_char_ref()
-                        .map_err(|_| fail(XmlProblem::Invalid("character reference")))?
-                    {
-                        character.to_string()
-                    } else {
-                        quick_xml::escape::resolve_xml_entity(
-                            &reference
-                                .decode()
-                                .map_err(|_| fail(XmlProblem::Invalid("UTF-8 reference")))?,
-                        )
-                        .ok_or_else(|| fail(XmlProblem::Forbidden("entity")))?
-                        .to_owned()
-                    };
+                    let value = reference_text(&reference).map_err(fail)?;
                     self.state.append(&value, &self.limits).map_err(fail)?;
                 }
                 Event::Decl(declaration) => {
                     validate_declaration(&declaration, offset).map_err(fail)?;
+                    self.declares_utf8 = declaration.encoding().is_some();
                 }
                 Event::DocType(_) => return Err(fail(XmlProblem::Forbidden("DTD"))),
                 Event::Comment(_) | Event::PI(_) => {}
@@ -249,6 +258,23 @@ impl<R: BufRead> MarcXmlReader<R> {
                 }
             }
         }
+    }
+}
+
+fn reference_text(reference: &quick_xml::events::BytesRef<'_>) -> Result<String, XmlProblem> {
+    if let Some(character) = reference
+        .resolve_char_ref()
+        .map_err(|_| XmlProblem::Invalid("character reference"))?
+    {
+        Ok(character.to_string())
+    } else {
+        quick_xml::escape::resolve_xml_entity(
+            &reference
+                .decode()
+                .map_err(|_| XmlProblem::Invalid("UTF-8 reference"))?,
+        )
+        .map(str::to_owned)
+        .ok_or(XmlProblem::Forbidden("entity"))
     }
 }
 
@@ -270,6 +296,21 @@ fn validate_declaration(declaration: &BytesDecl<'_>, offset: u64) -> Result<(), 
         return Err(XmlProblem::Forbidden("encoding"));
     }
     Ok(())
+}
+
+// Parser diagnostics can contain user data; report only the category.
+fn xml_error(error: quick_xml::Error, bound: &'static str) -> XmlProblem {
+    match error {
+        quick_xml::Error::Io(error)
+            if error
+                .get_ref()
+                .is_some_and(<dyn std::error::Error + Send + Sync>::is::<BudgetExceeded>) =>
+        {
+            XmlProblem::Limit(bound)
+        }
+        quick_xml::Error::Io(_) => XmlProblem::Input,
+        _ => XmlProblem::Invalid("XML syntax"),
+    }
 }
 
 impl<R: BufRead> Iterator for MarcXmlReader<R> {
@@ -299,6 +340,28 @@ struct BudgetExceeded;
 struct Bounded<R> {
     inner: R,
     left: usize,
+    // quick-xml can consume '<' from the next event; retain that lookahead.
+    raw: Vec<u8>,
+    start: u64,
+}
+
+impl<R> Bounded<R> {
+    fn strip_bom(&mut self) -> u64 {
+        if self.raw.starts_with(b"\xef\xbb\xbf") {
+            self.raw.drain(..3);
+            3
+        } else {
+            0
+        }
+    }
+
+    fn discard_before(&mut self, offset: u64) {
+        let discard = usize::try_from(offset.saturating_sub(self.start))
+            .unwrap_or(usize::MAX)
+            .min(self.raw.len());
+        self.raw.drain(..discard);
+        self.start += discard as u64;
+    }
 }
 
 impl<R: BufRead> Read for Bounded<R> {
@@ -322,6 +385,11 @@ impl<R: BufRead> BufRead for Bounded<R> {
     }
     fn consume(&mut self, amount: usize) {
         let count = amount.min(self.left);
+        if let Ok(bytes) = self.inner.fill_buf()
+            && let Some(consumed) = bytes.get(..count)
+        {
+            self.raw.extend_from_slice(consumed);
+        }
         self.inner.consume(count);
         self.left -= count;
     }

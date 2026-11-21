@@ -40,11 +40,15 @@ fn chop_area_separator(value: &[u8]) -> &[u8] {
 }
 
 /// The statement of responsibility of an Instance, for the way back.
-pub(super) fn of_description(description: &Description) -> Option<&str> {
-    description.statements.iter().find_map(|s| match &s.value {
-        Value::Literal { text, .. } if s.property == PROPERTY => Some(text.as_str()),
-        _ => None,
-    })
+pub(super) fn of_description(description: &Description) -> Vec<&str> {
+    description
+        .statements
+        .iter()
+        .filter_map(|s| match &s.value {
+            Value::Literal { text, .. } if s.property == PROPERTY => Some(text.as_str()),
+            _ => None,
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -77,6 +81,6 @@ mod tests {
             classes: Vec::new(),
             statements,
         };
-        assert_eq!(of_description(&description), Some("Maria L. Marcílio"));
+        assert_eq!(of_description(&description), ["Maria L. Marcílio"]);
     }
 }

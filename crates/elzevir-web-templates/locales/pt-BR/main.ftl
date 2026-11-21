@@ -894,3 +894,10 @@ patron-password-removed = O leitor não entra mais no OPAC.
 patron-password-short = A senha precisa de pelo menos 8 caracteres.
 patron-password-long = A senha pode ter no máximo 128 caracteres.
 patron-password-guessable = A senha não pode ser o número do cartão nem o CPF.
+
+import-origin = Origem dos identificadores (instalação de origem)
+import-local-notes = Visibilidade das notas locais
+import-notes-default = Preservar a visibilidade existente (novas notas para a equipe)
+import-notes-staff = Apenas equipe
+import-notes-public = Publicar no catálogo
+import-notes-invalid = Selecione uma visibilidade válida.

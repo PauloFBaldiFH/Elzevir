@@ -85,6 +85,7 @@ pub struct MarcTextReader<R> {
     input: R,
     limits: MrkLimits,
     line: Vec<u8>,
+    original: Vec<u8>,
     offset: usize,
     line_number: u64,
     record_start: usize,
@@ -99,6 +100,7 @@ impl<R: BufRead> MarcTextReader<R> {
             input,
             limits,
             line: Vec::new(),
+            original: Vec::new(),
             offset: 0,
             line_number: 0,
             record_start: 0,
@@ -111,6 +113,11 @@ impl<R: BufRead> MarcTextReader<R> {
     #[must_use]
     pub const fn record_offset(&self) -> u64 {
         self.record_start as u64
+    }
+
+    /// Exact source lines of the most recently returned record, including line endings.
+    pub fn take_record_bytes(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.original)
     }
 
     fn read_line(&mut self, bytes_left: usize, lines: usize) -> Result<usize, MrkProblem> {
@@ -159,6 +166,7 @@ impl<R: BufRead> MarcTextReader<R> {
     }
 
     fn read_record(&mut self) -> Result<Option<Record>, MarcTextError> {
+        self.original.clear();
         let mut record: Option<Record> = None;
         let mut lines = 0;
         loop {
@@ -215,6 +223,7 @@ impl<R: BufRead> MarcTextReader<R> {
                     fields: Vec::new(),
                 });
             }
+            self.original.extend_from_slice(&self.line);
             lines += 1;
         }
     }

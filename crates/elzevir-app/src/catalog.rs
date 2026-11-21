@@ -635,6 +635,15 @@ pub struct NewSubject {
 /// An Instance's own data.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct NewInstance {
+    /// Original record and decoding evidence, before MARC normalization.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub original: Option<OriginalRecord>,
+    /// Stable installation that supplied the external identifiers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
+    /// Catalog state approved during staged review, checked inside the writer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reviewed: Option<Box<crate::matching::MatchScope>>,
     /// Title as on the publication.
     pub title: String,
     /// The Instance's classes and statements (bibframe-completo.md, item 10h).
@@ -664,6 +673,26 @@ pub struct NewInstance {
     pub opac_hidden: bool,
 }
 
+/// Bytes in the original bibliographic serialization, with decoding evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OriginalRecord {
+    /// Physical representation of the saved bibliographic record.
+    #[serde(default = "iso_serialization")]
+    pub serialization: String,
+    /// Unmodified bibliographic record, including delimiters in its source format.
+    pub bytes: Vec<u8>,
+    /// Character encoding declaration in the source.
+    pub declared: String,
+    /// Decoder actually used.
+    pub decoded: String,
+    /// Cataloging family used by the mapper.
+    pub family: String,
+}
+
+fn iso_serialization() -> String {
+    "ISO 2709".into()
+}
+
 /// One identifier of an Instance.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NewIdentifier {
@@ -678,10 +707,32 @@ pub struct NewIdentifier {
 /// One note of an Instance.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NewNote {
+    /// Explicit publication decision; imported local notes default to staff access.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub visibility: Option<NoteVisibility>,
     /// Kind of note.
     pub kind: NoteKind,
     /// The note, as written.
     pub text: String,
+}
+
+/// Which readers may see a note.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NoteVisibility {
+    /// Include in patron-facing services.
+    Public,
+    /// Cataloging staff only.
+    Staff,
+}
+
+impl NewNote {
+    /// Applies the catalog default when no explicit policy was supplied.
+    #[must_use]
+    pub fn is_public(&self) -> bool {
+        self.visibility.map_or(self.kind != NoteKind::Local, |v| {
+            v == NoteVisibility::Public
+        })
+    }
 }
 
 /// A new Item of an existing Instance.
@@ -792,6 +843,15 @@ impl ItemStatus {
 /// An Item's own data.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ItemData {
+    /// Free-text issue designation, such as Koha 952$h, without guessing its parts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issue_statement: Option<String>,
+    /// Enumeration as transcribed on a serial issue.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enumeration: Option<String>,
+    /// Chronology as transcribed on a serial issue.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chronology: Option<String>,
     /// Barcode, unique when present.
     pub barcode: Option<String>,
     /// Inventory number (tombo), not necessarily unique.
@@ -917,6 +977,9 @@ pub enum CatalogOutput {
 /// Why a catalog command was refused.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CatalogRefusal {
+    /// The reviewed target is ambiguous, inconsistent or has changed.
+    #[error("import requires review: {0}")]
+    ImportConflict(String),
     /// No branch has this code.
     #[error("unknown branch `{0}`")]
     UnknownBranch(String),

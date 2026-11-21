@@ -21,9 +21,9 @@ use elzevir_store::{ElzevirHandler, ElzevirStore, StoreConfig};
 const STAFF_EXPORT: &[u8] =
     include_bytes!("../../elzevir-app/tests/data/koha-staff-bibs-1-200.mrc");
 
-// Captured from main at 9ecb0bf with the setup and options below. Later import
-// formats must match this baseline, not regenerate it to accept a changed result.
-const STAFF_EXPORT_DIGEST: &str = "bf89658626085174";
+// Schema 61 includes the original representation, decoder evidence and scoped headings.
+// The fixed catalog fixture must still export the same 200 ISO records byte for byte.
+const STAFF_EXPORT_DIGEST: &str = "0280171440ec1014";
 
 /// Keep the commands and their order identical to `import.rs`'s
 /// `the_staff_export_imports_whole`, including one `NameCodes` command per code.
@@ -81,6 +81,10 @@ fn the_staff_export_keeps_the_fixed_import_digest() {
         limits: Limits::default(),
         parallelism: Parallelism::Threads(NonZeroUsize::new(4).unwrap()),
         chunk: NonZeroUsize::new(32).unwrap(),
+        local_note_visibility: None,
+        origin: None,
+        reviewed: Vec::new(),
+        originals: std::collections::BTreeMap::new(),
         matching: None,
         translations: TypeTranslations::default(),
     };

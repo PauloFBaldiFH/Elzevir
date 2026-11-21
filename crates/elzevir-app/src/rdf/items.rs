@@ -32,6 +32,12 @@ pub struct HeldItem {
     pub collection: Option<String>,
     /// Copy number.
     pub copy_number: Option<String>,
+    /// Original free-text serial issue designation.
+    pub issue_statement: Option<String>,
+    /// Enumeration of the serial issue.
+    pub enumeration: Option<String>,
+    /// Chronology of the serial issue.
+    pub chronology: Option<String>,
     /// Date of acquisition, ISO 8601 as written.
     pub acquired_on: Option<String>,
     /// Circulation status numbers.
@@ -76,10 +82,19 @@ pub(super) fn item_node(item: &HeldItem, instance: &str, base: &IriBase) -> Node
         node.node("sublocation", Node::labelled("Sublocation", name));
     }
     if let Some(copy) = &item.copy_number {
-        node.node(
-            "enumerationAndChronology",
-            Node::labelled("Enumeration", copy),
-        );
+        let mut number = Node::blank("Local");
+        number.value(copy);
+        number.text("qualifier", "copy number");
+        node.node("identifiedBy", number);
+    }
+    for (class, value) in [
+        ("EnumerationAndChronology", &item.issue_statement),
+        ("Enumeration", &item.enumeration),
+        ("Chronology", &item.chronology),
+    ] {
+        if let Some(value) = value {
+            node.node("enumerationAndChronology", Node::labelled(class, value));
+        }
     }
     if let Some(date) = &item.acquired_on {
         let mut acquisition = Node::blank("ImmediateAcquisition");

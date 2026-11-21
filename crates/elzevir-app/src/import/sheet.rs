@@ -268,6 +268,19 @@ impl PreparedTable {
         &self.records
     }
 
+    /// Binds native records to the same confirmation evidence as MARC records.
+    pub fn apply_review(&mut self, options: &crate::import::ImportOptions) {
+        for (index, row) in self.records.iter_mut().enumerate() {
+            row.record.instance.origin.clone_from(&options.origin);
+            for note in &mut row.record.instance.notes {
+                if note.kind == elzevir_domain::catalog::NoteKind::Local {
+                    note.visibility = options.local_note_visibility;
+                }
+            }
+            row.record.instance.reviewed = options.reviewed.get(index).cloned().map(Box::new);
+        }
+    }
+
     /// Submits the validated sheet in order through the normal writer queue.
     ///
     /// # Errors

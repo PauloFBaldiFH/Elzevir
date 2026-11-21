@@ -81,6 +81,20 @@ pub enum DumpProblem {
 /// # Errors
 /// Returns a located, value-free grammar, budget, inventory or MARCXML failure.
 pub fn prepare(input: impl BufRead) -> Result<Vec<(Record, u64)>, DumpError> {
+    Ok(with_originals(input)?
+        .into_iter()
+        .map(|r| (r.record, r.offset))
+        .collect())
+}
+
+pub(super) struct MetadataRecord {
+    pub declares_utf8: bool,
+    pub record: Record,
+    pub offset: u64,
+    pub xml: Vec<u8>,
+}
+
+pub(super) fn with_originals(input: impl BufRead) -> Result<Vec<MetadataRecord>, DumpError> {
     assemble::records(parser::parse(input)?)
 }
 

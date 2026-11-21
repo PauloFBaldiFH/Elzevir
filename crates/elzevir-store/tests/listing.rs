@@ -160,6 +160,9 @@ fn record(title: &str, hub: Option<HubId>) -> NewRecord {
 
 fn item(inventory: &str, status: ItemStatus) -> ItemData {
     ItemData {
+        issue_statement: None,
+        enumeration: None,
+        chronology: None,
         barcode: None,
         inventory_number: Some(inventory.to_owned()),
         home_branch: "MAIN".to_owned(),
@@ -345,6 +348,9 @@ fn migration_8_computes_the_keys_of_older_databases() {
     let before = all_heads(&store);
     drop(store);
     let connection = rusqlite::Connection::open(dir.path().join("elzevir.db")).unwrap();
+    connection
+        .execute_batch(include_str!("data/rewind_import.sql"))
+        .unwrap();
     connection
         .execute_batch(
             "DROP TABLE board_notes; DROP TABLE notice_texts; DROP TABLE hold_notice_preferences; DROP TABLE daily_runs; DROP TABLE notice_items; DROP TABLE notices; DROP TABLE overdue_notice_rules; DROP TABLE ended_holds; DROP TABLE holds; DROP TABLE account_offsets; DROP TABLE account_lines; DROP TABLE patron_restrictions; DROP TABLE transfers; DROP TABLE returned_loans; DROP TABLE loans; DROP TABLE calendar_dates; DROP TABLE calendar_annual; DROP TABLE calendar_weekly; DROP TABLE circulation_rules; DROP TABLE patrons; DROP TABLE patron_categories; DROP INDEX audit_imports; DROP TABLE saved_list_families; DROP TABLE saved_lists; DROP INDEX audit_by_actor; DROP INDEX audit_by_kind; DROP INDEX audit_entities_by_seq; DROP INDEX works_in_listing; DROP INDEX hubs_in_listing;

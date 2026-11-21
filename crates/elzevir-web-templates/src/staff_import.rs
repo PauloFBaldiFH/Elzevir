@@ -113,6 +113,10 @@ pub struct ImportDraft {
     pub rules: Option<Vec<ImportRule>>,
     /// Saved matching choices.
     pub matching: ImportMatching,
+    /// Source installation supplied by the operator.
+    pub origin: String,
+    /// Access policy for incoming local notes.
+    pub local_notes: &'static str,
     /// One-based records excluded from the batch.
     pub excluded: Vec<u64>,
 }
@@ -201,6 +205,8 @@ pub struct ImportSample {
     pub blocks: Option<RecordBlocks>,
     /// Possible stored match.
     pub candidate: Option<i64>,
+    /// Catalog rows affected by this decision.
+    pub scope: Option<String>,
     /// Original MARC.
     pub before: String,
     /// MARC after an edit.

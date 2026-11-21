@@ -145,9 +145,18 @@ expression: write_turtle(&graph)
         a bf:Sublocation ;
         rdfs:label "Literatura"
     ] ;
+    bf:identifiedBy [
+        a bf:Local ;
+        rdf:value "ex. 1" ;
+        bf:qualifier "copy number"
+    ] ;
     bf:enumerationAndChronology [
         a bf:Enumeration ;
-        rdfs:label "ex. 1"
+        rdfs:label "v. 12"
+    ] ;
+    bf:enumerationAndChronology [
+        a bf:Chronology ;
+        rdfs:label "2020"
     ] ;
     bf:immediateAcquisition [
         a bf:ImmediateAcquisition ;
@@ -162,6 +171,14 @@ expression: write_turtle(&graph)
     a bf:Item ;
     bf:itemOf <https://biblioteca.example/bf/instances/7> ;
     bf:heldBy <https://biblioteca.example/bf/organizations/1> ;
+    bf:enumerationAndChronology [
+        a bf:Enumeration ;
+        rdfs:label "v. 12"
+    ] ;
+    bf:enumerationAndChronology [
+        a bf:Chronology ;
+        rdfs:label "2020"
+    ] ;
     bf:usageAndAccessPolicy [
         a bf:UsePolicy ;
         rdfs:label "Empréstimo normal"

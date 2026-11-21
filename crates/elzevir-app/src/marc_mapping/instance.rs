@@ -9,6 +9,9 @@ use crate::catalog::{NewIdentifier, NewInstance, NewNote};
 pub(super) fn map(marc: &Marc<'_>) -> NewInstance {
     let publication = publication(marc);
     NewInstance {
+        origin: None,
+        reviewed: None,
+        original: None,
         title: marc.first(b"245").map(title).unwrap_or_default(),
         description: elzevir_domain::statement::Description::default(),
         edition: marc.first_text(b"250", b'a'),
@@ -127,7 +130,11 @@ pub(super) fn note_of(tag: [u8; 3], field: DataField<'_>) -> Option<NewNote> {
         b"590" => (NoteKind::Local, field.raw(b'a')),
         _ => return None,
     };
-    Some(NewNote { kind, text: text? })
+    Some(NewNote {
+        visibility: None,
+        kind,
+        text: text?,
+    })
 }
 
 /// `024`: the first indicator (and `$2`) says which standard number it is.

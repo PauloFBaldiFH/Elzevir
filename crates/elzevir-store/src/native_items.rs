@@ -86,7 +86,7 @@ pub(crate) fn write(
 
     let persist = || {
         let id = if let Some(id) = existing {
-            items::update_item(connection, id, &item.fields)?;
+            items::write_item(connection, id, &item.fields, true)?;
             id
         } else {
             items::add_grid_item(connection, instance, &item.fields)?
@@ -95,7 +95,22 @@ pub(crate) fn write(
             entity: EntityKind::Item,
             id: id.0,
         };
-        statements::store_description(connection, subject, &item.description)?;
+        let mut description = item.description.clone();
+        if existing.is_some() {
+            let previous = statements::read_description(connection, subject)?;
+            let absent = previous.statements.into_iter().filter(|s| {
+                !item
+                    .description
+                    .statements
+                    .iter()
+                    .any(|new| new.property == s.property)
+            });
+            description.statements.extend(absent);
+            if description.classes.is_empty() {
+                description.classes = previous.classes;
+            }
+        }
+        statements::store_description(connection, subject, &description)?;
         Ok(id)
     };
     persist().map_err(|failure| match failure {

@@ -179,6 +179,9 @@ fn catalog() -> Catalog {
     let item = NewItem {
         instance,
         item: ItemData {
+            issue_statement: None,
+            enumeration: None,
+            chronology: None,
             barcode: Some("0001".to_owned()),
             inventory_number: None,
             home_branch: "MAIN".to_owned(),

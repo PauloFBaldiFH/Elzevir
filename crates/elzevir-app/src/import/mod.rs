@@ -12,6 +12,7 @@ pub mod koha_sql;
 pub mod preview;
 pub mod sheet;
 pub mod table;
+mod unimarc;
 
 use std::collections::VecDeque;
 use std::io::BufRead;
@@ -31,6 +32,14 @@ pub use crate::parallelism::Parallelism;
 /// Settings of one import.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImportOptions {
+    /// Stable source installation for local identifiers.
+    pub origin: Option<String>,
+    /// Visibility explicitly selected for local notes.
+    pub local_note_visibility: Option<crate::catalog::NoteVisibility>,
+    /// Unedited ISO originals for records altered by a staged recipe.
+    pub originals: std::collections::BTreeMap<u64, crate::catalog::OriginalRecord>,
+    /// Approved scopes in the order of the rendered records.
+    pub reviewed: Vec<crate::matching::MatchScope>,
     /// Limits applied to every record read.
     pub limits: Limits,
     /// How decoding and mapping run.
@@ -51,6 +60,10 @@ impl Default for ImportOptions {
             limits: Limits::default(),
             parallelism: Parallelism::Serial,
             chunk: NonZeroUsize::new(1024).unwrap_or(NonZeroUsize::MIN),
+            origin: None,
+            local_note_visibility: None,
+            reviewed: Vec::new(),
+            originals: std::collections::BTreeMap::new(),
             matching: None,
             translations: TypeTranslations::default(),
         }
@@ -108,6 +121,12 @@ pub enum RecordRejected {
 /// Why one record of the file was not imported. The import goes on with the next one.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RecordFailure {
+    /// Authority and holdings records cannot be ingested as bibliographic descriptions.
+    #[error("expected a bibliographic record")]
+    NotBibliographic,
+    /// A declared record character set cannot be decoded safely.
+    #[error("unsupported or inconsistent UNIMARC character encoding")]
+    Encoding,
     /// The bytes are not a valid ISO 2709 record (or break a limit).
     #[error(transparent)]
     Unreadable(elzevir_marc::RecordError),
@@ -197,7 +216,25 @@ pub enum ImportError {
 }
 
 /// A record read from the file, with its place in it.
+struct TextOriginal {
+    declared: bool,
+    bytes: Vec<u8>,
+    serialization: &'static str,
+}
+impl TextOriginal {
+    fn evidence(self, family: String) -> crate::catalog::OriginalRecord {
+        crate::catalog::OriginalRecord {
+            bytes: self.bytes,
+            declared: if self.declared { "UTF-8" } else { "undeclared" }.into(),
+            decoded: "UTF-8".into(),
+            serialization: self.serialization.into(),
+            family,
+        }
+    }
+}
+
 struct RawRecord {
+    text: Option<TextOriginal>,
     index: u64,
     offset: u64,
     bytes: Vec<u8>,
@@ -236,17 +273,27 @@ pub fn import_marcxml<R: BufRead, S: RecordSink>(
     sink: &S,
     options: &ImportOptions,
 ) -> Result<ImportReport, ImportError> {
+    let mut records = xml_records(input);
+    import_converted(|| records.next().transpose(), sink, options)
+}
+
+fn xml_records(
+    input: impl BufRead,
+) -> impl Iterator<Item = Result<(Record, u64, TextOriginal), ImportError>> {
     let mut reader = elzevir_marc::MarcXmlReader::new(input, elzevir_marc::XmlLimits::default());
-    import_converted(
-        || {
-            reader
-                .next()
-                .map(|record| Ok((record?, reader.record_offset())))
-                .transpose()
-        },
-        sink,
-        options,
-    )
+    std::iter::from_fn(move || {
+        reader.next().map(|record| {
+            Ok((
+                record?,
+                reader.record_offset(),
+                TextOriginal {
+                    bytes: reader.take_record_bytes(),
+                    serialization: "MARCXML",
+                    declared: reader.declares_utf8(),
+                },
+            ))
+        })
+    })
 }
 
 /// Imports UTF-8 `MarcEdit` mnemonic records through the ISO mapping, queue and matching.
@@ -260,17 +307,27 @@ pub fn import_marc_text<R: BufRead, S: RecordSink>(
     sink: &S,
     options: &ImportOptions,
 ) -> Result<ImportReport, ImportError> {
+    let mut records = mnemonic_records(input);
+    import_converted(|| records.next().transpose(), sink, options)
+}
+
+fn mnemonic_records(
+    input: impl BufRead,
+) -> impl Iterator<Item = Result<(Record, u64, TextOriginal), ImportError>> {
     let mut reader = elzevir_marc::MarcTextReader::new(input, elzevir_marc::MrkLimits::default());
-    import_converted(
-        || {
-            reader
-                .next()
-                .map(|record| Ok((record?, reader.record_offset())))
-                .transpose()
-        },
-        sink,
-        options,
-    )
+    std::iter::from_fn(move || {
+        reader.next().map(|record| {
+            Ok((
+                record?,
+                reader.record_offset(),
+                TextOriginal {
+                    bytes: reader.take_record_bytes(),
+                    serialization: "MRK",
+                    declared: false,
+                },
+            ))
+        })
+    })
 }
 
 /// Imports a validated partial Koha dump through the existing MARC writer path.
@@ -282,12 +339,22 @@ pub fn import_koha_sql<R: BufRead, S: RecordSink>(
     sink: &S,
     options: &ImportOptions,
 ) -> Result<ImportReport, ImportError> {
-    let mut records = koha_sql::prepare(input)?.into_iter();
+    let mut records = koha_sql::with_originals(input)?.into_iter().map(|r| {
+        (
+            r.record,
+            r.offset,
+            TextOriginal {
+                bytes: r.xml,
+                declared: r.declares_utf8,
+                serialization: "MARCXML",
+            },
+        )
+    });
     import_converted(|| Ok(records.next()), sink, options)
 }
 
 fn import_converted<S: RecordSink>(
-    mut next: impl FnMut() -> Result<Option<(Record, u64)>, ImportError>,
+    mut next: impl FnMut() -> Result<Option<(Record, u64, TextOriginal)>, ImportError>,
     sink: &S,
     options: &ImportOptions,
 ) -> Result<ImportReport, ImportError> {
@@ -295,7 +362,7 @@ fn import_converted<S: RecordSink>(
         |report| {
             let mut chunk = Vec::with_capacity(options.chunk.get());
             while chunk.len() < options.chunk.get() {
-                let Some((record, offset)) = next()? else {
+                let Some((record, offset, text)) = next()? else {
                     break;
                 };
                 let place = RawPlace {
@@ -303,7 +370,7 @@ fn import_converted<S: RecordSink>(
                     offset,
                 };
                 report.read = report.read.saturating_add(1);
-                match encode_source(&record, place) {
+                match encode_source(&record, place, text) {
                     Ok(record) => chunk.push(record),
                     Err(failed) => report.failures.push(failed),
                 }
@@ -315,12 +382,26 @@ fn import_converted<S: RecordSink>(
     )
 }
 
-fn encode_source(record: &Record, place: RawPlace) -> Result<RawRecord, FailedRecord> {
+fn encode_source(
+    record: &Record,
+    place: RawPlace,
+    text: TextOriginal,
+) -> Result<RawRecord, FailedRecord> {
+    let mut converted;
+    let record = if unimarc::recognizes(record) {
+        // XML and mnemonic readers already validated and decoded their UTF-8 text.
+        converted = record.clone();
+        unimarc::declare_utf8(&mut converted);
+        &converted
+    } else {
+        record
+    };
     let mut bytes = Vec::new();
     record
         .write_iso2709(&mut bytes)
         .map_err(|error| place.failed(RecordFailure::Source(error)))?;
     Ok(RawRecord {
+        text: Some(text),
         index: place.index,
         offset: place.offset,
         bytes,
@@ -388,6 +469,7 @@ fn read_chunk<R: BufRead>(
             Some(Ok(record)) => {
                 report.read = report.read.saturating_add(1);
                 chunk.push(RawRecord {
+                    text: None,
                     index,
                     offset,
                     bytes: record.as_bytes().to_vec(),
@@ -429,8 +511,46 @@ fn prepare(
     };
     (
         place,
-        to_model(raw.bytes, &options.limits, &options.translations),
+        to_model(raw.bytes, &options.limits, &options.translations).map(|mut record| {
+            for note in &mut record.instance.notes {
+                if note.kind == elzevir_domain::catalog::NoteKind::Local {
+                    note.visibility = options.local_note_visibility;
+                }
+            }
+            if let Some(original) = options.originals.get(&place.index) {
+                record.instance.original = Some(original.clone());
+            } else if let Some(text) = raw.text
+                && let Some(evidence) = record.instance.original.take()
+            {
+                record.instance.original = Some(text.evidence(evidence.family));
+            }
+            record.instance.origin.clone_from(&options.origin);
+            record.instance.reviewed = usize::try_from(place.index)
+                .ok()
+                .and_then(|index| options.reviewed.get(index))
+                .cloned()
+                .map(Box::new);
+            record
+        }),
     )
+}
+
+fn decode_evidence(record: &mut Record) -> Result<(String, String, String), RecordFailure> {
+    if unimarc::recognizes(record) {
+        let (declared, decoded) = unimarc::decode(record)?;
+        return Ok((declared, decoded, "UNIMARC".into()));
+    }
+    let declared = marc21_declaration(record.leader[9]);
+    let decoded = record.marc21_to_utf8();
+    Ok((declared.into(), format!("{decoded:?}"), "MARC21".into()))
+}
+
+fn marc21_declaration(code: u8) -> &'static str {
+    match code {
+        b'a' => "UTF-8",
+        b' ' => "MARC-8",
+        _ => "unknown",
+    }
 }
 
 fn to_model(
@@ -439,11 +559,27 @@ fn to_model(
     translations: &TypeTranslations,
 ) -> Result<NewRecord, RecordFailure> {
     let parsed = RecordRef::parse(&bytes, limits).map_err(RecordFailure::Unreadable)?;
+    if matches!(
+        parsed.leader().get(6),
+        Some(b'x' | b'y' | b'z' | b'u' | b'v')
+    ) {
+        return Err(RecordFailure::NotBibliographic);
+    }
     let already_utf8 = parsed.leader().get(9) == Some(&b'a');
     let mut record = Record::from_ref(&parsed);
+    if unimarc::recognizes(&record) {
+        return unimarc::map(record, bytes);
+    }
     let detected = record.marc21_to_utf8();
     // Keep the bytes as they arrived when they already were UTF-8 MARC21; otherwise keep
     // the converted record, since `source_records` holds UTF-8 (spec §2).
+    let original = crate::catalog::OriginalRecord {
+        serialization: "ISO 2709".into(),
+        bytes: bytes.clone(),
+        declared: marc21_declaration(parsed.leader()[9]).into(),
+        decoded: format!("{detected:?}"),
+        family: "MARC21".into(),
+    };
     let source = if already_utf8 && detected == DetectedEncoding::Utf8 {
         bytes
     } else {
@@ -454,6 +590,7 @@ fn to_model(
         converted
     };
     let mut model = marc_to_bibframe(&record, Some(source)).map_err(RecordFailure::Mapping)?;
+    model.instance.original = Some(original);
     if let Some(code) = koha_record_type(&record) {
         translations.apply(
             &code,

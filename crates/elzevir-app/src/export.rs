@@ -327,7 +327,21 @@ fn same_description(a: &NewRecord, b: &NewRecord) -> bool {
         && *languages == b.languages
         && *contributions == b.contributions
         && *subjects == b.subjects
-        && *instance == b.instance
+        && instance.title == b.instance.title
+        && instance.description == b.instance.description
+        && instance.edition == b.instance.edition
+        && instance.place == b.instance.place
+        && instance.publisher == b.instance.publisher
+        && instance.date == b.instance.date
+        && instance.extent == b.instance.extent
+        && instance.series == b.instance.series
+        && instance.identifiers == b.instance.identifiers
+        && instance.notes.iter().map(|n| (n.kind, &n.text)).eq(b
+            .instance
+            .notes
+            .iter()
+            .map(|n| (n.kind, &n.text)))
+        && instance.opac_hidden == b.instance.opac_hidden
         && *items == b.items
 }
 

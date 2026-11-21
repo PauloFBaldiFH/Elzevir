@@ -6,7 +6,7 @@ use std::io::{BufRead, Read};
 
 use elzevir_domain::catalog::InstanceId;
 use elzevir_domain::statement::{EntityKind, check_description};
-use elzevir_marc::{Limits, MarcTextReader, MarcXmlReader, MrkLimits, ReadError, XmlLimits};
+use elzevir_marc::{Limits, ReadError, Record};
 
 use super::{
     FailedRecord, ImportError, ImportOptions, MarcReader, RawPlace, RawRecord, RecordFailure,
@@ -27,11 +27,16 @@ pub const MAX_PREVIEW_RECORDS: usize = 3;
 
 /// Read-only catalog queries used for predictions.
 pub trait PreviewCatalog {
-    /// The oldest stored instance with this key.
+    /// All matching Instances and affected catalog rows in this read snapshot.
     ///
     /// # Errors
     /// Returns a catalog read failure.
-    fn candidate(&self, key: &MatchKey) -> Result<Option<InstanceId>, CatalogReadError>;
+    fn scope(
+        &self,
+        record: &NewRecord,
+        matching: &crate::matching::Matching,
+        origin: Option<&str>,
+    ) -> Result<crate::matching::MatchScope, CatalogReadError>;
     /// Whether a barcode already belongs to a stored item.
     ///
     /// # Errors
@@ -137,6 +142,8 @@ pub struct PreviewReport {
     pub samples: Vec<PreviewSample>,
     /// Existing catalog candidates, indexed by source record.
     pub matches: Vec<(u64, InstanceId)>,
+    /// Scope of each prepared unit, in submission order.
+    pub scopes: Vec<(u64, crate::matching::MatchScope)>,
     /// All blocking diagnostics.
     pub issues: Vec<PreviewIssue>,
 }
@@ -214,6 +221,7 @@ fn inspection<'a>(
             prepared: 0,
             items: 0,
             samples: Vec::new(),
+            scopes: Vec::new(),
             matches: Vec::new(),
             issues: Vec::new(),
         },
@@ -260,6 +268,7 @@ pub(super) fn scan_as(
                 let place = RawPlace { index, offset };
                 let record = match reader.next_record() {
                     Some(Ok(record)) => Ok(RawRecord {
+                        text: None,
                         index: place.index,
                         offset,
                         bytes: record.as_bytes().to_vec(),
@@ -278,50 +287,50 @@ pub(super) fn scan_as(
                 index += 1;
             }
         }
-        ImportFormat::MarcXml => {
-            let mut reader = MarcXmlReader::new(input, XmlLimits::default());
-            while let Some(record) = reader.next() {
-                let place = RawPlace {
-                    index,
-                    offset: reader.record_offset(),
-                };
-                visit(
-                    index,
-                    encode_source(&record.map_err(ImportError::Xml)?, place),
-                )?;
-                index += 1;
-            }
-        }
-        ImportFormat::MarcText => {
-            let mut reader = MarcTextReader::new(input, MrkLimits::default());
-            while let Some(record) = reader.next() {
-                let place = RawPlace {
-                    index,
-                    offset: reader.record_offset(),
-                };
-                visit(
-                    index,
-                    encode_source(&record.map_err(ImportError::MarcText)?, place),
-                )?;
-                index += 1;
-            }
-        }
+        ImportFormat::MarcXml => scan_text(super::xml_records(input), &mut visit)?,
+        ImportFormat::MarcText => scan_text(super::mnemonic_records(input), &mut visit)?,
         ImportFormat::KohaSqlDump => {
-            let records = super::koha_sql::prepare(input).map_err(ImportError::from)?;
+            let records = super::koha_sql::with_originals(input).map_err(ImportError::from)?;
             if !records.is_empty() {
                 detection.evidence = Evidence::KohaCatalogTables;
             }
-            for (index, (record, offset)) in records.into_iter().enumerate() {
+            for (index, row) in records.into_iter().enumerate() {
+                let offset = row.offset;
                 let place = RawPlace {
                     index: index as u64,
                     offset,
                 };
-                visit(place.index, encode_source(&record, place))?;
+                visit(
+                    place.index,
+                    encode_source(
+                        &row.record,
+                        place,
+                        super::TextOriginal {
+                            bytes: row.xml,
+                            declared: row.declares_utf8,
+                            serialization: "MARCXML",
+                        },
+                    ),
+                )?;
             }
         }
         _ => return Err(PreviewError::Format(detection)),
     }
     Ok(detection)
+}
+
+fn scan_text(
+    records: impl Iterator<Item = Result<(Record, u64, super::TextOriginal), ImportError>>,
+    visit: &mut impl FnMut(u64, Result<RawRecord, FailedRecord>) -> Result<(), PreviewError>,
+) -> Result<(), PreviewError> {
+    for (index, row) in (0..).zip(records) {
+        let (record, offset, text) = row?;
+        visit(
+            index,
+            encode_source(&record, RawPlace { index, offset }, text),
+        )?;
+    }
+    Ok(())
 }
 
 fn preview_format(
@@ -474,16 +483,29 @@ impl Inspection<'_> {
                 items: ItemsDecision::Add,
             });
         };
-        let (mut stored, mut earlier) = (None, None);
+        let mut earlier = None;
+        let scope = self
+            .catalog
+            .map(|catalog| catalog.scope(record, &matching, self.options.origin.as_deref()))
+            .transpose()?
+            .unwrap_or_default();
+        let stored = match scope.result() {
+            crate::matching::MatchResult::Unique(id) => Some(id),
+            crate::matching::MatchResult::Absent => None,
+            result => {
+                let reason = match result {
+                    crate::matching::MatchResult::Conflict(reason) => reason,
+                    _ => "multiple candidate Instances",
+                };
+                self.issue(place, None, IssueKind::InvalidDescription, reason);
+                None
+            }
+        };
+        self.report.scopes.push((place.index, scope));
         for key in match_keys(record)
             .into_iter()
             .filter(|key| key.rule == matching.rule)
         {
-            if let Some(catalog) = self.catalog
-                && let Some(candidate) = catalog.candidate(&key)?
-            {
-                stored = stored.into_iter().chain([candidate]).min();
-            }
             let first = *self.keys.entry(key).or_insert(place.index);
             if first != place.index {
                 earlier = earlier.into_iter().chain([first]).min();

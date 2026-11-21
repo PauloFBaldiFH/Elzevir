@@ -64,6 +64,69 @@ pub fn koha_biblionumber_key(source: &[u8]) -> Option<MatchKey> {
     })
 }
 
+/// Control number as written, qualified by format and assigning agency when present.
+#[must_use]
+pub fn source_control_number(record: &NewRecord) -> Option<(String, String)> {
+    let source = RecordRef::parse(record.source.as_deref()?, &Limits::default()).ok()?;
+    let text = |tag| {
+        source
+            .fields_with_tag(Tag::new(tag))
+            .next()
+            .and_then(|f| std::str::from_utf8(f.raw()).ok())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+    };
+    let number = text(*b"001")?;
+    let system = if record
+        .instance
+        .original
+        .as_ref()
+        .is_some_and(|r| r.family == "UNIMARC")
+    {
+        "unimarc.001".into()
+    } else {
+        text(*b"003").map_or_else(
+            || "marc21.001".into(),
+            |agency| format!("marc21.001/{agency}"),
+        )
+    };
+    Some((system, number.to_owned()))
+}
+
+/// Presence of local Koha columns in an original 952 (omission differs from zero).
+#[derive(Default)]
+pub struct KohaItemSource {
+    /// Source installation's itemnumber, when supplied.
+    pub itemnumber: Option<String>,
+    /// Explicitly supplied subfields.
+    pub supplied: std::collections::BTreeSet<u8>,
+}
+
+/// One entry per 952, in source order.
+#[must_use]
+pub fn koha_item_sources(record: &NewRecord) -> Vec<KohaItemSource> {
+    let Some(parsed) = record
+        .source
+        .as_deref()
+        .and_then(|s| RecordRef::parse(s, &Limits::default()).ok())
+    else {
+        return Vec::new();
+    };
+    parsed
+        .fields_with_tag(Tag::new(*b"952"))
+        .map(|field| KohaItemSource {
+            itemnumber: field
+                .subfield_values(b'9')
+                .next()
+                .and_then(|b| std::str::from_utf8(b).ok())
+                .map(str::trim)
+                .filter(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()))
+                .map(str::to_owned),
+            supplied: field.subfields().map(|(code, _)| code).collect(),
+        })
+        .collect()
+}
+
 /// What to do with an imported record that matches a stored one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OnMatch {
@@ -123,6 +186,79 @@ impl Matching {
             on_match: OnMatch::Ignore,
             on_no_match: OnNoMatch::CreateNew,
             items: ItemAction::AlwaysAdd,
+        }
+    }
+}
+
+/// Catalog rows whose identity or version matters to the review.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MatchScope {
+    /// All distinct candidate Instance identifiers.
+    pub candidates: Vec<elzevir_domain::catalog::InstanceId>,
+    /// Work ID, Work version, sibling Instance ID and Instance version.
+    pub editions: Vec<(i64, i64, i64, i64)>,
+    /// Item ID, owner Instance, version, holding library, open loan ID and due date.
+    pub holdings: Vec<HoldingScope>,
+    /// A conflict preventing the requested action.
+    pub conflict: Option<String>,
+}
+
+/// The reviewed ownership and circulation of an affected exemplar.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HoldingScope {
+    /// Local Item.
+    pub item: i64,
+    /// Owning Instance.
+    pub instance: i64,
+    /// Optimistic concurrency version.
+    pub version: i64,
+    /// Holding library.
+    pub branch: String,
+    /// Current loan and due date.
+    pub loan: Option<(i64, String)>,
+}
+
+/// Identity decision independent of the action requested by the operator.
+pub enum MatchResult<'a> {
+    /// None of the selected keys matched.
+    Absent,
+    /// All hits agree.
+    Unique(elzevir_domain::catalog::InstanceId),
+    /// More than one Instance was found.
+    Ambiguous,
+    /// Contradictory ownership or unsafe replacement.
+    Conflict(&'a str),
+}
+
+impl std::fmt::Display for MatchScope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Candidates {:?}", self.candidates)?;
+        for (work, _, instance, _) in &self.editions {
+            write!(f, " · Work {work} / Instance {instance}")?;
+        }
+        for item in &self.holdings {
+            write!(
+                f,
+                " · Item {} / Instance {} ({})",
+                item.item, item.instance, item.branch
+            )?;
+            if let Some((id, due)) = &item.loan {
+                write!(f, " · Loan {id} ({due})")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl MatchScope {
+    /// Classifies this snapshot without choosing arbitrarily.
+    #[must_use]
+    pub fn result(&self) -> MatchResult<'_> {
+        match (self.conflict.as_deref(), self.candidates.as_slice()) {
+            (Some(reason), _) => MatchResult::Conflict(reason),
+            (None, []) => MatchResult::Absent,
+            (None, [id]) => MatchResult::Unique(*id),
+            _ => MatchResult::Ambiguous,
         }
     }
 }

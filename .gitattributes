@@ -10,3 +10,6 @@ data/loc/** linguist-generated=true
 
 # Records exported by the Koha oracle: compared byte for byte, never normalized.
 crates/elzevir-marc/tests/data/** -text
+
+# Acceptance inputs preserve the original bytes, including legacy line endings.
+samples-import-tool/** -text

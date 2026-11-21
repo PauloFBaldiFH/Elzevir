@@ -23,7 +23,29 @@ pub(super) fn map(marc: &Marc<'_>) -> Result<Vec<ItemData>, MappingError> {
     let defaults = defaults(marc);
     marc.data(b"952")
         .enumerate()
-        .map(|(position, field)| item_of(position, field, &defaults))
+        .map(|(position, field)| {
+            let mut item = item_of(position, field, &defaults)?;
+            if let Some(barcode) = item.barcode.as_deref() {
+                let mut links = marc
+                    .data(b"876")
+                    .filter(|f| f.raw(b'p').as_deref() == Some(barcode))
+                    .filter_map(|f| f.raw(b'8'));
+                if let Some(link) = links.next()
+                    && links.next().is_none()
+                {
+                    let mut holdings = marc
+                        .data(b"863")
+                        .filter(|f| f.raw(b'8').as_ref() == Some(&link));
+                    if let Some(holding) = holdings.next()
+                        && holdings.next().is_none()
+                    {
+                        item.enumeration = holding.raw_joined(b"abcdefgh");
+                        item.chronology = holding.raw_joined(b"ijklm");
+                    }
+                }
+            }
+            Ok(item)
+        })
         .collect()
 }
 
@@ -41,6 +63,9 @@ pub(super) fn item_of(
         .or_else(|| defaults.item_type.clone())
         .ok_or(MappingError::MissingItemType { position })?;
     Ok(ItemData {
+        issue_statement: field.raw(b'h'),
+        enumeration: None,
+        chronology: None,
         barcode: field.raw(b'p'),
         inventory_number: field.raw(b'i'),
         holding_branch: field.raw(b'b').unwrap_or_else(|| home_branch.clone()),

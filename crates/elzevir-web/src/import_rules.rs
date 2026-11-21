@@ -38,6 +38,9 @@ pub(crate) struct RuleForm {
     subfields: String,
     index: Option<usize>,
     #[serde(default)]
+    origin: Option<String>,
+    local_notes: Option<String>,
+    #[serde(default)]
     rule: String,
     #[serde(default)]
     on_match: String,
@@ -72,7 +75,21 @@ pub(crate) fn apply(recipe: &mut Recipe, form: &RuleForm) -> Result<(), &'static
                 .exclude
                 .remove(&record(&form.record)?.ok_or("import-rule-record")?);
         }
-        "matching" => recipe.matching = matching(form)?,
+        "matching" => {
+            recipe.matching = matching(form)?;
+            if let Some(policy) = form.local_notes.as_deref() {
+                use elzevir_app::catalog::NoteVisibility;
+                recipe.local_note_visibility = match policy {
+                    "default" => None,
+                    "staff" => Some(NoteVisibility::Staff),
+                    "public" => Some(NoteVisibility::Public),
+                    _ => return Err("import-notes-invalid"),
+                };
+            }
+            if let Some(origin) = &form.origin {
+                recipe.origin = Some(origin.trim().to_owned()).filter(|s| !s.is_empty());
+            }
+        }
         _ => return Err("import-rule-missing"),
     }
     Ok(())
@@ -343,6 +360,8 @@ mod tests {
             indicators: String::new(),
             subfields: String::new(),
             index: None,
+            origin: None,
+            local_notes: None,
             rule: String::new(),
             on_match: String::new(),
             on_no_match: String::new(),

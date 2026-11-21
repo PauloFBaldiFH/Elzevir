@@ -25,6 +25,9 @@ use crate::open_store;
 /// `elzevir import`.
 #[derive(Args)]
 pub(crate) struct ImportArgs {
+    /// Stable identifier of the installation that produced the records.
+    #[arg(long)]
+    origin: Option<String>,
     /// Institution data directory (created if missing).
     #[arg(long)]
     data_dir: PathBuf,
@@ -146,6 +149,12 @@ pub(crate) fn import(args: &ImportArgs) -> Result<(), String> {
     if args.preview {
         return preview(args, input);
     }
+    if matches!(args.on_match, MatchAction::Replace) || matches!(args.items, ItemAction::Replace) {
+        return Err(
+            "replacement requires a reviewed batch: use import stage, edit, preview and confirm"
+                .into(),
+        );
+    }
     require_iso2709(&mut input)?;
     let data = open_store(&args.data_dir)?;
     if args.create_codes {
@@ -155,6 +164,7 @@ pub(crate) fn import(args: &ImportArgs) -> Result<(), String> {
     let switch = std::env::var("ELZEVIR_SERIAL").ok();
     let options = ImportOptions {
         parallelism: Parallelism::from_serial_switch(switch.as_deref(), "import", cores),
+        origin: args.origin.clone(),
         matching: args.matching(),
         translations: data.store.type_translations().map_err(|e| e.to_string())?,
         ..ImportOptions::default()
@@ -172,6 +182,7 @@ fn preview(args: &ImportArgs, input: BufReader<File>) -> Result<(), String> {
         return Err("interrupted restore requires backup recover-restore before preview".into());
     }
     let options = ImportOptions {
+        origin: args.origin.clone(),
         matching: args.matching(),
         ..ImportOptions::default()
     };
@@ -202,6 +213,9 @@ pub(crate) fn print_preview(report: &elzevir_app::import::preview::PreviewReport
             sample.instance,
             sample.items
         );
+    }
+    for (index, scope) in &report.scopes {
+        println!("record {}: {scope}", index + 1);
     }
     for (index, instance) in &report.matches {
         println!(
