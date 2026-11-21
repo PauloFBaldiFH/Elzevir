@@ -21,6 +21,7 @@ mod operations;
 mod port;
 pub use port::{MIN_PORT, PortForm, PortStep, Refusal, choose_port};
 mod folder_picker;
+mod restore_paths;
 mod runtime;
 mod service_view;
 mod setup;
@@ -42,7 +43,7 @@ pub use live::{
     Component, Details, Host, Institution, LiveState, Mode, ServerStatus, Snapshot, Storage,
 };
 pub use messages::Messages;
-pub use operations::{Form, Job, Operation, Operations, ServerAction};
+pub use operations::{Form, Job, Operation, Operations, RestoreReview, ServerAction};
 pub use runtime::{run, run_live, run_live_until};
 pub use view::draw;
 
@@ -343,6 +344,19 @@ impl Panel {
                 service: "elzevir".to_owned(),
                 protocol: "auto".to_owned(),
             },
+            (Section::Backup, 'R') => {
+                let Mode::Live(state) = &self.mode else {
+                    return false;
+                };
+                let Some(review) = state
+                    .snapshot
+                    .as_ref()
+                    .and_then(|s| s.operations.review.clone())
+                else {
+                    return false;
+                };
+                Operation::ApplyRestore(review)
+            }
             (Section::Backup, key) if cloud::shortcut(key, self.cloud_view()).is_some() => {
                 Operation::Cloud(
                     cloud::shortcut(key, self.cloud_view()).unwrap_or(CloudOperation::Providers),
@@ -392,6 +406,16 @@ impl Panel {
     /// visible at once, so pressing it is the explicit confirmation.
     pub fn submit_form(&mut self) {
         if let Some(form) = &mut self.form {
+            if matches!(form.operation, Operation::Restore { .. })
+                && form
+                    .values
+                    .iter()
+                    .zip(&form.checks)
+                    .any(|(v, c)| c.resolved(v).is_none())
+            {
+                form.notice = Some("restore-check-paths");
+                return;
+            }
             form.field = form.labels.len();
         }
         self.diagnostics.requested = self
@@ -403,6 +427,12 @@ impl Panel {
     }
 
     fn handle_form(&mut self, event: &Event) -> bool {
+        if let Event::Paste(value) = event {
+            if let Some(form) = &mut self.form {
+                form.paste(value);
+            }
+            return true;
+        }
         let Event::Key(key) = event else {
             return true;
         };
@@ -418,6 +448,19 @@ impl Panel {
         let Some(form) = &mut self.form else {
             return false;
         };
+        if matches!(form.operation, Operation::ApplyRestore(_)) && key.code == KeyCode::Enter {
+            self.submit_form();
+            return true;
+        }
+        if matches!(form.operation, Operation::Restore { .. })
+            && let Some(check) = form.checks.get_mut(form.field)
+        {
+            if matches!(key.code, KeyCode::F(7 | 8)) {
+                check.choose(key.code == KeyCode::F(8));
+                return true;
+            }
+            form.notice = None;
+        }
         if form.confirming() {
             if key.code == KeyCode::Char('y') {
                 self.submit_form();

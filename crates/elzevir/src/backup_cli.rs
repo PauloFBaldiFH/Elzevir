@@ -75,12 +75,12 @@ struct Target {
     data_dir: Option<PathBuf>,
 }
 
-pub(crate) fn lock(directory: &Path) -> Result<std::fs::File, String> {
+pub(crate) fn lock(directory: &Path) -> Result<crate::InstitutionLock, String> {
     archive::regular(&directory.join("elzevir.db"))?;
     lock_existing(directory)
 }
 
-pub(crate) fn lock_existing(directory: &Path) -> Result<std::fs::File, String> {
+pub(crate) fn lock_existing(directory: &Path) -> Result<crate::InstitutionLock, String> {
     let path = directory.join("elzevir.lock");
     archive::regular(&path)?;
     let file = std::fs::OpenOptions::new()
@@ -89,7 +89,7 @@ pub(crate) fn lock_existing(directory: &Path) -> Result<std::fs::File, String> {
         .map_err(|_| "institution lock unavailable")?;
     file.try_lock()
         .map_err(|_| "stop the institution before this operation")?;
-    Ok(file)
+    Ok(crate::InstitutionLock(file))
 }
 
 pub(crate) fn artifact(directory: &Path, id: &str) -> Result<PathBuf, String> {
@@ -260,7 +260,15 @@ fn restore_with(
     config: Option<&Path>,
     rebuild_action: impl FnOnce(&Path) -> Result<(), String>,
 ) -> Result<(), String> {
-    restore_inner(input, key, directory, config, rebuild_action, true).map(drop)
+    restore_inner(
+        prepare(archive::extract(input, key)?, directory, true)?,
+        directory,
+        config,
+        rebuild_action,
+        true,
+        &mut false,
+    )
+    .map(drop)
 }
 
 pub(crate) fn restore_rollback(
@@ -269,39 +277,89 @@ pub(crate) fn restore_rollback(
     directory: &Path,
     config: Option<&Path>,
 ) -> Result<(), String> {
-    restore_inner(input, key, directory, config, rebuild, false).map(drop)
+    restore_inner(
+        prepare(archive::extract_full(input, key)?, directory, false)?,
+        directory,
+        config,
+        rebuild,
+        false,
+        &mut false,
+    )
+    .map(drop)
+}
+
+pub(crate) struct Prepared {
+    archive: archive::Extracted,
+    configuration: Option<String>,
+}
+
+pub(crate) fn prepare(
+    archive: archive::Extracted,
+    directory: &Path,
+    reset_schedules: bool,
+) -> Result<Prepared, String> {
+    let configuration = if archive.manifest.scope == elzevir_panel::BackupScope::Full {
+        let destination = directory
+            .canonicalize()
+            .map_err(|_| "restore directory unavailable")?;
+        let config = crate::server_config::relocate(
+            &text(&archive.directory.path().join("server.toml"))?,
+            &destination,
+        )?;
+        validate_auxiliary(archive.directory.path(), reset_schedules)?;
+        Some(config)
+    } else {
+        None
+    };
+    Ok(Prepared {
+        archive,
+        configuration,
+    })
 }
 
 pub(crate) fn restore_managed(
-    input: &Path,
-    key: &Path,
+    restored: Prepared,
     directory: &Path,
     config: &Path,
 ) -> Result<crate::restore_journal::Journal, String> {
-    restore_inner(input, key, directory, Some(config), rebuild, true)
+    let mut swapping = false;
+    restore_inner(
+        restored,
+        directory,
+        Some(config),
+        rebuild,
+        true,
+        &mut swapping,
+    )
+    .map_err(|error| {
+        if swapping {
+            error
+        } else {
+            crate::managed_restore::BEFORE.to_owned()
+        }
+    })
 }
 
 fn restore_inner(
-    input: &Path,
-    key: &Path,
+    prepared: Prepared,
     directory: &Path,
     config: Option<&Path>,
     rebuild_action: impl FnOnce(&Path) -> Result<(), String>,
     safety_snapshot: bool,
+    swapping: &mut bool,
 ) -> Result<crate::restore_journal::Journal, String> {
     let directory = directory
         .canonicalize()
         .map_err(|_| "restore directory must already exist")?;
     let _lock = lock(&directory)?;
-    let restored = archive::extract_full(input, key)?;
+    let Prepared {
+        archive: restored,
+        configuration,
+    } = prepared;
+    let full = configuration.is_some();
     let config = config.map_or_else(|| directory.join("server.toml"), Path::to_owned);
     let config = crate::installation::absolute(&config)?;
-    let source = crate::server_config::relocate(
-        &text(&restored.directory.path().join("server.toml"))?,
-        &directory,
-    )?;
-    // Validate auxiliary configuration before any live file is moved.
-    validate_auxiliary(restored.directory.path(), safety_snapshot)?;
+
     let safety = crate::restore_journal::create_safety(&directory)?;
     // A consistent independent image is retained even if rebuilding the replacement fails.
     if safety_snapshot {
@@ -325,40 +383,49 @@ fn restore_inner(
         ("cloud-plans.json", "cloud-plans.json"),
         ("cloud-artifacts.json", "cloud-artifacts.json"),
     ] {
+        if !full && name != "database.sqlite" {
+            continue;
+        }
         let source = restored.directory.path().join(name);
         if source.exists() {
             copy_new(&source, &stage.path().join(target))?;
         }
         replacements.push((stage.path().join(target), directory.join(target)));
     }
-    let config_stage =
-        crate::private_temp::directory_in(config.parent().ok_or("configuration needs a parent")?)
-            .map_err(|_| "cannot stage restored configuration")?;
-    archive::write_new(&config_stage.path().join("server.toml"), source.as_bytes())?;
-    let configuration_target = config.clone();
-    replacements.push((config_stage.path().join("server.toml"), config));
-    // Secrets are treated as one directory, never merged with stale credentials.
-    let secrets = restored.directory.path().join("secrets");
-    if secrets.exists() {
-        make_directory(&stage.path().join("secrets"))?;
-        for entry in std::fs::read_dir(secrets).map_err(|_| "restored secrets unavailable")? {
-            let entry = entry.map_err(|_| "restored secrets unavailable")?;
-            copy_new(
-                &entry.path(),
-                &stage.path().join("secrets").join(entry.file_name()),
-            )?;
+
+    let config_stage;
+    if let Some(source) = configuration {
+        config_stage = crate::private_temp::directory_in(
+            config.parent().ok_or("configuration needs a parent")?,
+        )
+        .map_err(|_| "cannot stage restored configuration")?;
+        archive::write_new(&config_stage.path().join("server.toml"), source.as_bytes())?;
+
+        replacements.push((config_stage.path().join("server.toml"), config.clone()));
+        // Secrets are treated as one directory, never merged with stale credentials.
+        let secrets = restored.directory.path().join("secrets");
+        if secrets.exists() {
+            make_directory(&stage.path().join("secrets"))?;
+            for entry in std::fs::read_dir(secrets).map_err(|_| "restored secrets unavailable")? {
+                let entry = entry.map_err(|_| "restored secrets unavailable")?;
+                copy_new(
+                    &entry.path(),
+                    &stage.path().join("secrets").join(entry.file_name()),
+                )?;
+            }
         }
+        replacements.push((stage.path().join("secrets"), directory.join("secrets")));
     }
-    replacements.push((stage.path().join("secrets"), directory.join("secrets")));
     let journal =
-        crate::restore_journal::Journal::begin(&directory, &safety, &configuration_target)?;
+        crate::restore_journal::Journal::begin_scoped(&directory, &safety, &config, full)?;
+    *swapping = true;
     let result = (|| {
         // Move sidecars together with their database, before opening the replacement.
         for name in ["elzevir.db-wal", "elzevir.db-shm", "index"] {
             journal.preserve(&directory, &directory.join(name))?;
         }
         for (source, target) in &replacements {
-            prepare_replacement(source, target, &configuration_target, &directory)?;
+            prepare_replacement(source, target, &config, &directory)?;
             journal.preserve(&directory, target)?;
             if source.exists() {
                 std::fs::rename(source, target).map_err(|_| "cannot publish restored file")?;
@@ -461,6 +528,60 @@ fn rebuild(directory: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn database_restore_preserves_credentials_and_excludes_concurrent_restore() {
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path();
+        let data = crate::open_store(directory).unwrap();
+        let image = directory.join("database.age");
+        let key = directory.join("backup.key");
+        let config = directory.join("server.toml");
+        let control: crate::cancellation::Control = std::sync::Arc::new(|| false);
+        archive::create_selected(
+            directory,
+            "",
+            &image,
+            Some(data.store.readers()),
+            &control,
+            elzevir_panel::BackupOptions {
+                scope: elzevir_panel::BackupScope::Database,
+                ..Default::default()
+            },
+            |_| Ok(()),
+        )
+        .unwrap();
+        data.store.shutdown().unwrap();
+        let crate::DataDir {
+            _lock: lock_file, ..
+        } = data;
+        drop(lock_file);
+        let secrets = directory.join("secrets");
+        std::fs::create_dir_all(&secrets).unwrap();
+        std::fs::write(secrets.join("credential"), "original").unwrap();
+        std::fs::write(&config, "original configuration").unwrap();
+        let old_key = std::fs::read(&key).unwrap();
+        restore_with(&image, &key, directory, Some(&config), |target| {
+            std::thread::scope(|s| {
+                let competing = s.spawn(|| restore(&image, &key, target, Some(&config)));
+                assert_eq!(
+                    competing.join().unwrap().unwrap_err(),
+                    "stop the institution before this operation"
+                );
+            });
+            rebuild(target)
+        })
+        .unwrap();
+        assert_eq!(std::fs::read(key).unwrap(), old_key);
+        assert_eq!(
+            std::fs::read_to_string(config).unwrap(),
+            "original configuration"
+        );
+        assert_eq!(
+            std::fs::read_to_string(secrets.join("credential")).unwrap(),
+            "original"
+        );
+        assert!(!crate::restore_journal::pending(directory));
+    }
     #[test]
     fn restore_preserves_lock_inode_relocates_config_and_rolls_back_a_rebuild_failure() {
         let directory = tempfile::tempdir().unwrap();

@@ -1,32 +1,54 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Managed restore keeps original files available until the service confirms health.
+pub(crate) const BEFORE: &str = "restore_before_swap";
+pub(crate) const PENDING: &str = "restore_recovery_pending";
+pub(crate) const RECOVERED: &str = "restore_recovered";
+pub(crate) fn signature(manifest: &crate::backup_archive::Manifest) -> Result<String, String> {
+    use sha2::Digest as _;
+    Ok(format!(
+        "{:x}",
+        sha2::Sha256::digest(serde_json::to_vec(manifest).map_err(|_| BEFORE)?)
+    ))
+}
 trait Backend {
     fn step(&self, name: &'static str) -> Result<(), String>;
 }
 
 fn transaction(backend: &impl Backend) -> Result<(), String> {
-    backend.step("verify")?;
-    if let Err(error) = backend.step("stop") {
-        backend.step("start")?;
-        backend.step("health")?;
-        return Err(error);
+    backend
+        .step("verify")
+        .map_err(|e| if e == PENDING { PENDING } else { BEFORE })?;
+    if backend.step("stop").is_err() {
+        backend
+            .step("start")
+            .and_then(|()| backend.step("health"))
+            .map_err(|_| PENDING)?;
+        return Err(BEFORE.into());
     }
     let result = backend
         .step("restore")
         .and_then(|()| backend.step("start"))
         .and_then(|()| backend.step("health"));
-    if result.is_err() {
-        backend.step("stop")?;
-        backend.step("rollback")?;
-        backend.step("start")?;
-        backend.step("health")?;
-        return Err("restore failed; previous files and service were recovered".to_owned());
+    if let Err(error) = result {
+        if error == BEFORE {
+            backend
+                .step("start")
+                .and_then(|()| backend.step("health"))
+                .map_err(|_| PENDING)?;
+            return Err(error);
+        }
+        for step in ["stop", "rollback", "start", "health"] {
+            backend.step(step).map_err(|_| PENDING)?;
+        }
+        return Err(RECOVERED.into());
     }
     Ok(())
 }
 use std::{cell::RefCell, path::Path};
 struct Native<'a> {
     directory: &'a Path,
+    reviewed: &'a str,
+    prepared: RefCell<Option<crate::backup_cli::Prepared>>,
     input: &'a Path,
     key: &'a Path,
     config: &'a Path,
@@ -36,13 +58,26 @@ struct Native<'a> {
 impl Backend for Native<'_> {
     fn step(&self, name: &'static str) -> Result<(), String> {
         match name {
-            "verify" => crate::backup_archive::extract_full(self.input, self.key).map(drop),
+            "verify" => {
+                let extracted = crate::backup_archive::extract(self.input, self.key)?;
+                if signature(&extracted.manifest)? != self.reviewed {
+                    return Err(BEFORE.into());
+                }
+                if crate::restore_journal::pending(self.directory) {
+                    return Err(PENDING.into());
+                }
+                self.prepared.replace(Some(crate::backup_cli::prepare(
+                    extracted,
+                    self.directory,
+                    true,
+                )?));
+                Ok(())
+            }
             "stop" | "start" => crate::service::native_action(name, &self.service),
             "health" => crate::host_jobs::wait_healthy(self.directory),
             "restore" => {
                 let journal = crate::backup_cli::restore_managed(
-                    self.input,
-                    self.key,
+                    self.prepared.take().ok_or(BEFORE)?,
                     self.directory,
                     self.config,
                 )?;
@@ -66,6 +101,7 @@ pub(crate) fn execute(
     input: &Path,
     key: &Path,
     config: Option<&Path>,
+    reviewed: &str,
 ) -> Result<(), String> {
     crate::service::require_operator()?;
     let config = config.ok_or("managed restore requires a configuration file")?;
@@ -74,6 +110,8 @@ pub(crate) fn execute(
     let service = crate::installation::selected_service(&executable, directory, config)?;
     transaction(&Native {
         directory,
+        reviewed,
+        prepared: RefCell::new(None),
         input,
         key,
         config,
@@ -129,6 +167,41 @@ mod tests {
                 "health"
             ]
         );
+    }
+    #[test]
+    fn each_failure_reports_whether_recovery_completed() {
+        struct FailedRecovery(&'static str, std::cell::Cell<bool>);
+        impl Backend for FailedRecovery {
+            fn step(&self, step: &'static str) -> Result<(), String> {
+                if step == "restore" {
+                    self.1.set(true);
+                    return Err("rebuild".into());
+                }
+                if self.1.get() && step == self.0 {
+                    return Err("forced recovery failure".into());
+                }
+                Ok(())
+            }
+        }
+        for (fail, expected) in [
+            ("verify", BEFORE),
+            ("stop", BEFORE),
+            ("restore", RECOVERED),
+            ("start", RECOVERED),
+            ("health", RECOVERED),
+        ] {
+            let backend = Fake {
+                calls: RefCell::default(),
+                fail,
+            };
+            assert_eq!(transaction(&backend).unwrap_err(), expected);
+        }
+        for fail in ["stop", "rollback", "start", "health"] {
+            assert_eq!(
+                transaction(&FailedRecovery(fail, false.into())).unwrap_err(),
+                PENDING
+            );
+        }
     }
     #[test]
     fn successful_restore_starts_once_and_never_rolls_back() {

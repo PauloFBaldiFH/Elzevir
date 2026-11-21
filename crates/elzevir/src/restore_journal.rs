@@ -7,6 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 const NAME: &str = "elzevir-restore.json";
+const DATABASE_FILES: &[&str] = &["elzevir.db", "elzevir.db-wal", "elzevir.db-shm", "index"];
 const FILES: &[&str] = &[
     "elzevir.db",
     "elzevir.db-wal",
@@ -108,7 +109,16 @@ pub(crate) fn create_safety(directory: &Path) -> Result<PathBuf, String> {
 }
 
 impl Journal {
-    pub(crate) fn begin(directory: &Path, safety: &Path, config: &Path) -> Result<Self, String> {
+    #[cfg(test)]
+    fn begin(directory: &Path, safety: &Path, config: &Path) -> Result<Self, String> {
+        Self::begin_scoped(directory, safety, config, true)
+    }
+    pub(crate) fn begin_scoped(
+        directory: &Path,
+        safety: &Path,
+        config: &Path,
+        full: bool,
+    ) -> Result<Self, String> {
         let config = absolute(config)?;
         let prefix = format!(".elzevir-restore-{}-", scope(directory)?);
         let id = safety
@@ -118,7 +128,7 @@ impl Journal {
             .ok_or("invalid restore safety path")?
             .to_owned();
         let mut journal = Self {
-            schema: 1,
+            schema: if full { 1 } else { 2 },
             id,
             config,
             entries: Vec::new(),
@@ -126,7 +136,7 @@ impl Journal {
         if safety != safety_path(directory, &journal.id)? {
             return Err("restore safety directory does not match its institution".to_owned());
         }
-        for name in FILES {
+        for name in if full { FILES } else { DATABASE_FILES } {
             let target = journal.target(directory, name)?;
             if std::fs::symlink_metadata(journal.saved(directory, name)?).is_ok() {
                 return Err("restore original destination must be new".to_owned());
@@ -262,14 +272,18 @@ pub(crate) fn recover(directory: &Path, config: Option<&Path>) -> Result<(), Str
         .and_then(|file| file.take(16_385).read_to_end(&mut bytes))
         .map_err(|_| "restore journal unavailable")?;
     let journal: Journal = serde_json::from_slice(&bytes).map_err(|_| "invalid restore journal")?;
-    if journal.schema != 1
-        || journal.id.len() != 32
+    let expected = match journal.schema {
+        1 => FILES,
+        2 => DATABASE_FILES,
+        _ => return Err("unsupported restore journal".into()),
+    };
+    if journal.id.len() != 32
         || !journal.id.bytes().all(|byte| byte.is_ascii_hexdigit())
-        || journal.entries.len() != FILES.len()
+        || journal.entries.len() != expected.len()
         || journal
             .entries
             .iter()
-            .zip(FILES)
+            .zip(expected)
             .any(|(entry, name)| entry.name != *name)
         || journal.config
             != absolute(&config.map_or_else(|| directory.join("server.toml"), Path::to_owned))?

@@ -65,7 +65,7 @@ elzevir operations --config CAMINHO/server.toml list
 elzevir backup key --data-dir CAMINHO/data --output DESTINO-NOVO/backup.key
 ```
 
-A cópia contém uma imagem SQLite consistente, configurações e segredos
+A cópia completa contém uma imagem SQLite consistente, configurações e segredos
 cifrados com age. A chave de recuperação fica fora do arquivo. Exporte-a
 explicitamente para um destino privado separado: o arquivo cifrado sozinho
 não permite restauração. Índice, logs e certificado mestre Cloudflare não
@@ -74,6 +74,17 @@ entram no backup. O índice é reconstruído ao restaurar.
 A seção Backup permite criar, verificar, exportar, restaurar e definir
 retenção/agenda local e de nuvem. No painel, a restauração gerenciada para o
 serviço, preserva os arquivos anteriores e verifica saúde após reiniciar.
+Em **Backup**, pressione `o` e use `F2` no campo da cópia ou da chave.
+`F4` lista as cópias gerenciadas da instituição. `F3` abre a pasta pessoal
+no host do painel. Use `F5` para incluir arquivos com outras extensões.
+Em SSH, os dois caminhos devem existir no servidor. Colar um caminho só
+preenche o campo. F7 escolhe a forma literal e F8 a interpretada quando
+ambas identificam arquivos. **Validar cópia** autentica o pacote e verifica
+o banco antes de abrir a revisão. O foco começa em **Voltar**. Para aplicar,
+selecione **Restaurar** com a seta e confirme com Enter.
+**Somente banco** preserva as configurações e credenciais da instalação e
+reconstrói o índice. O histórico distingue falha antes da troca, retorno à
+instalação anterior e recuperação pendente.
 Falha de saúde provoca tentativa de retorno à instalação anterior. O comando
 backup restore é offline e exige servidor parado e --confirm-restore.
 
