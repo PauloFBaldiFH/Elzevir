@@ -135,6 +135,20 @@ pub(crate) fn interactive(
     scene.clear();
     let area = frame.area();
     ui::fill(frame, area, theme::muted());
+    if let Mode::Live(state) = &panel.mode
+        && panel.section == Section::Addresses
+        && panel.tunnel_tab == crate::TunnelTab::Share
+        && panel.form.is_none()
+    {
+        crate::sharing::draw(
+            frame,
+            state.snapshot.as_ref().filter(|_| state.age_seconds <= 5),
+            messages,
+            ascii || area.width < 80,
+            panel.access_notice,
+        );
+        return;
+    }
     if area.width < 80 || area.height < 18 {
         frame.render_widget(
             Paragraph::new(messages.get("panel-small")).wrap(Wrap { trim: true }),
@@ -170,14 +184,6 @@ pub(crate) fn interactive(
         crate::dashboard::draw(frame, panel, state, messages, work, context, ascii);
         if panel.section == Section::Restart {
             crate::service_view::draw(frame, panel, state, messages, work, (ascii, scene));
-        }
-        if panel.section == Section::Addresses && panel.tunnel_tab == crate::TunnelTab::Share {
-            crate::sharing::draw(
-                frame,
-                state.snapshot.as_ref().filter(|_| state.age_seconds <= 5),
-                messages,
-                ascii,
-            );
         }
     } else {
         draw_demo(frame, panel, messages, ascii, work, context);

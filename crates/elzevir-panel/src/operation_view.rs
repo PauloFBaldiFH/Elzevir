@@ -399,6 +399,47 @@ fn destination_header(
     }
 }
 
+fn address_header(
+    panel: &Panel,
+    form: &crate::Form,
+    messages: &Messages,
+    header: &mut Vec<Line<'static>>,
+) {
+    if panel.access_help == Some("address-terminal")
+        && matches!(
+            form.operation,
+            crate::Operation::Address(
+                crate::AddressOperation::Recover { .. } | crate::AddressOperation::Export { .. }
+            )
+        )
+    {
+        header.push(Line::from(messages.get("address-sftp")));
+    }
+    if matches!(
+        form.operation,
+        crate::Operation::Address(crate::AddressOperation::Enroll { .. })
+    ) {
+        if let Some(name) = form.values.get(2).filter(|s| !s.is_empty()) {
+            header.push(Line::from(messages.get("address-preview")));
+            header.push(Line::from(format!("https://{}.elzevir.app/", text(name))));
+        }
+        if let crate::Mode::Live(state) = &panel.mode {
+            let origin = state.institution.configured_listen.and_then(|mut addr| {
+                if addr.ip().is_unspecified() {
+                    addr.set_ip(if addr.is_ipv4() {
+                        std::net::Ipv4Addr::LOCALHOST.into()
+                    } else {
+                        std::net::Ipv6Addr::LOCALHOST.into()
+                    });
+                }
+                (addr.ip().is_loopback() && addr.port() != 0).then(|| format!("http://{addr}"))
+            });
+            header.push(row(messages, "address-origin", origin));
+        }
+        header.push(Line::from(messages.get("address-staff-setup")));
+    }
+}
+
 fn form_header(panel: &Panel, form: &crate::Form, messages: &Messages) -> Vec<Line<'static>> {
     let mut header = vec![Line::from(messages.get(form.operation.key()))];
     if let crate::Mode::Live(state) = &panel.mode {
@@ -419,6 +460,7 @@ fn form_header(panel: &Panel, form: &crate::Form, messages: &Messages) -> Vec<Li
                 .map(|count| count.to_string()),
         ));
     }
+    address_header(panel, form, messages, &mut header);
     destination_header(panel, form, messages, &mut header);
     if matches!(form.operation, crate::Operation::Restore { .. }) {
         header.push(Line::from(messages.get("restore-keys")));

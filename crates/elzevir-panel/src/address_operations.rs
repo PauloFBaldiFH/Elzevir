@@ -16,6 +16,15 @@ pub enum AddressOperation {
         /// Local service name.
         service: String,
     },
+    /// Resume the persisted device flow.
+    Resume {
+        /// Local server service name.
+        service: String,
+    },
+    /// Stop the installed connector while preserving registration.
+    PauseConnector,
+    /// Start the installed connector.
+    StartConnector,
     /// Refresh observed remote settings.
     Refresh,
     /// Choose public directory visibility.
@@ -63,6 +72,9 @@ impl AddressOperation {
     pub(crate) const fn key(&self) -> &'static str {
         match self {
             Self::Enroll { .. } => "broker-enroll",
+            Self::Resume { .. } => "broker-resume",
+            Self::PauseConnector => "broker-pause",
+            Self::StartConnector => "broker-start",
             Self::Refresh => "broker-refresh",
             Self::Listing { public: true } => "broker-list",
             Self::Listing { public: false } => "broker-unlist",
@@ -84,18 +96,18 @@ impl AddressOperation {
                 service,
             } => (
                 vec![
-                    "broker-url",
                     "broker-institution",
                     "broker-email",
                     "broker-name",
                     "op-service",
+                    "broker-url",
                 ],
                 vec![
-                    base.clone(),
                     institution.clone(),
                     email.clone(),
                     name.clone(),
                     service.clone(),
+                    base.clone(),
                 ],
             ),
             Self::Staff {
@@ -106,7 +118,9 @@ impl AddressOperation {
                 vec!["broker-username", "broker-password", "broker-cidrs"],
                 vec![username.clone(), password.clone(), cidrs.clone()],
             ),
-            Self::Renew { service } => (vec!["op-service"], vec![service.clone()]),
+            Self::Resume { service } | Self::Renew { service } => {
+                (vec!["op-service"], vec![service.clone()])
+            }
             Self::Export { output } => (vec!["op-output"], vec![output.clone()]),
             Self::Recover { input, service } => (
                 vec!["op-input", "op-service"],
@@ -119,16 +133,19 @@ impl AddressOperation {
         let mut values = values.into_iter();
         Some(match self {
             Self::Enroll { .. } => Self::Enroll {
-                base: values.next()?,
                 institution: values.next()?,
                 email: values.next()?,
                 name: values.next()?,
                 service: values.next()?,
+                base: values.next().unwrap_or_default(),
             },
             Self::Staff { .. } => Self::Staff {
                 username: values.next()?,
                 password: values.next()?,
                 cidrs: values.next()?,
+            },
+            Self::Resume { .. } => Self::Resume {
+                service: values.next()?,
             },
             Self::Renew { .. } => Self::Renew {
                 service: values.next()?,
@@ -153,6 +170,11 @@ pub(crate) fn shortcut(key: char) -> Option<AddressOperation> {
             name: String::new(),
             service: "elzevir".to_owned(),
         },
+        'G' => AddressOperation::Resume {
+            service: "elzevir".into(),
+        },
+        'P' => AddressOperation::PauseConnector,
+        'S' => AddressOperation::StartConnector,
         'c' => AddressOperation::Refresh,
         'j' => AddressOperation::Listing { public: true },
         'J' => AddressOperation::Listing { public: false },

@@ -36,16 +36,24 @@ pub(super) fn projection(
             catalog: None,
             staff: None,
             failure: None,
+            connector_at: jiff::Timestamp::now().to_string(),
+            registration_at: None,
+            poll_seconds: None,
             connector,
             staff_allow_cidrs: vec![],
             remote_status: None,
         });
     }
     let identity = load(directory)?;
+    let expired = identity.library.is_none()
+        && identity.device_code.is_some()
+        && identity.expires_at <= jiff::Timestamp::now().as_second();
     let mut result = DomainStatus {
         broker_url: identity.base.clone(),
         domain: identity.domain.clone().unwrap_or_default(),
-        phase: if identity.ready && identity.phase == DomainPhase::NotRegistered {
+        phase: if expired {
+            DomainPhase::Failed
+        } else if identity.ready && identity.phase == DomainPhase::NotRegistered {
             DomainPhase::Ready
         } else {
             identity.phase
@@ -53,16 +61,32 @@ pub(super) fn projection(
         catalog: identity.hosts.as_ref().map(|hosts| hosts.opac.clone()),
         staff: identity.hosts.as_ref().map(|hosts| hosts.staff.clone()),
         failure: identity.failure.as_deref().map(|code| match code {
+            "denied" => "broker-denied",
+            "expired" => "broker-expired",
             "dns_conflict" => "domain-error-dns",
             "quota_exceeded" => "domain-error-quota",
             "domain_unavailable" => "domain-error-unavailable",
             "tunnel_failed" => "domain-error-tunnel",
             _ => "domain-error-provisioning",
         }),
+        connector_at: jiff::Timestamp::now().to_string(),
+        registration_at: std::fs::metadata(location(directory))
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .and_then(|time| jiff::Timestamp::try_from(time).ok())
+            .map(|time| time.to_string()),
+        poll_seconds: identity
+            .device_code
+            .as_ref()
+            .filter(|_| !expired)
+            .map(|_| identity.interval),
         connector,
         staff_allow_cidrs: vec![],
         remote_status: None,
     };
+    if expired {
+        result.failure = Some("broker-expired");
+    }
     if let Some(observed) = observation(directory, &identity)? {
         result.staff_allow_cidrs = observed.staff_allow_cidrs;
         result.remote_status = match observed.status.as_deref() {
@@ -95,4 +119,31 @@ pub(crate) fn status(directory: &Path) -> Result<DomainStatus, String> {
         ConnectorState::Unavailable
     };
     projection(directory, connector)
+}
+
+pub(super) fn set_connector(directory: &Path, start: bool) -> Result<(), String> {
+    let name = crate::service::tunnel_name(directory)?;
+    if start {
+        let hosts = super::hosts(directory)?.ok_or("no active address binding")?;
+        let expected = crate::access_config::StaffMode::Hostname {
+            catalog_host: hosts.opac,
+            staff_host: hosts.staff,
+        };
+        let observed = crate::status::inspect(directory);
+        if observed.state != "running" || observed.staff.as_ref() != Some(&expected) {
+            return Err(
+                "start requires the institution server with its registered host separation".into(),
+            );
+        }
+    }
+    let observed = crate::service::native_status(&name)?;
+    match (
+        start,
+        observed.get("state").and_then(serde_json::Value::as_str),
+    ) {
+        (true, Some("stopped" | "failed")) => crate::service::native_action("start", &name),
+        (false, Some("running")) => crate::service::native_action("stop", &name),
+        (true, Some("running")) | (false, Some("stopped")) => Ok(()),
+        _ => Err("connector not installed or unavailable".into()),
+    }
 }
