@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Made-up SRU 1.2 answer with fictitious records, in the shape of real servers. -->
+<zs:searchRetrieveResponse xmlns:zs="http://www.loc.gov/zing/srw/" xmlns:marc="http://www.loc.gov/MARC21/slim">
+  <zs:version>1.2</zs:version>
+  <zs:numberOfRecords>37</zs:numberOfRecords>
+  <zs:records>
+    <zs:record>
+      <zs:recordSchema>marcxml</zs:recordSchema>
+      <zs:recordPacking>xml</zs:recordPacking>
+      <zs:recordData>
+        <marc:record>
+          <marc:leader>00000nam a2200000 a 4500</marc:leader>
+          <marc:controlfield tag="001">ex-0001</marc:controlfield>
+          <marc:controlfield tag="008">260101s2020    bl            000 0 por d</marc:controlfield>
+          <marc:datafield tag="020" ind1=" " ind2=" "><marc:subfield code="a">9780000000002</marc:subfield></marc:datafield>
+          <marc:datafield tag="100" ind1="1" ind2=" "><marc:subfield code="a">Lemos, Teodora,</marc:subfield><marc:subfield code="d">1950-</marc:subfield></marc:datafield>
+          <marc:datafield tag="245" ind1="1" ind2="0"><marc:subfield code="a">O rio das &#xE1;guas claras :</marc:subfield><marc:subfield code="b">romance /</marc:subfield><marc:subfield code="c">Teodora Lemos.</marc:subfield></marc:datafield>
+          <marc:datafield tag="250" ind1=" " ind2=" "><marc:subfield code="a">2. ed.</marc:subfield></marc:datafield>
+          <marc:datafield tag="264" ind1=" " ind2="1"><marc:subfield code="a">Curitiba :</marc:subfield><marc:subfield code="b">Editora Exemplo,</marc:subfield><marc:subfield code="c">2020.</marc:subfield></marc:datafield>
+        </marc:record>
+      </zs:recordData>
+      <zs:recordPosition>1</zs:recordPosition>
+    </zs:record>
+    <zs:record>
+      <zs:recordSchema>marcxml</zs:recordSchema>
+      <zs:recordPacking>xml</zs:recordPacking>
+      <zs:recordData>
+        <record xmlns="http://www.loc.gov/MARC21/slim">
+          <leader>00000nam a2200000 a 4500</leader>
+          <controlfield tag="001">ex-0002</controlfield>
+          <datafield tag="245" ind1="0" ind2="0"><subfield code="a">Contos do interior "reunidos"</subfield></datafield>
+        </record>
+      </zs:recordData>
+      <zs:recordPosition>2</zs:recordPosition>
+    </zs:record>
+    <zs:record>
+      <zs:recordSchema>marcxml</zs:recordSchema>
+      <zs:recordPacking>xml</zs:recordPacking>
+      <zs:recordData>
+        <marc:record>
+          <marc:leader>broken</marc:leader>
+        </marc:record>
+      </zs:recordData>
+      <zs:recordPosition>3</zs:recordPosition>
+    </zs:record>
+  </zs:records>
+</zs:searchRetrieveResponse>

@@ -21,6 +21,7 @@ elzevir-panel = { path = "crates/elzevir-panel" }
 elzevir-scenarios = { path = "crates/elzevir-scenarios" }
 elzevir-search = { path = "crates/elzevir-search" }
 elzevir-sip2 = { path = "crates/elzevir-sip2" }
+elzevir-sources = { path = "crates/elzevir-sources" }
 elzevir-store = { path = "crates/elzevir-store" }
 elzevir-web = { path = "crates/elzevir-web" }
 elzevir-web-templates = { path = "crates/elzevir-web-templates" }

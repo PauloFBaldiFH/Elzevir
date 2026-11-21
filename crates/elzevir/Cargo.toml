@@ -18,6 +18,7 @@ elzevir-panel.workspace = true
 elzevir-store.workspace = true
 elzevir-web.workspace = true
 elzevir-sip2.workspace = true
+elzevir-sources.workspace = true
 elzevir-search.workspace = true
 elzevir-web-templates.workspace = true
 axum.workspace = true

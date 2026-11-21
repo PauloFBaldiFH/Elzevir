@@ -2,6 +2,16 @@
 //! Operational HTTPS trusts the host certificate store and never disables validation.
 use std::{sync::Arc, time::Duration};
 pub(crate) fn secure_agent(redirects: u32, timeout: Duration) -> Result<ureq::Agent, String> {
+    agent(redirects, timeout, true)
+}
+
+/// An agent that validates certificates; `https_only` false also allows plain `http`, for
+/// servers the library configured that way (draft sources).
+pub(crate) fn agent(
+    redirects: u32,
+    timeout: Duration,
+    https_only: bool,
+) -> Result<ureq::Agent, String> {
     use ureq::tls::{Certificate, RootCerts, TlsConfig};
     let found = rustls_native_certs::load_native_certs();
     let roots: Vec<Certificate<'static>> = found
@@ -18,7 +28,7 @@ pub(crate) fn secure_agent(redirects: u32, timeout: Duration) -> Result<ureq::Ag
         .build();
     Ok(ureq::Agent::config_builder()
         .tls_config(tls)
-        .https_only(true)
+        .https_only(https_only)
         .http_status_as_error(false)
         .max_redirects(redirects)
         .timeout_global(Some(timeout))

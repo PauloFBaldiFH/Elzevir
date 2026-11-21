@@ -12,6 +12,7 @@ cargo-fuzz = true
 [dependencies]
 elzevir-app = { path = "../crates/elzevir-app" }
 elzevir-marc = { path = "../crates/elzevir-marc" }
+elzevir-sources = { path = "../crates/elzevir-sources" }
 libfuzzer-sys = "0.4"
 zip = { version = "=9.6.1", default-features = false }
 
@@ -73,3 +74,10 @@ bench = false
 
 # Not part of the main workspace: it needs the nightly toolchain.
 [workspace]
+
+[[bin]]
+name = "sru_response"
+path = "fuzz_targets/sru_response.rs"
+test = false
+doc = false
+bench = false

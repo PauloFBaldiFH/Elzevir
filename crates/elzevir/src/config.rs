@@ -6,9 +6,12 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
+use elzevir_app::drafts::DraftField;
 use elzevir_domain::call_number::{AuthorTable, MAX_TABLE_LINES, TableReport};
 use elzevir_domain::long_overdue::{DEFAULT_MAX_DAYS, LongOverdueSettings};
+use elzevir_sources::{DEFAULT_TIMEOUT, MAX_NAME_CHARS, SruServer, SruVersion};
 use jiff::tz::TimeZone;
 use serde::Deserialize;
 
@@ -36,6 +39,123 @@ pub(crate) struct Config {
     /// How notices go out (docs/specs/circulacao/avisos.md).
     #[serde(default)]
     notices: Notices,
+    /// Other catalogues to copy records from (docs/specs/catalogo/fontes-de-rascunho.md).
+    #[serde(default)]
+    draft_sources: Vec<DraftSourceEntry>,
+}
+
+/// One `[[draft_sources]]` entry (spec items 16 and 17).
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DraftSourceEntry {
+    /// Shown in the origin, `sru:<name>`.
+    name: String,
+    /// Only `sru` for now.
+    kind: String,
+    /// Base URL, `http` or `https`, without a query string.
+    url: String,
+    /// `1.2` (when absent) or `2.0`.
+    version: Option<String>,
+    /// `marcxml` when absent.
+    record_schema: Option<String>,
+    /// From 1 to 60; 10 when absent.
+    timeout_seconds: Option<u64>,
+    /// Asked when absent.
+    enabled: Option<bool>,
+    /// The server's CQL index of each query field.
+    #[serde(default)]
+    fields: DraftFields,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DraftFields {
+    isbn: Option<String>,
+    issn: Option<String>,
+    title: Option<String>,
+    author: Option<String>,
+    any: Option<String>,
+}
+
+impl DraftSourceEntry {
+    /// The server, or why it cannot be.
+    fn server(&self) -> Result<SruServer, String> {
+        let name = self.name.trim();
+        if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
+            return Err(format!("name must have 1 to {MAX_NAME_CHARS} characters"));
+        }
+        if self.kind != "sru" {
+            return Err(format!("kind must be sru, not {}", self.kind));
+        }
+        let url = self.url.trim();
+        if !(url.starts_with("https://") || url.starts_with("http://"))
+            || url.contains(['?', '#'])
+            || url.chars().any(char::is_whitespace)
+        {
+            return Err(format!(
+                "url must be http or https, without a query string: {url}"
+            ));
+        }
+        let version = match self.version.as_deref().unwrap_or("1.2") {
+            "1.2" => SruVersion::V1_2,
+            "2.0" => SruVersion::V2_0,
+            other => return Err(format!("version must be 1.2 or 2.0, not {other}")),
+        };
+        let timeout = match self.timeout_seconds {
+            None => DEFAULT_TIMEOUT,
+            Some(seconds @ 1..=60) => Duration::from_secs(seconds),
+            Some(other) => return Err(format!("timeout_seconds must be 1 to 60, not {other}")),
+        };
+        let fields = [
+            (DraftField::Isbn, &self.fields.isbn),
+            (DraftField::Issn, &self.fields.issn),
+            (DraftField::Title, &self.fields.title),
+            (DraftField::Author, &self.fields.author),
+            (DraftField::Any, &self.fields.any),
+        ]
+        .into_iter()
+        .filter_map(|(field, index)| {
+            let index = index.as_deref()?.trim();
+            (!index.is_empty()).then(|| (field, index.to_owned()))
+        })
+        .collect();
+        Ok(SruServer {
+            name: name.to_owned(),
+            url: url.trim_end_matches('/').to_owned(),
+            version,
+            record_schema: self
+                .record_schema
+                .as_deref()
+                .map_or("marcxml", str::trim)
+                .to_owned(),
+            timeout,
+            fields,
+        })
+    }
+}
+
+/// The enabled servers of `[[draft_sources]]`, in order, with unique names.
+fn draft_servers(entries: &[DraftSourceEntry]) -> Result<Vec<SruServer>, String> {
+    let mut servers: Vec<SruServer> = Vec::new();
+    for (index, entry) in entries.iter().enumerate() {
+        let server = entry
+            .server()
+            .map_err(|e| format!("draft_sources[{index}]: {e}"))?;
+        if entries
+            .iter()
+            .take(index)
+            .any(|other| other.name.trim() == server.name)
+        {
+            return Err(format!(
+                "draft_sources[{index}]: the name {} is repeated",
+                server.name
+            ));
+        }
+        if entry.enabled.unwrap_or(true) {
+            servers.push(server);
+        }
+    }
+    Ok(servers)
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -183,6 +303,8 @@ pub(crate) struct Loaded {
     pub(crate) expire_waiting_holds: bool,
     /// The mail server, when notices go out by e-mail.
     pub(crate) mail: Option<MailSettings>,
+    /// The enabled draft sources, in priority order.
+    pub(crate) draft_sources: Vec<SruServer>,
 }
 
 /// Reads `data_dir/elzevir.toml` and what it points to; no file is no configuration.
@@ -214,6 +336,8 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         ),
         None => None,
     };
+    let draft_sources =
+        draft_servers(&config.draft_sources).map_err(|e| format!("{}: {e}", path.display()))?;
     let Some(table) = config.call_number.author_table else {
         return Ok(Loaded {
             author_table: None,
@@ -222,6 +346,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
             long_overdue,
             expire_waiting_holds,
             mail,
+            draft_sources,
         });
     };
     let table_path = data_dir.join(table);
@@ -240,6 +365,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         long_overdue,
         expire_waiting_holds,
         mail,
+        draft_sources,
     })
 }
 
@@ -406,5 +532,67 @@ mod tests {
         assert!(load(dir.path()).unwrap_err().contains("lost_status"));
         std::fs::write(&config, "[circulation.long_overdue]\nlost_status = 1\n").unwrap();
         assert!(load(dir.path()).unwrap_err().contains("days"));
+    }
+
+    #[test]
+    fn draft_sources_are_read_in_order_and_checked() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(load(dir.path()).unwrap().draft_sources.is_empty());
+        let config = dir.path().join("elzevir.toml");
+        let write = |text: &str| std::fs::write(&config, text).unwrap();
+        write(
+            "[[draft_sources]]\nname = \"Exemplo\"\nkind = \"sru\"\n\
+             url = \"https://sru.example.org/cat/\"\ntimeout_seconds = 5\n\
+             [draft_sources.fields]\nisbn = \"bath.isbn\"\nany = \" \"\n\
+             [[draft_sources]]\nname = \"Desligada\"\nkind = \"sru\"\n\
+             url = \"http://off.example.org\"\nenabled = false\n\
+             [[draft_sources]]\nname = \"Segunda\"\nkind = \"sru\"\n\
+             url = \"http://dois.example.org/sru\"\nversion = \"2.0\"\n",
+        );
+        let servers = load(dir.path()).unwrap().draft_sources;
+        let names: Vec<_> = servers.iter().map(|server| server.name.as_str()).collect();
+        assert_eq!(names, ["Exemplo", "Segunda"]);
+        let first = &servers[0];
+        assert_eq!(first.url, "https://sru.example.org/cat");
+        assert_eq!(first.timeout, Duration::from_secs(5));
+        assert_eq!(first.record_schema, "marcxml");
+        assert_eq!(
+            first.fields,
+            std::collections::HashMap::from([(DraftField::Isbn, "bath.isbn".to_owned())])
+        );
+        assert_eq!(
+            (servers[1].version, servers[1].timeout),
+            (SruVersion::V2_0, DEFAULT_TIMEOUT)
+        );
+        let entry = |extra: &str| format!("[[draft_sources]]\nname = \"A\"\n{extra}");
+        for (wrong, says) in [
+            (entry("kind = \"z3950\"\nurl = \"https://a\"\n"), "kind"),
+            (entry("kind = \"sru\"\nurl = \"ftp://a\"\n"), "url"),
+            (entry("kind = \"sru\"\nurl = \"https://a?x=1\"\n"), "url"),
+            (
+                entry("kind = \"sru\"\nurl = \"https://a\"\nversion = \"1.1\"\n"),
+                "version",
+            ),
+            (
+                entry("kind = \"sru\"\nurl = \"https://a\"\ntimeout_seconds = 61\n"),
+                "timeout",
+            ),
+            (
+                entry("kind = \"sru\"\nurl = \"https://a\"\nport = 80\n"),
+                "port",
+            ),
+            (
+                format!("{0}{0}", entry("kind = \"sru\"\nurl = \"https://a\"\n")),
+                "repeated",
+            ),
+            (
+                "[[draft_sources]]\nname = \" \"\nkind = \"sru\"\nurl = \"https://a\"\n".to_owned(),
+                "name",
+            ),
+        ] {
+            write(&wrong);
+            let error = load(dir.path()).unwrap_err();
+            assert!(error.contains(says), "{wrong}: {error}");
+        }
     }
 }
