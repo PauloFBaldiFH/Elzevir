@@ -5,9 +5,11 @@ mod address_operations;
 mod address_view;
 pub use address_operations::AddressOperation;
 mod addresses;
+mod backup_options;
 mod cloud;
 mod dashboard;
 mod domain;
+pub use backup_options::{BackupOptions, BackupProfile, BackupScope};
 pub use cloud::{CloudConnection, CloudOperation, CloudPlan, CloudQuestion, CloudView};
 pub use domain::{ConnectorState, DomainPhase, DomainStatus};
 mod diagnostic_view;
@@ -18,6 +20,7 @@ mod operation_view;
 mod operations;
 mod port;
 pub use port::{MIN_PORT, PortForm, PortStep, Refusal, choose_port};
+mod folder_picker;
 mod runtime;
 mod service_view;
 mod setup;
@@ -475,7 +478,10 @@ impl Panel {
 
 fn backup_operation(key: char, observed: Option<&Operations>) -> Operation {
     match key {
-        'n' => Operation::BackupNow,
+        'n' => Operation::BackupNow {
+            options: BackupOptions::default(),
+            folder: String::new(),
+        },
         'v' => Operation::VerifyLatest,
         'e' => Operation::ExportLatest {
             output: String::new(),

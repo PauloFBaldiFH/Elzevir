@@ -33,7 +33,10 @@ struct Request {
 enum Command {
     Status,
     Diagnose,
-    BackupNow,
+    BackupNow {
+        #[serde(default)]
+        options: elzevir_panel::BackupOptions,
+    },
     ConfigureCloud {
         action: crate::cloud::Action,
     },
@@ -135,11 +138,11 @@ async fn handle(
             count: sessions.staff_session_count(),
         },
         Some(Request {
-            command: Command::BackupNow,
+            command: Command::BackupNow { options },
             ..
         }) => operation_result(
             operations
-                .submit(crate::operations::Task::Backup)
+                .submit(crate::operations::Task::Backup { options })
                 .map(|job| Outcome::Job { job }),
         ),
         Some(Request {
@@ -314,7 +317,13 @@ fn operation_result(result: Result<Outcome, String>) -> Outcome {
     })
 }
 pub(crate) fn start_backup(info: &RuntimeInfo) -> Result<crate::operations::Job, String> {
-    match call(info, Command::BackupNow)? {
+    start_selected_backup(info, elzevir_panel::BackupOptions::default())
+}
+pub(crate) fn start_selected_backup(
+    info: &RuntimeInfo,
+    options: elzevir_panel::BackupOptions,
+) -> Result<crate::operations::Job, String> {
+    match call(info, Command::BackupNow { options })? {
         Outcome::Job { job } => Ok(job),
         _ => Err("backup job refused".to_owned()),
     }

@@ -201,10 +201,26 @@ pub(crate) fn run(args: BackupArgs) -> Result<(), String> {
 
 pub(crate) fn copy_new(source: &Path, output: &Path) -> Result<(), String> {
     archive::regular(source)?;
+    let input = std::fs::File::open(source).map_err(|_| "artifact unavailable")?;
+    publish_copy(input, output)
+}
+
+/// Opens a managed artifact relative to its institution, even when the exporter is elevated.
+pub(crate) fn export_managed(directory: &Path, id: &str, output: &Path) -> Result<(), String> {
+    let source = artifact(directory, id)?;
+    let scope = cap_std::fs::Dir::open_ambient_dir(directory, cap_std::ambient_authority())
+        .map_err(|_| "institution unavailable")?;
+    let relative = source
+        .strip_prefix(directory)
+        .map_err(|_| "invalid artifact path")?;
+    let input = archive::scoped_file(&scope, relative)?.into_std();
+    publish_copy(input, output)
+}
+
+fn publish_copy(mut input: std::fs::File, output: &Path) -> Result<(), String> {
     let parent = output.parent().ok_or("destination needs a parent")?;
     let mut staged =
         tempfile::NamedTempFile::new_in(parent).map_err(|_| "cannot prepare export")?;
-    let mut input = std::fs::File::open(source).map_err(|_| "artifact unavailable")?;
     std::io::copy(&mut input, staged.as_file_mut()).map_err(|_| "cannot copy artifact")?;
     staged
         .as_file()
@@ -277,7 +293,7 @@ fn restore_inner(
         .canonicalize()
         .map_err(|_| "restore directory must already exist")?;
     let _lock = lock(&directory)?;
-    let restored = archive::extract(input, key)?;
+    let restored = archive::extract_full(input, key)?;
     let config = config.map_or_else(|| directory.join("server.toml"), Path::to_owned);
     let config = crate::installation::absolute(&config)?;
     let source = crate::server_config::relocate(

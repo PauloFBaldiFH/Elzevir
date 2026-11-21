@@ -51,6 +51,7 @@ pub(crate) fn rows(
             _ => matches!(
                 job.action,
                 "op-backup-now"
+                    | "op-backup-export"
                     | "op-backup-verify"
                     | "op-restore"
                     | "cloud-operation"
@@ -63,7 +64,14 @@ pub(crate) fn rows(
                 messages.get(job.action),
                 messages.get(job.state)
             )));
-            rows.push(Line::from(text(&job.id)));
+            if let Some(phase) = job.phase {
+                rows.push(Line::from(messages.get(phase)));
+            }
+            if job.action == "op-backup-now" {
+                rows.push(Line::from(format!("elzevir-{}.age", text(&job.id))));
+            } else {
+                rows.push(Line::from(text(&job.id)));
+            }
         }
     }
     rows
@@ -243,6 +251,26 @@ fn form_header(panel: &Panel, form: &crate::Form, messages: &Messages) -> Vec<Li
                 .and_then(|snapshot| snapshot.operations.sessions)
                 .map(|count| count.to_string()),
         ));
+    }
+    if matches!(form.operation, crate::Operation::BackupNow { .. })
+        && let crate::Mode::Live(state) = &panel.mode
+        && let Some(sample) = state.snapshot.as_ref()
+    {
+        if let Some(bytes) = sample.storage.database_bytes {
+            let estimate = bytes
+                .saturating_add(sample.storage.wal_bytes.unwrap_or_default())
+                .saturating_mul(3);
+            header.push(row(
+                messages,
+                "backup-estimate",
+                Some(format!("{} MiB", estimate.div_ceil(1 << 20))),
+            ));
+        }
+        if form.values.last().is_some_and(String::is_empty)
+            && let Some(folder) = &sample.operations.backup_folder
+        {
+            header.push(Line::from(text(&folder.to_string_lossy())));
+        }
     }
     if matches!(
         &form.operation,

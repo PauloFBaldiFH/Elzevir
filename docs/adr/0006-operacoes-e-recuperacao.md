@@ -14,7 +14,7 @@ do serviço. O histórico é limitado e persistido antes de aceitar o trabalho.
 Cópias SQLite usam a API de backup a partir de conexão somente de leitura; a
 nova conexão de escrita pertence exclusivamente ao arquivo de destino.
 
-O formato de backup é tar/gzip autenticado e cifrado com age/X25519, usando
+O formato de backup é tar comprimido (Zstandard nas novas cópias e gzip nas antigas), autenticado e cifrado com age/X25519, usando
 implementação existente. Configuração e segredos ficam dentro da cifra; a chave
 de recuperação fica fora e é exportada somente para arquivo novo privado.
 Extração valida manifesto, nomes, tamanhos, hashes e integridade do SQLite.

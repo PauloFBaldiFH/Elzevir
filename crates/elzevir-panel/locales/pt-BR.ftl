@@ -351,3 +351,25 @@ tray-open-staff = Abrir a interface da equipe
 tray-start = Iniciar o servidor
 tray-stop = Parar o servidor
 tray-quit = Fechar este ícone
+
+backup-scope = Escopo
+backup-compression = Zstandard
+backup-folder = Pasta de exportação (F2 explorar, vazio = gerenciada)
+backup-full = Instituição completa
+backup-db = Somente banco
+backup-fast = Rápida
+backup-balanced = Equilibrada
+backup-compact = Mais compacta
+folder-title = Selecionar pasta de exportação
+folder-keys = Tab: lista / caminho / ação   F3: pessoal   F4: backups   Esc: voltar
+folder-use = Usar esta pasta (será criada ao confirmar se faltar)
+folder-loading = Lendo pastas…
+folder-error = Pasta indisponível. Informe um caminho absoluto.
+backup-estimate = Espaço de trabalho estimado: { $value }
+backup-phase-snapshot = Imagem SQLite
+backup-phase-manifest = Preparar manifesto
+backup-phase-compress = Comprimir e cifrar
+backup-phase-verify = Verificar arquivo
+backup-phase-publish = Publicar arquivo
+backup-phase-catalog = Registrar cópia
+backup-export-target = Arquivo novo ou F2 para escolher pasta

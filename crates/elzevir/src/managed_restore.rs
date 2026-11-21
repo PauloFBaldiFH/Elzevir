@@ -36,7 +36,7 @@ struct Native<'a> {
 impl Backend for Native<'_> {
     fn step(&self, name: &'static str) -> Result<(), String> {
         match name {
-            "verify" => crate::backup_archive::extract(self.input, self.key).map(drop),
+            "verify" => crate::backup_archive::extract_full(self.input, self.key).map(drop),
             "stop" | "start" => crate::service::native_action(name, &self.service),
             "health" => crate::host_jobs::wait_healthy(self.directory),
             "restore" => {

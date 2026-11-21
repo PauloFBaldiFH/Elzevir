@@ -7,12 +7,35 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeSet,
-    io::{Read, Write},
+    io::{BufRead, BufReader, Read, Write},
     path::Path,
 };
 
 const MAX_AUX: u64 = 16 * 1024 * 1024;
 const MAX_DB: u64 = 512 * 1024 * 1024 * 1024;
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Phase {
+    Snapshot,
+    Manifest,
+    Compress,
+    Verify,
+    Publish,
+    Catalog,
+}
+impl Phase {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Snapshot => "backup-phase-snapshot",
+            Self::Manifest => "backup-phase-manifest",
+            Self::Compress => "backup-phase-compress",
+            Self::Verify => "backup-phase-verify",
+            Self::Publish => "backup-phase-publish",
+            Self::Catalog => "backup-phase-catalog",
+        }
+    }
+}
 
 fn private_scratch(directory: &Path) -> Result<tempfile::TempDir, String> {
     #[cfg(target_os = "linux")]
@@ -29,7 +52,10 @@ fn private_scratch(directory: &Path) -> Result<tempfile::TempDir, String> {
     crate::private_temp::directory().map_err(|_| "cannot prepare private backup scratch".to_owned())
 }
 
-fn scoped_file(scope: &cap_std::fs::Dir, relative: &Path) -> Result<cap_std::fs::File, String> {
+pub(super) fn scoped_file(
+    scope: &cap_std::fs::Dir,
+    relative: &Path,
+) -> Result<cap_std::fs::File, String> {
     use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt as _};
     let mut options = cap_std::fs::OpenOptions::new();
     options.read(true).follow(FollowSymlinks::No);
@@ -58,6 +84,8 @@ pub(crate) struct Entry {
 #[serde(deny_unknown_fields)]
 pub(crate) struct Manifest {
     pub schema: u8,
+    #[serde(default)]
+    pub scope: elzevir_panel::BackupScope,
     pub id: String,
     pub created_at: String,
     pub version: String,
@@ -229,6 +257,26 @@ pub(crate) fn create_controlled(
     readers: Option<&elzevir_store::ReadPool>,
     control: &Control,
 ) -> Result<Manifest, String> {
+    create_selected(
+        directory,
+        config,
+        output,
+        readers,
+        control,
+        elzevir_panel::BackupOptions::default(),
+        |_| Ok(()),
+    )
+}
+
+pub(crate) fn create_selected(
+    directory: &Path,
+    config: &str,
+    output: &Path,
+    readers: Option<&elzevir_store::ReadPool>,
+    control: &Control,
+    options: elzevir_panel::BackupOptions,
+    phase: impl Fn(Phase) -> Result<(), String>,
+) -> Result<Manifest, String> {
     check(control)?;
     let directory = directory
         .canonicalize()
@@ -246,6 +294,7 @@ pub(crate) fn create_controlled(
     let identity = key(&directory.join("backup.key"), true)?;
     let scratch = private_scratch(directory)?;
     let image = scratch.path().join("database.sqlite");
+    phase(Phase::Snapshot)?;
     let database = match readers {
         Some(pool) => pool.snapshot_controlled(&image, std::sync::Arc::clone(control)),
         None => elzevir_store::snapshot_offline(&directory.join("elzevir.db"), &image),
@@ -254,14 +303,17 @@ pub(crate) fn create_controlled(
     if database.bytes > MAX_DB {
         return Err("database exceeds backup limit".to_owned());
     }
-    write_new(&scratch.path().join("server.toml"), config.as_bytes())?;
-    let files = vec![
-        ("database.sqlite".to_owned(), image),
-        ("server.toml".to_owned(), scratch.path().join("server.toml")),
-    ];
-    let mut files = additional_files(directory, &scope, files)?;
+    phase(Phase::Manifest)?;
+    let mut files = vec![("database.sqlite".to_owned(), image)];
+    if options.scope == elzevir_panel::BackupScope::Full {
+        let server = scratch.path().join("server.toml");
+        write_new(&server, config.as_bytes())?;
+        files.push(("server.toml".to_owned(), server));
+        files = additional_files(directory, &scope, files)?;
+    }
     let mut manifest = Manifest {
-        schema: 1,
+        schema: 2,
+        scope: options.scope,
         id: output_id(output)?,
         created_at: jiff::Timestamp::now().to_string(),
         version: env!("CARGO_PKG_VERSION").to_owned(),
@@ -276,6 +328,7 @@ pub(crate) fn create_controlled(
         &mut manifest,
         control,
     )?;
+    phase(Phase::Compress)?;
     let mut file = tempfile::NamedTempFile::new_in(output.parent().ok_or("backup needs parent")?)
         .map_err(|_| "cannot prepare backup output")?;
     encrypt(
@@ -283,22 +336,33 @@ pub(crate) fn create_controlled(
         &manifest,
         &files,
         &identity.to_public(),
+        options.profile.level(),
         control,
     )?;
     file.as_file()
         .sync_all()
         .map_err(|_| "cannot sync backup")?;
+    drop(scratch);
+    phase(Phase::Verify)?;
+    extract_controlled(
+        file.path(),
+        &directory.join("backup.key"),
+        std::sync::Arc::clone(control),
+        Some(directory),
+    )?;
     check(control)?;
+    phase(Phase::Publish)?;
     file.persist_noclobber(output)
         .map_err(|_| "cannot publish backup without replacement")?;
     Ok(manifest)
 }
 
 fn encrypt(
-    file: &mut std::fs::File,
+    file: &mut impl Write,
     manifest: &Manifest,
     files: &[(String, std::path::PathBuf)],
     recipient: &age::x25519::Recipient,
+    level: i32,
     control: &Control,
 ) -> Result<(), String> {
     let encryptor =
@@ -307,8 +371,9 @@ fn encrypt(
     let writer = encryptor
         .wrap_output(file)
         .map_err(|_| "cannot encrypt backup")?;
-    let gzip = flate2::write::GzEncoder::new(writer, flate2::Compression::default());
-    let mut archive = tar::Builder::new(gzip);
+    let compressed = zstd::stream::write::Encoder::new(writer, level)
+        .map_err(|_| "cannot initialize Zstandard")?;
+    let mut archive = tar::Builder::new(compressed);
     let bytes = serde_json::to_vec(manifest).map_err(|_| "cannot encode backup manifest")?;
     let mut header = tar::Header::new_gnu();
     header.set_size(u64::try_from(bytes.len()).map_err(|_| "manifest too large")?);
@@ -338,7 +403,7 @@ fn encrypt(
     }
     archive
         .into_inner()
-        .and_then(flate2::write::GzEncoder::finish)
+        .and_then(zstd::stream::write::Encoder::finish)
         .and_then(age::stream::StreamWriter::finish)
         .map_err(|_| "cannot finish encrypted backup")?;
     Ok(())
@@ -486,6 +551,13 @@ pub(crate) struct Extracted {
 }
 
 /// Extracts only declared regular entries, with byte limits and full authentication.
+pub(crate) fn extract_full(input: &Path, key_file: &Path) -> Result<Extracted, String> {
+    let extracted = extract(input, key_file)?;
+    if extracted.manifest.scope != elzevir_panel::BackupScope::Full {
+        return Err("full restore requires a full institution backup".into());
+    }
+    Ok(extracted)
+}
 pub(crate) fn extract(input: &Path, key_file: &Path) -> Result<Extracted, String> {
     extract_controlled(input, key_file, std::sync::Arc::new(|| false), None)
 }
@@ -515,7 +587,9 @@ pub(crate) fn extract_controlled(
     let reader = decryptor
         .decrypt(std::iter::once(&identity as &dyn age::Identity))
         .map_err(|_| "backup key or authentication refused")?;
-    let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(reader));
+    let mut reader = BufReader::new(reader);
+    let decoder = decompress(&mut reader)?;
+    let mut archive = tar::Archive::new(decoder);
     let mut entries = archive
         .entries()
         .map_err(|_| "invalid backup archive")?
@@ -575,18 +649,31 @@ pub(crate) fn extract_controlled(
         return Err("incomplete backup".to_owned());
     }
     authenticate_tail(archive.into_inner())?;
-    let info = elzevir_store::inspect_snapshot_controlled(
-        &directory.path().join("database.sqlite"),
-        control,
-    )
-    .map_err(|_| "backup database integrity failed")?;
-    if info.schema_version != manifest.database_schema {
-        return Err("backup schema mismatch".to_owned());
+    if !reader
+        .fill_buf()
+        .map_err(|_| "backup authentication failed")?
+        .is_empty()
+    {
+        return Err("unexpected compressed tail".to_owned());
     }
+    verify_database(
+        &directory.path().join("database.sqlite"),
+        manifest.database_schema,
+        control,
+    )?;
     Ok(Extracted {
         directory,
         manifest,
     })
+}
+
+fn verify_database(path: &Path, schema: i64, control: Control) -> Result<(), String> {
+    let info = elzevir_store::inspect_snapshot_controlled(path, control)
+        .map_err(|_| "backup database integrity failed")?;
+    if info.schema_version != schema {
+        return Err("backup schema mismatch".to_owned());
+    }
+    Ok(())
 }
 
 fn read_manifest<R: Read>(mut first: tar::Entry<'_, R>) -> Result<Manifest, String> {
@@ -600,19 +687,45 @@ fn read_manifest<R: Read>(mut first: tar::Entry<'_, R>) -> Result<Manifest, Stri
     first
         .read_to_end(&mut bytes)
         .map_err(|_| "invalid backup manifest")?;
-    serde_json::from_slice(&bytes).map_err(|_| "invalid backup manifest".to_owned())
+    let manifest: Manifest =
+        serde_json::from_slice(&bytes).map_err(|_| "invalid backup manifest")?;
+    if manifest.schema == 2 {
+        #[derive(Deserialize)]
+        struct RequiredScope {
+            scope: elzevir_panel::BackupScope,
+        }
+        let scoped: RequiredScope =
+            serde_json::from_slice(&bytes).map_err(|_| "backup scope required")?;
+        if scoped.scope != manifest.scope {
+            return Err("inconsistent backup scope".into());
+        }
+    }
+    Ok(manifest)
 }
 
-fn authenticate_tail<R: Read>(mut gzip: flate2::read::GzDecoder<R>) -> Result<(), String> {
+fn decompress(reader: &mut impl BufRead) -> Result<Box<dyn Read + '_>, String> {
+    let header = reader
+        .fill_buf()
+        .map_err(|_| "invalid compressed payload")?;
+    Ok(if header.starts_with(&[0x1f, 0x8b]) {
+        Box::new(flate2::bufread::GzDecoder::new(reader))
+    } else if header.starts_with(&[0x28, 0xb5, 0x2f, 0xfd]) {
+        let mut decoder = zstd::stream::read::Decoder::with_buffer(reader)
+            .map_err(|_| "invalid Zstandard payload")?
+            .single_frame();
+        decoder
+            .window_log_max(23)
+            .map_err(|_| "unsupported Zstandard window")?;
+        Box::new(decoder)
+    } else {
+        return Err("unsupported backup compression".to_owned());
+    })
+}
+
+fn authenticate_tail<R: Read>(mut decoded: R) -> Result<(), String> {
     // Drain past tar's terminator to authenticate the final age chunk as well.
     // Tar pads its terminator. Bound extra decompressed bytes to reject bombs.
-    let drained = std::io::copy(&mut (&mut gzip).take(1025), &mut std::io::sink())
-        .map_err(|_| "backup authentication failed")?;
-    if drained > 1024 {
-        return Err("unexpected backup tail".to_owned());
-    }
-    let mut encrypted = gzip.into_inner();
-    let drained = std::io::copy(&mut (&mut encrypted).take(1025), &mut std::io::sink())
+    let drained = std::io::copy(&mut (&mut decoded).take(1025), &mut std::io::sink())
         .map_err(|_| "backup authentication failed")?;
     if drained > 1024 {
         return Err("unexpected backup tail".to_owned());
@@ -622,7 +735,8 @@ fn authenticate_tail<R: Read>(mut gzip: flate2::read::GzDecoder<R>) -> Result<()
 
 fn validate_manifest(manifest: &Manifest) -> Result<(BTreeSet<String>, u64), String> {
     if manifest.database_schema < 1
-        || manifest.schema != 1
+        || !matches!(manifest.schema, 1 | 2)
+        || (manifest.schema == 1 && manifest.scope != elzevir_panel::BackupScope::Full)
         || manifest.entries.len() > 32
         || manifest.database_schema > elzevir_store::supported_schema_version()
     {
@@ -643,7 +757,12 @@ fn validate_manifest(manifest: &Manifest) -> Result<(BTreeSet<String>, u64), Str
             .checked_add(entry.bytes)
             .ok_or("backup size overflow")?;
     }
-    if !names.contains("database.sqlite") || !names.contains("server.toml") {
+    if !names.contains("database.sqlite")
+        || match manifest.scope {
+            elzevir_panel::BackupScope::Full => !names.contains("server.toml"),
+            elzevir_panel::BackupScope::Database => names.len() != 1,
+        }
+    {
         return Err("incomplete backup".to_owned());
     }
     let auxiliary = manifest
@@ -780,5 +899,95 @@ mod account_certificate_tests {
                 .any(|entry| entry.name == "secrets/cf-cert.pem")
         );
         assert!(!allowed("secrets/cf-cert.pem"));
+    }
+}
+
+#[cfg(test)]
+mod format_tests {
+    use super::*;
+
+    #[test]
+    fn restores_gzip_fixture_created_by_7891109e() {
+        let target = tempfile::tempdir().unwrap();
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/gzip-v1/library.age");
+        let key = target.path().join("fixture.key");
+        write_new(&key, include_bytes!("../tests/data/gzip-v1/fixture.key")).unwrap();
+        let legacy = extract(&source, &key).unwrap();
+        assert_eq!(legacy.manifest.schema, 1);
+        assert_eq!(legacy.manifest.scope, elzevir_panel::BackupScope::Full);
+        let data = crate::open_store(target.path()).unwrap();
+        {
+            let crate::DataDir {
+                store,
+                _lock: _held,
+            } = data;
+            store.shutdown().unwrap();
+        }
+        crate::backup_cli::restore(&source, &key, target.path(), None).unwrap();
+        assert!(target.path().join("index").is_dir());
+        elzevir_store::inspect_snapshot(&target.path().join("elzevir.db")).unwrap();
+    }
+
+    #[test]
+    fn database_only_uses_a_zstd_frame_and_excludes_all_settings() {
+        let root = tempfile::tempdir().unwrap();
+        let store = crate::open_store(root.path()).unwrap();
+        let output = root.path().join("snapshot.age");
+        let control: Control = std::sync::Arc::new(|| false);
+        let opts = elzevir_panel::BackupOptions {
+            scope: elzevir_panel::BackupScope::Database,
+            profile: elzevir_panel::BackupProfile::Compact,
+        };
+        create_selected(
+            root.path(),
+            "sensitive-config",
+            &output,
+            Some(store.store.readers()),
+            &control,
+            opts,
+            |_| Ok(()),
+        )
+        .unwrap();
+        let key_path = root.path().join("backup.key");
+        let recovered = extract(&output, &key_path).unwrap();
+        assert_eq!(recovered.manifest.scope, opts.scope);
+        assert_eq!(recovered.manifest.entries.len(), 1);
+        assert!(!recovered.directory.path().join("server.toml").exists());
+        let identity = key(&key_path, false).unwrap();
+        let decryptor = age::Decryptor::new(std::fs::File::open(output).unwrap()).unwrap();
+        let mut reader = decryptor
+            .decrypt(std::iter::once(&identity as &dyn age::Identity))
+            .unwrap();
+        let mut magic = [0; 4];
+        reader.read_exact(&mut magic).unwrap();
+        assert_eq!(magic, [0x28, 0xb5, 0x2f, 0xfd]);
+    }
+
+    #[test]
+    fn rejects_excess_decompressed_padding() {
+        let bytes = zstd::stream::encode_all(&[0u8; 4096][..], 1).unwrap();
+        let decoder = zstd::stream::read::Decoder::new(bytes.as_slice()).unwrap();
+        assert!(authenticate_tail(decoder).is_err());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn full_disk_fails_the_encrypted_writer() {
+        let mut full = std::fs::OpenOptions::new()
+            .write(true)
+            .open("/dev/full")
+            .unwrap();
+        let manifest = Manifest {
+            schema: 2,
+            scope: elzevir_panel::BackupScope::Full,
+            id: identifier().unwrap(),
+            created_at: jiff::Timestamp::now().to_string(),
+            database_schema: 1,
+            version: "test".into(),
+            entries: Vec::new(),
+        };
+        let recipient = age::x25519::Identity::generate().to_public();
+        let control: Control = std::sync::Arc::new(|| false);
+        assert!(encrypt(&mut full, &manifest, &[], &recipient, 3, &control).is_err());
     }
 }

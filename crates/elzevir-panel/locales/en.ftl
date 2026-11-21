@@ -351,3 +351,25 @@ tray-open-staff = Open the staff interface
 tray-start = Start the server
 tray-stop = Stop the server
 tray-quit = Close this icon
+
+backup-scope = Scope
+backup-compression = Zstandard
+backup-folder = Export folder (F2 browse, empty = managed)
+backup-full = Full institution
+backup-db = Database only
+backup-fast = Fast
+backup-balanced = Balanced
+backup-compact = Compact
+folder-title = Select export folder
+folder-keys = Tab: list / path / action   F3: home   F4: backups   Esc: back
+folder-use = Use this folder (created on confirmation if missing)
+folder-loading = Loading folders…
+folder-error = Folder unavailable. Enter an absolute path.
+backup-estimate = Estimated working space: { $value }
+backup-phase-snapshot = SQLite snapshot
+backup-phase-manifest = Prepare manifest
+backup-phase-compress = Compress and encrypt
+backup-phase-verify = Verify archive
+backup-phase-publish = Publish file
+backup-phase-catalog = Record artifact
+backup-export-target = New file or F2 to select a folder

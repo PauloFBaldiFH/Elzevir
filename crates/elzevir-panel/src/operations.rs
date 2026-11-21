@@ -64,7 +64,12 @@ pub enum Operation {
     /// Request an operating-system reboot.
     Reboot,
     /// Create an encrypted managed backup.
-    BackupNow,
+    BackupNow {
+        /// Scope and compression.
+        options: crate::BackupOptions,
+        /// Optional export directory on the operator's host.
+        folder: String,
+    },
     /// Authenticate the newest completed managed backup.
     VerifyLatest,
     /// Export a completed encrypted backup to a new file.
@@ -114,7 +119,7 @@ impl Operation {
             Self::Settings { .. } => "op-settings",
             Self::Restart { .. } => "op-restart",
             Self::Reboot => "op-reboot",
-            Self::BackupNow => "op-backup-now",
+            Self::BackupNow { .. } => "op-backup-now",
             Self::VerifyLatest => "op-backup-verify",
             Self::ExportLatest { .. } => "op-backup-export",
             Self::ExportKey { .. } => "op-key-export",
@@ -150,6 +155,8 @@ impl ServerAction {
 /// One safe job observation; arbitrary server messages do not enter the UI.
 #[derive(Debug, Clone)]
 pub struct Job {
+    /// Last durable backup phase, including the phase of failure.
+    pub phase: Option<&'static str>,
     /// Random job identity.
     pub id: String,
     /// Known translation key for the action.
@@ -163,6 +170,8 @@ pub struct Job {
 /// Operational state from the selected institution.
 #[derive(Debug, Clone, Default)]
 pub struct Operations {
+    /// Operator-visible default managed backup directory.
+    pub backup_folder: Option<std::path::PathBuf>,
     /// Retention, when the policy could be read.
     pub keep: Option<u16>,
     /// Daily wall-clock time and IANA time zone, when enabled.
@@ -207,6 +216,12 @@ pub struct Form {
 #[must_use]
 pub(crate) fn choices(label: &str) -> Option<&'static [(&'static str, &'static str)]> {
     match label {
+        "backup-scope" => Some(&[("full", "backup-full"), ("database", "backup-db")]),
+        "backup-compression" => Some(&[
+            ("fast", "backup-fast"),
+            ("balanced", "backup-balanced"),
+            ("compact", "backup-compact"),
+        ]),
         "settings-language" => Some(&[("en", "language-en"), ("pt-BR", "language-pt-BR")]),
         _ => None,
     }
@@ -264,11 +279,28 @@ impl Form {
             | Operation::InstallRclone
             | Operation::CheckUpdates
             | Operation::Reboot
-            | Operation::BackupNow
             | Operation::VerifyLatest => (vec![], vec![]),
-            Operation::ExportLatest { output } | Operation::ExportKey { output } => {
-                (vec!["op-output"], vec![output.clone()])
+            Operation::ExportLatest { output } => {
+                (vec!["backup-export-target"], vec![output.clone()])
             }
+            Operation::ExportKey { output } => (vec!["op-output"], vec![output.clone()]),
+            Operation::BackupNow { options, folder } => (
+                vec!["backup-scope", "backup-compression", "backup-folder"],
+                vec![
+                    match options.scope {
+                        crate::BackupScope::Full => "full",
+                        crate::BackupScope::Database => "database",
+                    }
+                    .into(),
+                    match options.profile {
+                        crate::BackupProfile::Fast => "fast",
+                        crate::BackupProfile::Balanced => "balanced",
+                        crate::BackupProfile::Compact => "compact",
+                    }
+                    .into(),
+                    folder.clone(),
+                ],
+            ),
             Operation::Restore { input, key } => {
                 (vec!["op-input", "op-key"], vec![input.clone(), key.clone()])
             }
@@ -333,7 +365,22 @@ impl Form {
                 language: values.next()?,
             },
             Operation::Reboot => Operation::Reboot,
-            Operation::BackupNow => Operation::BackupNow,
+            Operation::BackupNow { .. } => Operation::BackupNow {
+                options: crate::BackupOptions {
+                    scope: match values.next()?.as_str() {
+                        "full" => crate::BackupScope::Full,
+                        "database" => crate::BackupScope::Database,
+                        _ => return None,
+                    },
+                    profile: match values.next()?.as_str() {
+                        "fast" => crate::BackupProfile::Fast,
+                        "balanced" => crate::BackupProfile::Balanced,
+                        "compact" => crate::BackupProfile::Compact,
+                        _ => return None,
+                    },
+                },
+                folder: values.next()?,
+            },
             Operation::VerifyLatest => Operation::VerifyLatest,
             Operation::ExportLatest { .. } => Operation::ExportLatest {
                 output: values.next()?,
