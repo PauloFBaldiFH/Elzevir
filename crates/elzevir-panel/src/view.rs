@@ -168,6 +168,9 @@ pub(crate) fn interactive(
     menu(frame, panel, messages, navigation, ascii, scene);
     if let Mode::Live(state) = &panel.mode {
         crate::dashboard::draw(frame, panel, state, messages, work, context, ascii);
+        if panel.section == Section::Restart {
+            crate::service_view::draw(frame, panel, state, messages, work, (ascii, scene));
+        }
         if panel.section == Section::Addresses && panel.tunnel_tab == crate::TunnelTab::Share {
             crate::sharing::draw(
                 frame,

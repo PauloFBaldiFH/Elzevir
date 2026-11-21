@@ -56,6 +56,7 @@ pub(crate) fn connected(
         configured_access: config
             .as_ref()
             .map(|_| crate::addresses::presentation(&settings.staff)),
+        language: Some(settings.lang.clone()),
         managed: managed(),
     };
     let mut collector = Collector::new(settings.data_dir.clone());
@@ -328,6 +329,12 @@ impl Collector {
                 Ok(()) if matches!(operation, elzevir_panel::Operation::Server(_)) => {
                     "op-server-done"
                 }
+                Ok(()) if matches!(operation, elzevir_panel::Operation::Settings { .. }) => {
+                    "settings-saved"
+                }
+                Err(_) if matches!(operation, elzevir_panel::Operation::Settings { .. }) => {
+                    "settings-invalid"
+                }
                 Ok(()) => "op-submitted",
                 Err(error) if error.starts_with("B1:") => "broker-unsupported",
                 Err(_) => "op-refused",
@@ -344,6 +351,14 @@ impl Collector {
         }
         if let Operation::Server(action) = operation {
             return self.server(*action);
+        }
+        if let Operation::Settings {
+            name,
+            listen,
+            language,
+        } = operation
+        {
+            return self.settings(name, listen, language);
         }
         if matches!(operation, Operation::CheckUpdates) {
             self.latest = Some(crate::release::latest(&crate::release::Metadata)?);
@@ -411,6 +426,7 @@ impl Collector {
             Operation::Address(_)
             | Operation::Cloud(_)
             | Operation::Server(_)
+            | Operation::Settings { .. }
             | Operation::Restore { .. }
             | Operation::Restart { .. }
             | Operation::Reboot
@@ -451,6 +467,43 @@ impl Collector {
             crate::background::restart(&executable, &self.directory, &config)?;
         }
         Ok(())
+    }
+
+    /// Saves the settings form; the server applies it when it restarts.
+    fn settings(&self, name: &str, listen: &str, language: &str) -> Result<(), String> {
+        let config = self
+            .config
+            .as_deref()
+            .ok_or("settings require a configuration file")?;
+        crate::server_config::validate_name(name).map_err(|error| error.to_string())?;
+        let listen: std::net::SocketAddr = listen
+            .trim()
+            .parse()
+            .map_err(|_| "address must look like 127.0.0.1:7390")?;
+        if listen.port() < elzevir_panel::MIN_PORT {
+            return Err("port must be 1024 or above".into());
+        }
+        let language = language.trim();
+        if !crate::server_config::LANGUAGES.contains(&language) {
+            return Err("language must be en or pt-BR".into());
+        }
+        let current = crate::server_config::ServeArgs::for_status(Some(config.to_owned()), None)
+            .resolve()
+            .map_err(|error| error.to_string())?;
+        // The running server holds its own address; any other must be free.
+        if listen != current.listen && !crate::listen_port::free(listen) {
+            return Err("the new address is in use".into());
+        }
+        crate::listen_port::rewrite(config, |source| {
+            crate::server_config::with_settings(
+                source,
+                crate::server_config::Edit {
+                    name: name.to_owned(),
+                    listen,
+                    lang: language.to_owned(),
+                },
+            )
+        })
     }
 
     fn host_operation(

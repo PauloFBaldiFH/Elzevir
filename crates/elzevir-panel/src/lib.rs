@@ -19,6 +19,7 @@ mod operations;
 mod port;
 pub use port::{MIN_PORT, PortForm, PortStep, Refusal, choose_port};
 mod runtime;
+mod service_view;
 mod setup;
 pub use setup::{Setup, SetupProfile, setup};
 mod sharing;
@@ -289,6 +290,20 @@ impl Panel {
         matches!(&self.mode, Mode::Live(state) if state.institution.managed)
     }
 
+    /// The settings form, filled with the values read when the panel opened;
+    /// only an institution with a configuration file has any.
+    fn settings(&self) -> Option<Operation> {
+        let Mode::Live(state) = &self.mode else {
+            return None;
+        };
+        let institution = &state.institution;
+        Some(Operation::Settings {
+            name: institution.name.clone().unwrap_or_default(),
+            listen: institution.configured_listen?.to_string(),
+            language: institution.language.clone().unwrap_or_default(),
+        })
+    }
+
     fn begin_operation(&mut self, key: char) -> bool {
         if !matches!(&self.mode, Mode::Live(_)) || self.palette || self.diagnostics.pending {
             return false;
@@ -338,6 +353,10 @@ impl Panel {
                     None
                 },
             ),
+            (Section::Restart, 'c') => match self.settings() {
+                Some(operation) => operation,
+                None => return false,
+            },
             (Section::Restart, 'i') if !self.managed() => Operation::Server(ServerAction::Start),
             (Section::Restart, 'p') if !self.managed() => Operation::Server(ServerAction::Stop),
             (Section::Restart, 't') if !self.managed() => Operation::Server(ServerAction::Restart),
@@ -366,6 +385,20 @@ impl Panel {
         true
     }
 
+    /// Submits the open form as its primary button does: all fields are
+    /// visible at once, so pressing it is the explicit confirmation.
+    pub fn submit_form(&mut self) {
+        if let Some(form) = &mut self.form {
+            form.field = form.labels.len();
+        }
+        self.diagnostics.requested = self
+            .form
+            .take()
+            .and_then(Form::finish)
+            .map(ObservationRequest::Operate);
+        self.diagnostics.pending = self.diagnostics.requested.is_some();
+    }
+
     fn handle_form(&mut self, event: &Event) -> bool {
         let Event::Key(key) = event else {
             return true;
@@ -384,12 +417,33 @@ impl Panel {
         };
         if form.confirming() {
             if key.code == KeyCode::Char('y') {
-                self.diagnostics.requested = self
-                    .form
-                    .take()
-                    .and_then(Form::finish)
-                    .map(ObservationRequest::Operate);
-                self.diagnostics.pending = self.diagnostics.requested.is_some();
+                self.submit_form();
+            } else if key.code == KeyCode::BackTab {
+                form.field = form.field.saturating_sub(1);
+            }
+            return true;
+        }
+        let label = form.labels.get(form.field).copied().unwrap_or_default();
+        if let Some(choices) = operations::choices(label) {
+            // A choice field changes with the arrows; typing never edits it.
+            if let (KeyCode::Left | KeyCode::Right, Some(value)) =
+                (key.code, form.values.get_mut(form.field))
+            {
+                let current = choices.iter().position(|(choice, _)| choice == value);
+                let next = match (key.code, current) {
+                    (KeyCode::Left, Some(index)) => {
+                        index.checked_sub(1).unwrap_or(choices.len() - 1)
+                    }
+                    (_, Some(index)) => (index + 1) % choices.len(),
+                    (_, None) => 0,
+                };
+                if let Some((choice, _)) = choices.get(next) {
+                    (*choice).clone_into(value);
+                }
+            } else if matches!(key.code, KeyCode::Enter | KeyCode::Tab) {
+                form.field += 1;
+            } else if key.code == KeyCode::BackTab {
+                form.field = form.field.saturating_sub(1);
             }
             return true;
         }

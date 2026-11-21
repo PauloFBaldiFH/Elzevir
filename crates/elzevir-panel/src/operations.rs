@@ -46,6 +46,16 @@ pub enum Operation {
     /// Start, stop or restart the background server of a personal
     /// installation, which has no service manager.
     Server(ServerAction),
+    /// Change the institution's name, listen address and language in its
+    /// configuration file; the server applies them when it restarts.
+    Settings {
+        /// Institution name shown in the catalog.
+        name: String,
+        /// Listen address, host and port.
+        listen: String,
+        /// Interface language, `en` or `pt-BR`.
+        language: String,
+    },
     /// Restart the selected managed service.
     Restart {
         /// Managed service name.
@@ -101,6 +111,7 @@ impl Operation {
             Self::RecoverUpdate { .. } => "op-update-recover",
             Self::Update { .. } => "op-update",
             Self::Server(action) => action.key(),
+            Self::Settings { .. } => "op-settings",
             Self::Restart { .. } => "op-restart",
             Self::Reboot => "op-reboot",
             Self::BackupNow => "op-backup-now",
@@ -191,6 +202,16 @@ pub struct Form {
     /// Translation keys for the fields.
     pub labels: Vec<&'static str>,
 }
+/// Fields answered by picking one of fixed values, with the translation
+/// key of each value's button.
+#[must_use]
+pub(crate) fn choices(label: &str) -> Option<&'static [(&'static str, &'static str)]> {
+    match label {
+        "settings-language" => Some(&[("en", "language-en"), ("pt-BR", "language-pt-BR")]),
+        _ => None,
+    }
+}
+
 impl Form {
     /// Creates the fields appropriate for one explicit action.
     #[must_use]
@@ -228,6 +249,14 @@ impl Form {
                 (vec!["op-executable"], vec![executable.clone()])
             }
             Operation::Restart { name } => (vec!["op-service"], vec![name.clone()]),
+            Operation::Settings {
+                name,
+                listen,
+                language,
+            } => (
+                vec!["settings-name", "settings-listen", "settings-language"],
+                vec![name.clone(), listen.clone(), language.clone()],
+            ),
             Operation::Server(_)
             | Operation::TestTunnel
             | Operation::CloudflareLogin
@@ -297,6 +326,11 @@ impl Form {
             },
             Operation::Restart { .. } => Operation::Restart {
                 name: values.next()?,
+            },
+            Operation::Settings { .. } => Operation::Settings {
+                name: values.next()?,
+                listen: values.next()?,
+                language: values.next()?,
             },
             Operation::Reboot => Operation::Reboot,
             Operation::BackupNow => Operation::BackupNow,
