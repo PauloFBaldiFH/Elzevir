@@ -818,6 +818,36 @@ pub(crate) fn required_item_codes(
     Ok([home, holding, policy])
 }
 
+/// Recover serial holdings only where a stored barcode still belongs to the source Instance.
+pub(crate) fn backfill_item_issues(c: &Connection) -> Result<(), StoreError> {
+    let mut sources = c.prepare("SELECT instance_id,record FROM source_records")?;
+    let mut rows = sources.query([])?;
+    let mut holder = c.prepare("SELECT id FROM items WHERE instance_id=?1 AND barcode=?2")?;
+    while let Some(row) = rows.next()? {
+        let instance: i64 = row.get(0)?;
+        let bytes: Vec<u8> = row.get(1)?;
+        let items = elzevir_app::marc_mapping::source_items(&bytes);
+        let mut counts = std::collections::BTreeMap::new();
+        for barcode in items.iter().filter_map(|i| i.barcode.as_ref()) {
+            *counts.entry(barcode).or_insert(0) += 1;
+        }
+        for item in &items {
+            if (item.issue_statement.is_some()
+                || item.enumeration.is_some()
+                || item.chronology.is_some())
+                && let Some(barcode) = &item.barcode
+                && counts.get(barcode) == Some(&1)
+                && let Some(id) = holder
+                    .query_row(params![instance, barcode], |r| r.get(0))
+                    .optional()?
+            {
+                store_issue(c, ItemId(id), item)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn store_issue(c: &Connection, id: ItemId, item: &ItemData) -> Result<(), StoreError> {
     if item.issue_statement.is_some() || item.enumeration.is_some() || item.chronology.is_some() {
         c.execute("INSERT INTO item_issues(item_id,enumeration,chronology,statement) VALUES(?1,?2,?3,?4)

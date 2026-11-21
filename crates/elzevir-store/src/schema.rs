@@ -1074,7 +1074,7 @@ fn apply_migrations(
                 backfill_opac_hidden(&tx)?;
             }
             if version == 61 {
-                backfill_item_issues(&tx)?;
+                crate::catalog::backfill_item_issues(&tx)?;
             }
             if version == NO_CODES_VERSION || version == POLICIES_VERSION || version == 61 {
                 check_foreign_keys(&tx, version)?;
@@ -1137,36 +1137,6 @@ fn backfill_notes(connection: &Connection) -> Result<(), StoreError> {
     while let Some(row) = rows.next()? {
         let record: Vec<u8> = row.get(1)?;
         insert_notes(connection, row.get(0)?, &source_notes(&record))?;
-    }
-    Ok(())
-}
-
-/// Recover serial holdings only where a stored barcode still belongs to the source Instance.
-fn backfill_item_issues(c: &Connection) -> Result<(), StoreError> {
-    let mut sources = c.prepare("SELECT instance_id,record FROM source_records")?;
-    let mut rows = sources.query([])?;
-    let mut holder = c.prepare("SELECT id FROM items WHERE instance_id=?1 AND barcode=?2")?;
-    while let Some(row) = rows.next()? {
-        let instance: i64 = row.get(0)?;
-        let bytes: Vec<u8> = row.get(1)?;
-        let items = elzevir_app::marc_mapping::source_items(&bytes);
-        let mut counts = std::collections::BTreeMap::new();
-        for barcode in items.iter().filter_map(|i| i.barcode.as_ref()) {
-            *counts.entry(barcode).or_insert(0) += 1;
-        }
-        for item in &items {
-            if (item.issue_statement.is_some()
-                || item.enumeration.is_some()
-                || item.chronology.is_some())
-                && let Some(barcode) = &item.barcode
-                && counts.get(barcode) == Some(&1)
-                && let Some(id) = holder
-                    .query_row(params![instance, barcode], |r| r.get(0))
-                    .optional()?
-            {
-                crate::catalog::store_issue(c, elzevir_domain::catalog::ItemId(id), item)?;
-            }
-        }
     }
     Ok(())
 }
