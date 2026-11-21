@@ -1,0 +1,174 @@
+000    00950cz  a2200193o  4500
+001    000284518
+003    Br
+005    20100426120030.2
+008    060801|| acnnnaab|          aaaa     d
+035 __ |a 2003080616194419med
+040 __ |a Br |c Br
+100 1_ |a Macedo, Joaryvar, |d 1937-
+400 1_ |a Lobo de Macedo, Joaquim |d 1937-
+400 1_ |a Macedo, Joaquim Lobo de |d 1937-
+670 __ |a Autor de: Pedro Bandeira... [1976?] |b (p.r.: Joarivar Macêdo, do Instituto do Ceará)
+670 __ |a http://catalog.loc.gov 26/4/10
+670 __ |a http://authorities.loc.gov |b (d.n., rem.)
+670 __ |a http://www.raimundogirao.com.br/gjoaryvar.php |b (Joaryvar Macedo, escritor, foi Secretário da Cultura do Estado do Ceará, membro da Academia Cearense de Letras e do Instituto do Ceará)
+670 __ |a http://pt.wikipedia.org/wiki/Joaquim_Lobo_de_Mac%C3%AAdo |b (Joaquim Lôbo de Macêdo, ou Joaryvar Macêdo, nasceu em Lavras da Mangabeira, em 20 de maio de 1937, é um escritor brasileiro)
+
+000    00366nz  a2200121o  4500
+001    000478745
+003    Br
+005    20160511095513.0
+008    100419|| acnnnaab|          aana  d   
+035 __ |a 2010041913525353med
+040 __ |a blrjbn |c blrjbn
+130 _0 |a Biblioteca Pedro Bandeira |p Roda de histórias
+670 __ |a Série de: O fantástico mistério de Feiurinha. 2009 |b (São Paulo : Moderna)
+
+000    00805cz  a2200157o  4500
+001    000522305
+003    Br
+005    20120529123602.7
+008    120529|| acnacaban          aaaa      
+035 __ |a 2012052912304606med
+040 __ |a blrjbn |c blrjbn
+130 _0 |a Xuxa em o mistério de Feiurinha (Filme)
+670 __ |a Assunto de: Bandeira, Pedro. Xuxa em o mistério de Feiurinha
+670 __ |a http://pt.wikipedia.org/wiki/Xuxa_em_O_Mist%C3%A9rio_de_Feiurinha 29/05/2012 |b (é um filme infanto-juvenil da apresentadora infantil e atriz Xuxa Meneghel, com direção de Tizuka Yamasaki. Adaptado a partir do livro O Fantástico Mistério de Feiurinha, do escritor Pedro Bandeira)
+670 __ |a http://www.cineclick.com.br/filmes/ficha/nomefilme/xuxa-em-o-misterio-de-feiurinha/id/16122 29/05/2012
+675 __ |a LC authorities 29/05/2012
+
+
+000    00594cz  a2200205o  4500
+001    000046958
+003    Br
+005    20050202164336.9
+008    020225d| anznnbabn           a ana     d
+035 __ |a 2002022512584893med
+040 __ |a Br |c Br |f Br
+150 __ |a Judeus |x História |y Até 1200 A.C.
+450 1_ |a Conquista de Canãa pelos judeus
+450 __ |a Jews |x Conquest of Canaan
+450 __ |a Jews |x Settlement in Canaan
+450 __ |a Jews |x Wandering in the wilderness
+450 __ |a Judeus |x Conquista de Canãa
+550 __ |w h |a Êxodo (Evento bíblico)
+670 1_ |a LCSH
+750 _0 |a Jews |x History |y To 1200 B.C.
+
+000    00855cz  a2200241o  4500
+001    000084792
+003    Br
+005    20070403104655.2
+008    070108 | anznnbaba           a ana     d
+035 __ |a 2007010810261593med
+040 __ |a Br |c Br |f Br
+155 __ |a Retrato
+199 __ |a CABEÇALHO EXCLUSIVO PARA MATERIAL ICONOGRÁFICO
+555 __ |w h |a Auto-retrato
+555 __ |w h |a Retrato de grupo
+555 __ |w h |a Retrato fotográfico
+555 __ |w n |a Caricatura
+555 __ |a Auto-retrato
+555 __ |a Caricatura
+555 __ |a Retrato de grupo
+670 1_ |a LCTGM II
+680 __ |a Representação gráfica, em especial do rosto de pessoas ou animais, geralmente posadas,vivas ou mortas. Imagem cujo objetivo primordial é retratar um indivíduo ou grupo de indivíduos, e não aquela onde os indivíduos são apenas parte de uma cena ou evento.
+755 _0 |a Portraits
+
+000    00703cz  a2200169o  4500
+001    000103649
+003    Br
+005    20130405133416.6
+008    130405 | anznnbaba           a ana      
+035 __ |a 2013040513301145med
+040 __ |a Br |c Br |f Br
+150 __ |a Histórias alternativas (Ficção)
+450 __ |a Alternate histories (Fiction)
+550 __ |w g |a Ficção
+670 __ |a LCSH
+680 __ |a Usado para coleções de ficção em que a trama ou cenário assume um resultado alternativo de um evento histórico. Obras especulativas da história que apresentam resultados alternativos de eventos históricos e mudanças posteriores da história entram em Histórias imaginárias.
+750 _4 |a Alternative histories (Fiction)
+
+000    00931cz  a2200277o  4500
+001    000001349
+003    Br
+005    20080603121903.9
+008    000118 | anznnbabn          aana     d
+035 __ |a 100011811315417E14
+040 __ |a Br |c Br |f Br
+151 __ |a Rio Grande (RS)
+451 1_ |a Rio Grande (Brazil: City)
+451 __ |a Rio Grande de São Pedro (Brazil)
+451 __ |a Rio Grande do São Pedro do Sul (Brazil)
+451 __ |a Rio Grande do Sul, Brazil (City)
+451 __ |a São Pedro (Rio Grande do Sul, Brazil)
+451 __ |a São Pedro do Rio Grande do Sul (Brazil)
+451 __ |a Vila do Rio Grande de São Pedro (RS)
+670 __ |a AACR2
+670 __ |a LCSH
+670 __ |a Atlas Mirador
+670 __ |a Divisão Territorial do Brasil. IBGE, 1997.
+670 __ |a Viabilidade econômica das centrais de carga no hinterland de portos brasileiros ... 1989.
+751 _0 |a Rio Grande (Rio Grande do Sul, Brazil)
+
+000    00422cz  a2200133o  4500
+001    000202919
+003    Br
+005    20110310114326.2
+008    100121        a             aaaa     d
+035 __ |a 100121009192518120
+040 __ |a Br |c Br |f Br
+110 2_ |a IBGE. |b Diretoria de Pesquisas. |b Divisão de Cadastro e Classificação
+670 __ |a Sec. de: Eastrutura produtiva... 1997.
+675 __ |a http://authorities.loc.gov |a http://catalog.loc.gov 10/3/11
+
+000    00399nz  a2200145o  4500
+001    000155354
+003    Br
+005    20201020113115.0
+008    100011|| acnacaban          aana     d
+011 __ |s 100011115405489E15
+035 __ |a 100011115405489E15
+040 __ |a Br |c Br |f Br
+130 _0 |a Encontro com escritores mineiros
+670 __ |a Série de: Affonso Ávila...,1993. |b (Belo Horizonte : CEL)
+
+000    00464cz  a2200157o  4500
+001    000006703
+003    Br
+005    20161005083637.0
+008    000320 | anznnbaba          aana     d
+035 __ |a 100032012353879147
+040 __ |a Br |c Br |f Br
+180 __ |x Literatura e a guerra, [revolução, etc.]
+670 __ |a LC (Sub. cat. man.)
+680 __ |a Subdivisão controlada pelo P.H. para guerras (H1200)
+780 _0 |x Literature and the war, [revolution, etc.]
+
+
+000    00333nz  a2200145o  4500
+001    000078899
+003    Br
+005    20060206133657.5
+008    060206 | anznnbaba           a ana     d
+035 __ |a 2006020613365757med
+040 __ |a Br |c Br |f Br
+151 __ |a Sol |x Na literatura
+450 1_ |a Sol na literatura
+670 1_ |a LCSH
+751 _0 |a Sun |x In literature
+
+000    00444cz  a2200169o  4500
+001    000000748
+003    Br
+005    20110328134218.5
+008    000114d| anznnbabn          aana     d
+035 __ |a 100011414135125E14
+040 __ |a Br |c Br |f Br
+150 __ |a Literatura infantojuvenil italiana
+450 __ |a Italian children's literature
+550 __ |a Literatura italiana |w g
+670 __ |a LCSH
+750 _0 |a Children's literature, Italian
+
+
