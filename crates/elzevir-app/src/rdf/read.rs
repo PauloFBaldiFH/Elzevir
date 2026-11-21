@@ -217,6 +217,7 @@ impl Reader<'_> {
                 }
                 "tableOfContents" if labelled(object, "TableOfContents").is_some() => {
                     instance.notes.push(NewNote {
+                        visibility: None,
                         kind: NoteKind::Contents,
                         text: labelled(object, "TableOfContents").unwrap_or_default(),
                     });
@@ -355,6 +356,9 @@ impl Reader<'_> {
             sublocation: None,
             collection: None,
             copy_number: None,
+            issue_statement: None,
+            enumeration: None,
+            chronology: None,
             acquired_on: None,
             status: ItemStatus::default(),
             description: Description {
@@ -368,6 +372,9 @@ impl Reader<'_> {
                 "itemOf" | "heldBy" => {}
                 "identifiedBy" if item.barcode.is_none() && valued(object, "Barcode").is_some() => {
                     item.barcode = valued(object, "Barcode");
+                }
+                "identifiedBy" if copy_number(object).is_some() => {
+                    item.copy_number = copy_number(object).map(str::to_owned);
                 }
                 "identifiedBy"
                     if item.inventory_number.is_none() && valued(object, "Local").is_some() =>
@@ -386,8 +393,16 @@ impl Reader<'_> {
                     }
                     sublocations += 1;
                 }
+                "enumerationAndChronology"
+                    if labelled(object, "EnumerationAndChronology").is_some() =>
+                {
+                    item.issue_statement = labelled(object, "EnumerationAndChronology");
+                }
                 "enumerationAndChronology" if labelled(object, "Enumeration").is_some() => {
-                    item.copy_number = labelled(object, "Enumeration");
+                    item.enumeration = labelled(object, "Enumeration");
+                }
+                "enumerationAndChronology" if labelled(object, "Chronology").is_some() => {
+                    item.chronology = labelled(object, "Chronology");
                 }
                 "immediateAcquisition" => {
                     item.acquired_on = match object {
@@ -489,6 +504,23 @@ fn labelled(object: &Object, class: &str) -> Option<String> {
     (node.iri.is_none() && is_only(node, class) && node.properties.len() == 1)
         .then(|| label(node))
         .flatten()
+}
+
+fn copy_number(object: &Object) -> Option<&str> {
+    let Object::Node(node) = object else {
+        return None;
+    };
+    if !is_only(node, "Local")
+        || !bf_values(node, "qualifier").any(|q| plain(q) == Some("copy number"))
+    {
+        return None;
+    }
+    node.properties.iter().find_map(|(property, value)| {
+        property
+            .strip_prefix(RDF)
+            .filter(|p| *p == "value")
+            .and_then(|_| plain(value))
+    })
 }
 
 /// The `rdf:value` of a blank node of `class` that holds only its value.
@@ -660,7 +692,11 @@ fn column_note(object: &Object) -> Option<NewNote> {
         }
         _ => return None,
     };
-    Some(NewNote { kind, text })
+    Some(NewNote {
+        visibility: None,
+        kind,
+        text,
+    })
 }
 
 /// The concept of a Library of Congress vocabulary that `iri` names.
@@ -849,10 +885,15 @@ mod tests {
         let stored = record();
         let text = write_turtle(&record_graph(&stored, &items(), &base));
         let read = records_from(&read_turtle(&text).unwrap(), &base);
+        let mut record = stored.record;
+        // Publication permission is local policy and is not asserted by the RDF graph.
+        for note in &mut record.instance.notes {
+            note.visibility = None;
+        }
         let expected = ReadRecord {
             work: stored.work,
             instance: stored.instance,
-            record: stored.record,
+            record,
             items: items(),
         };
         assert_eq!(read, [expected]);

@@ -13,9 +13,7 @@ use elzevir_app::import::preview::{
     PreviewCatalog, PreviewError, PreviewReport, preview, preview_page, preview_table,
 };
 use elzevir_app::import::sheet::{PreparedTable, SheetError, TableSettings, prepare};
-use elzevir_app::matching::MatchKey;
-use elzevir_domain::catalog::InstanceId;
-use rusqlite::{Connection, params};
+use rusqlite::Connection;
 
 use crate::{CommandFailed, ReadPool, catalog, koha_types, schema};
 
@@ -89,15 +87,18 @@ fn sheet(
         .transpose()
         .map_err(read_error)?
         .unwrap_or_default();
-    let table = source(&codes)?;
+    let mut table = source(&codes)?;
     let snapshot = connection.map(Snapshot);
     let catalog = snapshot
         .as_ref()
         .map(|snapshot| snapshot as &dyn PreviewCatalog);
     let options = ImportOptions {
+        origin: recipe.origin.clone(),
+        local_note_visibility: recipe.local_note_visibility,
         matching: recipe.matching,
         ..ImportOptions::default()
     };
+    table.apply_review(&options);
     let report = preview_table(&table, catalog, &options, from)?;
     Ok((table, report))
 }
@@ -193,15 +194,13 @@ fn read_error(error: impl std::fmt::Display) -> CatalogReadError {
 }
 
 impl PreviewCatalog for Snapshot<'_> {
-    fn candidate(&self, key: &MatchKey) -> Result<Option<InstanceId>, CatalogReadError> {
-        let mut query = self
-            .0
-            .prepare_cached("SELECT min(instance_id) FROM match_keys WHERE rule = ?1 AND key = ?2")
-            .map_err(read_error)?;
-        let id: Option<i64> = query
-            .query_row(params![key.rule.code(), key.key], |row| row.get(0))
-            .map_err(read_error)?;
-        Ok(id.map(InstanceId))
+    fn scope(
+        &self,
+        record: &elzevir_app::catalog::NewRecord,
+        matching: &elzevir_app::matching::Matching,
+        origin: Option<&str>,
+    ) -> Result<elzevir_app::matching::MatchScope, CatalogReadError> {
+        crate::matching::match_scope(self.0, record, *matching, origin).map_err(read_error)
     }
 
     fn barcode_exists(&self, barcode: &str) -> Result<bool, CatalogReadError> {

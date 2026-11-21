@@ -774,6 +774,12 @@ fn show_batch(
     // MARC edit rules apply only when no spreadsheet is selected.
     let rules = (table.is_none() && recipe.table.is_none() && format != "table")
         .then(|| crate::import_rules::rules(&recipe));
+    let origin = recipe.origin.clone().unwrap_or_default();
+    let local_notes = match recipe.local_note_visibility {
+        None => "default",
+        Some(elzevir_app::catalog::NoteVisibility::Staff) => "staff",
+        Some(elzevir_app::catalog::NoteVisibility::Public) => "public",
+    };
     let matching = crate::import_rules::matching_view(recipe.matching);
     let excluded = recipe.exclude.iter().copied().collect();
     let (recipe, status, notice, detail) = if let Some((recipe, failure)) = failed {
@@ -808,6 +814,8 @@ fn show_batch(
             columns,
             rules,
             matching,
+            local_notes,
+            origin,
             excluded,
         })),
         status,
@@ -1009,6 +1017,11 @@ fn record_samples(t: &I18n, preview: &BatchPreview) -> Vec<ImportSample> {
                 record: entry.record,
                 blocks,
                 candidate,
+                scope: report
+                    .scopes
+                    .iter()
+                    .find(|(i, _)| *i == index)
+                    .map(|(_, scope)| scope.to_string()),
                 before: entry.before.clone(),
                 after: entry.after.clone(),
             }

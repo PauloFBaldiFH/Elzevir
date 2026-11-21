@@ -218,6 +218,7 @@ fn synthetic_ods(
     let recipe = serde_json::json!({
         "archive": {"member": ["books.bin"], "sheet": "Livros"},
         "table": {"delimiter": "comma", "encoding": "utf8", "profile": {"version": 1, "columns": columns}},
+        "origin": "catalog-sheet",
         "matching": rules
     });
     (container(&[("books.bin", &ods)]), recipe)
@@ -494,6 +495,11 @@ fn preview_revision_and_original_are_required_then_only_the_edited_field_changes
         "the export changed beyond the edit"
     );
     assert!(!batch.exists());
+    let persisted =
+        elzevir_app::export::stored_record(&store(data), elzevir_domain::catalog::InstanceId(1))
+            .unwrap()
+            .unwrap();
+    assert_eq!(persisted.record.instance.original.unwrap().bytes, original);
     assert_eq!(run(data, &["confirm", &id, "2"]).status.code(), Some(1));
 }
 
@@ -610,6 +616,15 @@ fn textual_sources_show_the_changed_field_and_keep_original_positions() {
             serde_json::from_str(&success(run(data, &["confirm", &id, "2"]))).unwrap();
         assert_eq!(receipt["stored"], 1);
         assert_eq!(receipt["excluded"], 1);
+        let stored = elzevir_app::export::stored_record(
+            &store(data),
+            elzevir_domain::catalog::InstanceId(1),
+        )
+        .unwrap()
+        .unwrap();
+        let physical = String::from_utf8(stored.record.instance.original.unwrap().bytes).unwrap();
+        assert!(physical.contains("Old value") && physical.contains("Included"));
+        assert!(!physical.contains("New value") && !physical.contains("Excluded"));
     }
 }
 
@@ -778,7 +793,7 @@ fn an_unedited_batch_keeps_the_i1_digest_and_the_original_iso_records() {
     catalog.shutdown().unwrap();
     success(run(data, &["confirm", &id, "1"]));
     let catalog = store(data);
-    assert_eq!(catalog.digest().unwrap(), "bf89658626085174");
+    assert_eq!(catalog.digest().unwrap(), "0280171440ec1014");
     catalog.shutdown().unwrap();
     assert!(
         export(data) == FIXTURE,
@@ -817,4 +832,50 @@ fn the_direct_import_and_the_batch_steps_share_one_command() {
         .output()
         .unwrap();
     assert!(!mixed.status.success(), "{mixed:?}");
+}
+
+#[test]
+fn catalog_change_between_cli_preview_and_confirmation_requires_another_review() {
+    use elzevir_app::import::{ImportOptions, import_marc21};
+    use elzevir_app::matching::{ItemAction, Matching, OnMatch};
+    use elzevir_domain::catalog::MatchRule;
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path();
+    let seed = |title| {
+        let catalog = store(data);
+        let opts = ImportOptions {
+            origin: Some("staff-installation".into()),
+            ..ImportOptions::default()
+        };
+        assert_eq!(
+            import_marc21(record(title).as_slice(), &catalog, &opts)
+                .unwrap()
+                .imported,
+            1
+        );
+        catalog.shutdown().unwrap();
+    };
+    seed("First");
+    let input = data.join("overlay.mrc");
+    fs::write(&input, record("Replacement")).unwrap();
+    let id = stage(data, &input);
+    let matching = Matching {
+        on_match: OnMatch::Replace,
+        items: ItemAction::Ignore,
+        ..Matching::new(MatchRule::KohaBiblionumber)
+    };
+    let path = recipe(
+        data,
+        &serde_json::json!({"origin":"staff-installation","matching":matching}).to_string(),
+    );
+    success(run(data, &["edit", &id, "1", &path]));
+    let preview = success(run(data, &["preview", &id]));
+    assert!(preview.contains("Work 1") && preview.contains("Instance 1"));
+    seed("Another candidate");
+    let before = export(data);
+    refusal(
+        &run(data, &["confirm", &id, "2"]),
+        "preview identity changed",
+    );
+    assert_eq!(export(data), before);
 }

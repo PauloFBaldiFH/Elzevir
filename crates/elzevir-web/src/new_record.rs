@@ -272,6 +272,7 @@ mod tests {
             qualifier: None,
         });
         source.instance.notes.push(NewNote {
+            visibility: None,
             kind: NoteKind::General,
             text: "Inclui índice.".to_owned(),
         });

@@ -27,6 +27,12 @@ const RECORD_OVERHEAD: usize = 26;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Recipe {
+    /// Stable source installation for local identifiers.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
+    /// Explicit access policy for local notes in this source.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub local_note_visibility: Option<crate::catalog::NoteVisibility>,
     /// Operations in application order.
     pub edits: Vec<Edit>,
     /// One-based source record numbers explicitly excluded.
@@ -219,6 +225,15 @@ impl Recipe {
     /// # Errors
     /// Returns a located error for invalid selectors, fields or operations.
     pub fn validate(&self) -> Result<(), PreviewError> {
+        if self
+            .origin
+            .as_deref()
+            .is_some_and(|s| s.trim().is_empty() || s.trim() != s || s.len() > 256)
+        {
+            return Err(PreviewError::Edit(
+                "invalid source installation identifier".into(),
+            ));
+        }
         if self.table.is_some() && !self.edits.is_empty() {
             return Err(PreviewError::Edit(
                 "MARC edit rules do not apply to a spreadsheet".into(),
@@ -475,6 +490,8 @@ pub struct RenderReport {
     pub samples: Vec<ChangedSample>,
     /// The selected page of source records.
     pub source: Vec<SourceSample>,
+    /// Decoding evidence for originals that were edited by this recipe, by rendered index.
+    pub originals: std::collections::BTreeMap<u64, crate::catalog::OriginalRecord>,
     positions: Vec<RawPlace>,
 }
 
@@ -522,6 +539,7 @@ impl RenderReport {
             read: table.read,
             excluded: table.excluded,
             changed: 0,
+            originals: std::collections::BTreeMap::new(),
             samples: Vec::new(),
             source,
             positions,
@@ -551,6 +569,9 @@ impl RenderReport {
         let original = |index| self.source_position(index, 0).0;
         for sample in &mut report.samples {
             sample.index = original(sample.index);
+        }
+        for (index, _) in &mut report.scopes {
+            *index = original(*index);
         }
         for (index, _) in &mut report.matches {
             *index = original(*index);
@@ -603,6 +624,7 @@ pub fn render_page(
     let (mut read, mut excluded, mut changed) = (0, 0, 0);
     let mut samples = Vec::new();
     let mut source = Vec::new();
+    let mut originals = std::collections::BTreeMap::new();
     let mut positions = Vec::new();
     let detection = scan_as(input, limits, selected, |raw| {
         let position = raw
@@ -629,6 +651,12 @@ pub fn render_page(
         let edited = edit_bytes(&raw.bytes, rules, limits, position, &mut samples)?;
         if edited.is_some() {
             changed += 1;
+        }
+        if edited.is_some() || raw.text.is_some() {
+            originals.insert(
+                positions.len() as u64,
+                original_record(&raw.bytes, raw.text, limits)?,
+            );
         }
         let bytes = edited.as_deref().unwrap_or(&raw.bytes);
         if from.is_some_and(|from| positions.len() as u64 >= from)
@@ -677,7 +705,28 @@ pub fn render_page(
         changed,
         samples,
         source,
+        originals,
         positions,
+    })
+}
+
+fn original_record(
+    bytes: &[u8],
+    text: Option<super::TextOriginal>,
+    limits: Limits,
+) -> Result<crate::catalog::OriginalRecord, PreviewError> {
+    let parsed = RecordRef::parse(bytes, &limits).map_err(|e| PreviewError::Edit(e.to_string()))?;
+    let (declared, decoded, family) = super::decode_evidence(&mut Record::from_ref(&parsed))
+        .map_err(|e| PreviewError::Edit(e.to_string()))?;
+    Ok(match text {
+        Some(text) => text.evidence(family),
+        None => crate::catalog::OriginalRecord {
+            bytes: bytes.to_vec(),
+            declared,
+            decoded,
+            family,
+            serialization: "ISO 2709".into(),
+        },
     })
 }
 
@@ -685,7 +734,7 @@ fn display_record(bytes: &[u8], limits: Limits) -> Result<String, PreviewError> 
     let parsed =
         RecordRef::parse(bytes, &limits).map_err(|error| PreviewError::Edit(error.to_string()))?;
     let mut record = Record::from_ref(&parsed);
-    record.marc21_to_utf8();
+    super::decode_evidence(&mut record).map_err(|e| PreviewError::Edit(e.to_string()))?;
     let mut display = format!("LDR  {}\n", String::from_utf8_lossy(&record.leader));
     for field in &record.fields {
         writeln!(display, "{}  {}", field.tag(), field_text(field))
@@ -707,7 +756,7 @@ fn edit_bytes<'a>(
     let fail = |reason| PreviewError::Edit(format!("record {position}: {reason}"));
     let parsed = RecordRef::parse(bytes, &limits).map_err(|_| fail("invalid ISO source"))?;
     let mut original = Record::from_ref(&parsed);
-    original.marc21_to_utf8();
+    super::decode_evidence(&mut original).map_err(|e| PreviewError::Edit(e.to_string()))?;
     let mut total = RECORD_OVERHEAD
         + original
             .fields

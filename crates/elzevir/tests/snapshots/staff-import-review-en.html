@@ -118,6 +118,13 @@
           <input type="hidden" name="action" value="matching">
           <fieldset>
             <legend>Matching with the catalog</legend>
+            <label>Source installation for local identifiers <input name="origin" value="" maxlength="256"></label>
+            <label>Local note visibility
+              <select name="local_notes">
+                <option value="default" selected>Keep existing visibility (staff for new notes)</option>
+                <option value="staff">Staff only</option>
+                <option value="public">Publish in the catalog</option>
+              </select></label>
             <label>Find existing records by
               <select name="rule">
                 <option value="none" selected>Do not look for matches</option>
@@ -253,6 +260,7 @@
               </form>
 
 
+
             </div>
             <aside class="import-source">
               <details open>
@@ -329,6 +337,7 @@
               </form>
 
 
+
             </div>
             <aside class="import-source">
               <details open>
@@ -396,6 +405,7 @@
                 <input type="hidden" name="record" value="3">
                 <button type="submit">Exclude from import</button>
               </form>
+
 
 
             </div>

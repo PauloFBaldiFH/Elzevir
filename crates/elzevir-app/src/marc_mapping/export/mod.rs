@@ -190,7 +190,7 @@ fn write_titles(out: &mut Record, model: &NewRecord, before: Option<&NewRecord>)
         b.instance.title != instance.title
             || responsibility::of_description(&b.instance.description) != statement
     }) {
-        write_245(out, model, statement);
+        write_245(out, model, before, &statement);
     }
     if before.is_none_or(|b| b.work_title != model.work_title) {
         let main_title = instance.title.split(" : ").next().unwrap_or_default();
@@ -242,7 +242,8 @@ fn write_titles(out: &mut Record, model: &NewRecord, before: Option<&NewRecord>)
 /// first indicator says whether the title is an added entry: it is when the Work has a main
 /// entry or a preferred title of its own; the second (characters to ignore) has no source
 /// in the model and is `0`.
-fn write_245(out: &mut Record, model: &NewRecord, statement: Option<&str>) {
+fn write_245(out: &mut Record, model: &NewRecord, before: Option<&NewRecord>, statements: &[&str]) {
+    let statement = statements.first();
     let title = model.instance.title.as_str();
     let (main, rest) = match title.split_once(" : ") {
         Some((main, rest)) => (main, Some(rest)),
@@ -259,17 +260,91 @@ fn write_245(out: &mut Record, model: &NewRecord, statement: Option<&str>) {
         Some(_) => format!("{rest} /"),
         None => closed(rest),
     });
+    if let Some(previous) = before
+        && let Some(index) = first_index(out, *b"245")
+        && let Some(Field::Data { subfields, .. }) = out.fields.get_mut(index)
+    {
+        let (old_main, old_rest) = previous
+            .instance
+            .title
+            .split_once(" : ")
+            .map_or((previous.instance.title.as_str(), None), |(a, b)| {
+                (a, Some(b))
+            });
+        let (new_main, new_rest) = title
+            .split_once(" : ")
+            .map_or((title, None), |(a, b)| (a, Some(b)));
+        if old_main != new_main {
+            // The display title includes subsequent $n/$p and repeated $a. Leave those
+            // occurrences in place when the main title is edited in the catalog.
+            let suffix = subfields
+                .iter()
+                .filter(|s| b"anp".contains(&s.code))
+                .skip(1)
+                .filter_map(|s| super::text::clean(&s.value))
+                .collect::<Vec<_>>()
+                .join(" ");
+            let value = new_main
+                .strip_suffix(&format!(" {suffix}"))
+                .unwrap_or(new_main);
+            edit_first(subfields, b'a', Some(value));
+        }
+        if old_rest != new_rest {
+            edit_first(subfields, b'b', rest.as_deref());
+        }
+        let prior = responsibility::of_description(&previous.instance.description);
+        if prior != statements {
+            edit_responsibilities(subfields, &prior, statements);
+        }
+        return;
+    }
     set_subfield(out, *b"245", indicators, b'a', Some(&main));
     set_subfield(out, *b"245", indicators, b'b', rest.as_deref());
-    set_subfield(
-        out,
-        *b"245",
-        indicators,
-        b'c',
-        statement.map(closed).as_deref(),
-    );
-    set_subfield(out, *b"245", indicators, b'n', None);
-    set_subfield(out, *b"245", indicators, b'p', None);
+    if let Some(index) = first_index(out, *b"245")
+        && let Some(Field::Data { subfields, .. }) = out.fields.get_mut(index)
+    {
+        edit_responsibilities(subfields, &[], statements);
+    }
+}
+
+fn edit_responsibilities(fields: &mut Vec<Subfield>, prior: &[&str], edited: &[&str]) {
+    let mut values = edited.iter();
+    let mut old = prior.iter();
+    fields.retain_mut(|s| {
+        if s.code != b'c' {
+            return true;
+        }
+        let Some(value) = values.next() else {
+            return false;
+        };
+        if old.next() != Some(value) {
+            s.value = closed(value).into_bytes();
+        }
+        true
+    });
+    fields.extend(values.map(|value| Subfield {
+        code: b'c',
+        value: closed(value).into_bytes(),
+    }));
+}
+
+fn edit_first(subfields: &mut Vec<Subfield>, code: u8, value: Option<&str>) {
+    let at = subfields.iter().position(|s| s.code == code);
+    match (at, value) {
+        (Some(i), Some(text)) => {
+            if let Some(s) = subfields.get_mut(i) {
+                s.value = text.as_bytes().to_vec();
+            }
+        }
+        (Some(i), None) => {
+            subfields.remove(i);
+        }
+        (None, Some(text)) => subfields.push(Subfield {
+            code,
+            value: text.as_bytes().to_vec(),
+        }),
+        (None, None) => {}
+    }
 }
 
 /// The ISBD punctuation of the publication area, as the LC way back writes it: ` ;`
@@ -751,7 +826,7 @@ fn item_field(item: &ItemData, base: Option<&Field>) -> Field {
         m.map(|m| format!("{}.{:02}", m.0 / 100, m.0 % 100))
     };
     let number = |n: i64| (n != 0).then(|| n.to_string());
-    let values: [(u8, Option<String>); 17] = [
+    let values: [(u8, Option<String>); 18] = [
         (b'0', number(item.status.withdrawn)),
         (b'1', number(item.status.lost)),
         (b'4', number(item.status.damaged)),
@@ -767,6 +842,7 @@ fn item_field(item: &ItemData, base: Option<&Field>) -> Field {
         (b'o', item.call_number.clone()),
         (b'p', item.barcode.clone()),
         (b't', item.copy_number.clone()),
+        (b'h', item.issue_statement.clone()),
         (b'v', money(item.replacement_price)),
         (b'y', Some(item.item_type.clone())),
     ];

@@ -86,6 +86,8 @@ todo o arquivo antes de preparar registros para a escritora.
 
 ### 1.3 Preparar e preservar a origem
 
+Na versão de schema 61, a comparação das exportações ISO continua sendo byte a byte. O digest integral inclui também a representação original recebida e tem uma referência de regressão para cada formato.
+
 **Entrega I3:** `MarcXmlReader` lê documentos XML 1.0 UTF-8 com raiz `record` ou
 `collection` no namespace MARC21, inclusive prefixado. Preserva ordem,
 repetições, indicadores, espaços e texto de campos; referências XML e CDATA

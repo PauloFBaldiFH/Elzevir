@@ -81,6 +81,7 @@ fn options(parallelism: Parallelism, chunk: usize) -> ImportOptions {
         chunk: NonZeroUsize::new(chunk).unwrap(),
         matching: None,
         translations: TypeTranslations::default(),
+        ..ImportOptions::default()
     }
 }
 

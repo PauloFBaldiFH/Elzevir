@@ -191,11 +191,38 @@ fn add_record(
         .enumerate()
         .map(|(position, item)| crate::native_items::add(connection, instance, position, item))
         .collect::<Result<Vec<_>, _>>()?;
+    let sources = elzevir_app::matching::koha_item_sources(record);
+    for (item, source) in items.iter().zip(&sources) {
+        remember_item(
+            connection,
+            *item,
+            record.instance.origin.as_deref(),
+            Some(source),
+        )?;
+    }
     Ok(CatalogOutput::Record {
         work,
         instance,
         items,
     })
+}
+
+pub(crate) fn remember_item(
+    c: &Connection,
+    id: ItemId,
+    origin: Option<&str>,
+    source: Option<&elzevir_app::matching::KohaItemSource>,
+) -> Result<(), CommandFailed<WriteRefusal>> {
+    if let (Some(origin), Some(key)) = (origin, source.and_then(|s| s.itemnumber.as_deref())) {
+        let changed=c.execute("INSERT INTO item_origins(origin,system,external_id,item_id) VALUES(?1,'koha.itemnumber',?2,?3)
+            ON CONFLICT(origin,system,external_id) DO UPDATE SET item_id=excluded.item_id WHERE item_origins.item_id=excluded.item_id",params![origin,key,id.0]).map_err(StoreError::from)?;
+        if changed == 0 {
+            return Err(refused(CatalogRefusal::ImportConflict(
+                "external itemnumber belongs to another Item".into(),
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// Stores the Work, its Instance, the source record and the match keys, without Items.
@@ -232,8 +259,20 @@ pub(crate) fn add_work_and_instance(
     let work = connection.last_insert_rowid();
     link_relations(connection, work, &record.relations)?;
     link_languages(connection, work, &record.languages)?;
-    link_contributions(connection, work, &record.contributions)?;
-    link_subjects(connection, work, &record.subjects)?;
+    link_contributions_at_from(
+        connection,
+        work,
+        0,
+        &record.contributions,
+        HeadingSource::of(record),
+    )?;
+    link_subjects_at_from(
+        connection,
+        work,
+        0,
+        &record.subjects,
+        HeadingSource::of(record),
+    )?;
     store_description(
         connection,
         EntityRef {
@@ -254,6 +293,26 @@ pub(crate) fn store_source_and_keys(
     instance: InstanceId,
     record: &NewRecord,
 ) -> Result<(), StoreError> {
+    if let Some(origin) = &record.instance.origin {
+        connection.execute(
+            "INSERT OR IGNORE INTO instance_origins(instance_id,origin) VALUES(?1,?2)",
+            params![instance.0, origin],
+        )?;
+    }
+    if let (Some(origin), Some((system, value))) = (
+        &record.instance.origin,
+        elzevir_app::matching::source_control_number(record),
+    ) {
+        connection.execute(
+            "INSERT OR IGNORE INTO import_identities(origin,entity,system,external_id,instance_id)
+             VALUES (?1,'instance',?2,?3,?4)",
+            params![origin, system, value, instance.0],
+        )?;
+    }
+    if let Some(raw) = &record.instance.original {
+        connection.execute("INSERT INTO original_records(instance_id,original,declared,decoded,family,origin,serialization) VALUES(?1,?2,?3,?4,?5,?6,?7)
+        ON CONFLICT(instance_id) DO UPDATE SET original=excluded.original,declared=excluded.declared,decoded=excluded.decoded,family=excluded.family,origin=excluded.origin,serialization=excluded.serialization",params![instance.0,raw.bytes,raw.declared,raw.decoded,raw.family,record.instance.origin,raw.serialization])?;
+    }
     if let Some(source) = &record.source {
         connection.execute(
             "INSERT INTO source_records (instance_id, format, record) VALUES (?1, ?2, ?3)",
@@ -261,6 +320,15 @@ pub(crate) fn store_source_and_keys(
         )?;
     }
     for key in match_keys(record) {
+        if key.rule == elzevir_domain::catalog::MatchRule::KohaBiblionumber
+            && let Some(origin) = &record.instance.origin
+        {
+            connection.execute(
+                "INSERT OR IGNORE INTO import_identities(origin,entity,system,external_id,instance_id)
+                 VALUES (?1,'instance','koha.biblionumber',?2,?3)",
+                params![origin,key.key,instance.0],
+            )?;
+        }
         connection.execute(
             "INSERT OR IGNORE INTO match_keys (rule, key, instance_id) VALUES (?1, ?2, ?3)",
             params![key.rule.code(), key.key, instance.0],
@@ -325,14 +393,6 @@ pub(crate) fn link_languages(
     Ok(())
 }
 
-pub(crate) fn link_contributions(
-    connection: &Connection,
-    work: i64,
-    contributions: &[NewContribution],
-) -> Result<(), CommandFailed<WriteRefusal>> {
-    link_contributions_at(connection, work, 0, contributions)
-}
-
 /// Links `contributions` to `work` from `start` on.
 pub(crate) fn link_contributions_at(
     connection: &Connection,
@@ -340,15 +400,46 @@ pub(crate) fn link_contributions_at(
     start: i64,
     contributions: &[NewContribution],
 ) -> Result<(), CommandFailed<WriteRefusal>> {
+    link_contributions_at_from(
+        connection,
+        work,
+        start,
+        contributions,
+        HeadingSource::Catalog,
+    )
+}
+
+pub(crate) fn link_contributions_at_from(
+    connection: &Connection,
+    work: i64,
+    start: i64,
+    contributions: &[NewContribution],
+    origin: HeadingSource<'_>,
+) -> Result<(), CommandFailed<WriteRefusal>> {
     for (contribution, position) in contributions.iter().zip(start..) {
-        let agent = upsert(
-            connection,
-            "INSERT INTO agents (kind, heading) VALUES (?1, ?2) ON CONFLICT DO NOTHING",
-            "SELECT id FROM agents WHERE kind = ?1 AND heading = ?2",
-            contribution.kind.code(),
-            &contribution.heading,
-        )?;
-        set_name_parts(connection, contribution).map_err(StoreError::from)?;
+        let identity = occurrence_identity(origin, work, position, &contribution.identifiers)?;
+        let args = params![contribution.kind.code(), contribution.heading, identity];
+        connection
+            .execute(
+                "INSERT INTO agents(kind,heading,identity) VALUES(?1,?2,?3) ON CONFLICT DO NOTHING",
+                args,
+            )
+            .map_err(StoreError::from)?;
+        let agent: i64 = connection
+            .query_row(
+                "SELECT id FROM agents WHERE kind=?1 AND heading=?2 AND identity=?3",
+                args,
+                |r| r.get(0),
+            )
+            .map_err(StoreError::from)?;
+        if !contribution.name_parts.is_empty() {
+            connection
+                .execute(
+                    "UPDATE agents SET name_parts=?2 WHERE id=?1 AND name_parts=''",
+                    params![agent, name_parts_column(&contribution.name_parts)],
+                )
+                .map_err(StoreError::from)?;
+        }
         let role = optional_term(
             connection,
             Vocabulary::Relator,
@@ -476,14 +567,6 @@ pub(crate) fn name_parts_of_column(column: &str) -> Result<Vec<NamePart>, ReadFa
         .collect()
 }
 
-pub(crate) fn link_subjects(
-    connection: &Connection,
-    work: i64,
-    subjects: &[NewSubject],
-) -> Result<(), CommandFailed<WriteRefusal>> {
-    link_subjects_at(connection, work, 0, subjects)
-}
-
 /// Links `subjects` to `work` from `start` on.
 pub(crate) fn link_subjects_at(
     connection: &Connection,
@@ -491,13 +574,41 @@ pub(crate) fn link_subjects_at(
     start: i64,
     subjects: &[NewSubject],
 ) -> Result<(), CommandFailed<WriteRefusal>> {
+    link_subjects_at_from(connection, work, start, subjects, HeadingSource::Catalog)
+}
+
+pub(crate) fn link_subjects_at_from(
+    connection: &Connection,
+    work: i64,
+    start: i64,
+    subjects: &[NewSubject],
+    origin: HeadingSource<'_>,
+) -> Result<(), CommandFailed<WriteRefusal>> {
     for (subject, position) in subjects.iter().zip(start..) {
         let thesaurus = optional_term(
             connection,
             Vocabulary::Thesaurus,
             subject.thesaurus.as_deref(),
         )?;
-        let subject_id = subject_id(connection, subject, thesaurus).map_err(StoreError::from)?;
+        let identity = occurrence_identity(origin, work, position, &subject.identifiers)?;
+        let subdivisions = subdivisions_column(&subject.subdivisions);
+        let args = params![
+            subject.kind.code(),
+            subject.heading,
+            thesaurus,
+            subdivisions,
+            identity
+        ];
+        connection.execute("INSERT INTO subjects(kind,heading,thesaurus,subdivisions,identity) VALUES(?1,?2,?3,?4,?5) ON CONFLICT DO NOTHING",args).map_err(StoreError::from)?;
+        let subject_id:i64 = connection.query_row("SELECT id FROM subjects WHERE kind=?1 AND heading=?2 AND thesaurus IS ?3 AND subdivisions=?4 AND identity=?5",args,|r|r.get(0)).map_err(StoreError::from)?;
+        if !subject.name_parts.is_empty() {
+            connection
+                .execute(
+                    "UPDATE subjects SET name_parts=?2 WHERE id=?1 AND name_parts=''",
+                    params![subject_id, name_parts_column(&subject.name_parts)],
+                )
+                .map_err(StoreError::from)?;
+        }
         connection
             .execute(
                 "INSERT INTO work_subjects (work_id, position, subject_id) VALUES (?1, ?2, ?3)",
@@ -646,6 +757,12 @@ pub(crate) fn insert_notes(
              VALUES (?1, ?2, ?3, ?4)",
             params![instance, position, note.kind.code(), note.text],
         )?;
+        if note.visibility.is_some() {
+            connection.execute(
+                "INSERT INTO note_visibility(instance_id,position,public) VALUES(?1,?2,?3)",
+                params![instance, position, note.is_public()],
+            )?;
+        }
     }
     Ok(())
 }
@@ -701,6 +818,15 @@ pub(crate) fn required_item_codes(
     Ok([home, holding, policy])
 }
 
+pub(crate) fn store_issue(c: &Connection, id: ItemId, item: &ItemData) -> Result<(), StoreError> {
+    if item.issue_statement.is_some() || item.enumeration.is_some() || item.chronology.is_some() {
+        c.execute("INSERT INTO item_issues(item_id,enumeration,chronology,statement) VALUES(?1,?2,?3,?4)
+        ON CONFLICT(item_id) DO UPDATE SET enumeration=coalesce(excluded.enumeration,enumeration), chronology=coalesce(excluded.chronology,chronology),
+         statement=coalesce(excluded.statement,statement)",params![id.0,item.enumeration,item.chronology,item.issue_statement])?;
+    }
+    Ok(())
+}
+
 /// Stores an imported Item.
 pub(crate) fn add_item(
     connection: &Connection,
@@ -746,7 +872,11 @@ pub(crate) fn insert_item(
         ],
     );
     match inserted {
-        Ok(_) => Ok(ItemId(connection.last_insert_rowid())),
+        Ok(_) => {
+            let id = ItemId(connection.last_insert_rowid());
+            store_issue(connection, id, item)?;
+            Ok(id)
+        }
         Err(e) if is_constraint(&e) => Err(refused(CatalogRefusal::BarcodeTaken(
             item.barcode.clone().unwrap_or_default(),
         ))),
@@ -764,16 +894,45 @@ pub(crate) fn lookup(
         .optional()?)
 }
 
-/// Inserts `(number, text)` if missing and returns the row's id.
-fn upsert(
-    connection: &Connection,
-    insert: &str,
-    select: &str,
-    number: u8,
-    text: &str,
-) -> Result<i64, StoreError> {
-    connection.execute(insert, params![number, text])?;
-    Ok(connection.query_row(select, params![number, text], |row| row.get(0))?)
+#[derive(Clone, Copy)]
+pub(crate) enum HeadingSource<'a> {
+    Catalog,
+    Import(Option<&'a str>),
+    Retained(&'a str),
+}
+
+impl<'a> HeadingSource<'a> {
+    pub(crate) fn of(record: &'a NewRecord) -> Self {
+        if record.instance.original.is_some()
+            || record.instance.origin.is_some()
+            || matches!(
+                record.items,
+                elzevir_app::catalog::RecordItems::Native { .. }
+            )
+        {
+            Self::Import(record.instance.origin.as_deref())
+        } else {
+            Self::Catalog
+        }
+    }
+}
+
+fn occurrence_identity(
+    source: HeadingSource<'_>,
+    work: i64,
+    position: i64,
+    links: &[AuthorityLink],
+) -> Result<String, StoreError> {
+    let origin = match source {
+        HeadingSource::Retained(identity) => return Ok(identity.to_owned()),
+        HeadingSource::Catalog if links.is_empty() => return Ok(String::new()),
+        HeadingSource::Catalog => None,
+        HeadingSource::Import(origin) => origin,
+    };
+    if links.is_empty() || origin.is_none() {
+        return Ok(serde_json::to_string(&(origin, work, position, links))?);
+    }
+    Ok(serde_json::to_string(&(origin, links))?)
 }
 
 /// The term with `code` in `vocabulary`, created with the code as its label if missing.
@@ -1049,7 +1208,7 @@ fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>,
     )?;
     let notes = coded_list(
         c,
-        "SELECT kind, text FROM instance_notes WHERE instance_id = ?1 ORDER BY position",
+        "SELECT kind, text FROM instance_notes LEFT JOIN note_visibility USING(instance_id,position) WHERE instance_id = ?1 AND coalesce(public, kind != 3) ORDER BY position",
         id.0,
         "note kind",
         NoteKind::from_code,

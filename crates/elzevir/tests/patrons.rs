@@ -456,6 +456,9 @@ fn stock(data: &Path) {
         WriteCommand::Catalog(CatalogCommand::AddItem(Box::new(NewItem {
             instance,
             item: ItemData {
+                issue_statement: None,
+                enumeration: None,
+                chronology: None,
                 barcode: Some("0001".to_owned()),
                 inventory_number: None,
                 home_branch: "B2".to_owned(),

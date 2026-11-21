@@ -54,6 +54,119 @@ pub enum MappingError {
     },
 }
 
+/// Keep unmapped local MARC fields across overlay. Source identifiers and holdings
+/// are resolved by the matching and Item writers.
+///
+/// # Errors
+/// Refuses a replacement whose local fields cannot be preserved.
+pub fn preserve_local_fields(old: &[u8], new: &[u8]) -> Result<Vec<u8>, String> {
+    let parse = |raw: &[u8]| {
+        RecordRef::parse(raw, &Limits::default())
+            .map(|r| Record::from_ref(&r))
+            .map_err(|e| e.to_string())
+    };
+    let prior = parse(old)?;
+    let mut incoming = parse(new)?;
+    let mut changed = false;
+    // An Item field belongs to its barcode; a holdings field belongs to its linkage.
+    // For other repeated local fields, retain the source occurrence order.
+    let mut positions = std::collections::BTreeMap::new();
+    for field in prior.fields.into_iter().filter(|f| local_tag(f.tag())) {
+        let tag = field.tag();
+        let mut candidates = incoming.fields.iter_mut().filter(|f| f.tag() == tag);
+        let target = match tag.as_bytes() {
+            b"952" | b"876" => {
+                let Some(key) = local_key(&field, b'p') else {
+                    continue;
+                };
+                candidates.find(|f| local_key(f, b'p') == Some(key))
+            }
+            b"863" => {
+                let Some(key) = local_key(&field, b'8') else {
+                    continue;
+                };
+                candidates.find(|f| local_key(f, b'8') == Some(key))
+            }
+            b"590" => candidates.find(|f| local_key(f, b'a') == local_key(&field, b'a')),
+            _ => {
+                let index = positions.entry(tag).or_insert(0);
+                let target = candidates.nth(*index);
+                *index += 1;
+                target
+            }
+        };
+        if let Some(target) = target {
+            if let (Field::Data { subfields, .. }, Field::Data { subfields: old, .. }) =
+                (target, field)
+            {
+                let present: std::collections::BTreeSet<_> =
+                    subfields.iter().map(|s| s.code).collect();
+                let length = subfields.len();
+                subfields.extend(old.into_iter().filter(|s| {
+                    !(present.contains(&s.code) || tag.as_bytes() == b"952" && s.code == b'9')
+                }));
+                changed |= subfields.len() != length;
+            }
+        } else {
+            let at = incoming
+                .fields
+                .iter()
+                .rposition(|f| f.tag() <= tag)
+                .map_or(0, |i| i + 1);
+            incoming.fields.insert(at, field);
+            changed = true;
+        }
+    }
+    if !changed {
+        return Ok(new.to_vec());
+    }
+    let mut bytes = Vec::new();
+    incoming
+        .write_iso2709(&mut bytes)
+        .map_err(|e| e.to_string())?;
+    Ok(bytes)
+}
+
+fn local_key(field: &Field, code: u8) -> Option<&[u8]> {
+    match field {
+        Field::Data { subfields, .. } => subfields
+            .iter()
+            .find(|s| s.code == code)
+            .map(|s| s.value.as_slice()),
+        Field::Control { .. } => None,
+    }
+}
+
+fn local_tag(tag: elzevir_marc::Tag) -> bool {
+    let t = tag.as_bytes();
+    (t.first() == Some(&b'9') || t.get(1) == Some(&b'9') || matches!(t, b"863" | b"876"))
+        && t != b"999"
+}
+
+/// The local MARC extension fields kept when a native sheet overlays a MARC source.
+///
+/// # Errors
+/// Reports an unreadable source record.
+pub fn local_fields_only(old: &[u8]) -> Result<Vec<u8>, String> {
+    let mut source =
+        Record::from_ref(&RecordRef::parse(old, &Limits::default()).map_err(|e| e.to_string())?);
+    source.fields.retain(|f| local_tag(f.tag()));
+    let mut bytes = Vec::new();
+    source
+        .write_iso2709(&mut bytes)
+        .map_err(|e| e.to_string())?;
+    Ok(bytes)
+}
+
+/// Holdings information recoverable from a legacy normalized source record.
+#[must_use]
+pub fn source_items(source: &[u8]) -> Vec<crate::catalog::ItemData> {
+    RecordRef::parse(source, &Limits::default())
+        .ok()
+        .and_then(|raw| items::map(&Marc(&Record::from_ref(&raw))).ok())
+        .unwrap_or_default()
+}
+
 /// The notes of a stored source record (UTF-8 ISO 2709), for records stored before the
 /// model had notes. A record that no longer parses has none.
 #[must_use]

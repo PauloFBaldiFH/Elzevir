@@ -138,12 +138,16 @@ fn stored(instance: i64) -> StoredRecord {
                     qualifier: None,
                 }],
                 notes: vec![NewNote {
+                    visibility: None,
                     kind: NoteKind::Local,
                     text: "Doação da família Silva.".to_owned(),
                 }],
                 ..NewInstance::default()
             },
             items: vec![ItemData {
+                issue_statement: None,
+                enumeration: None,
+                chronology: None,
                 barcode: Some("000123".to_owned()),
                 inventory_number: Some("T-77".to_owned()),
                 home_branch: "CENTRAL".to_owned(),

@@ -171,10 +171,21 @@ expression: "crate::rdf::write_rdf_xml(&graph)"
         <rdfs:label>Literatura</rdfs:label>
       </bf:Sublocation>
     </bf:sublocation>
+    <bf:identifiedBy>
+      <bf:Local>
+        <rdf:value>ex. 1</rdf:value>
+        <bf:qualifier>copy number</bf:qualifier>
+      </bf:Local>
+    </bf:identifiedBy>
     <bf:enumerationAndChronology>
       <bf:Enumeration>
-        <rdfs:label>ex. 1</rdfs:label>
+        <rdfs:label>v. 12</rdfs:label>
       </bf:Enumeration>
+    </bf:enumerationAndChronology>
+    <bf:enumerationAndChronology>
+      <bf:Chronology>
+        <rdfs:label>2020</rdfs:label>
+      </bf:Chronology>
     </bf:enumerationAndChronology>
     <bf:immediateAcquisition>
       <bf:ImmediateAcquisition>
@@ -190,6 +201,16 @@ expression: "crate::rdf::write_rdf_xml(&graph)"
   <bf:Item rdf:about="https://biblioteca.example/bf/items/12">
     <bf:itemOf rdf:resource="https://biblioteca.example/bf/instances/7"/>
     <bf:heldBy rdf:resource="https://biblioteca.example/bf/organizations/1"/>
+    <bf:enumerationAndChronology>
+      <bf:Enumeration>
+        <rdfs:label>v. 12</rdfs:label>
+      </bf:Enumeration>
+    </bf:enumerationAndChronology>
+    <bf:enumerationAndChronology>
+      <bf:Chronology>
+        <rdfs:label>2020</rdfs:label>
+      </bf:Chronology>
+    </bf:enumerationAndChronology>
     <bf:usageAndAccessPolicy>
       <bf:UsePolicy>
         <rdfs:label>Empréstimo normal</rdfs:label>

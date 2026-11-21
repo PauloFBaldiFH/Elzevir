@@ -837,6 +837,8 @@ const MIGRATIONS: &[&str] = &[
     // 60: the patron's OPAC password, as an Argon2id hash (docs/specs/opac/
     // conta-do-leitor.md, items 1 to 4); NULL is no OPAC access.
     "ALTER TABLE patrons ADD COLUMN password_hash TEXT;",
+    // 61: keep installation-local identifiers separate across source catalogs.
+    include_str!("import_provenance.sql"),
 ];
 
 /// The migration that creates `match_keys`.
@@ -961,21 +963,36 @@ fn migrate(connection: &mut Connection) -> Result<(), StoreError> {
         });
     }
     // Foreign keys can only be switched outside a transaction.
-    let rebuilds = current < POLICIES_VERSION;
+    if current < 60 {
+        migrate_range(connection, current, 60, current < POLICIES_VERSION)?;
+    }
+    migrate_range(connection, current.max(60), supported, current < 61)
+}
+
+fn migrate_range(
+    connection: &mut Connection,
+    current: i64,
+    target: i64,
+    rebuilds: bool,
+) -> Result<(), StoreError> {
     if rebuilds {
         connection.execute_batch("PRAGMA foreign_keys = OFF;")?;
     }
-    let migrated = apply_migrations(connection, current);
+    let migrated = apply_migrations(connection, current, target);
     if rebuilds {
         connection.execute_batch("PRAGMA foreign_keys = ON;")?;
     }
     migrated
 }
 
-fn apply_migrations(connection: &mut Connection, current: i64) -> Result<(), StoreError> {
+fn apply_migrations(
+    connection: &mut Connection,
+    current: i64,
+    target: i64,
+) -> Result<(), StoreError> {
     let tx = connection.transaction()?;
     for (version, sql) in (1_i64..).zip(MIGRATIONS) {
-        if version > current {
+        if version > current && version <= target {
             if version == DROP_EXTRA_VERSION {
                 check_extra_is_empty(&tx)?;
             }
@@ -1056,7 +1073,10 @@ fn apply_migrations(connection: &mut Connection, current: i64) -> Result<(), Sto
             if version == OPAC_HIDDEN_VERSION {
                 backfill_opac_hidden(&tx)?;
             }
-            if version == NO_CODES_VERSION || version == POLICIES_VERSION {
+            if version == 61 {
+                backfill_item_issues(&tx)?;
+            }
+            if version == NO_CODES_VERSION || version == POLICIES_VERSION || version == 61 {
                 check_foreign_keys(&tx, version)?;
             }
             tx.pragma_update(None, "user_version", version)?;
@@ -1117,6 +1137,36 @@ fn backfill_notes(connection: &Connection) -> Result<(), StoreError> {
     while let Some(row) = rows.next()? {
         let record: Vec<u8> = row.get(1)?;
         insert_notes(connection, row.get(0)?, &source_notes(&record))?;
+    }
+    Ok(())
+}
+
+/// Recover serial holdings only where a stored barcode still belongs to the source Instance.
+fn backfill_item_issues(c: &Connection) -> Result<(), StoreError> {
+    let mut sources = c.prepare("SELECT instance_id,record FROM source_records")?;
+    let mut rows = sources.query([])?;
+    let mut holder = c.prepare("SELECT id FROM items WHERE instance_id=?1 AND barcode=?2")?;
+    while let Some(row) = rows.next()? {
+        let instance: i64 = row.get(0)?;
+        let bytes: Vec<u8> = row.get(1)?;
+        let items = elzevir_app::marc_mapping::source_items(&bytes);
+        let mut counts = std::collections::BTreeMap::new();
+        for barcode in items.iter().filter_map(|i| i.barcode.as_ref()) {
+            *counts.entry(barcode).or_insert(0) += 1;
+        }
+        for item in &items {
+            if (item.issue_statement.is_some()
+                || item.enumeration.is_some()
+                || item.chronology.is_some())
+                && let Some(barcode) = &item.barcode
+                && counts.get(barcode) == Some(&1)
+                && let Some(id) = holder
+                    .query_row(params![instance, barcode], |r| r.get(0))
+                    .optional()?
+            {
+                crate::catalog::store_issue(c, elzevir_domain::catalog::ItemId(id), item)?;
+            }
+        }
     }
     Ok(())
 }
@@ -1595,6 +1645,10 @@ fn backfill_sort_keys(connection: &Connection) -> Result<(), StoreError> {
 }
 
 #[cfg(test)]
+#[path = "schema_import_tests.rs"]
+mod import_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -1667,7 +1721,7 @@ mod catalog_tests {
             .unwrap();
         connection
             .execute_batch(
-                "DROP TABLE board_notes; DROP TABLE notice_texts; DROP TABLE hold_notice_preferences; DROP TABLE daily_runs; DROP TABLE notice_items; DROP TABLE notices; DROP TABLE overdue_notice_rules; DROP TABLE ended_holds; DROP TABLE holds; DROP TABLE account_offsets; DROP TABLE account_lines; DROP TABLE patron_restrictions; DROP TABLE transfers; DROP TABLE returned_loans; DROP TABLE loans; DROP TABLE calendar_dates; DROP TABLE calendar_annual; DROP TABLE calendar_weekly; DROP TABLE circulation_rules; DROP TABLE patrons; DROP TABLE patron_categories; DROP INDEX audit_imports; DROP TABLE saved_list_families; DROP TABLE saved_lists; DROP INDEX audit_by_actor; DROP INDEX audit_by_kind; DROP INDEX audit_entities_by_seq; DROP TABLE instance_notes; ALTER TABLE works DROP COLUMN audience;
+                "DROP TABLE import_identities; DROP TABLE board_notes; DROP TABLE notice_texts; DROP TABLE hold_notice_preferences; DROP TABLE daily_runs; DROP TABLE notice_items; DROP TABLE notices; DROP TABLE overdue_notice_rules; DROP TABLE ended_holds; DROP TABLE holds; DROP TABLE account_offsets; DROP TABLE account_lines; DROP TABLE patron_restrictions; DROP TABLE transfers; DROP TABLE returned_loans; DROP TABLE loans; DROP TABLE calendar_dates; DROP TABLE calendar_annual; DROP TABLE calendar_weekly; DROP TABLE circulation_rules; DROP TABLE patrons; DROP TABLE patron_categories; DROP INDEX audit_imports; DROP TABLE saved_list_families; DROP TABLE saved_lists; DROP INDEX audit_by_actor; DROP INDEX audit_by_kind; DROP INDEX audit_entities_by_seq; DROP TABLE instance_notes; ALTER TABLE works DROP COLUMN audience;
                  DROP INDEX works_in_listing; DROP INDEX hubs_in_listing; ALTER TABLE works DROP COLUMN sort_key; ALTER TABLE hubs DROP COLUMN sort_key; ALTER TABLE audit_log DROP COLUMN actor; DROP INDEX agents_by_heading; DROP INDEX subjects_by_heading; DROP TABLE koha_type_statements; ALTER TABLE circulation_policies ADD COLUMN code TEXT; UPDATE circulation_policies SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 4 AND local_id = circulation_policies.id), 'P' || id); ALTER TABLE circulation_policies RENAME COLUMN name TO description; ALTER TABLE circulation_policies RENAME TO item_types; ALTER TABLE items RENAME COLUMN policy_id TO item_type; DELETE FROM koha_codes WHERE kind = 4; ALTER TABLE branches ADD COLUMN code TEXT; UPDATE branches SET code = COALESCE((SELECT code FROM koha_codes WHERE kind = 1 AND local_id = branches.id), 'B' || id); ALTER TABLE items ADD COLUMN location INTEGER REFERENCES terms (id); ALTER TABLE items ADD COLUMN collection INTEGER REFERENCES terms (id); INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 3, k.code, p.name FROM sublocations p JOIN koha_codes k ON k.kind = 2 AND k.local_id = p.id; INSERT OR IGNORE INTO terms (vocabulary, code, label) SELECT 4, k.code, p.name FROM collections p JOIN koha_codes k ON k.kind = 3 AND k.local_id = p.id; UPDATE items SET location = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 2 AND k.code = t.code WHERE t.vocabulary = 3 AND k.local_id = items.sublocation_id), collection = (SELECT t.id FROM terms t JOIN koha_codes k ON k.kind = 3 AND k.code = t.code WHERE t.vocabulary = 4 AND k.local_id = items.collection_id); ALTER TABLE items DROP COLUMN sublocation_id; ALTER TABLE items DROP COLUMN collection_id; DROP TABLE sublocations; DROP TABLE collections; DROP TABLE koha_codes; ALTER TABLE branches DROP COLUMN address; ALTER TABLE branches DROP COLUMN phone; ALTER TABLE branches DROP COLUMN email; ALTER TABLE branches DROP COLUMN url; ALTER TABLE hubs ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE works ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE instances ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; ALTER TABLE items ADD COLUMN extra TEXT NOT NULL DEFAULT '{}'; DROP TABLE entity_classes; DROP TABLE statements; DROP TABLE lc_concepts; DROP TABLE ontology_names; DROP TABLE subject_identifiers; ALTER TABLE subjects DROP COLUMN name_parts; DROP TABLE contribution_identifiers; ALTER TABLE contributions DROP COLUMN role_term; ALTER TABLE agents DROP COLUMN name_parts; DROP INDEX subjects_identity; ALTER TABLE subjects DROP COLUMN subdivisions; CREATE UNIQUE INDEX subjects_identity ON subjects (kind, heading, coalesce(thesaurus, 0)); ALTER TABLE works ADD COLUMN material_type INTEGER; ALTER TABLE instances ADD COLUMN material_type INTEGER; ALTER TABLE subjects DROP COLUMN row_version; ALTER TABLE agents DROP COLUMN row_version; ALTER TABLE instances DROP COLUMN opac_hidden; DROP TABLE audit_entities; ALTER TABLE audit_log DROP COLUMN at; PRAGMA user_version = 5;",
             )
             .unwrap();
@@ -2656,6 +2710,9 @@ mod catalog_tests {
     }
 
     fn rewind(connection: &Connection, version: i64) {
+        connection
+            .execute_batch("DROP TABLE IF EXISTS import_identities")
+            .unwrap();
         if version < WORK_LISTS_VERSION {
             connection
                 .execute_batch(

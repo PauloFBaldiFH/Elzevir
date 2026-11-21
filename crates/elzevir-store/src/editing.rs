@@ -16,8 +16,8 @@ use elzevir_domain::catalog::{InstanceId, MatchRule, Vocabulary, WorkId};
 use rusqlite::{Connection, OptionalExtension, ToSql, params};
 
 use crate::catalog::{
-    insert_identifiers, insert_notes, link_contributions, link_languages, link_relations,
-    link_subjects, optional_term, record_changed, refused,
+    HeadingSource, insert_identifiers, insert_notes, link_contributions_at_from, link_languages,
+    link_relations, link_subjects_at_from, optional_term, record_changed, refused,
 };
 use crate::statements::{replace_classes, replace_property};
 use crate::{CommandFailed, StoreError, WriteTx};
@@ -177,21 +177,23 @@ fn apply_work_change(
         }
         WorkChange::Contributions(contributions) => {
             let contributions = keep_role_terms(connection, id, contributions)?;
-            clear(
+            relink_headings(
                 connection,
-                "DELETE FROM contributions WHERE work_id = ?1",
                 id,
+                "DELETE FROM contributions WHERE work_id=?1",
+                &contributions,
+                link_contributions_at_from,
             )?;
-            link_contributions(connection, id, &contributions)?;
         }
         WorkChange::Subjects(subjects) => {
             let subjects = keep_subject_details(connection, id, subjects)?;
-            clear(
+            relink_headings(
                 connection,
-                "DELETE FROM work_subjects WHERE work_id = ?1",
                 id,
+                "DELETE FROM work_subjects WHERE work_id=?1",
+                &subjects,
+                link_subjects_at_from,
             )?;
-            link_subjects(connection, id, &subjects)?;
         }
         WorkChange::Relations(relations) => replace_relations(connection, work, relations)?,
         WorkChange::Statements {
@@ -206,6 +208,30 @@ fn apply_work_change(
             property,
             statements,
         )?,
+    }
+    Ok(())
+}
+
+/// Preserve the occurrence's scoped heading when a staff edit reorders or reuses it.
+fn relink_headings<T>(
+    c: &Connection,
+    work: i64,
+    clear_sql: &str,
+    headings: &[(T, Option<String>)],
+    link: impl Fn(
+        &Connection,
+        i64,
+        i64,
+        &[T],
+        HeadingSource<'_>,
+    ) -> Result<(), CommandFailed<WriteRefusal>>,
+) -> Result<(), CommandFailed<WriteRefusal>> {
+    clear(c, clear_sql, work)?;
+    for (position, (heading, identity)) in (0..).zip(headings) {
+        let source = identity
+            .as_deref()
+            .map_or(HeadingSource::Catalog, HeadingSource::Retained);
+        link(c, work, position, std::slice::from_ref(heading), source)?;
     }
     Ok(())
 }
@@ -235,19 +261,37 @@ fn keep_role_terms(
     connection: &Connection,
     work: i64,
     contributions: &[NewContribution],
-) -> Result<Vec<NewContribution>, StoreError> {
-    let mut current = crate::export::contributions(connection, work).map_err(store_error)?;
+) -> Result<Vec<(NewContribution, Option<String>)>, StoreError> {
+    let mut ids = connection.prepare(
+        "SELECT h.identity FROM contributions r JOIN agents h ON h.id=r.agent_id
+        WHERE r.work_id=?1 ORDER BY r.position",
+    )?;
+    let identities = ids
+        .query_map([work], |row| row.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut current: Vec<_> = crate::export::contributions(connection, work)
+        .map_err(store_error)?
+        .into_iter()
+        .zip(identities)
+        .collect();
     Ok(contributions
         .iter()
         .map(|contribution| {
             let mut contribution = contribution.clone();
-            let found = current.iter().position(|present| {
-                present.kind == contribution.kind
+            let mut identity = None;
+            let found = current.iter().position(|(present, _)| {
+                (contribution.identifiers.is_empty()
+                    || present.identifiers == contribution.identifiers)
+                    && present.kind == contribution.kind
                     && present.heading == contribution.heading
                     && present.role == contribution.role
             });
             if let Some(found) = found {
-                let present = current.remove(found);
+                let (present, key) = current.remove(found);
+                identity = Some(key);
+                if contribution.name_parts.is_empty() {
+                    contribution.name_parts.clone_from(&present.name_parts);
+                }
                 if contribution.role_term.is_none() {
                     contribution.role_term = present.role_term;
                 }
@@ -255,7 +299,7 @@ fn keep_role_terms(
                     contribution.identifiers = present.identifiers;
                 }
             }
-            contribution
+            (contribution, identity)
         })
         .collect())
 }
@@ -267,19 +311,36 @@ fn keep_subject_details(
     connection: &Connection,
     work: i64,
     subjects: &[NewSubject],
-) -> Result<Vec<NewSubject>, StoreError> {
-    let mut current = crate::export::subjects(connection, work).map_err(store_error)?;
+) -> Result<Vec<(NewSubject, Option<String>)>, StoreError> {
+    let mut ids = connection.prepare(
+        "SELECT h.identity FROM work_subjects r JOIN subjects h ON h.id=r.subject_id
+        WHERE r.work_id=?1 ORDER BY r.position",
+    )?;
+    let identities = ids
+        .query_map([work], |row| row.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut current: Vec<_> = crate::export::subjects(connection, work)
+        .map_err(store_error)?
+        .into_iter()
+        .zip(identities)
+        .collect();
     Ok(subjects
         .iter()
         .map(|subject| {
             let mut subject = subject.clone();
-            let found = current.iter().position(|present| {
-                present.kind == subject.kind
+            let mut identity = None;
+            let found = current.iter().position(|(present, _)| {
+                (subject.identifiers.is_empty() || present.identifiers == subject.identifiers)
+                    && present.kind == subject.kind
                     && present.heading == subject.heading
                     && present.thesaurus == subject.thesaurus
             });
             if let Some(found) = found {
-                let present = current.remove(found);
+                let (present, key) = current.remove(found);
+                identity = Some(key);
+                if subject.name_parts.is_empty() {
+                    subject.name_parts.clone_from(&present.name_parts);
+                }
                 if subject.subdivisions.is_empty() {
                     subject.subdivisions = present.subdivisions;
                 }
@@ -287,7 +348,7 @@ fn keep_subject_details(
                     subject.identifiers = present.identifiers;
                 }
             }
-            subject
+            (subject, identity)
         })
         .collect())
 }

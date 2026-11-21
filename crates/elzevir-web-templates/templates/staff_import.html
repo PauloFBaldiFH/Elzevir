@@ -181,6 +181,13 @@
           <input type="hidden" name="action" value="matching">
           <fieldset>
             <legend>{{ t.get("import-matching") }}</legend>
+            <label>{{ t.get("import-origin") }} <input name="origin" value="{{ draft.origin }}" maxlength="256"></label>
+            <label>{{ t.get("import-local-notes") }}
+              <select name="local_notes">
+                <option value="default"{% if draft.local_notes == "default" %} selected{% endif %}>{{ t.get("import-notes-default") }}</option>
+                <option value="staff"{% if draft.local_notes == "staff" %} selected{% endif %}>{{ t.get("import-notes-staff") }}</option>
+                <option value="public"{% if draft.local_notes == "public" %} selected{% endif %}>{{ t.get("import-notes-public") }}</option>
+              </select></label>
             <label>{{ t.get("import-matching-rule") }}
               <select name="rule">
                 <option value="none"{% if draft.matching.rule == "none" %} selected{% endif %}>{{ t.get("import-matching-none") }}</option>
@@ -259,6 +266,7 @@
                 <button type="submit">{{ t.get("import-exclude") }}</button>
               </form>
             {% endif %}
+            {% if let Some(scope) = entry.scope %}<p>{{ scope }}</p>{% endif %}
             {% if let Some(candidate) = entry.candidate %}
               <p class="import-candidate">{{ t.get("import-candidate") }}: {{ candidate }}</p>
             {% endif %}

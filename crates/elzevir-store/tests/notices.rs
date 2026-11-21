@@ -196,6 +196,9 @@ impl Library {
             WriteCommand::Catalog(CatalogCommand::AddItem(Box::new(NewItem {
                 instance: self.instance,
                 item: ItemData {
+                    issue_statement: None,
+                    enumeration: None,
+                    chronology: None,
                     barcode: Some(barcode.to_owned()),
                     inventory_number: None,
                     home_branch: "B1".to_owned(),

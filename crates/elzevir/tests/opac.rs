@@ -137,6 +137,9 @@ fn search_then_record_then_a_new_item_shows_up() {
             NewItem {
                 instance,
                 item: ItemData {
+                    issue_statement: None,
+                    enumeration: None,
+                    chronology: None,
                     barcode: Some("OPAC-TEST-1".to_owned()),
                     inventory_number: None,
                     home_branch: branch.clone(),
@@ -755,4 +758,56 @@ fn an_lcgft_genre_shows_its_label_on_the_record() {
     assert_eq!(status, StatusCode::OK);
     assert!(record.contains("Novels"));
     assert!(!record.contains("gf2015026020"));
+}
+
+#[test]
+fn local_notes_require_explicit_visibility_for_opac_search_and_rdf() {
+    use elzevir_app::import::{ImportOptions, import_marc_text};
+    use elzevir_app::rdf::{IriBase, RdfFormat, export_rdf};
+    let (_dir, store) = imported();
+    let store = Arc::new(store);
+    for (keyword, visibility) in [
+        ("staffonlyword", None),
+        (
+            "publicnoteword",
+            Some(elzevir_app::catalog::NoteVisibility::Public),
+        ),
+    ] {
+        let input = format!(
+            "=LDR  00000nam a2200000 a 4500\n=245  00$aVisibility test\n=590  \\\\$a{keyword}\n"
+        );
+        let options = ImportOptions {
+            local_note_visibility: visibility,
+            ..ImportOptions::default()
+        };
+        let result = import_marc_text(input.as_bytes(), &*store, &options).unwrap();
+        assert_eq!(result.imported, 1);
+        let id = store
+            .readers()
+            .read(|c| c.query_row("SELECT max(id) FROM instances", [], |r| r.get::<_, i64>(0)))
+            .unwrap();
+        let index = Arc::new(TantivyIndex::in_memory(Parallelism::Serial).unwrap());
+        index_pending(&*store, &*store, &*index, &self::options()).unwrap();
+        let app = app(&store, &index);
+        let (status, html) = get(&app, &format!("/record/{id}"));
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(html.contains(keyword), visibility.is_some());
+        let rdf = export_rdf(
+            &*store,
+            elzevir_domain::catalog::InstanceId(id),
+            RdfFormat::Turtle,
+            &IriBase::new("https://example.org"),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(rdf.contains(keyword), visibility.is_some());
+        let hits = index
+            .search(&SearchQuery::words(keyword), SearchScope::Public, 0, 10)
+            .unwrap()
+            .hits;
+        assert_eq!(
+            hits.iter().any(|h| h.instance.0 == id),
+            visibility.is_some()
+        );
+    }
 }

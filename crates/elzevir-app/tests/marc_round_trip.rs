@@ -219,6 +219,7 @@ fn notes_map_both_ways_and_an_edited_note_touches_only_its_field() {
     assert!(contents.text.contains("Marx"));
     contents.text = "Nota de conteúdo reescrita.".to_owned();
     edited.instance.notes.push(NewNote {
+        visibility: None,
         kind: NoteKind::Local,
         text: "Doação da família.".to_owned(),
     });
@@ -967,4 +968,53 @@ fn hiding_from_the_opac_writes_the_942_n_and_showing_again_its_zero() {
     let again = bibframe_to_marc(&shown, Some(&exported));
     assert_eq!(n(&again), ["0"]);
     assert!(!model(&again).instance.opac_hidden);
+}
+
+#[test]
+fn correcting_main_title_preserves_order_indicators_and_repeated_parts() {
+    use elzevir_marc::{Subfield, Tag};
+    let mut record = Record {
+        leader: *b"00000nam a2200000 a 4500",
+        fields: vec![Field::Data {
+            tag: Tag::new(*b"245"),
+            indicators: *b"14",
+            subfields: [
+                (b'a', "Old"),
+                (b'a', "Repeated"),
+                (b'n', "I"),
+                (b'p', "Maps"),
+                (b'n', "II"),
+                (b'p', "Tables"),
+                (b'b', "Subtitle"),
+                (b'b', "Parallel subtitle"),
+                (b'c', "A."),
+                (b'c', "B."),
+            ]
+            .into_iter()
+            .map(|(code, v)| Subfield {
+                code,
+                value: v.as_bytes().to_vec(),
+            })
+            .collect(),
+        }],
+    };
+    let mut edit = model(&record);
+    edit.instance.title = edit.instance.title.replacen("Old", "New", 1);
+    let second = edit
+        .instance
+        .description
+        .statements
+        .iter_mut()
+        .filter(|s| s.property == "responsibilityStatement")
+        .nth(1)
+        .unwrap();
+    if let elzevir_domain::statement::Value::Literal { text, .. } = &mut second.value {
+        *text = "Second author".into();
+    }
+    let output = bibframe_to_marc(&edit, Some(&record));
+    if let Field::Data { subfields, .. } = record.fields.first_mut().unwrap() {
+        subfields.first_mut().unwrap().value = b"New".to_vec();
+        subfields.last_mut().unwrap().value = b"Second author.".to_vec();
+    }
+    assert_eq!(tags(&output, *b"245"), tags(&record, *b"245"));
 }

@@ -93,7 +93,8 @@ pub(crate) fn build() -> (Schema, Fields) {
         subject: builder.add_text_field("subject", words.clone()),
         publisher: builder.add_text_field("publisher", words.clone()),
         summary: builder.add_text_field("summary", words.clone()),
-        note: builder.add_text_field("note", words),
+        // Opening an index that predates note visibility must discard its private terms.
+        note: builder.add_text_field("public_note", words),
         date: builder.add_text_field("date", STORED),
         content: builder.add_text_field("content", code.clone() | FAST),
         carrier: builder.add_text_field("carrier", code.clone() | FAST),

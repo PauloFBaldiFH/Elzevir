@@ -121,7 +121,7 @@ fn instance_node(data: &NewInstance, base: &IriBase) -> Node {
         }
         instance.node("identifiedBy", node);
     }
-    for note in &data.notes {
+    for note in data.notes.iter().filter(|note| note.is_public()) {
         match note.kind {
             NoteKind::Contents => {
                 instance.node(
@@ -440,6 +440,9 @@ pub(super) mod tests {
             sublocation: Some("Estantes gerais".to_owned()),
             collection: Some("Literatura".to_owned()),
             copy_number: Some("ex. 1".to_owned()),
+            issue_statement: None,
+            enumeration: Some("v. 12".into()),
+            chronology: Some("2020".into()),
             acquired_on: Some("2020-03-01".to_owned()),
             status: ItemStatus::default(),
             description: Description::default(),
@@ -510,6 +513,9 @@ pub(super) mod tests {
                     identifiers: Vec::new(),
                 }],
                 instance: NewInstance {
+                    origin: None,
+                    reviewed: None,
+                    original: None,
                     title: "Dom Casmurro".to_owned(),
                     description: instance,
                     edition: Some("2. ed.".to_owned()),
@@ -525,10 +531,12 @@ pub(super) mod tests {
                     }],
                     notes: vec![
                         NewNote {
+                            visibility: None,
                             kind: NoteKind::Contents,
                             text: "Cap. 1 -- Cap. 2.".to_owned(),
                         },
                         NewNote {
+                            visibility: Some(crate::catalog::NoteVisibility::Public),
                             kind: NoteKind::Local,
                             text: "Doação.".to_owned(),
                         },

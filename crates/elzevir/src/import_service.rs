@@ -217,6 +217,8 @@ fn close(batch: &mut Batch) {
 fn options(batch: &Batch) -> ImportOptions {
     ImportOptions {
         matching: batch.recipe.matching,
+        origin: batch.recipe.origin.clone(),
+        local_note_visibility: batch.recipe.local_note_visibility,
         ..ImportOptions::default()
     }
 }
@@ -250,7 +252,10 @@ impl PreparedInput {
     ) -> Result<ImportReport, ImportError> {
         match self {
             Self::Marc(file) => import_marc21(BufReader::new(file), sink, options),
-            Self::Table(table) => table.submit(sink, options.matching),
+            Self::Table(mut table) => {
+                table.apply_review(options);
+                table.submit(sink, options.matching)
+            }
         }
     }
 }
@@ -422,6 +427,7 @@ fn prepare_table(
         error => BatchError::Invalid(error.to_string()),
     })?;
     let stamp = Batches::table_stamp(batch, &table).map_err(BatchError::Invalid)?;
+    let stamp = catalog_stamp(&stamp, &report)?;
     let mut rendered = RenderReport::for_table(&table, from);
     rendered.detection.evidence = evidence;
     rendered.review(&mut report, &batch.recipe);
@@ -459,6 +465,7 @@ fn prepare_marc(
         None => elzevir_store::preview_import(&data_dir.join("elzevir.db"), input, options(batch)),
     }
     .map_err(|error| BatchError::Invalid(error.to_string()))?;
+    let stamp = catalog_stamp(&stamp, &report)?;
     file.rewind()
         .map_err(|error| BatchError::Unavailable(error.to_string()))?;
     rendered.review(&mut report, &batch.recipe);
@@ -471,6 +478,18 @@ fn prepare_marc(
         },
         stamp,
     })
+}
+
+fn catalog_stamp(
+    source: &str,
+    report: &elzevir_app::import::preview::PreviewReport,
+) -> Result<String, BatchError> {
+    use sha2::{Digest, Sha256};
+    let mut hash = Sha256::new();
+    hash.update(source.as_bytes());
+    serde_json::to_writer(&mut hash, &report.scopes)
+        .map_err(|error| BatchError::Invalid(error.to_string()))?;
+    Ok(format!("{:x}", hash.finalize()))
 }
 
 fn confirm(
@@ -487,7 +506,7 @@ fn confirm(
     }
     let Prepared {
         input,
-        preview,
+        mut preview,
         stamp,
     } = prepare(data_dir, live, batches, &batch, None)?;
     if batch.preview_sha256.as_deref() != Some(stamp.as_str()) {
@@ -511,6 +530,13 @@ fn confirm(
             (&local.store, None)
         };
         let mut options = options(&batch);
+        options.originals = std::mem::take(&mut preview.rendered.originals);
+        options.reviewed = preview
+            .report
+            .scopes
+            .iter()
+            .map(|(_, scope)| scope.clone())
+            .collect();
         if matches!(input, PreparedInput::Marc(_)) {
             options.translations = store
                 .type_translations()
@@ -590,8 +616,16 @@ fn outcome(preview: &BatchPreview, report: &ImportReport) -> Completion {
             RecordFailure::Rejected(RecordRejected::Refused(refusal)) => native_detail(refusal),
             _ => None,
         };
-        let (item, detail) =
-            target.map_or((None, None), |(item, detail)| (Some(item), Some(detail)));
+        let (item, detail) = match (&failure.failure, target) {
+            (_, Some((item, detail))) => (Some(item), Some(detail)),
+            (
+                RecordFailure::Rejected(RecordRejected::Refused(CatalogRefusal::ImportConflict(
+                    reason,
+                ))),
+                None,
+            ) => (None, Some(reason.clone())),
+            _ => (None, None),
+        };
         (failure.index, failure.offset, item, detail)
     });
     let items = report.item_failures.iter().map(|failure| {

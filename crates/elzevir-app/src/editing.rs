@@ -474,6 +474,7 @@ mod tests {
             InstanceChange::Title(" Dom Casmurro ".to_owned()),
             InstanceChange::Edition(Some(String::new())),
             InstanceChange::Notes(vec![NewNote {
+                visibility: None,
                 kind: NoteKind::General,
                 text: " ".to_owned(),
             }]),

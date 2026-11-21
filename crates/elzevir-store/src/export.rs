@@ -46,8 +46,8 @@ fn held_items(c: &Connection, instance: i64) -> Result<Vec<HeldItem>, ReadFailur
     let mut statement = c.prepare_cached(
         "SELECT items.id, barcode, inventory_number, home.id, home.name, policy.name,
                 call_number, location.name, collection.name, copy_number, acquired_on,
-                not_for_loan, damaged, lost, withdrawn, restricted
-         FROM items
+                not_for_loan, damaged, lost, withdrawn, restricted, issue.enumeration, issue.chronology, issue.statement
+         FROM items LEFT JOIN item_issues AS issue ON issue.item_id=items.id
          JOIN branches AS home ON home.id = items.home_branch
          JOIN circulation_policies AS policy ON policy.id = items.policy_id
          LEFT JOIN sublocations AS location ON location.id = items.sublocation_id
@@ -67,6 +67,9 @@ fn held_items(c: &Connection, instance: i64) -> Result<Vec<HeldItem>, ReadFailur
                 sublocation: row.get(7)?,
                 collection: row.get(8)?,
                 copy_number: row.get(9)?,
+                issue_statement: row.get(18)?,
+                enumeration: row.get(16)?,
+                chronology: row.get(17)?,
                 acquired_on: row.get(10)?,
                 status: status_at(row, 11)?,
                 description: Description::default(),
@@ -169,6 +172,19 @@ fn stored(c: &Connection, head: Head) -> Result<StoredRecord, ReadFailure> {
         contributions: contributions(c, head.work)?,
         subjects: subjects(c, head.work)?,
         instance: NewInstance {
+            origin: c.query_row(
+                "SELECT coalesce((SELECT origin FROM original_records WHERE instance_id=?1),
+                     (SELECT min(origin) FROM instance_origins WHERE instance_id=?1 HAVING count(*)=1))",
+                [head.instance], |r|r.get(0),
+            )?,
+            reviewed: None,
+            original: c.query_row(
+                "SELECT original,declared,decoded,family,serialization FROM original_records WHERE instance_id=?1",
+                [head.instance], |r| Ok(elzevir_app::catalog::OriginalRecord {
+                    bytes:r.get(0)?, declared:r.get(1)?, decoded:r.get(2)?,
+                    family:r.get(3)?, serialization:r.get(4)?,
+                }),
+            ).optional()?,
             title: head.title,
             description: read_description(c, subject(EntityKind::Instance, head.instance))?,
             edition: head.edition,
@@ -324,18 +340,29 @@ pub(crate) fn subjects(c: &Connection, work: i64) -> Result<Vec<NewSubject>, Rea
         .collect()
 }
 
-fn notes(c: &Connection, instance: i64) -> Result<Vec<NewNote>, ReadFailure> {
+pub(crate) fn notes(c: &Connection, instance: i64) -> Result<Vec<NewNote>, ReadFailure> {
     let mut statement = c.prepare_cached(
-        "SELECT kind, text FROM instance_notes WHERE instance_id = ?1 ORDER BY position",
+        "SELECT kind, text, public FROM instance_notes LEFT JOIN note_visibility USING(instance_id,position) WHERE instance_id = ?1 ORDER BY position",
     )?;
     let rows = statement
         .query_map(params![instance], |row| {
-            Ok((row.get::<_, u8>(0)?, row.get(1)?))
+            Ok((
+                row.get::<_, u8>(0)?,
+                row.get(1)?,
+                row.get::<_, Option<bool>>(2)?,
+            ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     rows.into_iter()
-        .map(|(kind, text)| {
+        .map(|(kind, text, public)| {
             Ok(NewNote {
+                visibility: public.map(|public| {
+                    if public {
+                        elzevir_app::catalog::NoteVisibility::Public
+                    } else {
+                        elzevir_app::catalog::NoteVisibility::Staff
+                    }
+                }),
                 kind: required(kind, "note kind", NoteKind::from_code)?,
                 text,
             })
@@ -374,8 +401,8 @@ fn items(c: &Connection, instance: i64) -> Result<Vec<ItemData>, ReadFailure> {
                 COALESCE(location_code.code, location.name),
                 COALESCE(collection_code.code, collection.name), price_cents,
                 replacement_price_cents, copy_number, acquired_on,
-                not_for_loan, damaged, lost, withdrawn, restricted
-         FROM items
+                not_for_loan, damaged, lost, withdrawn, restricted, issue.enumeration, issue.chronology, issue.statement
+         FROM items LEFT JOIN item_issues issue ON issue.item_id=items.id
          JOIN branches AS home ON home.id = items.home_branch
          JOIN branches AS holding ON holding.id = items.holding_branch
          JOIN circulation_policies AS policy ON policy.id = items.policy_id
@@ -396,6 +423,9 @@ fn items(c: &Connection, instance: i64) -> Result<Vec<ItemData>, ReadFailure> {
     Ok(statement
         .query_map(params![instance], |row| {
             Ok(ItemData {
+                issue_statement: row.get(19)?,
+                enumeration: row.get(17)?,
+                chronology: row.get(18)?,
                 barcode: row.get(0)?,
                 inventory_number: row.get(1)?,
                 home_branch: row.get(2)?,

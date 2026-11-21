@@ -56,6 +56,8 @@ Hub e relações entre Obras não são criados na importação desta versão (AD
 | número de controle | `035$a` |
 | notas, na ordem | `500$a` (geral), `505` (conteúdo: `$a`, ou `$g`, `$t` e `$r` na ordem do campo, unidos por espaço), `590$a` (local); a pontuação é mantida |
 
+Notas locais novas têm acesso de equipe por padrão. A receita pode conservar a política anterior na substituição ou atribuir acesso de equipe ou público. OPAC, índice público e RDF usam a visibilidade da nota.
+
 ### 1.4 Itens (`952`, convenção do Koha)
 
 | Modelo | `952` | Koha |
@@ -69,18 +71,19 @@ Hub e relações entre Obras não são criados na importação desta versão (AD
 | tipo de item | `$y`, senão `942$c` do registro | `itype` |
 | número de chamada | `$o`; sem ele, `090$a` + `$b`, senão `082$a` (B.4) | `itemcallnumber` |
 | número do exemplar | `$t` | `copynumber` |
+| designação de fascículo, transcrita | `$h` | `enumchron` |
 | situação | `$7`, `$4`, `$1`, `$0`, `$5` (número, 0 = normal) | `notforloan`, `damaged`, `itemlost`, `withdrawn`, `restricted` |
 | preço, preço de reposição | `$g`, `$v` (centavos; valor não numérico é ignorado) | `price`, `replacementprice` |
 | data de aquisição | `$d` | `dateaccessioned` |
 
-Os outros subcampos do `952` são dados que o Koha calcula ou mantém sozinho (`$9` número interno, `$6` ordenação do número de chamada, `$l`, `$m`, `$s`, `$r`, `$w`, `$q` de circulação e controle). Não viram colunas; ficam no registro original.
+A ligação inequívoca entre o código de barras em `876$p` e um `863`, via `$8`, fornece enumeração (`863$a–h`) e cronologia (`863$i–m`) em campos próprios. Com instalação conhecida, `952$9` identifica o exemplar naquela origem. Os outros subcampos do `952` incluem dados que o Koha calcula ou mantém sozinho ( `$6` ordenação do número de chamada, `$l`, `$m`, `$s`, `$r`, `$w`, `$q` de circulação e controle). Não viram colunas; ficam no registro original.
 
 ### 1.5 Exportação (`bibframe_to_marc`)
 
 1. O ponto de partida é o registro original (`source_records`). Sem ele, um registro novo com líder `00000nam a2200000 i 4500`.
 2. Cada parte do modelo é comparada com o que o original mapeia. **Só as partes diferentes são reescritas**; o resto do registro fica byte a byte.
 3. Partes de um campo só (título, edição, publicação, descrição física, série, classificação, resumo): o subcampo é trocado no primeiro campo da etiqueta, mantendo os outros subcampos (o `245$c` fica). Valor apagado remove o subcampo; campo sem subcampos sai.
-   - Título da Instância: `245$a` e `$b` (separados no ` : `); `$n` e `$p` saem.
+   - A edição do título da Instância reaproveita o `245` original, conservando indicadores, ordem e repetições. A alteração do título principal preserva `$n`, `$p` e as demais ocorrências. Cada menção de responsabilidade corresponde a uma ocorrência de `$c`.
    - Título da Obra: `130$a` se o registro tem `130`, senão `240$a` (criado só se difere do título principal).
    - Publicação: no `264` de 2º indicador `1`, ou no `260` quando é o que o registro usa.
 4. Listas (contribuições, assuntos, identificadores, notas, exemplares): cada valor do modelo reaproveita, sem mudança, o campo original que mapeia exatamente para ele, com `$0`, `$1`, `$9` e o que mais tiver. Só valores novos ou alterados geram campo novo, no lugar do primeiro campo da lista.

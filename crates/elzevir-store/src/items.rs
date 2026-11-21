@@ -221,13 +221,47 @@ pub(crate) fn update_item(
     id: ItemId,
     fields: &ItemFields,
 ) -> Result<(), CommandFailed<WriteRefusal>> {
+    write_item(connection, id, fields, false)
+}
+
+/// A retained shelving location or collection cannot follow an Item to another home branch.
+pub(crate) fn check_retained_places(
+    connection: &Connection,
+    id: ItemId,
+    places: &Places,
+) -> Result<(), CommandFailed<WriteRefusal>> {
+    let invalid = connection
+        .query_row(
+            "SELECT home_branch <> ?2 AND ((sublocation_id IS NOT NULL AND ?3 IS NULL)
+                OR (collection_id IS NOT NULL AND ?4 IS NULL)) FROM items WHERE id = ?1",
+            params![id.0, places.home, places.location, places.collection],
+            |r| r.get::<_, bool>(0),
+        )
+        .map_err(StoreError::from)?;
+    if invalid {
+        return Err(refused(CatalogRefusal::ImportConflict(
+            "retained Item location or collection belongs to a different home library".into(),
+        )));
+    }
+    Ok(())
+}
+
+pub(crate) fn write_item(
+    connection: &Connection,
+    id: ItemId,
+    fields: &ItemFields,
+    preserve_absent: bool,
+) -> Result<(), CommandFailed<WriteRefusal>> {
     let places = places(fields);
+    if preserve_absent {
+        check_retained_places(connection, id, &places)?;
+    }
     connection
         .execute(
-            "UPDATE items SET barcode = ?2, inventory_number = ?3, home_branch = ?4,
-                              holding_branch = ?5, policy_id = ?6, call_number = ?7,
-                              sublocation_id = ?8, collection_id = ?9, copy_number = ?10,
-                              price_cents = ?11, row_version = row_version + 1
+            "UPDATE items SET barcode = ?2, inventory_number = CASE WHEN ?12 THEN coalesce(?3,inventory_number) ELSE ?3 END, home_branch = ?4,
+                              holding_branch = ?5, policy_id = ?6, call_number = CASE WHEN ?12 THEN coalesce(?7,call_number) ELSE ?7 END,
+                              sublocation_id = CASE WHEN ?12 THEN coalesce(?8,sublocation_id) ELSE ?8 END, collection_id = CASE WHEN ?12 THEN coalesce(?9,collection_id) ELSE ?9 END, copy_number = CASE WHEN ?12 THEN coalesce(?10,copy_number) ELSE ?10 END,
+                              price_cents = CASE WHEN ?12 THEN coalesce(?11,price_cents) ELSE ?11 END, row_version = row_version + 1
              WHERE id = ?1",
             params![
                 id.0,
@@ -240,7 +274,7 @@ pub(crate) fn update_item(
                 places.location,
                 places.collection,
                 fields.copy_number,
-                fields.price.map(|money| money.0)
+                fields.price.map(|money| money.0),preserve_absent
             ],
         )
         .map_err(StoreError::from)?;
@@ -255,6 +289,9 @@ pub(crate) fn add_grid_item(
 ) -> Result<ItemId, CommandFailed<WriteRefusal>> {
     let places = places(fields);
     let item = ItemData {
+        issue_statement: None,
+        enumeration: None,
+        chronology: None,
         barcode: fields.barcode.clone(),
         inventory_number: fields.inventory_number.clone(),
         home_branch: String::new(),

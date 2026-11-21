@@ -10,7 +10,7 @@ use crate::marc_mapping::items::cents;
 
 const ITEM_TAG: Tag = Tag::new(*b"952");
 
-pub(super) fn records(rows: CatalogRows) -> Result<Vec<(Record, u64)>, DumpError> {
+pub(super) fn records(rows: CatalogRows) -> Result<Vec<super::MetadataRecord>, DumpError> {
     let mut records = Vec::with_capacity(rows.biblios.len());
     let mut bibs = BTreeMap::new();
     let mut primary = BTreeSet::new();
@@ -23,9 +23,14 @@ pub(super) fn records(rows: CatalogRows) -> Result<Vec<(Record, u64)>, DumpError
         {
             return Err(error(at, DumpProblem::Duplicate("bibliographic key")));
         }
-        let record = xml(&biblio)?;
+        let (record, declares_utf8) = xml(&biblio)?;
         embedded.index(index, at, &record)?;
-        records.push((record, at));
+        records.push(super::MetadataRecord {
+            record,
+            offset: at,
+            xml: biblio.xml,
+            declares_utf8,
+        });
     }
     let mut extra = BTreeMap::<usize, Vec<Field>>::new();
     let (mut numbers, mut barcodes) = (BTreeSet::new(), BTreeSet::new());
@@ -43,7 +48,7 @@ pub(super) fn records(rows: CatalogRows) -> Result<Vec<(Record, u64)>, DumpError
             .ok_or_else(|| error(at, DumpProblem::Orphan))?;
         let record = records
             .get(owner)
-            .map(|(record, _)| record)
+            .map(|r| &r.record)
             .ok_or_else(|| error(at, DumpProblem::Orphan))?;
         if embedded.has_equivalent(owner, record, &item)? {
             continue;
@@ -54,9 +59,9 @@ pub(super) fn records(rows: CatalogRows) -> Result<Vec<(Record, u64)>, DumpError
         }
         append.push(item.field());
     }
-    for (index, (record, _)) in records.iter_mut().enumerate() {
+    for (index, row) in records.iter_mut().enumerate() {
         if let Some(extra) = extra.remove(&index) {
-            append_items(record, extra);
+            append_items(&mut row.record, extra);
         }
     }
     Ok(records)
@@ -67,10 +72,10 @@ fn error(offset: u64, problem: DumpProblem) -> DumpError {
 }
 
 /// Koha: `Koha::Biblio::Metadata::record`.
-fn xml(biblio: &Biblio) -> Result<Record, DumpError> {
+fn xml(biblio: &Biblio) -> Result<(Record, bool), DumpError> {
     let invalid = || error(biblio.offset, DumpProblem::Metadata);
     let mut reader = MarcXmlReader::new(biblio.xml.as_slice(), XmlLimits::default());
-    let record = reader.next().ok_or_else(invalid)?.map_err(|_| invalid())?;
+    let mut record = reader.next().ok_or_else(invalid)?.map_err(|_| invalid())?;
     if reader.next().is_some() {
         return Err(invalid());
     }
@@ -90,7 +95,26 @@ fn xml(biblio: &Biblio) -> Result<Record, DumpError> {
             ));
         }
     }
-    Ok(record)
+    let number = Subfield {
+        code: b'c',
+        value: biblio.number.to_string().into_bytes(),
+    };
+    if let Some(Field::Data { subfields, .. }) = record
+        .fields
+        .iter_mut()
+        .find(|f| f.tag().as_bytes() == b"999")
+    {
+        if !subfields.iter().any(|s| s.code == b'c') {
+            subfields.push(number);
+        }
+    } else {
+        record.fields.push(Field::Data {
+            tag: Tag::new(*b"999"),
+            indicators: *b"  ",
+            subfields: vec![number],
+        });
+    }
+    Ok((record, reader.declares_utf8()))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

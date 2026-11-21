@@ -1301,3 +1301,10 @@ patron-password-removed = The patron can no longer sign in to the OPAC.
 patron-password-short = The password needs at least 8 characters.
 patron-password-long = The password can have at most 128 characters.
 patron-password-guessable = The password cannot be the card number or the CPF.
+
+import-origin = Source installation for local identifiers
+import-local-notes = Local note visibility
+import-notes-default = Keep existing visibility (staff for new notes)
+import-notes-staff = Staff only
+import-notes-public = Publish in the catalog
+import-notes-invalid = Choose a valid note visibility.

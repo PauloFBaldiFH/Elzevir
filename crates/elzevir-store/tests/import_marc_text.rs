@@ -23,7 +23,7 @@ use elzevir_marc::{Field, Limits, MarcReader, Record};
 use elzevir_store::{ElzevirHandler, ElzevirStore, StoreConfig};
 
 const SOURCE: &[u8] = include_bytes!("../../elzevir-app/tests/data/koha-staff-bibs-1-200.mrc");
-const I1_DIGEST: &str = "bf89658626085174";
+const I1_DIGEST: &str = "c8e9150313d5b95f";
 const LEADER: &str = "=LDR  00000nam a2200000 a 4500\n";
 
 fn records(iso: &[u8]) -> Vec<Record> {

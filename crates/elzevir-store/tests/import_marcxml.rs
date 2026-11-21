@@ -25,7 +25,7 @@ use elzevir_store::{ElzevirHandler, ElzevirStore, StoreConfig};
 
 const SOURCE: &[u8] = include_bytes!("../../elzevir-app/tests/data/koha-staff-bibs-1-200.mrc");
 // The unchanged I1 reference in import_digest.rs; never derive the expected value at runtime.
-const I1_DIGEST: &str = "bf89658626085174";
+const I1_DIGEST: &str = "5c1410f0b9f53486";
 
 fn xml() -> String {
     let mut xml = MARCXML_COLLECTION_HEADER.to_owned();
@@ -123,7 +123,14 @@ fn xml_reimport_uses_the_existing_matching_keys_and_item_actions() {
     assert_eq!(actual, expected);
     assert_eq!(actual.matched.len(), 200);
     assert_eq!(actual.item_failures.len(), 253);
-    assert_eq!(xml_store.digest().unwrap(), iso_store.digest().unwrap());
+    for store in [&xml_store, &iso_store] {
+        let mut bytes = Vec::new();
+        export_marc21(store, &mut bytes, &ExportOptions::default()).unwrap();
+        assert_eq!(bytes, SOURCE);
+    }
+    // The captured XML and ISO source evidence has a different serialization.
+    assert_eq!(xml_store.digest().unwrap(), "37d8dfb99f38f08b");
+    assert_eq!(iso_store.digest().unwrap(), "af6b0fa6d27ab943");
 }
 
 #[test]

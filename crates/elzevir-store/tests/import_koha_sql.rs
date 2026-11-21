@@ -19,7 +19,7 @@ use elzevir_marc::{Field, Limits, MarcReader, Record};
 use elzevir_store::{ElzevirHandler, ElzevirStore, StoreConfig};
 
 const SOURCE: &[u8] = include_bytes!("../../elzevir-app/tests/data/koha-staff-bibs-1-200.mrc");
-const I1_DIGEST: &str = "bf89658626085174";
+const I1_DIGEST: &str = "becab4325d8127e6";
 const PRIVATE: &str = "SYNTHETIC_PRIVATE_READER";
 
 fn quoted(text: &[u8]) -> String {

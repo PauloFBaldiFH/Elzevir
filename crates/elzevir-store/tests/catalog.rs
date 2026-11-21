@@ -149,6 +149,9 @@ fn item(instance: InstanceId, barcode: &str) -> NewItem {
 
 fn item_data(barcode: &str) -> ItemData {
     ItemData {
+        issue_statement: None,
+        enumeration: None,
+        chronology: None,
         barcode: Some(barcode.to_owned()),
         inventory_number: Some(format!("2026/{barcode}")),
         home_branch: "MAIN".to_owned(),

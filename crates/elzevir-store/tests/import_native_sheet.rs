@@ -129,6 +129,11 @@ fn twenty_native_books_resolve_names_export_marc_and_match_on_reimport() {
     assert_eq!(codes.policy(item.fields.policy), "Standard loan");
     assert!(first.record.source.is_none());
 
+    let mut table = table;
+    table.apply_review(&elzevir_app::import::ImportOptions {
+        origin: Some("sheet".into()),
+        ..Default::default()
+    });
     let report = table.submit(&store, None).unwrap();
     assert!(report.failures.is_empty(), "{:?}", report.failures);
     assert_eq!((report.imported, report.items), (20, 20));
@@ -136,10 +141,21 @@ fn twenty_native_books_resolve_names_export_marc_and_match_on_reimport() {
         items: ItemAction::Replace,
         ..Matching::new(MatchRule::Isbn)
     };
-    let again = prepared(&source, &codes, None)
-        .unwrap()
-        .submit(&store, Some(matching))
+    let recipe = elzevir_app::import::edits::Recipe {
+        matching: Some(matching),
+        origin: Some("sheet".into()),
+        ..elzevir_app::import::edits::Recipe::default()
+    };
+    let (mut second, report) = store
+        .readers()
+        .preview_table_source(&recipe, 0, |codes| prepared(&source, codes, None))
         .unwrap();
+    second.apply_review(&elzevir_app::import::ImportOptions {
+        reviewed: report.scopes.into_iter().map(|(_, scope)| scope).collect(),
+        origin: Some("sheet".into()),
+        ..Default::default()
+    });
+    let again = second.submit(&store, Some(matching)).unwrap();
     assert_eq!(
         (
             again.imported,
