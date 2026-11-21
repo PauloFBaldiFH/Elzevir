@@ -10,7 +10,10 @@ mod cloud;
 mod dashboard;
 mod domain;
 pub use backup_options::{BackupOptions, BackupProfile, BackupScope};
-pub use cloud::{CloudConnection, CloudOperation, CloudPlan, CloudQuestion, CloudView};
+pub use cloud::{
+    CloudConnection, CloudOperation, CloudPlan, CloudQuestion, CloudTarget, CloudView,
+    RemoteCommand, RemotePage,
+};
 pub use domain::{ConnectorState, DomainPhase, DomainStatus};
 mod diagnostic_view;
 mod diagnostics;
@@ -141,6 +144,14 @@ pub struct Panel {
     pub diagnostics: DiagnosticAction,
     /// Bounded operation form and explicit confirmation.
     pub form: Option<Form>,
+    /// Cloud backup tab (connections, plans, files or history).
+    pub cloud_tab: usize,
+    /// Index of the plan whose connection and folder are displayed.
+    pub cloud_plan: usize,
+    /// Selected file on the current remote page.
+    pub cloud_file: usize,
+    /// Reviewed destinations marked for a single upload.
+    pub cloud_targets: Vec<CloudTarget>,
     /// Selected public tunnel detail tab.
     pub tunnel_tab: TunnelTab,
     /// Vertical dashboard scroll offset.
@@ -308,9 +319,112 @@ impl Panel {
         })
     }
 
+    fn cloud_navigation(&mut self, key: char) -> bool {
+        match key {
+            '[' | ']' => {
+                self.cloud_tab = (self.cloud_tab + if key == ']' { 1 } else { 3 }) % 4;
+            }
+            ',' | '.' => {
+                let count = self
+                    .cloud_view()
+                    .and_then(|v| v.remote.as_ref())
+                    .map_or(0, |r| r.files.len())
+                    .max(1);
+                self.cloud_file = cycle(self.cloud_file, count, key == '.');
+            }
+            '<' | '>' => {
+                self.cloud_file = 0;
+                let count = self.cloud_view().map_or(0, |v| v.plans.len()).max(1);
+                self.cloud_plan = cycle(self.cloud_plan, count, key == '>');
+            }
+            'l' | 'D' | 'U' | 'O' | 'u' | '+' | 'M' => {
+                let Mode::Live(state) = &self.mode else {
+                    return false;
+                };
+                let Some(snapshot) = &state.snapshot else {
+                    return false;
+                };
+                let Some(view) = &snapshot.operations.cloud else {
+                    return true;
+                };
+                let Some(plan) = view
+                    .plans
+                    .get(self.cloud_plan)
+                    .or_else(|| view.plans.first())
+                else {
+                    return true;
+                };
+                let target = plan.target();
+                if key == 'O' {
+                    if let Some((download, path)) = &view.download
+                        && download == &target
+                    {
+                        self.form = Some(Form::new(Operation::Restore {
+                            input: path.to_string_lossy().into_owned(),
+                            key: String::new(),
+                        }));
+                    }
+                    return true;
+                }
+                if key == '+' {
+                    if self.cloud_targets.contains(&target) {
+                        self.cloud_targets.retain(|t| t != &target);
+                    } else if self.cloud_targets.len() < 16 {
+                        self.cloud_targets.push(target);
+                    }
+                    return true;
+                }
+                if key == 'M' {
+                    if !self.cloud_targets.is_empty() {
+                        self.form = Some(Form::new(Operation::Cloud(CloudOperation::SendGroup(
+                            self.cloud_targets.clone(),
+                            snapshot
+                                .operations
+                                .managed_ids
+                                .last()
+                                .cloned()
+                                .unwrap_or_default(),
+                        ))));
+                    }
+                    return true;
+                }
+                let listing = view.remote.as_ref().filter(|r| r.target == target);
+                let cmd = match key {
+                    'l' => RemoteCommand::Browse(listing.map_or(1, |r| r.page)),
+                    'D' => {
+                        let Some((id, _)) = listing
+                            .and_then(|r| r.files.get(self.cloud_file).or_else(|| r.files.first()))
+                        else {
+                            return true;
+                        };
+                        RemoteCommand::Download(id.clone())
+                    }
+                    'u' => RemoteCommand::Create,
+                    _ => RemoteCommand::Send(
+                        view.transfers
+                            .iter()
+                            .find(|(t, _, s)| *t == target && s != "cloud-verified")
+                            .map(|(_, id, _)| id)
+                            .or_else(|| snapshot.operations.managed_ids.last())
+                            .cloned()
+                            .unwrap_or_default(),
+                    ),
+                };
+                self.form = Some(Form::new(Operation::Cloud(CloudOperation::Remote(
+                    target, cmd,
+                ))));
+            }
+            _ => return false,
+        }
+        self.scroll = 0;
+        true
+    }
     fn begin_operation(&mut self, key: char) -> bool {
         if !matches!(&self.mode, Mode::Live(_)) || self.palette || self.diagnostics.pending {
             return false;
+        }
+        if self.section == Section::Backup && self.cloud_navigation(key) {
+            return true;
         }
         let operation = match (self.section, key) {
             (Section::Addresses, 'Q') => {
@@ -448,6 +562,13 @@ impl Panel {
         let Some(form) = &mut self.form else {
             return false;
         };
+        if let Operation::Cloud(CloudOperation::SendGroup(targets, _)) = &form.operation
+            && matches!(key.code, KeyCode::PageUp | KeyCode::PageDown)
+        {
+            let count = targets.len().max(1);
+            form.target_page = cycle(form.target_page, count, key.code == KeyCode::PageDown);
+            return true;
+        }
         if matches!(form.operation, Operation::ApplyRestore(_)) && key.code == KeyCode::Enter {
             self.submit_form();
             return true;
@@ -517,6 +638,10 @@ impl Panel {
         }
         true
     }
+}
+
+fn cycle(current: usize, count: usize, forward: bool) -> usize {
+    (current % count + if forward { 1 } else { count - 1 }) % count
 }
 
 fn backup_operation(key: char, observed: Option<&Operations>) -> Operation {

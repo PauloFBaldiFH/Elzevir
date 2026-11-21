@@ -712,3 +712,74 @@ fn pasted_restore_fields_cannot_trigger_navigation_or_submission() {
     assert!(panel.diagnostics.requested.is_none());
     assert!(!panel.quit);
 }
+
+#[test]
+fn cloud_tabs_show_destination_quota_pending_status_and_bound_actions() {
+    use elzevir_panel::{
+        CloudConnection, CloudOperation, CloudPlan, CloudTarget, CloudView, Operation,
+        RemoteCommand, RemotePage,
+    };
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut panel = connected();
+    panel.section = elzevir_panel::Section::Backup;
+    let target = CloudTarget {
+        plan: "a".repeat(32),
+        connection: "b".repeat(32),
+        folder: "Acervo/noite".into(),
+    };
+    if let Mode::Live(state) = &mut panel.mode {
+        state.snapshot.as_mut().unwrap().operations.cloud = Some(CloudView {
+            plans: vec![CloudPlan {
+                id: target.plan.clone(),
+                name: "Noite".into(),
+                connection: target.connection.clone(),
+                folder: target.folder.clone(),
+                keep: 7,
+                daily: None,
+                retention_pending: false,
+            }],
+            connections: vec![CloudConnection {
+                id: target.connection.clone(),
+                name: "Biblioteca".into(),
+                provider: "s3".into(),
+                ready: true,
+                test_failed: false,
+                tested_at: None,
+            }],
+            transfers: vec![(target.clone(), "c".repeat(32), "cloud-unconfirmed".into())],
+            remote: Some(RemotePage {
+                target: target.clone(),
+                page: 1,
+                pages: 1,
+                files: vec![("c".repeat(32), 128), ("d".repeat(32), 256)],
+                free: None,
+            }),
+            ..Default::default()
+        });
+    }
+    let key = |panel: &mut Panel, c| {
+        panel.handle(
+            &Event::Key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)),
+            140,
+            30,
+        );
+    };
+    for tab in ["connections", "plans", "files", "history"] {
+        insta::assert_snapshot!(format!("cloud_{tab}_pt_BR"), screen(&panel, "pt-BR"));
+        key(&mut panel, ']');
+    }
+    key(&mut panel, '.');
+    key(&mut panel, 'D');
+    assert_eq!(
+        panel.form.take().unwrap().operation,
+        Operation::Cloud(CloudOperation::Remote(
+            target.clone(),
+            RemoteCommand::Download("d".repeat(32))
+        ))
+    );
+    key(&mut panel, '+');
+    key(&mut panel, 'M');
+    assert!(
+        matches!(panel.form.take().unwrap().operation,Operation::Cloud(CloudOperation::SendGroup(targets,_)) if targets==[target])
+    );
+}

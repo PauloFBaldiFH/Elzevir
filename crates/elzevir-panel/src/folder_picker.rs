@@ -159,7 +159,6 @@ impl Picker {
                 self.catalog = false;
                 self.open(PathBuf::from(&self.path));
             }
-            KeyCode::F(6) if self.kind == Kind::Archive => self.notice = "restore-cloud",
             KeyCode::Down if self.focus == 0 => {
                 self.selected = (self.selected + 1).min(self.entries.len().saturating_sub(1));
             }
@@ -307,8 +306,6 @@ mod tests {
         collect(&mut picker);
         assert!(!picker.entries.iter().any(|s| s == "older.archive"));
         assert!(picker.entries.iter().any(|s| s == "loose.age"));
-        picker.key(KeyCode::F(6));
-        assert_eq!(picker.notice, "restore-cloud");
     }
 
     #[test]

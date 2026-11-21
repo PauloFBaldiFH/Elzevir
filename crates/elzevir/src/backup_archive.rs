@@ -12,7 +12,7 @@ use std::{
 };
 
 const MAX_AUX: u64 = 16 * 1024 * 1024;
-const MAX_DB: u64 = 512 * 1024 * 1024 * 1024;
+pub(crate) const MAX_DB: u64 = 512 * 1024 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -167,7 +167,7 @@ pub(crate) fn key(path: &Path, create: bool) -> Result<age::x25519::Identity, St
         .map_err(|_| "invalid backup key".to_owned())
 }
 
-fn hash(path: &Path, control: &Control) -> Result<String, String> {
+pub(crate) fn hash(path: &Path, control: &Control) -> Result<String, String> {
     let mut source = std::fs::File::open(path).map_err(|_| "snapshot file unavailable")?;
     let mut digest = Sha256::new();
     let mut buffer = vec![0_u8; 65_536].into_boxed_slice();
