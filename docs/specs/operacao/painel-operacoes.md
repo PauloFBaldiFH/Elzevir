@@ -17,7 +17,17 @@ Reinício e atualização exigem confirmação; a indisponibilidade de observaç
 de sessões nunca é apresentada como zero sessões. A operação de sistema é
 executada por cliente privilegiado, fora do processo que será parado.
 
-Seção Serviço (antes "Reiniciar", atalho `r`). Na instalação pessoal, sem
+Formulários mostram todos os campos ao mesmo tempo, cada um com seu rótulo e
+clicável; Tab e Enter avançam, e o campo em edição fica destacado. Campos de
+valores fixos (como o idioma) são botões de escolha: clique ou setas trocam o
+valor, e digitar não os altera. Os botões Confirmar e Cancelar ficam sempre
+visíveis; clicar em Confirmar é a confirmação explícita. Pelo teclado, Enter no
+último campo leva à confirmação e `y` a executa, como antes.
+
+Seção Serviço (antes "Reiniciar", atalho `r`). O estado do servidor aparece em
+destaque (bolinha colorida, tempo ligado, endereço e sessões abertas), seguido
+de botões grandes e clicáveis; o que não se aplica ao estado atual fica
+apagado e não responde. Na instalação pessoal, sem
 gerenciador de serviços, `i` inicia o servidor em segundo plano, `p` o para e
 `t` o reinicia (para e inicia de novo). Cada ação pede confirmação, roda no
 trabalhador do painel e termina ali: o painel espera o servidor responder (ou
@@ -27,6 +37,14 @@ instalação gerenciada (registro de instalação do executável presente), o
 gerenciador de serviços é o dono do processo: o painel só oferece `t`, que
 reinicia o serviço pelo auxiliar privilegiado, e recusa iniciar e parar. Em
 ambas, `m` reinicia o computador.
+
+Configurações (botão na seção Serviço, atalho `c`): nome da biblioteca,
+endereço e porta, e idioma (English ou Português). Só existem com arquivo de
+configuração. O painel valida o nome (1 a 200 caracteres), o endereço (porta
+1024 ou mais; um endereço diferente do atual precisa estar livre) e o idioma,
+e grava o `server.toml` de forma atômica, mantendo o resto. O idioma fica em
+`server.lang` (`--lang` continua tendo precedência; sem nenhum, vale o do
+sistema). Nada muda no servidor em execução: a mensagem pede Reiniciar.
 
 A contagem de sessões é calculada no próprio estado em memória do servidor,
 expurgando as expiradas sem renovar seu prazo. A resposta administrativa só

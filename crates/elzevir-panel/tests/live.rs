@@ -548,15 +548,30 @@ fn the_service_section_starts_and_stops_a_personal_server_and_restarts_a_managed
         panel.section = Section::Restart;
         let messages = Messages::new(language).unwrap();
         for key in [
-            "op-server-help",
             "op-server-start",
             "op-server-stop",
             "op-server-restart",
+            "op-server-done",
+            "service-uptime",
+            "service-stopped-hint",
+            "ui-settings",
+            "ui-reboot",
         ] {
             assert_ne!(messages.get(key), key);
         }
         let shown = screen(&panel, language);
-        assert!(shown.contains(&messages.get("op-server-help")), "{shown}");
+        for button in [
+            "ui-start",
+            "ui-stop",
+            "ui-restart",
+            "ui-settings",
+            "ui-reboot",
+        ] {
+            let text = messages.get(button);
+            let text = text.trim_start_matches(|c: char| !c.is_alphabetic());
+            assert!(shown.contains(text), "{button}\n{shown}");
+        }
+        insta::assert_snapshot!(format!("service_{language}"), shown);
     }
 
     let mut managed = Panel::live(Institution {
@@ -573,5 +588,50 @@ fn the_service_section_starts_and_stops_a_personal_server_and_restarts_a_managed
     assert!(matches!(
         managed.form.take().map(|form| form.operation),
         Some(Operation::Restart { .. })
+    ));
+}
+
+#[test]
+fn the_settings_form_shows_every_field_and_picks_the_language_from_buttons() {
+    use elzevir_panel::{Operation, Section};
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let press = |panel: &mut Panel, code| {
+        panel.handle(
+            &Event::Key(KeyEvent::new(code, KeyModifiers::NONE)),
+            140,
+            30,
+        );
+    };
+    let mut panel = Panel::live(Institution {
+        name: Some("Biblioteca de teste".to_owned()),
+        configured_listen: Some("127.0.0.1:7390".parse().unwrap()),
+        language: Some("pt-BR".to_owned()),
+        ..Institution::default()
+    });
+    panel.section = Section::Restart;
+    press(&mut panel, KeyCode::Char('c'));
+    let shown = screen(&panel, "pt-BR");
+    for text in [
+        "Nome da biblioteca",
+        "Biblioteca de teste",
+        "127.0.0.1:7390",
+        "English",
+        "Português",
+        "Confirmar",
+    ] {
+        assert!(shown.contains(text), "{text}\n{shown}");
+    }
+    insta::assert_snapshot!("settings_form_pt-BR", shown);
+    // Typing never edits a choice; the arrows change it.
+    press(&mut panel, KeyCode::Tab);
+    press(&mut panel, KeyCode::Tab);
+    press(&mut panel, KeyCode::Char('x'));
+    press(&mut panel, KeyCode::Right);
+    panel.submit_form();
+    assert!(panel.form.is_none());
+    assert!(matches!(
+        &panel.diagnostics.requested,
+        Some(elzevir_panel::ObservationRequest::Operate(Operation::Settings { name, listen, language }))
+            if name == "Biblioteca de teste" && listen == "127.0.0.1:7390" && language == "en"
     ));
 }

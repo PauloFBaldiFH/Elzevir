@@ -8,7 +8,7 @@ use std::path::Path;
 /// How many ports after the busy one are probed for a suggestion.
 const SUGGESTION_RANGE: u16 = 100;
 
-fn free(address: SocketAddr) -> bool {
+pub(crate) fn free(address: SocketAddr) -> bool {
     TcpListener::bind(address).is_ok()
 }
 
@@ -50,9 +50,20 @@ pub(crate) fn ensure(
 
 /// Replaces the configured port atomically, keeping every other setting.
 fn save(config: &Path, port: u16) -> Result<(), String> {
+    rewrite(config, |original| {
+        crate::server_config::with_port(original, port)
+    })
+}
+
+/// Replaces the configuration file atomically with `change` applied to it,
+/// keeping its owner and permissions.
+pub(crate) fn rewrite(
+    config: &Path,
+    change: impl FnOnce(&str) -> Result<String, String>,
+) -> Result<(), String> {
     let original =
         std::fs::read_to_string(config).map_err(|_| "cannot read server configuration")?;
-    let text = crate::server_config::with_port(&original, port)?;
+    let text = change(&original)?;
     let mut file = tempfile::NamedTempFile::new_in(
         config
             .parent()

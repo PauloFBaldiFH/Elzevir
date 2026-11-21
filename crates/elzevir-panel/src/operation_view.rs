@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Operational forms and job history; only recognized presentation keys are localized.
 use crate::dashboard::{row, text};
+use crate::ui::{Action, theme};
 use crate::{Messages, Panel, Snapshot};
 use ratatui::{
     Frame,
     crossterm::event::KeyCode,
     layout::Rect,
+    style::{Modifier, Style},
     text::Line,
     widgets::{Clear, Paragraph, Wrap},
 };
@@ -13,32 +15,18 @@ use ratatui::{
 pub(crate) fn rows(
     snapshot: Option<&Snapshot>,
     pending: bool,
-    (section, managed): (crate::Section, bool),
+    section: crate::Section,
     messages: &Messages,
 ) -> Vec<Line<'static>> {
     let operations = snapshot.map(|snapshot| &snapshot.operations);
     let mut rows = match section {
         crate::Section::Backup => backup_rows(operations, messages),
-        crate::Section::Updates => vec![
+        _ => vec![
             Line::from(messages.get("op-update-help")),
             row(
                 messages,
                 "op-latest",
                 operations.and_then(|ops| ops.latest.as_deref()).map(text),
-            ),
-        ],
-        _ => vec![
-            Line::from(messages.get(if managed {
-                "op-restart-help"
-            } else {
-                "op-server-help"
-            })),
-            row(
-                messages,
-                "op-sessions",
-                operations
-                    .and_then(|ops| ops.sessions)
-                    .map(|count| count.to_string()),
             ),
         ],
     };
@@ -60,7 +48,6 @@ pub(crate) fn rows(
                 job.action,
                 "op-update" | "op-update-recover" | "op-install-cloudflared" | "op-install-rclone"
             ),
-            crate::Section::Restart => matches!(job.action, "op-restart" | "op-reboot"),
             _ => matches!(
                 job.action,
                 "op-backup-now"
@@ -182,30 +169,72 @@ pub(crate) fn form(
         return;
     };
     let area = frame.area();
-    let height = if form.confirming() {
-        u16::try_from(form.labels.len() + 8).unwrap_or(16).max(12)
-    } else {
-        12
-    };
+    let header = form_header(panel, form, messages);
+    let field_count = u16::try_from(form.labels.len()).unwrap_or(8);
+    let header_rows = u16::try_from(header.len()).unwrap_or(4);
+    let height = (header_rows + 2 * field_count + 6).min(area.height);
     let popup = Rect::new(
-        area.x + area.width.saturating_sub(72) / 2,
+        area.x + area.width.saturating_sub(76) / 2,
         area.y + area.height.saturating_sub(height) / 2,
-        area.width.min(72),
-        area.height.min(height),
+        area.width.min(76),
+        height,
     );
-    let mut rows = vec![
-        Line::from(messages.get(form.operation.key())),
-        Line::default(),
-    ];
+    frame.render_widget(Clear, popup);
+    let block = crate::view::block(messages.get("op-dialog"), ascii);
+    let inner = block.inner(popup).inner(ratatui::layout::Margin::new(1, 0));
+    frame.render_widget(block, popup);
+    frame.render_widget(
+        Paragraph::new(header).wrap(Wrap { trim: false }),
+        Rect::new(inner.x, inner.y, inner.width, header_rows),
+    );
+    fields(
+        frame,
+        form,
+        Rect::new(
+            inner.x,
+            inner.y + header_rows + 1,
+            inner.width,
+            inner.height.saturating_sub(header_rows + 4),
+        ),
+        messages,
+        scene,
+    );
+    let help = Rect::new(inner.x, inner.bottom().saturating_sub(3), inner.width, 1);
+    frame.render_widget(
+        Paragraph::new(messages.get(if form.labels.is_empty() {
+            "op-confirm"
+        } else {
+            "op-edit-help"
+        }))
+        .style(Style::new().fg(theme::MUTED)),
+        help,
+    );
+    let buttons = Rect::new(inner.x, inner.bottom().saturating_sub(1), inner.width, 1);
+    scene.buttons(
+        frame,
+        buttons,
+        [
+            (
+                crate::ui::label(messages.get("ui-save"), ascii),
+                Action::Submit,
+                true,
+            ),
+            (messages.get("ui-cancel"), Action::Key(KeyCode::Esc), false),
+        ],
+    );
+}
+
+fn form_header(panel: &Panel, form: &crate::Form, messages: &Messages) -> Vec<Line<'static>> {
+    let mut header = vec![Line::from(messages.get(form.operation.key()))];
     if let crate::Mode::Live(state) = &panel.mode {
-        rows.push(Line::from(
+        header.push(Line::from(
             state
                 .institution
                 .name
                 .as_deref()
                 .map_or_else(|| messages.get("panel-no-name"), text),
         ));
-        rows.push(row(
+        header.push(row(
             messages,
             "op-sessions",
             state
@@ -225,37 +254,81 @@ pub(crate) fn form(
             .and_then(|sample| sample.operations.cloud.as_ref())
             .and_then(|cloud| cloud.question.as_ref())
     {
-        rows.push(row(messages, "cloud-question", Some(text(&question.name))));
+        header.push(row(messages, "cloud-question", Some(text(&question.name))));
     }
-    if form.confirming() {
-        rows.push(Line::from(messages.get("op-confirm")));
-        for (key, value) in form.labels.iter().zip(&form.values) {
-            rows.push(row(messages, key, Some(field_value(key, value))));
+    header
+}
+
+/// Every field at once: a label, then its input or its choices.
+fn fields(
+    frame: &mut Frame,
+    form: &crate::Form,
+    area: Rect,
+    messages: &Messages,
+    scene: &mut crate::ui::Scene,
+) {
+    let mut y = area.y;
+    for (index, (key, value)) in form.labels.iter().zip(&form.values).enumerate() {
+        if y + 1 >= area.bottom() {
+            break;
         }
-    } else {
-        let key = form.labels.get(form.field).copied().unwrap_or("op-output");
-        rows.push(row(messages, key, Some(String::new())));
-        rows.push(Line::from(format!(
-            "> {}",
-            form.values
-                .get(form.field)
-                .map_or_else(String::new, |value| field_value(key, value))
-        )));
-        rows.push(Line::from(messages.get("op-edit-help")));
+        let focused = form.field == index;
+        frame.render_widget(
+            Paragraph::new(field_label(messages, key)).style(if focused {
+                Style::new().fg(theme::ACCENT).add_modifier(Modifier::BOLD)
+            } else {
+                Style::new().fg(theme::TEXT)
+            }),
+            Rect::new(area.x, y, area.width, 1),
+        );
+        let input = Rect::new(area.x, y + 1, area.width, 1);
+        if let Some(choices) = crate::operations::choices(key) {
+            choice_buttons(frame, input, (index, value, choices), messages, scene);
+        } else {
+            let hover = scene.add(input, Action::Field(index));
+            let shown = field_value(key, value);
+            let cursor = if focused { "▏" } else { "" };
+            frame.render_widget(
+                Paragraph::new(format!(" {shown}{cursor}")).style(if focused || hover {
+                    Style::new().fg(theme::TEXT).bg(theme::BORDER)
+                } else {
+                    Style::new().fg(theme::TEXT).bg(theme::BACKGROUND)
+                }),
+                input,
+            );
+        }
+        y += 2;
     }
-    frame.render_widget(Clear, popup);
-    frame.render_widget(
-        Paragraph::new(rows)
-            .wrap(Wrap { trim: false })
-            .block(crate::view::block(messages.get("op-dialog"), ascii)),
-        popup,
+}
+
+/// The field's name alone: the label keys also carry the value for the
+/// summary lines, which the input shows here instead.
+fn field_label(messages: &Messages, key: &str) -> String {
+    messages
+        .values(key, &[("value", String::new())])
+        .trim_end()
+        .trim_end_matches(':')
+        .to_owned()
+}
+
+fn choice_buttons(
+    frame: &mut Frame,
+    area: Rect,
+    (index, value, choices): (usize, &str, &'static [(&'static str, &'static str)]),
+    messages: &Messages,
+    scene: &mut crate::ui::Scene,
+) {
+    scene.buttons(
+        frame,
+        area,
+        choices.iter().map(|(choice, key)| {
+            (
+                messages.get(key),
+                Action::Choose(index, choice),
+                *choice == value,
+            )
+        }),
     );
-    let primary = if form.confirming() {
-        ("ui-save", KeyCode::Char('y'))
-    } else {
-        ("ui-next", KeyCode::Enter)
-    };
-    crate::ui::modal_buttons(frame, popup, messages, ascii, scene, Some(primary));
 }
 
 fn field_value(key: &str, value: &str) -> String {

@@ -1,0 +1,33 @@
+---
+source: crates/elzevir-panel/tests/live.rs
+expression: shown
+---
+Elzevir TUI  0.1.0-alpha.2  |  Não lido
++Seções--------------------+     1 Início            2 Saúde          3 Acesso           4 Backup           5 Versões         6 Serviço
+|  d Painel de controle    |+Serviço-------------------------------------------------------------------------++Instituição selecionada-----+
+|  x Diagnóstico           || * Consultando...                                                               ||Biblioteca de teste         |
+|  a Endereços e acesso    ||                                                                                ||                            |
+|  b Backup e agendamentos ||                                                                                ||Listener configurado        |
+|  u Atualizações          ||                                                                                ||127.0.0.1:7390              |
+|> r Serviço               ||   +Operação com confirmação--------------------------------------------------+ ||                            |
+|                          || +-| Salvar as configurações — valem ao reiniciar o servidor                  | ||Listener observado          |
+|                          || | | Biblioteca de teste                                                      | ||Não lido                    |
+|                          || +-| Sessões ativas observadas da equipe: Não lido                            | ||                            |
+|                          || +-|                                                                          | ||Consultando...              |
+|                          || | | Nome da biblioteca                                                       | ||                            |
+|                          || +-|  Biblioteca de teste▏                                                    | ||Observações somente de      |
+|                          ||   | Endereço e porta (ex.: 127.0.0.1:7390)                                   | ||leitura                     |
+|                          ||   |  127.0.0.1:7390                                                          | ||                            |
+|                          ||   | Idioma                                                                   | ||                            |
+|                          ||   |                English                            Português              | ||                            |
+|                          ||   | Clique num campo para editar · Tab: próximo · Esc: cancelar              | ||                            |
+|                          ||   |                                                                          | ||                            |
+|                          ||   |             Confirmar [Y]                      Cancelar [Esc]            | ||                            |
+|                          ||   +--------------------------------------------------------------------------+ ||                            |
+|                          ||                                                                                ||                            |
+|                          ||                                                                                ||                            |
+|                          ||                                                                                ||                            |
+|                          ||                                                                                ||                            |
+|                          |+--------------------------------------------------------------------------------++----------------------------+
++--------------------------+                                                  Atualizar [F]
+Tab/setas: navegar | f: atualizar | PgUp/PgDn: rolar | Ctrl+P: paleta | q/Ctrl+C: sair

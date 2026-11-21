@@ -5,8 +5,9 @@
 1. `elzevir serve --config CAMINHO` lê explicitamente um arquivo TOML UTF-8.
    Não há busca automática de configuração nem interpolação de variáveis.
 2. A seção `[server]` aceita `data_dir` (pasta da instituição), `listen`
-   (IP e porta, incluindo IPv6 entre colchetes), `insecure_cookies` (booleano)
-   e `iri_base` (base das IRIs BIBFRAME).
+   (IP e porta, incluindo IPv6 entre colchetes), `insecure_cookies` (booleano),
+   `iri_base` (base das IRIs BIBFRAME) e `lang` (`en` ou `pt-BR`; `--lang`
+   tem precedência e, sem nenhum dos dois, vale o idioma do sistema).
    O arquivo de exemplo é `elzevir.example.toml`.
 3. Precedência: opções explícitas da CLI > arquivo > padrões internos.
    `listen` tem padrão `127.0.0.1:7390` (porta livre no registro da IANA, longe da 8080 que outros serviços costumam ocupar); `insecure_cookies` é falso por padrão.

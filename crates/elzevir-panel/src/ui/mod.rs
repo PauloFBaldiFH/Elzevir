@@ -17,6 +17,12 @@ use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 pub(crate) enum Action {
     Section(Section),
     Key(KeyCode),
+    /// Focus a form field.
+    Field(usize),
+    /// Pick one of a form field's fixed choices.
+    Choose(usize, &'static str),
+    /// Submit the form, as its primary button.
+    Submit,
 }
 
 #[derive(Default)]
@@ -82,6 +88,20 @@ impl Action {
                 area.width,
                 area.height,
             ),
+            Self::Field(index) => {
+                if let Some(form) = &mut panel.form {
+                    form.field = index.min(form.labels.len());
+                }
+            }
+            Self::Choose(index, value) => {
+                if let Some(form) = &mut panel.form
+                    && let Some(field) = form.values.get_mut(index)
+                {
+                    value.clone_into(field);
+                    form.field = index;
+                }
+            }
+            Self::Submit => panel.submit_form(),
         }
     }
 }
@@ -148,13 +168,12 @@ pub(crate) fn action_bar(
         return;
     }
     let contextual: &[(&str, char)] = match panel.section {
-        Section::Dashboard => &[],
         Section::Diagnostics => &[("ui-verify", 'v'), ("ui-export", 'e')],
         Section::Addresses => &[("ui-test", 'v'), ("ui-share", 'Q'), ("ui-config", 's')],
         Section::Backup => &[("ui-new", 'n'), ("ui-verify", 'v'), ("ui-config", 's')],
         Section::Updates => &[("ui-search", 'c'), ("ui-install", 'i'), ("ui-recover", 'r')],
-        Section::Restart if panel.managed() => &[("ui-restart", 't')],
-        Section::Restart => &[("ui-start", 'i'), ("ui-stop", 'p'), ("ui-restart", 't')],
+        // The service section has its own big buttons.
+        Section::Dashboard | Section::Restart => &[],
     };
     let controls: Vec<_> = contextual
         .iter()

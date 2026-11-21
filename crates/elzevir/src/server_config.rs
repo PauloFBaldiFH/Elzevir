@@ -74,6 +74,9 @@ struct Server {
     listen: SocketAddr,
     insecure_cookies: bool,
     iri_base: Option<String>,
+    /// Interface language; `--lang` overrides it, the system's applies without either.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    lang: Option<String>,
 }
 
 impl Default for Server {
@@ -83,6 +86,7 @@ impl Default for Server {
             listen: default_listen(),
             insecure_cookies: false,
             iri_base: None,
+            lang: None,
         }
     }
 }
@@ -110,6 +114,8 @@ pub(crate) enum ConfigError {
     EmptyDataDir,
     #[error("institution name must contain 1 to 200 characters and no control characters")]
     InvalidName,
+    #[error("language must be en or pt-BR")]
+    InvalidLanguage,
     #[error("cannot serialize initialization configuration")]
     Serialize,
 }
@@ -154,7 +160,8 @@ impl ServeArgs {
             return Err(ConfigError::EmptyDataDir);
         }
         Ok(Settings {
-            lang: crate::first_use::language(self.lang.as_deref()).to_owned(),
+            lang: crate::first_use::language(self.lang.as_deref().or(server.lang.as_deref()))
+                .to_owned(),
             institution_name: file.institution.map(|institution| institution.name),
             staff: file.staff,
             data_dir,
@@ -205,6 +212,14 @@ impl FileConfig {
         }
         if self
             .server
+            .lang
+            .as_deref()
+            .is_some_and(|lang| !LANGUAGES.contains(&lang))
+        {
+            return Err(ConfigError::InvalidLanguage);
+        }
+        if self
+            .server
             .data_dir
             .as_ref()
             .is_some_and(|dir| dir.as_os_str().is_empty())
@@ -214,6 +229,9 @@ impl FileConfig {
         Ok(())
     }
 }
+
+/// Languages of the interface, as `--lang` accepts them.
+pub(crate) const LANGUAGES: [&str; 2] = ["en", "pt-BR"];
 
 pub(crate) fn validate_name(name: &str) -> Result<(), ConfigError> {
     if name.trim().is_empty()
@@ -243,6 +261,7 @@ pub(crate) fn render_init(
             listen,
             insecure_cookies,
             iri_base: None,
+            lang: None,
         },
     };
     config.validate()?;
@@ -266,6 +285,7 @@ pub(crate) fn snapshot(settings: &Settings) -> Result<String, ConfigError> {
             listen: settings.listen,
             insecure_cookies: settings.insecure_cookies,
             iri_base: settings.iri_base.clone(),
+            lang: Some(settings.lang.clone()),
         },
     })
     .map_err(|_| ConfigError::Serialize)
@@ -298,6 +318,31 @@ pub(crate) fn with_port(source: &str, port: u16) -> Result<String, String> {
         .staff
         .validate(Some(config.server.listen))
         .map_err(|_| "invalid access policy for the new port")?;
+    toml::to_string_pretty(&config).map_err(|_| "cannot encode server configuration".to_owned())
+}
+
+/// The settings the panel edits.
+pub(crate) struct Edit {
+    pub(crate) name: String,
+    pub(crate) listen: SocketAddr,
+    pub(crate) lang: String,
+}
+
+/// Changes the institution name, listen address and language, keeping the
+/// rest of the configuration.
+pub(crate) fn with_settings(source: &str, edit: Edit) -> Result<String, String> {
+    let mut config: FileConfig =
+        toml::from_str(source).map_err(|_| "invalid server configuration")?;
+    config.institution = Some(Institution {
+        name: edit.name.trim().to_owned(),
+    });
+    config.server.listen = edit.listen;
+    config.server.lang = Some(edit.lang);
+    config.validate().map_err(|_| "invalid name or language")?;
+    config
+        .staff
+        .validate(Some(config.server.listen))
+        .map_err(|_| "invalid access policy for the new address")?;
     toml::to_string_pretty(&config).map_err(|_| "cannot encode server configuration".to_owned())
 }
 
