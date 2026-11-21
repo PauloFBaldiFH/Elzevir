@@ -374,6 +374,14 @@ fn accept(directory: &Path, connection: &Connection, output: &[u8]) -> Result<()
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum Action {
+    SendGroup {
+        targets: Vec<elzevir_panel::CloudTarget>,
+        id: String,
+    },
+    Remote {
+        target: elzevir_panel::CloudTarget,
+        command: elzevir_panel::RemoteCommand,
+    },
     Providers,
     Plan {
         definition: crate::cloud_plans::Definition,
@@ -424,6 +432,15 @@ pub(crate) fn execute(
     progress: Option<Progress>,
 ) -> Result<(), String> {
     match action {
+        Action::SendGroup { targets, id } => {
+            require_limited_account()?;
+            let control: crate::cancellation::Control =
+                std::sync::Arc::new(move || progress.as_ref().is_some_and(|p| p(&[]).is_err()));
+            return crate::cloud_plans::resend(directory, targets, id, &control);
+        }
+        Action::Remote { target, command } => {
+            return remote_files::execute(directory, target, command, progress);
+        }
         Action::Plan { definition } => {
             return crate::cloud_plans::upsert(directory, definition.clone()).map(drop);
         }
@@ -445,7 +462,9 @@ fn execute_with(
     progress: Option<Progress>,
 ) -> Result<(), String> {
     match action {
-        Action::Plan { .. }
+        Action::SendGroup { .. }
+        | Action::Remote { .. }
+        | Action::Plan { .. }
         | Action::DisablePlan { .. }
         | Action::RemovePlan { .. }
         | Action::RunPlan { .. } => Err("invalid cloud metadata dispatch".to_owned()),
@@ -716,70 +735,6 @@ fn destination(connection: &Connection, folder_name: &str, name: &str) -> Result
     }
     Ok(format!("{}:{folder_name}/{name}", remote(connection)))
 }
-fn transfer_with(
-    directory: &Path,
-    connection: &Connection,
-    folder_name: &str,
-    source: &Path,
-    program: &Path,
-    runner: &impl Runner,
-    progress: Option<Progress>,
-) -> Result<(), String> {
-    archive::regular(source)?;
-    let name = source
-        .file_name()
-        .and_then(|value| value.to_str())
-        .ok_or("invalid cloud artifact name")?;
-    let target = destination(connection, folder_name, name)?;
-    run(
-        runner,
-        program,
-        vec![
-            "copyto".into(),
-            source.as_os_str().to_owned(),
-            target.into(),
-            "--immutable".into(),
-            "--retries".into(),
-            "1".into(),
-            "--low-level-retries".into(),
-            "2".into(),
-            "--stats".into(),
-            "0".into(),
-        ],
-        environment(directory, connection),
-        None,
-        progress.clone(),
-        65_536,
-    )?;
-    run(
-        runner,
-        program,
-        vec![
-            "check".into(),
-            source
-                .parent()
-                .ok_or("cloud artifact parent required")?
-                .as_os_str()
-                .to_owned(),
-            format!("{}:{folder_name}", remote(connection)).into(),
-            "--include".into(),
-            format!("/{name}").into(),
-            "--max-depth".into(),
-            "1".into(),
-            "--one-way".into(),
-            "--download".into(),
-            "--retries".into(),
-            "1".into(),
-            "--stats".into(),
-            "0".into(),
-        ],
-        environment(directory, connection),
-        None,
-        progress,
-        65_536,
-    )?;
-    Ok(())
-}
 fn test(
     directory: &Path,
     id: &str,
@@ -802,14 +757,12 @@ fn test(
         &source,
         b"Elzevir fictional upload test. No institution data.\n",
     )?;
-    transfer_with(
-        directory,
-        &connection,
+    let control: crate::cancellation::Control = std::sync::Arc::new(|| false);
+    let digest = archive::hash(&source, &control)?;
+    remote_files::Session::new(directory, &connection, program, runner, progress.clone()).upload(
         folder_name,
         &source,
-        program,
-        runner,
-        progress.clone(),
+        &digest,
     )?;
     run(
         runner,
@@ -832,6 +785,7 @@ pub(crate) fn upload(
     id: &str,
     folder_name: &str,
     source: &Path,
+    digest: &str,
     progress: Option<Progress>,
 ) -> Result<(), String> {
     require_limited_account()?;
@@ -842,21 +796,71 @@ pub(crate) fn upload(
     let _lock = lock(directory, &connection)?;
     let lease = crate::managed_tools::lease(crate::managed_tools::Tool::Rclone)?;
     let program = &lease.path;
-    transfer_with(
-        directory,
-        &connection,
+    remote_files::Session::new(directory, &connection, program, &Native, progress).upload(
         folder_name,
         source,
-        program,
-        &Native,
-        progress,
+        digest,
     )
+}
+pub(crate) fn inspect_object(
+    directory: &Path,
+    plan: &crate::cloud_plans::Plan,
+    id: &str,
+    digest: Option<&str>,
+    progress: Option<Progress>,
+) -> Result<(), String> {
+    require_limited_account()?;
+    let connection = connection(directory, &plan.connection)?;
+    if !connection.ready {
+        return Err("connection authorization pending".into());
+    }
+    let _lock = lock(directory, &connection)?;
+    let lease = crate::managed_tools::lease(crate::managed_tools::Tool::Rclone)?;
+    let name = format!("elzevir-{id}.age");
+    let target = destination(&connection, &plan.folder, &name)?;
+    if let Some(digest) = digest {
+        return remote_files::verify_remote(
+            directory,
+            &connection,
+            &lease.path,
+            &target,
+            digest,
+            progress,
+        );
+    }
+    let folder = format!("{}:{}", remote(&connection), plan.folder);
+    for args in [
+        vec!["mkdir".into(), OsString::from(&folder)],
+        vec![
+            "lsf".into(),
+            folder.into(),
+            "--max-depth".into(),
+            "1".into(),
+            "--include".into(),
+            format!("/{name}").into(),
+        ],
+    ] {
+        let output = run(
+            &Native,
+            &lease.path,
+            args,
+            environment(directory, &connection),
+            None,
+            progress.clone(),
+            65536,
+        )?;
+        if !output.stdout.is_empty() {
+            return Err("remote name already in use".into());
+        }
+    }
+    Ok(())
 }
 pub(crate) fn remove_owned(
     directory: &Path,
     id: &str,
     folder_name: &str,
     artifact_id: &str,
+    digest: &str,
     progress: Option<Progress>,
 ) -> Result<(), String> {
     require_limited_account()?;
@@ -870,26 +874,12 @@ pub(crate) fn remove_owned(
     let _lock = lock(directory, &connection)?;
     let lease = crate::managed_tools::lease(crate::managed_tools::Tool::Rclone)?;
     let program = &lease.path;
-    run(
-        &Native,
-        program,
-        vec![
-            "deletefile".into(),
-            destination(
-                &connection,
-                folder_name,
-                &format!("elzevir-{artifact_id}.age"),
-            )?
-            .into(),
-            "--retries".into(),
-            "1".into(),
-        ],
-        environment(directory, &connection),
-        None,
-        progress,
-        65_536,
+    let target = destination(
+        &connection,
+        folder_name,
+        &format!("elzevir-{artifact_id}.age"),
     )?;
-    Ok(())
+    remote_files::delete_confirmed(directory, &connection, program, &target, digest, progress)
 }
 
 fn require_limited_account() -> Result<(), String> {
@@ -942,6 +932,18 @@ pub(crate) fn execute_queued(
         Ok(())
     });
     let result = execute(directory, &action, Some(progress));
+    if result.is_err()
+        && let Action::Test { id, .. } = &action
+        && valid_id(id)
+    {
+        let record = serde_json::json!({"schema":1,"id":id,"at":jiff::Timestamp::now().to_string(),"verified":false});
+        let bytes = serde_json::to_vec(&record).map_err(|_| "cannot encode test result")?;
+        crate::broker::publish(
+            directory,
+            &directory.join(format!("cloud-test-{id}.json")),
+            &bytes,
+        )?;
+    }
     let path = directory.join("cloud-progress.json");
     if path.exists() {
         std::fs::remove_file(path).map_err(|_| "cannot clear cloud authorization progress")?;
@@ -980,6 +982,7 @@ pub(crate) fn view(directory: &Path) -> Result<elzevir_panel::CloudView, String>
             name: connection.name.clone(),
             provider: connection.provider.clone(),
             ready: connection.ready,
+            test_failed: test_failed(directory, &connection.id),
             tested_at: tested_at(directory, &connection.id),
         });
         if !connection.ready
@@ -1034,9 +1037,23 @@ pub(crate) fn view(directory: &Path) -> Result<elzevir_panel::CloudView, String>
             }
         }
     }
+    view.remote = remote_files::page(directory);
+    view.download = remote_files::downloaded(directory);
+    view.notice = remote_files::notice(directory);
+    view.transfers = crate::cloud_plans::history(directory)?;
     view.plans = crate::cloud_plans::summaries(directory)?;
     Ok(view)
 }
+fn test_failed(directory: &Path, id: &str) -> bool {
+    read(&directory.join(format!("cloud-test-{id}.json")), 4096)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .is_some_and(|v| {
+            v.get("verified").and_then(serde_json::Value::as_bool) == Some(false)
+                && v.get("id").and_then(serde_json::Value::as_str) == Some(id)
+        })
+}
+mod remote_files;
 fn tested_at(directory: &Path, id: &str) -> Option<String> {
     let bytes = read(&directory.join(format!("cloud-test-{id}.json")), 4096).ok()?;
     let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
@@ -1053,6 +1070,14 @@ fn tested_at(directory: &Path, id: &str) -> Option<String> {
 pub(crate) fn intention(operation: &elzevir_panel::CloudOperation) -> Result<Action, String> {
     use elzevir_panel::CloudOperation as Panel;
     Ok(match operation {
+        Panel::SendGroup(targets, id) => Action::SendGroup {
+            targets: targets.clone(),
+            id: id.clone(),
+        },
+        Panel::Remote(target, command) => Action::Remote {
+            target: target.clone(),
+            command: command.clone(),
+        },
         Panel::Plan {
             id,
             name,

@@ -8,12 +8,12 @@ Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:
 |  x Diagnostics           ||Running                                                                         ||Biblioteca de teste         |
 |  a Addresses and access  ||                                                                                ||                            |
 |> b Backups and schedules ||n Create · v Verify · e Export · k Recovery key · o Restore · s Schedule        ||Configured listener         |
-|  u Updates               ||p providers · c connect · a answer provider · y crypt wrapper · t fictitious    ||127.0.0.1:0                 |
-|  r Service               ||upl+Confirmed operation-------------------------------------------------------+ ||                            |
-|                          ||g c| Create encrypted backup                                                  | ||Observed listener           |
-|                          ||con| Biblioteca de teste                                                      | ||127.0.0.1:8080              |
-|                          ||Cop| Observed active staff sessions: Not read                                 | ||                            |
-|                          ||Dai| Estimated working space: 12 MiB                                          | ||Last check: 0 seconds ago   |
+|  u Updates               ||Copies retained: Not read                                                       ||127.0.0.1:0                 |
+|  r Service               ||Dai+Confirmed operation-------------------------------------------------------+ ||                            |
+|                          ||[Co| Create encrypted backup                                                  | ||Observed listener           |
+|                          ||[ ]| Biblioteca de teste                                                      | ||127.0.0.1:8080              |
+|                          ||   | Observed active staff sessions: Not read                                 | ||                            |
+|                          ||   | Estimated working space: 12 MiB                                          | ||Last check: 0 seconds ago   |
 |                          ||   |                                                                          | ||                            |
 |                          ||   | Scope                                                                    | ||Read-only observations      |
 |                          ||   |           Full institution                      Database only            | ||                            |

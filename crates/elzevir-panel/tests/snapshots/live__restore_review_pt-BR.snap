@@ -8,12 +8,12 @@ Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:
 |  x Diagnóstico           ||Em execução                                                                     ||Biblioteca de teste         |
 |  a Endereços e acesso    ||                                                                                ||                            |
 |> b Backup e agendamentos ||n Criar · v Verificar · e Exportar · k Chave · o Restaurar · s Agendar          ||Listener configurado        |
-|  u Atualizações          ||p p+Operação com confirmação--------------------------------------------------+ ||127.0.0.1:0                 |
-|  r Serviço               ||com| Revisar restauração da instituição                                       | ||                            |
-|                          ||g c| Biblioteca de teste                                                      |·||Listener observado          |
-|                          ||C r| Sessões ativas observadas da equipe: Não lido                            | ||127.0.0.1:8080              |
-|                          ||Cóp| biblioteca.age                                                           | ||                            |
-|                          ||Bac| 00112233445566778899aabbccddeeff   2026-11-20T22:30:00Z                  | ||Última consulta: há 0       |
+|  u Atualizações          ||Cóp+Operação com confirmação--------------------------------------------------+ ||127.0.0.1:0                 |
+|  r Serviço               ||Bac| Revisar restauração da instituição                                       | ||                            |
+|                          ||[Co| Biblioteca de teste                                                      | ||Listener observado          |
+|                          ||[ ]| Sessões ativas observadas da equipe: Não lido                            | ||127.0.0.1:8080              |
+|                          ||   | biblioteca.age                                                           | ||                            |
+|                          ||   | 00112233445566778899aabbccddeeff   2026-11-20T22:30:00Z                  | ||Última consulta: há 0       |
 |                          ||   | Esquema do banco 1                                                       | ||segundos                    |
 |                          ||   | Instituição de origem desconhecida                                       | ||                            |
 |                          ||   | Somente banco. A configuração e as credenciais atuais serão mantidas.    | ||Observações somente de      |

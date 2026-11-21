@@ -235,6 +235,7 @@ pub struct Form {
     /// Values under edit, at most eight fields of 512 Unicode scalar values each.
     pub values: Vec<String>,
     /// Current restore path check for each input.
+    pub(crate) target_page: usize,
     pub(crate) checks: [crate::restore_paths::Checked; 2],
     /// Localized paste feedback.
     pub(crate) notice: Option<&'static str>,
@@ -344,6 +345,7 @@ impl Form {
         Self {
             operation,
             field: 0,
+            target_page: 0,
             checks: Default::default(),
             notice: None,
             values,

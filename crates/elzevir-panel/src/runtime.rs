@@ -257,7 +257,16 @@ fn handle_picker(
         if let Event::Key(key) = input
             && key.kind == event::KeyEventKind::Press
         {
-            if key.code == event::KeyCode::Esc {
+            if key.code == event::KeyCode::F(6)
+                && panel.form.as_ref().is_some_and(|f| {
+                    matches!(f.operation, crate::Operation::Restore { .. }) && f.field == 0
+                })
+            {
+                *picker = None;
+                panel.form = None;
+                panel.cloud_tab = 2;
+                panel.scroll = 0;
+            } else if key.code == event::KeyCode::Esc {
                 *picker = None;
             } else if let Some(mut path) = active.key(key.code) {
                 if let Some(form) = &mut panel.form {

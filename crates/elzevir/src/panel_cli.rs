@@ -400,6 +400,17 @@ impl Collector {
         let key = crate::installation::absolute(Path::new(key))?;
         let extracted = crate::backup_archive::extract(&input, &key)?;
         let m = extracted.manifest.clone();
+        if input.parent()
+            == self
+                .directory
+                .join("cloud-downloads")
+                .canonicalize()
+                .ok()
+                .as_deref()
+            && input.file_name() != Some(std::ffi::OsStr::new(&format!("elzevir-{}.age", m.id)))
+        {
+            return Err("downloaded archive identity differs from the selected object".into());
+        }
         crate::backup_cli::prepare(extracted, &self.directory, true)?;
         let reviewed = crate::managed_restore::signature(&m)?;
         let managed = crate::local_artifacts::ids(&self.directory)

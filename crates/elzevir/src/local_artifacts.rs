@@ -57,7 +57,15 @@ pub(crate) fn record(directory: &Path, id: &str) -> Result<(), String> {
 pub(crate) fn retain(directory: &Path, keep: u16) -> Result<(), String> {
     let mut catalog = load(directory)?;
     let remove = catalog.ids.len().saturating_sub(usize::from(keep.max(1)));
-    for id in catalog.ids.iter().take(remove) {
+    let pinned = crate::cloud_plans::pinned(directory)?;
+    let expired = catalog
+        .ids
+        .iter()
+        .take(remove)
+        .filter(|id| !pinned.contains(*id))
+        .cloned()
+        .collect::<std::collections::BTreeSet<_>>();
+    for id in &expired {
         let path = crate::backup_cli::artifact(directory, id)?;
         match std::fs::symlink_metadata(&path) {
             Ok(metadata) if metadata.is_file() && !metadata.is_symlink() => {
@@ -67,7 +75,7 @@ pub(crate) fn retain(directory: &Path, keep: u16) -> Result<(), String> {
             _ => return Err("local backup retention target refused".to_owned()),
         }
     }
-    catalog.ids.drain(..remove);
+    catalog.ids.retain(|id| !expired.contains(id));
     save(directory, &catalog)
 }
 #[cfg(test)]

@@ -34,12 +34,27 @@ struct Catalog {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Artifact {
+    #[serde(default)]
+    state: TransferState,
+    #[serde(default)]
+    digest: Option<String>,
     id: String,
     plan: String,
     connection: String,
     folder: String,
     at: String,
 }
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum TransferState {
+    Queued,
+    Unprobed,
+    Pending,
+    Failed,
+    #[default]
+    Verified,
+}
+
 #[derive(Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Ledger {
@@ -206,7 +221,11 @@ fn ledger(directory: &Path) -> Result<Ledger, String> {
         if !crate::cloud::valid_id(&artifact.id)
             || !crate::cloud::valid_id(&artifact.plan)
             || !crate::cloud::valid_id(&artifact.connection)
-            || !ids.insert(&artifact.id)
+            || !ids.insert((&artifact.connection, &artifact.folder, &artifact.id))
+            || artifact
+                .digest
+                .as_ref()
+                .is_some_and(|h| h.len() != 64 || !h.bytes().all(|b| b.is_ascii_hexdigit()))
             || artifact.at.parse::<jiff::Timestamp>().is_err()
         {
             return Err("invalid remote artifact ownership".to_owned());
@@ -221,10 +240,29 @@ fn save_ledger(directory: &Path, ledger: &Ledger) -> Result<(), String> {
     if bytes.len() > 4 * 1024 * 1024 || ledger.artifacts.len() > 8192 {
         return Err("remote artifact ownership limit exceeded".to_owned());
     }
-    crate::broker::publish(directory, &directory.join("cloud-artifacts.json"), &bytes)
+    crate::broker::publish(directory, &directory.join("cloud-artifacts.json"), &bytes)?;
+    #[cfg(unix)]
+    std::fs::File::open(directory)
+        .and_then(|f| f.sync_all())
+        .map_err(|_| "cannot sync transfer ledger")?;
+    Ok(())
 }
 trait Backend {
-    fn upload(&self, directory: &Path, plan: &Plan, source: &Path) -> Result<(), String>;
+    fn preflight(&self, directory: &Path, plan: &Plan, id: &str) -> Result<(), String>;
+    fn confirmed(
+        &self,
+        directory: &Path,
+        plan: &Plan,
+        id: &str,
+        digest: &str,
+    ) -> Result<(), String>;
+    fn upload(
+        &self,
+        directory: &Path,
+        plan: &Plan,
+        source: &Path,
+        digest: &str,
+    ) -> Result<(), String>;
     fn remove(&self, directory: &Path, artifact: &Artifact) -> Result<(), String>;
 }
 struct Native {
@@ -237,12 +275,31 @@ impl Native {
     }
 }
 impl Backend for Native {
-    fn upload(&self, directory: &Path, plan: &Plan, source: &Path) -> Result<(), String> {
+    fn preflight(&self, directory: &Path, plan: &Plan, id: &str) -> Result<(), String> {
+        crate::cloud::inspect_object(directory, plan, id, None, Some(self.progress()))
+    }
+    fn confirmed(
+        &self,
+        directory: &Path,
+        plan: &Plan,
+        id: &str,
+        digest: &str,
+    ) -> Result<(), String> {
+        crate::cloud::inspect_object(directory, plan, id, Some(digest), Some(self.progress()))
+    }
+    fn upload(
+        &self,
+        directory: &Path,
+        plan: &Plan,
+        source: &Path,
+        digest: &str,
+    ) -> Result<(), String> {
         crate::cloud::upload(
             directory,
             &plan.connection,
             &plan.folder,
             source,
+            digest,
             Some(self.progress()),
         )
     }
@@ -252,6 +309,10 @@ impl Backend for Native {
             &artifact.connection,
             &artifact.folder,
             &artifact.id,
+            artifact
+                .digest
+                .as_deref()
+                .ok_or("remote digest unavailable")?,
             Some(self.progress()),
         )
     }
@@ -299,24 +360,159 @@ fn execute_with_control(
     control: &crate::cancellation::Control,
 ) -> Result<(), String> {
     let plan = get(directory, plan_id)?;
-    let mut ledger = ledger(directory)?;
-    if ledger.artifacts.len() >= 8192 {
-        return Err("remote artifact ownership limit exceeded; review retention".to_owned());
-    }
     crate::backup_cli::make_directory(&directory.join("backups"))?;
     let output = crate::backup_cli::artifact(directory, job_id)?;
     crate::backup_archive::create_controlled(directory, config, &output, Some(readers), control)?;
     crate::local_artifacts::record(directory, job_id)?;
-    backend.upload(directory, &plan, &output)?;
-    ledger.artifacts.push(Artifact {
-        id: job_id.to_owned(),
-        plan: plan.id.clone(),
-        connection: plan.connection.clone(),
-        folder: plan.folder.clone(),
-        at: jiff::Timestamp::now().to_string(),
-    });
+    send_group(
+        directory,
+        std::slice::from_ref(&plan),
+        job_id,
+        backend,
+        control,
+    )
+}
+pub(crate) fn reviewed(
+    directory: &Path,
+    target: &elzevir_panel::CloudTarget,
+) -> Result<Plan, String> {
+    let plan = get(directory, &target.plan)?;
+    if plan.connection != target.connection || plan.folder != target.folder {
+        return Err("review the changed destination".into());
+    }
+    Ok(plan)
+}
+pub(crate) fn resend(
+    directory: &Path,
+    targets: &[elzevir_panel::CloudTarget],
+    id: &str,
+    control: &crate::cancellation::Control,
+) -> Result<(), String> {
+    if !crate::local_artifacts::ids(directory)?
+        .iter()
+        .any(|v| v == id)
+    {
+        return Err("select a managed local copy".into());
+    }
+    let path = crate::backup_cli::artifact(directory, id)?;
+    let verified = crate::backup_archive::extract_controlled(
+        &path,
+        &directory.join("backup.key"),
+        std::sync::Arc::clone(control),
+        Some(directory),
+    )?;
+    if verified.manifest.id != id {
+        return Err("local archive identity changed".into());
+    }
+    drop(verified);
+    if targets.is_empty() || targets.len() > 16 {
+        return Err("select up to sixteen destinations".into());
+    }
+    let mut unique = BTreeSet::new();
+    let plans = targets
+        .iter()
+        .map(|t| {
+            if !unique.insert((&t.connection, &t.folder)) {
+                return Err("duplicated destination".into());
+            }
+            reviewed(directory, t)
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    send_group(
+        directory,
+        &plans,
+        id,
+        &Native {
+            control: std::sync::Arc::clone(control),
+        },
+        control,
+    )
+}
+fn send_group(
+    directory: &Path,
+    plans: &[Plan],
+    id: &str,
+    backend: &impl Backend,
+    control: &crate::cancellation::Control,
+) -> Result<(), String> {
+    let path = crate::backup_cli::artifact(directory, id)?;
+    let digest = crate::backup_archive::hash(&path, control)?;
+    let mut ledger = ledger(directory)?;
+    for plan in plans {
+        if let Some(entry) = ledger
+            .artifacts
+            .iter()
+            .find(|a| a.id == id && a.connection == plan.connection && a.folder == plan.folder)
+        {
+            if entry.plan != plan.id || entry.digest.as_ref() != Some(&digest) {
+                return Err("artifact ownership or content changed".into());
+            }
+        } else {
+            ledger.artifacts.push(Artifact {
+                id: id.into(),
+                plan: plan.id.clone(),
+                connection: plan.connection.clone(),
+                folder: plan.folder.clone(),
+                at: jiff::Timestamp::now().to_string(),
+                state: TransferState::Queued,
+                digest: Some(digest.clone()),
+            });
+        }
+    }
     save_ledger(directory, &ledger)?;
-    if retain(directory, &plan, &mut ledger, backend).is_err() {
+    let mut result = Ok(());
+    for plan in plans {
+        crate::cancellation::check(control)?;
+        if let Err(error) = send(directory, plan, id, backend, &digest) {
+            result = Err(error);
+        }
+    }
+    result
+}
+fn send(
+    directory: &Path,
+    plan: &Plan,
+    id: &str,
+    backend: &impl Backend,
+    digest: &str,
+) -> Result<(), String> {
+    let output = crate::backup_cli::artifact(directory, id)?;
+    let mut ledger = ledger(directory)?;
+    let index = ledger
+        .artifacts
+        .iter()
+        .position(|a| a.id == id && a.connection == plan.connection && a.folder == plan.folder)
+        .ok_or("missing upload intent")?;
+    let entry = ledger
+        .artifacts
+        .get_mut(index)
+        .ok_or("missing upload intent")?;
+    let preflight = matches!(entry.state, TransferState::Queued | TransferState::Unprobed);
+    let reconciled = !preflight && backend.confirmed(directory, plan, id, digest).is_ok();
+    if preflight && let Err(error) = backend.preflight(directory, plan, id) {
+        entry.state = TransferState::Unprobed;
+        save_ledger(directory, &ledger)?;
+        return Err(error);
+    }
+    entry.state = TransferState::Pending;
+    save_ledger(directory, &ledger)?;
+    let result = if reconciled {
+        Ok(())
+    } else {
+        backend.upload(directory, plan, &output, digest)
+    };
+    ledger
+        .artifacts
+        .get_mut(index)
+        .ok_or("remote entry missing")?
+        .state = if result.is_ok() {
+        TransferState::Verified
+    } else {
+        TransferState::Failed
+    };
+    save_ledger(directory, &ledger)?;
+    result?;
+    if retain(directory, plan, &mut ledger, backend).is_err() {
         tracing::warn!(event = "cloud.retention_failed");
     }
     Ok(())
@@ -327,25 +523,70 @@ fn retain(
     ledger: &mut Ledger,
     backend: &impl Backend,
 ) -> Result<(), String> {
-    let ids = ledger
+    let expired = ledger
         .artifacts
         .iter()
         .rev()
-        .filter(|artifact| artifact.plan == plan.id)
+        .filter(|a| a.plan == plan.id && a.state == TransferState::Verified && a.digest.is_some())
         .skip(usize::from(plan.keep.max(1)))
-        .map(|artifact| artifact.id.clone())
+        .cloned()
         .collect::<Vec<_>>();
-    for id in ids {
-        let artifact = ledger
-            .artifacts
-            .iter()
-            .find(|artifact| artifact.id == id)
-            .ok_or("remote artifact ownership lost")?;
-        backend.remove(directory, artifact)?;
-        ledger.artifacts.retain(|artifact| artifact.id != id);
+    for artifact in expired {
+        backend.remove(directory, &artifact)?;
+        ledger.artifacts.retain(|a| {
+            !(a.id == artifact.id
+                && a.connection == artifact.connection
+                && a.folder == artifact.folder)
+        });
         save_ledger(directory, ledger)?;
     }
     Ok(())
+}
+pub(crate) fn pinned(directory: &Path) -> Result<BTreeSet<String>, String> {
+    Ok(ledger(directory)?
+        .artifacts
+        .into_iter()
+        .filter(|a| a.state != TransferState::Verified)
+        .map(|a| a.id)
+        .collect())
+}
+pub(crate) fn expected_digest(
+    directory: &Path,
+    target: &elzevir_panel::CloudTarget,
+    id: &str,
+) -> Result<Option<String>, String> {
+    Ok(ledger(directory)?
+        .artifacts
+        .into_iter()
+        .find(|a| a.connection == target.connection && a.folder == target.folder && a.id == id)
+        .and_then(|a| a.digest))
+}
+pub(crate) fn history(
+    directory: &Path,
+) -> Result<Vec<(elzevir_panel::CloudTarget, String, String)>, String> {
+    Ok(ledger(directory)?
+        .artifacts
+        .into_iter()
+        .rev()
+        .take(128)
+        .map(|a| {
+            (
+                elzevir_panel::CloudTarget {
+                    plan: a.plan,
+                    connection: a.connection,
+                    folder: a.folder,
+                },
+                a.id,
+                match a.state {
+                    TransferState::Queued => "op-queued",
+                    TransferState::Pending => "cloud-unconfirmed",
+                    TransferState::Unprobed | TransferState::Failed => "cloud-upload-failed",
+                    TransferState::Verified => "cloud-verified",
+                }
+                .into(),
+            )
+        })
+        .collect())
 }
 pub(crate) fn restored(directory: &Path) -> Result<(), String> {
     let mut plans = load(directory)?;
@@ -363,7 +604,11 @@ pub(crate) fn summaries(directory: &Path) -> Result<Vec<elzevir_panel::CloudPlan
             let count = ledger
                 .artifacts
                 .iter()
-                .filter(|artifact| artifact.plan == plan.id)
+                .filter(|artifact| {
+                    artifact.plan == plan.id
+                        && artifact.state == TransferState::Verified
+                        && artifact.digest.is_some()
+                })
                 .count();
             elzevir_panel::CloudPlan {
                 id: plan.id,
@@ -389,7 +634,17 @@ mod tests {
         events: RefCell<Vec<String>>,
     }
     impl Backend for Fake {
-        fn upload(&self, _: &Path, plan: &Plan, source: &Path) -> Result<(), String> {
+        fn preflight(&self, _: &Path, _: &Plan, _: &str) -> Result<(), String> {
+            Ok(())
+        }
+        fn confirmed(&self, _: &Path, _: &Plan, _: &str, _: &str) -> Result<(), String> {
+            if self.fail {
+                Err("offline".into())
+            } else {
+                Ok(())
+            }
+        }
+        fn upload(&self, _: &Path, plan: &Plan, source: &Path, _: &str) -> Result<(), String> {
             assert_eq!(plan.folder, "Elzevir/library");
             assert!(source.is_file());
             self.events.borrow_mut().push("upload".to_owned());
@@ -507,8 +762,68 @@ mod tests {
                 .unwrap()
                 .exists()
         );
-        assert!(ledger(directory.path()).unwrap().artifacts.is_empty());
+        assert_eq!(
+            ledger(directory.path())
+                .unwrap()
+                .artifacts
+                .first()
+                .unwrap()
+                .state,
+            TransferState::Failed
+        );
         assert_eq!(*backend.events.borrow(), ["upload"]);
+    }
+    #[test]
+    fn interrupted_upload_reconciles_by_destination_and_digest_and_never_reuploads() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        let plan = fixture(root);
+        let id = "b".repeat(32);
+        let output = crate::backup_cli::artifact(root, &id).unwrap();
+        crate::backup_cli::make_directory(output.parent().unwrap()).unwrap();
+        std::fs::write(&output, b"fixture").unwrap();
+        let control: crate::cancellation::Control = std::sync::Arc::new(|| false);
+        let digest = crate::backup_archive::hash(&output, &control).unwrap();
+        save_ledger(
+            root,
+            &Ledger {
+                artifacts: vec![Artifact {
+                    id: id.clone(),
+                    plan: plan.id.clone(),
+                    connection: plan.connection.clone(),
+                    folder: plan.folder.clone(),
+                    at: jiff::Timestamp::now().to_string(),
+                    state: TransferState::Pending,
+                    digest: Some(digest),
+                }],
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            history(root).unwrap().first().unwrap().2,
+            "cloud-unconfirmed"
+        );
+        assert!(pinned(root).unwrap().contains(&id));
+        let backend = Fake {
+            fail: false,
+            events: RefCell::default(),
+        };
+        let mut second = plan.clone();
+        second.id = "f".repeat(32);
+        second.folder = "Elzevir/library".into();
+        second.connection = "9".repeat(32);
+        send_group(root, &[plan.clone(), second], &id, &backend, &control).unwrap();
+        assert_eq!(*backend.events.borrow(), ["upload"]);
+        assert_eq!(history(root).unwrap().len(), 2);
+        assert!(
+            history(root)
+                .unwrap()
+                .iter()
+                .all(|row| row.2 == "cloud-verified")
+        );
+        assert!(!pinned(root).unwrap().contains(&id));
+        std::fs::write(output, b"replaced").unwrap();
+        assert!(send_group(root, &[plan], &id, &backend, &control).is_err());
     }
     #[test]
     fn retention_runs_only_after_verification_and_targets_only_the_plans_owned_artifacts() {
@@ -525,6 +840,8 @@ mod tests {
             before.artifacts.push(Artifact {
                 id,
                 plan: owner,
+                digest: Some("a".repeat(64)),
+                state: TransferState::Verified,
                 connection: plan.connection.clone(),
                 folder: plan.folder.clone(),
                 at: "2026-11-17T01:00:00Z".to_owned(),
@@ -554,7 +871,9 @@ mod tests {
             after
                 .artifacts
                 .iter()
-                .filter(|artifact| artifact.plan == plan.id)
+                .filter(|artifact| artifact.plan == plan.id
+                    && artifact.state == TransferState::Verified
+                    && artifact.digest.is_some())
                 .count(),
             2
         );
