@@ -10,6 +10,8 @@ pub enum Operation {
     Cloud(crate::CloudOperation),
     /// Explicitly test the configured public HTTPS endpoints.
     TestTunnel,
+    /// Test only the public staff endpoint.
+    TestStaff,
     /// Publish separate catalog/staff hostnames through the selected Cloudflare account.
     CloudflareSetup {
         /// Catalog hostname.
@@ -109,6 +111,7 @@ impl Operation {
         match self {
             Self::Address(action) => action.key(),
             Self::Cloud(action) => action.key(),
+            Self::TestStaff => "op-staff-test",
             Self::TestTunnel => "op-tunnel-test",
             Self::CloudflareSetup { .. } => "op-cloudflare-setup",
             Self::CloudflareLogin => "op-cloudflare-login",
@@ -260,11 +263,32 @@ pub(crate) fn choices(label: &str) -> Option<&'static [(&'static str, &'static s
 }
 
 impl Form {
+    pub(crate) fn open_broker_settings(&mut self) -> bool {
+        if !matches!(
+            self.operation,
+            Operation::Address(crate::AddressOperation::Enroll { .. })
+        ) {
+            return false;
+        }
+        if self.labels.last() != Some(&"broker-url") {
+            self.labels.push("broker-url");
+            self.values.push(String::new());
+        }
+        self.field = self.labels.len() - 1;
+        true
+    }
     /// Creates the fields appropriate for one explicit action.
     #[must_use]
     pub fn new(operation: Operation) -> Self {
         let (labels, values) = match &operation {
-            Operation::Address(action) => action.fields(),
+            Operation::Address(action) => {
+                let (mut labels, mut values) = action.fields();
+                if matches!(action,crate::AddressOperation::Enroll { base,.. } if base.is_empty()) {
+                    labels.pop();
+                    values.pop();
+                }
+                (labels, values)
+            }
             Operation::Cloud(action) => action.fields(),
             Operation::CloudflareSetup {
                 catalog,
@@ -305,6 +329,7 @@ impl Form {
                 vec![name.clone(), listen.clone(), language.clone()],
             ),
             Operation::Server(_)
+            | Operation::TestStaff
             | Operation::TestTunnel
             | Operation::CloudflareLogin
             | Operation::InstallCloudflared
@@ -402,6 +427,7 @@ impl Form {
                 protocol: values.next()?,
             },
             Operation::Server(action) => Operation::Server(action),
+            Operation::TestStaff => Operation::TestStaff,
             Operation::TestTunnel => Operation::TestTunnel,
             Operation::CloudflareLogin => Operation::CloudflareLogin,
             Operation::InstallCloudflared => Operation::InstallCloudflared,

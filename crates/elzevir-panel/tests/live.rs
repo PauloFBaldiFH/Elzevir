@@ -370,6 +370,7 @@ fn public_tunnel_test_and_log_tabs_never_conflate_a_gate_with_a_failure() {
             elzevir_panel::TunnelState::Configured(elzevir_panel::Tunnel {
                 catalog: "https://catalog.example.org/".to_owned(),
                 staff: "https://staff.example.org/equipe".to_owned(),
+                staff_tested_at: None,
                 catalog_check: elzevir_panel::PublicCheck::Ok,
                 staff_check: elzevir_panel::PublicCheck::Protected,
                 tested_at: Some("2026-11-17T00:00:00Z".to_owned()),
@@ -484,6 +485,9 @@ fn domain_flow_distinguishes_registration_connector_and_public_test_results() {
             catalog: Some("fictional.elzevir.app".to_owned()),
             staff: Some("fictional-admin.elzevir.app".to_owned()),
             failure: None,
+            registration_at: None,
+            connector_at: "2026-11-17T00:00:00Z".into(),
+            poll_seconds: None,
             connector: ConnectorState::Stopped,
             staff_allow_cidrs: vec!["192.0.2.0/24".to_owned()],
             remote_status: None,
@@ -518,7 +522,7 @@ fn registration_form_explains_the_default_broker_in_both_languages() {
     })));
     for language in ["en", "pt-BR"] {
         let rendered = screen(&panel, language);
-        assert!(rendered.contains("broker.elzevir.app"));
+        assert!(rendered.contains("broker.elzevir.app"), "{rendered}");
         assert!(!rendered.contains("broker-url"));
     }
 }
@@ -781,5 +785,89 @@ fn cloud_tabs_show_destination_quota_pending_status_and_bound_actions() {
     key(&mut panel, 'M');
     assert!(
         matches!(panel.form.take().unwrap().operation,Operation::Cloud(CloudOperation::SendGroup(targets,_)) if targets==[target])
+    );
+}
+
+#[test]
+fn narrow_and_ascii_sharing_show_only_the_catalog_and_escape_returns_to_addresses() {
+    use elzevir_panel::{PublicCheck, Section, Tunnel, TunnelState, TunnelTab};
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut panel = connected();
+    panel.section = Section::Addresses;
+    panel.tunnel_tab = TunnelTab::Share;
+    if let Mode::Live(state) = &mut panel.mode {
+        state.snapshot.as_mut().unwrap().operations.tunnel = TunnelState::Configured(Tunnel {
+            catalog: "https://public.elzevir.app/".into(),
+            staff: "https://staff.elzevir.app/equipe".into(),
+            catalog_check: PublicCheck::NotRun,
+            staff_check: PublicCheck::NotRun,
+            tested_at: None,
+            staff_tested_at: None,
+            logs: elzevir_panel::TunnelLog::default(),
+        });
+    }
+    for (width, ascii) in [(52, false), (120, true)] {
+        let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
+        terminal
+            .draw(|frame| draw(frame, &panel, &Messages::new("pt-BR").unwrap(), ascii))
+            .unwrap();
+        let buffer = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect::<String>();
+        assert!(buffer.contains("https://public.elzevir.app/"));
+        assert!(!buffer.contains("staff.elzevir.app"));
+        assert!(!buffer.contains(['▀', '▄', '█']));
+    }
+    panel.handle(
+        &Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+        52,
+        24,
+    );
+    assert_eq!(panel.tunnel_tab, TunnelTab::Addresses);
+}
+
+#[test]
+fn managing_addresses_exposes_saved_enrollment_and_reports_disabled_staff() {
+    use elzevir_panel::{AddressOperation, Operation, RemoteAddress, Section, TunnelTab};
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut panel = connected();
+    panel.section = Section::Addresses;
+    if let Mode::Live(state) = &mut panel.mode {
+        state.snapshot.as_mut().unwrap().operations.remote_address = Some(RemoteAddress {
+            at: "2026-11-20T12:00:00Z".into(),
+            listed: false,
+            staff_remote: false,
+        });
+    }
+    let press = |panel: &mut Panel, code| {
+        panel.handle(
+            &Event::Key(KeyEvent::new(code, KeyModifiers::NONE)),
+            140,
+            30,
+        );
+    };
+    press(&mut panel, KeyCode::Char(']'));
+    assert_eq!(panel.tunnel_tab, TunnelTab::Manage);
+    let rendered = screen(&panel, "en");
+    assert!(rendered.contains("Remote staff access: disabled"));
+    insta::assert_snapshot!("manage_addresses", rendered);
+    press(&mut panel, KeyCode::Char('S'));
+    assert!(panel.form.is_none());
+    press(&mut panel, KeyCode::Char('G'));
+    assert!(matches!(
+        panel.form.as_ref().unwrap().operation,
+        Operation::Address(AddressOperation::Resume { .. })
+    ));
+    press(&mut panel, KeyCode::Esc);
+    press(&mut panel, KeyCode::Char('g'));
+    assert!(!panel.form.as_ref().unwrap().labels.contains(&"broker-url"));
+    press(&mut panel, KeyCode::F(2));
+    assert_eq!(
+        panel.form.as_ref().unwrap().labels.last(),
+        Some(&"broker-url")
     );
 }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Terminal administration interface.
 
+mod access_actions;
 mod address_operations;
 mod address_view;
 pub use address_operations::AddressOperation;
@@ -152,6 +153,10 @@ pub struct Panel {
     pub cloud_file: usize,
     /// Reviewed destinations marked for a single upload.
     pub cloud_targets: Vec<CloudTarget>,
+    /// Most recent desktop or clipboard action feedback.
+    pub access_notice: Option<&'static str>,
+    /// Available terminal-host actions.
+    pub access_help: Option<&'static str>,
     /// Selected public tunnel detail tab.
     pub tunnel_tab: TunnelTab,
     /// Vertical dashboard scroll offset.
@@ -182,6 +187,21 @@ impl Panel {
     /// Applies an input event using the same geometry as the renderer.
     pub fn handle(&mut self, event: &Event, width: u16, height: u16) {
         if self.form.is_some() && self.handle_form(event) {
+            return;
+        }
+        if self.section == Section::Addresses && self.tunnel_tab == TunnelTab::Share {
+            if let Event::Key(key) = event
+                && key.kind != KeyEventKind::Release
+            {
+                match key.code {
+                    KeyCode::Char('Q') | KeyCode::Esc => self.tunnel_tab = TunnelTab::Addresses,
+                    KeyCode::Char('q') => self.quit = true,
+                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        self.quit = true;
+                    }
+                    _ => {}
+                }
+            }
             return;
         }
         let previous = self.section;
@@ -419,33 +439,80 @@ impl Panel {
         self.scroll = 0;
         true
     }
+    fn connector_action_available(&self, key: char) -> bool {
+        if !matches!(key, 'P' | 'S') {
+            return true;
+        }
+        let Mode::Live(state) = &self.mode else {
+            return false;
+        };
+        let observed = state
+            .snapshot
+            .as_ref()
+            .filter(|_| state.age_seconds <= 5)
+            .and_then(|s| s.operations.domain.as_ref())
+            .map(|d| d.connector);
+        matches!(
+            (key, observed),
+            ('P', Some(ConnectorState::Running)) | ('S', Some(ConnectorState::Stopped))
+        )
+    }
+    fn address_navigation(&mut self, key: char) -> bool {
+        match key {
+            key @ ('[' | ']') => {
+                use TunnelTab::{Addresses, Log, Manage, Test};
+                let tabs = [Addresses, Manage, Test, Log];
+                let i = tabs
+                    .iter()
+                    .position(|tab| *tab == self.tunnel_tab)
+                    .unwrap_or(0);
+                self.tunnel_tab = tabs
+                    .get(cycle(i, tabs.len(), key == ']'))
+                    .copied()
+                    .unwrap_or(Addresses);
+            }
+            'Q' => {
+                self.access_notice = None;
+                self.tunnel_tab = if self.tunnel_tab == TunnelTab::Share {
+                    TunnelTab::Addresses
+                } else {
+                    TunnelTab::Share
+                };
+            }
+            'm' => self.tunnel_tab = TunnelTab::Manage,
+            'h' => {
+                self.tunnel_tab = TunnelTab::Log;
+            }
+            _ => return false,
+        }
+        self.scroll = 0;
+        true
+    }
     fn begin_operation(&mut self, key: char) -> bool {
         if !matches!(&self.mode, Mode::Live(_)) || self.palette || self.diagnostics.pending {
             return false;
         }
-        if self.section == Section::Backup && self.cloud_navigation(key) {
+        if (self.section == Section::Addresses && self.address_navigation(key))
+            || (self.section == Section::Backup && self.cloud_navigation(key))
+        {
             return true;
         }
         let operation = match (self.section, key) {
-            (Section::Addresses, 'Q') => {
-                self.tunnel_tab = if self.tunnel_tab == TunnelTab::Share {
-                    TunnelTab::Test
-                } else {
-                    TunnelTab::Share
-                };
-                self.scroll = 0;
-                return true;
-            }
-            (Section::Addresses, 'h') => {
-                self.tunnel_tab = TunnelTab::Log;
-                self.scroll = 0;
-                return true;
+            (Section::Addresses, 'T') => {
+                self.tunnel_tab = TunnelTab::Test;
+                Operation::TestStaff
             }
             (Section::Addresses, 't') => {
                 self.tunnel_tab = TunnelTab::Test;
                 Operation::TestTunnel
             }
             (Section::Addresses, key) if address_operations::shortcut(key).is_some() => {
+                if !self.connector_action_available(key) {
+                    self.access_notice = Some("address-connector-unavailable");
+                    self.scroll = 0;
+                    return true;
+                }
+                self.tunnel_tab = TunnelTab::Manage;
                 Operation::Address(
                     address_operations::shortcut(key).unwrap_or(AddressOperation::Refresh),
                 )
@@ -507,7 +574,7 @@ impl Panel {
             },
             _ => return false,
         };
-        if matches!(operation, Operation::TestTunnel) {
+        if matches!(operation, Operation::TestTunnel | Operation::TestStaff) {
             self.diagnostics.requested = Some(ObservationRequest::Operate(operation));
             self.diagnostics.pending = true;
         } else {
@@ -562,6 +629,9 @@ impl Panel {
         let Some(form) = &mut self.form else {
             return false;
         };
+        if key.code == KeyCode::F(2) && form.open_broker_settings() {
+            return true;
+        }
         if let Operation::Cloud(CloudOperation::SendGroup(targets, _)) = &form.operation
             && matches!(key.code, KeyCode::PageUp | KeyCode::PageDown)
         {

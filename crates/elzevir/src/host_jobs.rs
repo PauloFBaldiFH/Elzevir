@@ -30,6 +30,7 @@ pub(crate) enum Task {
         setup: crate::broker::Setup,
     },
     TestTunnel,
+    TestStaff,
     CloudflareSetup {
         setup: crate::cloudflare::Setup,
     },
@@ -97,6 +98,7 @@ fn action(task: &Task) -> &'static str {
         Task::CloudflareLogin => "cloudflare_login",
         Task::Broker { .. } => "broker",
         Task::TestTunnel => "tunnel_test",
+        Task::TestStaff => "staff_test",
         Task::CloudflareSetup { .. } => "cloudflare_setup",
         Task::InstallTool { tool } => match tool {
             crate::managed_tools::Tool::Cloudflared => "install_cloudflared",
@@ -456,6 +458,7 @@ fn execute(
         Task::Reboot => reboot(),
         Task::CloudflareLogin => crate::cloudflare::login(directory, progress),
         Task::Broker { setup } => crate::broker::execute(directory, &setup, progress.as_ref()),
+        Task::TestStaff => crate::tunnel_observe::test_staff(directory),
         Task::TestTunnel => crate::tunnel_observe::test(directory),
         Task::CloudflareSetup { setup } => crate::cloudflare::configure(directory, &setup),
         Task::InstallTool { tool } => crate::managed_tool_update::execute(directory, tool),
@@ -607,6 +610,7 @@ fn receipts_all(directory: &Path) -> Result<Vec<Receipt>, String> {
                     | "install_rclone"
                     | "cloudflare_login"
                     | "cloudflare_setup"
+                    | "staff_test"
                     | "tunnel_test"
                     | "broker"
             )

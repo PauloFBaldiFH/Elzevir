@@ -162,6 +162,8 @@ impl Identity {
                         | "quota_exceeded"
                         | "domain_unavailable"
                         | "tunnel_failed"
+                        | "denied"
+                        | "expired"
                         | "provisioning_failed"
                 )
             })
@@ -272,6 +274,9 @@ pub(crate) enum Action {
         email: String,
         name: String,
     },
+    Resume,
+    PauseConnector,
+    StartConnector,
     Refresh,
     Listing {
         public: bool,
@@ -611,7 +616,7 @@ fn execute_with_clock(
         return Err("configured origin differs from the enrolled origin".to_owned());
     }
     match &setup.action {
-        Action::Enroll { .. } => {
+        Action::Enroll { .. } | Action::Resume => {
             enroll(directory, &mut identity, transport, progress, clock)?;
             connect(directory, setup, &mut identity, transport, connector, clock)?;
         }
@@ -663,6 +668,12 @@ fn execute_with_clock(
                 .signed(transport, "DELETE", "/v1/staff-credentials", &[])?
                 .success()?;
         }
+        Action::PauseConnector | Action::StartConnector => {
+            return domain::set_connector(
+                directory,
+                matches!(setup.action, Action::StartConnector),
+            );
+        }
         Action::Refresh => {}
     }
     if !matches!(&setup.action, Action::Withdraw | Action::Export { .. }) {
@@ -685,6 +696,20 @@ fn selected_identity(
 ) -> Result<Identity, String> {
     match &setup.action {
         Action::Enroll { .. } => begin(directory, setup, settings, transport, clock),
+        Action::Resume => {
+            let identity = load(directory)?;
+            if matches!(identity.phase, DomainPhase::Ready)
+                || (identity.ready && identity.phase == DomainPhase::NotRegistered)
+                || (identity.library.is_none()
+                    && (identity.device_code.is_none() || identity.expires_at <= clock.now()))
+            {
+                return Err(
+                    "no resumable enrollment; review the address or request authorization again"
+                        .into(),
+                );
+            }
+            Ok(identity)
+        }
         Action::Recover { input } => {
             let identity: Identity = serde_json::from_slice(&read(input)?)
                 .map_err(|_| "invalid address recovery file")?;
@@ -797,6 +822,12 @@ pub(crate) fn panel_setup(
                 name: name.clone(),
             }
         }
+        Panel::Resume { service: name } => {
+            service.clone_from(name);
+            Action::Resume
+        }
+        Panel::PauseConnector => Action::PauseConnector,
+        Panel::StartConnector => Action::StartConnector,
         Panel::Refresh => Action::Refresh,
         Panel::Listing { public } => Action::Listing { public: *public },
         Panel::Staff {

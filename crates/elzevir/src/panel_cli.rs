@@ -308,6 +308,7 @@ impl Collector {
                             "recover_update" => "op-update-recover",
                             "cloudflare_login" => "op-cloudflare-login",
                             "cloudflare_setup" => "op-cloudflare-setup",
+                            "staff_test" => "op-staff-test",
                             "tunnel_test" => "op-tunnel-test",
                             "broker" => "broker-operation",
                             "install_cloudflared" => "op-install-cloudflared",
@@ -550,6 +551,7 @@ impl Collector {
             | Operation::CheckUpdates
             | Operation::InstallCloudflared
             | Operation::InstallRclone
+            | Operation::TestStaff
             | Operation::TestTunnel
             | Operation::CloudflareLogin
             | Operation::CloudflareSetup { .. } => {
@@ -656,6 +658,7 @@ impl Collector {
                 },
             }),
             Operation::CloudflareLogin => Some(crate::host_jobs::Task::CloudflareLogin),
+            Operation::TestStaff => Some(crate::host_jobs::Task::TestStaff),
             Operation::TestTunnel => Some(crate::host_jobs::Task::TestTunnel),
             Operation::InstallCloudflared => Some(crate::host_jobs::Task::InstallTool {
                 tool: crate::managed_tools::Tool::Cloudflared,

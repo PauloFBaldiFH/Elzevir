@@ -231,6 +231,7 @@ fn approve(
                 identity.device_code = None;
                 identity.verification_uri = None;
                 identity.phase = DomainPhase::Failed;
+                identity.failure = Some(poll.status);
                 save(directory, identity)?;
                 return Err(
                     "device authorization denied or expired; register again to retry".to_owned(),

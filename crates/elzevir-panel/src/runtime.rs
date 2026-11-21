@@ -152,6 +152,8 @@ fn interact(
     worker: Option<&Worker>,
     stopping: impl Fn() -> bool,
 ) -> io::Result<()> {
+    let mut access = crate::access_actions::Actions::detect();
+    panel.access_help = Some(access.help());
     let mut scene = crate::ui::Scene::default();
     let mut picker: Option<crate::folder_picker::Picker> = None;
     let mut observed_at: Option<Instant> = None;
@@ -194,6 +196,7 @@ fn interact(
         if let Some(active) = &mut picker {
             active.poll();
         }
+        access.poll(&mut panel);
         path_probe.poll(panel.form.as_mut());
         let drawn = terminal
             .draw(|frame| {
@@ -207,7 +210,7 @@ fn interact(
             .area;
         if event::poll(tick.saturating_sub(last_tick.elapsed()))? {
             let input = event::read()?;
-            if handle_picker(&input, &mut picker, &mut panel) {
+            if handle_picker(&input, &mut picker, &mut panel) || access.handle(&input, &mut panel) {
                 continue;
             }
             match input {
