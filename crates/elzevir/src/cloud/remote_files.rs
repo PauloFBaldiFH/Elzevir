@@ -194,7 +194,10 @@ impl<'a, R: Runner> Session<'a, R> {
             }
         } else {
             crate::file_owner::private_tree(&path, self.directory)?;
-            std::fs::File::open(&path)
+            // Windows requires write access to flush file buffers.
+            std::fs::File::options()
+                .write(true)
+                .open(&path)
                 .and_then(|file| file.sync_all())
                 .map_err(|_| "cannot sync download")?;
             std::fs::hard_link(path, output).map_err(|_| "cannot publish verified download")?;
@@ -463,7 +466,11 @@ mod tests {
             result.unwrap();
             assert!(page(dir.path()).unwrap().free.is_none());
             let download = session.download(&target, &id);
-            assert_eq!(download.is_ok(), mode == "ok");
+            match mode {
+                "partial" => assert_eq!(download.unwrap_err(), "partial cloud download"),
+                "mismatch" => assert_eq!(download.unwrap_err(), "remote checksum mismatch"),
+                _ => download.unwrap(),
+            }
             assert_eq!(downloaded(dir.path()).is_some(), mode == "ok");
             if mode != "ok" {
                 assert_eq!(
