@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Made-up SRU 1.2 refusal. -->
+<zs:searchRetrieveResponse xmlns:zs="http://www.loc.gov/zing/srw/">
+  <zs:version>1.2</zs:version>
+  <zs:numberOfRecords>0</zs:numberOfRecords>
+  <zs:diagnostics>
+    <diag:diagnostic xmlns:diag="http://www.loc.gov/zing/srw/diagnostic/">
+      <diag:uri>info:srw/diagnostic/1/16</diag:uri>
+      <diag:details>bath.isbn</diag:details>
+      <diag:message>Unsupported index</diag:message>
+    </diag:diagnostic>
+  </zs:diagnostics>
+</zs:searchRetrieveResponse>

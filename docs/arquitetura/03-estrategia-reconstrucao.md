@@ -402,6 +402,24 @@ Fase 2 fechada em 2026-11-19 (PR #161): o critério de desempenho da 2.3 e da 2.
 
 Ordem: 3.1 a 3.5 em sequência (cada uma usa a anterior), 3.6 logo depois da 3.5, e 3.7 a 3.10 em seguida.
 
+### Fase 4: interoperabilidade
+
+Plano registrado em 2026-11-21, depois da Fase 3. Ficam pendentes da Fase 3 o modo completo do acervo (interface §24.5) e o "Mostrar CPF" com registro no `audit_log` (§18.4).
+
+| # | Tarefa | Referência | Pronto quando |
+|---|---|---|---|
+| 4.1 | Fontes de rascunho: porta `DraftSource` na aplicação e cliente SRU (MARCXML) numa crate de borda; servidores por instituição no `elzevir.toml`, com tempo-limite e consulta em paralelo | Interface §17.1; SRU 1.2/2.0 (LC); Koha: `C4::Breeding`, `z3950servers` | A busca por ISBN, título e autor devolve rascunhos de cada servidor configurado, com a origem; servidor fora do ar aparece como "sem resposta" |
+| 4.2 | Estação de captura no bloco da Instância: resultados por fonte, prévia do registro e aprovação por `marc_to_bibframe` e pelo casamento da 1.10; registro de origem com `origin = sru:<servidor>` | Interface §17.1 e §10; Koha: `cataloguing/z3950_search.pl` | Aprovar um rascunho cria a Instância na Obra certa (ou leva à duplicata) e nada é gravado sem aprovação |
+| 4.3 | Cliente Z39.50 (Init, Search, Present; BER próprio, com limites e fuzzing) atrás da mesma porta; conjuntos de caracteres MARC-8 e UTF-8 | Z39.50-2003 (ANSI/NISO); Koha: `C4::Breeding::Z3950Search` | Os mesmos rascunhos da 4.1 vêm de servidores Z39.50, gravados como fixture; o decodificador tem alvo de fuzzing |
+| 4.4 | Autoridades por fonte no bloco da Autoridade (VIAF, LCNAF, BN), com `agent_identifiers` | Interface §17.1 | O nome autorizado e o identificador chegam ao bloco sem gravação automática |
+| 4.5 | Servidor SIP2 (login, status do exemplar e do leitor, empréstimo, devolução, renovação) sobre as mesmas regras do balcão | Koha: `C4::SIP`; SIP2 3M | Cenários SIP2 com as mesmas respostas do oráculo com o SIP ligado |
+| 4.6 | Servidor SRU e Z39.50 e colheita OAI-PMH do catálogo público | Koha: `Koha::OAI::Server`, Zebra | Um cliente externo encontra e colhe os registros visíveis no OPAC, nada oculto |
+| 4.7 | API REST do catálogo público e da conta do leitor, com tokens | Koha: `api/v1` | Contrato OpenAPI publicado e testado |
+| 4.8 | UNIMARC na importação e na exportação | Decisão 4 do doc 04 | Ida e volta sem perdas nos registros de teste |
+| 4.9 | Formatos de citação e intercâmbio (RIS, BibTeX, MODS, Dublin Core) | Interface §11 | A Instância exporta nos quatro formatos |
+
+Ordem: 4.1 a 4.3 em sequência, 4.4 depois da 4.2; 4.5 a 4.9 em seguida, na ordem que Paulo escolher.
+
 ### Ordem e trilha crítica
 
 ```mermaid

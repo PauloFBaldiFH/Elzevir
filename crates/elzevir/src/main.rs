@@ -25,6 +25,7 @@ mod config;
 mod desktop;
 mod diagnostic_logs;
 mod diagnostics;
+mod draft_search;
 mod file_owner;
 mod first_use;
 mod health;
@@ -160,6 +161,8 @@ enum Command {
     Export(catalog_cli::ExportArgs),
     /// Names branches, item types, locations and collections as a Koha names them.
     KohaCodes(koha_codes::KohaCodesArgs),
+    /// Asks the draft sources of `elzevir.toml` (SRU), to check them before cataloguing.
+    DraftSearch(draft_search::DraftSearchArgs),
     /// Sets how this library's Koha item types translate into BIBFRAME on import.
     KohaTypes(catalog_cli::KohaTypesArgs),
 }
@@ -242,6 +245,7 @@ fn main() -> ExitCode {
         Command::ImportModel { tsv } => import_batch_cli::model(tsv),
         Command::Export(args) => catalog_cli::export(&args),
         Command::KohaCodes(args) => koha_codes::koha_codes(&args),
+        Command::DraftSearch(args) => draft_search::run(&args),
         Command::KohaTypes(args) => catalog_cli::koha_types(&args),
     };
     match result {

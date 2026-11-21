@@ -1065,6 +1065,7 @@ dependencies = [
  "elzevir-scenarios",
  "elzevir-search",
  "elzevir-sip2",
+ "elzevir-sources",
  "elzevir-store",
  "elzevir-web",
  "elzevir-web-templates",
@@ -1200,6 +1201,16 @@ name = "elzevir-sip2"
 version = "0.1.0-alpha.2"
 dependencies = [
  "elzevir-app",
+]
+
+[[package]]
+name = "elzevir-sources"
+version = "0.1.0-alpha.2"
+dependencies = [
+ "elzevir-app",
+ "elzevir-marc",
+ "quick-xml 0.41.0",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

@@ -1,0 +1,18 @@
+[package]
+name = "elzevir-sources"
+description = "Draft sources: SRU (and later Z39.50) clients behind the application's DraftSource port."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+elzevir-app.workspace = true
+elzevir-marc.workspace = true
+quick-xml.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

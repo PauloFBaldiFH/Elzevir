@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Made-up SRU 2.0 answer with no records. -->
+<sru:searchRetrieveResponse xmlns:sru="http://docs.oasis-open.org/ns/search-ws/sruResponse">
+  <sru:version>2.0</sru:version>
+  <sru:numberOfRecords>0</sru:numberOfRecords>
+</sru:searchRetrieveResponse>
