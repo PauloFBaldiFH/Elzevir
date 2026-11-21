@@ -14,10 +14,17 @@ use std::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum Task {
-    Backup,
+    Backup {
+        #[serde(default)]
+        options: elzevir_panel::BackupOptions,
+    },
     ConfigureCloud,
-    CloudBackup { plan: String },
-    Verify { id: String },
+    CloudBackup {
+        plan: String,
+    },
+    Verify {
+        id: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -41,6 +48,8 @@ pub(crate) struct Job {
     pub id: String,
     pub task: Task,
     pub state: State,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase: Option<archive::Phase>,
     pub at: String,
 }
 
@@ -175,6 +184,7 @@ impl Client {
         let job = Job {
             id: archive::identifier()?,
             task,
+            phase: None,
             state: State::Queued,
             at: jiff::Timestamp::now().to_string(),
         };
@@ -354,9 +364,12 @@ impl Client {
                 } else {
                     State::Failed
                 };
+                if result.is_err() && matches!(job.task, Task::Backup { .. }) {
+                    tracing::warn!(target: "elzevir::ops",event="backup.failed",job_id=%job.id,artifact=%format_args!("elzevir-{}.age",job.id),phase=?entry.phase);
+                }
                 save_history(&self.0.directory, &state.history)?;
                 if result.is_ok()
-                    && matches!(job.task, Task::Backup | Task::CloudBackup { .. })
+                    && matches!(job.task, Task::Backup { .. } | Task::CloudBackup { .. })
                     && retain(&self.0.directory, &state.history, policy.keep).is_err()
                 {
                     // The completed, synced artifact remains valid when cleanup fails.
@@ -377,6 +390,18 @@ impl Client {
         }
         Ok(())
     }
+    fn backup_phase(&self, id: &str, phase: archive::Phase) -> Result<(), String> {
+        let mut state = self.0.state.lock().map_err(|_| "worker unavailable")?;
+        let entry = state
+            .history
+            .jobs
+            .iter_mut()
+            .find(|j| j.id == id)
+            .ok_or("backup job unavailable")?;
+        entry.phase = Some(phase);
+        tracing::info!(target: "elzevir::ops",event="backup.phase", job_id=id, artifact=%format_args!("elzevir-{id}.age"), ?phase);
+        save_history(&self.0.directory, &state.history)
+    }
     fn execute(
         &self,
         job: &Job,
@@ -396,15 +421,18 @@ impl Client {
             Task::ConfigureCloud => {
                 crate::cloud::execute_queued(&self.0.directory, &job.id, Arc::clone(&control))?;
             }
-            Task::Backup => {
+            Task::Backup { options } => {
                 crate::backup_cli::make_directory(&self.0.directory.join("backups"))?;
-                archive::create_controlled(
+                archive::create_selected(
                     &self.0.directory,
                     config,
                     &crate::backup_cli::artifact(&self.0.directory, &job.id)?,
                     Some(store.readers()),
                     &control,
+                    *options,
+                    |phase| self.backup_phase(&job.id, phase),
                 )?;
+                self.backup_phase(&job.id, archive::Phase::Catalog)?;
                 crate::local_artifacts::record(&self.0.directory, &job.id)?;
             }
             Task::Verify { id } => {
@@ -432,7 +460,9 @@ fn claim_due(
         .retain(|id, _| plans.iter().any(|plan| plan.id == *id));
     let task = if let Some(date) = policy.due(at, history.last_daily) {
         history.last_daily = Some(date);
-        Some(Task::Backup)
+        Some(Task::Backup {
+            options: elzevir_panel::BackupOptions::default(),
+        })
     } else if let Some((id, date)) = crate::cloud_plans::due(directory, at, &history.last_cloud)? {
         history.last_cloud.insert(id.clone(), date);
         Some(Task::CloudBackup { plan: id })
@@ -445,6 +475,7 @@ fn claim_due(
             Job {
                 id: archive::identifier()?,
                 task,
+                phase: None,
                 state: State::Queued,
                 at: at.to_string(),
             },
@@ -456,7 +487,7 @@ fn claim_due(
 fn retain(directory: &Path, history: &History, keep: u16) -> Result<(), String> {
     // Migrate retained ownership from earlier versions before presentation history is truncated.
     for job in &history.jobs {
-        if matches!(job.task, Task::Backup | Task::CloudBackup { .. })
+        if matches!(job.task, Task::Backup { .. } | Task::CloudBackup { .. })
             && job.state == State::Completed
             && crate::backup_cli::artifact(directory, &job.id)?.is_file()
         {
@@ -520,7 +551,11 @@ mod tests {
         )
         .unwrap();
         let client = worker.client();
-        let job = client.submit(Task::Backup).unwrap();
+        let job = client
+            .submit(Task::Backup {
+                options: elzevir_panel::BackupOptions::default(),
+            })
+            .unwrap();
         drop(client);
         worker.finish().unwrap();
         assert!(weak.upgrade().is_none());
@@ -553,7 +588,10 @@ mod tests {
             .unwrap();
             history.jobs.push(Job {
                 id,
-                task: Task::Backup,
+                task: Task::Backup {
+                    options: elzevir_panel::BackupOptions::default(),
+                },
+                phase: None,
                 state: State::Completed,
                 at: "2026-11-17T00:00:00Z".to_owned(),
             });

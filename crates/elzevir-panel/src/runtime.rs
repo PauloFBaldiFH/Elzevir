@@ -123,6 +123,7 @@ fn interact(
     stopping: impl Fn() -> bool,
 ) -> io::Result<()> {
     let mut scene = crate::ui::Scene::default();
+    let mut picker: Option<crate::folder_picker::Picker> = None;
     let mut observed_at: Option<Instant> = None;
     let mut action_sequence = None;
     let tick = Duration::from_millis(150);
@@ -152,11 +153,24 @@ fn interact(
             }
             panel.refresh_requested = false;
         }
+        if let Some(active) = &mut picker {
+            active.poll();
+        }
         let drawn = terminal
-            .draw(|frame| crate::view::interactive(frame, &panel, messages, ascii, &mut scene))?
+            .draw(|frame| {
+                if let Some(active) = &picker {
+                    scene.clear();
+                    active.draw(frame, messages, ascii);
+                } else {
+                    crate::view::interactive(frame, &panel, messages, ascii, &mut scene);
+                }
+            })?
             .area;
         if event::poll(tick.saturating_sub(last_tick.elapsed()))? {
             let input = event::read()?;
+            if handle_picker(&input, &mut picker, &mut panel) {
+                continue;
+            }
             match input {
                 Event::Mouse(mouse) => {
                     let point = (mouse.column, mouse.row).into();
@@ -189,4 +203,51 @@ fn interact(
         }
     }
     Ok(())
+}
+
+fn handle_picker(
+    input: &Event,
+    picker: &mut Option<crate::folder_picker::Picker>,
+    panel: &mut Panel,
+) -> bool {
+    if let Some(active) = picker {
+        if let Event::Key(key) = input
+            && key.kind == event::KeyEventKind::Press
+        {
+            if key.code == event::KeyCode::Esc {
+                *picker = None;
+            } else if let Some(mut path) = active.key(key.code) {
+                if let Some(form) = &mut panel.form {
+                    if matches!(form.operation, crate::Operation::ExportLatest { .. }) {
+                        path.push(std::path::MAIN_SEPARATOR);
+                    }
+                    if let Some(value) = form.values.get_mut(form.field) {
+                        *value = path;
+                        form.field += 1;
+                    }
+                }
+                *picker = None;
+            }
+        }
+        return true;
+    }
+    if let Event::Key(key) = input
+        && key.code == event::KeyCode::F(2)
+        && key.kind == event::KeyEventKind::Press
+        && let Some(form) = &mut panel.form
+        && matches!(
+            form.operation,
+            crate::Operation::BackupNow { .. } | crate::Operation::ExportLatest { .. }
+        )
+        && let Mode::Live(state) = &panel.mode
+        && let Some(folder) = state
+            .snapshot
+            .as_ref()
+            .and_then(|s| s.operations.backup_folder.clone())
+    {
+        form.field = form.values.len().saturating_sub(1);
+        *picker = Some(crate::folder_picker::Picker::new(folder));
+        return true;
+    }
+    false
 }

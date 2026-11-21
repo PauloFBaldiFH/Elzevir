@@ -11,6 +11,10 @@ use std::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum Task {
+    ExportBackup {
+        id: String,
+        folder: PathBuf,
+    },
     Restore {
         input: PathBuf,
         key: PathBuf,
@@ -85,6 +89,7 @@ fn result_path(directory: &Path, id: &str) -> Result<PathBuf, String> {
 }
 fn action(task: &Task) -> &'static str {
     match task {
+        Task::ExportBackup { .. } => "export_backup",
         Task::Restore { .. } => "restore",
         Task::Restart { .. } => "restart",
         Task::Reboot => "reboot",
@@ -402,6 +407,30 @@ fn execute(
     progress: Option<crate::process_runner::Progress>,
 ) -> Result<(), String> {
     match task {
+        Task::ExportBackup { id, folder } => {
+            let info = crate::runtime_info::read(&directory.join(crate::runtime_info::NAME))?;
+            loop {
+                let view = crate::admin::operations(&info)?;
+                let job = view
+                    .jobs
+                    .iter()
+                    .find(|job| job.id == id)
+                    .ok_or("backup job unavailable")?;
+                match job.state {
+                    crate::operations::State::Completed => break,
+                    crate::operations::State::Running | crate::operations::State::Queued => {
+                        std::thread::sleep(std::time::Duration::from_millis(500));
+                    }
+                    _ => return Err("backup did not complete".into()),
+                }
+            }
+            std::fs::create_dir_all(&folder).map_err(|_| "cannot create export folder")?;
+            crate::backup_cli::export_managed(
+                directory,
+                &id,
+                &folder.join(format!("elzevir-{id}.age")),
+            )
+        }
         Task::Restore { input, key, config } => {
             crate::managed_restore::execute(directory, &input, &key, config.as_deref())
         }
@@ -546,6 +575,7 @@ fn receipts_all(directory: &Path) -> Result<Vec<Receipt>, String> {
             || !matches!(
                 receipt.action.as_str(),
                 "restore"
+                    | "export_backup"
                     | "restart"
                     | "reboot"
                     | "update"

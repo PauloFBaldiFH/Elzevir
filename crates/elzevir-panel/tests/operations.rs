@@ -15,11 +15,17 @@ fn backup_requires_confirmation_and_key_repeat_does_not_duplicate_it() {
     panel.section = Section::Backup;
     key(&mut panel, KeyCode::Char('n'));
     assert!(panel.diagnostics.requested.is_none());
+    for _ in 0..3 {
+        key(&mut panel, KeyCode::Tab);
+    }
     assert!(panel.form.as_ref().unwrap().confirming());
     key(&mut panel, KeyCode::Char('y'));
     assert_eq!(
         panel.diagnostics.requested,
-        Some(ObservationRequest::Operate(Operation::BackupNow))
+        Some(ObservationRequest::Operate(Operation::BackupNow {
+            options: elzevir_panel::BackupOptions::default(),
+            folder: String::new()
+        }))
     );
     key(&mut panel, KeyCode::Char('n'));
     assert!(panel.form.is_none());

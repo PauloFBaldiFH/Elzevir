@@ -7,7 +7,7 @@ ativo. A cópia inclui o manifesto SHA-256 e versão de esquema, configuração
 operacional, configuração local da biblioteca, operações e segredos conhecidos.
 O índice é excluído e reconstruído na restauração.
 
-O pacote tar/gzip inteiro é cifrado no formato age, por biblioteca, com uma
+O pacote tar comprimido inteiro é cifrado no formato age, por biblioteca, com uma
 chave de recuperação aleatória de 256 bits em arquivo privado `backup.key`.
 A chave nunca é incluída no pacote, em argumentos ou logs. O comando de
 exportação grava somente um arquivo novo privado. Sem essa chave não é
@@ -93,3 +93,26 @@ A proteção Windows substitui primeiro as permissões explícitas pela herança
 padrão do pai (`icacls /reset`) e depois remove essa herança e aplica a lista
 restrita. Remover somente a herança não elimina grants explícitos do criador
 ou de contas anteriores. O proprietário é alterado apenas após proteger a DACL.
+
+## Backup local com Zstandard
+
+Novos pacotes mantêm o nome gerenciado `elzevir-<id>.age`. O escritor
+comprime o tar com Zstandard antes de cifrar. O leitor identifica gzip ou
+Zstandard dentro da cifra e autentica o final do fluxo. A janela máxima de
+descompressão Zstandard é de 8 MiB. O manifesto v2 registra o escopo.
+O leitor interpreta o manifesto v1 dos arquivos históricos como instituição
+completa. A restauração completa exige o escopo completo antes de parar o serviço.
+
+No painel, N abre as opções de escopo e compressão. Instituição completa e
+nível 3 são os padrões. Os níveis 1 e 7 priorizam velocidade e compactação,
+respectivamente. Somente banco inclui o manifesto e a imagem SQLite.
+O serviço verifica a cópia cifrada antes da publicação. O histórico identifica
+o arquivo e a fase da execução. A estimativa de trabalho usa os tamanhos
+observados do banco e WAL. O uso efetivo também depende dos arquivos auxiliares
+e do volume escolhido para os temporários.
+
+Em Criar ou Exportar, F2 abre o seletor de pasta no host do operador.
+F3 abre a pasta pessoal e F4 a pasta gerenciada. Use Tab entre lista, caminho
+e ação. A confirmação da exportação cria a pasta informada quando necessário.
+O serviço grava na pasta gerenciada e a exportação para o destino escolhido
+é feita sob a identidade do operador, sem sobrescrever arquivo existente.

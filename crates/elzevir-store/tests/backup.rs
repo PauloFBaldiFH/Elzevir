@@ -51,3 +51,38 @@ fn interrupted_snapshot_leaves_no_image_and_the_live_pool_remains_usable() {
         .unwrap();
     store.shutdown().unwrap();
 }
+
+#[test]
+fn online_snapshot_reads_committed_data_during_a_wal_write() {
+    let root = tempfile::tempdir().unwrap();
+    let source = root.path().join("live.db");
+    let store = ElzevirStore::open(&source, &StoreConfig::default(), ElzevirHandler).unwrap();
+    let mut writer = rusqlite::Connection::open(source).unwrap();
+    assert_eq!(
+        writer
+            .query_row("PRAGMA journal_mode", [], |row| row.get::<_, String>(0))
+            .unwrap(),
+        "wal"
+    );
+    writer
+        .execute_batch("CREATE TABLE fixture(n INTEGER); INSERT INTO fixture VALUES(1)")
+        .unwrap();
+    let tx = writer.transaction().unwrap();
+    tx.execute("UPDATE fixture SET n=2", []).unwrap();
+    let image = root.path().join("snapshot.db");
+    store.readers().snapshot(&image).unwrap();
+    tx.commit().unwrap();
+    let copy = rusqlite::Connection::open(image).unwrap();
+    assert_eq!(
+        copy.query_row("SELECT n FROM fixture", [], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        writer
+            .query_row("SELECT n FROM fixture", [], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        2
+    );
+    store.shutdown().unwrap();
+}

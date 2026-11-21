@@ -635,3 +635,18 @@ fn the_settings_form_shows_every_field_and_picks_the_language_from_buttons() {
             if name == "Biblioteca de teste" && listen == "127.0.0.1:7390" && language == "en"
     ));
 }
+
+#[test]
+fn local_backup_form_shows_scope_codec_and_destination() {
+    let mut panel = connected();
+    panel.section = elzevir_panel::Section::Backup;
+    panel.form = Some(elzevir_panel::Form::new(
+        elzevir_panel::Operation::BackupNow {
+            options: elzevir_panel::BackupOptions::default(),
+            folder: String::new(),
+        },
+    ));
+    for language in ["en", "pt-BR"] {
+        insta::assert_snapshot!(format!("local_backup_{language}"), screen(&panel, language));
+    }
+}

@@ -55,6 +55,7 @@ rustls-native-certs.workspace = true
 ureq.workspace = true
 stats_alloc = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "net", "signal", "macros", "sync", "io-util", "time"] }
+zstd = { version = "0.13", default-features = false }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # System tray over D-Bus (StatusNotifierItem), pure Rust: no GTK, works in the static musl build.

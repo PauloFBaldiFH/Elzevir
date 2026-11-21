@@ -211,6 +211,7 @@ impl Collector {
         self.observe_request(request);
         let mut result = elzevir_panel::Operations {
             result: self.operation_result,
+            backup_folder: Some(self.directory.join("backups")),
             latest: self.latest.as_ref().map(|release| release.tag_name.clone()),
             update_available: self.latest.as_ref().is_some_and(|release| {
                 crate::personal_update::newer(&release.tag_name, env!("CARGO_PKG_VERSION"))
@@ -232,42 +233,7 @@ impl Collector {
             Err(_) => elzevir_panel::TunnelState::Unavailable,
         };
         // Client-side jobs are separate from the daemon that they may need to stop.
-        if let Ok(receipts) = crate::host_jobs::receipts(&self.directory) {
-            result.authorization_uris = receipts
-                .iter()
-                .filter_map(|receipt| receipt.authorization_uri.clone())
-                .collect();
-            result.jobs.extend(
-                receipts
-                    .into_iter()
-                    .rev()
-                    .map(|receipt| elzevir_panel::Job {
-                        id: receipt.id,
-                        at: String::new(),
-                        action: match receipt.action.as_str() {
-                            "restore" => "op-restore",
-                            "restart" => "op-restart",
-                            "update" => "op-update",
-                            "recover_update" => "op-update-recover",
-                            "cloudflare_login" => "op-cloudflare-login",
-                            "cloudflare_setup" => "op-cloudflare-setup",
-                            "tunnel_test" => "op-tunnel-test",
-                            "broker" => "broker-operation",
-                            "install_cloudflared" => "op-install-cloudflared",
-                            "install_rclone" => "op-install-rclone",
-                            _ => "op-reboot",
-                        },
-                        state: match receipt.state.as_str() {
-                            "queued" => "op-queued",
-                            "running" => "op-running",
-                            "interrupted" => "op-interrupted",
-                            "completed" => "op-completed",
-                            "unsupported" => "broker-unsupported",
-                            _ => "op-failed",
-                        },
-                    }),
-            );
-        }
+        self.host_history(&mut result);
         // Observation failure is represented as missing policy/history, never fake success.
         let Ok(info) = crate::runtime_info::read(&self.directory.join(crate::runtime_info::NAME))
         else {
@@ -291,10 +257,11 @@ impl Collector {
                 .into_iter()
                 .rev()
                 .map(|job| elzevir_panel::Job {
+                    phase: job.phase.map(crate::backup_archive::Phase::label),
                     id: job.id,
                     at: job.at,
                     action: match job.task {
-                        crate::operations::Task::Backup => "op-backup-now",
+                        crate::operations::Task::Backup { .. } => "op-backup-now",
                         crate::operations::Task::ConfigureCloud => "cloud-operation",
                         crate::operations::Task::CloudBackup { .. } => "cloud-backup",
                         crate::operations::Task::Verify { .. } => "op-backup-verify",
@@ -312,6 +279,74 @@ impl Collector {
         result
     }
 
+    fn host_history(&self, result: &mut elzevir_panel::Operations) {
+        if let Ok(receipts) = crate::host_jobs::receipts(&self.directory) {
+            result.authorization_uris = receipts
+                .iter()
+                .filter_map(|receipt| receipt.authorization_uri.clone())
+                .collect();
+            result.jobs.extend(
+                receipts
+                    .into_iter()
+                    .rev()
+                    .map(|receipt| elzevir_panel::Job {
+                        phase: None,
+                        id: receipt.id,
+                        at: String::new(),
+                        action: match receipt.action.as_str() {
+                            "restore" => "op-restore",
+                            "restart" => "op-restart",
+                            "update" => "op-update",
+                            "recover_update" => "op-update-recover",
+                            "cloudflare_login" => "op-cloudflare-login",
+                            "cloudflare_setup" => "op-cloudflare-setup",
+                            "tunnel_test" => "op-tunnel-test",
+                            "broker" => "broker-operation",
+                            "install_cloudflared" => "op-install-cloudflared",
+                            "export_backup" => "op-backup-export",
+                            "install_rclone" => "op-install-rclone",
+                            _ => "op-reboot",
+                        },
+                        state: match receipt.state.as_str() {
+                            "queued" => "op-queued",
+                            "running" => "op-running",
+                            "interrupted" => "op-interrupted",
+                            "completed" => "op-completed",
+                            "unsupported" => "broker-unsupported",
+                            _ => "op-failed",
+                        },
+                    }),
+            );
+        }
+    }
+    fn export_backup(&self, id: &str, output: &str) -> Result<(), String> {
+        let source = crate::backup_cli::artifact(&self.directory, id)?;
+        let target = if output.ends_with(std::path::MAIN_SEPARATOR) {
+            std::fs::create_dir_all(output).map_err(|_| "cannot create export folder")?;
+            Path::new(output).join(source.file_name().ok_or("artifact name missing")?)
+        } else {
+            Path::new(output).to_owned()
+        };
+        crate::backup_cli::export_managed(&self.directory, id, &target)
+    }
+    fn backup_now(
+        &self,
+        info: &crate::runtime_info::RuntimeInfo,
+        options: elzevir_panel::BackupOptions,
+        folder: &str,
+    ) -> Result<(), String> {
+        let job = crate::admin::start_selected_backup(info, options)?;
+        if !folder.is_empty() && Path::new(folder) != self.directory.join("backups") {
+            crate::host_jobs::launch(
+                &self.directory,
+                crate::host_jobs::Task::ExportBackup {
+                    id: job.id,
+                    folder: std::path::absolute(folder).map_err(|_| "invalid export directory")?,
+                },
+            )?;
+        }
+        Ok(())
+    }
     fn observe_request(&mut self, request: &ObservationRequest) {
         if self
             .release_check
@@ -378,8 +413,8 @@ impl Collector {
         }
         let info = crate::runtime_info::read(&self.directory.join(crate::runtime_info::NAME))?;
         match operation {
-            Operation::BackupNow => {
-                crate::admin::start_backup(&info)?;
+            Operation::BackupNow { options, folder } => {
+                self.backup_now(&info, *options, folder)?;
             }
             Operation::VerifyLatest | Operation::ExportLatest { .. } => {
                 let view = crate::admin::operations(&info)?;
@@ -390,7 +425,7 @@ impl Collector {
                     .find(|job| {
                         matches!(
                             job.task,
-                            crate::operations::Task::Backup
+                            crate::operations::Task::Backup { .. }
                                 | crate::operations::Task::CloudBackup { .. }
                         ) && job.state == crate::operations::State::Completed
                             && crate::backup_cli::artifact(&self.directory, &job.id)
@@ -398,10 +433,7 @@ impl Collector {
                     })
                     .ok_or("no completed backup")?;
                 if let Operation::ExportLatest { output } = operation {
-                    crate::backup_cli::copy_new(
-                        &crate::backup_cli::artifact(&self.directory, &job.id)?,
-                        Path::new(output),
-                    )?;
+                    self.export_backup(&job.id, output)?;
                 } else {
                     crate::admin::verify_backup(&info, job.id)?;
                 }

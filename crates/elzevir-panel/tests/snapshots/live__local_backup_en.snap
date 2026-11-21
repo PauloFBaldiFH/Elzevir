@@ -1,0 +1,33 @@
+---
+source: crates/elzevir-panel/tests/live.rs
+expression: "screen(&panel, language)"
+---
+Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
++Sections------------------+      1 Home            2 Health          3 Access           4 Backup           5 Updates         6 Service
+|  d Dashboard             |+Backups and schedules-----------------------------------------------------------++Selected institution--------+
+|  x Diagnostics           ||Running                                                                         ||Biblioteca de teste         |
+|  a Addresses and access  ||                                                                                ||                            |
+|> b Backups and schedules ||n Create · v Verify · e Export · k Recovery key · o Restore · s Schedule        ||Configured listener         |
+|  u Updates               ||p providers · c connect · a answer provider · y crypt wrapper · t fictitious    ||127.0.0.1:0                 |
+|  r Service               ||upl+Confirmed operation-------------------------------------------------------+ ||                            |
+|                          ||g c| Create encrypted backup                                                  | ||Observed listener           |
+|                          ||con| Biblioteca de teste                                                      | ||127.0.0.1:8080              |
+|                          ||Cop| Observed active staff sessions: Not read                                 | ||                            |
+|                          ||Dai| Estimated working space: 12 MiB                                          | ||Last check: 0 seconds ago   |
+|                          ||   |                                                                          | ||                            |
+|                          ||   | Scope                                                                    | ||Read-only observations      |
+|                          ||   |           Full institution                      Database only            | ||                            |
+|                          ||   | Zstandard                                                                | ||                            |
+|                          ||   |           Fast                  Balanced                 Compact         | ||                            |
+|                          ||   | Export folder (F2 browse, empty = managed)                               | ||                            |
+|                          ||   |                                                                          | ||                            |
+|                          ||   | Click a field to edit · Tab: next · Esc: cancel                          | ||                            |
+|                          ||   |                                                                          | ||                            |
+|                          ||   |              Confirm [Y]                        Cancel [Esc]             | ||                            |
+|                          ||   +--------------------------------------------------------------------------+ ||                            |
+|                          ||                                                                                ||                            |
+|                          ||                                                                                ||                            |
+|                          ||                                                                                ||                            |
+|                          |+--------------------------------------------------------------------------------++----------------------------+
++--------------------------+       New backup [N]                Verify [V]                  Config [S]                  Refresh [F]
+Tab/arrows: navigate | f: refresh | PgUp/PgDn: scroll | Ctrl+P: palette | q/Ctrl+C: quit
