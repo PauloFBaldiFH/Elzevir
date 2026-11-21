@@ -13,9 +13,8 @@ use crate::{CommandFailed, StoreConfig, StoreError, SubmitError};
 /// Applies typed commands to the database. Implemented once per application, by the layer
 /// that owns the command enum; the store only runs it on the writer thread.
 pub trait CommandHandler: Send + 'static {
-    /// The command enum. Serialized into `audit_log`, so replaying the log in `seq` order
-    /// reproduces the state.
-    type Command: Serialize + Send + 'static;
+    /// The command applied by the writer.
+    type Command: Send + 'static;
     /// What a successful command returns to its caller.
     type Output: Send + 'static;
     /// Why the handler may refuse a command (a business rule said no).
@@ -23,6 +22,9 @@ pub trait CommandHandler: Send + 'static {
 
     /// Short, stable name of the command, stored in `audit_log.kind`.
     fn kind(command: &Self::Command) -> &'static str;
+
+    /// The safe payload to store with the actor and action in `audit_log`.
+    fn audit_payload(command: &Self::Command) -> impl Serialize;
 
     /// Applies one command. Everything it writes through `tx` is kept only if it returns
     /// `Ok`; on `Err` the command's savepoint, audit entry included, is rolled back.
@@ -256,7 +258,7 @@ fn apply_one<H: CommandHandler>(
     command: &H::Command,
 ) -> Outcome<H> {
     let savepoint = tx.savepoint().map_err(StoreError::from)?;
-    let json = serde_json::to_string(command).map_err(StoreError::from)?;
+    let json = serde_json::to_string(&H::audit_payload(command)).map_err(StoreError::from)?;
     savepoint
         .execute(
             // The time is the database's, in UTC: the history shows when (migration 37).

@@ -52,6 +52,10 @@ impl CommandHandler for Counters {
         }
     }
 
+    fn audit_payload(command: &Command) -> impl Serialize {
+        command
+    }
+
     fn apply(
         &mut self,
         tx: &WriteTx<'_>,

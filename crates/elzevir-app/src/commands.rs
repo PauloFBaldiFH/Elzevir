@@ -2,11 +2,11 @@
 //! Typed write commands (docs/arquitetura/05-definicoes-de-implementacao.md, §1).
 //!
 //! Every change to an institution's data is one of these values, sent to the writer
-//! thread. Each command is serialized into the audit log, so it must carry only data that
-//! may be kept there: never a plain password, only its hash.
+//! thread. Commands that change credentials use a separate audit payload.
 
 use std::collections::BTreeSet;
 
+use elzevir_domain::patron::PatronId;
 use serde::{Deserialize, Serialize};
 
 use crate::board::{BoardCommand, BoardOutput, BoardRefusal};
@@ -42,6 +42,19 @@ pub enum StaffCommand {
         /// Granted permissions.
         permissions: BTreeSet<Permission>,
     },
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+enum AuditPayload<'a> {
+    Staff {
+        target: &'a str,
+    },
+    Patron {
+        target: PatronId,
+        access_enabled: bool,
+    },
+    Command(&'a WriteCommand),
 }
 
 /// What a successful command returns.
@@ -80,6 +93,26 @@ pub enum WriteRefusal {
 }
 
 impl WriteCommand {
+    /// Payload stored alongside the actor and action. Credential changes record the target
+    /// and, for patrons, whether OPAC access was enabled. Other commands keep their
+    /// existing representation for readers such as the catalog history.
+    #[must_use]
+    pub fn audit_payload(&self) -> impl Serialize {
+        match self {
+            Self::Staff(StaffCommand::Create { login, .. }) => {
+                AuditPayload::Staff { target: login }
+            }
+            Self::Patrons(PatronCommand::SetPassword {
+                patron,
+                password_hash,
+            }) => AuditPayload::Patron {
+                target: *patron,
+                access_enabled: password_hash.is_some(),
+            },
+            _ => AuditPayload::Command(self),
+        }
+    }
+
     /// Short, stable name for the audit log.
     #[must_use]
     pub const fn kind(&self) -> &'static str {

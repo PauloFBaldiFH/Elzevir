@@ -15,6 +15,7 @@ use elzevir_app::patrons::{
     PatronUpdate, ReadingHistory,
 };
 use elzevir_app::registries::{RegistryChange, RegistryEntry};
+use elzevir_app::staff::hash_password;
 use elzevir_domain::catalog::BranchId;
 use elzevir_domain::patron::{Cpf, Enrolment, PatronCategoryId, PatronId};
 use elzevir_store::{CommandFailed, ElzevirHandler, ElzevirStore, StoreConfig};
@@ -110,6 +111,46 @@ fn fields(branch: BranchId, category: PatronCategoryId) -> PatronFields {
 
 fn add(store: &ElzevirStore, fields: PatronFields) -> Outcome {
     run(store, PatronCommand::Add(Box::new(fields)))
+}
+
+#[test]
+fn patron_password_changes_audit_the_actor_action_and_target_without_the_hash() {
+    let dir = tempfile::tempdir().unwrap();
+    let (store, branch, category) = library(&dir);
+    let PatronOutput::Added(patron) = add(&store, fields(branch, category)).unwrap() else {
+        panic!("not added");
+    };
+    let hash = hash_password("test-patron-password").unwrap();
+    for password_hash in [Some(hash.clone()), None] {
+        let access_enabled = password_hash.is_some();
+        assert_eq!(
+            run(
+                &store,
+                PatronCommand::SetPassword {
+                    patron,
+                    password_hash
+                },
+            ),
+            Ok(PatronOutput::PasswordSet(patron))
+        );
+        let (actor, payload): (i64, String) = store
+            .readers()
+            .read(|c| {
+                c.query_row(
+                    "SELECT actor, command FROM audit_log WHERE kind = 'patrons.set_password'
+                     ORDER BY seq DESC LIMIT 1",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+            })
+            .unwrap();
+        assert_eq!(actor, 7);
+        assert!(!payload.contains(&hash));
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&payload).unwrap(),
+            serde_json::json!({"target": patron.0, "access_enabled": access_enabled})
+        );
+    }
 }
 
 #[test]
