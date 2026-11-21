@@ -38,6 +38,20 @@ pub struct RemotePage {
     /// Available quota, when reported by the provider.
     pub free: Option<u64>,
 }
+
+impl RemotePage {
+    pub(crate) fn selected_index(
+        &self,
+        selection: Option<&(CloudTarget, String)>,
+    ) -> Option<usize> {
+        let (target, id) = selection?;
+        if *target != self.target {
+            return None;
+        }
+        self.files.iter().position(|(file, _)| file == id)
+    }
+}
+
 /// Confirmed cloud connection intention; sensitive values have no debug representation.
 #[derive(Clone, PartialEq, Eq)]
 pub enum CloudOperation {
@@ -150,11 +164,9 @@ impl CloudOperation {
         match self {
             Self::SendGroup(_, id) => (vec!["cloud-artifact"], vec![id.clone()]),
             Self::Remote(_, cmd) => match cmd {
-                RemoteCommand::Create => (vec![], vec![]),
+                RemoteCommand::Create | RemoteCommand::Download(_) => (vec![], vec![]),
                 RemoteCommand::Browse(page) => (vec!["cloud-page"], vec![page.to_string()]),
-                RemoteCommand::Send(id) | RemoteCommand::Download(id) => {
-                    (vec!["cloud-artifact"], vec![id.clone()])
-                }
+                RemoteCommand::Send(id) => (vec!["cloud-artifact"], vec![id.clone()]),
             },
             Self::Plan {
                 id,
@@ -225,7 +237,7 @@ impl CloudOperation {
                     RemoteCommand::Create => RemoteCommand::Create,
                     RemoteCommand::Browse(_) => RemoteCommand::Browse(values.next()?.parse().ok()?),
                     RemoteCommand::Send(_) => RemoteCommand::Send(values.next()?),
-                    RemoteCommand::Download(_) => RemoteCommand::Download(values.next()?),
+                    RemoteCommand::Download(id) => RemoteCommand::Download(id),
                 },
             ),
             Self::Plan { .. } => Self::Plan {

@@ -169,7 +169,7 @@ fn backup_rows(
                 rows.push(Line::from(m.get("cloud-no-plans")));
             }
         }
-        2 => file_rows(&mut rows, view, plan, panel.cloud_file, m),
+        2 => file_rows(&mut rows, view, plan, panel.cloud_file.as_ref(), m),
         _ => {
             rows.push(Line::from(m.get("cloud-send-keys")));
             for (target, id, state) in &view.transfers {
@@ -235,7 +235,7 @@ fn file_rows(
     rows: &mut Vec<Line<'static>>,
     view: &crate::CloudView,
     plan: Option<&crate::CloudPlan>,
-    selected: usize,
+    selected: Option<&(crate::CloudTarget, String)>,
     m: &Messages,
 ) {
     rows.push(Line::from(m.get("cloud-file-keys")));
@@ -270,12 +270,12 @@ fn file_rows(
         if r.files.is_empty() {
             rows.push(Line::from(m.get("cloud-folder-empty")));
         }
+        let index = r.selected_index(selected);
+        if selected.is_some() && index.is_none() {
+            rows.push(Line::from(m.get("cloud-reselect")));
+        }
         for (i, (id, size)) in r.files.iter().enumerate() {
-            let marker = if i == selected || i == 0 && selected >= r.files.len() {
-                ">"
-            } else {
-                " "
-            };
+            let marker = if Some(i) == index { ">" } else { " " };
             rows.push(Line::from(format!(
                 "{marker} elzevir-{}.age   {size} B",
                 text(id)
@@ -305,7 +305,9 @@ pub(crate) fn form(
     let area = frame.area();
     let header = form_header(panel, form, messages);
     let field_count = u16::try_from(form.labels.len()).unwrap_or(8);
-    let header_rows = u16::try_from(header.len()).unwrap_or(4);
+    let header_rows = u16::try_from(header.len())
+        .unwrap_or(4)
+        .min(area.height.saturating_sub(8));
     let height = (header_rows + 2 * field_count + 6).min(area.height);
     let popup = Rect::new(
         area.x + area.width.saturating_sub(76) / 2,
@@ -317,8 +319,15 @@ pub(crate) fn form(
     let block = crate::view::block(messages.get("op-dialog"), ascii);
     let inner = block.inner(popup).inner(ratatui::layout::Margin::new(1, 0));
     frame.render_widget(block, popup);
+    // Keep every review item on screen, including scope and outage, even for a long filename.
+    let summary = Paragraph::new(header);
+    let summary = if matches!(form.operation, crate::Operation::ApplyRestore(_)) {
+        summary
+    } else {
+        summary.wrap(Wrap { trim: false })
+    };
     frame.render_widget(
-        Paragraph::new(header).wrap(Wrap { trim: false }),
+        summary,
         Rect::new(inner.x, inner.y, inner.width, header_rows),
     );
     fields(
@@ -380,7 +389,12 @@ fn destination_header(
             ));
             targets.get(form.target_page)
         }
-        crate::Operation::Cloud(crate::CloudOperation::Remote(target, _)) => Some(target),
+        crate::Operation::Cloud(crate::CloudOperation::Remote(target, cmd)) => {
+            if let crate::RemoteCommand::Download(id) = cmd {
+                header.push(Line::from(format!("elzevir-{}.age", text(id))));
+            }
+            Some(target)
+        }
         _ => None,
     };
     if let Some(target) = target {
@@ -535,7 +549,7 @@ fn form_header(panel: &Panel, form: &crate::Form, messages: &Messages) -> Vec<Li
     header
 }
 
-/// Every field at once: a label, then its input or its choices.
+/// Scroll the field list just enough to keep the focused label and input together.
 fn fields(
     frame: &mut Frame,
     form: &crate::Form,
@@ -544,7 +558,10 @@ fn fields(
     scene: &mut crate::ui::Scene,
 ) {
     let mut y = area.y;
-    for (index, (key, value)) in form.labels.iter().zip(&form.values).enumerate() {
+    let visible = usize::from(area.height / 2);
+    let focus = form.field.min(form.labels.len().saturating_sub(1));
+    let first = (focus + 1).saturating_sub(visible);
+    for (index, (key, value)) in form.labels.iter().zip(&form.values).enumerate().skip(first) {
         if y + 1 >= area.bottom() {
             break;
         }

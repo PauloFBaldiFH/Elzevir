@@ -149,8 +149,8 @@ pub struct Panel {
     pub cloud_tab: usize,
     /// Index of the plan whose connection and folder are displayed.
     pub cloud_plan: usize,
-    /// Selected file on the current remote page.
-    pub cloud_file: usize,
+    /// Identity and destination of the selected remote backup.
+    pub cloud_file: Option<(CloudTarget, String)>,
     /// Reviewed destinations marked for a single upload.
     pub cloud_targets: Vec<CloudTarget>,
     /// Most recent desktop or clipboard action feedback.
@@ -184,8 +184,42 @@ impl Panel {
             ..Self::default()
         }
     }
+    fn sharing_catalog(&self) -> bool {
+        self.section == Section::Addresses
+            && self.tunnel_tab == TunnelTab::Share
+            && self.form.is_none()
+            && matches!(self.mode, Mode::Live(_))
+    }
+
+    fn size_warning(&self, width: u16, height: u16) -> bool {
+        view::too_small(width, height) && !self.sharing_catalog()
+    }
+
+    fn handle_size_warning(&mut self, event: &Event) {
+        if let Event::Key(key) = event
+            && key.kind == KeyEventKind::Press
+        {
+            match key.code {
+                KeyCode::Char('q') => self.quit = true,
+                KeyCode::Char('Q') if self.live_addresses() => {
+                    self.tunnel_tab = TunnelTab::Share;
+                }
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.quit = true;
+                }
+                _ => {}
+            }
+        }
+    }
+
     /// Applies an input event using the same geometry as the renderer.
     pub fn handle(&mut self, event: &Event, width: u16, height: u16) {
+        if self.size_warning(width, height) {
+            if self.form.is_none() {
+                self.handle_size_warning(event);
+            }
+            return;
+        }
         if self.form.is_some() && self.handle_form(event) {
             return;
         }
@@ -204,6 +238,7 @@ impl Panel {
             }
             return;
         }
+
         let previous = self.section;
         match event {
             Event::Key(key) if key.kind != KeyEventKind::Release => {
@@ -339,21 +374,53 @@ impl Panel {
         })
     }
 
+    fn remote_page(&self) -> Option<&RemotePage> {
+        let view = self.cloud_view()?;
+        let plan = view
+            .plans
+            .get(self.cloud_plan)
+            .or_else(|| view.plans.first())?;
+        view.remote.as_ref().filter(|r| r.target == plan.target())
+    }
+
+    fn initialize_cloud_file(&mut self) {
+        if self.cloud_file.is_none()
+            && let Some(r) = self.remote_page()
+            && let Some((id, _)) = r.files.first()
+        {
+            self.cloud_file = Some((r.target.clone(), id.clone()));
+        }
+    }
+
+    fn step_cloud_file(&mut self, forward: bool) {
+        let Some(r) = self.remote_page() else { return };
+        let current = r.selected_index(self.cloud_file.as_ref());
+        let index = current.map_or_else(
+            || {
+                if forward {
+                    0
+                } else {
+                    r.files.len().saturating_sub(1)
+                }
+            },
+            |i| cycle(i, r.files.len(), forward),
+        );
+        if let Some((id, _)) = r.files.get(index) {
+            self.cloud_file = Some((r.target.clone(), id.clone()));
+        }
+    }
+
     fn cloud_navigation(&mut self, key: char) -> bool {
+        self.initialize_cloud_file();
         match key {
             '[' | ']' => {
                 self.cloud_tab = (self.cloud_tab + if key == ']' { 1 } else { 3 }) % 4;
             }
             ',' | '.' => {
-                let count = self
-                    .cloud_view()
-                    .and_then(|v| v.remote.as_ref())
-                    .map_or(0, |r| r.files.len())
-                    .max(1);
-                self.cloud_file = cycle(self.cloud_file, count, key == '.');
+                self.step_cloud_file(key == '.');
             }
             '<' | '>' => {
-                self.cloud_file = 0;
+                self.cloud_file = None;
                 let count = self.cloud_view().map_or(0, |v| v.plans.len()).max(1);
                 self.cloud_plan = cycle(self.cloud_plan, count, key == '>');
             }
@@ -413,8 +480,10 @@ impl Panel {
                     'l' => RemoteCommand::Browse(listing.map_or(1, |r| r.page)),
                     'D' => {
                         let Some((id, _)) = listing
-                            .and_then(|r| r.files.get(self.cloud_file).or_else(|| r.files.first()))
+                            .and_then(|r| r.files.get(r.selected_index(self.cloud_file.as_ref())?))
                         else {
+                            self.cloud_tab = 2;
+                            self.scroll = 0;
                             return true;
                         };
                         RemoteCommand::Download(id.clone())
@@ -583,9 +652,19 @@ impl Panel {
         true
     }
 
-    /// Submits the open form as its primary button does: all fields are
-    /// visible at once, so pressing it is the explicit confirmation.
+    /// Confirms the current form using the same validation as its primary button.
     pub fn submit_form(&mut self) {
+        if let Some(Operation::Cloud(CloudOperation::Remote(target, RemoteCommand::Download(id)))) =
+            self.form.as_ref().map(|form| &form.operation)
+            && !self
+                .remote_page()
+                .is_some_and(|r| r.target == *target && r.files.iter().any(|(file, _)| file == id))
+        {
+            self.form = None;
+            self.cloud_tab = 2;
+            self.scroll = 0;
+            return;
+        }
         if let Some(form) = &mut self.form {
             if matches!(form.operation, Operation::Restore { .. })
                 && form

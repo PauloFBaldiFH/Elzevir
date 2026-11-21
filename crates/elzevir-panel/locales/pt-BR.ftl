@@ -462,3 +462,5 @@ address-share-keys = Y copiar URL pública · Q/Esc voltar
 address-registration-at = Cadastro salvo em: { $value }
 address-connector-controls = P pausar conector · S iniciar conector
 address-sftp = sftp usuario@servidor · put envia o arquivo de recuperação e get baixa.
+cloud-reselect = A cópia selecionada saiu da lista. Use , ou . para escolher novamente.
+panel-small-form = Formulário pausado. Redimensione o terminal para pelo menos 80x18 para continuar.

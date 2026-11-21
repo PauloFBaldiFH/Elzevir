@@ -125,6 +125,10 @@ pub fn draw(frame: &mut Frame, panel: &Panel, messages: &Messages, ascii: bool) 
     interactive(frame, panel, messages, ascii, &mut Scene::default());
 }
 
+pub(crate) fn too_small(width: u16, height: u16) -> bool {
+    width < 80 || height < 18
+}
+
 pub(crate) fn interactive(
     frame: &mut Frame,
     panel: &Panel,
@@ -136,9 +140,7 @@ pub(crate) fn interactive(
     let area = frame.area();
     ui::fill(frame, area, theme::muted());
     if let Mode::Live(state) = &panel.mode
-        && panel.section == Section::Addresses
-        && panel.tunnel_tab == crate::TunnelTab::Share
-        && panel.form.is_none()
+        && panel.sharing_catalog()
     {
         crate::sharing::draw(
             frame,
@@ -149,9 +151,14 @@ pub(crate) fn interactive(
         );
         return;
     }
-    if area.width < 80 || area.height < 18 {
+    if too_small(area.width, area.height) {
         frame.render_widget(
-            Paragraph::new(messages.get("panel-small")).wrap(Wrap { trim: true }),
+            Paragraph::new(messages.get(if panel.form.is_some() {
+                "panel-small-form"
+            } else {
+                "panel-small"
+            }))
+            .wrap(Wrap { trim: true }),
             area,
         );
         return;
