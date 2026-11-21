@@ -40,6 +40,10 @@ pub(crate) struct RuleForm {
     #[serde(default)]
     origin: Option<String>,
     local_notes: Option<String>,
+    date: Option<elzevir_app::import::biblivre::DateUse>,
+    home_branch: Option<i64>,
+    holding_branch: Option<i64>,
+    policy: Option<i64>,
     #[serde(default)]
     rule: String,
     #[serde(default)]
@@ -75,6 +79,25 @@ pub(crate) fn apply(recipe: &mut Recipe, form: &RuleForm) -> Result<(), &'static
                 .exclude
                 .remove(&record(&form.record)?.ok_or("import-rule-record")?);
         }
+        "biblivre" => {
+            use elzevir_app::import::biblivre::Profile;
+            use elzevir_domain::catalog::{BranchId, PolicyId};
+            let required = "import-biblivre-required";
+            let origin = form
+                .origin
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or(required)?;
+            recipe.biblivre = Some(Box::new(Profile {
+                date: form.date.ok_or(required)?,
+                home_branch: BranchId(form.home_branch.ok_or(required)?),
+                holding_branch: BranchId(form.holding_branch.ok_or(required)?),
+                policy: PolicyId(form.policy.ok_or(required)?),
+            }));
+            recipe.origin = Some(origin.to_owned());
+        }
+        "remove_biblivre" => recipe.biblivre = None,
         "matching" => {
             recipe.matching = matching(form)?;
             if let Some(policy) = form.local_notes.as_deref() {
@@ -362,6 +385,10 @@ mod tests {
             index: None,
             origin: None,
             local_notes: None,
+            date: None,
+            home_branch: None,
+            holding_branch: None,
+            policy: None,
             rule: String::new(),
             on_match: String::new(),
             on_no_match: String::new(),

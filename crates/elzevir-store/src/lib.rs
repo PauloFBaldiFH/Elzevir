@@ -17,6 +17,7 @@ mod accounts;
 mod authorities;
 mod backup;
 mod batch;
+mod biblivre;
 mod board;
 mod calendar;
 mod catalog;

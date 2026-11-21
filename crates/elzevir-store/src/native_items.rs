@@ -18,6 +18,11 @@ use crate::{CommandFailed, items, statements};
 type Rejection = CommandFailed<WriteRefusal>;
 
 pub(crate) fn check_record(record: &NewRecord) -> Result<(), Rejection> {
+    if matches!(record.items, RecordItems::Biblivre { .. }) {
+        return Err(refused(CatalogRefusal::ImportConflict(
+            "Biblivre requires its reviewed source identity".into(),
+        )));
+    }
     let RecordItems::Native { native } = &record.items else {
         return Ok(());
     };
@@ -91,6 +96,14 @@ pub(crate) fn write(
         } else {
             items::add_grid_item(connection, instance, &item.fields)?
         };
+        if let Some(date) = &item.acquired_on {
+            connection
+                .execute(
+                    "UPDATE items SET acquired_on=?2 WHERE id=?1",
+                    rusqlite::params![id.0, date],
+                )
+                .map_err(crate::StoreError::from)?;
+        }
         let subject = EntityRef {
             entity: EntityKind::Item,
             id: id.0,

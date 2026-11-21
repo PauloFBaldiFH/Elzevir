@@ -174,7 +174,40 @@
               <button type="submit">{{ t.get("import-include") }}</button>
             </form>
           </li>{% endfor %}
-        </ul>{% endif %}
+        </ul>{% endif %}{% if let Some(profile) = draft.biblivre %}
+        <form action="/equipe/acervo/importar/{{ draft.link.id }}/regra" method="post">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="revision" value="{{ draft.revision }}">
+          <fieldset>
+            <legend>{{ t.get("import-biblivre") }}</legend>
+            <p>{{ t.get("import-biblivre-tombo") }}</p>
+            <label>{{ t.get("import-origin") }} <input name="origin" required maxlength="256" value="{{ draft.origin }}"></label>
+            <label>{{ t.get("import-biblivre-date") }}
+              <select name="date" required><option value=""></option>
+                <option value="source_only"{% if profile.date == "source_only" %} selected{% endif %}>{{ t.get("import-biblivre-source") }}</option>
+                <option value="acquisition"{% if profile.date == "acquisition" %} selected{% endif %}>{{ t.get("import-biblivre-acquired") }}</option>
+              </select></label>
+            <label>{{ t.get("import-biblivre-home") }}
+              <select name="home_branch" required><option value=""></option>{% for (key, label) in profile.branches %}
+                <option value="{{ key }}"{% if *key == profile.selected.0 %} selected{% endif %}>{{ label }} (#{{ key }})</option>{% endfor %}
+              </select></label>
+            <label>{{ t.get("import-biblivre-holding") }}
+              <select name="holding_branch" required><option value=""></option>{% for (key, label) in profile.branches %}
+                <option value="{{ key }}"{% if *key == profile.selected.1 %} selected{% endif %}>{{ label }} (#{{ key }})</option>{% endfor %}
+              </select></label>
+            <label>{{ t.get("import-biblivre-policy") }}
+              <select name="policy" required><option value=""></option>{% for (key, label) in profile.policies %}
+                <option value="{{ key }}"{% if *key == profile.selected.2 %} selected{% endif %}>{{ label }} (#{{ key }})</option>{% endfor %}
+              </select></label>
+            <button type="submit" name="action" value="biblivre">{{ t.get("import-biblivre-apply") }}</button>
+          </fieldset>
+        </form>
+        {% if !profile.date.is_empty() %}<form action="/equipe/acervo/importar/{{ draft.link.id }}/regra" method="post">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="revision" value="{{ draft.revision }}">
+          <button type="submit" name="action" value="remove_biblivre">{{ t.get("import-biblivre-remove") }}</button>
+        </form>{% endif %}
+        {% endif %}
         <form class="import-matching" action="/equipe/acervo/importar/{{ draft.link.id }}/regra" method="post">
           <input type="hidden" name="csrf" value="{{ csrf }}">
           <input type="hidden" name="revision" value="{{ draft.revision }}">

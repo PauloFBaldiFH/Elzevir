@@ -113,12 +113,26 @@ pub struct ImportDraft {
     pub rules: Option<Vec<ImportRule>>,
     /// Saved matching choices.
     pub matching: ImportMatching,
+    /// Explicit Biblivre mapping when 949 holdings are available for review.
+    pub biblivre: Option<BiblivreForm>,
     /// Source installation supplied by the operator.
     pub origin: String,
     /// Access policy for incoming local notes.
     pub local_notes: &'static str,
     /// One-based records excluded from the batch.
     pub excluded: Vec<u64>,
+}
+
+/// Native registries and the saved 949 interpretation shown to staff.
+pub struct BiblivreForm {
+    /// ID and display name of each branch.
+    pub branches: Vec<(i64, String)>,
+    /// ID and display name of each circulation policy.
+    pub policies: Vec<(i64, String)>,
+    /// Saved home branch, holding branch and policy, or zero before selection.
+    pub selected: (i64, i64, i64),
+    /// Saved date interpretation, or empty before selection.
+    pub date: &'static str,
 }
 
 /// One saved MARC edit rule.

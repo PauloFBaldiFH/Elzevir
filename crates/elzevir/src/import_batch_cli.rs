@@ -148,7 +148,7 @@ fn run_step(step: Step) -> Result<(), String> {
                 }
             }
             if let Some(preview) = view.preview {
-                return print_preview(&preview, view.recipe.matching);
+                return print_preview(&preview, &view.recipe);
             }
             Ok(())
         }
@@ -187,14 +187,26 @@ pub(crate) fn model(tsv: bool) -> Result<(), String> {
 
 fn print_preview(
     preview: &BatchPreview,
-    matching: Option<elzevir_app::matching::Matching>,
+    recipe: &elzevir_app::import::edits::Recipe,
 ) -> Result<(), String> {
     let BatchPreview {
         rendered, report, ..
     } = preview;
+    let matching = if let Some(profile) = &recipe.biblivre {
+        format!(
+            "Biblivre 001/003 in {} (949$a = inventory number, 949$y = {:?}, home #{}, holding #{}, policy #{})",
+            recipe.origin.as_deref().unwrap_or_default(),
+            profile.date,
+            profile.home_branch.0,
+            profile.holding_branch.0,
+            profile.policy.0
+        )
+    } else {
+        format!("{:?}", recipe.matching)
+    };
     println!(
-        "{} original records, {} excluded, {} edited, {} items to submit, matching {:?}",
-        rendered.read, rendered.excluded, rendered.changed, report.items, matching
+        "{} original records, {} excluded, {} edited, {} items to submit, matching {matching}",
+        rendered.read, rendered.excluded, rendered.changed, report.items
     );
     for sample in &rendered.samples {
         if sample.fields.is_empty() {

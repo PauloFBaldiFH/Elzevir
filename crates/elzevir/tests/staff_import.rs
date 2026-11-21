@@ -560,3 +560,87 @@ fn staff_import_maps_custom_spreadsheet_columns_by_form() {
     );
     drop(server);
 }
+
+#[test]
+fn staff_can_select_native_registries_and_confirm_the_biblivre_profile() {
+    use elzevir_app::catalog::CatalogCommand;
+    use elzevir_app::commands::WriteCommand;
+    use elzevir_store::{ElzevirHandler, ElzevirStore, StoreConfig};
+    let data = tempfile::tempdir().unwrap();
+    account(data.path());
+    let store = ElzevirStore::open(
+        &data.path().join("elzevir.db"),
+        &StoreConfig::default(),
+        ElzevirHandler,
+    )
+    .unwrap();
+    for command in [
+        CatalogCommand::CreateBranch {
+            name: "School library".into(),
+        },
+        CatalogCommand::CreatePolicy {
+            name: "Local lending".into(),
+        },
+    ] {
+        store
+            .submit(WriteCommand::Catalog(command))
+            .unwrap()
+            .wait()
+            .unwrap();
+    }
+    store.shutdown().unwrap();
+    let (_server, address) = start(data.path());
+    let user = sign_in(address, "ana");
+    let home = request(address, "GET", IMPORT, &format!("Cookie: {user}\r\n"), "");
+    let token = csrf(&home);
+    let source = include_str!(
+        "../../../samples-import-tool/biblivre_simulacao_10_registros_com_exemplares_sinteticos.mrk"
+    );
+    let uploaded = upload(address, &user, token, source, false);
+    assert_status(&uploaded, 303);
+    let url = header(&uploaded, "location");
+    let post = |endpoint: &str, rev, extra: &str| {
+        form(
+            address,
+            &format!("{url}/{endpoint}"),
+            &user,
+            &format!("csrf={token}&revision={rev}{extra}"),
+        )
+    };
+    let unprofiled = post("prever", 1, "");
+    assert_status(&unprofiled, 200);
+    assert!(
+        unprofiled.contains("Biblivre holdings (949)")
+            && unprofiled.contains("School library (#1)")
+            && unprofiled.contains("Local lending (#1)")
+    );
+    assert_status(
+        &post(
+            "regra",
+            1,
+            "&action=biblivre&origin=escola&date=acquisition&home_branch=1&holding_branch=1",
+        ),
+        422,
+    );
+    assert_status(
+        &post(
+            "regra",
+            1,
+            "&action=biblivre&origin=escola&date=acquisition&home_branch=1&holding_branch=1&policy=1",
+        ),
+        303,
+    );
+    assert_status(&post("confirmar", 2, ""), 409);
+    let review = post("prever", 2, "");
+    assert_status(&review, 200);
+    assert!(
+        review.contains("16764") && review.contains("2025-03-24") && review.contains("18 items"),
+        "{}",
+        review
+            .lines()
+            .filter(|s| s.contains("items") || s.contains("2025"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    assert_status(&post("confirmar", 2, ""), 303);
+}

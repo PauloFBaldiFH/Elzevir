@@ -54,6 +54,11 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CatalogCommand) -> Applied {
                 .map_err(StoreError::from)?;
             CatalogOutput::Hub(HubId(connection.last_insert_rowid()))
         }
+        CatalogCommand::AddRecord(record)
+            if let elzevir_app::catalog::RecordItems::Biblivre { biblivre } = &record.items =>
+        {
+            CatalogOutput::Imported(crate::biblivre::confirm(tx, record, biblivre)?)
+        }
         CatalogCommand::AddRecord(record) => {
             let output = add_record(connection, record)?;
             if let CatalogOutput::Record { instance, .. } = &output {

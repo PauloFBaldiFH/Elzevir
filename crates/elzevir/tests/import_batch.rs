@@ -879,3 +879,122 @@ fn catalog_change_between_cli_preview_and_confirmation_requires_another_review()
     );
     assert_eq!(export(data), before);
 }
+
+#[test]
+fn biblivre_profile_reviews_commits_and_replays_the_eighteen_holdings() {
+    use std::collections::BTreeMap;
+    let directory = tempfile::tempdir().unwrap();
+    let data = directory.path();
+    let fixture = include_str!(
+        "../../../samples-import-tool/biblivre_simulacao_10_registros_com_exemplares_sinteticos.mrk"
+    );
+    let path = data.join("biblivre.mrk");
+    fs::write(&path, fixture).unwrap();
+    let catalog = store(data);
+    for command in [
+        CatalogCommand::CreateBranch {
+            name: "Central".into(),
+        },
+        CatalogCommand::CreateBranch {
+            name: "Leitura".into(),
+        },
+        CatalogCommand::CreatePolicy {
+            name: "Consulta".into(),
+        },
+    ] {
+        catalog
+            .submit(WriteCommand::Catalog(command))
+            .unwrap()
+            .wait()
+            .unwrap();
+    }
+    catalog.shutdown().unwrap();
+    let profile = recipe(
+        data,
+        r#"{"origin":"biblivre-escola","biblivre":{"date":"acquisition","home_branch":1,"holding_branch":2,"policy":1}}"#,
+    );
+    let mut expected = BTreeMap::new();
+    let mut control = "";
+    for line in fixture.lines() {
+        if let Some(id) = line.strip_prefix("=001  ") {
+            control = id;
+        } else if line.starts_with("=949") {
+            let tombo = line.split('$').find_map(|s| s.strip_prefix('a')).unwrap();
+            let acquired_on = line.split('$').find_map(|s| s.strip_prefix('y')).unwrap();
+            assert!(
+                expected
+                    .insert(
+                        tombo.to_owned(),
+                        (control.to_owned(), acquired_on.to_owned())
+                    )
+                    .is_none()
+            );
+        }
+    }
+    assert_eq!(expected.len(), 18);
+    for (pass, count) in [18, 0].iter().enumerate() {
+        let batch = stage(data, &path);
+        success(run(data, &["edit", &batch, "1", &profile]));
+        let preview = success(run(data, &["preview", &batch]));
+        assert!(
+            preview.contains("10 original records")
+                && preview.contains(&format!("{count} items to submit")),
+            "{preview}"
+        );
+        if pass == 0 {
+            let catalog = store(data);
+            let instances: i64 = catalog
+                .readers()
+                .read(|c| c.query_row("SELECT count(*) FROM instances", [], |r| r.get(0)))
+                .unwrap();
+            assert_eq!(instances, 0);
+            catalog.shutdown().unwrap();
+        }
+        success(run(data, &["confirm", &batch, "2"]));
+        let catalog = store(data);
+        check_biblivre_holdings(&catalog, &expected, fixture);
+        catalog.shutdown().unwrap();
+    }
+}
+
+fn check_biblivre_holdings(
+    catalog: &ElzevirStore,
+    expected: &std::collections::BTreeMap<String, (String, String)>,
+    fixture: &str,
+) {
+    use std::collections::BTreeMap;
+    catalog.readers().read(|connection| {
+            let journal: String = connection.query_row("PRAGMA journal_mode", [], |r| r.get(0))?;
+            assert_eq!(journal, "wal");
+            let counts: (i64, i64, i64) = connection.query_row(
+                "SELECT (SELECT count(*) FROM instances), (SELECT count(*) FROM items),
+                        (SELECT count(*) FROM item_origins)",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )?;
+            assert_eq!(counts, (10, 18, 18));
+            let mut holdings = connection.prepare(
+                "SELECT i.inventory_number, b.external_id, i.acquired_on FROM items i
+                 JOIN import_identities b ON i.instance_id = b.instance_id AND b.origin = 'biblivre-escola'
+                    AND b.system LIKE 'marc21.001%'
+                 JOIN item_origins k ON k.item_id = i.id AND k.origin = b.origin
+                    AND k.system = 'biblivre.949$a' AND k.external_id = i.inventory_number
+                 WHERE i.home_branch = 1 AND i.holding_branch = 2 AND i.policy_id = 1 AND i.barcode IS NULL",
+            )?;
+            let actual: BTreeMap<String, (String, String)> = holdings
+                .query_map([], |r| Ok((r.get(0)?, (r.get(1)?, r.get(2)?))))?
+                .collect::<Result<_, _>>()?;
+            assert_eq!(*expected, actual);
+
+            let mut sources = connection.prepare(
+                "SELECT original FROM original_records
+                 WHERE origin = 'biblivre-escola' AND serialization = 'MRK' ORDER BY instance_id",
+            )?;
+            let originals: Vec<Vec<u8>> = sources
+                .query_map([], |r| r.get(0))?
+                .collect::<Result<_, _>>()?;
+            assert_eq!(originals.len(), 10);
+            assert_eq!(originals.join(&b'\n'), fixture.as_bytes());
+            Ok::<_, elzevir_store::StoreError>(())
+        }).unwrap();
+}

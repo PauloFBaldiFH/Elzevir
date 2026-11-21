@@ -438,6 +438,11 @@ pub struct NewRecord {
 pub enum RecordItems {
     /// Items from the MARC edge, in their original order.
     Marc(Vec<ItemData>),
+    /// Exemplars from a confirmed Biblivre 949 profile, in field order.
+    Biblivre {
+        /// Items identified by installation and inventory number.
+        biblivre: Vec<NativeItem>,
+    },
     /// Native Items with catalog identifiers.
     Native {
         /// Items in sheet order.
@@ -460,6 +465,9 @@ impl From<Vec<ItemData>> for RecordItems {
 /// An Item from a native input, without MARC codes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NativeItem {
+    /// Acquisition date explicitly mapped by the source profile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acquired_on: Option<String>,
     /// Native catalog fields.
     pub fields: ItemFields,
     /// BIBFRAME classes and statements for this Item.
@@ -492,7 +500,7 @@ impl RecordItems {
     pub fn len(&self) -> usize {
         match self {
             Self::Marc(items) => items.len(),
-            Self::Native { native } => native.len(),
+            Self::Native { native } | Self::Biblivre { biblivre: native } => native.len(),
         }
     }
 
@@ -507,7 +515,7 @@ impl RecordItems {
     pub fn marc(&self) -> &[ItemData] {
         match self {
             Self::Marc(items) => items,
-            Self::Native { .. } => &[],
+            Self::Native { .. } | Self::Biblivre { .. } => &[],
         }
     }
 
@@ -516,14 +524,14 @@ impl RecordItems {
     pub fn into_marc(self) -> Vec<ItemData> {
         match self {
             Self::Marc(items) => items,
-            Self::Native { .. } => Vec::new(),
+            Self::Native { .. } | Self::Biblivre { .. } => Vec::new(),
         }
     }
 
     /// Ordered items with their source-specific representation.
     pub fn entries(&self) -> impl Iterator<Item = RecordItem<'_>> {
         let native = match self {
-            Self::Native { native } => native.as_slice(),
+            Self::Native { native } | Self::Biblivre { biblivre: native } => native.as_slice(),
             Self::Marc(_) => &[],
         };
         self.marc()

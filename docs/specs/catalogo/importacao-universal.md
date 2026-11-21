@@ -158,6 +158,23 @@ na confirmação. Registra todos os erros e avisos, não apenas os da amostra.
   MARC. Usa a validação pública de criação/edição e dos exemplares.
   A exportação MARC posterior parte do modelo, como na catalogação nativa.
 
+#### Exemplares Biblivre no 949
+
+Na prévia MARC da equipe, a seção **Exemplares do Biblivre (949)** aparece ao revisar uma página com esse campo. Selecione a instalação de origem, as bibliotecas proprietária e detentora e a política de circulação. Aplicar o perfil interpreta cada `949$a` como tombo textual da instalação e mantém o código de barras vazio. Escolha se `949$y` é a data de aquisição (AAAA-MM-DD) ou se deve ficar apenas no original. Outros subcampos, inclusive `$c`, permanecem na fonte. Reveja a contagem de exemplares antes de confirmar.
+
+A mesma escolha está disponível na receita de `elzevir import edit`. Os números abaixo são IDs dos cadastros da instituição.
+
+```toml
+origin = "biblivre-escola"
+[biblivre]
+date = "acquisition"
+home_branch = 1
+holding_branch = 2
+policy = 1
+```
+
+Use `date = "source_only"` para preservar datas ambíguas. A Instância é identificada pela instalação, pelo `001` e pelo `003` quando presente. Um tombo já vinculado à mesma Instância conta como zero inclusões na reapresentação. Tombo repetido ou sem vínculo de procedência na biblioteca proprietária, cadastros divergentes, descrições de origem diferentes sob a mesma identidade e registros com `952` exigem revisão. A escritora confere novamente a prévia antes de gravar a unidade. Sem o perfil, o fluxo MARC habitual preserva o `949` sem projetá-lo como exemplar.
+
 ### 1.4 Mapeamento das planilhas
 
 CSV/TSV aceita UTF-8 com ou sem BOM e Latin-1. Bytes válidos como UTF-8 usam

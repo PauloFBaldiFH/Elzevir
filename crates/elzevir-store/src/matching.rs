@@ -351,7 +351,7 @@ pub(crate) fn match_scope(
     Ok(scope)
 }
 
-fn holding_scope(
+pub(crate) fn holding_scope(
     c: &Connection,
     items: BTreeSet<i64>,
 ) -> Result<Vec<elzevir_app::matching::HoldingScope>, StoreError> {

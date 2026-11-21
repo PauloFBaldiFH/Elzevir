@@ -718,6 +718,17 @@ import-items-matches = Add only to matched records
 import-items-new = Add only to new records
 import-items-replace = Replace the items of matched records
 import-items-ignore = Do not import items
+import-biblivre = Biblivre holdings (949)
+import-biblivre-tombo = Applying this profile treats each 949$a as an inventory number in the source installation. The item will have no barcode. Other subfields stay in the original record.
+import-biblivre-date = Meaning of 949$y
+import-biblivre-source = Keep only in source
+import-biblivre-acquired = Acquisition date (YYYY-MM-DD)
+import-biblivre-home = Home library
+import-biblivre-holding = Holding library
+import-biblivre-policy = Circulation policy
+import-biblivre-apply = Apply profile and review items
+import-biblivre-remove = Remove Biblivre profile
+import-biblivre-required = Select the installation, date interpretation, both libraries and circulation policy.
 import-matching-save = Save matching
 import-advanced = Advanced: edit the recipe as JSON
 
