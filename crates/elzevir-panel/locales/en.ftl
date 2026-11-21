@@ -462,3 +462,5 @@ address-share-keys = Y copy public URL · Q/Esc back
 address-registration-at = Registration last saved at: { $value }
 address-connector-controls = P pause connector · S start connector
 address-sftp = sftp user@server · put to upload, get to download the recovery file.
+cloud-reselect = Selected backup is no longer listed. Use , or . to choose again.
+panel-small-form = Form paused. Resize the terminal to at least 80x18 to continue.

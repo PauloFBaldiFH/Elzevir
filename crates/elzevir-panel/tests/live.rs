@@ -9,7 +9,11 @@ use elzevir_panel::{
 use ratatui::{Terminal, backend::TestBackend};
 
 fn screen(panel: &Panel, language: &str) -> String {
-    let mut terminal = Terminal::new(TestBackend::new(140, 30)).unwrap();
+    sized_screen(panel, language, 140, 30)
+}
+
+fn sized_screen(panel: &Panel, language: &str, width: u16, height: u16) -> String {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     let messages = Messages::new(language).unwrap();
     terminal
         .draw(|frame| draw(frame, panel, &messages, true))
@@ -18,7 +22,7 @@ fn screen(panel: &Panel, language: &str) -> String {
         .backend()
         .buffer()
         .content
-        .chunks(140)
+        .chunks(usize::from(width))
         .map(|row| {
             row.iter()
                 .map(ratatui::buffer::Cell::symbol)
@@ -680,7 +684,24 @@ fn assisted_restore_review_defaults_to_back_and_requires_a_choice() {
     assert!(panel.diagnostics.requested.is_none());
     panel.form = Some(Form::new(Operation::ApplyRestore(review.clone())));
     panel.handle(&event(KeyCode::Right), 140, 30);
-    panel.handle(&event(KeyCode::Enter), 140, 30);
+    for (width, height) in [(79, 24), (80, 17)] {
+        panel.handle(&event(KeyCode::Enter), width, height);
+        panel.handle(&event(KeyCode::Char('y')), width, height);
+        assert!(panel.form.is_some());
+        assert!(panel.diagnostics.requested.is_none());
+    }
+    for height in [18, 24] {
+        for (lang, impact, choice) in [
+            ("en", "Database only", "Back"),
+            ("pt-BR", "Somente banco", "Voltar"),
+        ] {
+            let shown = sized_screen(&panel, lang, 80, height);
+            for label in ["biblioteca.age", impact, choice] {
+                assert!(shown.contains(label), "{shown}");
+            }
+        }
+    }
+    panel.handle(&event(KeyCode::Enter), 80, 18);
     assert_eq!(
         panel.diagnostics.requested,
         Some(ObservationRequest::Operate(Operation::ApplyRestore(review)))
@@ -715,6 +736,23 @@ fn pasted_restore_fields_cannot_trigger_navigation_or_submission() {
     );
     assert!(panel.diagnostics.requested.is_none());
     assert!(!panel.quit);
+}
+
+fn displayed_files(panel: &mut Panel) -> Option<&mut Vec<(String, u64)>> {
+    let Mode::Live(state) = &mut panel.mode else {
+        return None;
+    };
+    Some(
+        &mut state
+            .snapshot
+            .as_mut()?
+            .operations
+            .cloud
+            .as_mut()?
+            .remote
+            .as_mut()?
+            .files,
+    )
 }
 
 #[test]
@@ -773,6 +811,7 @@ fn cloud_tabs_show_destination_quota_pending_status_and_bound_actions() {
         key(&mut panel, ']');
     }
     key(&mut panel, '.');
+    displayed_files(&mut panel).unwrap().reverse();
     key(&mut panel, 'D');
     assert_eq!(
         panel.form.take().unwrap().operation,
@@ -780,6 +819,21 @@ fn cloud_tabs_show_destination_quota_pending_status_and_bound_actions() {
             target.clone(),
             RemoteCommand::Download("d".repeat(32))
         ))
+    );
+    key(&mut panel, 'D');
+    displayed_files(&mut panel)
+        .unwrap()
+        .retain(|(id, _)| *id != "d".repeat(32));
+    panel.submit_form();
+    assert!(panel.diagnostics.requested.is_none());
+    assert_eq!(panel.cloud_tab, 2);
+    key(&mut panel, 'D');
+    assert!(panel.form.is_none());
+    assert!(screen(&panel, "pt-BR").contains("saiu da lista"));
+    key(&mut panel, '.');
+    key(&mut panel, 'D');
+    assert!(
+        matches!(panel.form.take().unwrap().operation,Operation::Cloud(CloudOperation::Remote(_,RemoteCommand::Download(id))) if id == "c".repeat(32))
     );
     key(&mut panel, '+');
     key(&mut panel, 'M');
@@ -870,4 +924,21 @@ fn managing_addresses_exposes_saved_enrollment_and_reports_disabled_staff() {
         panel.form.as_ref().unwrap().labels.last(),
         Some(&"broker-url")
     );
+}
+
+#[test]
+fn advanced_broker_field_stays_visible_at_compact_sizes() {
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut panel = connected();
+    panel.section = elzevir_panel::Section::Addresses;
+    for code in [KeyCode::Char('g'), KeyCode::F(2), KeyCode::Char('Z')] {
+        panel.handle(&Event::Key(KeyEvent::new(code, KeyModifiers::NONE)), 80, 18);
+    }
+    for height in [18, 24] {
+        for lang in ["en", "pt-BR"] {
+            let shown = sized_screen(&panel, lang, 80, height);
+            assert!(shown.contains("Broker HTTPS"), "{shown}");
+            assert!(shown.contains("Z▏"), "{shown}");
+        }
+    }
 }

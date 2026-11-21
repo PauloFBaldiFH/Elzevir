@@ -174,6 +174,7 @@ fn interact(
                 {
                     panel.form = Some(crate::Form::new(crate::Operation::ApplyRestore(review)));
                 }
+                panel.initialize_cloud_file();
                 observed_at = Some(at);
                 if action_sequence.is_some_and(|requested| completed >= requested) {
                     panel.diagnostics.pending = false;
@@ -210,6 +211,14 @@ fn interact(
             .area;
         if event::poll(tick.saturating_sub(last_tick.elapsed()))? {
             let input = event::read()?;
+            let size = terminal.size()?;
+            if size != ratatui::layout::Size::new(drawn.width, drawn.height) {
+                continue;
+            }
+            if picker.is_none() && panel.size_warning(size.width, size.height) {
+                panel.handle(&input, size.width, size.height);
+                continue;
+            }
             if handle_picker(&input, &mut picker, &mut panel) || access.handle(&input, &mut panel) {
                 continue;
             }
@@ -218,10 +227,7 @@ fn interact(
                     let point = (mouse.column, mouse.row).into();
                     scene.pointer = Some(point);
                     match mouse.kind {
-                        MouseEventKind::Down(MouseButton::Left)
-                            if terminal.size()?
-                                == ratatui::layout::Size::new(drawn.width, drawn.height) =>
-                        {
+                        MouseEventKind::Down(MouseButton::Left) => {
                             if let Some(action) = scene.hit(point) {
                                 action.apply(&mut panel, drawn);
                             }
