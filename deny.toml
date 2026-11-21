@@ -13,7 +13,15 @@ yanked = "deny"
 # age 0.12.1 was evaluated: it adds crypto-bigint 0.5.5 (RUSTSEC-2026-0387).
 # Keep the X25519 implementation without that vulnerable dependency and revisit
 # when age's HPKE dependencies or i18n-config are updated. No vulnerability waived.
-ignore = ["RUSTSEC-2026-0374", "RUSTSEC-2026-0173"]
+# ksni 0.3.7 (Linux tray) pins zbus 5, whose zvariant, zvariant_derive and zbus_names
+# were folded into zbus 6: maintenance notices with no safe upgrade until ksni moves.
+ignore = [
+    "RUSTSEC-2026-0374",
+    "RUSTSEC-2026-0173",
+    "RUSTSEC-2026-0370",
+    "RUSTSEC-2026-0371",
+    "RUSTSEC-2026-0372",
+]
 
 [licenses]
 version = 2
