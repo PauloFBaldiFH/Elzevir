@@ -89,6 +89,9 @@ jobs:
           - { name: windows-x86_64, os: windows-2025 }
           - { name: windows-arm64, os: windows-11-arm }
     runs-on: ${{ matrix.os }}
+    env:
+      # Debug symbols in every integration-test executable can fill the runner disk.
+      CARGO_PROFILE_TEST_DEBUG: "0"
     steps:
       - uses: actions/checkout@v4
       - name: Install the pinned toolchain (rust-toolchain.toml)
