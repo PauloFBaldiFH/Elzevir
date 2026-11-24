@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Private content-addressed objects of a single, exclusively opened institution.
 mod backup;
-pub(super) use backup::{archive_source, restore_archive};
+pub(super) use backup::restore_archive;
 mod maintenance;
 pub(super) use maintenance::pin_snapshot;
 #[cfg(test)]
@@ -151,26 +151,7 @@ impl FsObjectStore {
         if !meta.is_file() || meta.len() != info.bytes {
             return Err(Integrity::Corrupt);
         }
-        let mut file = File::open(path).map_err(not_found)?;
-        let mut buffer = vec![0; CHUNK];
-        let mut digest = Sha256::new();
-        let mut total = 0u64;
-        loop {
-            let n = read_chunk(&mut file, &mut buffer).map_err(|_| Integrity::Corrupt)?;
-            if n == 0 {
-                break;
-            }
-            total += n as u64;
-            if total > info.bytes {
-                return Err(Integrity::Corrupt);
-            }
-            digest.update(buffer.get(..n).ok_or(Integrity::Corrupt)?);
-        }
-        if total != info.bytes || ObjectHash(digest.finalize().into()) != info.hash {
-            return Err(Integrity::Corrupt);
-        }
-        file.rewind().map_err(|_| Integrity::Corrupt)?;
-        Ok(file)
+        verify_bytes(File::open(path).map_err(not_found)?, info)
     }
     fn forget_observation(&self, hash: ObjectHash) -> Result<()> {
         match fs::remove_file(self.inventory.join(hash.to_string())) {
@@ -179,6 +160,59 @@ impl FsObjectStore {
             Err(e) => Err(failure(e)),
         }
     }
+}
+
+/// Open a regular, correctly sized object through its institution directory handle.
+pub(super) fn object_source(
+    scope: &cap_std::fs::Dir,
+    info: ObjectInfo,
+) -> std::result::Result<File, String> {
+    use cap_fs_ext::DirExt as _;
+    let mut leaf = scope.try_clone().map_err(|e| e.to_string())?;
+    let (a, b) = shards(info.hash);
+    for name in ["repository", "objects", "sha256", &a, &b] {
+        leaf = leaf
+            .open_dir_nofollow(name)
+            .map_err(|_| format!("missing repository object {}", info.hash))?;
+    }
+    let hash = info.hash.to_string();
+    if !leaf
+        .symlink_metadata(&hash)
+        .is_ok_and(|meta| meta.is_file())
+    {
+        return Err(format!("missing or non-regular repository object {hash}"));
+    }
+    let file = crate::backup_archive::scoped_file(&leaf, Path::new(&hash))?.into_std();
+    if file.metadata().map_err(|e| e.to_string())?.len() != info.bytes {
+        return Err(format!("repository object size mismatch {}", info.hash));
+    }
+    Ok(file)
+}
+
+/// Verify the open handle and rewind that same handle for streaming.
+pub(super) fn verify_bytes(
+    mut file: File,
+    info: ObjectInfo,
+) -> std::result::Result<File, Integrity> {
+    let mut buffer = vec![0; CHUNK];
+    let mut digest = Sha256::new();
+    let mut total = 0u64;
+    loop {
+        let n = read_chunk(&mut file, &mut buffer).map_err(|_| Integrity::Corrupt)?;
+        if n == 0 {
+            break;
+        }
+        total += n as u64;
+        if total > info.bytes {
+            return Err(Integrity::Corrupt);
+        }
+        digest.update(buffer.get(..n).ok_or(Integrity::Corrupt)?);
+    }
+    if total != info.bytes || ObjectHash(digest.finalize().into()) != info.hash {
+        return Err(Integrity::Corrupt);
+    }
+    file.rewind().map_err(|_| Integrity::Corrupt)?;
+    Ok(file)
 }
 
 impl ObjectStore for FsObjectStore {

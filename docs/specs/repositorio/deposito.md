@@ -83,3 +83,22 @@ Backups antigos (formatos 1 e 2) e backups com escopo de banco continuam
 legíveis. Nessas cópias, a verificação cobre a imagem SQLite e as demais
 entradas declaradas. Para recuperar os documentos digitais, o operador
 precisa restaurar separadamente o diretório de objetos da origem.
+
+## Consulta pública no OPAC (Etapa 4a)
+
+A ficha bibliográfica do OPAC oferece um link para o depósito publicado.
+A página estável `/repository/{deposit}` apresenta o vínculo com a ficha
+bibliográfica e os arquivos públicos vigentes e íntegros. Cada link de
+download usa `/repository/{deposit}/files/{file}/versions/{seq}`. Os IDs
+usam 32 dígitos hexadecimais minúsculos. GET e HEAD aplicam a mesma
+autorização. A página retirada responde 410. Instâncias ocultas, rascunhos,
+vínculos restritos e versões antigas respondem 404 ao visitante. Um objeto
+autorizado indisponível responde 503 ao download.
+
+A entrega usa anexo, valida tamanho e SHA-256 antes de enviar cabeçalhos e
+transmite o arquivo inteiro em blocos de até 256 KiB. Uma requisição com
+`Range` também passa pela autorização e recebe o arquivo inteiro (200).
+O servidor admite até duas operações simultâneas de consulta à página do
+depósito ou download por instituição e responde 503 quando ambas estão ocupadas. As respostas
+pedem ao cliente e aos intermediários que consultem novamente a origem em
+cada acesso. A CLI continua responsável pelo depósito e pela publicação.

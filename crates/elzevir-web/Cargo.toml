@@ -15,6 +15,7 @@ elzevir-domain.workspace = true
 elzevir-web-templates.workspace = true
 askama.workspace = true
 axum = { workspace = true, features = ["multipart"] }
+futures-util = { version = "0.3", default-features = false }
 getrandom.workspace = true
 jiff.workspace = true
 serde.workspace = true

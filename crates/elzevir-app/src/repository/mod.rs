@@ -2,6 +2,8 @@
 //! Institutional repository. Metadata commits and immutable object installation have
 //! distinct durability boundaries. A failed metadata commit may leave a collectable object.
 mod deposit;
+mod public;
+pub use public::PublicRepository;
 mod types;
 
 pub use deposit::*;
@@ -208,51 +210,17 @@ impl<M: RepositoryRead + RepositoryWrite, O: ObjectStore, C: Clock> Repository<M
         )
     }
 
-    fn visible_deposit(
-        &self,
-        id: DepositId,
-        audience: ReadAudience,
-        page: bool,
-    ) -> Result<Deposit> {
-        let (deposit, visible) = self.metadata.snapshot(id)?;
-        if audience == ReadAudience::Public {
-            if !visible || deposit.state == DepositState::Draft {
-                return Err(RepositoryError::NotVisible);
-            }
-            if deposit.state == DepositState::Withdrawn {
-                return Err(if page {
-                    RepositoryError::Withdrawn
-                } else {
-                    RepositoryError::NotVisible
-                });
-            }
-        }
-        Ok(deposit)
-    }
     /// # Errors
     /// Hidden, unknown, or withdrawn public page.
     pub fn page(&self, id: DepositId, audience: ReadAudience) -> Result<DepositPage> {
-        let deposit = self.visible_deposit(id, audience, true)?;
-        let files = deposit
-            .files
-            .into_values()
-            .filter(|file| {
-                audience != ReadAudience::Public
-                    || (file.description.access == FileAccess::Public
-                        && file
-                            .current
-                            .as_ref()
-                            .is_some_and(|r| self.objects.integrity(r.object) == Integrity::Ok))
+        let (deposit, visible) = self.metadata.snapshot(id)?;
+        if audience == ReadAudience::Public {
+            deposit.public_page(visible, |info| {
+                self.objects.integrity(info) == Integrity::Ok
             })
-            .map(|file| (file.description, file.current.map(|r| r.version)))
-            .collect();
-        Ok(DepositPage {
-            id,
-            instance: deposit.instance,
-            state: deposit.state,
-            collections: deposit.collections.into_iter().collect(),
-            files,
-        })
+        } else {
+            Ok(deposit.into_page())
+        }
     }
     /// Open the current version or a specific sequence; every opening, including a
     /// future HEAD/range request, goes through the same metadata authorization.
@@ -266,35 +234,23 @@ impl<M: RepositoryRead + RepositoryWrite, O: ObjectStore, C: Clock> Repository<M
         seq: Option<u64>,
         audience: ReadAudience,
     ) -> Result<Download> {
-        let snapshot = self.visible_deposit(deposit, audience, false)?;
+        let (snapshot, visible) = self.metadata.snapshot(deposit)?;
+        let ReadAudience::Staff(actor) = audience else {
+            return snapshot.public_download(visible, file, seq, |info| self.objects.open(info));
+        };
         let head = snapshot
             .files
             .get(&file)
             .ok_or(RepositoryError::NotVisible)?;
-        let receipt = if let (ReadAudience::Staff(_), Some(seq)) = (audience, seq) {
+        let receipt = if let Some(seq) = seq {
             self.metadata.receipt(VersionRef { deposit, file, seq })?
         } else {
-            if audience == ReadAudience::Public && head.description.access != FileAccess::Public {
-                return Err(RepositoryError::NotVisible);
-            }
-            head.current
-                .as_ref()
-                .filter(|r| seq.is_none_or(|s| s == r.version.seq))
-                .ok_or(RepositoryError::NotVisible)?
-                .clone()
+            head.current.clone().ok_or(RepositoryError::NotVisible)?
         };
         let reader = self.objects.open(receipt.object)?;
-        if let ReadAudience::Staff(actor) = audience {
-            self.metadata
-                .audit_download(actor, self.clock.now(), receipt.version)?;
-        }
-        Ok(Download {
-            version: receipt.version,
-            name: receipt.upload.display_name,
-            media_type: receipt.upload.media_type,
-            bytes: receipt.object.bytes,
-            reader,
-        })
+        self.metadata
+            .audit_download(actor, self.clock.now(), receipt.version)?;
+        Ok(Download::from_receipt(&receipt, reader))
     }
     /// Inspect health and all affected links with staff authorization.
     ///

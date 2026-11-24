@@ -57,6 +57,7 @@ mod process_runner;
 mod release;
 mod repository_cli;
 mod repository_fs;
+mod repository_public;
 mod restore_journal;
 mod runtime_info;
 mod server_config;
@@ -451,6 +452,10 @@ fn web_app(
         store: Arc::clone(store),
     }))
     .map_err(|error| error.to_string())?
+    .with_repository(Arc::new(repository_public::Public::new(
+        Arc::clone(store),
+        data_dir,
+    )?))
     .with_patrons(Arc::clone(store) as _)
     .with_loans(Arc::clone(store) as _)
     .with_rules(Arc::clone(store) as _)

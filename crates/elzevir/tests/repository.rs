@@ -5,7 +5,7 @@
     reason = "integration fixture helpers fail the test on errors"
 )]
 use elzevir_app::{
-    catalog::{CatalogCommand, WorkChange},
+    catalog::{CatalogCommand, CatalogReader, InstanceChange, InstanceUpdate, WorkChange},
     commands::WriteCommand,
     creating::new_record,
 };
@@ -396,4 +396,172 @@ fn missing_or_corrupt_historical_bytes_prevent_backup_publication() {
     assert!(!missing.status.success());
     assert!(String::from_utf8_lossy(&missing.stderr).contains(hash));
     assert_eq!(fs::read_dir(d.join("backups")).unwrap().count(), 0);
+}
+
+#[test]
+fn public_http_exposes_only_the_current_authorized_version() {
+    let fixture = institution();
+    let d = fixture.path();
+    let deposit = run(d, &["draft", "1"]);
+    let pdf = run(
+        d,
+        &["add-file", &deposit, "Public thesis", "primary", "public"],
+    );
+    let consent = run(
+        d,
+        &["add-file", &deposit, "Consent", "administrative", "staff"],
+    );
+    upload(d, &deposit, &pdf, 1, None, b"earlier");
+    upload(d, &deposit, &pdf, 2, Some("1"), b"final thesis");
+    upload(d, &deposit, &consent, 3, None, b"final thesis");
+    run(d, &["publish", &deposit]);
+    let (_server, host, agent) = start_http(d);
+    let url = format!("{host}/repository/{deposit}");
+    let mut bib = agent.get(format!("{host}/record/1")).call().unwrap();
+    assert!(
+        bib.body_mut()
+            .read_to_string()
+            .unwrap()
+            .contains(&format!("/repository/{deposit}"))
+    );
+    let mut page = agent.get(&url).call().unwrap();
+    assert_eq!(page.status(), 200);
+    assert_eq!(page.headers()["cache-control"], "no-store");
+    let html = page.body_mut().read_to_string().unwrap();
+    assert!(html.contains("Public thesis") && html.contains(&pdf));
+    assert!(!html.contains("Consent") && !html.contains(&consent));
+    let current = format!("{url}/files/{pdf}/versions/2");
+    let mut download = agent.get(&current).call().unwrap();
+    assert_eq!(download.status(), 200);
+    assert!(
+        download.headers()["content-disposition"]
+            .to_str()
+            .unwrap()
+            .starts_with("attachment")
+    );
+    assert_eq!(
+        download.body_mut().read_to_string().unwrap(),
+        "final thesis"
+    );
+    assert_eq!(
+        agent.head(&current).call().unwrap().headers()["content-length"],
+        "12"
+    );
+    for (id, seq) in [(&pdf, 1), (&consent, 1)] {
+        let path = format!("{url}/files/{id}/versions/{seq}");
+        assert_eq!(agent.get(&path).call().unwrap().status(), 404);
+        assert_eq!(agent.head(&path).call().unwrap().status(), 404);
+    }
+}
+fn start_http(d: &Path) -> (HttpServer, String, ureq::Agent) {
+    let log = d.join("server-output");
+    let output = fs::File::create(&log).unwrap();
+    let mut server = HttpServer(
+        Command::new(env!("CARGO_BIN_EXE_elzevir"))
+            .args(["serve", "--data-dir"])
+            .arg(d)
+            .args(["--listen", "127.0.0.1:0"])
+            .stdout(output.try_clone().unwrap())
+            .stderr(output)
+            .spawn()
+            .unwrap(),
+    );
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let url = loop {
+        let text = fs::read_to_string(&log).unwrap();
+        if let Some(address) = text
+            .lines()
+            .find_map(|s| s.strip_prefix("elzevir: listening on http://"))
+        {
+            break format!("http://{address}");
+        }
+        assert!(
+            server.0.try_wait().unwrap().is_none() && Instant::now() < deadline,
+            "{text}"
+        );
+        thread::sleep(Duration::from_millis(20));
+    };
+    let agent = ureq::Agent::new_with_config(
+        ureq::Agent::config_builder()
+            .proxy(None)
+            .http_status_as_error(false)
+            .build(),
+    );
+    (server, url, agent)
+}
+struct HttpServer(std::process::Child);
+impl Drop for HttpServer {
+    fn drop(&mut self) {
+        drop(self.0.kill());
+        drop(self.0.wait());
+    }
+}
+
+#[test]
+fn opac_conceals_drafts_then_distinguishes_unavailable_bytes_and_withdrawal() {
+    let fixture = institution();
+    let d = fixture.path();
+    let deposit = run(d, &["draft", "1"]);
+    let file = run(d, &["add-file", &deposit, "Article", "primary", "public"]);
+    let receipt = upload(d, &deposit, &file, 1, None, b"article");
+    let path = format!("/repository/{deposit}");
+    let version = format!("{path}/files/{file}/versions/1");
+    let assert_status = |page, download, linked| {
+        let (_server, host, agent) = start_http(d);
+        let response = agent.get(format!("{host}{path}")).call().unwrap();
+        assert_eq!(response.status().as_u16(), page);
+        assert_eq!(response.headers()["cache-control"], "no-store");
+        assert_eq!(
+            agent
+                .head(format!("{host}{version}"))
+                .call()
+                .unwrap()
+                .status()
+                .as_u16(),
+            download
+        );
+        let mut bib = agent.get(format!("{host}/record/1")).call().unwrap();
+        assert_eq!(
+            bib.body_mut().read_to_string().unwrap().contains(&path),
+            linked
+        );
+    };
+    assert_status(404, 404, false);
+    run(d, &["publish", &deposit]);
+    let hash = receipt
+        .split_whitespace()
+        .find_map(|entry| entry.strip_prefix("sha256="))
+        .unwrap();
+    let object = d
+        .join("repository/objects/sha256")
+        .join(hash.get(..2).unwrap())
+        .join(hash.get(2..4).unwrap())
+        .join(hash);
+    fs::write(&object, b"changed").unwrap();
+    assert_status(200, 503, true);
+    fs::remove_file(object).unwrap();
+    assert_status(200, 503, true);
+    run(d, &["withdraw", &deposit]);
+    assert_status(410, 404, false);
+    let store = ElzevirStore::open(
+        &d.join("elzevir.db"),
+        &StoreConfig::default(),
+        ElzevirHandler,
+    )
+    .unwrap();
+    let instance = elzevir_domain::catalog::InstanceId(1);
+    let row_version = store.record_version(instance).unwrap().unwrap();
+    store
+        .submit(WriteCommand::Catalog(CatalogCommand::UpdateInstance(
+            Box::new(InstanceUpdate {
+                instance,
+                row_version,
+                changes: vec![InstanceChange::OpacHidden(true)],
+            }),
+        )))
+        .unwrap()
+        .wait()
+        .unwrap();
+    store.shutdown().unwrap();
+    assert_status(404, 404, false);
 }

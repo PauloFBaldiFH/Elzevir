@@ -427,7 +427,7 @@ fn encrypt(
     for (index, entry) in manifest.entries.iter().enumerate() {
         check(control)?;
         let file = if let Some(object) = entry.object() {
-            crate::repository_fs::archive_source(scope, object)?
+            crate::repository_fs::object_source(scope, object)?
         } else {
             let (_, path) = files
                 .get(index)

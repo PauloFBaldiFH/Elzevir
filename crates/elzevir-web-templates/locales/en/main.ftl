@@ -1319,3 +1319,7 @@ import-notes-default = Keep existing visibility (staff for new notes)
 import-notes-staff = Staff only
 import-notes-public = Publish in the catalog
 import-notes-invalid = Choose a valid note visibility.
+
+repository-title = Digital deposit
+repository-record = Bibliographic record
+repository-no-files = No files are currently available for download.

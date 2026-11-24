@@ -137,12 +137,39 @@ pub(super) fn snapshot(c: &Connection, deposit: r::DepositId) -> r::Result<(r::D
     Ok((view, !hidden))
 }
 
-impl r::RepositoryRead for MetadataStore {
-    fn snapshot(&self, id: r::DepositId) -> r::Result<(r::Deposit, bool)> {
-        self.0.readers().read(|c| {
+impl crate::ReadPool {
+    /// Published deposit link for a visible OPAC instance.
+    ///
+    /// # Errors
+    /// The snapshot cannot be read.
+    pub fn published_deposit(&self, instance: r::InstanceId) -> r::Result<Option<r::DepositId>> {
+        self.read(|c| {
+            c.query_row(
+                "SELECT d.id FROM repo_deposits d JOIN instances i ON i.id=d.instance_id
+             WHERE d.instance_id=?1 AND d.state='published' AND i.opac_hidden=0",
+                [instance.0],
+                |row| Ok(r::DepositId(id(row, 0)?)),
+            )
+            .optional()
+            .map_err(db)
+        })
+    }
+
+    /// Read one deposit and its OPAC visibility in the same SQLite snapshot.
+    ///
+    /// # Errors
+    /// Unknown deposit or database read failure.
+    pub fn repository_snapshot(&self, id: r::DepositId) -> r::Result<(r::Deposit, bool)> {
+        self.read(|c| {
             let tx = c.unchecked_transaction().map_err(db)?;
             snapshot(&tx, id)
         })
+    }
+}
+
+impl r::RepositoryRead for MetadataStore {
+    fn snapshot(&self, id: r::DepositId) -> r::Result<(r::Deposit, bool)> {
+        self.0.readers().repository_snapshot(id)
     }
     fn receipt(&self, v: r::VersionRef) -> r::Result<r::UploadReceipt> {
         self.0.readers().read(|c| receipt(c, v))

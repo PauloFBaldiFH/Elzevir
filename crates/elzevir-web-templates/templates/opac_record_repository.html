@@ -1,0 +1,5 @@
+{% extends "opac_record.html" %}
+{% block content %}
+{{ super() }}
+{% if let Some(url) = deposit_url %}<p><a href="{{ url }}">{{ t.get("repository-title") }}</a></p>{% endif %}
+{% endblock %}
