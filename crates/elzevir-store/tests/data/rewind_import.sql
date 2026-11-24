@@ -1,3 +1,11 @@
+-- Undo migration 62 for fixtures that reconstruct an older catalog schema.
+DROP TRIGGER repo_instance_retained;
+DROP TABLE repo_versions;
+DROP TABLE repo_files;
+DROP TABLE repo_objects;
+DROP TABLE repo_collection_members;
+DROP TABLE repo_collections;
+DROP TABLE repo_deposits;
 -- SPDX-License-Identifier: GPL-3.0-or-later
 UPDATE contributions SET agent_id = (SELECT min(b.id) FROM agents a JOIN agents b ON b.heading=a.heading AND b.kind=a.kind WHERE a.id=contributions.agent_id);
 DELETE FROM agents WHERE id NOT IN (SELECT min(id) FROM agents GROUP BY kind,heading);

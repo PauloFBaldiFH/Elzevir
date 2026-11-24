@@ -839,6 +839,8 @@ const MIGRATIONS: &[&str] = &[
     "ALTER TABLE patrons ADD COLUMN password_hash TEXT;",
     // 61: keep installation-local identifiers separate across source catalogs.
     include_str!("import_provenance.sql"),
+    // 62: offline institutional repository.
+    include_str!("repository/schema.sql"),
 ];
 
 /// The migration that creates `match_keys`.
@@ -1707,6 +1709,9 @@ mod catalog_tests {
         .write_iso2709(&mut source)
         .unwrap();
         let (_dir, mut connection) = catalog();
+        connection
+            .execute_batch(include_str!("../tests/data/rewind_repository.sql"))
+            .unwrap();
         connection
             .execute(
                 "UPDATE source_records SET record = ?1 WHERE instance_id = 1",
@@ -2704,6 +2709,9 @@ mod catalog_tests {
     }
 
     fn rewind(connection: &Connection, version: i64) {
+        connection
+            .execute_batch(include_str!("../tests/data/rewind_repository.sql"))
+            .unwrap();
         connection
             .execute_batch("DROP TABLE IF EXISTS import_identities")
             .unwrap();

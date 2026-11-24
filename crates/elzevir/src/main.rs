@@ -55,6 +55,8 @@ mod personal_update;
 mod private_temp;
 mod process_runner;
 mod release;
+mod repository_cli;
+mod repository_fs;
 mod restore_journal;
 mod runtime_info;
 mod server_config;
@@ -142,6 +144,8 @@ enum Command {
     Addresses(addresses::AddressArgs),
     /// Create, verify, export and restore encrypted snapshots.
     Backup(backup_cli::BackupArgs),
+    /// Manage digital deposits, immutable files and offline maintenance.
+    Repository(repository_cli::Args),
     /// Observe jobs and configure operational schedules.
     Operations(operations_cli::Args),
     /// Manage the operating-system service.
@@ -224,6 +228,7 @@ fn main() -> ExitCode {
         Command::Addresses(args) => addresses::run(args),
         Command::Service(args) => service::run(args),
         Command::Backup(args) => backup_cli::run(args),
+        Command::Repository(args) => repository_cli::run(args),
         Command::Operations(args) => operations_cli::run(args),
         Command::Staff(StaffAction::Add {
             data_dir,
