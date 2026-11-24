@@ -37,6 +37,7 @@ pub mod pending;
 pub mod profiles;
 pub mod rdf;
 pub mod registries;
+pub mod repository;
 pub mod search;
 pub mod staff;
 pub mod statement_rows;
