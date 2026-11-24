@@ -7,8 +7,7 @@
     reason = "integration helpers fail the test on error"
 )]
 
-use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpStream};
+use std::net::SocketAddr;
 use std::path::Path;
 use std::process::{Child, Command};
 use std::time::{Duration, Instant};
@@ -59,20 +58,40 @@ fn start(data: &Path) -> (Server, SocketAddr) {
     }
 }
 
-fn request(address: SocketAddr, method: &str, path: &str, headers: &str, body: &str) -> String {
-    let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(5)).unwrap();
-    stream
-        .set_read_timeout(Some(Duration::from_secs(10)))
-        .unwrap();
-    write!(
-        stream,
-        "{method} {path} HTTP/1.0\r\nHost: localhost\r\n{headers}Content-Length: {}\r\n\r\n{body}",
-        body.len(),
+type Response = ureq::http::Response<String>;
+
+fn request(address: SocketAddr, path: &str, cookie: &str, form: Option<&str>) -> Response {
+    let config = ureq::Agent::config_builder()
+        .proxy(None)
+        .http_status_as_error(false)
+        .max_redirects(0)
+        .timeout_global(Some(Duration::from_mins(1)))
+        .build();
+    let agent = ureq::Agent::new_with_config(config);
+    let method = if form.is_some() { "POST" } else { "GET" };
+    let mut request = ureq::http::Request::builder()
+        .method(method)
+        .uri(format!("http://{address}{path}"))
+        .header("Host", "localhost");
+    if !cookie.is_empty() {
+        request = request.header("Cookie", cookie);
+    }
+    let response = match form {
+        Some(body) => agent.run(
+            request
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .body(body)
+                .unwrap(),
+        ),
+        None => agent.run(request.body(()).unwrap()),
+    }
+    .unwrap_or_else(|e| panic!("{method} {path}: {e}"));
+    let (parts, mut body) = response.into_parts();
+    Response::from_parts(
+        parts,
+        body.read_to_string()
+            .unwrap_or_else(|e| panic!("{method} {path}: {e}")),
     )
-    .unwrap();
-    let mut response = String::new();
-    stream.read_to_string(&mut response).unwrap();
-    response
 }
 
 fn open(data: &Path) -> ElzevirStore {
@@ -132,55 +151,31 @@ fn csrf(page: &str) -> &str {
         .0
 }
 
-fn session_cookie(response: &str, name: &str) -> String {
-    let line = response
-        .lines()
-        .find(|line| {
-            line.to_ascii_lowercase()
-                .starts_with(&format!("set-cookie: {name}="))
-        })
-        .unwrap();
-    line.split_once(": ")
+fn session_cookie(response: &Response, name: &str) -> String {
+    response
+        .headers()
+        .get_all("set-cookie")
+        .iter()
+        .map(|value| value.to_str().unwrap().split(';').next().unwrap())
+        .find(|cookie| cookie.split_once('=').is_some_and(|(key, _)| key == name))
         .unwrap()
-        .1
-        .split_once(';')
-        .unwrap()
-        .0
         .to_owned()
 }
 
-/// Signs in and returns the `Cookie:` header line of the session.
 fn sign_in(address: SocketAddr, login: &str) -> String {
-    let page = request(address, "GET", "/equipe/login", "", "");
+    let page = request(address, "/equipe/login", "", None);
     let cookie = session_cookie(&page, "elzevir_login_csrf");
-    let headers =
-        format!("Cookie: {cookie}\r\nContent-Type: application/x-www-form-urlencoded\r\n");
-    let signed = request(
-        address,
-        "POST",
-        "/equipe/login",
-        &headers,
-        &format!(
-            "login={login}&password=synthetic-password&csrf={}",
-            csrf(&page)
-        ),
+    let form = format!(
+        "login={login}&password=synthetic-password&csrf={}",
+        csrf(page.body())
     );
+    let signed = request(address, "/equipe/login", &cookie, Some(&form));
     assert_status(&signed, 303);
-    format!("Cookie: {}\r\n", session_cookie(&signed, "elzevir_session"))
+    session_cookie(&signed, "elzevir_session")
 }
 
-fn assert_status(response: &str, expected: u16) {
-    assert!(
-        response.starts_with(&format!("HTTP/1.0 {expected} ")),
-        "{response}"
-    );
-}
-
-fn location(response: &str) -> &str {
-    response
-        .lines()
-        .find_map(|line| line.strip_prefix("location: "))
-        .unwrap()
+fn assert_status(response: &Response, expected: u16) {
+    assert_eq!(response.status().as_u16(), expected, "{}", response.body());
 }
 
 #[test]
@@ -191,28 +186,28 @@ fn closings_are_added_shown_removed_and_copied_on_the_screen() {
     let adm = sign_in(address, "adm");
     let cat = sign_in(address, "cat");
     assert_status(
-        &request(address, "GET", "/equipe/admin/calendario", &cat, ""),
+        &request(address, "/equipe/admin/calendario", &cat, None),
         403,
     );
     assert!(
-        request(address, "GET", "/equipe/barra", &adm, "").contains("/equipe/admin/calendario")
+        request(address, "/equipe/barra", &adm, None)
+            .body()
+            .contains("/equipe/admin/calendario")
     );
 
     let month = format!("/equipe/admin/calendario?branch={central}&month=2026-11");
-    let page = request(address, "GET", &month, &adm, "");
+    let page = request(address, &month, &adm, None);
     assert_status(&page, 200);
-    assert!(page.contains("November 2026"), "{page}");
-    let headers = format!("{adm}Content-Type: application/x-www-form-urlencoded\r\n");
+    assert!(page.body().contains("November 2026"), "{}", page.body());
     let post = |fields: &str| {
         request(
             address,
-            "POST",
             "/equipe/admin/calendario",
-            &headers,
-            &format!(
+            &adm,
+            Some(&format!(
                 "csrf={}&branch={central}&month=2026-11&{fields}",
-                csrf(&page)
-            ),
+                csrf(page.body())
+            )),
         )
     };
     assert_status(&post("action=weekly&weekday=0&title=Domingo"), 303);
@@ -222,7 +217,16 @@ fn closings_are_added_shown_removed_and_copied_on_the_screen() {
     );
     let saved = post("action=dates&first=2026-11-20&last=&title=Consci%C3%AAncia+Negra");
     assert_status(&saved, 303);
-    assert!(location(&saved).contains("saved=1"), "{saved}");
+    assert!(
+        saved
+            .headers()
+            .get("location")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .contains("saved=1"),
+        "{saved:?}"
+    );
     assert_status(
         &post("action=dates&first=2026-11-22&open=1&title=Feira"),
         303,
@@ -230,12 +234,16 @@ fn closings_are_added_shown_removed_and_copied_on_the_screen() {
     // A range that runs backwards is refused, and the page says why.
     let refused = post("action=dates&first=2026-11-30&last=2026-11-01&title=Errado");
     assert_status(&refused, 422);
-    assert!(refused.contains("These dates do not make a range"));
+    assert!(refused.body().contains("These dates do not make a range"));
 
-    let page = request(address, "GET", &month, &adm, "");
-    assert!(page.contains("title=\"Consciência Negra\""), "{page}");
-    assert!(page.contains("calendar-exception"));
-    assert!(page.contains("25 December"));
+    let page = request(address, &month, &adm, None);
+    assert!(
+        page.body().contains("title=\"Consciência Negra\""),
+        "{}",
+        page.body()
+    );
+    assert!(page.body().contains("calendar-exception"));
+    assert!(page.body().contains("25 December"));
     assert_status(
         &post("action=remove_dates&first=2026-11-20&last=2026-11-20"),
         303,

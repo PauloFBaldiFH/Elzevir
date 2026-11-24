@@ -212,16 +212,19 @@ fn interrupted_process_releases_offline_lock_and_leaves_only_staging() {
     ];
     let mut child = cli(d).args(args).stdin(Stdio::piped()).spawn().unwrap();
     let mut input = child.stdin.take().unwrap();
-    input.write_all(b"partial upload").unwrap();
+    let partial = b"partial upload";
+    input.write_all(partial).unwrap();
     let staging = d.join("repository/staging");
     let deadline = Instant::now() + Duration::from_secs(30);
+    // On Windows the directory entry may report a stale length until the writer
+    // closes. Read the file itself to synchronize with the completed chunk write.
     while !staging
         .read_dir()
         .unwrap()
-        .any(|entry| entry.is_ok_and(|e| e.metadata().is_ok_and(|m| m.len() > 0)))
+        .any(|entry| fs::read(entry.unwrap().path()).unwrap() == partial)
     {
         assert!(child.try_wait().unwrap().is_none());
-        assert!(Instant::now() < deadline);
+        assert!(Instant::now() < deadline, "upload never staged its input");
         thread::sleep(Duration::from_millis(10));
     }
     refuses(d, &["maintain", "--apply"], "stop the institution");
