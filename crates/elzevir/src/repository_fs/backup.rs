@@ -12,31 +12,6 @@ use std::{
     sync::Arc,
 };
 
-fn object_directories(info: ObjectInfo) -> [String; 5] {
-    let (a, b) = shards(info.hash);
-    ["repository".into(), "objects".into(), "sha256".into(), a, b]
-}
-pub(crate) fn archive_source(scope: &Dir, info: ObjectInfo) -> Result<File, String> {
-    let mut leaf = scope.try_clone().map_err(|e| e.to_string())?;
-    for name in object_directories(info) {
-        leaf = leaf
-            .open_dir_nofollow(name)
-            .map_err(|_| format!("missing repository object {}", info.hash))?;
-    }
-    let hash = info.hash.to_string();
-    if !leaf
-        .symlink_metadata(&hash)
-        .is_ok_and(|meta| meta.is_file())
-    {
-        return Err(format!("missing or non-regular repository object {hash}"));
-    }
-    let file = archive::scoped_file(&leaf, Path::new(&hash))?.into_std();
-    if file.metadata().map_err(|e| e.to_string())?.len() != info.bytes {
-        return Err(format!("repository object size mismatch {}", info.hash));
-    }
-    Ok(file)
-}
-
 fn sync(dir: &Dir) -> Result<(), String> {
     #[cfg(unix)]
     dir.open(".")

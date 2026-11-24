@@ -4,6 +4,17 @@
 //! Templates never contain interface text: every string comes from Fluent through [`I18n`]
 //! (English first, then Brazilian Portuguese; docs/arquitetura/04-decisoes.md, §1 item 7).
 
+/// Public digital deposit and its authorized file links.
+#[derive(askama::Template)]
+#[template(path = "repository.html")]
+pub struct RepositoryPage<'a> {
+    /// Localized interface text.
+    pub t: &'a I18n,
+    /// Bibliographic record identifier.
+    pub instance: i64,
+    /// Escaped labels and canonical version URLs.
+    pub files: Vec<(String, String)>,
+}
 mod board;
 mod opac_account;
 mod staff_bar;
@@ -381,8 +392,10 @@ pub struct OpacRecordBody<'a> {
 
 /// A record page around an already rendered body.
 #[derive(Template)]
-#[template(path = "opac_record.html")]
+#[template(path = "opac_record_repository.html")]
 pub struct OpacRecord<'a> {
+    /// Published digital deposit of this instance.
+    pub deposit_url: Option<String>,
     /// Interface texts.
     pub t: &'a I18n,
     /// Title, for `<title>`.
@@ -472,6 +485,8 @@ mod tests {
         let templates = [
             include_str!("../templates/base.html"),
             include_str!("../templates/opac_home.html"),
+            include_str!("../templates/opac_record_repository.html"),
+            include_str!("../templates/repository.html"),
             include_str!("../templates/opac_results.html"),
             include_str!("../templates/opac_results_list.html"),
             include_str!("../templates/opac_record.html"),

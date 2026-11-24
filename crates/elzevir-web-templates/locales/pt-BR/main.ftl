@@ -912,3 +912,7 @@ import-notes-default = Preservar a visibilidade existente (novas notas para a eq
 import-notes-staff = Apenas equipe
 import-notes-public = Publicar no catálogo
 import-notes-invalid = Selecione uma visibilidade válida.
+
+repository-title = Depósito digital
+repository-record = Ficha bibliográfica
+repository-no-files = Nenhum arquivo está disponível para download no momento.

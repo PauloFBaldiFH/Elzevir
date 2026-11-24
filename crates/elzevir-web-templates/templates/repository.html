@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ t.get("repository-title") }}{% endblock %}
+{% block content %}
+<h1>{{ t.get("repository-title") }}</h1>
+<p><a href="/record/{{ instance }}">{{ t.get("repository-record") }}</a></p>
+{% if files.is_empty() %}<p>{{ t.get("repository-no-files") }}</p>{% else %}
+<ul>{% for (label,url) in files %}<li><a href="{{ url }}" download>{{ label }}</a></li>{% endfor %}</ul>
+{% endif %}
+{% endblock %}

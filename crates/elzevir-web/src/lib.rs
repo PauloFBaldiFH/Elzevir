@@ -44,6 +44,7 @@ mod print_notices;
 mod record_fields;
 mod record_form;
 mod registries;
+mod repository;
 mod security;
 mod session;
 mod staff;
@@ -102,6 +103,7 @@ impl Default for WebConfig {
 #[derive(Clone)]
 pub struct AppState {
     inner: Arc<Inner>,
+    repository: Option<repository::Access>,
     imports: Option<Arc<importing::Imports>>,
     patrons: Option<Arc<dyn elzevir_app::patrons::PatronDesk>>,
     loans: Option<Arc<dyn elzevir_app::loans::LoanDesk>>,
@@ -145,6 +147,7 @@ impl AppState {
     ) -> Self {
         Self {
             imports: None,
+            repository: None,
             patrons: None,
             loans: None,
             rules: None,
@@ -168,6 +171,15 @@ impl AppState {
         }
     }
 
+    /// Connect public deposit pages and downloads for this institution.
+    #[must_use]
+    pub fn with_repository(
+        mut self,
+        port: Arc<dyn elzevir_app::repository::PublicRepository>,
+    ) -> Self {
+        self.repository = Some(repository::Access::new(port));
+        self
+    }
     /// Connects the prepared imports for this institution.
     ///
     /// # Errors
@@ -253,6 +265,7 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/", get(opac::home))
         .route("/search", get(opac::search))
+        .merge(repository::routes())
         .route("/record/{id}", get(opac::record))
         .route("/equipe/barra", get(staff_bar::bar))
         .route("/equipe/busca", get(staff_bar::search))

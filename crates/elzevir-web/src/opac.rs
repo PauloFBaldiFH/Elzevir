@@ -178,12 +178,23 @@ pub(crate) async fn record(State(state): State<AppState>, Path(id): Path<String>
         return not_found(&state);
     };
     let worker_state = state.clone();
-    let rendered = tokio::task::spawn_blocking(move || rendered_record(&worker_state, id)).await;
+    let rendered = tokio::task::spawn_blocking(move || {
+        let Some((record, items)) = rendered_record(&worker_state, id)? else {
+            return Ok(None);
+        };
+        let deposit = worker_state
+            .repository
+            .as_ref()
+            .and_then(|repo| repo.port.for_instance(id).ok().flatten());
+        Ok::<_, ()>(Some((record, items, deposit)))
+    })
+    .await;
     match rendered {
-        Ok(Ok(Some((record, items)))) => render(&OpacRecord {
+        Ok(Ok(Some((record, items, deposit)))) => render(&OpacRecord {
             t: &state.inner.i18n,
             title: &record.title,
             body: &record.body,
+            deposit_url: deposit.map(|d| format!("/repository/{:032x}", d.0)),
             // The same link for everyone: the hold page asks who is signed in.
             hold_url: (state.accounts.is_some() && state.loans.is_some() && !items.is_empty())
                 .then(|| format!("/conta/reservar/{}", id.0)),
