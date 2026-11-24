@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+# precisa atuaizar esse arquivo, houve mais progresso do que está sendo dito aqui
+
 Instruções para quem escreve código no Elzevir (pessoas e agentes). Leia inteiro antes de mexer em qualquer coisa.
 
 ## O projeto em uma frase
