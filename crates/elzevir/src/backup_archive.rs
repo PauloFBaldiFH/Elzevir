@@ -344,7 +344,7 @@ pub(crate) fn create_selected(
         .map_err(|_| "cannot sync backup")?;
     drop(scratch);
     phase(Phase::Verify)?;
-    extract_controlled(
+    let verified = extract_controlled(
         file.path(),
         &directory.join("backup.key"),
         std::sync::Arc::clone(control),
@@ -352,6 +352,12 @@ pub(crate) fn create_selected(
     )?;
     check(control)?;
     phase(Phase::Publish)?;
+    crate::repository_fs::pin_snapshot(
+        directory,
+        &verified.directory.path().join("database.sqlite"),
+        output,
+        &manifest.id,
+    )?;
     file.persist_noclobber(output)
         .map_err(|_| "cannot publish backup without replacement")?;
     Ok(manifest)

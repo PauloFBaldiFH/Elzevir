@@ -63,7 +63,7 @@ fn tables(connection: &Connection) -> Result<Vec<String>, rusqlite::Error> {
         // The team's saved lists and notice board, the patrons, their restrictions, accounts, holds and notices, the circulation rules,
         // the calendars, the loans and the transfers are not catalog content: a new table of theirs must not move the digest of an import.
         "SELECT name FROM sqlite_master
-         WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+         WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT GLOB 'repo_*'
            AND name NOT IN ('saved_lists', 'saved_list_families', 'patrons',
                             'patron_categories', 'circulation_rules',
                             'calendar_weekly', 'calendar_annual', 'calendar_dates',
