@@ -6,11 +6,13 @@ use age::secrecy::ExposeSecret as _;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     io::{BufRead, BufReader, Read, Write},
     path::Path,
 };
 
+const MAX_OBJECTS: usize = 8192;
+const MAX_MANIFEST: u64 = 2 * 1024 * 1024;
 const MAX_AUX: u64 = 16 * 1024 * 1024;
 pub(crate) const MAX_DB: u64 = 512 * 1024 * 1024 * 1024;
 
@@ -78,6 +80,19 @@ pub(crate) struct Entry {
     pub name: String,
     pub bytes: u64,
     pub sha256: String,
+}
+
+impl Entry {
+    pub(crate) fn object(&self) -> Option<elzevir_app::repository::ObjectInfo> {
+        let hex = self.name.strip_prefix("object-")?;
+        if hex != self.sha256 || self.bytes == 0 {
+            return None;
+        }
+        Some(elzevir_app::repository::ObjectInfo {
+            hash: hex.parse().ok()?,
+            bytes: self.bytes,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -168,7 +183,11 @@ pub(crate) fn key(path: &Path, create: bool) -> Result<age::x25519::Identity, St
 }
 
 pub(crate) fn hash(path: &Path, control: &Control) -> Result<String, String> {
-    let mut source = std::fs::File::open(path).map_err(|_| "snapshot file unavailable")?;
+    let source = std::fs::File::open(path).map_err(|_| "snapshot file unavailable")?;
+    hash_reader(source, control)
+}
+
+pub(crate) fn hash_reader(mut source: impl Read, control: &Control) -> Result<String, String> {
     let mut digest = Sha256::new();
     let mut buffer = vec![0_u8; 65_536].into_boxed_slice();
     loop {
@@ -239,7 +258,7 @@ fn allowed(name: &str) -> bool {
     })
 }
 
-/// Writes an encrypted tar/gzip snapshot and publishes it without replacement.
+/// Writes an encrypted Zstandard-compressed snapshot and publishes it without replacement.
 pub(crate) fn create(
     directory: &Path,
     config: &str,
@@ -328,6 +347,20 @@ pub(crate) fn create_selected(
         &mut manifest,
         control,
     )?;
+    if manifest.scope == elzevir_panel::BackupScope::Full {
+        let objects = repository_inventory(&scratch.path().join("database.sqlite"))?;
+        if !objects.is_empty() {
+            manifest.schema = 3;
+            manifest
+                .entries
+                .extend(objects.into_iter().map(|object| Entry {
+                    name: format!("object-{}", object.hash),
+                    sha256: object.hash.to_string(),
+                    bytes: object.bytes,
+                }));
+        }
+    }
+    validate_manifest(&manifest)?;
     phase(Phase::Compress)?;
     let mut file = tempfile::NamedTempFile::new_in(output.parent().ok_or("backup needs parent")?)
         .map_err(|_| "cannot prepare backup output")?;
@@ -335,6 +368,7 @@ pub(crate) fn create_selected(
         file.as_file_mut(),
         &manifest,
         &files,
+        &scope,
         &identity.to_public(),
         options.profile.level(),
         control,
@@ -344,11 +378,12 @@ pub(crate) fn create_selected(
         .map_err(|_| "cannot sync backup")?;
     drop(scratch);
     phase(Phase::Verify)?;
-    let verified = extract_controlled(
+    let verified = read_archive(
         file.path(),
         &directory.join("backup.key"),
         std::sync::Arc::clone(control),
         Some(directory),
+        ObjectOutput::Verify,
     )?;
     check(control)?;
     phase(Phase::Publish)?;
@@ -367,6 +402,7 @@ fn encrypt(
     file: &mut impl Write,
     manifest: &Manifest,
     files: &[(String, std::path::PathBuf)],
+    scope: &cap_std::fs::Dir,
     recipient: &age::x25519::Recipient,
     level: i32,
     control: &Control,
@@ -388,20 +424,28 @@ fn encrypt(
     archive
         .append_data(&mut header, "manifest.json", bytes.as_slice())
         .map_err(|_| "cannot write backup manifest")?;
-    for ((name, path), entry) in files.iter().zip(&manifest.entries) {
+    for (index, entry) in manifest.entries.iter().enumerate() {
         check(control)?;
+        let file = if let Some(object) = entry.object() {
+            crate::repository_fs::archive_source(scope, object)?
+        } else {
+            let (_, path) = files
+                .get(index)
+                .filter(|(name, _)| name == &entry.name)
+                .ok_or("missing staged backup entry")?;
+            std::fs::File::open(path).map_err(|_| "backup entry unavailable")?
+        };
         let mut header = tar::Header::new_gnu();
         header.set_size(entry.bytes);
         header.set_mode(0o600);
         header.set_entry_type(tar::EntryType::Regular);
         header.set_cksum();
-        let source = std::fs::File::open(path).map_err(|_| "backup entry unavailable")?;
         archive
             .append_data(
                 &mut header,
-                name,
+                &entry.name,
                 Controlled {
-                    source,
+                    source: file.take(entry.bytes),
                     control: std::sync::Arc::clone(control),
                 },
             )
@@ -565,13 +609,38 @@ pub(crate) fn extract_full(input: &Path, key_file: &Path) -> Result<Extracted, S
     Ok(extracted)
 }
 pub(crate) fn extract(input: &Path, key_file: &Path) -> Result<Extracted, String> {
-    extract_controlled(input, key_file, std::sync::Arc::new(|| false), None)
+    read_archive(
+        input,
+        key_file,
+        std::sync::Arc::new(|| false),
+        None,
+        ObjectOutput::Extract,
+    )
 }
-pub(crate) fn extract_controlled(
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ObjectOutput {
+    Extract,
+    Verify,
+}
+
+pub(crate) fn verify(input: &Path, key_file: &Path) -> Result<Manifest, String> {
+    verify_controlled(input, key_file, std::sync::Arc::new(|| false), None)
+}
+pub(crate) fn verify_controlled(
     input: &Path,
     key_file: &Path,
     control: Control,
     scratch: Option<&Path>,
+) -> Result<Manifest, String> {
+    Ok(read_archive(input, key_file, control, scratch, ObjectOutput::Verify)?.manifest)
+}
+
+fn read_archive(
+    input: &Path,
+    key_file: &Path,
+    control: Control,
+    scratch: Option<&Path>,
+    object_output: ObjectOutput,
 ) -> Result<Extracted, String> {
     check(&control)?;
     if regular(input)? > MAX_DB {
@@ -605,53 +674,47 @@ pub(crate) fn extract_controlled(
         .ok_or("backup manifest absent")?
         .map_err(|_| "invalid backup manifest")?;
     let manifest = read_manifest(first)?;
-    let (names, total) = validate_manifest(&manifest)?;
+    let (declared, total) = validate_manifest(&manifest)?;
     let directory = match scratch {
         Some(directory) => private_scratch(directory)?,
         None => crate::private_temp::directory().map_err(|_| "cannot prepare restore")?,
     };
+    let scratch_bytes = if object_output == ObjectOutput::Extract {
+        total
+    } else {
+        manifest
+            .entries
+            .iter()
+            .filter(|e| e.object().is_none())
+            .map(|e| e.bytes)
+            .sum()
+    };
     if fs4::available_space(directory.path()).map_err(|_| "cannot inspect restore space")?
-        < total.saturating_add(16 * 1024 * 1024)
+        < scratch_bytes.saturating_add(16 * 1024 * 1024)
     {
         return Err("insufficient restore space".to_owned());
     }
     let mut found = BTreeSet::new();
     for entry in entries {
-        let mut entry = entry.map_err(|_| "invalid backup entry")?;
+        let entry = entry.map_err(|_| "invalid backup entry")?;
         let name = entry
             .path()
             .map_err(|_| "invalid backup path")?
             .to_str()
             .ok_or("invalid backup path")?
             .to_owned();
-        let expected = manifest
-            .entries
-            .iter()
-            .find(|expected| expected.name == name)
+        let expected = declared
+            .get(name.as_str())
             .ok_or("undeclared backup entry")?;
         if !entry.header().entry_type().is_file()
             || entry.size() != expected.bytes
-            || !found.insert(name.clone())
+            || !found.insert(name)
         {
             return Err("invalid backup entry".to_owned());
         }
-        let path = directory.path().join(&name);
-        if name.starts_with("secrets/") && !directory.path().join("secrets").exists() {
-            std::fs::create_dir(directory.path().join("secrets"))
-                .map_err(|_| "cannot prepare secrets")?;
-        }
-        write_new(&path, &[])?;
-        let mut output = std::fs::OpenOptions::new()
-            .write(true)
-            .open(&path)
-            .map_err(|_| "cannot extract backup entry")?;
-        let copied =
-            std::io::copy(&mut entry, &mut output).map_err(|_| "cannot extract backup entry")?;
-        if copied != expected.bytes || hash(&path, &control)? != expected.sha256 {
-            return Err("backup checksum mismatch".to_owned());
-        }
+        verify_entry(entry, expected, directory.path(), object_output, &control)?;
     }
-    if found.len() != names.len() {
+    if found.len() != declared.len() {
         return Err("incomplete backup".to_owned());
     }
     authenticate_tail(archive.into_inner())?;
@@ -667,10 +730,46 @@ pub(crate) fn extract_controlled(
         manifest.database_schema,
         control,
     )?;
+    if manifest.schema == 3 {
+        verify_inventory(&directory.path().join("database.sqlite"), &manifest)?;
+    }
     Ok(Extracted {
         directory,
         manifest,
     })
+}
+
+fn verify_entry(
+    mut entry: impl Read,
+    expected: &Entry,
+    directory: &Path,
+    object_output: ObjectOutput,
+    control: &Control,
+) -> Result<(), String> {
+    let name = &expected.name;
+    let (size_ok, digest) = if object_output == ObjectOutput::Verify && expected.object().is_some()
+    {
+        let mut bytes = entry.take(expected.bytes);
+        let digest = hash_reader(&mut bytes, control)?;
+        (bytes.limit() == 0, digest)
+    } else {
+        let path = directory.join(name);
+        if name.starts_with("secrets/") && !directory.join("secrets").exists() {
+            std::fs::create_dir(directory.join("secrets")).map_err(|_| "cannot prepare secrets")?;
+        }
+        write_new(&path, &[])?;
+        let mut output = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .map_err(|_| "cannot extract backup entry")?;
+        let copied =
+            std::io::copy(&mut entry, &mut output).map_err(|_| "cannot extract backup entry")?;
+        (copied == expected.bytes, hash(&path, control)?)
+    };
+    if !size_ok || digest != expected.sha256 {
+        return Err(format!("backup checksum mismatch for {name}"));
+    }
+    Ok(())
 }
 
 fn verify_database(path: &Path, schema: i64, control: Control) -> Result<(), String> {
@@ -684,7 +783,7 @@ fn verify_database(path: &Path, schema: i64, control: Control) -> Result<(), Str
 
 fn read_manifest<R: Read>(mut first: tar::Entry<'_, R>) -> Result<Manifest, String> {
     if first.path().map_err(|_| "invalid entry")?.as_ref() != Path::new("manifest.json")
-        || first.size() > 65_536
+        || first.size() > MAX_MANIFEST
         || !first.header().entry_type().is_file()
     {
         return Err("invalid backup manifest".to_owned());
@@ -695,7 +794,10 @@ fn read_manifest<R: Read>(mut first: tar::Entry<'_, R>) -> Result<Manifest, Stri
         .map_err(|_| "invalid backup manifest")?;
     let manifest: Manifest =
         serde_json::from_slice(&bytes).map_err(|_| "invalid backup manifest")?;
-    if manifest.schema == 2 {
+    if manifest.schema < 3 && bytes.len() > 65536 {
+        return Err("legacy backup manifest exceeds limit".into());
+    }
+    if manifest.schema >= 2 {
         #[derive(Deserialize)]
         struct RequiredScope {
             scope: elzevir_panel::BackupScope,
@@ -739,45 +841,67 @@ fn authenticate_tail<R: Read>(mut decoded: R) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_manifest(manifest: &Manifest) -> Result<(BTreeSet<String>, u64), String> {
+fn repository_inventory(image: &Path) -> Result<Vec<elzevir_app::repository::ObjectInfo>, String> {
+    elzevir_store::repository::backup::snapshot_objects(image, MAX_OBJECTS)
+        .map_err(|e| e.to_string())
+}
+fn verify_inventory(image: &Path, manifest: &Manifest) -> Result<(), String> {
+    let expected = repository_inventory(image)?;
+    let mut actual: Vec<_> = manifest.entries.iter().filter_map(Entry::object).collect();
+    actual.sort_unstable_by_key(|object| object.hash);
+    if actual != expected {
+        return Err("repository manifest disagrees with database snapshot".into());
+    }
+    Ok(())
+}
+
+fn validate_manifest(manifest: &Manifest) -> Result<(BTreeMap<&str, &Entry>, u64), String> {
     if manifest.database_schema < 1
-        || !matches!(manifest.schema, 1 | 2)
-        || (manifest.schema == 1 && manifest.scope != elzevir_panel::BackupScope::Full)
-        || manifest.entries.len() > 32
+        || !matches!(manifest.schema, 1..=3)
+        || (manifest.schema != 2 && manifest.scope != elzevir_panel::BackupScope::Full)
+        || manifest.entries.len() > 32 + MAX_OBJECTS
         || manifest.database_schema > elzevir_store::supported_schema_version()
     {
-        return Err("unsupported backup schema".to_owned());
+        return Err("unsupported backup schema".into());
     }
-    let mut names = BTreeSet::new();
-    let mut total = 0_u64;
+    let mut names = BTreeMap::new();
+    let mut auxiliary = 0u64;
+    let mut total = 0u64;
+    let mut objects = 0;
     for entry in &manifest.entries {
-        if !allowed(&entry.name)
-            || !names.insert(entry.name.clone())
+        if manifest.schema == 3 && entry.object().is_some() {
+            objects += 1;
+        } else if allowed(&entry.name) {
+            if entry.name != "database.sqlite" {
+                auxiliary = auxiliary
+                    .checked_add(entry.bytes)
+                    .ok_or("backup size overflow")?;
+            }
+        } else {
+            return Err("invalid backup entry".into());
+        }
+        if names.insert(entry.name.as_str(), entry).is_some()
             || entry.bytes > MAX_DB
             || entry.sha256.len() != 64
-            || !entry.sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
+            || !entry.sha256.bytes().all(|c| c.is_ascii_hexdigit())
         {
-            return Err("invalid backup entry".to_owned());
+            return Err("invalid backup entry".into());
         }
         total = total
             .checked_add(entry.bytes)
             .ok_or("backup size overflow")?;
     }
-    if !names.contains("database.sqlite")
+    if objects > MAX_OBJECTS
+        || names.len() - objects > 32
+        || (manifest.schema == 3 && (objects == 0 || total > MAX_DB))
+        || !names.contains_key("database.sqlite")
         || match manifest.scope {
-            elzevir_panel::BackupScope::Full => !names.contains("server.toml"),
+            elzevir_panel::BackupScope::Full => !names.contains_key("server.toml"),
             elzevir_panel::BackupScope::Database => names.len() != 1,
         }
     {
-        return Err("incomplete backup".to_owned());
+        return Err("incomplete or oversized backup".into());
     }
-    let auxiliary = manifest
-        .entries
-        .iter()
-        .filter(|entry| entry.name != "database.sqlite")
-        .try_fold(0_u64, |total, entry| {
-            total.checked_add(entry.bytes).ok_or("backup size overflow")
-        })?;
     if auxiliary > MAX_AUX
         || manifest.id.len() != 32
         || !manifest.id.bytes().all(|byte| byte.is_ascii_hexdigit())
@@ -816,6 +940,70 @@ impl<R: Read> Read for HeaderLimit<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn verification_streams_objects_and_restore_extracts_the_same_bytes() {
+        let root = tempfile::tempdir().unwrap();
+        let control: Control = std::sync::Arc::new(|| false);
+        let bytes = b"example thesis";
+        let sha256 = hash_reader(bytes.as_slice(), &control).unwrap();
+        let mut object = Entry {
+            name: format!("object-{sha256}"),
+            bytes: bytes.len() as u64,
+            sha256,
+        };
+        let verify = |object: &Entry, mode| {
+            verify_entry(bytes.as_slice(), object, root.path(), mode, &control)
+        };
+        verify(&object, ObjectOutput::Verify).unwrap();
+        object.bytes += 1;
+        assert!(verify(&object, ObjectOutput::Verify).is_err());
+        assert_eq!(root.path().read_dir().unwrap().count(), 0);
+        object.bytes -= 1;
+        verify(&object, ObjectOutput::Extract).unwrap();
+        assert_eq!(std::fs::read(root.path().join(object.name)).unwrap(), bytes);
+    }
+    #[test]
+    fn repository_manifest_rejects_extra_objects_aliases_and_duplicates() {
+        let root = tempfile::tempdir().unwrap();
+        let _catalog = crate::open_store(root.path()).unwrap();
+        let hash = "01".repeat(32);
+        let object = Entry {
+            name: format!("object-{hash}"),
+            sha256: hash.clone(),
+            bytes: 1,
+        };
+        let mut manifest = Manifest {
+            schema: 3,
+            scope: elzevir_panel::BackupScope::Full,
+            id: "00".repeat(16),
+            created_at: "2026-01-01T00:00:00Z".into(),
+            version: "test".into(),
+            database_schema: 62,
+            entries: vec![
+                Entry {
+                    name: "database.sqlite".into(),
+                    sha256: hash.clone(),
+                    bytes: 1,
+                },
+                Entry {
+                    name: "server.toml".into(),
+                    sha256: hash,
+                    bytes: 1,
+                },
+                object.clone(),
+            ],
+        };
+        validate_manifest(&manifest).unwrap();
+        assert!(verify_inventory(&root.path().join("elzevir.db"), &manifest).is_err());
+        manifest.entries.push(object);
+        assert!(validate_manifest(&manifest).is_err());
+        manifest.entries.pop().unwrap();
+        let entry = manifest.entries.last_mut().unwrap();
+        entry.name = format!("object-../{}", entry.sha256);
+        assert!(validate_manifest(&manifest).is_err());
+        manifest.entries.last_mut().unwrap().name = format!("object-{}", "02".repeat(32));
+        assert!(validate_manifest(&manifest).is_err());
+    }
     #[test]
     fn encrypted_archive_roundtrips_and_preserves_existing_outputs() {
         let root = tempfile::tempdir().unwrap();
@@ -994,6 +1182,17 @@ mod format_tests {
         };
         let recipient = age::x25519::Identity::generate().to_public();
         let control: Control = std::sync::Arc::new(|| false);
-        assert!(encrypt(&mut full, &manifest, &[], &recipient, 3, &control).is_err());
+        assert!(
+            encrypt(
+                &mut full,
+                &manifest,
+                &[],
+                &cap_std::fs::Dir::open_ambient_dir(".", cap_std::ambient_authority()).unwrap(),
+                &recipient,
+                3,
+                &control
+            )
+            .is_err()
+        );
     }
 }

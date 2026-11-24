@@ -49,3 +49,37 @@ A coleta consulta esse índice mesmo depois de restaurar um catálogo anterior.
 Enquanto o arquivo de backup local existir, seus objetos ficam protegidos.
 Após expirar o último backup local, a próxima constatação inicia a carência
 de sete dias. Cópias exportadas para outra máquina precisam levar os objetos.
+
+## Backup completo portátil (Etapa 3)
+
+O backup completo inclui os objetos retidos por qualquer versão da imagem
+SQLite, inclusive versões antigas, retiradas e restritas. Com objetos, o
+manifesto usa o formato 3. Cada entrada `object-<sha256>` informa o tamanho
+em bytes e o SHA-256 hexadecimal minúsculo. Dois arquivos com os mesmos bytes
+ocupam uma única entrada. As permissões de cada vínculo continuam na imagem
+SQLite. A cópia contém os documentos restritos e usa a criptografia age do
+backup institucional.
+
+`elzevir backup now` usa a imagem consistente do escritor online ou a trava
+offline. Antes de publicar o arquivo, o sistema autentica a cópia, confere o
+tamanho e o hash de cada entrada e compara o inventário com a imagem SQLite.
+Um objeto ausente ou corrompido impede a publicação. O limite do piloto é
+8.192 objetos distintos por backup completo, manifesto de até 2 MiB e
+até 512 GiB somando as entradas descompactadas.
+
+Para levar o acervo a outra instalação, use `backup export` para obter o
+arquivo e `backup key` para exportar a chave de recuperação por um canal
+separado. `backup verify --input ARQUIVO --recovery-key CHAVE` autentica e
+verifica a cópia. Use `backup restore --input ARQUIVO --recovery-key CHAVE
+--data-dir DESTINO --confirm-restore` com a instituição de destino
+inicializada e parada. A restauração verifica e instala os objetos antes de
+substituir o catálogo. Reutiliza objetos íntegros e recusa colisões com
+conteúdo divergente. A instalação dos objetos usa links físicos no volume
+privado do destino e preserva 2 GiB de espaço livre. Uma falha antes da troca
+mantém o catálogo ativo. Objetos instalados sem referência seguem a carência
+normal da coleta.
+
+Backups antigos (formatos 1 e 2) e backups com escopo de banco continuam
+legíveis. Nessas cópias, a verificação cobre a imagem SQLite e as demais
+entradas declaradas. Para recuperar os documentos digitais, o operador
+precisa restaurar separadamente o diretório de objetos da origem.

@@ -444,7 +444,7 @@ pub(crate) fn backup_stopped(
         None,
     )?;
     crate::file_owner::private_tree(&path, directory)?;
-    archive::extract(&path, &directory.join("backup.key"))?;
+    archive::verify(&path, &directory.join("backup.key"))?;
     Ok(path)
 }
 
@@ -477,7 +477,7 @@ fn backup(directory: &Path, config: &Path, stopped: bool) -> Result<PathBuf, Str
         }
     }
     let path = crate::backup_cli::artifact(directory, &job.id)?;
-    archive::extract(&path, &directory.join("backup.key"))?;
+    archive::verify(&path, &directory.join("backup.key"))?;
     Ok(path)
 }
 

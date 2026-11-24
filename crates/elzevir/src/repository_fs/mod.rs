@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Private content-addressed objects of a single, exclusively opened institution.
+mod backup;
+pub(super) use backup::{archive_source, restore_archive};
 mod maintenance;
 pub(super) use maintenance::pin_snapshot;
 #[cfg(test)]

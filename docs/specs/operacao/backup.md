@@ -47,8 +47,11 @@ O preparo de arquivos usa diretório temporário privado do processo, fora do
 diretório gravável pelo serviço. Arquivos auxiliares são abertos por capacidade
 relativa à instituição: links não podem escapar desse diretório. Uma tabela de
 autores externa deve ser movida para a instituição para participar do backup.
-O espaço temporário necessário inclui a imagem SQLite descomprimida; o operador
-pode selecionar um volume privado maior por `TMPDIR` (ou `TEMP` no Windows).
+A verificação precisa de espaço temporário para a imagem SQLite descomprimida
+e os auxiliares. Ela calcula os hashes dos objetos digitais durante a leitura.
+Na restauração, o volume temporário também deve comportar os objetos
+descompactados. O operador pode selecionar um volume privado maior por
+`TMPDIR` (ou `TEMP` no Windows) para a restauração.
 
 O catálogo de artefatos locais é separado do histórico de 64 trabalhos. Assim,
 a retenção de até 365 cópias não perde a propriedade de arquivos antigos ao
@@ -100,16 +103,20 @@ Novos pacotes mantêm o nome gerenciado `elzevir-<id>.age`. O escritor
 comprime o tar com Zstandard antes de cifrar. O leitor identifica gzip ou
 Zstandard dentro da cifra e autentica o final do fluxo. A janela máxima de
 descompressão Zstandard é de 8 MiB. O manifesto v2 registra o escopo.
-O leitor interpreta o manifesto v1 dos arquivos históricos como instituição
-completa. A restauração completa exige o escopo completo antes de parar o serviço.
+O manifesto v3 do backup completo inclui uma entrada por objeto digital
+referenciado pela imagem SQLite. O leitor interpreta o manifesto v1 dos
+arquivos históricos como instituição completa. A restauração completa exige
+o escopo completo antes de parar o serviço.
 
 No painel, N abre as opções de escopo e compressão. Instituição completa e
 nível 3 são os padrões. Os níveis 1 e 7 priorizam velocidade e compactação,
 respectivamente. Somente banco inclui o manifesto e a imagem SQLite.
 O serviço verifica a cópia cifrada antes da publicação. O histórico identifica
 o arquivo e a fase da execução. A estimativa de trabalho usa os tamanhos
-observados do banco e WAL. O uso efetivo também depende dos arquivos auxiliares
-e do volume escolhido para os temporários.
+observados do banco e WAL. O uso efetivo também depende do volume dos objetos
+digitais, dos arquivos auxiliares e do volume escolhido para os temporários.
+Os limites do manifesto e o procedimento de recuperação dos objetos estão na
+[especificação do repositório](../repositorio/deposito.md#backup-completo-portátil-etapa-3).
 
 Em Criar ou Exportar, F2 abre o seletor de pasta no host do operador.
 F3 abre a pasta pessoal e F4 a pasta gerenciada. Use Tab entre lista, caminho
