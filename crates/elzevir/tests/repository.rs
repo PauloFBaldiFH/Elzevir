@@ -244,3 +244,156 @@ fn interrupted_process_releases_offline_lock_and_leaves_only_staging() {
     assert!(run(d, &["maintain", "--apply"]).contains("temporary=1 orphan=0 recoverable_bytes=14"));
     assert!(upload(d, &deposit, &file, 1, None, b"complete").contains("seq=1"));
 }
+
+fn backup(args: &[&str]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_elzevir"))
+        .arg("backup")
+        .args(args)
+        .output()
+        .unwrap()
+}
+fn checked_backup(args: &[&str]) -> serde_json::Value {
+    let result = backup(args);
+    assert!(
+        result.status.success(),
+        "{args:?}: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    if result.stdout.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::from_slice(&result.stdout).unwrap()
+    }
+}
+#[test]
+fn full_backup_moves_history_shared_objects_and_permissions_to_another_institution() {
+    let src = institution();
+    let s = src.path();
+    let source = s.to_str().unwrap();
+    let deposit = run(s, &["draft", "1"]);
+    let primary = run(
+        s,
+        &["add-file", &deposit, "Thesis PDF", "primary", "public"],
+    );
+    let sheet = run(
+        s,
+        &["add-file", &deposit, "Public data", "supplement", "public"],
+    );
+    let term = run(
+        s,
+        &["add-file", &deposit, "Consent", "administrative", "staff"],
+    );
+    upload(s, &deposit, &primary, 1, None, b"first edition");
+    upload(s, &deposit, &primary, 2, Some("1"), b"revised edition");
+    upload(s, &deposit, &sheet, 3, None, b"research data");
+    upload(s, &deposit, &term, 4, None, b"research data");
+    run(s, &["publish", &deposit]);
+    run(s, &["retire", &deposit, &primary, "1"]);
+    let artifact = checked_backup(&["now", "--data-dir", source]);
+    let temp = tempfile::tempdir().unwrap();
+    let archive = temp.path().join("thesis.age");
+    let key = temp.path().join("recovery.key");
+    let archive = archive.to_str().unwrap();
+    let key = key.to_str().unwrap();
+    checked_backup(&[
+        "export",
+        "--data-dir",
+        source,
+        "--id",
+        artifact["id"].as_str().unwrap(),
+        "--output",
+        archive,
+    ]);
+    checked_backup(&["key", "--data-dir", source, "--output", key]);
+    drop(src);
+    let manifest = checked_backup(&["verify", "--input", archive, "--recovery-key", key]);
+    assert_eq!(manifest["schema"], 3);
+    let objects: Vec<_> = manifest["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| e["name"].as_str().unwrap().starts_with("object-"))
+        .collect();
+    assert_eq!(objects.len(), 3);
+    let target = institution();
+    let t = target.path();
+    let restore = [
+        "restore",
+        "--confirm-restore",
+        "--input",
+        archive,
+        "--recovery-key",
+        key,
+        "--data-dir",
+        t.to_str().unwrap(),
+    ];
+    // A conflicting destination must keep its live database and damaged evidence.
+    let local = run(t, &["draft", "1"]);
+    // The first object is installed before the second one fails verification.
+    let hash = objects[1]["sha256"].as_str().unwrap();
+    let shard = t
+        .join("repository/objects/sha256")
+        .join(hash.get(..2).unwrap())
+        .join(hash.get(2..4).unwrap());
+    fs::create_dir_all(&shard).unwrap();
+    let damaged = shard.join(hash);
+    let wrong = vec![0; usize::try_from(objects[1]["bytes"].as_u64().unwrap()).unwrap()];
+    fs::write(&damaged, &wrong).unwrap();
+    let conflict = backup(&restore);
+    assert!(!conflict.status.success());
+    assert!(String::from_utf8_lossy(&conflict.stderr).contains(hash));
+    assert!(run(t, &["show", &local]).contains("Draft"));
+    assert_eq!(fs::read(&damaged).unwrap(), wrong);
+    fs::remove_file(damaged).unwrap();
+    assert!(run(t, &["maintain", "--apply"]).contains("first_observations=1 temporary=0 orphan=0"));
+    checked_backup(&restore);
+    checked_backup(&restore); // safely reuse every installed object
+    assert_eq!(
+        run(t, &["download", &deposit, &primary, "--public"]),
+        "revised edition"
+    );
+    assert_eq!(
+        run(t, &["download", &deposit, &primary, "--seq", "1"]),
+        "first edition"
+    );
+    refuses(
+        t,
+        &["download", &deposit, &primary, "--seq", "1", "--public"],
+        "not_visible",
+    );
+    assert_eq!(
+        run(t, &["download", &deposit, &sheet, "--public"]),
+        "research data"
+    );
+    refuses(t, &["download", &deposit, &term, "--public"], "not_visible");
+    assert_eq!(run(t, &["download", &deposit, &term]), "research data");
+}
+
+#[test]
+fn missing_or_corrupt_historical_bytes_prevent_backup_publication() {
+    let src = institution();
+    let d = src.path();
+    let deposit = run(d, &["draft", "1"]);
+    let file = run(d, &["add-file", &deposit, "PDF", "primary", "public"]);
+    let first = upload(d, &deposit, &file, 1, None, b"original");
+    upload(d, &deposit, &file, 2, Some("1"), b"updated");
+    let hash = first
+        .split_whitespace()
+        .find_map(|s| s.strip_prefix("sha256="))
+        .unwrap();
+    let object = d
+        .join("repository/objects/sha256")
+        .join(hash.get(..2).unwrap())
+        .join(hash.get(2..4).unwrap())
+        .join(hash);
+    let args = ["now", "--data-dir", d.to_str().unwrap()];
+    fs::write(&object, b"corrupt!").unwrap();
+    let corrupt = backup(&args);
+    assert!(!corrupt.status.success());
+    assert!(String::from_utf8_lossy(&corrupt.stderr).contains(hash));
+    fs::remove_file(object).unwrap();
+    let missing = backup(&args);
+    assert!(!missing.status.success());
+    assert!(String::from_utf8_lossy(&missing.stderr).contains(hash));
+    assert_eq!(fs::read_dir(d.join("backups")).unwrap().count(), 0);
+}

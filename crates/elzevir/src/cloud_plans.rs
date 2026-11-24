@@ -395,16 +395,16 @@ pub(crate) fn resend(
         return Err("select a managed local copy".into());
     }
     let path = crate::backup_cli::artifact(directory, id)?;
-    let verified = crate::backup_archive::extract_controlled(
+    let manifest = crate::backup_archive::verify_controlled(
         &path,
         &directory.join("backup.key"),
         std::sync::Arc::clone(control),
         Some(directory),
     )?;
-    if verified.manifest.id != id {
+    if manifest.id != id {
         return Err("local archive identity changed".into());
     }
-    drop(verified);
+    drop(manifest);
     if targets.is_empty() || targets.len() > 16 {
         return Err("select up to sixteen destinations".into());
     }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Private maintenance index, independent of the catalog being restored.
 use crate::StoreError;
-use elzevir_app::repository::ObjectHash;
+use elzevir_app::repository::{ObjectHash, ObjectInfo};
 use rusqlite::{Connection, OpenFlags, params};
 use std::path::Path;
 
@@ -24,6 +24,43 @@ pub fn snapshot_contains_objects(snapshot: &Path) -> Result<bool, StoreError> {
             row.get(0)
         })?,
     )
+}
+
+/// Unique objects referenced by any version in an immutable database snapshot,
+/// in digest order. Enforces the archive writer's manifest budget before allocation grows.
+///
+/// # Errors
+/// Fails on a broken reference, invalid size, unreadable schema or excessive inventory.
+pub fn snapshot_objects(snapshot: &Path, limit: usize) -> Result<Vec<ObjectInfo>, StoreError> {
+    let source = crate::schema::open_reader(snapshot)?;
+    let version: i64 = source.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if version < 62 {
+        return Ok(Vec::new());
+    }
+    let mut query = source.prepare(
+        "SELECT v.object_hash,o.bytes
+        FROM (SELECT DISTINCT object_hash FROM repo_versions) v
+        LEFT JOIN repo_objects o ON o.sha256=v.object_hash ORDER BY v.object_hash",
+    )?;
+    let mut rows = query.query([])?;
+    let mut objects = Vec::new();
+    while let Some(row) = rows.next()? {
+        if objects.len() >= limit {
+            return Err(StoreError::Backup(
+                "repository manifest exceeds object limit".into(),
+            ));
+        }
+        let bytes = u64::try_from(row.get::<_, i64>(1)?)
+            .map_err(|_| StoreError::Backup("negative repository object size".into()))?;
+        if bytes == 0 {
+            return Err(StoreError::Backup("invalid repository object size".into()));
+        }
+        objects.push(ObjectInfo {
+            hash: ObjectHash(row.get(0)?),
+            bytes,
+        });
+    }
+    Ok(objects)
 }
 
 /// Persist the exact set of hashes retained by a verified SQLite snapshot before

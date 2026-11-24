@@ -163,10 +163,10 @@ pub(crate) fn run(args: BackupArgs) -> Result<(), String> {
             input,
             recovery_key,
         } => {
-            let verified = archive::extract(&input, &recovery_key)?;
+            let manifest = archive::verify(&input, &recovery_key)?;
             println!(
                 "{}",
-                serde_json::to_string(&verified.manifest).map_err(|_| "cannot encode manifest")?
+                serde_json::to_string(&manifest).map_err(|_| "cannot encode manifest")?
             );
         }
         Action::Key { data_dir, output } => {
@@ -351,7 +351,7 @@ fn restore_inner(
     let directory = directory
         .canonicalize()
         .map_err(|_| "restore directory must already exist")?;
-    let _lock = lock(&directory)?;
+    let institution_lock = lock(&directory)?;
     let Prepared {
         archive: restored,
         configuration,
@@ -360,15 +360,6 @@ fn restore_inner(
     let config = config.map_or_else(|| directory.join("server.toml"), Path::to_owned);
     let config = crate::installation::absolute(&config)?;
 
-    let safety = crate::restore_journal::create_safety(&directory)?;
-    // A consistent independent image is retained even if rebuilding the replacement fails.
-    if safety_snapshot {
-        elzevir_store::snapshot_offline(
-            &directory.join("elzevir.db"),
-            &safety.join("database.sqlite"),
-        )
-        .map_err(|_| "cannot create restore safety image")?;
-    }
     let stage =
         crate::private_temp::directory_in(crate::restore_journal::trusted_parent(&directory)?)
             .map_err(|_| "cannot stage restore")?;
@@ -415,6 +406,16 @@ fn restore_inner(
             }
         }
         replacements.push((stage.path().join("secrets"), directory.join("secrets")));
+    }
+    crate::repository_fs::restore_archive(&directory, &restored, &institution_lock)?;
+    let safety = crate::restore_journal::create_safety(&directory)?;
+    // A consistent independent image is retained even if rebuilding the replacement fails.
+    if safety_snapshot {
+        elzevir_store::snapshot_offline(
+            &directory.join("elzevir.db"),
+            &safety.join("database.sqlite"),
+        )
+        .map_err(|_| "cannot create restore safety image")?;
     }
     let journal =
         crate::restore_journal::Journal::begin_scoped(&directory, &safety, &config, full)?;

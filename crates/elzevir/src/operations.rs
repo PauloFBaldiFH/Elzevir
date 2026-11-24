@@ -456,7 +456,7 @@ impl Client {
                 crate::local_artifacts::record(&self.0.directory, &job.id)?;
             }
             Task::Verify { id } => {
-                archive::extract_controlled(
+                archive::verify_controlled(
                     &crate::backup_cli::artifact(&self.0.directory, id)?,
                     &self.0.directory.join("backup.key"),
                     Arc::clone(&control),
