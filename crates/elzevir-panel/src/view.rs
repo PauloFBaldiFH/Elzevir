@@ -242,10 +242,11 @@ fn draw_tabs(frame: &mut Frame, tabs: Rect, panel: &Panel, messages: &Messages, 
                             "tab-backup",
                             "tab-updates",
                             "tab-restart",
+                            "tab-admins",
                         ];
                         let label = names
                             .get(index)
-                            .filter(|_| tabs.width / 6 >= 10)
+                            .filter(|_| tabs.width / 7 >= 10)
                             .map_or_else(String::new, |name| messages.get(name));
                         format!("{} {label}", index + 1)
                     },

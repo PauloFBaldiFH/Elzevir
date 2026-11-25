@@ -3,14 +3,14 @@ source: crates/elzevir-panel/tests/live.rs
 expression: "screen(&panel, \"pt-BR\")"
 ---
 Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
-+Seções--------------------+     1 Início            2 Saúde          3 Acesso           4 Backup           5 Versões         6 Serviço
++Seções--------------------+    1 Início         2 Saúde        3 Acesso        4 Backup        5 Versões       6 Serviço       7 Contas
 |> d Painel de controle    |+Painel de controle--------------------------------------------------------------++Instituição selecionada-----+
 |  x Diagnóstico           ||Em execução                                                                     ||Biblioteca de teste         |
 |  a Endereços e acesso    ||                                                                                ||                            |
 |  b Backup e agendamentos ||Acesso                                                                          ||Listener configurado        |
 |  u Atualizações          ||Catálogo (neste computador): http://127.0.0.1:8080/                             ||127.0.0.1:0                 |
 |  r Serviço               ||Equipe (neste computador): http://127.0.0.1:8080/equipe                         ||                            |
-|                          ||Estado do servidor                                                              ||Listener observado          |
+|  g Administradores       ||Estado do servidor                                                              ||Listener observado          |
 |                          ||Versão: 0.0.0                                                                   ||127.0.0.1:8080              |
 |                          ||PID: 42                                                                         ||                            |
 |                          ||Tempo em execução (segundos): 123                                               ||Última consulta: há 0       |
@@ -29,5 +29,5 @@ Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:
 |                          ||Backup: ainda não disponível                                                    ||                            |
 |                          ||                                                                                ||                            |
 |                          |+--------------------------------------------------------------------------------++----------------------------+
-+--------------------------+      Ver endereços [3]         Gerenciar backups [4]      Controlar servidor [6]           Atualizar [F]
++--------------------------+   Ver endereços [3]   Gerenciar backups [4] Controlar servidor [6]  Administradores [7]       Atualizar [F]
 Tab/setas: navegar | f: atualizar | PgUp/PgDn: rolar | Ctrl+P: paleta | q/Ctrl+C: sair

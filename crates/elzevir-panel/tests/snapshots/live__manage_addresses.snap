@@ -3,14 +3,14 @@ source: crates/elzevir-panel/tests/live.rs
 expression: rendered
 ---
 Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
-+Sections------------------+      1 Home            2 Health          3 Access           4 Backup           5 Updates         6 Service
++Sections------------------+     1 Home         2 Health        3 Access        4 Backup        5 Updates       6 Service      7 Accounts
 |  d Dashboard             |+Addresses and access------------------------------------------------------------++Selected institution--------+
 |  x Diagnostics           ||Running                                                                         ||Biblioteca de teste         |
 |> a Addresses and access  ||                                                                                ||                            |
 |  b Backups and schedules ||Addresses and access | [Configure and manage] | Test | Log                      ||Configured listener         |
 |  u Updates               ||[ / ] tabs · Q share catalog · t test public HTTPS · T staff HTTPS              ||127.0.0.1:0                 |
 |  r Service               ||g Get address · G Resume registration · o Recover existing address              ||                            |
-|                          ||c refresh broker · w/W staff on/off · k export recovery · n rotate token · z    ||Observed listener           |
+|  g Administrators        ||c refresh broker · w/W staff on/off · k export recovery · n rotate token · z    ||Observed listener           |
 |                          ||unlink                                                                          ||127.0.0.1:8080              |
 |                          ||P pause connector · S start connector                                           ||                            |
 |                          ||l Cloudflare login · s Own domain · t Test · h Log                              ||Last check: 0 seconds ago   |

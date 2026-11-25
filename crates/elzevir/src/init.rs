@@ -70,6 +70,10 @@ impl InitArgs {
 }
 
 pub(crate) fn run(args: &InitArgs) -> Result<(), String> {
+    initialize(args, false)
+}
+
+pub(crate) fn initialize(args: &InitArgs, panel_accounts: bool) -> Result<(), String> {
     let _listener = if args.check_port {
         Some(
             std::net::TcpListener::bind(args.listen)
@@ -101,7 +105,7 @@ pub(crate) fn run(args: &InitArgs) -> Result<(), String> {
                 .to_owned(),
         );
     }
-    let (name, password, profile) = initial_choices(args, &messages, language)?;
+    let (name, password, profile) = initial_choices(args, &messages, language, panel_accounts)?;
     let insecure = args
         .insecure_cookies
         .unwrap_or_else(|| using_default && args.listen.ip().is_loopback());
@@ -113,10 +117,16 @@ pub(crate) fn run(args: &InitArgs) -> Result<(), String> {
         .find(|path| path.is_dir())
         .ok_or("data directory needs an existing ancestor")?;
     crate::local_disk::check(existing)?;
-    if password.chars().count() < 8 || password.len() > 1024 {
-        return Err("password must have at least 8 characters and at most 1024 bytes".to_owned());
-    }
-    let hash = hash_password(&password).map_err(|error| error.to_string())?;
+    let hash = if panel_accounts {
+        None
+    } else {
+        if password.chars().count() < 8 || password.len() > 1024 {
+            return Err(
+                "password must have at least 8 characters and at most 1024 bytes".to_owned(),
+            );
+        }
+        Some(hash_password(&password).map_err(|error| error.to_string())?)
+    };
     if using_default {
         std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         crate::local_disk::check(parent)?;
@@ -224,6 +234,7 @@ fn initial_choices(
     args: &InitArgs,
     messages: &Messages,
     language: &str,
+    panel_accounts: bool,
 ) -> Result<(String, zeroize::Zeroizing<String>, Option<Profile>), String> {
     if let Some(name) = &args.name {
         // Reject invalid explicit names before reading a secret.
@@ -234,9 +245,13 @@ fn initial_choices(
     if !crate::first_use::interactive() {
         return Err("use --name for noninteractive initialization".into());
     }
-    let selected = elzevir_panel::setup(language)
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| messages.get("setup-cancelled"))?;
+    let selected = if panel_accounts {
+        elzevir_panel::institution_setup(language)
+    } else {
+        elzevir_panel::setup(language)
+    }
+    .map_err(|error| error.to_string())?
+    .ok_or_else(|| messages.get("setup-cancelled"))?;
     let profile = match selected.profile {
         elzevir_panel::SetupProfile::Empty => None,
         elzevir_panel::SetupProfile::Public => Some(Profile::Public),
@@ -251,7 +266,7 @@ fn finish(
     config: &Path,
     source: &str,
     login: &str,
-    hash: String,
+    hash: Option<String>,
     profile: Option<Profile>,
     messages: &Messages,
 ) -> Result<(), String> {
@@ -352,32 +367,34 @@ fn populate(
     config: &Path,
     source: &str,
     login: &str,
-    hash: String,
+    hash: Option<String>,
     profile: Option<Profile>,
     messages: &Messages,
 ) -> Result<(), String> {
     // On errors, DataDir drops the store before releasing the single-writer lock.
     let data = crate::open_store(data_dir)?;
-    let outcome = data
-        .store
-        .submit(WriteCommand::Staff(StaffCommand::Create {
-            login: login.to_owned(),
-            password_hash: hash,
-            permissions: [
-                Permission::StaffInterface,
-                Permission::Administration,
-                Permission::Cataloguing,
-                Permission::Circulation,
-                Permission::Patrons,
-            ]
-            .into_iter()
-            .collect(),
-        }))
-        .map_err(|error| error.to_string())?
-        .wait()
-        .map_err(|error| error.to_string())?;
-    if !matches!(outcome, WriteOutput::StaffCreated(_)) {
-        return Err("unexpected answer while creating administrator".to_owned());
+    if let Some(hash) = hash {
+        let outcome = data
+            .store
+            .submit(WriteCommand::Staff(StaffCommand::Create {
+                login: login.to_owned(),
+                password_hash: hash,
+                permissions: [
+                    Permission::StaffInterface,
+                    Permission::Administration,
+                    Permission::Cataloguing,
+                    Permission::Circulation,
+                    Permission::Patrons,
+                ]
+                .into_iter()
+                .collect(),
+            }))
+            .map_err(|error| error.to_string())?
+            .wait()
+            .map_err(|error| error.to_string())?;
+        if !matches!(outcome, WriteOutput::StaffCreated(_)) {
+            return Err("unexpected answer while creating administrator".to_owned());
+        }
     }
     if let Some(profile) = profile {
         use elzevir_app::catalog::CatalogCommand;
@@ -451,7 +468,7 @@ mod tests {
                 &config,
                 "replacement",
                 "admin",
-                hash,
+                Some(hash),
                 None,
                 &Messages::new("en").unwrap()
             )

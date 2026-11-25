@@ -82,6 +82,14 @@ pub(crate) fn draw(
         rows.extend(address_rows(panel, snapshot, state, messages));
     } else if matches!(panel.section, Section::Backup | Section::Updates) {
         rows.extend(crate::operation_view::rows(snapshot, panel, messages));
+    } else if panel.section == Section::Administrators {
+        rows.push(Line::from(messages.get("panel-administrators-body")));
+        if let Some(key @ ("account-created" | "account-refused")) =
+            snapshot.and_then(|s| s.operations.result)
+        {
+            rows.push(Line::default());
+            rows.push(Line::from(messages.get(key)));
+        }
     } else if panel.section == Section::Restart {
         // The service view draws its state and buttons over this block.
         rows.clear();

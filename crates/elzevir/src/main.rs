@@ -206,16 +206,6 @@ fn main() -> ExitCode {
         no_self_update,
     } = Cli::parse();
     // Daily use needs no command: the bare program opens the panel.
-    if command.is_none() && first_use::interactive() {
-        match first_use::launch() {
-            Ok(true) => {}
-            Ok(false) => return ExitCode::SUCCESS,
-            Err(e) => {
-                eprintln!("elzevir: {e}");
-                return ExitCode::FAILURE;
-            }
-        }
-    }
     let command = command.unwrap_or_else(|| Command::Start(server_config::ServeArgs::default()));
     let result = match command {
         Command::HostJob(args) => host_jobs::run(&args),
@@ -818,6 +808,38 @@ fn create_staff(
         return Err(format!("unexpected answer from the writer: {outcome:?}"));
     };
     println!("elzevir: staff account `{login}` created (id {})", id.0);
+    Ok(())
+}
+
+fn create_administrator(store: &ElzevirStore, login: &str, password: &str) -> Result<(), ()> {
+    if login.is_empty()
+        || login.len() > 64
+        || !login
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'-' | b'_'))
+        || password.len() > 1024
+        || password.chars().count() < 8
+    {
+        return Err(());
+    }
+    let password_hash = hash_password(password).map_err(|_| ())?;
+    let command = StaffCommand::Create {
+        login: login.into(),
+        password_hash,
+        permissions: [
+            Permission::StaffInterface,
+            Permission::Administration,
+            Permission::Cataloguing,
+            Permission::Circulation,
+            Permission::Patrons,
+        ]
+        .into(),
+    };
+    store
+        .submit(WriteCommand::Staff(command))
+        .map_err(|_| ())?
+        .wait()
+        .map_err(|_| ())?;
     Ok(())
 }
 

@@ -73,6 +73,8 @@ pub(crate) struct View {
 }
 
 struct Shared {
+    store: Arc<elzevir_store::ElzevirStore>,
+    account_slot: Arc<tokio::sync::Semaphore>,
     cancellation: crate::cancellation::Cancellation,
     state: Mutex<WorkerState>,
     wake: Condvar,
@@ -140,6 +142,23 @@ fn save_history(directory: &Path, history: &History) -> Result<(), String> {
 }
 
 impl Client {
+    pub(crate) async fn create_administrator(
+        &self,
+        login: String,
+        password: zeroize::Zeroizing<String>,
+    ) -> Result<(), ()> {
+        let guard = Arc::clone(&self.0.account_slot)
+            .try_acquire_owned()
+            .map_err(|_| ())?;
+        let store = Arc::clone(&self.0.store);
+        tokio::task::spawn_blocking(move || {
+            let _guard = guard;
+            crate::create_administrator(&store, &login, &password)
+        })
+        .await
+        .map_err(|_| ())?
+    }
+
     pub(crate) fn view(&self) -> Result<View, String> {
         let policy = crate::operations_config::load(&self.0.directory)?;
         let state = self
@@ -265,6 +284,8 @@ impl Worker {
         }
         save_history(&directory, &history)?;
         let client = Client(Arc::new(Shared {
+            store: Arc::clone(&store),
+            account_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             cancellation: crate::cancellation::Cancellation::default(),
             state: Mutex::new(WorkerState {
                 history,

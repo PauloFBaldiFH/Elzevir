@@ -30,17 +30,17 @@ o instalador rodou no Linux ainda não conhece o comando: rode
 `source ~/.bashrc` ou abra outro terminal, como o instalador indica.
 
 Abra o Elzevir pelo terminal. No primeiro uso, informe o nome da
-biblioteca, crie a senha do administrador e selecione um perfil inicial
+biblioteca e selecione um perfil inicial
 opcional.
 
 ```sh
 elzevir
 ```
 
-Na primeira abertura, o assistente cria o usuário `admin`. Entre em
-`/equipe/login` com a senha escolhida. Nas aberturas seguintes, escolha
-**Abrir painel** ou **Criar administrador** com o mouse ou as setas e Enter.
-Para criar outra conta administrativa local, pare primeiro o servidor da instituição.
+Para cadastrar o primeiro administrador ou adicionar outra conta, abra a seção **Administradores**
+(tecla **7**, aba **Contas**) e escolha **Criar administrador [N]**. O formulário
+pede o login, a senha e a confirmação dentro do painel. Com o servidor em
+execução, o cadastro usa o canal administrativo local da instituição.
 
 `elzevir start` abre diretamente o painel e serve o catálogo em
 `http://127.0.0.1:7390` por padrão. O servidor continua em segundo plano

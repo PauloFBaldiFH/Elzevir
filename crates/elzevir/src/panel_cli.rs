@@ -39,7 +39,7 @@ pub(crate) fn run(args: PanelArgs, no_self_update: bool) -> Result<(), String> {
     }
     let mut input = crate::server_config::ServeArgs::for_status(args.config, args.data_dir);
     input.lang = args.lang;
-    let (settings, config) = crate::first_use::resolve(input)?;
+    let (settings, config) = crate::first_use::resolve_or_ask(input, true, true)?;
     connected(&settings, config, args.ascii, no_self_update, || false)
 }
 
@@ -369,6 +369,26 @@ impl Collector {
             && self.latest.is_none()
         {
             self.latest = Some(release);
+        }
+        if let ObservationRequest::Administrator(login, password) = request {
+            let outcome =
+                match crate::runtime_info::read(&self.directory.join(crate::runtime_info::NAME)) {
+                    Ok(info) => crate::admin::create_administrator(&info, login, password.expose())
+                        .map_err(|_| ()),
+                    Err(_) if self.directory.join("elzevir.db").is_file() => {
+                        crate::open_store(&self.directory)
+                            .map_err(|_| ())
+                            .and_then(|data| {
+                                crate::create_administrator(&data.store, login, password.expose())
+                            })
+                    }
+                    Err(_) => Err(()),
+                };
+            self.operation_result = Some(if outcome.is_ok() {
+                "account-created"
+            } else {
+                "account-refused"
+            });
         }
         if let ObservationRequest::Operate(operation) = request {
             self.operation_result = Some(match self.operate(operation) {

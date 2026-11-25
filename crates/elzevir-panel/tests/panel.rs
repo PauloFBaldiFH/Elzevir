@@ -42,7 +42,7 @@ fn screen(panel: &Panel, lang: &str, width: u16, height: u16) -> String {
 fn navigation_wraps_and_release_events_are_ignored() {
     let mut panel = Panel::default();
     panel.handle(&key(KeyCode::BackTab), 120, 24);
-    assert_eq!(panel.section, Section::Restart);
+    assert_eq!(panel.section, Section::Administrators);
     panel.handle(&key(KeyCode::Tab), 120, 24);
     assert_eq!(panel.section, Section::Dashboard);
     panel.handle(

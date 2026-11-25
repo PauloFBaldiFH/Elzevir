@@ -1,6 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Read-only diagnostic values and explicit observation requests.
 
+/// Masked credential carried only to the local administrative client.
+#[derive(Clone, PartialEq, Eq)]
+pub struct AccountPassword(pub(crate) zeroize::Zeroizing<String>);
+impl AccountPassword {
+    /// Borrow for submission over the private institution channel.
+    #[must_use]
+    pub fn expose(&self) -> &str {
+        &self.0
+    }
+}
+impl std::fmt::Debug for AccountPassword {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("[redacted]")
+    }
+}
+
 /// Work requested from the single background observer.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum ObservationRequest {
@@ -15,11 +31,15 @@ pub enum ObservationRequest {
     Export,
     /// A confirmed operation, never coalesced with other requests.
     Operate(crate::Operation),
+    /// Create an administrator in the selected institution.
+    Administrator(String, AccountPassword),
 }
 
 /// Coalesced UI action state, separate from lightweight refresh.
 #[derive(Debug, Default)]
 pub struct DiagnosticAction {
+    /// Open the local account form.
+    pub account_requested: bool,
     /// Next explicit work request, if any.
     pub requested: Option<ObservationRequest>,
     /// Whether an explicit action is waiting for completion.
@@ -178,7 +198,9 @@ pub struct Diagnostics {
 
 impl ObservationRequest {
     pub(crate) fn merge(self, next: Self) -> Option<Self> {
-        if matches!(self, Self::Operate(_)) || matches!(next, Self::Operate(_)) {
+        if matches!(self, Self::Operate(_) | Self::Administrator(..))
+            || matches!(next, Self::Operate(_) | Self::Administrator(..))
+        {
             return if self == Self::Poll {
                 Some(next)
             } else if next == Self::Poll {
@@ -192,7 +214,7 @@ impl ObservationRequest {
             Self::TestAddresses => 1,
             Self::Verify => 2,
             Self::Export => 3,
-            Self::Operate(_) => 4,
+            Self::Operate(_) | Self::Administrator(..) => 4,
         };
         Some(if rank(&self) >= rank(&next) {
             self

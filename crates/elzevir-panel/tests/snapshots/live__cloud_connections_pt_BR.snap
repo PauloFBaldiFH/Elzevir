@@ -3,14 +3,14 @@ source: crates/elzevir-panel/tests/live.rs
 expression: "screen(&panel, \"pt-BR\")"
 ---
 Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
-+Seções--------------------+     1 Início            2 Saúde          3 Acesso           4 Backup           5 Versões         6 Serviço
++Seções--------------------+    1 Início         2 Saúde        3 Acesso        4 Backup        5 Versões       6 Serviço       7 Contas
 |  d Painel de controle    |+Backup e agendamentos-----------------------------------------------------------++Instituição selecionada-----+
 |  x Diagnóstico           ||Em execução                                                                     ||Biblioteca de teste         |
 |  a Endereços e acesso    ||                                                                                ||                            |
 |> b Backup e agendamentos ||n Criar · v Verificar · e Exportar · k Chave · o Restaurar · s Agendar          ||Listener configurado        |
 |  u Atualizações          ||Cópias mantidas: Não lido                                                       ||127.0.0.1:0                 |
 |  r Serviço               ||Backup diário: Desativado                                                       ||                            |
-|                          ||[Conexões]  Planos  Na nuvem  Histórico                                         ||Listener observado          |
+|  g Administradores       ||[Conexões]  Planos  Na nuvem  Histórico                                         ||Listener observado          |
 |                          ||[ ] mudar aba · < > selecionar plano                                            ||127.0.0.1:8080              |
 |                          ||p provedores · c conectar · a responder ao provedor · y camada crypt · t teste  ||                            |
 |                          ||com arquivo fictício                                                            ||Última consulta: há 0       |
