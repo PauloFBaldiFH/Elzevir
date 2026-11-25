@@ -119,6 +119,7 @@ pub(crate) fn header(
         Mode::Demo => None,
     };
     let (status, colour, details) = match snapshot.map(|sample| &sample.status) {
+        _ if panel.inspection.is_some() => ("inspect-mode", theme::ACCENT, None),
         Some(ServerStatus::Running(details)) => ("ui-online", theme::SUCCESS, Some(details)),
         Some(ServerStatus::Degraded(details)) => {
             ("panel-state-degraded", theme::WARNING, Some(details))
@@ -168,6 +169,9 @@ pub(crate) fn action_bar(
     ascii: bool,
 ) {
     if !matches!(panel.mode, Mode::Live(_)) {
+        return;
+    }
+    if panel.inspection.is_some() {
         return;
     }
     let contextual: &[(&str, char)] = match panel.section {

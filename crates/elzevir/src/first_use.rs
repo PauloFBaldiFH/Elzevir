@@ -104,10 +104,7 @@ fn resolve_or_ask(mut args: ServeArgs, ask: bool) -> Result<(Settings, Option<Pa
                 "elzevir: {}",
                 messages.values(
                     "setup-done",
-                    &[
-                        ("listen", init.listen.to_string()),
-                        ("login", init.login.clone()),
-                    ]
+                    &[("listen", init.listen.to_string())]
                 )
             );
         }
@@ -125,25 +122,11 @@ fn resolve_or_ask(mut args: ServeArgs, ask: bool) -> Result<(Settings, Option<Pa
         .map_err(|e| e.to_string())
 }
 
-pub(crate) fn start(args: ServeArgs, no_self_update: bool) -> Result<(), String> {
+pub(crate) fn start(args: &ServeArgs, no_self_update: bool) -> Result<(), String> {
     if !interactive() {
         return Err(
             "start requires an interactive terminal; use serve for unattended startup".into(),
         );
     }
-    // A --listen override is never written back to server.toml.
-    let explicit_listen = args.listen.is_some();
-    let (settings, config) = resolve(args)?;
-    if matches!(
-        crate::status::inspect(&settings.data_dir).state,
-        "running" | "degraded"
-    ) {
-        return crate::panel_cli::connected(&settings, config, false, no_self_update, || false);
-    }
-    let mut settings = settings;
-    let saved = config.as_deref().filter(|_| !explicit_listen);
-    settings.listen = crate::listen_port::ensure(settings.listen, saved, &settings.lang)?;
-    // The server keeps running after the panel closes (Paulo, 2026-11-20).
-    crate::background::launch(&settings, config.as_deref())?;
-    crate::panel_cli::connected(&settings, config, false, no_self_update, || false)
+    crate::panel_startup::open(args, false, true, no_self_update)
 }

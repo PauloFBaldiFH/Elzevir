@@ -12,6 +12,7 @@ publish.workspace = true
 elzevir-app.workspace = true
 elzevir-domain.workspace = true
 rusqlite.workspace = true
+url.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 jiff.workspace = true

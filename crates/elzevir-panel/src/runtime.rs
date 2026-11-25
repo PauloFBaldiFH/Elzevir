@@ -55,6 +55,23 @@ pub fn run_live_until(
     )
 }
 
+/// Opens the installation overview without a worker, network access, or writable operations.
+/// Returns the explicit action chosen by the operator, or None on exit.
+///
+/// # Errors
+/// Reports terminal or localization failures.
+pub fn inspect_installation(
+    language: &str,
+    ascii: bool,
+    inspection: crate::Inspection,
+) -> Result<Option<crate::InspectionAction>, PanelError> {
+    let messages = prepare(language)?;
+    let mut panel = Panel::live(Institution::default());
+    panel.inspection = Some(inspection);
+    with_terminal(|terminal| interact(terminal, &messages, ascii, &mut panel, None, || false))?;
+    Ok(panel.inspection_action)
+}
+
 pub(crate) fn prepare(language: &str) -> Result<Messages, PanelError> {
     let messages = Messages::new(language)?;
     if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
@@ -66,11 +83,11 @@ pub(crate) fn prepare(language: &str) -> Result<Messages, PanelError> {
 fn terminal(
     messages: &Messages,
     ascii: bool,
-    panel: Panel,
+    mut panel: Panel,
     worker: Option<&Worker>,
     stopping: impl Fn() -> bool,
 ) -> Result<(), PanelError> {
-    with_terminal(|terminal| interact(terminal, messages, ascii, panel, worker, stopping))
+    with_terminal(|terminal| interact(terminal, messages, ascii, &mut panel, worker, stopping))
 }
 
 pub(crate) fn with_terminal<T>(
@@ -148,7 +165,7 @@ fn interact(
     mut terminal: ratatui::DefaultTerminal,
     messages: &Messages,
     ascii: bool,
-    mut panel: Panel,
+    panel: &mut Panel,
     worker: Option<&Worker>,
     stopping: impl Fn() -> bool,
 ) -> io::Result<()> {
@@ -197,7 +214,7 @@ fn interact(
         if let Some(active) = &mut picker {
             active.poll();
         }
-        access.poll(&mut panel);
+        access.poll(panel);
         path_probe.poll(panel.form.as_mut());
         let drawn = terminal
             .draw(|frame| {
@@ -205,7 +222,7 @@ fn interact(
                     scene.clear();
                     active.draw(frame, messages, ascii);
                 } else {
-                    crate::view::interactive(frame, &panel, messages, ascii, &mut scene);
+                    crate::view::interactive(frame, panel, messages, ascii, &mut scene);
                 }
             })?
             .area;
@@ -219,28 +236,11 @@ fn interact(
                 panel.handle(&input, size.width, size.height);
                 continue;
             }
-            if handle_picker(&input, &mut picker, &mut panel) || access.handle(&input, &mut panel) {
+            if handle_picker(&input, &mut picker, panel) || access.handle(&input, panel) {
                 continue;
             }
             match input {
-                Event::Mouse(mouse) => {
-                    let point = (mouse.column, mouse.row).into();
-                    scene.pointer = Some(point);
-                    match mouse.kind {
-                        MouseEventKind::Down(MouseButton::Left) => {
-                            if let Some(action) = scene.hit(point) {
-                                action.apply(&mut panel, drawn);
-                            }
-                        }
-                        MouseEventKind::ScrollDown if panel.form.is_none() => {
-                            panel.scroll = panel.scroll.saturating_add(3).min(500);
-                        }
-                        MouseEventKind::ScrollUp if panel.form.is_none() => {
-                            panel.scroll = panel.scroll.saturating_sub(3);
-                        }
-                        _ => {}
-                    }
-                }
+                Event::Mouse(mouse) => handle_mouse(mouse, &mut scene, panel, drawn),
                 Event::Resize(_, _) => scene.pointer = None,
                 other => panel.handle(&other, drawn.width, drawn.height),
             }
@@ -251,6 +251,30 @@ fn interact(
         }
     }
     Ok(())
+}
+
+fn handle_mouse(
+    mouse: event::MouseEvent,
+    scene: &mut crate::ui::Scene,
+    panel: &mut Panel,
+    drawn: ratatui::layout::Rect,
+) {
+    let point = (mouse.column, mouse.row).into();
+    scene.pointer = Some(point);
+    match mouse.kind {
+        MouseEventKind::Down(MouseButton::Left) => {
+            if let Some(action) = scene.hit(point) {
+                action.apply(panel, drawn);
+            }
+        }
+        MouseEventKind::ScrollDown if panel.form.is_none() => {
+            panel.scroll = panel.scroll.saturating_add(3).min(500);
+        }
+        MouseEventKind::ScrollUp if panel.form.is_none() => {
+            panel.scroll = panel.scroll.saturating_sub(3);
+        }
+        _ => {}
+    }
 }
 
 fn handle_picker(

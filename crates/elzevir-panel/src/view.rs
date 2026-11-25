@@ -167,7 +167,7 @@ pub(crate) fn interactive(
     ui::header(frame, header, panel, messages, ascii);
     let [mut navigation, mut work, mut context] = columns(area);
     if matches!(panel.mode, Mode::Live(_))
-        && (area.width < 120 || panel.section == Section::Dashboard)
+        && (area.width < 120 || panel.section == Section::Dashboard || panel.inspection.is_some())
     {
         navigation = Rect::default();
         work = body(area);
@@ -196,7 +196,16 @@ pub(crate) fn interactive(
     if !navigation.is_empty() {
         menu(frame, panel, messages, navigation, ascii, scene);
     }
-    if let Mode::Live(state) = &panel.mode {
+    if let Some(inspection) = &panel.inspection {
+        inspection.draw(
+            frame,
+            work.union(context),
+            panel.section,
+            messages,
+            scene,
+            ascii,
+        );
+    } else if let Mode::Live(state) = &panel.mode {
         crate::dashboard::draw(frame, panel, state, messages, work, context, ascii);
         if panel.section == Section::Restart {
             crate::service_view::draw(frame, panel, state, messages, work, (ascii, scene));
@@ -298,7 +307,9 @@ fn draw_demo(
 
 fn draw_footer(frame: &mut Frame, area: Rect, panel: &Panel, messages: &Messages) {
     let footer = Rect::new(area.x, area.bottom().saturating_sub(2), area.width, 2);
-    let mut help = messages.get(if matches!(panel.mode, Mode::Demo) {
+    let mut help = messages.get(if panel.inspection.is_some() {
+        "inspect-help"
+    } else if matches!(panel.mode, Mode::Demo) {
         "panel-help"
     } else {
         "panel-help-live"

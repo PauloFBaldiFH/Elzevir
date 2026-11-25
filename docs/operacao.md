@@ -48,6 +48,8 @@ elzevir panel --config CAMINHO/server.toml --lang pt-BR
 elzevir status --config CAMINHO/server.toml --json
 ```
 
+Ao abrir `elzevir` em uma instalação pessoal nova, use **Ajustes → Configurar biblioteca** quando estiver pronto. Ao terminar, o painel volta à biblioteca criada. **Serviço → Iniciar** coloca o catálogo no ar. Se o painel indicar uma configuração inválida ou dados existentes, confira o caminho exibido. Em um banco legado parado, a inspeção tenta identificar se já há administrador.
+
 O idioma padrão é inglês; --lang pt-BR seleciona português. --ascii permite
 bordas simples em terminais sem os caracteres usados pelo painel.
 

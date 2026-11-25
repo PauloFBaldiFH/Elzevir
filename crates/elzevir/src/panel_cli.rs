@@ -39,8 +39,7 @@ pub(crate) fn run(args: PanelArgs, no_self_update: bool) -> Result<(), String> {
     }
     let mut input = crate::server_config::ServeArgs::for_status(args.config, args.data_dir);
     input.lang = args.lang;
-    let (settings, config) = crate::first_use::resolve(input)?;
-    connected(&settings, config, args.ascii, no_self_update, || false)
+    crate::panel_startup::open(&input, args.ascii, false, no_self_update)
 }
 
 pub(crate) fn connected(
@@ -79,7 +78,7 @@ pub(crate) fn connected(
 
 /// Whether this program belongs to an installation run by the system's
 /// service manager (`install.sh`/`install.ps1` with service options).
-fn managed() -> bool {
+pub(crate) fn managed() -> bool {
     std::env::current_exe()
         .ok()
         .and_then(|executable| crate::installation::record_path(&executable).ok())
