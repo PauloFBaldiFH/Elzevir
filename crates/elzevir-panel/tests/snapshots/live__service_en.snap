@@ -29,5 +29,5 @@ Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:
 |                          ||                                                                                ||                            |
 |                          ||                                                                                ||                            |
 |                          |+--------------------------------------------------------------------------------++----------------------------+
-+--------------------------+                                                   Refresh [F]
++--------------------------+                                                   Refresh [f]
 Tab/arrows: navigate | f: refresh | PgUp/PgDn: scroll | Ctrl+P: palette | q/Ctrl+C: quit

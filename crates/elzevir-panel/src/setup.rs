@@ -10,7 +10,7 @@ use ratatui::{
     crossterm::event::{
         self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
     },
-    layout::{Constraint, Rect},
+    layout::{Constraint, Rect, Size},
     style::{Modifier, Style},
     widgets::{Clear, Paragraph, Wrap},
 };
@@ -91,7 +91,9 @@ pub fn setup_with_login(
         };
         let mut scene = Scene::default();
         loop {
-            terminal.draw(|frame| wizard.draw(frame, &messages, &mut scene, ascii))?;
+            let drawn = terminal
+                .draw(|frame| wizard.draw(frame, &messages, &mut scene, ascii))?
+                .area;
             let key = match event::read()? {
                 Event::Key(key) if key.kind != KeyEventKind::Release => Some(key),
                 Event::Mouse(mouse) => {
@@ -113,7 +115,11 @@ pub fn setup_with_login(
                 {
                     return Ok(None);
                 }
-                if wizard.handle(key) {
+                let size = terminal.size()?;
+                if size.width == drawn.width
+                    && size.height == drawn.height
+                    && wizard.handle(key, size)
+                {
                     return Ok(Some(Setup {
                         name: wizard.name,
                         login: wizard.login,
@@ -135,7 +141,10 @@ pub fn setup_with_login(
 }
 
 impl Wizard {
-    fn handle(&mut self, key: KeyEvent) -> bool {
+    fn handle(&mut self, key: KeyEvent, size: Size) -> bool {
+        if !fits(size) {
+            return false;
+        }
         if key.code == KeyCode::Enter {
             self.step = match self.step {
                 Step::Name if self.name.trim().is_empty() || self.name.chars().count() > 200 => {
@@ -211,7 +220,7 @@ impl Wizard {
         scene.clear();
         let screen = frame.area();
         ui::fill(frame, screen, theme::muted());
-        if screen.width < 38 || screen.height < 10 {
+        if !fits(Size::new(screen.width, screen.height)) {
             frame.render_widget(
                 Paragraph::new(messages.get("setup-small")).wrap(Wrap { trim: true }),
                 screen,
@@ -336,5 +345,30 @@ impl Wizard {
                     }),
             );
         }
+    }
+}
+
+fn fits(size: Size) -> bool {
+    size.width >= 38 && size.height >= 10
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn a_hidden_confirmation_cannot_create_an_institution() {
+        let mut wizard = Wizard {
+            login: "admin".into(),
+            step: Step::Profile,
+            name: "Library".into(),
+            password: Zeroizing::new(String::new()),
+            confirm: Zeroizing::new(String::new()),
+            profile: 0,
+            error: None,
+        };
+        let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        assert!(!wizard.handle(enter, Size::new(37, 10)));
+        assert!(!wizard.handle(enter, Size::new(80, 9)));
+        assert!(wizard.handle(enter, Size::new(38, 10)));
     }
 }

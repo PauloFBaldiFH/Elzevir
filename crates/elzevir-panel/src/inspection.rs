@@ -132,7 +132,7 @@ impl Inspection {
         if next.height >= 5
             && let Some((label, shortcut)) = action
         {
-            let text = format!("{} [{}]", m.get(label), shortcut.to_ascii_uppercase());
+            let text = format!("{} [{shortcut}]", m.get(label));
             let width = u16::try_from(text.chars().count() + 4)
                 .unwrap_or(u16::MAX)
                 .min(next.width.saturating_sub(4));

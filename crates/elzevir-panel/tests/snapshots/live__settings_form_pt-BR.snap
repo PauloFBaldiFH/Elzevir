@@ -29,5 +29,5 @@ Elzevir TUI  0.1.0-alpha.2  |  Não lido
 |                          ||                                                                                ||                            |
 |                          ||                                                                                ||                            |
 |                          |+--------------------------------------------------------------------------------++----------------------------+
-+--------------------------+                                                  Atualizar [F]
++--------------------------+                                                  Atualizar [f]
 Tab/setas: navegar | f: atualizar | PgUp/PgDn: rolar | Ctrl+P: paleta | q/Ctrl+C: sair

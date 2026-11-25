@@ -209,15 +209,7 @@ pub(crate) fn action_bar(
             .enumerate()
             .map(|(index, (key, shortcut))| {
                 (
-                    format!(
-                        "{} [{}]",
-                        label(messages.get(key), ascii),
-                        if panel.section == Section::Addresses {
-                            shortcut
-                        } else {
-                            shortcut.to_ascii_uppercase()
-                        }
-                    ),
+                    format!("{} [{shortcut}]", label(messages.get(key), ascii)),
                     Action::Key(KeyCode::Char(shortcut)),
                     line == 0 && index == 0,
                 )
