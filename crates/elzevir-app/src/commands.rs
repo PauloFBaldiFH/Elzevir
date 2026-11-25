@@ -18,6 +18,9 @@ use crate::staff::{Permission, StaffId};
 /// Every write the application can make.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WriteCommand {
+    /// In-process repository operation. Its operator must come from an authorized session.
+    #[serde(skip)]
+    Repository(Box<crate::repository::RepositoryCommand>),
     /// Staff account management.
     Staff(StaffCommand),
     /// Catalog: records, items and their vocabularies.
@@ -47,6 +50,7 @@ pub enum StaffCommand {
 #[derive(Serialize)]
 #[serde(untagged)]
 enum AuditPayload<'a> {
+    Repository(serde_json::Value),
     Staff {
         target: &'a str,
     },
@@ -60,6 +64,8 @@ enum AuditPayload<'a> {
 /// What a successful command returns.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WriteOutput {
+    /// Optional receipt for a repository upload.
+    Repository(Option<Box<crate::repository::UploadReceipt>>),
     /// A staff account was created.
     StaffCreated(StaffId),
     /// A catalog command succeeded.
@@ -75,6 +81,12 @@ pub enum WriteOutput {
 /// Why a command was refused.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum WriteRefusal {
+    /// Domain refusal from the repository.
+    #[error(transparent)]
+    Repository(crate::repository::RepositoryError),
+    /// Idempotent replay rolls back its redundant audit entry.
+    #[error("repository upload already committed")]
+    RepositoryReplay(Box<crate::repository::UploadReceipt>),
     /// The login is already taken.
     #[error("login `{0}` is already in use")]
     LoginTaken(String),
@@ -99,6 +111,7 @@ impl WriteCommand {
     #[must_use]
     pub fn audit_payload(&self) -> impl Serialize {
         match self {
+            Self::Repository(cmd) => AuditPayload::Repository(cmd.audit_payload()),
             Self::Staff(StaffCommand::Create { login, .. }) => {
                 AuditPayload::Staff { target: login }
             }
@@ -117,6 +130,7 @@ impl WriteCommand {
     #[must_use]
     pub const fn kind(&self) -> &'static str {
         match self {
+            Self::Repository(cmd) => cmd.kind(),
             Self::Staff(StaffCommand::Create { .. }) => "staff.create",
             Self::Catalog(CatalogCommand::CreateBranch { .. }) => "catalog.create_branch",
             Self::Catalog(CatalogCommand::CreatePolicy { .. }) => "catalog.create_policy",
@@ -214,7 +228,7 @@ impl WriteCommand {
             // administration (docs/specs/interface/mural.md, item 3).
             Self::Board(command) if !command.is_public() => Permission::StaffInterface,
             Self::Staff(_) | Self::Circulation(_) | Self::Board(_) => Permission::Administration,
-            Self::Catalog(_) => Permission::Cataloguing,
+            Self::Catalog(_) | Self::Repository(_) => Permission::Cataloguing,
             Self::Patrons(_) => Permission::Patrons,
         }
     }

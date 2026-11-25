@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Institutional repository. Metadata commits and immutable object installation have
 //! distinct durability boundaries. A failed metadata commit may leave a collectable object.
+mod command;
+pub use command::{RepositoryAction, RepositoryCommand};
 mod deposit;
+mod desk;
+pub use desk::{DeskEdit, DeskInstance, DeskView, RepositoryDesk};
 mod discovery;
 pub use discovery::{DiscoveryPage, DiscoveryReader, PublishedDeposit, discover};
 mod public;

@@ -35,6 +35,7 @@ impl CommandHandler for ElzevirHandler {
         command: &WriteCommand,
     ) -> Result<WriteOutput, CommandFailed<WriteRefusal>> {
         match command {
+            WriteCommand::Repository(cmd) => crate::repository::dispatch(tx, cmd),
             WriteCommand::Staff(StaffCommand::Create {
                 login,
                 password_hash,

@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Offline institution metadata adapter. Its command handler uses the standard
+//! Institution metadata adapter for the CLI and the server. Its command handler uses the standard
 //! single writer, savepoints, read pool, audit and transactional effect outbox.
 pub mod backup;
 mod read;
-use crate::{CommandFailed, CommandHandler, Store, StoreConfig, StoreError, WriteTx};
+use crate::{CommandFailed, ElzevirHandler, ElzevirStore, StoreConfig, StoreError, WriteTx};
+use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::repository as r;
+use r::{RepositoryAction as Action, RepositoryCommand as Command};
 use rusqlite::{Connection, params};
 use std::path::Path;
+use std::sync::Arc;
 
 fn integer(v: u64) -> r::Result<i64> {
     i64::try_from(v).map_err(|_| r::RepositoryError::InvalidState)
@@ -22,24 +25,8 @@ fn constraint(e: rusqlite::Error, refusal: r::RepositoryError) -> r::RepositoryE
     }
 }
 
-/// An offline store owned by the process holding the institution lock.
-pub struct MetadataStore(Store<Handler>);
-struct Handler;
-
-enum Action {
-    Draft(r::DepositId, r::InstanceId),
-    Collection(r::DigitalCollectionId, String),
-    Edit(r::DepositId, r::Edit),
-    Version(r::Upload, r::ObjectInfo),
-    Download(r::VersionRef),
-    Verify(r::VersionRef, r::Integrity),
-}
-struct Command {
-    actor: r::Operator,
-    at: i64,
-    action: Action,
-}
-
+/// Institution metadata adapter sharing the running writer and read pool.
+pub struct MetadataStore(Arc<ElzevirStore>);
 enum Refusal {
     Error(r::RepositoryError),
     Replay(Box<r::UploadReceipt>),
@@ -56,7 +43,14 @@ impl MetadataStore {
     /// # Errors
     /// Opening or migration failed.
     pub fn open(path: &Path) -> Result<Self, StoreError> {
-        Store::open(path, &StoreConfig::default(), Handler).map(Self)
+        ElzevirStore::open(path, &StoreConfig::default(), ElzevirHandler)
+            .map(Arc::new)
+            .map(Self)
+    }
+    /// Attach to the already-open institution.
+    #[must_use]
+    pub fn shared(store: Arc<ElzevirStore>) -> Self {
+        Self(store)
     }
     fn submit(
         &self,
@@ -66,14 +60,21 @@ impl MetadataStore {
     ) -> r::Result<Option<r::UploadReceipt>> {
         let pending = self
             .0
-            .submit_as(actor.id().0, Command { actor, at, action })
+            .submit_as(
+                actor.id().0,
+                WriteCommand::Repository(Box::new(Command { actor, at, action })),
+            )
             .map_err(|_| r::RepositoryError::Unavailable)?;
         match pending.wait() {
-            Ok(output) => Ok(output),
-            Err(CommandFailed::Rejected(Refusal::Replay(receipt))) => Ok(Some(*receipt)),
-            Err(CommandFailed::Rejected(Refusal::Error(e))) => Err(e),
+            Ok(WriteOutput::Repository(output)) => Ok(output.map(|r| *r)),
+            Err(CommandFailed::Rejected(WriteRefusal::RepositoryReplay(receipt))) => {
+                Ok(Some(*receipt))
+            }
+            Err(CommandFailed::Rejected(WriteRefusal::Repository(e))) => Err(e),
             Err(CommandFailed::WriterGone) => Err(r::RepositoryError::CommitUnknown),
-            Err(CommandFailed::Storage(_)) => Err(r::RepositoryError::Unavailable),
+            Ok(_) | Err(CommandFailed::Rejected(_) | CommandFailed::Storage(_)) => {
+                Err(r::RepositoryError::Unavailable)
+            }
         }
     }
     /// Record an explicit staff verification and reindex affected public instances
@@ -136,57 +137,18 @@ impl r::RepositoryWrite for MetadataStore {
     }
 }
 
-impl CommandHandler for Handler {
-    type Command = Command;
-    type Output = Option<r::UploadReceipt>;
-    type Rejection = Refusal;
-    fn kind(cmd: &Command) -> &'static str {
-        match &cmd.action {
-            Action::Collection(..) => "repository.collection",
-            Action::Draft(..) => "repository.draft",
-            Action::Version(..) => "repository.version",
-            Action::Download(..) => "repository.download",
-            Action::Verify(..) => "repository.verify",
-            Action::Edit(_, edit) => match edit {
-                r::Edit::AddFile(_) => "repository.file",
-                r::Edit::Join(_) => "repository.join",
-                r::Edit::Publish(_) => "repository.publish",
-                r::Edit::Withdraw => "repository.withdraw",
-                r::Edit::Retire(..) => "repository.retire",
-            },
-        }
-    }
-    fn audit_payload(cmd: &Command) -> impl serde::Serialize {
-        use serde_json::json;
-        match &cmd.action {
-            Action::Draft(id, i) => json!({"deposit":format!("{:032x}",id.0),"instance":i.0}),
-            Action::Collection(id, _) => json!({"collection":format!("{:032x}",id.0)}),
-            Action::Edit(id, r::Edit::Join(c)) => {
-                json!({"deposit":format!("{:032x}",id.0), "collection":format!("{:032x}",c.0)})
-            }
-            Action::Edit(id, r::Edit::AddFile(f)) => {
-                json!({"deposit":format!("{:032x}",id.0), "file":format!("{:032x}",f.id.0)})
-            }
-            Action::Edit(_, r::Edit::Retire(v, withdraw)) => {
-                json!({"file":format!("{:032x}",v.file.0), "seq":v.seq, "withdraw_deposit":withdraw})
-            }
-            Action::Edit(id, _) => json!({"deposit":format!("{:032x}",id.0)}),
-            Action::Verify(v, status) => {
-                json!({"file":format!("{:032x}",v.file.0),"seq":v.seq,"integrity":integrity_code(*status)})
-            }
-            Action::Version(u, _) => {
-                json!({"file":format!("{:032x}",u.file.0),"operation":format!("{:032x}",u.operation.0)})
-            }
-            Action::Download(v) => json!({"file":format!("{:032x}",v.file.0),"seq":v.seq}),
-        }
-    }
-    fn apply(
-        &mut self,
-        tx: &WriteTx<'_>,
-        cmd: &Command,
-    ) -> Result<Self::Output, CommandFailed<Refusal>> {
-        apply(tx, cmd).map_err(CommandFailed::Rejected)
-    }
+pub(crate) fn dispatch(
+    tx: &WriteTx<'_>,
+    cmd: &Command,
+) -> Result<WriteOutput, CommandFailed<WriteRefusal>> {
+    apply(tx, cmd)
+        .map(|r| WriteOutput::Repository(r.map(Box::new)))
+        .map_err(|e| {
+            CommandFailed::Rejected(match e {
+                Refusal::Error(e) => WriteRefusal::Repository(e),
+                Refusal::Replay(r) => WriteRefusal::RepositoryReplay(r),
+            })
+        })
 }
 fn apply(tx: &WriteTx<'_>, cmd: &Command) -> Result<Option<r::UploadReceipt>, Refusal> {
     let c = tx.connection();
@@ -297,14 +259,6 @@ fn persist_version(c: &Connection, r: &r::UploadReceipt) -> r::Result<()> {
     .map_err(db)?;
     Ok(())
 }
-fn integrity_code(status: r::Integrity) -> &'static str {
-    match status {
-        r::Integrity::Ok => "ok",
-        r::Integrity::Missing => "missing",
-        r::Integrity::Corrupt => "corrupt",
-    }
-}
-
 fn remember_integrity(
     tx: &WriteTx<'_>,
     object: r::ObjectInfo,
@@ -323,7 +277,7 @@ fn remember_integrity(
     if size != integer(object.bytes)? {
         return Err(r::RepositoryError::ObjectUnavailable);
     }
-    let code = integrity_code(status);
+    let code = status.code();
     c.execute(
         "UPDATE repo_objects SET last_verified_at=?1,integrity=?2 WHERE sha256=?3",
         params![at, code, object.hash.0],

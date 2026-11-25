@@ -42,7 +42,7 @@ pub struct Deposit {
     pub files: BTreeMap<FileId, FileHead>,
 }
 /// Atomic editorial command for the metadata writer.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Edit {
     /// Add a reference to an existing digital collection.
     Join(DigitalCollectionId),

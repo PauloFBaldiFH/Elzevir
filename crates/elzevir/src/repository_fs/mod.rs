@@ -25,7 +25,7 @@ const CHUNK: usize = 256 * 1024;
 pub(super) const MAX_BYTES: u64 = 1 << 30;
 pub(super) const MIN_FREE: u64 = 2 << 30;
 struct Session {
-    _lock: crate::InstitutionLock,
+    _lock: Arc<crate::InstitutionLock>,
     uploading: AtomicBool,
 }
 struct UploadGuard(Arc<Session>);
@@ -101,7 +101,7 @@ fn read_chunk(source: &mut dyn Read, buffer: &mut [u8]) -> io::Result<usize> {
 impl FsObjectStore {
     pub(super) fn new(
         data: &Path,
-        lock: crate::InstitutionLock,
+        lock: impl Into<Arc<crate::InstitutionLock>>,
         max_bytes: u64,
         min_free: u64,
     ) -> Result<Self> {
@@ -110,7 +110,7 @@ impl FsObjectStore {
         Ok(Self {
             data: data.to_owned(),
             session: Arc::new(Session {
-                _lock: lock,
+                _lock: lock.into(),
                 uploading: AtomicBool::new(false),
             }),
             staging: directory(&root, "staging")?,

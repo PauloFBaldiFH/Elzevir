@@ -1,0 +1,86 @@
+{% extends "staff_base.html" %}
+{% block title %}{{ t.get("desk-title") }}{% endblock %}
+{% macro token() %}<input type="hidden" name="csrf" value="{{ csrf }}">{% endmacro %}
+{% block content %}
+<div class="registries">
+<h1>{{ t.get("desk-title") }}</h1>
+<form method="get" action="/equipe/repositorio" class="rules-chooser">
+  <label>{{ t.get("desk-instance") }} <input type="number" name="instance" min="1" required {% if let Some(i)=instance %}value="{{ i }}"{% endif %}></label>
+  <button>{{ t.get("rules-open") }}</button>
+</form>
+{% if !title.is_empty() %}<h2>{{ title }}</h2>{% endif %}
+{% if let Some(key)=id %}
+{% if opac_hidden %}<p class="form-hint">{{ t.get("desk-hidden") }}</p>{% endif %}
+<p>{{ t.get(state_key) }}</p>
+{% if state_key == "desk-published" && !opac_hidden %}<a href="/repository/{{ key }}">{{ t.get("desk-public-page") }}</a>{% endif %}
+<form method="post" action="/equipe/repositorio/{{ key }}">
+  {% call token() %}{% endcall %}
+  {% if state_key == "desk-published" %}<button name="action" value="withdraw">{{ t.get("desk-withdraw") }}</button>
+  {% else %}<button name="action" value="publish">{{ t.get("desk-publish") }}</button>{% endif %}
+</form>
+<h2>{{ t.get("desk-files") }}</h2>
+{% for f in files %}
+<section class="registry-card">
+  <h3>{{ f.label }}</h3>
+  <p>{{ t.get(f.role) }} · {% if f.restricted %}{{ t.get("desk-staff") }}{% else %}{{ t.get("desk-public") }}{% endif %} ·
+    {% if f.current > 0 %}{{ t.get("desk-current") }} {{ f.current }}{% else %}{{ t.get("desk-no-current") }}{% endif %}</p>
+  <form method="post" enctype="multipart/form-data" action="/equipe/repositorio/{{ key }}/files/{{ f.id }}/upload">
+    {% call token() %}{% endcall %}
+    <input type="hidden" name="operation" value="{{ f.operation }}">
+    <input type="hidden" name="expected" value="{{ f.current }}">
+    <label>{{ t.get("desk-new-version") }} <input type="file" name="file" required></label>
+    <button>{{ t.get("desk-upload") }}</button>
+  </form>
+  {% if f.last > 0 %}
+  <form method="get" action="/equipe/repositorio/{{ key }}/files/{{ f.id }}/download">
+    <label>{{ t.get("desk-version") }} <input type="number" name="seq" min="1" max="{{ f.last }}" value="{{ f.last }}" required></label>
+    <button>{{ t.get("desk-download") }}</button>
+  </form>
+  <details><summary>{{ t.get("desk-retire") }}</summary>
+    <form method="post" action="/equipe/repositorio/{{ key }}">
+      {% call token() %}{% endcall %}<input type="hidden" name="file" value="{{ f.id }}">
+      <label>{{ t.get("desk-version") }} <input type="number" name="seq" min="1" max="{{ f.last }}" required></label>
+      {% if state_key == "desk-published" && f.role == "desk-primary" && f.current > 0 %}<label><input type="checkbox" name="together" value="yes"> {{ t.get("desk-together") }}</label>{% endif %}
+      <button name="action" value="retire">{{ t.get("desk-retire") }}</button>
+    </form>
+  </details>
+  {% endif %}
+</section>
+{% endfor %}
+<form method="post" action="/equipe/repositorio/{{ key }}" class="rules-chooser">
+  {% call token() %}{% endcall %}
+  <label>{{ t.get("desk-file-name") }} <input name="name" maxlength="256" required></label>
+  <label>{{ t.get("desk-role") }} <select name="role">
+    <option value="primary">{{ t.get("desk-primary") }}</option><option value="supplement" selected>{{ t.get("desk-supplement") }}</option>
+    <option value="administrative">{{ t.get("desk-administrative") }}</option><option value="label">{{ t.get("desk-label") }}</option>
+  </select></label>
+  <label>{{ t.get("desk-access") }} <select name="access"><option value="staff">{{ t.get("desk-staff") }}</option><option value="public">{{ t.get("desk-public") }}</option></select></label>
+  <p class="form-hint">{{ t.get("desk-file-policy") }}</p>
+  <button name="action" value="file">{{ t.get("desk-add-file") }}</button>
+</form>
+<h2>{{ t.get("desk-collections") }}</h2>
+<ul>{% for c in collections %}{% if c.2 %}<li>{{ c.1 }}</li>{% endif %}{% endfor %}</ul>
+<form method="get" action="/equipe/repositorio/{{ key }}">
+  <label>{{ t.get("desk-find-collection") }} <input type="search" name="filter" value="{{ filter }}"></label>
+  <button>{{ t.get("bar-search") }}</button>
+</form>
+<form method="post" action="/equipe/repositorio/{{ key }}">
+  {% call token() %}{% endcall %}
+  <label>{{ t.get("desk-collection") }} <select name="collection" required>
+    <option value=""></option>
+    {% for c in collections %}{% if !c.2 %}<option value="{{ c.0 }}">{{ c.1 }}</option>{% endif %}{% endfor %}
+  </select></label><button name="action" value="join">{{ t.get("desk-join") }}</button>
+</form>
+<form method="post" action="/equipe/repositorio/{{ key }}">
+  {% call token() %}{% endcall %}
+  <label>{{ t.get("desk-collection-name") }} <input name="name" maxlength="256" required></label>
+  <button name="action" value="collection">{{ t.get("desk-create-collection") }}</button>
+</form>
+{% else if let Some(i)=instance %}
+<form method="post" action="/equipe/repositorio">
+  {% call token() %}{% endcall %}<input type="hidden" name="instance" value="{{ i }}">
+  <button>{{ t.get("desk-create-draft") }}</button>
+</form>
+{% endif %}
+</div>
+{% endblock %}

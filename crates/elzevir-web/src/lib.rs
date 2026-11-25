@@ -46,6 +46,7 @@ mod record_form;
 mod registries;
 mod repository;
 mod repository_discovery;
+mod repository_staff;
 mod security;
 mod session;
 mod staff;
@@ -105,6 +106,7 @@ impl Default for WebConfig {
 pub struct AppState {
     inner: Arc<Inner>,
     repository: Option<repository::Access>,
+    desk: Option<repository_staff::Desk>,
     imports: Option<Arc<importing::Imports>>,
     patrons: Option<Arc<dyn elzevir_app::patrons::PatronDesk>>,
     loans: Option<Arc<dyn elzevir_app::loans::LoanDesk>>,
@@ -149,6 +151,7 @@ impl AppState {
         Self {
             imports: None,
             repository: None,
+            desk: None,
             patrons: None,
             loans: None,
             rules: None,
@@ -172,6 +175,15 @@ impl AppState {
         }
     }
 
+    /// Attach staff repository operations to the institution's existing writer.
+    #[must_use]
+    pub fn with_repository_desk(
+        mut self,
+        port: Arc<dyn elzevir_app::repository::RepositoryDesk>,
+    ) -> Self {
+        self.desk = Some(repository_staff::Desk::new(port));
+        self
+    }
     /// Connect public deposit pages and downloads for this institution.
     #[must_use]
     pub fn with_repository(
@@ -267,6 +279,7 @@ pub fn router(state: AppState) -> Router {
         .route("/", get(opac::home))
         .route("/search", get(opac::search))
         .merge(repository::routes())
+        .merge(repository_staff::routes(&state))
         .route("/record/{id}", get(opac::record))
         .route("/equipe/barra", get(staff_bar::bar))
         .route("/equipe/busca", get(staff_bar::search))

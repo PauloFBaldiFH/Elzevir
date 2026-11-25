@@ -276,3 +276,66 @@ impl r::DiscoveryReader for crate::ElzevirStore {
         })
     }
 }
+
+fn desk_instance(conn: &Connection, instance: r::InstanceId) -> r::Result<r::DeskInstance> {
+    conn.query_row(
+        "SELECT coalesce(nullif(i.title,''),w.title), d.id FROM instances i
+         JOIN works w ON w.id=i.work_id LEFT JOIN repo_deposits d ON d.instance_id=i.id
+         WHERE i.id=?1",
+        [instance.0],
+        |row| {
+            let key: Option<[u8; 16]> = row.get(1)?;
+            Ok(r::DeskInstance {
+                title: row.get(0)?,
+                deposit: key.map(|k| r::DepositId(u128::from_be_bytes(k))),
+            })
+        },
+    )
+    .optional()
+    .map_err(db)?
+    .ok_or(r::RepositoryError::InstanceNotFound)
+}
+
+impl MetadataStore {
+    /// Staff lookup includes drafts and withdrawn deposits.
+    ///
+    /// # Errors
+    /// Unknown instance or failed read.
+    pub fn staff_deposit(&self, instance: r::InstanceId) -> r::Result<r::DeskInstance> {
+        self.0.readers().read(|c| desk_instance(c, instance))
+    }
+
+    /// Snapshot with all memberships and up to 100 matching collection choices.
+    ///
+    /// # Errors
+    /// Unknown deposit or failed read.
+    pub fn desk_view(&self, deposit_id: r::DepositId, filter: &str) -> r::Result<r::DeskView> {
+        self.0.readers().read(|conn| {
+            let tx = conn.unchecked_transaction().map_err(db)?;
+            let (deposit, opac_visible) = snapshot(&tx, deposit_id)?;
+            let title = desk_instance(&tx, deposit.instance)?.title;
+            let mut stmt = tx
+                .prepare(
+                    "SELECT id,name FROM repo_collections WHERE id IN
+                    (SELECT collection_id FROM repo_collection_members WHERE deposit_id=?1)
+                 OR id IN
+                    (SELECT id FROM repo_collections WHERE instr(lower(name),lower(?2))>0
+                     ORDER BY name,id LIMIT 100)
+                 ORDER BY name,id",
+                )
+                .map_err(db)?;
+            let rows = stmt
+                .query_map(params![deposit_id.0.to_be_bytes(), filter], |row| {
+                    Ok((r::DigitalCollectionId(id(row, 0)?), row.get(1)?))
+                })
+                .map_err(db)?;
+            let collections = rows.collect::<rusqlite::Result<_>>().map_err(db)?;
+            Ok(r::DeskView {
+                deposit,
+                title,
+                opac_visible,
+                collections,
+            })
+        })
+    }
+}
