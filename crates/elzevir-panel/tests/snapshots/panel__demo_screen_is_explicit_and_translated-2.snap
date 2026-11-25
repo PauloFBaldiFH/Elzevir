@@ -3,14 +3,14 @@ source: crates/elzevir-panel/tests/panel.rs
 expression: "screen(&panel, \"pt-BR\", 120, 24)"
 ---
 🦀  Elzevir TUI  0.1.0-alpha.2  ·  Instituição fictícia
-╭Seções────────────────────╮   1 Início         2 Saúde       3 Acesso       4 Backup        5 Versões      6 Serviço
+╭Seções────────────────────╮   Início        Saúde        Acesso       Backup       Versões      Serviço       Ajustes
 │▌ d Painel de controle    │╭Painel de controle──────────────────────────────────────────╮╭Instituição selecionada─────╮
 │  x Diagnóstico           ││DEMONSTRAÇÃO - dados simulados                              ││Biblioteca de demonstração  │
 │  a Endereços e acesso    ││                                                            ││                            │
 │  b Backup e agendamentos ││Estado do serviço, endereços e saúde aparecerão aqui quando ││Instituição fictícia        │
 │  u Atualizações          ││conectado.                                                  ││                            │
 │  r Serviço               ││                                                            ││Estado do servidor: não lido│
-│                          ││Apenas demonstração. Nenhuma operação está disponível e nada││                            │
+│  g Configurações         ││Apenas demonstração. Nenhuma operação está disponível e nada││                            │
 │                          ││é alterado no sistema.                                      ││| Animação de demonstração  │
 │                          ││                                                            ││                            │
 │                          ││                                                            ││                            │

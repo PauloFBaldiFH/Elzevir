@@ -22,6 +22,7 @@ mod live;
 mod messages;
 mod operation_view;
 mod operations;
+mod overview;
 mod port;
 pub use port::{MIN_PORT, PortForm, PortStep, Refusal, choose_port};
 mod folder_picker;
@@ -82,17 +83,20 @@ pub enum Section {
     Updates,
     /// Service and machine restart.
     Restart,
+    /// Institution preferences and initial setup.
+    Settings,
 }
 
 impl Section {
     /// Navigation order.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Dashboard,
         Self::Diagnostics,
         Self::Addresses,
         Self::Backup,
         Self::Updates,
         Self::Restart,
+        Self::Settings,
     ];
 
     /// Fluent message key for this section.
@@ -105,6 +109,7 @@ impl Section {
             Self::Backup => "panel-backup",
             Self::Updates => "panel-updates",
             Self::Restart => "panel-restart",
+            Self::Settings => "section-settings",
         }
     }
 
@@ -118,6 +123,7 @@ impl Section {
             Self::Backup => 'b',
             Self::Updates => 'u',
             Self::Restart => 'r',
+            Self::Settings => 'g',
         }
     }
 
@@ -620,7 +626,7 @@ impl Panel {
                     None
                 },
             ),
-            (Section::Restart, 'c') => match self.settings() {
+            (Section::Restart | Section::Settings, 'c') => match self.settings() {
                 Some(operation) => operation,
                 None => return false,
             },

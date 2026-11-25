@@ -96,6 +96,7 @@ struct Collector {
     system: Option<sysinfo::System>,
     cpu_at: Option<Instant>,
     cpu: Option<f32>,
+    process_sample: Option<(sysinfo::Pid, u64, Instant)>,
     diagnostics: crate::diagnostics::Context,
     operation_result: Option<&'static str>,
     config: Option<PathBuf>,
@@ -112,6 +113,7 @@ impl Collector {
             cpu_at: None,
             restore: None,
             cpu: None,
+            process_sample: None,
             diagnostics: crate::diagnostics::Context::default(),
             operation_result: None,
             config: None,
@@ -135,6 +137,7 @@ impl Collector {
             indexer: component(health.indexer),
             listen: observed.listen,
         });
+        let host = self.host(details.as_ref().map(|detail| detail.pid));
         let status = match (observed.state, details) {
             ("running", Some(details)) => ServerStatus::Running(details),
             ("degraded", Some(details)) => ServerStatus::Degraded(details),
@@ -160,14 +163,14 @@ impl Collector {
                 wal_bytes,
                 available_bytes,
             },
-            host: self.host(),
+            host,
             diagnostics,
             addresses: self.diagnostics.addresses(),
             operations,
         }
     }
 
-    fn host(&mut self) -> Host {
+    fn host(&mut self, pid: Option<u32>) -> Host {
         if self.system.is_none() {
             // Unsupported/temporarily unavailable host information stays unknown and is retried.
             self.system = sysinfo::System::new().ok();
@@ -189,7 +192,30 @@ impl Collector {
             self.cpu_at = Some(now);
         }
         let memory = (system.used_memory(), system.total_memory());
+        let mut process_cpu = None;
+        let mut resident = None;
+        let sample = pid.map(sysinfo::Pid::from_u32).and_then(|pid| {
+            use sysinfo::{ProcessRefreshKind, ProcessesToUpdate};
+            let count = system.refresh_processes_specifics(
+                ProcessesToUpdate::Some(&[pid]),
+                true,
+                ProcessRefreshKind::nothing().with_memory().with_cpu(),
+            );
+            let process = system.process(pid).filter(|_| count == 1)?;
+            resident = Some(process.memory());
+            if self.process_sample.is_some_and(|(old, birth, at)| {
+                old == pid
+                    && birth == process.start_time()
+                    && at.elapsed() >= sysinfo::MINIMUM_CPU_UPDATE_INTERVAL
+            }) {
+                process_cpu = Some(process.cpu_usage()).filter(|n| n.is_finite() && *n >= 0.0);
+            }
+            Some((pid, process.start_time(), now))
+        });
+        self.process_sample = sample;
         Host {
+            process_cpu,
+            resident,
             cpu_percent: self.cpu,
             memory_bytes: (memory.1 > 0 && memory.0 <= memory.1).then_some(memory),
         }
@@ -270,7 +296,10 @@ impl Collector {
                 .map(|job| elzevir_panel::Job {
                     phase: job.phase.map(crate::backup_archive::Phase::label),
                     id: job.id,
-                    at: job.at,
+                    at: job
+                        .at
+                        .parse::<jiff::Timestamp>()
+                        .map_or(job.at, |t| t.strftime("%F %R UTC").to_string()),
                     action: match job.task {
                         crate::operations::Task::Backup { .. } => "op-backup-now",
                         crate::operations::Task::ConfigureCloud => "cloud-operation",

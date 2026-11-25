@@ -3,31 +3,31 @@ source: crates/elzevir-panel/tests/live.rs
 expression: "screen(&panel, \"en\")"
 ---
 Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
-+Sections------------------+      1 Home            2 Health          3 Access           4 Backup           5 Updates         6 Service
-|> d Dashboard             |+Dashboard-----------------------------------------------------------------------++Selected institution--------+
-|  x Diagnostics           ||Running                                                                         ||Biblioteca de teste         |
-|  a Addresses and access  ||                                                                                ||                            |
-|  b Backups and schedules ||Version: 0.0.0                                                                  ||Configured listener         |
-|  u Updates               ||PID: 42                                                                         ||127.0.0.1:0                 |
-|  r Service               ||Uptime (seconds): 123                                                           ||                            |
-|                          ||Database: OK                                                                    ||Observed listener           |
-|                          ||Indexer: OK                                                                     ||127.0.0.1:8080              |
-|                          ||                                                                                ||                            |
-|                          ||Host CPU (%): 12.5                                                              ||Last check: 0 seconds ago   |
-|                          ||Host memory (MiB): 1024 / 8192                                                  ||                            |
-|                          ||Free space (bytes): 104857600                                                   ||Read-only observations      |
-|                          ||Database size (bytes): 4194304                                                  ||                            |
-|                          ||WAL size (bytes): 0                                                             ||                            |
-|                          ||                                                                                ||                            |
-|                          ||Catalog (this computer): http://127.0.0.1:8080/                                 ||                            |
-|                          ||Staff (this computer): http://127.0.0.1:8080/equipe                             ||                            |
-|                          ||Addresses from listener binding; HTTP not tested.                               ||                            |
-|                          ||LAN access: not measured                                                        ||                            |
-|                          ||Internet access: not configured                                                 ||                            |
-|                          ||Backup: not available yet                                                       ||                            |
-|                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-|                          |+--------------------------------------------------------------------------------++----------------------------+
-+--------------------------+                                                   Refresh [F]
+      1 Home             2 Health            3 Access             4 Backup            5 Updates           6 Service          7 Settings
++ Biblioteca de teste ----------------------------------------------+ + Data protection --------------------------------------------------+
+| Running                                                           | | Local backup status unavailable                                   |
+| Database: OK                                                      | | Cloud transfer: Not read                                          |
+| Indexer: OK                                                       | |                                                                   |
+| Version: 0.0.0                                                    | |                                                                   |
+| Configured listener: 127.0.0.1:0                                  | |                                                                   |
+| Last check: 0 seconds ago                                         | |                                                                   |
+|                                                                   | |                                                                   |
+|                                                                   | |                                                                   |
+|                                                                   | |                                                                   |
+|                                                                   | |                                                                   |
++-------------------------------------------------------------------+ +-------------------------------------------------------------------+
++ Access -----------------------------------------------------------+ + Resource usage ---------------------------------------------------+
+| Catalog (this computer): http://127.0.0.1:8080/                   | | Elzevir RAM (resident): Not read                                  |
+| Staff (this computer): http://127.0.0.1:8080/equipe               | | Elzevir CPU (one core = 100%): Not read                           |
+| Addresses from listener binding; HTTP not tested.                 | | Host CPU (%): 12.5                                                |
+| LAN access: not measured                                          | | Host RAM: 1.0 GiB / 8.0 GiB                                       |
+| Public HTTPS test: Not read                                       | | Disk free: 100.0 MiB                                              |
+|                                                                   | | Database: 4.0 MiB                                                 |
+|                                                                   | | WAL: 0 B                                                          |
+|                                                                   | |                                                                   |
+|                                                                   | |                                                                   |
+|                                                                   | |                                                                   |
++-------------------------------------------------------------------+ +-------------------------------------------------------------------+
+
+           Backups and schedules [B]                            Settings [G]                                    Refresh [F]
 Tab/arrows: navigate | f: refresh | PgUp/PgDn: scroll | Ctrl+P: palette | q/Ctrl+C: quit

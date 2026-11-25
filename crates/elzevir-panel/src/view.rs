@@ -42,7 +42,7 @@ pub(crate) fn menu_area(area: Rect, palette: bool) -> Rect {
             area.x + area.width.saturating_sub(48) / 2,
             area.y + area.height.saturating_sub(8) / 2,
             area.width.min(48),
-            area.height.min(8),
+            area.height.min(9),
         )
     } else {
         columns(area).first().copied().unwrap_or_default()
@@ -165,7 +165,14 @@ pub(crate) fn interactive(
     }
     let header = Rect::new(area.x, area.y, area.width, 1);
     ui::header(frame, header, panel, messages, ascii);
-    let [navigation, work, context] = columns(area);
+    let [mut navigation, mut work, mut context] = columns(area);
+    if matches!(panel.mode, Mode::Live(_))
+        && (area.width < 120 || panel.section == Section::Dashboard)
+    {
+        navigation = Rect::default();
+        work = body(area);
+        context = Rect::new(work.right(), work.y, 0, work.height);
+    }
     let tabs = Rect::new(work.x, work.y, work.width + context.width, 1);
     draw_tabs(frame, tabs, panel, messages, scene);
     let action_rows = if matches!(&panel.mode, Mode::Live(_)) && area.width < 115 {
@@ -186,7 +193,9 @@ pub(crate) fn interactive(
         work.width + context.width,
         action_rows,
     );
-    menu(frame, panel, messages, navigation, ascii, scene);
+    if !navigation.is_empty() {
+        menu(frame, panel, messages, navigation, ascii, scene);
+    }
     if let Mode::Live(state) = &panel.mode {
         crate::dashboard::draw(frame, panel, state, messages, work, context, ascii);
         if panel.section == Section::Restart {
@@ -196,21 +205,7 @@ pub(crate) fn interactive(
         draw_demo(frame, panel, messages, ascii, work, context);
     }
     ui::action_bar(frame, actions, panel, messages, scene, ascii);
-    let footer = Rect::new(area.x, area.bottom().saturating_sub(2), area.width, 2);
-    let mut help = messages.get(if matches!(panel.mode, Mode::Demo) {
-        "panel-help"
-    } else {
-        "panel-help-live"
-    });
-    if let Mode::Live(state) = &panel.mode
-        && let Some(result) = state
-            .snapshot
-            .as_ref()
-            .and_then(|sample| sample.operations.result)
-    {
-        help = format!("{}  |  {help}", messages.get(result));
-    }
-    frame.render_widget(Paragraph::new(help).wrap(Wrap { trim: true }), footer);
+    draw_footer(frame, area, panel, messages);
     if panel.form.is_some() {
         scene.clear();
         ui::dim(frame);
@@ -218,8 +213,7 @@ pub(crate) fn interactive(
     } else if panel.palette {
         scene.clear();
         ui::dim(frame);
-        let mut popup = menu_area(area, true);
-        popup.height = popup.height.saturating_add(1).min(area.bottom() - popup.y);
+        let popup = menu_area(area, true);
         frame.render_widget(Clear, popup);
         menu(frame, panel, messages, popup, ascii, scene);
     }
@@ -242,12 +236,16 @@ fn draw_tabs(frame: &mut Frame, tabs: Rect, panel: &Panel, messages: &Messages, 
                             "tab-backup",
                             "tab-updates",
                             "tab-restart",
+                            "tab-settings",
                         ];
                         let label = names
                             .get(index)
-                            .filter(|_| tabs.width / 6 >= 10)
                             .map_or_else(String::new, |name| messages.get(name));
-                        format!("{} {label}", index + 1)
+                        if tabs.width < 100 {
+                            label
+                        } else {
+                            format!("{} {label}", index + 1)
+                        }
                     },
                     Action::Section(section),
                     panel.section == section,
@@ -296,4 +294,22 @@ fn draw_demo(
             .block(block(messages.get("panel-context"), ascii)),
         context,
     );
+}
+
+fn draw_footer(frame: &mut Frame, area: Rect, panel: &Panel, messages: &Messages) {
+    let footer = Rect::new(area.x, area.bottom().saturating_sub(2), area.width, 2);
+    let mut help = messages.get(if matches!(panel.mode, Mode::Demo) {
+        "panel-help"
+    } else {
+        "panel-help-live"
+    });
+    if let Mode::Live(state) = &panel.mode
+        && let Some(result) = state
+            .snapshot
+            .as_ref()
+            .and_then(|sample| sample.operations.result)
+    {
+        help = format!("{}  |  {help}", messages.get(result));
+    }
+    frame.render_widget(Paragraph::new(help).wrap(Wrap { trim: true }), footer);
 }

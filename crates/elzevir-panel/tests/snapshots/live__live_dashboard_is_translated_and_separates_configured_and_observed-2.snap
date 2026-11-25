@@ -3,31 +3,31 @@ source: crates/elzevir-panel/tests/live.rs
 expression: "screen(&panel, \"pt-BR\")"
 ---
 Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
-+Seções--------------------+     1 Início            2 Saúde          3 Acesso           4 Backup           5 Versões         6 Serviço
-|> d Painel de controle    |+Painel de controle--------------------------------------------------------------++Instituição selecionada-----+
-|  x Diagnóstico           ||Em execução                                                                     ||Biblioteca de teste         |
-|  a Endereços e acesso    ||                                                                                ||                            |
-|  b Backup e agendamentos ||Versão: 0.0.0                                                                   ||Listener configurado        |
-|  u Atualizações          ||PID: 42                                                                         ||127.0.0.1:0                 |
-|  r Serviço               ||Tempo em execução (segundos): 123                                               ||                            |
-|                          ||Banco: OK                                                                       ||Listener observado          |
-|                          ||Indexador: OK                                                                   ||127.0.0.1:8080              |
-|                          ||                                                                                ||                            |
-|                          ||CPU da máquina (%): 12.5                                                        ||Última consulta: há 0       |
-|                          ||Memória da máquina (MiB): 1024 / 8192                                           ||segundos                    |
-|                          ||Espaço livre (bytes): 104857600                                                 ||                            |
-|                          ||Tamanho do banco (bytes): 4194304                                               ||Observações somente de      |
-|                          ||Tamanho do WAL (bytes): 0                                                       ||leitura                     |
-|                          ||                                                                                ||                            |
-|                          ||Catálogo (neste computador): http://127.0.0.1:8080/                             ||                            |
-|                          ||Equipe (neste computador): http://127.0.0.1:8080/equipe                         ||                            |
-|                          ||Endereços derivados do listener; HTTP não testado.                              ||                            |
-|                          ||Acesso na rede local: não medido                                                ||                            |
-|                          ||Acesso pela internet: não configurado                                           ||                            |
-|                          ||Backup: ainda não disponível                                                    ||                            |
-|                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-|                          |+--------------------------------------------------------------------------------++----------------------------+
-+--------------------------+                                                  Atualizar [F]
+     1 Início             2 Saúde            3 Acesso             4 Backup            5 Versões           6 Serviço           7 Ajustes
++ Biblioteca de teste ----------------------------------------------+ + Proteção dos dados -----------------------------------------------+
+| Em execução                                                       | | Situação do backup local indisponível                             |
+| Banco: OK                                                         | | Envio à nuvem: Não lido                                           |
+| Indexador: OK                                                     | |                                                                   |
+| Versão: 0.0.0                                                     | |                                                                   |
+| Endereço configurado: 127.0.0.1:0                                 | |                                                                   |
+| Última consulta: há 0 segundos                                    | |                                                                   |
+|                                                                   | |                                                                   |
+|                                                                   | |                                                                   |
+|                                                                   | |                                                                   |
+|                                                                   | |                                                                   |
++-------------------------------------------------------------------+ +-------------------------------------------------------------------+
++ Acesso -----------------------------------------------------------+ + Uso de recursos --------------------------------------------------+
+| Catálogo (neste computador): http://127.0.0.1:8080/               | | RAM do Elzevir (residente): Não lido                              |
+| Equipe (neste computador): http://127.0.0.1:8080/equipe           | | CPU do Elzevir (um núcleo = 100%): Não lido                       |
+| Endereços derivados do listener; HTTP não testado.                | | CPU da máquina (%): 12.5                                          |
+| Acesso na rede local: não medido                                  | | RAM da máquina: 1.0 GiB / 8.0 GiB                                 |
+| Teste HTTPS público: Não lido                                     | | Espaço livre: 100.0 MiB                                           |
+|                                                                   | | Banco de dados: 4.0 MiB                                           |
+|                                                                   | | WAL: 0 B                                                          |
+|                                                                   | |                                                                   |
+|                                                                   | |                                                                   |
+|                                                                   | |                                                                   |
++-------------------------------------------------------------------+ +-------------------------------------------------------------------+
+
+           Backup e agendamentos [B]                          Configurações [G]                                Atualizar [F]
 Tab/setas: navegar | f: atualizar | PgUp/PgDn: rolar | Ctrl+P: paleta | q/Ctrl+C: sair

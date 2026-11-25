@@ -3,14 +3,14 @@ source: crates/elzevir-panel/tests/live.rs
 expression: shown
 ---
 Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
-+Seções--------------------+     1 Início            2 Saúde          3 Acesso           4 Backup           5 Versões         6 Serviço
++Seções--------------------+   1 Início         2 Saúde        3 Acesso         4 Backup        5 Versões       6 Serviço       7 Ajustes
 |  d Painel de controle    |+Serviço-------------------------------------------------------------------------++Instituição selecionada-----+
 |  x Diagnóstico           || * Em execução                                                                  ||Biblioteca de teste         |
 |  a Endereços e acesso    || Ligado há 2 min  |  http://127.0.0.1:8080/                                     ||                            |
 |  b Backup e agendamentos ||                                                                                ||Listener configurado        |
 |  u Atualizações          ||                                                                                ||127.0.0.1:0                 |
 |> r Serviço               ||                                                                                ||                            |
-|                          || +-----------------------+  +----------------------+  +-----------------------+ ||Listener observado          |
+|  g Configurações         || +-----------------------+  +----------------------+  +-----------------------+ ||Listener observado          |
 |                          || |        Iniciar        |  |         Parar        |  |       Reiniciar       | ||127.0.0.1:8080              |
 |                          || +-----------------------+  +----------------------+  +-----------------------+ ||                            |
 |                          || +------------------------------------+  +------------------------------------+ ||Última consulta: há 0       |

@@ -3,14 +3,14 @@ source: crates/elzevir-panel/tests/live.rs
 expression: shown
 ---
 Elzevir TUI  0.1.0-alpha.2  |  Não lido
-+Seções--------------------+     1 Início            2 Saúde          3 Acesso           4 Backup           5 Versões         6 Serviço
++Seções--------------------+   1 Início         2 Saúde        3 Acesso         4 Backup        5 Versões       6 Serviço       7 Ajustes
 |  d Painel de controle    |+Serviço-------------------------------------------------------------------------++Instituição selecionada-----+
 |  x Diagnóstico           || * Consultando...                                                               ||Biblioteca de teste         |
 |  a Endereços e acesso    ||                                                                                ||                            |
 |  b Backup e agendamentos ||                                                                                ||Listener configurado        |
 |  u Atualizações          ||                                                                                ||127.0.0.1:7390              |
 |> r Serviço               ||   +Operação com confirmação--------------------------------------------------+ ||                            |
-|                          || +-| Salvar as configurações — valem ao reiniciar o servidor                  | ||Listener observado          |
+|  g Configurações         || +-| Salvar as configurações — valem ao reiniciar o servidor                  | ||Listener observado          |
 |                          || | | Biblioteca de teste                                                      | ||Não lido                    |
 |                          || +-| Sessões ativas observadas da equipe: Não lido                            | ||                            |
 |                          || +-|                                                                          | ||Consultando...              |

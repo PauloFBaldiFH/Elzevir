@@ -85,3 +85,4 @@ num contêiner, as métricas de host dependem do que o SO disponibiliza.
 
 A projeção de proteção separa quatro observações: cópia local publicada e verificada na criação, última tentativa do servidor, resultado de exportação pelo operador e transferência do plano de nuvem. Um recibo de exportação antigo não identifica o artefato. O painel informa o resultado como observação independente. Arquivo não catalogado, catálogo ilegível e cópia catalogada ausente impedem afirmar que há proteção verificada. A tela não recalcula hashes a cada coleta. O histórico usa a hora da solicitação. Informação vencida perde a indicação positiva.
 
+Na visão geral, saúde, proteção, recursos e acesso têm cartões próprios. As medidas do processo vêm do PID confirmado e CPU exige duas amostras. Em tela compacta as seções conservam seus nomes e o conteúdo pode rolar sem deslocar as ações.

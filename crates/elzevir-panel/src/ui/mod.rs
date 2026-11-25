@@ -6,7 +6,7 @@ pub(crate) mod theme;
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Position, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     widgets::{Paragraph, Widget},
 };
 
@@ -66,6 +66,7 @@ impl Scene {
         let areas = Layout::horizontal(
             (0..count).map(|_| Constraint::Ratio(1, u32::try_from(count).unwrap_or(u32::MAX))),
         )
+        .spacing(1)
         .split(area);
         for ((label, action, selected), rect) in buttons.into_iter().zip(areas.iter().copied()) {
             let hover = self.add(rect, action);
@@ -140,10 +141,12 @@ pub(crate) fn header(
             "Tantivy {}",
             crate::dashboard::component(details.indexer, messages)
         ));
-        if let Some(address) = snapshot.and_then(|sample| sample.addresses.catalog.as_deref()) {
+        if area.width >= 120
+            && let Some(address) = snapshot
+                .and_then(|sample| sample.addresses.catalog.as_deref())
+                .filter(|a| a.len() + 65 < usize::from(area.width))
+        {
             parts.push(address.to_owned());
-        } else if let Some(address) = details.listen {
-            parts.push(format!("http://{address}"));
         }
     }
     if snapshot.is_some_and(|sample| sample.operations.update_available) {
@@ -168,39 +171,48 @@ pub(crate) fn action_bar(
         return;
     }
     let contextual: &[(&str, char)] = match panel.section {
+        Section::Settings if panel.settings().is_some() => &[("ui-settings", 'c')],
+        Section::Dashboard => &[("panel-backup", 'b'), ("section-settings", 'g')],
         Section::Diagnostics => &[("ui-verify", 'v'), ("ui-export", 'e')],
         Section::Addresses => &[("ui-test", 't'), ("ui-share", 'Q'), ("ui-config", 'm')],
         Section::Backup => &[("ui-new", 'n'), ("ui-verify", 'v'), ("ui-config", 's')],
         Section::Updates => &[("ui-search", 'c'), ("ui-install", 'i'), ("ui-recover", 'r')],
         // The service section has its own big buttons.
-        Section::Dashboard | Section::Restart => &[],
+        Section::Settings | Section::Restart => &[],
     };
     let controls: Vec<_> = contextual
         .iter()
         .copied()
         .chain([("ui-refresh", 'f')])
         .collect();
+    if controls.is_empty() {
+        return;
+    }
     let per_row = if area.height > 1 {
         controls.len().div_ceil(2)
     } else {
         controls.len()
     };
     for (line, row) in controls.chunks(per_row).enumerate() {
-        let buttons = row.iter().copied().map(|(key, shortcut)| {
-            (
-                format!(
-                    "{} [{}]",
-                    label(messages.get(key), ascii),
-                    if panel.section == Section::Addresses {
-                        shortcut
-                    } else {
-                        shortcut.to_ascii_uppercase()
-                    }
-                ),
-                Action::Key(KeyCode::Char(shortcut)),
-                false,
-            )
-        });
+        let buttons = row
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(index, (key, shortcut))| {
+                (
+                    format!(
+                        "{} [{}]",
+                        label(messages.get(key), ascii),
+                        if panel.section == Section::Addresses {
+                            shortcut
+                        } else {
+                            shortcut.to_ascii_uppercase()
+                        }
+                    ),
+                    Action::Key(KeyCode::Char(shortcut)),
+                    line == 0 && index == 0,
+                )
+            });
         scene.buttons(
             frame,
             Rect::new(
@@ -259,4 +271,27 @@ pub(crate) fn fill(frame: &mut Frame, area: Rect, style: Style) {
     Paragraph::new("")
         .style(style)
         .render(area, frame.buffer_mut());
+}
+
+/// A dashboard card with a persistent title and scrollable, wrapped contents.
+pub(crate) fn card(
+    frame: &mut Frame,
+    area: Rect,
+    title: &str,
+    rows: Vec<ratatui::text::Line<'static>>,
+    accent: Color,
+    ascii: bool,
+    offset: u16,
+) {
+    let block = crate::view::block(format!(" {title} "), ascii)
+        .title_style(Style::new().fg(accent).add_modifier(Modifier::BOLD))
+        .border_style(Style::new().fg(theme::BORDER))
+        .padding(ratatui::widgets::Padding::horizontal(1));
+    frame.render_widget(
+        Paragraph::new(rows)
+            .block(block)
+            .wrap(ratatui::widgets::Wrap { trim: false })
+            .scroll((offset, 0)),
+        area,
+    );
 }
