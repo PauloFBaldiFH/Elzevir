@@ -3,14 +3,14 @@ source: crates/elzevir-panel/tests/live.rs
 expression: text
 ---
 Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://catalog.example:8080/
-+Sections------------------+      1 Home            2 Health          3 Access           4 Backup           5 Updates         6 Service
++Sections------------------+     1 Home         2 Health        3 Access        4 Backup        5 Updates       6 Service      7 Accounts
 |  d Dashboard             |+Addresses and access------------------------------------------------------------++Selected institution--------+
 |  x Diagnostics           ||Running                                                                         ||Biblioteca de teste         |
 |> a Addresses and access  ||                                                                                ||                            |
 |  b Backups and schedules ||[Addresses and access] | Configure and manage | Test | Log                      ||Configured listener         |
 |  u Updates               ||[ / ] tabs · Q share catalog · t test public HTTPS · T staff HTTPS              ||127.0.0.1:0                 |
 |  r Service               ||Domain & Tunnel (*.elzevir.app)                                                 ||                            |
-|                          ||Registration status unavailable                                                 ||Observed listener           |
+|  g Administrators        ||Registration status unavailable                                                 ||Observed listener           |
 |                          ||Public tunnel configuration could not be observed.                              ||127.0.0.1:8080              |
 |                          ||                                                                                ||                            |
 |                          ||Mode in loaded file: Same address                                               ||Last check: 0 seconds ago   |

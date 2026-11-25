@@ -261,3 +261,15 @@ fn sigterm_closes_the_database_and_removes_owned_endpoints() {
             .success()
     );
 }
+
+#[tokio::test]
+async fn private_channel_creates_a_new_administrator_and_refuses_a_duplicate() {
+    let root = tempfile::tempdir().unwrap();
+    let (_server, info) = start(root.path());
+    let command = serde_json::json!({"schema":1,"instance":info["instance"],"id":34,"command":{"type":"create_administrator","login":"test.admin","password":"fixture-password"}});
+    let bytes = format!("{command}\n");
+    let response = exchange(&info, bytes.as_bytes()).await;
+    assert_eq!(response["result"]["type"], "administrator_created");
+    let duplicate = exchange(&info, bytes.as_bytes()).await;
+    assert_eq!(duplicate["result"]["type"], "error");
+}

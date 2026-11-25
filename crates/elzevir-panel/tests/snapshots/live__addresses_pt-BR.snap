@@ -3,14 +3,14 @@ source: crates/elzevir-panel/tests/live.rs
 expression: text
 ---
 Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://catalog.example:8080/
-+Seções--------------------+     1 Início            2 Saúde          3 Acesso           4 Backup           5 Versões         6 Serviço
++Seções--------------------+    1 Início         2 Saúde        3 Acesso        4 Backup        5 Versões       6 Serviço       7 Contas
 |  d Painel de controle    |+Endereços e acesso--------------------------------------------------------------++Instituição selecionada-----+
 |  x Diagnóstico           ||Em execução                                                                     ||Biblioteca de teste         |
 |> a Endereços e acesso    ||                                                                                ||                            |
 |  b Backup e agendamentos ||[Endereços e acesso] | Configurar e gerenciar | Teste | Registro                ||Listener configurado        |
 |  u Atualizações          ||[ / ] abas · Q compartilhar catálogo · t testar HTTPS público · T HTTPS da      ||127.0.0.1:0                 |
 |  r Serviço               ||equipe                                                                          ||                            |
-|                          ||Domínio & Túnel (*.elzevir.app)                                                 ||Listener observado          |
+|  g Administradores       ||Domínio & Túnel (*.elzevir.app)                                                 ||Listener observado          |
 |                          ||Estado do cadastro indisponível                                                 ||127.0.0.1:8080              |
 |                          ||Não foi possível observar a configuração do túnel público.                      ||                            |
 |                          ||                                                                                ||Última consulta: há 0       |

@@ -29,7 +29,7 @@ mod restore_paths;
 mod runtime;
 mod service_view;
 mod setup;
-pub use setup::{Setup, SetupProfile, setup};
+pub use setup::{Setup, SetupProfile, institution_setup, setup};
 mod sharing;
 mod tunnel_view;
 mod ui;
@@ -40,8 +40,8 @@ pub use addresses::{
     AddressBook, PublicCheck, RemoteAddress, StaffAccess, Tunnel, TunnelLog, TunnelState, TunnelTab,
 };
 pub use diagnostics::{
-    CheckResult, DiagnosticAction, Diagnostics, ExportState, LogEntry, LogEvent, LogFeed, LogState,
-    ObservationRequest,
+    AccountPassword, CheckResult, DiagnosticAction, Diagnostics, ExportState, LogEntry, LogEvent,
+    LogFeed, LogState, ObservationRequest,
 };
 pub use live::{
     Component, Details, Host, Institution, LiveState, Mode, ServerStatus, Snapshot, Storage,
@@ -66,7 +66,7 @@ pub enum PanelError {
     Terminal(#[from] std::io::Error),
 }
 
-/// The six administration sections, shared by keyboard, mouse and rendering.
+/// The administration sections, shared by keyboard, mouse and rendering.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Section {
     /// Service overview.
@@ -82,17 +82,20 @@ pub enum Section {
     Updates,
     /// Service and machine restart.
     Restart,
+    /// Local staff administrator accounts.
+    Administrators,
 }
 
 impl Section {
     /// Navigation order.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Dashboard,
         Self::Diagnostics,
         Self::Addresses,
         Self::Backup,
         Self::Updates,
         Self::Restart,
+        Self::Administrators,
     ];
 
     /// Fluent message key for this section.
@@ -105,6 +108,7 @@ impl Section {
             Self::Backup => "panel-backup",
             Self::Updates => "panel-updates",
             Self::Restart => "panel-restart",
+            Self::Administrators => "panel-administrators",
         }
     }
 
@@ -118,6 +122,7 @@ impl Section {
             Self::Backup => 'b',
             Self::Updates => 'u',
             Self::Restart => 'r',
+            Self::Administrators => 'g',
         }
     }
 
@@ -564,6 +569,10 @@ impl Panel {
         if (self.section == Section::Addresses && self.address_navigation(key))
             || (self.section == Section::Backup && self.cloud_navigation(key))
         {
+            return true;
+        }
+        if self.section == Section::Administrators && key == 'n' {
+            self.diagnostics.account_requested = true;
             return true;
         }
         let operation = match (self.section, key) {

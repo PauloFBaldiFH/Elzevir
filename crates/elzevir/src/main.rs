@@ -772,6 +772,15 @@ fn add_staff(data_dir: &Path, login: &str, granted: [(bool, Permission); 4]) -> 
             .map_err(|e| format!("cannot read the password: {e}"))?;
         line.trim_end_matches(['\r', '\n']).to_owned()
     };
+    create_staff(data_dir, login, granted, &password)
+}
+
+fn create_staff(
+    data_dir: &Path,
+    login: &str,
+    granted: [(bool, Permission); 4],
+    password: &str,
+) -> Result<(), String> {
     if password.chars().count() < 8 {
         return Err("the password must have at least 8 characters".to_owned());
     }
@@ -783,7 +792,7 @@ fn add_staff(data_dir: &Path, login: &str, granted: [(bool, Permission); 4]) -> 
             .into_iter()
             .filter_map(|(asked, permission)| asked.then_some(permission)),
     );
-    let password_hash = hash_password(&password).map_err(|e| e.to_string())?;
+    let password_hash = hash_password(password).map_err(|e| e.to_string())?;
     let data = open_store(data_dir)?;
     let outcome = data
         .store
@@ -799,6 +808,38 @@ fn add_staff(data_dir: &Path, login: &str, granted: [(bool, Permission); 4]) -> 
         return Err(format!("unexpected answer from the writer: {outcome:?}"));
     };
     println!("elzevir: staff account `{login}` created (id {})", id.0);
+    Ok(())
+}
+
+fn create_administrator(store: &ElzevirStore, login: &str, password: &str) -> Result<(), ()> {
+    if login.is_empty()
+        || login.len() > 64
+        || !login
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'-' | b'_'))
+        || password.len() > 1024
+        || password.chars().count() < 8
+    {
+        return Err(());
+    }
+    let password_hash = hash_password(password).map_err(|_| ())?;
+    let command = StaffCommand::Create {
+        login: login.into(),
+        password_hash,
+        permissions: [
+            Permission::StaffInterface,
+            Permission::Administration,
+            Permission::Cataloguing,
+            Permission::Circulation,
+            Permission::Patrons,
+        ]
+        .into(),
+    };
+    store
+        .submit(WriteCommand::Staff(command))
+        .map_err(|_| ())?
+        .wait()
+        .map_err(|_| ())?;
     Ok(())
 }
 

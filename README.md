@@ -30,16 +30,23 @@ o instalador rodou no Linux ainda não conhece o comando: rode
 `source ~/.bashrc` ou abra outro terminal, como o instalador indica.
 
 Abra o Elzevir pelo terminal. No primeiro uso, informe o nome da
-biblioteca, crie a senha do administrador e selecione um perfil inicial
+biblioteca e selecione um perfil inicial
 opcional.
 
 ```sh
 elzevir
 ```
 
-O comando sem argumentos (o mesmo que `elzevir start`) abre o painel
-Ratatui e serve o catálogo em `http://127.0.0.1:7390`. O servidor continua
-rodando em segundo plano depois que o painel fecha; `elzevir stop` o para.
+Para cadastrar o primeiro administrador ou adicionar outra conta, abra a seção **Administradores**
+(tecla **7**, aba **Contas**) e escolha **Criar administrador [N]**. O formulário
+pede o login, a senha e a confirmação dentro do painel. Com o servidor em
+execução, o cadastro usa o canal administrativo local da instituição.
+
+`elzevir start` abre diretamente o painel e serve o catálogo em
+`http://127.0.0.1:7390` por padrão. O servidor continua em segundo plano
+ao fechar o painel. Para pará-lo, use `elzevir stop`.
+Em um checkout com o Rust instalado, execute `./elzevir.sh` para compilar
+e abrir a mesma interface.
 Também é possível usar `elzevir serve` e `elzevir panel` em terminais
 separados. Use `elzevir panel --demo` para explorar a interface com dados
 simulados.

@@ -82,6 +82,14 @@ pub(crate) fn draw(
         rows.extend(address_rows(panel, snapshot, state, messages));
     } else if matches!(panel.section, Section::Backup | Section::Updates) {
         rows.extend(crate::operation_view::rows(snapshot, panel, messages));
+    } else if panel.section == Section::Administrators {
+        rows.push(Line::from(messages.get("panel-administrators-body")));
+        if let Some(key @ ("account-created" | "account-refused")) =
+            snapshot.and_then(|s| s.operations.result)
+        {
+            rows.push(Line::default());
+            rows.push(Line::from(messages.get(key)));
+        }
     } else if panel.section == Section::Restart {
         // The service view draws its state and buttons over this block.
         rows.clear();
@@ -216,7 +224,30 @@ fn readings(
 ) -> Vec<Line<'static>> {
     let host = snapshot.map(|sample| &sample.host);
     let storage = snapshot.map(|sample| &sample.storage);
+    let heading = |key: &str| {
+        Line::from(messages.get(key)).style(
+            crate::ui::theme::surface()
+                .fg(crate::ui::theme::ACCENT)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        )
+    };
     vec![
+        heading("tab-access"),
+        row(
+            messages,
+            "panel-local-catalog",
+            snapshot
+                .and_then(|s| s.addresses.catalog.as_deref())
+                .map(text),
+        ),
+        row(
+            messages,
+            "panel-local-staff",
+            snapshot
+                .and_then(|s| s.addresses.staff.as_deref())
+                .map(text),
+        ),
+        heading("launch-server-state"),
         row(messages, "panel-version", details.map(|d| text(&d.version))),
         row(messages, "panel-pid", details.map(|d| d.pid.to_string())),
         row(
@@ -234,7 +265,7 @@ fn readings(
             "panel-indexer-state",
             details.map(|d| component(d.indexer, messages)),
         ),
-        Line::default(),
+        heading("launch-resources"),
         row(
             messages,
             "panel-host-cpu",
@@ -268,20 +299,6 @@ fn readings(
             storage.and_then(|s| s.wal_bytes).map(|n| n.to_string()),
         ),
         Line::default(),
-        row(
-            messages,
-            "panel-local-catalog",
-            snapshot
-                .and_then(|s| s.addresses.catalog.as_deref())
-                .map(text),
-        ),
-        row(
-            messages,
-            "panel-local-staff",
-            snapshot
-                .and_then(|s| s.addresses.staff.as_deref())
-                .map(text),
-        ),
         Line::from(messages.get(
             if snapshot.is_some_and(|s| s.addresses.tested_at.is_some()) {
                 "panel-access-tests-reference"

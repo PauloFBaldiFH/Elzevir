@@ -245,6 +245,7 @@ fn interact(
                 other => panel.handle(&other, drawn.width, drawn.height),
             }
         }
+        account_dialog(&mut panel, &mut terminal, messages, ascii)?;
         if last_tick.elapsed() >= tick {
             panel.tick = panel.tick.wrapping_add(1) % 4;
             last_tick = Instant::now();
@@ -253,6 +254,28 @@ fn interact(
     Ok(())
 }
 
+fn account_dialog(
+    panel: &mut Panel,
+    terminal: &mut ratatui::DefaultTerminal,
+    messages: &Messages,
+    ascii: bool,
+) -> io::Result<()> {
+    if std::mem::take(&mut panel.diagnostics.account_requested)
+        && let Some(entry) = crate::setup::dialog(
+            terminal,
+            messages,
+            crate::setup::Purpose::Account,
+            Some((panel, ascii)),
+        )?
+    {
+        panel.diagnostics.requested = Some(ObservationRequest::Administrator(
+            entry.name,
+            crate::AccountPassword(entry.password),
+        ));
+        panel.diagnostics.pending = true;
+    }
+    Ok(())
+}
 fn handle_picker(
     input: &Event,
     picker: &mut Option<crate::folder_picker::Picker>,

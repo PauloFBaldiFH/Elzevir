@@ -17,6 +17,7 @@ use tokio::{
 };
 
 const DEADLINE: Duration = Duration::from_secs(2);
+const ACCOUNT_DEADLINE: Duration = Duration::from_secs(30);
 const MAX_FRAME: usize = 32_768;
 
 #[derive(Serialize, Deserialize)]
@@ -32,6 +33,10 @@ struct Request {
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 enum Command {
     Status,
+    CreateAdministrator {
+        login: String,
+        password: String,
+    },
     Diagnose,
     BackupNow {
         #[serde(default)]
@@ -69,6 +74,7 @@ enum Outcome {
     Sessions { count: usize },
     Job { job: crate::operations::Job },
     Operations { view: crate::operations::View },
+    AdministratorCreated,
     Stopping,
     Error { code: ErrorCode },
 }
@@ -103,8 +109,9 @@ async fn handle(
     control: crate::shutdown::Control,
 ) -> io::Result<()> {
     // Collapse decoding failures to a static code; never echo untrusted frame contents.
-    let request = frame(&stream, MAX_FRAME)
+    let request = timeout(DEADLINE, frame(&stream, MAX_FRAME))
         .await
+        .map_err(|_| io::Error::from(io::ErrorKind::TimedOut))?
         .ok()
         .and_then(|bytes| serde_json::from_slice::<Request>(&zeroize::Zeroizing::new(bytes)).ok());
     let id = request.as_ref().map(|request| request.id);
@@ -118,6 +125,15 @@ async fn handle(
         Some(request) if request.instance != probe.instance() => Outcome::Error {
             code: ErrorCode::InstanceMismatch,
         },
+        Some(Request {
+            command: Command::CreateAdministrator { login, password },
+            ..
+        }) => operation_result(
+            operations
+                .create_administrator(login, zeroize::Zeroizing::new(password))
+                .await
+                .map(|()| Outcome::AdministratorCreated),
+        ),
         Some(Request {
             command: Command::Status,
             ..
@@ -212,7 +228,7 @@ pub(crate) async fn serve(
                     let operations = operations.clone();
                     let sessions=sessions.clone();
                     let control = control.clone();
-                    pending.spawn(async move { timeout(DEADLINE, handle(stream, probe, operations, sessions, control)).await });
+                    pending.spawn(async move { timeout(ACCOUNT_DEADLINE, handle(stream, probe, operations, sessions, control)).await });
                 }
                 // Dropping excess connections applies a fixed resource bound.
             }
@@ -240,6 +256,23 @@ pub(crate) fn status(info: &RuntimeInfo) -> Result<Report, String> {
     }
 }
 
+pub(crate) fn create_administrator(
+    info: &RuntimeInfo,
+    login: &str,
+    password: &str,
+) -> Result<(), String> {
+    match call(
+        info,
+        Command::CreateAdministrator {
+            login: login.into(),
+            password: password.into(),
+        },
+    )? {
+        Outcome::AdministratorCreated => Ok(()),
+        _ => Err("administrator creation refused".into()),
+    }
+}
+
 /// Asks a running server for an ordered shutdown.
 pub(crate) fn stop(info: &RuntimeInfo) -> Result<(), String> {
     match call(info, Command::Stop)? {
@@ -256,13 +289,18 @@ pub(crate) fn diagnose(info: &RuntimeInfo) -> Result<Integrity, String> {
 }
 
 fn call(info: &RuntimeInfo, command: Command) -> Result<Outcome, String> {
+    let deadline = if matches!(command, Command::CreateAdministrator { .. }) {
+        ACCOUNT_DEADLINE
+    } else {
+        DEADLINE
+    };
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|_| "cannot initialize administrative client")?;
     runtime
         .block_on(async {
-            timeout(DEADLINE, query(info, command))
+            timeout(deadline, query(info, command))
                 .await
                 .map_err(|_| "administrative request timed out")?
         })
@@ -311,7 +349,7 @@ async fn query(info: &RuntimeInfo, command: Command) -> Result<Outcome, String> 
     Ok(response.result)
 }
 
-fn operation_result(result: Result<Outcome, String>) -> Outcome {
+fn operation_result<E>(result: Result<Outcome, E>) -> Outcome {
     result.unwrap_or(Outcome::Error {
         code: ErrorCode::OperationRefused,
     })

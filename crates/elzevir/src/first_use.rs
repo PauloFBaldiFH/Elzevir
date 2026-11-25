@@ -50,16 +50,20 @@ pub(crate) fn interactive() -> bool {
 
 pub(crate) fn resolve(args: ServeArgs) -> Result<(Settings, Option<PathBuf>), String> {
     let ask = interactive();
-    resolve_or_ask(args, ask)
+    resolve_or_ask(args, ask, false)
 }
 
 /// The institution, when it exists already; never asks anything, even from
 /// a terminal (the tray's console on Windows is a hidden one).
 pub(crate) fn existing(args: ServeArgs) -> Result<(Settings, Option<PathBuf>), String> {
-    resolve_or_ask(args, false)
+    resolve_or_ask(args, false, false)
 }
 
-fn resolve_or_ask(mut args: ServeArgs, ask: bool) -> Result<(Settings, Option<PathBuf>), String> {
+pub(crate) fn resolve_or_ask(
+    mut args: ServeArgs,
+    ask: bool,
+    panel_accounts: bool,
+) -> Result<(Settings, Option<PathBuf>), String> {
     if args.config.is_some() || args.data_dir.is_some() {
         let config = args.config.clone();
         return args
@@ -99,17 +103,21 @@ fn resolve_or_ask(mut args: ServeArgs, ask: bool) -> Result<(Settings, Option<Pa
             // Nothing is written yet, so the chosen port goes into the new server.toml.
             init.listen =
                 crate::listen_port::ensure(init.listen, None, language(args.lang.as_deref()))?;
-            crate::init::run(&init)?;
-            println!(
-                "elzevir: {}",
-                messages.values(
-                    "setup-done",
-                    &[
-                        ("listen", init.listen.to_string()),
-                        ("login", init.login.clone()),
-                    ]
-                )
-            );
+            crate::init::initialize(&init, panel_accounts)?;
+            if panel_accounts {
+                println!("{}", messages.get("panel-administrators-body"));
+            } else {
+                println!(
+                    "elzevir: {}",
+                    messages.values(
+                        "setup-done",
+                        &[
+                            ("listen", init.listen.to_string()),
+                            ("login", init.login.clone()),
+                        ]
+                    )
+                );
+            }
         }
         _ => return Err("cannot inspect default institution database".into()),
     }
@@ -133,7 +141,7 @@ pub(crate) fn start(args: ServeArgs, no_self_update: bool) -> Result<(), String>
     }
     // A --listen override is never written back to server.toml.
     let explicit_listen = args.listen.is_some();
-    let (settings, config) = resolve(args)?;
+    let (settings, config) = resolve_or_ask(args, true, true)?;
     if matches!(
         crate::status::inspect(&settings.data_dir).state,
         "running" | "degraded"
