@@ -565,3 +565,129 @@ fn opac_conceals_drafts_then_distinguishes_unavailable_bytes_and_withdrawal() {
     store.shutdown().unwrap();
     assert_status(404, 404, false);
 }
+
+#[test]
+fn repository_discovery_searches_public_collections_and_filters_exact_id() {
+    let fixture = institution();
+    let d = fixture.path();
+    let deposit = run(d, &["draft", "1"]);
+    let pdf = run(d, &["add-file", &deposit, "PDF", "primary", "public"]);
+    let term = run(
+        d,
+        &[
+            "add-file",
+            &deposit,
+            "Privateconsent",
+            "administrative",
+            "staff",
+        ],
+    );
+    upload(d, &deposit, &pdf, 1, None, b"paper");
+    upload(d, &deposit, &term, 2, None, b"paper");
+    let collection = run(d, &["collection", "Paleobotânica"]);
+    let other = run(d, &["collection", "Paleobotânica"]);
+    run(d, &["join", &deposit, &collection]);
+    run(d, &["publish", &deposit]);
+    let (_server, host, agent) = start_http(d);
+    let get = |query: &str| {
+        let mut res = agent
+            .get(format!("{host}/repository{query}"))
+            .call()
+            .unwrap();
+        assert_eq!(res.status(), 200);
+        res.body_mut().read_to_string().unwrap()
+    };
+    let link = format!("/repository/{deposit}");
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !get("?q=paleobotanica").contains(&link) {
+        assert!(
+            Instant::now() < deadline,
+            "deposit did not reach the search index"
+        );
+        thread::sleep(Duration::from_millis(25));
+    }
+    assert!(get("").contains("Paleobotânica"));
+    assert!(get("?q=thesis").contains(&link));
+    assert!(get(&format!("?collection={collection}&q=thesis")).contains(&link));
+    assert!(!get(&format!("?collection={other}")).contains(&link));
+    assert!(!get("?q=Privateconsent").contains(&link));
+}
+
+#[test]
+fn withdrawal_is_effective_in_discovery_before_and_after_outbox_replay() {
+    use elzevir_app::{
+        parallelism::Parallelism,
+        repository::discover,
+        search::{IndexOptions, SearchIndex, SearchQuery, SearchScope, index_pending},
+    };
+    let fixture = institution();
+    let d = fixture.path();
+    let open = || {
+        ElzevirStore::open(
+            &d.join("elzevir.db"),
+            &StoreConfig::default(),
+            ElzevirHandler,
+        )
+        .unwrap()
+    };
+    let index = elzevir_search::TantivyIndex::in_memory(Parallelism::Serial).unwrap();
+    let options = IndexOptions::default();
+    let query = SearchQuery::words("");
+    let scope = SearchScope::Repository(None);
+    let count = || index.search(&query, scope, 0, 0).unwrap().total;
+    let deposit = run(d, &["draft", "1"]);
+    let file = run(d, &["add-file", &deposit, "PDF", "primary", "public"]);
+    upload(d, &deposit, &file, 1, None, b"article");
+    let store = open();
+    index_pending(&store, &store, &index, &options).unwrap();
+    assert_eq!(count(), 0);
+    store.shutdown().unwrap();
+    run(d, &["publish", &deposit]);
+    let store = open();
+    index_pending(&store, &store, &index, &options).unwrap();
+    assert_eq!(count(), 1); // a published deposit need not belong to a collection
+    store.shutdown().unwrap();
+    let coll = run(d, &["collection", "Herbarium"]);
+    run(d, &["join", &deposit, &coll]);
+    let store = open();
+    index_pending(&store, &store, &index, &options).unwrap();
+    assert_eq!(
+        discover(&index, &store, "herbarium", None, 1)
+            .unwrap()
+            .rows
+            .len(),
+        1
+    );
+    assert_eq!(
+        index
+            .search(
+                &SearchQuery::words("digital_collection:herbarium"),
+                SearchScope::Public,
+                0,
+                0
+            )
+            .unwrap()
+            .total,
+        0
+    );
+    store.shutdown().unwrap();
+    run(d, &["withdraw", &deposit]);
+    let store = open();
+    assert_eq!(count(), 1); // the index intentionally lags the committed withdrawal
+    assert!(
+        discover(&index, &store, "herbarium", None, 1)
+            .unwrap()
+            .rows
+            .is_empty()
+    );
+    index_pending(&store, &store, &index, &options).unwrap();
+    assert_eq!(count(), 0);
+    assert_eq!(
+        index
+            .search(&query, SearchScope::Public, 0, 0)
+            .unwrap()
+            .total,
+        1
+    );
+    store.shutdown().unwrap();
+}

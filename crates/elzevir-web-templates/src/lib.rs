@@ -4,6 +4,36 @@
 //! Templates never contain interface text: every string comes from Fluent through [`I18n`]
 //! (English first, then Brazilian Portuguese; docs/arquitetura/04-decisoes.md, §1 item 7).
 
+/// One authorized public result with navigable collection identities.
+pub struct DiscoveryResult {
+    /// Bibliographic title.
+    pub title: String,
+    /// Canonical deposit identifier.
+    pub id: String,
+    /// Collection identifiers and display names.
+    pub collections: Vec<(String, String)>,
+}
+
+/// Search form and results for the institutional repository.
+#[derive(askama::Template)]
+#[template(path = "repository_search.html")]
+pub struct RepositorySearch<'a> {
+    /// Localized messages.
+    pub t: &'a I18n,
+    /// Current search text.
+    pub query: String,
+    /// Active collection filter.
+    pub selected: Option<String>,
+    /// Same search across collections.
+    pub clear_url: String,
+    /// Confirmed public hits.
+    pub rows: Vec<DiscoveryResult>,
+    /// Previous page.
+    pub previous: Option<String>,
+    /// Next page.
+    pub next: Option<String>,
+}
+
 /// Public digital deposit and its authorized file links.
 #[derive(askama::Template)]
 #[template(path = "repository.html")]
@@ -201,8 +231,10 @@ impl I18n {
 
 /// OPAC home page.
 #[derive(Template)]
-#[template(path = "opac_home.html")]
+#[template(path = "opac_home_repository.html")]
 pub struct OpacHome<'a> {
+    /// Whether repository discovery is available.
+    pub repository: bool,
     /// Interface texts.
     pub t: &'a I18n,
     /// The Instances catalogued last, newest first.
@@ -487,6 +519,8 @@ mod tests {
             include_str!("../templates/opac_home.html"),
             include_str!("../templates/opac_record_repository.html"),
             include_str!("../templates/repository.html"),
+            include_str!("../templates/repository_search.html"),
+            include_str!("../templates/opac_home_repository.html"),
             include_str!("../templates/opac_results.html"),
             include_str!("../templates/opac_results_list.html"),
             include_str!("../templates/opac_record.html"),

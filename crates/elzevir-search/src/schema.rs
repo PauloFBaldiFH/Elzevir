@@ -18,6 +18,8 @@ pub(crate) const FOLDED: &str = "elzevir_folded";
 
 /// The fields of the schema.
 pub(crate) struct Fields {
+    pub(crate) repository_membership: tantivy::schema::Field,
+    pub(crate) digital_collection: tantivy::schema::Field,
     pub(crate) instance: tantivy::schema::Field,
     pub(crate) work: tantivy::schema::Field,
     pub(crate) hub: tantivy::schema::Field,
@@ -73,11 +75,12 @@ pub(crate) const fn facet_field(facet: Facet) -> &'static str {
 
 pub(crate) fn build() -> (Schema, Fields) {
     let mut builder = Schema::builder();
-    let words = TextOptions::default().set_stored().set_indexing_options(
+    let indexed_words = TextOptions::default().set_indexing_options(
         TextFieldIndexing::default()
             .set_tokenizer(FOLDED)
             .set_index_option(IndexRecordOption::WithFreqsAndPositions),
     );
+    let words = indexed_words.clone().set_stored();
     let code = STRING | STORED;
     // A facet is a whole value counted from its column.
     let facet = STRING | FAST;
@@ -113,6 +116,9 @@ pub(crate) fn build() -> (Schema, Fields) {
         audience: builder.add_text_field("audience", facet.clone()),
         subject_heading: builder.add_text_field("subject_heading", facet.clone()),
         year: builder.add_text_field("year", facet),
+        // Keep repository-only fields after the catalog query schema.
+        repository_membership: builder.add_text_field("repository_membership", STRING),
+        digital_collection: builder.add_text_field("digital_collection", indexed_words),
     };
     (builder.build(), fields)
 }

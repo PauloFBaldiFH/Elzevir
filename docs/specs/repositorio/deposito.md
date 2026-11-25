@@ -102,3 +102,21 @@ O servidor admite até duas operações simultâneas de consulta à página do
 depósito ou download por instituição e responde 503 quando ambas estão ocupadas. As respostas
 pedem ao cliente e aos intermediários que consultem novamente a origem em
 cada acesso. A CLI continua responsável pelo depósito e pela publicação.
+
+## Descoberta no Tantivy (Etapa 4b)
+
+O OPAC oferece uma entrada em `/repository`. Sem termos, ela lista depósitos
+publicados de instâncias visíveis. O parâmetro `q` pesquisa os metadados
+bibliográficos e nomes de coleções digitais. O filtro `collection` seleciona
+um ID exato, inclusive quando duas coleções têm o mesmo nome. Cada resultado
+leva ao depósito e às suas coleções. As páginas usam os limites do OPAC
+(20 resultados, 256 caracteres de consulta e até 500 páginas).
+
+O índice mantém um documento por instância. O consumidor existente de
+`ReindexInstance` atualiza a presença do depósito e os nomes e IDs das coleções.
+Rótulos de arquivos, conteúdo dos objetos, versões e dados administrativos ficam
+fora dessa projeção. A troca de esquema do índice usa a reconstrução já existente
+a partir da outbox. Entre o commit SQLite e a atualização do Tantivy pode faltar
+um resultado novo. Antes da exibição, a consulta confere publicação, visibilidade
+e participação na coleção no SQLite. Uma retirada pode encurtar temporariamente
+a página de resultados.

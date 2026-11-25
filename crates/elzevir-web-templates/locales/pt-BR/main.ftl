@@ -916,3 +916,7 @@ import-notes-invalid = Selecione uma visibilidade válida.
 repository-title = Depósito digital
 repository-record = Ficha bibliográfica
 repository-no-files = Nenhum arquivo está disponível para download no momento.
+repository-search-title = Repositório institucional
+repository-search-label = Buscar depósitos e coleções digitais
+repository-all-collections = Buscar em todas as coleções
+repository-search-empty = Nenhum depósito público nesta página.

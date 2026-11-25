@@ -91,6 +91,7 @@ pub(crate) async fn home(State(state): State<AppState>, headers: HeaderMap) -> R
     let notes = crate::board::opac_cards(&state).await;
     let (panel, csrf) = crate::patron_login::panel(&state, &headers);
     let page = render(&OpacHome {
+        repository: state.repository.is_some(),
         t: &state.inner.i18n,
         notes,
         recent: recent

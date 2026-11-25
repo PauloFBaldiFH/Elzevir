@@ -37,3 +37,12 @@ impl PublicRepository for Public {
         })
     }
 }
+
+impl r::DiscoveryReader for Public {
+    fn published_deposits(
+        &self,
+        instances: &[r::InstanceId],
+    ) -> r::Result<std::collections::BTreeMap<r::InstanceId, r::PublishedDeposit>> {
+        self.store.published_deposits(instances)
+    }
+}

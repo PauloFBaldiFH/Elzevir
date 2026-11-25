@@ -29,7 +29,7 @@ impl Access {
             slots: Arc::new(Semaphore::new(2)),
         }
     }
-    fn slot(&self) -> Result<OwnedSemaphorePermit, StatusCode> {
+    pub(super) fn slot(&self) -> Result<OwnedSemaphorePermit, StatusCode> {
         Arc::clone(&self.slots)
             .try_acquire_owned()
             .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)
@@ -37,6 +37,7 @@ impl Access {
 }
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
+        .route("/repository", get(crate::repository_discovery::search))
         .route("/repository/{deposit}", get(page))
         .route(
             "/repository/{deposit}/files/{file}/versions/{seq}",
@@ -53,7 +54,7 @@ pub(super) fn routes() -> Router<AppState> {
         ))
 }
 
-fn id(value: &str) -> Result<u128, StatusCode> {
+pub(super) fn id(value: &str) -> Result<u128, StatusCode> {
     if value.len() != 32
         || !value
             .bytes()

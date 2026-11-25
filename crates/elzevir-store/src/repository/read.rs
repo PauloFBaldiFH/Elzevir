@@ -232,3 +232,47 @@ impl MetadataStore {
         })
     }
 }
+
+impl r::DiscoveryReader for crate::ElzevirStore {
+    fn published_deposits(
+        &self,
+        instances: &[r::InstanceId],
+    ) -> r::Result<std::collections::BTreeMap<r::InstanceId, r::PublishedDeposit>> {
+        let mut deposits = std::collections::BTreeMap::new();
+        if instances.is_empty() {
+            return Ok(deposits);
+        }
+        // One bound JSON array avoids SQLite's host parameter limit on large replays.
+        let ids: Vec<i64> = instances.iter().map(|i| i.0).collect();
+        let ids = serde_json::to_string(&ids).map_err(|_| r::RepositoryError::Unavailable)?;
+        self.readers().read(|c| {
+            let mut statement = c
+                .prepare(
+                    "SELECT d.instance_id,d.id,k.id,k.name
+                FROM repo_deposits d JOIN instances i ON i.id=d.instance_id
+                LEFT JOIN repo_collection_members m ON m.deposit_id=d.id
+                LEFT JOIN repo_collections k ON k.id=m.collection_id
+                WHERE d.instance_id IN (SELECT value FROM json_each(?1))
+                AND d.state='published' AND i.opac_hidden=0 ORDER BY d.instance_id,k.name,k.id",
+                )
+                .map_err(db)?;
+            let mut rows = statement.query([ids]).map_err(db)?;
+            while let Some(row) = rows.next().map_err(db)? {
+                let deposit = r::DepositId(id(row, 1).map_err(db)?);
+                let data = deposits
+                    .entry(r::InstanceId(row.get(0).map_err(db)?))
+                    .or_insert_with(|| r::PublishedDeposit {
+                        id: deposit,
+                        collections: Vec::new(),
+                    });
+                if let Some(key) = row.get::<_, Option<[u8; 16]>>(2).map_err(db)? {
+                    data.collections.push((
+                        r::DigitalCollectionId(u128::from_be_bytes(key)),
+                        row.get(3).map_err(db)?,
+                    ));
+                }
+            }
+            Ok(deposits)
+        })
+    }
+}

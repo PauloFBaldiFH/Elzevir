@@ -2,6 +2,7 @@
 {% block title %}{{ t.get("repository-title") }}{% endblock %}
 {% block content %}
 <h1>{{ t.get("repository-title") }}</h1>
+<p><a href="/repository">{{ t.get("repository-search-title") }}</a></p>
 <p><a href="/record/{{ instance }}">{{ t.get("repository-record") }}</a></p>
 {% if files.is_empty() %}<p>{{ t.get("repository-no-files") }}</p>{% else %}
 <ul>{% for (label,url) in files %}<li><a href="{{ url }}" download>{{ label }}</a></li>{% endfor %}</ul>

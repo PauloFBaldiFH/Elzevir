@@ -1323,3 +1323,7 @@ import-notes-invalid = Choose a valid note visibility.
 repository-title = Digital deposit
 repository-record = Bibliographic record
 repository-no-files = No files are currently available for download.
+repository-search-title = Institutional repository
+repository-search-label = Search deposits and digital collections
+repository-all-collections = Search all collections
+repository-search-empty = No public deposits on this page.
