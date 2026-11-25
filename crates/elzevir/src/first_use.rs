@@ -147,3 +147,43 @@ pub(crate) fn start(args: ServeArgs, no_self_update: bool) -> Result<(), String>
     crate::background::launch(&settings, config.as_deref())?;
     crate::panel_cli::connected(&settings, config, false, no_self_update, || false)
 }
+
+/// On first use, start runs the institution wizard, which also creates its administrator.
+pub(crate) fn launch() -> Result<bool, String> {
+    use elzevir_app::staff::Permission;
+    if !data_dir()?
+        .join("elzevir.db")
+        .try_exists()
+        .map_err(|e| e.to_string())?
+    {
+        return Ok(true);
+    }
+    let (settings, _) = existing(ServeArgs::default())?;
+    let online = matches!(
+        crate::status::inspect(&settings.data_dir).state,
+        "running" | "degraded"
+    );
+    match elzevir_panel::launcher(&settings.lang, online).map_err(|e| e.to_string())? {
+        elzevir_panel::LaunchAction::Exit => Ok(false),
+        elzevir_panel::LaunchAction::Dashboard => Ok(true),
+        elzevir_panel::LaunchAction::Administrator => {
+            let Some((login, password)) =
+                elzevir_panel::administrator(&settings.lang).map_err(|e| e.to_string())?
+            else {
+                return Ok(false);
+            };
+            crate::create_staff(
+                &settings.data_dir,
+                &login,
+                [
+                    (true, Permission::Administration),
+                    (true, Permission::Cataloguing),
+                    (true, Permission::Circulation),
+                    (true, Permission::Patrons),
+                ],
+                &password,
+            )?;
+            Ok(true)
+        }
+    }
+}

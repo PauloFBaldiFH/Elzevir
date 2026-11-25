@@ -206,6 +206,16 @@ fn main() -> ExitCode {
         no_self_update,
     } = Cli::parse();
     // Daily use needs no command: the bare program opens the panel.
+    if command.is_none() && first_use::interactive() {
+        match first_use::launch() {
+            Ok(true) => {}
+            Ok(false) => return ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("elzevir: {e}");
+                return ExitCode::FAILURE;
+            }
+        }
+    }
     let command = command.unwrap_or_else(|| Command::Start(server_config::ServeArgs::default()));
     let result = match command {
         Command::HostJob(args) => host_jobs::run(&args),
@@ -772,6 +782,15 @@ fn add_staff(data_dir: &Path, login: &str, granted: [(bool, Permission); 4]) -> 
             .map_err(|e| format!("cannot read the password: {e}"))?;
         line.trim_end_matches(['\r', '\n']).to_owned()
     };
+    create_staff(data_dir, login, granted, &password)
+}
+
+fn create_staff(
+    data_dir: &Path,
+    login: &str,
+    granted: [(bool, Permission); 4],
+    password: &str,
+) -> Result<(), String> {
     if password.chars().count() < 8 {
         return Err("the password must have at least 8 characters".to_owned());
     }
@@ -783,7 +802,7 @@ fn add_staff(data_dir: &Path, login: &str, granted: [(bool, Permission); 4]) -> 
             .into_iter()
             .filter_map(|(asked, permission)| asked.then_some(permission)),
     );
-    let password_hash = hash_password(&password).map_err(|e| e.to_string())?;
+    let password_hash = hash_password(password).map_err(|e| e.to_string())?;
     let data = open_store(data_dir)?;
     let outcome = data
         .store

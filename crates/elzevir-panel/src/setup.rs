@@ -49,6 +49,8 @@ enum Step {
 
 struct Wizard {
     step: Step,
+    account_only: bool,
+    invalid: bool,
     name: String,
     password: Zeroizing<String>,
     confirm: Zeroizing<String>,
@@ -61,10 +63,24 @@ struct Wizard {
 /// # Errors
 /// Reports terminal, I/O and translation failures.
 pub fn setup(language: &str) -> Result<Option<Setup>, PanelError> {
+    form(language, false)
+}
+
+/// Collect a new local administrator login and confirmed, masked password.
+///
+/// # Errors
+/// Reports terminal and localization failures.
+pub fn administrator(language: &str) -> Result<Option<(String, Zeroizing<String>)>, PanelError> {
+    Ok(form(language, true)?.map(|entry| (entry.name, entry.password)))
+}
+
+fn form(language: &str, account_only: bool) -> Result<Option<Setup>, PanelError> {
     let messages = runtime::prepare(language)?;
     runtime::with_terminal(|mut terminal| {
         let mut wizard = Wizard {
             step: Step::Name,
+            account_only,
+            invalid: false,
             name: String::new(),
             password: Zeroizing::new(String::new()),
             confirm: Zeroizing::new(String::new()),
@@ -118,9 +134,30 @@ pub fn setup(language: &str) -> Result<Option<Setup>, PanelError> {
 impl Wizard {
     fn handle(&mut self, key: KeyEvent) -> bool {
         if key.code == KeyCode::Enter {
+            self.invalid = match self.step {
+                Step::Name if self.account_only => {
+                    self.name.is_empty()
+                        || self.name.len() > 64
+                        || !self
+                            .name
+                            .bytes()
+                            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'-' | b'_'))
+                }
+                Step::Name => self.name.trim().is_empty(),
+                Step::Password => self.password.chars().count() < 8,
+                _ => false,
+            };
+            if self.invalid {
+                return false;
+            }
             self.step = match self.step {
                 Step::Name => Step::Password,
                 Step::Password => Step::Confirm,
+                Step::Confirm
+                    if self.account_only && self.password.as_str() == self.confirm.as_str() =>
+                {
+                    return true;
+                }
                 Step::Confirm if self.password.as_str() == self.confirm.as_str() => Step::Profile,
                 Step::Confirm => {
                     self.confirm = Zeroizing::new(String::new());
@@ -181,6 +218,9 @@ impl Wizard {
         let area = screen.centered(Constraint::Length(76), Constraint::Length(12));
         frame.render_widget(Clear, area);
         let (key, value) = match self.step {
+            Step::Name if self.account_only => {
+                ("account-login", crate::dashboard::text(&self.name))
+            }
             Step::Name => ("setup-name", crate::dashboard::text(&self.name)),
             Step::Password => (
                 "setup-password",
@@ -192,7 +232,13 @@ impl Wizard {
             ),
             Step::Profile => ("setup-profile", String::new()),
         };
-        let warning = if self.mismatch && matches!(self.step, Step::Password) {
+        let warning = if self.invalid {
+            messages.get(match self.step {
+                Step::Password => "account-short",
+                Step::Name if self.account_only => "account-login-rule",
+                _ => "account-empty",
+            })
+        } else if self.mismatch && matches!(self.step, Step::Password) {
             messages.get("setup-mismatch")
         } else {
             String::new()
@@ -201,7 +247,14 @@ impl Wizard {
         frame.render_widget(
             Paragraph::new(body)
                 .wrap(Wrap { trim: false })
-                .block(crate::view::block(messages.get("setup-title"), false)),
+                .block(crate::view::block(
+                    messages.get(if self.account_only {
+                        "account-title"
+                    } else {
+                        "setup-title"
+                    }),
+                    false,
+                )),
             area,
         );
         if matches!(self.step, Step::Profile) && area.height >= 8 {
@@ -239,7 +292,9 @@ impl Wizard {
             false,
             scene,
             Some((
-                if matches!(self.step, Step::Profile) {
+                if self.account_only && matches!(self.step, Step::Confirm) {
+                    "account-save"
+                } else if matches!(self.step, Step::Profile) {
                     "setup-finish"
                 } else {
                     "ui-next"
@@ -247,5 +302,131 @@ impl Wizard {
                 KeyCode::Enter,
             )),
         );
+    }
+}
+
+/// Action chosen on startup.
+pub enum LaunchAction {
+    /// Open the running dashboard or start the institution.
+    Dashboard,
+    /// Create a staff account while the institution is offline.
+    Administrator,
+    /// Close the launcher.
+    Exit,
+}
+
+/// Choose the dashboard or local administrator setup.
+/// Escape cancels without opening institution data.
+///
+/// # Errors
+/// Reports terminal and localization failures.
+pub fn launcher(language: &str, online: bool) -> Result<LaunchAction, PanelError> {
+    let messages = runtime::prepare(language)?;
+    runtime::with_terminal(|mut terminal| {
+        let mut focus = 0;
+        let mut scene = Scene::default();
+        loop {
+            terminal.draw(|frame| {
+                scene.clear();
+                let area = frame
+                    .area()
+                    .centered(Constraint::Length(68), Constraint::Length(11));
+                frame.render_widget(
+                    Paragraph::new(messages.get(if online && focus == 1 {
+                        "account-stop"
+                    } else {
+                        "launch-hint"
+                    }))
+                    .wrap(Wrap { trim: true })
+                    .block(crate::view::block("Elzevir".into(), false)),
+                    area,
+                );
+                for (i, key, title, selected) in [
+                    (0, '1', "launch-dashboard", focus == 0),
+                    (1, '2', "account-title", focus == 1),
+                    (2, '3', "launch-exit", focus == 2),
+                ] {
+                    if area.height >= 7 {
+                        scene.buttons(
+                            frame,
+                            Rect::new(
+                                area.x + 1,
+                                area.bottom() - 6 + i,
+                                area.width.saturating_sub(2),
+                                1,
+                            ),
+                            [(
+                                messages.get(title),
+                                Action::Key(KeyCode::Char(key)),
+                                selected,
+                            )],
+                        );
+                    }
+                }
+            })?;
+            let key = match event::read()? {
+                Event::Key(k) if k.kind != KeyEventKind::Release => {
+                    if k.code == KeyCode::Char('c') && k.modifiers.contains(KeyModifiers::CONTROL) {
+                        return Ok(LaunchAction::Exit);
+                    }
+                    k.code
+                }
+                Event::Mouse(m) if m.kind == MouseEventKind::Down(MouseButton::Left) => {
+                    let Some(Action::Key(k)) = scene.hit((m.column, m.row).into()) else {
+                        continue;
+                    };
+                    k
+                }
+                _ => continue,
+            };
+            match key {
+                KeyCode::Enter => {
+                    return Ok(match focus {
+                        0 => LaunchAction::Dashboard,
+                        1 if !online => LaunchAction::Administrator,
+                        1 => continue,
+                        _ => LaunchAction::Exit,
+                    });
+                }
+                KeyCode::Char('1') => return Ok(LaunchAction::Dashboard),
+                KeyCode::Char('2') if online => focus = 1,
+                KeyCode::Char('2') => return Ok(LaunchAction::Administrator),
+                KeyCode::Esc | KeyCode::Char('3') => return Ok(LaunchAction::Exit),
+                KeyCode::Tab | KeyCode::Down => focus = (focus + 1) % 3,
+                KeyCode::BackTab | KeyCode::Up => focus = (focus + 2) % 3,
+                _ => {}
+            }
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn existing_institution_requires_a_valid_login_and_confirmed_password() {
+        let mut wizard = Wizard {
+            step: Step::Name,
+            account_only: true,
+            invalid: false,
+            name: "bad login".into(),
+            password: Zeroizing::default(),
+            confirm: Zeroizing::default(),
+            profile: 0,
+            mismatch: false,
+        };
+        let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        assert!(!wizard.handle(enter) && wizard.invalid);
+        wizard.name = "library.admin".into();
+        assert!(!wizard.handle(enter) && matches!(wizard.step, Step::Password));
+        assert!(!wizard.handle(enter) && wizard.invalid);
+        wizard.password.push_str("fixture-password");
+        assert!(!wizard.handle(enter) && matches!(wizard.step, Step::Confirm));
+        assert!(!wizard.handle(enter) && wizard.mismatch && wizard.password.is_empty());
+        wizard.password.push_str("fixture-password");
+        assert!(!wizard.handle(enter));
+        wizard.confirm.push_str("fixture-password");
+        assert!(wizard.handle(enter));
     }
 }

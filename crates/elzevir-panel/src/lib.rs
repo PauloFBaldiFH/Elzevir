@@ -29,7 +29,7 @@ mod restore_paths;
 mod runtime;
 mod service_view;
 mod setup;
-pub use setup::{Setup, SetupProfile, setup};
+pub use setup::{LaunchAction, Setup, SetupProfile, administrator, launcher, setup};
 mod sharing;
 mod tunnel_view;
 mod ui;

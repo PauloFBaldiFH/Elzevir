@@ -37,9 +37,16 @@ opcional.
 elzevir
 ```
 
-O comando sem argumentos (o mesmo que `elzevir start`) abre o painel
-Ratatui e serve o catálogo em `http://127.0.0.1:7390`. O servidor continua
-rodando em segundo plano depois que o painel fecha; `elzevir stop` o para.
+Na primeira abertura, o assistente cria o usuário `admin`. Entre em
+`/equipe/login` com a senha escolhida. Nas aberturas seguintes, escolha
+**Abrir painel** ou **Criar administrador** com o mouse ou as setas e Enter.
+Para criar outra conta administrativa local, pare primeiro o servidor da instituição.
+
+`elzevir start` abre diretamente o painel e serve o catálogo em
+`http://127.0.0.1:7390` por padrão. O servidor continua em segundo plano
+ao fechar o painel. Para pará-lo, use `elzevir stop`.
+Em um checkout com o Rust instalado, execute `./elzevir.sh` para compilar
+e abrir a mesma interface.
 Também é possível usar `elzevir serve` e `elzevir panel` em terminais
 separados. Use `elzevir panel --demo` para explorar a interface com dados
 simulados.

@@ -173,7 +173,12 @@ pub(crate) fn action_bar(
         Section::Backup => &[("ui-new", 'n'), ("ui-verify", 'v'), ("ui-config", 's')],
         Section::Updates => &[("ui-search", 'c'), ("ui-install", 'i'), ("ui-recover", 'r')],
         // The service section has its own big buttons.
-        Section::Dashboard | Section::Restart => &[],
+        Section::Dashboard => &[
+            ("launch-access", '3'),
+            ("launch-backups", '4'),
+            ("launch-service", '6'),
+        ],
+        Section::Restart => &[],
     };
     let controls: Vec<_> = contextual
         .iter()
