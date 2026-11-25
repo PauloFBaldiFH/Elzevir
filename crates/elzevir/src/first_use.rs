@@ -102,10 +102,7 @@ fn resolve_or_ask(mut args: ServeArgs, ask: bool) -> Result<(Settings, Option<Pa
             crate::init::run(&init)?;
             println!(
                 "elzevir: {}",
-                messages.values(
-                    "setup-done",
-                    &[("listen", init.listen.to_string())]
-                )
+                messages.values("setup-done", &[("listen", init.listen.to_string())])
             );
         }
         _ => return Err("cannot inspect default institution database".into()),
