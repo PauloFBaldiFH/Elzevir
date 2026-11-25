@@ -80,3 +80,8 @@ Botões de operação, logs ao vivo/diagnóstico completo (P3), edição e teste
 endereços (P4), backup, serviço, atualização, lista de instituições, histórico
 de erros por 24h e contagem de efeitos pendentes. Métricas são instantâneas;
 num contêiner, as métricas de host dependem do que o SO disponibiliza.
+
+## Visão geral operacional
+
+A projeção de proteção separa quatro observações: cópia local publicada e verificada na criação, última tentativa do servidor, resultado de exportação pelo operador e transferência do plano de nuvem. Um recibo de exportação antigo não identifica o artefato. O painel informa o resultado como observação independente. Arquivo não catalogado, catálogo ilegível e cópia catalogada ausente impedem afirmar que há proteção verificada. A tela não recalcula hashes a cada coleta. O histórico usa a hora da solicitação. Informação vencida perde a indicação positiva.
+

@@ -9,7 +9,8 @@ struct Catalog {
 }
 fn load(directory: &Path) -> Result<Catalog, String> {
     let path = directory.join("backup-artifacts.json");
-    if !path.exists() {
+    if matches!(std::fs::symlink_metadata(&path), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
+    {
         return Ok(Catalog::default());
     }
     if crate::backup_archive::regular(&path)? > 524_288 {
@@ -36,6 +37,30 @@ fn load(directory: &Path) -> Result<Catalog, String> {
 pub(crate) fn ids(directory: &Path) -> Result<Vec<String>, String> {
     Ok(load(directory)?.ids)
 }
+/// Inspect only the newest entry; verification was performed by the publisher.
+pub(crate) fn observation(directory: &Path, ids: &[String]) -> elzevir_panel::LocalBackup {
+    use elzevir_panel::LocalBackup;
+    let folder = directory.join("backups");
+    match std::fs::symlink_metadata(&folder) {
+        Ok(meta) if meta.is_dir() => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound && ids.is_empty() => {
+            return LocalBackup::Empty;
+        }
+        _ => return LocalBackup::Unknown,
+    }
+    if let Some(id) = ids.last() {
+        if crate::backup_cli::artifact(directory, id)
+            .and_then(|path| crate::backup_archive::regular(&path))
+            .is_ok_and(|size| size > 0)
+        {
+            return LocalBackup::Verified;
+        }
+    } else if std::fs::read_dir(folder).is_ok_and(|mut entries| entries.next().is_none()) {
+        return LocalBackup::Empty;
+    }
+    LocalBackup::Unknown
+}
+
 fn save(directory: &Path, catalog: &Catalog) -> Result<(), String> {
     crate::broker::publish(
         directory,
@@ -81,6 +106,24 @@ pub(crate) fn retain(directory: &Path, keep: u16) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn observation_requires_a_retained_regular_file_and_an_intact_catalog() {
+        use elzevir_panel::LocalBackup;
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path();
+        let id = "42".repeat(16);
+        assert_eq!(observation(dir, &[]), LocalBackup::Empty);
+        std::fs::create_dir(dir.join("backups")).unwrap();
+        let file = crate::backup_cli::artifact(dir, &id).unwrap();
+        std::fs::write(&file, b"uncatalogued").unwrap();
+        assert_eq!(observation(dir, &[]), LocalBackup::Unknown);
+        record(dir, &id).unwrap();
+        assert_eq!(observation(dir, &ids(dir).unwrap()), LocalBackup::Verified);
+        std::fs::remove_file(file).unwrap();
+        assert_eq!(observation(dir, &ids(dir).unwrap()), LocalBackup::Unknown);
+        std::fs::write(dir.join("backup-artifacts.json"), b"invalid").unwrap();
+        assert!(ids(dir).is_err());
+    }
     #[test]
     fn retention_beyond_job_history_keeps_the_requested_count_and_preserves_unknown_files() {
         let directory = tempfile::tempdir().unwrap();

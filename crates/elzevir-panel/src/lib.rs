@@ -47,7 +47,7 @@ pub use live::{
     Component, Details, Host, Institution, LiveState, Mode, ServerStatus, Snapshot, Storage,
 };
 pub use messages::Messages;
-pub use operations::{Form, Job, Operation, Operations, RestoreReview, ServerAction};
+pub use operations::{Form, Job, LocalBackup, Operation, Operations, RestoreReview, ServerAction};
 pub use runtime::{run, run_live, run_live_until};
 pub use view::draw;
 

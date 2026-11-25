@@ -218,7 +218,6 @@ impl Collector {
         let mut result = elzevir_panel::Operations {
             result: self.operation_result,
             review: self.restore.as_ref().map(|r| r.review.clone()),
-            managed_ids: crate::local_artifacts::ids(&self.directory).unwrap_or_default(),
             backup_folder: Some(self.directory.join("backups")),
             latest: self.latest.as_ref().map(|release| release.tag_name.clone()),
             update_available: self.latest.as_ref().is_some_and(|release| {
@@ -230,6 +229,10 @@ impl Collector {
                 .and_then(|release| release.body.clone()),
             ..elzevir_panel::Operations::default()
         };
+        if let Ok(ids) = crate::local_artifacts::ids(&self.directory) {
+            result.local_backup = crate::local_artifacts::observation(&self.directory, &ids);
+            result.managed_ids = ids;
+        }
         // Unreadable cloud or broker state is shown as unknown in the panel, not as an error.
         result.cloud = crate::cloud::view(&self.directory).ok();
         result.remote_address = crate::broker::observe(&self.directory).ok().flatten();
@@ -289,6 +292,21 @@ impl Collector {
 
     fn host_history(&self, result: &mut elzevir_panel::Operations) {
         if let Ok(receipts) = crate::host_jobs::receipts(&self.directory) {
+            let exports = receipts.iter().filter(|r| r.action == "export_backup");
+            if let Some(latest) = exports
+                .clone()
+                .map(|r| r.created)
+                .max()
+                .filter(|at| *at > 0)
+            {
+                let mut dated = exports.filter(|r| r.created == latest);
+                if let Some(receipt) = dated.next()
+                    && dated.next().is_none()
+                {
+                    result.latest_export_failed =
+                        Some(matches!(receipt.state.as_str(), "failed" | "interrupted"));
+                }
+            }
             result.authorization_uris = receipts
                 .iter()
                 .filter_map(|receipt| receipt.authorization_uri.clone())
