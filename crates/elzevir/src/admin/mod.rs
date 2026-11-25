@@ -128,15 +128,12 @@ async fn handle(
         Some(Request {
             command: Command::CreateAdministrator { login, password },
             ..
-        }) => {
-            let password = zeroize::Zeroizing::new(password);
-            match operations.create_administrator(login, password).await {
-                Ok(()) => Outcome::AdministratorCreated,
-                Err(()) => Outcome::Error {
-                    code: ErrorCode::OperationRefused,
-                },
-            }
-        }
+        }) => operation_result(
+            operations
+                .create_administrator(login, zeroize::Zeroizing::new(password))
+                .await
+                .map(|()| Outcome::AdministratorCreated),
+        ),
         Some(Request {
             command: Command::Status,
             ..
@@ -352,7 +349,7 @@ async fn query(info: &RuntimeInfo, command: Command) -> Result<Outcome, String> 
     Ok(response.result)
 }
 
-fn operation_result(result: Result<Outcome, String>) -> Outcome {
+fn operation_result<E>(result: Result<Outcome, E>) -> Outcome {
     result.unwrap_or(Outcome::Error {
         code: ErrorCode::OperationRefused,
     })
