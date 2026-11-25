@@ -179,7 +179,12 @@ pub(crate) fn action_bar(
         Section::Dashboard => &[("panel-backup", 'b'), ("section-settings", 'g')],
         Section::Diagnostics => &[("ui-verify", 'v'), ("ui-export", 'e')],
         Section::Addresses => &[("ui-test", 't'), ("ui-share", 'Q'), ("ui-config", 'm')],
-        Section::Backup => &[("ui-new", 'n'), ("ui-verify", 'v'), ("ui-config", 's')],
+        Section::Backup => &[
+            ("ui-new", 'n'),
+            ("ui-verify", 'v'),
+            ("transfer-tab", 'z'),
+            ("ui-config", 's'),
+        ],
         Section::Updates => &[("ui-search", 'c'), ("ui-install", 'i'), ("ui-recover", 'r')],
         // The service section has its own big buttons.
         Section::Settings | Section::Restart => &[],

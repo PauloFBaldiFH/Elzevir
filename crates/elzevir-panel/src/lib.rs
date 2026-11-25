@@ -34,6 +34,7 @@ mod setup;
 pub use inspection::{Inspection, InspectionAction, InstallationIssue};
 pub use setup::{Setup, SetupProfile, setup, setup_with_login};
 mod sharing;
+mod transfer;
 mod tunnel_view;
 mod ui;
 mod view;

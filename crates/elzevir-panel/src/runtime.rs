@@ -172,6 +172,7 @@ fn interact(
     let mut access = crate::access_actions::Actions::detect();
     panel.access_help = Some(access.help());
     let mut scene = crate::ui::Scene::default();
+    let mut transfer: Option<crate::transfer::Dialog> = None;
     let mut picker: Option<crate::folder_picker::Picker> = None;
     let mut observed_at: Option<Instant> = None;
     let mut action_sequence = None;
@@ -223,6 +224,12 @@ fn interact(
                     active.draw(frame, messages, ascii);
                 } else {
                     crate::view::interactive(frame, panel, messages, ascii, &mut scene);
+                    if let Some(dialog) = &transfer
+                        && !crate::view::too_small(frame.area().width, frame.area().height)
+                    {
+                        crate::ui::dim(frame);
+                        dialog.draw(frame, messages, &mut scene, ascii, access.desktop());
+                    }
                 }
             })?
             .area;
@@ -236,7 +243,10 @@ fn interact(
                 panel.handle(&input, size.width, size.height);
                 continue;
             }
-            if handle_picker(&input, &mut picker, panel) || access.handle(&input, panel) {
+            if handle_picker(&input, &mut picker, panel)
+                || crate::transfer::handle(&mut transfer, &input, panel, &scene, &mut access)
+                || access.handle(&input, panel)
+            {
                 continue;
             }
             match input {
