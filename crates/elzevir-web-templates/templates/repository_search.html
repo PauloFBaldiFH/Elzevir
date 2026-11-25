@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ t.get("repository-search-title") }}{% endblock %}
+{% block content %}
+<h1>{{ t.get("repository-search-title") }}</h1>
+<form method="get" action="/repository" role="search">
+  <label for="repository-query">{{ t.get("repository-search-label") }}</label>
+  <input id="repository-query" type="search" name="q" maxlength="256" value="{{ query }}">
+  {% if let Some(id) = selected %}<input type="hidden" name="collection" value="{{ id }}">{% endif %}
+  <button type="submit">{{ t.get("opac-home-search-button") }}</button>
+</form>
+{% if selected.is_some() %}<p><a href="{{ clear_url }}">{{ t.get("repository-all-collections") }}</a></p>{% endif %}
+{% if rows.is_empty() %}<p>{{ t.get("repository-search-empty") }}</p>{% else %}
+<ul>{% for row in rows %}
+  <li><a href="/repository/{{ row.id }}">{{ row.title }}</a>
+  {% if !row.collections.is_empty() %}<ul>{% for (id,name) in row.collections %}<li><a href="/repository?collection={{ id }}">{{ name }}</a></li>{% endfor %}</ul>{% endif %}</li>
+{% endfor %}</ul>
+{% endif %}
+{% if let Some(url) = previous %}<a rel="prev" href="{{ url }}">{{ t.get("opac-results-previous") }}</a>{% endif %}
+{% if let Some(url) = next %}<a rel="next" href="{{ url }}">{{ t.get("opac-results-next") }}</a>{% endif %}
+{% endblock %}

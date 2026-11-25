@@ -7,7 +7,7 @@ use super::{
 use std::io::Read;
 
 /// The public HTTP interface can only request an authorized view or exact version.
-pub trait PublicRepository: Send + Sync {
+pub trait PublicRepository: super::DiscoveryReader {
     /// Public deposit link for a visible catalog record.
     ///
     /// # Errors

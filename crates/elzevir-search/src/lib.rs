@@ -27,7 +27,7 @@ use tantivy::directory::MmapDirectory;
 use tantivy::query::{
     AllQuery, BooleanQuery, BoostQuery, Occur, Query, QueryParser, RegexQuery, TermQuery,
 };
-use tantivy::schema::{IndexRecordOption, Value};
+use tantivy::schema::{IndexRecordOption, Schema, Value};
 use tantivy::{
     Document, Index, IndexReader, IndexSettings, IndexWriter, Order, ReloadPolicy, Searcher,
     TantivyDocument, Term,
@@ -46,6 +46,7 @@ const MAX_THREADS: usize = 8;
 pub struct TantivyIndex {
     index: Index,
     fields: Fields,
+    catalog_query_schema: Schema,
     writer: Mutex<IndexWriter>,
     reader: IndexReader,
     /// The facets of the whole catalog for the staff, by searcher generation: every
@@ -119,7 +120,18 @@ impl TantivyIndex {
             .reload_policy(ReloadPolicy::Manual)
             .try_into()
             .map_err(error)?;
+        // Field-qualified catalog queries must not bypass the live repository visibility check.
+        // Catalog fields form a prefix, so the parser uses the same Tantivy field IDs.
+        let mut catalog_schema = Schema::builder();
+        for (_, field) in index
+            .schema()
+            .fields()
+            .take_while(|(id, _)| *id != fields.repository_membership)
+        {
+            catalog_schema.add_field(field.clone());
+        }
         Ok(Self {
+            catalog_query_schema: catalog_schema.build(),
             index,
             fields,
             writer: Mutex::new(writer),
@@ -165,6 +177,13 @@ impl TantivyIndex {
                 .map_or(id(source.work.0), |hub| id(hub.0) | HUB_FAMILY),
         );
         document.add_u64(f.opac_hidden, u64::from(source.opac_hidden));
+        if let Some(deposit) = &source.repository {
+            document.add_text(f.repository_membership, "published");
+            for (collection, name) in &deposit.collections {
+                document.add_text(f.repository_membership, format!("{:032x}", collection.0));
+                document.add_text(f.digital_collection, name);
+            }
+        }
         document.add_text(f.title, &source.title);
         document.add_text(f.work_title, &source.work_title);
         if let Some(main) = &source.main_contributor {
@@ -218,21 +237,25 @@ impl TantivyIndex {
     /// The query for what a person typed: words over the descriptive fields, plus exact
     /// matches on codes (ISBN, barcode, tombo, call number) and a classification prefix
     /// (`82*`).
-    fn query(&self, text: &str) -> Box<dyn Query> {
+    fn query(&self, text: &str, scope: SearchScope) -> Box<dyn Query> {
         let f = &self.fields;
-        let mut parser = QueryParser::for_index(
-            &self.index,
-            vec![
-                f.title,
-                f.work_title,
-                f.other_title,
-                f.contributor,
-                f.subject,
-                f.publisher,
-                f.summary,
-                f.note,
-            ],
-        );
+        let mut fields = vec![
+            f.title,
+            f.work_title,
+            f.other_title,
+            f.contributor,
+            f.subject,
+            f.publisher,
+            f.summary,
+            f.note,
+        ];
+        let schema = if matches!(scope, SearchScope::Repository(_)) {
+            fields.push(f.digital_collection);
+            self.index.schema()
+        } else {
+            self.catalog_query_schema.clone()
+        };
+        let mut parser = QueryParser::new(schema, fields, self.index.tokenizers().clone());
         parser.set_conjunction_by_default();
         parser.set_field_boost(f.title, 2.0);
         parser.set_field_boost(f.work_title, 2.0);
@@ -274,11 +297,11 @@ impl TantivyIndex {
     }
 
     /// The query for `asked`: its words (everything when there are none), and every filter.
-    fn filtered(&self, asked: &SearchQuery<'_>) -> Box<dyn Query> {
+    fn filtered(&self, asked: &SearchQuery<'_>, scope: SearchScope) -> Box<dyn Query> {
         let words = if asked.text.trim().is_empty() {
             Box::new(AllQuery)
         } else {
-            self.query(asked.text)
+            self.query(asked.text, scope)
         };
         if asked.filters.is_empty() {
             return words;
@@ -329,19 +352,27 @@ impl TantivyIndex {
 
     /// The OPAC leaves out the Instances hidden from it; the staff sees them all.
     fn scoped(&self, query: Box<dyn Query>, scope: SearchScope) -> Box<dyn Query> {
-        match scope {
-            SearchScope::Staff => query,
-            SearchScope::Public => {
-                let hidden = TermQuery::new(
-                    Term::from_field_u64(self.fields.opac_hidden, 1),
-                    IndexRecordOption::Basic,
-                );
-                Box::new(BooleanQuery::new(vec![
-                    (Occur::Must, query),
-                    (Occur::MustNot, Box::new(hidden)),
-                ]))
-            }
+        if scope == SearchScope::Staff {
+            return query;
         }
+        let hidden = TermQuery::new(
+            Term::from_field_u64(self.fields.opac_hidden, 1),
+            IndexRecordOption::Basic,
+        );
+        let mut clauses: Vec<(Occur, Box<dyn Query>)> =
+            vec![(Occur::Must, query), (Occur::MustNot, Box::new(hidden))];
+        if let SearchScope::Repository(collection) = scope {
+            let key =
+                collection.map_or_else(|| "published".to_owned(), |id| format!("{:032x}", id.0));
+            clauses.push((
+                Occur::Must,
+                Box::new(TermQuery::new(
+                    Term::from_field_text(self.fields.repository_membership, &key),
+                    IndexRecordOption::Basic,
+                )),
+            ));
+        }
+        Box::new(BooleanQuery::new(clauses))
     }
 
     fn hit(&self, score: f32, document: &TantivyDocument) -> Option<SearchHit> {
@@ -416,7 +447,7 @@ impl SearchIndex for TantivyIndex {
         limit: usize,
     ) -> Result<SearchResults, SearchError> {
         let searcher = self.reader.searcher();
-        let query = self.scoped(self.filtered(asked), scope);
+        let query = self.scoped(self.filtered(asked, scope), scope);
         if limit == 0 {
             let total = searcher.search(&*query, &Count).map_err(error)?;
             return Ok(SearchResults {
@@ -476,7 +507,7 @@ impl SearchIndex for TantivyIndex {
                 return Ok(counts.clone());
             }
         }
-        let query = self.scoped(self.filtered(asked), scope);
+        let query = self.scoped(self.filtered(asked, scope), scope);
         let collector = FacetCollector {
             shared: self.shared_families(&searcher)?,
         };
@@ -531,6 +562,7 @@ mod tests {
     ) -> SearchDocument {
         let strings = |values: &[&str]| values.iter().map(|v| (*v).to_owned()).collect();
         SearchDocument {
+            repository: None,
             instance: InstanceId(instance),
             work: WorkId(work),
             hub: hub.map(HubId),
@@ -758,7 +790,7 @@ mod tests {
     #[test]
     fn an_index_with_another_schema_is_rebuilt() {
         let dir = tempfile::tempdir().unwrap();
-        let mut old = tantivy::schema::Schema::builder();
+        let mut old = Schema::builder();
         old.add_text_field("title", tantivy::schema::STORED);
         let directory = MmapDirectory::open(dir.path()).unwrap();
         drop(Index::create(directory, old.build(), IndexSettings::default()).unwrap());

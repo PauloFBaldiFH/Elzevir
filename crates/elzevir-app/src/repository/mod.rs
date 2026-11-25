@@ -2,6 +2,8 @@
 //! Institutional repository. Metadata commits and immutable object installation have
 //! distinct durability boundaries. A failed metadata commit may leave a collectable object.
 mod deposit;
+mod discovery;
+pub use discovery::{DiscoveryPage, DiscoveryReader, PublishedDeposit, discover};
 mod public;
 pub use public::PublicRepository;
 mod types;

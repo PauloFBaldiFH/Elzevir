@@ -45,6 +45,7 @@ mod record_fields;
 mod record_form;
 mod registries;
 mod repository;
+mod repository_discovery;
 mod security;
 mod session;
 mod staff;

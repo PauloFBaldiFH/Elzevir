@@ -13,6 +13,7 @@ use elzevir_domain::catalog::{HubId, IdentifierKind, InstanceId, WorkId};
 use crate::catalog::{CatalogReadError, CatalogReader, InstanceView, ItemView};
 use crate::material::Material;
 use crate::parallelism::Parallelism;
+use crate::repository::{DigitalCollectionId, DiscoveryReader, PublishedDeposit};
 
 /// Effect kind asking the index to rebuild one Instance's document after commit.
 pub const REINDEX_INSTANCE: &str = "catalog.reindex_instance";
@@ -53,6 +54,8 @@ pub struct EffectLogError(pub String);
 /// Everything the index knows about one Instance.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SearchDocument {
+    /// Visible repository metadata, loaded once per outbox batch.
+    pub repository: Option<PublishedDeposit>,
     /// The Instance; one document per Instance.
     pub instance: InstanceId,
     /// Its Work.
@@ -113,6 +116,8 @@ pub struct SearchDocument {
 pub enum SearchScope {
     /// The OPAC.
     Public,
+    /// Published deposits, optionally filtered by exact digital collection.
+    Repository(Option<DigitalCollectionId>),
     /// The staff screens.
     Staff,
 }
@@ -121,6 +126,7 @@ pub enum SearchScope {
 #[must_use]
 pub fn document_of(instance: &InstanceView, items: &[ItemView]) -> SearchDocument {
     SearchDocument {
+        repository: None,
         instance: instance.id,
         work: instance.work,
         hub: instance.hub,
@@ -495,6 +501,9 @@ pub struct IndexReport {
 /// Why indexing stopped. What was committed before stays, with its cursor.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum IndexError {
+    /// The public repository projection could not be read.
+    #[error(transparent)]
+    Repository(#[from] crate::repository::RepositoryError),
     /// The outbox could not be read.
     #[error(transparent)]
     Effects(#[from] EffectLogError),
@@ -523,7 +532,7 @@ pub fn index_pending<L, C, I>(
 ) -> Result<IndexReport, IndexError>
 where
     L: EffectLog + ?Sized,
-    C: CatalogReader + ?Sized,
+    C: CatalogReader + DiscoveryReader + ?Sized,
     I: SearchIndex + ?Sized,
 {
     index_pending_until(log, catalog, index, options, || false)
@@ -545,7 +554,7 @@ pub fn index_pending_until<L, C, I>(
 ) -> Result<IndexReport, IndexError>
 where
     L: EffectLog + ?Sized,
-    C: CatalogReader + ?Sized,
+    C: CatalogReader + DiscoveryReader + ?Sized,
     I: SearchIndex + ?Sized,
 {
     let mut report = IndexReport::default();
@@ -565,6 +574,7 @@ where
             })
             .filter(|instance| seen.insert(*instance))
             .collect();
+        let mut deposits = catalog.published_deposits(&instances)?;
         let built = options
             .parallelism
             .map(instances, |instance| build(catalog, instance));
@@ -575,7 +585,12 @@ where
         };
         for (instance, document) in built {
             match document? {
-                Some(document) => batch.upserts.push(document),
+                Some(mut document) => {
+                    if !document.opac_hidden {
+                        document.repository = deposits.remove(&instance);
+                    }
+                    batch.upserts.push(document);
+                }
                 None => batch.removals.push(instance),
             }
         }
@@ -625,6 +640,15 @@ mod tests {
         }
     }
 
+    impl DiscoveryReader for Fake {
+        fn published_deposits(
+            &self,
+            _: &[InstanceId],
+        ) -> crate::repository::Result<std::collections::BTreeMap<InstanceId, PublishedDeposit>>
+        {
+            Ok(std::collections::BTreeMap::new())
+        }
+    }
     impl CatalogReader for Fake {
         fn instance(&self, id: InstanceId) -> Result<Option<InstanceView>, CatalogReadError> {
             Ok(self.existing.contains(&id).then(|| InstanceView {
