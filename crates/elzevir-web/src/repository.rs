@@ -130,6 +130,14 @@ async fn download(
             .await
             .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
             .map_err(status)?;
+    Ok(download_response(download, permit, &method))
+}
+
+pub(super) fn download_response(
+    download: elzevir_app::repository::Download,
+    permit: OwnedSemaphorePermit,
+    method: &Method,
+) -> Response {
     let name = download
         .name
         .rsplit(['/', '\\'])
@@ -145,7 +153,7 @@ async fn download(
     } else {
         stream(download.reader.take(download.bytes), permit)
     };
-    Ok((
+    (
         [
             (header::CONTENT_TYPE, "application/octet-stream".to_owned()),
             (header::CONTENT_DISPOSITION, disposition),
@@ -153,7 +161,7 @@ async fn download(
         ],
         body,
     )
-        .into_response())
+        .into_response()
 }
 
 fn stream(reader: io::Take<Box<dyn Read + Send>>, permit: OwnedSemaphorePermit) -> Body {

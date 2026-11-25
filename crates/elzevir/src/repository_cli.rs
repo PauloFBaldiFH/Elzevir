@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Offline pilot. The installation lock covers both SQLite and immutable bytes.
+use crate::institution_repository::{InstitutionRepository, WallClock};
 use crate::repository_fs::{FsObjectStore, MAX_BYTES, MIN_FREE};
 use clap::{Subcommand, ValueEnum};
 use elzevir_app::{
@@ -136,12 +137,6 @@ struct UploadArgs {
     #[arg(long)]
     sha256: Option<r::ObjectHash>,
 }
-struct WallClock;
-impl Clock for WallClock {
-    fn now(&self) -> i64 {
-        jiff::Timestamp::now().as_second()
-    }
-}
 fn audience(public: bool, actor: r::Operator) -> r::ReadAudience {
     if public {
         r::ReadAudience::Public
@@ -156,7 +151,6 @@ fn offline_actor() -> r::Result<r::Operator> {
         permissions: [Permission::StaffInterface, Permission::Cataloguing].into(),
     })
 }
-type Pilot = r::Repository<MetadataStore, FsObjectStore, WallClock>;
 
 pub(crate) fn run(args: Args) -> Result<(), String> {
     let lock = crate::backup_cli::lock(&args.data_dir)?;
@@ -168,7 +162,7 @@ pub(crate) fn run(args: Args) -> Result<(), String> {
     let metadata =
         MetadataStore::open(&args.data_dir.join("elzevir.db")).map_err(|e| e.to_string())?;
     execute(
-        &mut Pilot {
+        &mut InstitutionRepository {
             metadata,
             objects,
             clock: WallClock,
@@ -177,7 +171,7 @@ pub(crate) fn run(args: Args) -> Result<(), String> {
     )
     .map_err(|e| e.to_string())
 }
-fn execute(repo: &mut Pilot, action: Action) -> Result<(), Box<dyn Error>> {
+fn execute(repo: &mut InstitutionRepository, action: Action) -> Result<(), Box<dyn Error>> {
     let actor = offline_actor()?;
     match action {
         Action::Draft { instance } => {
@@ -271,7 +265,11 @@ fn execute(repo: &mut Pilot, action: Action) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn upload(repo: &Pilot, actor: r::Operator, args: UploadArgs) -> Result<(), Box<dyn Error>> {
+fn upload(
+    repo: &InstitutionRepository,
+    actor: r::Operator,
+    args: UploadArgs,
+) -> Result<(), Box<dyn Error>> {
     let UploadArgs {
         deposit,
         file,
@@ -307,7 +305,12 @@ fn upload(repo: &Pilot, actor: r::Operator, args: UploadArgs) -> Result<(), Box<
 
     Ok(())
 }
-fn show(repo: &Pilot, actor: r::Operator, deposit: Id, public: bool) -> r::Result<()> {
+fn show(
+    repo: &InstitutionRepository,
+    actor: r::Operator,
+    deposit: Id,
+    public: bool,
+) -> r::Result<()> {
     let page = repo.page(r::DepositId(deposit.0), audience(public, actor))?;
     println!(
         "deposit={:032x} instance={} state={:?}",
@@ -329,7 +332,13 @@ fn show(repo: &Pilot, actor: r::Operator, deposit: Id, public: bool) -> r::Resul
 
     Ok(())
 }
-fn verify(repo: &Pilot, actor: r::Operator, deposit: Id, file: Id, seq: u64) -> r::Result<()> {
+fn verify(
+    repo: &InstitutionRepository,
+    actor: r::Operator,
+    deposit: Id,
+    file: Id,
+    seq: u64,
+) -> r::Result<()> {
     let version = r::VersionRef {
         deposit: r::DepositId(deposit.0),
         file: r::FileId(file.0),

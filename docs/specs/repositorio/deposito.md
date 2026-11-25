@@ -120,3 +120,20 @@ a partir da outbox. Entre o commit SQLite e a atualização do Tantivy pode falt
 um resultado novo. Antes da exibição, a consulta confere publicação, visibilidade
 e participação na coleção no SQLite. Uma retirada pode encurtar temporariamente
 a página de resultados.
+
+## Operação pela equipe (Etapa 4c)
+
+Em `/equipe/repositorio`, o catalogador abre o depósito pelo número da
+instância ou cria um rascunho para ela. A ficha permite criar e associar
+coleções, cadastrar arquivos lógicos, enviar ou substituir versões,
+publicar, retirar e recuperar uma versão exata. A retirada do arquivo
+principal vigente de um depósito publicado exige confirmação da retirada
+conjunta. Uma versão antiga continua disponível para consulta da equipe.
+
+Todas as rotas exigem sessão da equipe com permissão de catalogação.
+Formulários de mudança exigem o token CSRF. O autor registrado na auditoria
+é o da sessão. A escrita usa a fila única do servidor e a mesma transação
+da CLI. Uma operação de upload reserva a vaga da instituição e só pode
+confirmar a versão após receber o fim do formulário. O envio usa o limite
+de 1 GiB, a reserva de espaço do armazenamento e a revisão esperada exibida
+no formulário. Uma repetição conserva a chave de operação.

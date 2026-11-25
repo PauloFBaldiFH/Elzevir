@@ -45,6 +45,8 @@ pub struct RepositoryPage<'a> {
     /// Escaped labels and canonical version URLs.
     pub files: Vec<(String, String)>,
 }
+mod staff_repository;
+pub use staff_repository::{StaffDeposit, StaffDepositFile};
 mod board;
 mod opac_account;
 mod staff_bar;
@@ -519,6 +521,7 @@ mod tests {
             include_str!("../templates/opac_home.html"),
             include_str!("../templates/opac_record_repository.html"),
             include_str!("../templates/repository.html"),
+            include_str!("../templates/staff_repository.html"),
             include_str!("../templates/repository_search.html"),
             include_str!("../templates/opac_home_repository.html"),
             include_str!("../templates/opac_results.html"),

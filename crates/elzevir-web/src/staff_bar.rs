@@ -174,7 +174,7 @@ const NEW_ENTRIES: [LinkEntry; 5] = [
 ];
 
 /// The main modules of the home and the drawer, in the draft's order and tones.
-const MODULES: [LinkEntry; 9] = [
+const MODULES: [LinkEntry; 10] = [
     link(
         "module-circulation",
         "bar-circulation",
@@ -209,6 +209,13 @@ const MODULES: [LinkEntry; 9] = [
         "patrons",
         None,
         any_staff,
+    ),
+    link(
+        "desk-title",
+        "mod-repositories",
+        "catalog",
+        Some("/equipe/repositorio"),
+        repository_staff,
     ),
     link(
         "module-serials",
@@ -293,6 +300,10 @@ fn circulates(state: &AppState, session: &ActiveSession) -> bool {
 
 fn catalogues(_: &AppState, session: &ActiveSession) -> bool {
     session.identity.can(Permission::Cataloguing)
+}
+
+fn repository_staff(state: &AppState, session: &ActiveSession) -> bool {
+    state.desk.is_some() && catalogues(state, session)
 }
 
 fn imports(state: &AppState, session: &ActiveSession) -> bool {

@@ -239,3 +239,15 @@ impl RepositoryError {
         }
     }
 }
+
+impl Integrity {
+    /// Stable storage and audit value.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::Ok => "ok",
+            Self::Missing => "missing",
+            Self::Corrupt => "corrupt",
+        }
+    }
+}

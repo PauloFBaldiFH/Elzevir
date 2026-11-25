@@ -36,6 +36,7 @@ mod import_batches;
 mod import_service;
 mod init;
 mod installation;
+mod institution_repository;
 mod koha_codes;
 mod listen_port;
 mod local_artifacts;
@@ -417,6 +418,7 @@ fn language_bundle(language: &str) -> Result<I18n, String> {
 }
 
 fn web_app(
+    lock: Arc<InstitutionLock>,
     store: &Arc<ElzevirStore>,
     index: Arc<TantivyIndex>,
     data_dir: &Path,
@@ -452,6 +454,19 @@ fn web_app(
         store: Arc::clone(store),
     }))
     .map_err(|error| error.to_string())?
+    .with_repository_desk(Arc::new(institution_repository::ServerDesk(
+        institution_repository::InstitutionRepository {
+            metadata: elzevir_store::repository::MetadataStore::shared(Arc::clone(store)),
+            objects: repository_fs::FsObjectStore::new(
+                data_dir,
+                lock,
+                repository_fs::MAX_BYTES,
+                repository_fs::MIN_FREE,
+            )
+            .map_err(|e| e.to_string())?,
+            clock: institution_repository::WallClock,
+        },
+    )))
     .with_repository(Arc::new(repository_public::Public::new(
         Arc::clone(store),
         data_dir,
@@ -525,7 +540,11 @@ fn serve_controlled(
     if let Some((path, report)) = &loaded.table_report {
         println!("{}", config::summary(path, report));
     }
-    let DataDir { store, _lock } = open_store(data_dir)?;
+    let DataDir {
+        store,
+        _lock: institution_lock,
+    } = open_store(data_dir)?;
+    let lock = Arc::new(institution_lock);
     let store = Arc::new(store);
     let _logs = logging::start(data_dir)?;
     let probe = Arc::new(health::Probe::new(Arc::clone(&store))?);
@@ -554,6 +573,7 @@ fn serve_controlled(
             mail: loaded.mail.clone(),
         };
         let app = web_app(
+            Arc::clone(&lock),
             &store,
             index,
             data_dir,

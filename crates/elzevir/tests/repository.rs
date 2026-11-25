@@ -691,3 +691,17 @@ fn withdrawal_is_effective_in_discovery_before_and_after_outbox_replay() {
     );
     store.shutdown().unwrap();
 }
+
+#[test]
+fn staff_repository_requires_an_authenticated_cataloguer() {
+    let fixture = institution();
+    let (_server, host, agent) = start_http(fixture.path());
+    let response = agent
+        .get(format!("{host}/equipe/repositorio"))
+        .call()
+        .unwrap();
+    assert_eq!(response.status(), 401);
+}
+
+#[path = "repository_staff/mod.rs"]
+mod staff;
