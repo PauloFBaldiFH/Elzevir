@@ -582,3 +582,28 @@ A Ferramenta Mágica será considerada tecnicamente madura, dentro dos formatos 
 **Prioridade absoluta: qualidade do algoritmo de interpretação, integridade da migração e fidelidade biblioteconômica.** Não trocar precisão por uma aparência de universalidade. A ferramenta deve evoluir com cada nova amostra através de perfis, regras, evidências e testes — e ser capaz de lidar de modo útil com fontes desconhecidas, mesmo quando a conclusão correta é solicitar uma decisão humana ou um formato de exportação alternativo.
 
 O usuário deve sentir que o Elzevir compreende a sua biblioteca, não que precisa remodelar a biblioteca para caber em um importador rígido.
+
+Pesquisa de estratégias superiores de inferência
+
+Investigar a possibilidade de desenvolver uma abordagem algorítmica original ou uma combinação não convencional de técnicas existentes que maximize a capacidade de interpretar bases bibliotecárias desconhecidas.
+
+Considerar, sem limitar a investigação:
+
+- Inferência semântica bidirecional entre origem e ontologia de destino.
+- Reconstrução do modelo conceitual da biblioteca como um problema de inferência global.
+- Propagação de evidências entre entidades, campos e relacionamentos.
+- Formulação, competição e eliminação progressiva de hipóteses.
+- Impressões digitais estruturais e semânticas independentes dos nomes dos campos.
+- Aprendizado ativo para minimizar a quantidade de perguntas ao bibliotecário.
+- Transferência de conhecimento entre estruturas de sistemas diferentes.
+- Estratégias híbridas de inferência determinística, probabilística e assistida por IA.
+
+O agente possui liberdade para propor técnicas não mencionadas neste documento, inclusive reformular fundamentalmente a abordagem algorítmica inicial, desde que preserve os requisitos de segurança, integridade, explicabilidade, desempenho e fidelidade biblioteconômica.
+
+Investigar soluções provenientes de outras áreas científicas, não se restringindo às ferramentas bibliotecárias existentes.
+
+Comparar experimentalmente as abordagens promissoras com uma baseline convencional, utilizando bases desconhecidas e casos adversariais.
+
+Não perseguir complexidade ou originalidade como fins em si mesmos. Priorizar a solução que demonstrar maior capacidade real de generalização, precisão e autonomia.
+
+Caso seja identificada uma contribuição algorítmica potencialmente inédita, documentar formalmente seu funcionamento, fundamentação, limitações e resultados experimentais.
