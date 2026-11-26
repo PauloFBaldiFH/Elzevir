@@ -63,7 +63,8 @@ pub(crate) fn patron(
 ) -> Result<Found<i64>, StoreError> {
     only(
         connection,
-        "SELECT local_id FROM koha_keys WHERE kind = 2 AND koha_key = ?1",
+        "SELECT k.local_id FROM koha_keys k JOIN patrons p ON p.id = k.local_id
+         WHERE k.kind = 2 AND k.koha_key = ?1 AND p.anonymized_at IS NULL",
         &borrowernumber.to_string(),
         CirculationLeftover::Patron,
     )

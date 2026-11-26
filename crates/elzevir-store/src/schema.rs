@@ -59,9 +59,8 @@ const MIGRATIONS: &[&str] = &[
          permission TEXT NOT NULL,
          PRIMARY KEY (staff_id, permission)
      ) STRICT, WITHOUT ROWID;",
-    // 3: the bibliographic model (docs/specs/catalogo/modelo-bibliografico.md). Small
-    // integer columns named `kind`, `vocabulary` or `format` hold the stable numbers of
-    // the enums in `elzevir_domain::catalog`.
+    // 3: the bibliographic model (docs/specs/catalogo/modelo-bibliografico.md). Columns
+    // `kind`, `vocabulary` and `format` hold the stable numbers of `elzevir_domain::catalog`.
     "CREATE TABLE branches (
          id          INTEGER PRIMARY KEY,
          code        TEXT NOT NULL UNIQUE,
@@ -834,7 +833,7 @@ const MIGRATIONS: &[&str] = &[
          day         TEXT NOT NULL,
          row_version INTEGER NOT NULL DEFAULT 1
      ) STRICT;",
-    // 60: the patron's OPAC password, Argon2id (opac/conta-do-leitor.md); NULL: no access.
+    // 60: the OPAC password, Argon2id (opac/conta-do-leitor.md); 66: anonymization.
     "ALTER TABLE patrons ADD COLUMN password_hash TEXT;",
     // 61: installation-local identifiers per source catalog; 62: offline repository.
     include_str!("import_provenance.sql"),
@@ -843,6 +842,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("oai_datestamps.sql"),
     include_str!("koha_keys.sql"),
     include_str!("koha_history.sql"),
+    "ALTER TABLE patrons ADD COLUMN anonymized_at TEXT;",
 ];
 
 /// The migration that creates `match_keys`.

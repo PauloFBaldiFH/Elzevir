@@ -445,6 +445,48 @@ fn a_patron_is_enrolled_and_edited_on_the_form() {
     assert_eq!(views, 1);
 }
 
+#[test]
+fn a_patron_is_anonymized_from_the_edit_form_after_confirming() {
+    // docs/specs/circulacao/lgpd.md, item 6.
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    let (server, address) = start(data.path());
+    let lei = sign_in(address, "lei");
+    let cir = sign_in(address, "cir");
+    let edit = format!("/equipe/leitores/{ana}/editar");
+    let action = format!("/equipe/leitores/{ana}/anonimizar");
+    let page = request(address, "GET", &edit, &lei, "");
+    assert!(page.contains(&format!("action=\"{action}\"")));
+    let token = csrf(&page).to_owned();
+    let post = |who: &str, body: &str| {
+        request(
+            address,
+            "POST",
+            &action,
+            &format!("{who}Content-Type: application/x-www-form-urlencoded\r\n"),
+            &format!("csrf={token}{body}"),
+        )
+    };
+    assert_status(&post(&cir, "&confirm=1"), 403);
+    let unconfirmed = post(&lei, "");
+    assert_status(&unconfirmed, 422);
+    assert!(unconfirmed.contains("Tick the box to confirm."));
+    let done = post(&lei, "&confirm=1");
+    assert_status(&done, 303);
+    assert!(done.contains("location: /equipe/leitores?anonimizado=1"));
+    assert!(
+        request(address, "GET", "/equipe/leitores?anonimizado=1", &lei, "")
+            .contains("The patron was anonymized.")
+    );
+    assert_status(
+        &request(address, "GET", &format!("/equipe/leitores/{ana}"), &cir, ""),
+        404,
+    );
+    assert!(!request(address, "GET", "/equipe/leitores?q=silva", &cir, "").contains("Silva, Ana"));
+    assert_status(&post(&lei, "&confirm=1"), 404);
+    drop(server);
+}
+
 /// An Item "0001" of "Dom Casmurro" at the Anexo branch, and rules that lend for a week.
 fn stock(data: &Path) {
     let store = open(data);

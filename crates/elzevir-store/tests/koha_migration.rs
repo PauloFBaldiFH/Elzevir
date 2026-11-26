@@ -9,6 +9,7 @@
 
 use elzevir_app::catalog::CatalogCommand;
 use elzevir_app::codes::{CodeTable, NamedCode};
+use elzevir_app::commands::WriteRefusal;
 use elzevir_app::commands::{WriteCommand, WriteOutput};
 use elzevir_app::import::{ImportOptions, import_marc_text};
 use elzevir_app::koha_migration::{
@@ -17,9 +18,11 @@ use elzevir_app::koha_migration::{
 };
 use elzevir_app::matching::Matching;
 use elzevir_app::patron_account::log_in;
-use elzevir_app::patrons::{CategoryChange, PatronCommand, PatronOutput};
+use elzevir_app::patrons::{CategoryChange, PatronCommand, PatronOutput, PatronRefusal};
 use elzevir_domain::catalog::MatchRule;
 use elzevir_domain::patron::Enrolment;
+use elzevir_domain::patron::PatronId;
+use elzevir_store::CommandFailed;
 use elzevir_store::{ElzevirHandler, ElzevirStore, StoreConfig};
 use jiff::civil::date;
 use jiff::tz::TimeZone;
@@ -340,6 +343,7 @@ fn loans_holds_and_accounts_follow_the_patrons_and_the_catalog() {
         (0, 0, 6)
     );
     assert_eq!(rows(&store, "SELECT count(*) || '' FROM holds"), ["4"]);
+    anonymizing_keeps_the_history_without_the_patron(&store, &dir);
 }
 
 /// The accounts, after the loans (circulacao-do-koha.md, items 9 to 12).
@@ -434,4 +438,92 @@ fn history_keeps_only_consenting_patrons(store: &ElzevirStore, plan: &KohaPlan) 
         ]
     );
     assert_eq!(history(store, plan).already_migrated, 4);
+}
+
+/// docs/specs/circulacao/lgpd.md, items 1 to 7, on the migrated library: the patron's
+/// data leaves the record, the history and the audit log; another patron's stays.
+fn anonymizing_keeps_the_history_without_the_patron(store: &ElzevirStore, dir: &tempfile::TempDir) {
+    let ana = PatronId(
+        rows(
+            store,
+            "SELECT id || '' FROM patrons WHERE cardnumber = 'A0001'",
+        )
+        .first()
+        .unwrap()
+        .parse()
+        .unwrap(),
+    );
+    let anonymize = || {
+        store
+            .submit(WriteCommand::Patrons(PatronCommand::Anonymize(ana)))
+            .unwrap()
+            .wait()
+    };
+    assert!(matches!(
+        anonymize(),
+        Err(CommandFailed::Rejected(WriteRefusal::Patrons(
+            PatronRefusal::HasLoans
+        )))
+    ));
+    // The desk takes the Item back and cancels the holds.
+    rusqlite::Connection::open(dir.path().join("elzevir.db"))
+        .unwrap()
+        .execute_batch(&format!(
+            "DELETE FROM loans WHERE patron_id = {0}; DELETE FROM holds WHERE patron_id = {0};",
+            ana.0
+        ))
+        .unwrap();
+    assert!(matches!(
+        anonymize(),
+        Ok(WriteOutput::Patrons(PatronOutput::Anonymized(_)))
+    ));
+    assert_eq!(
+        rows(
+            store,
+            &format!(
+                "SELECT cardnumber || '|' || surname || '|' || coalesce(first_name, '-') || '|'
+                     || coalesce(email, '-') || '|' || coalesce(password_hash, '-') || '|'
+                     || (anonymized_at IS NOT NULL)
+                 FROM patrons WHERE id = {}",
+                ana.0
+            )
+        ),
+        [format!("anon-{}||-|-|-|1", ana.0)]
+    );
+    // The returned loan and the account stay, without a name.
+    assert_eq!(
+        rows(
+            store,
+            "SELECT count(*) || '|' || count(patron_id) FROM returned_loans"
+        ),
+        ["4|0"]
+    );
+    assert_eq!(
+        rows(
+            store,
+            &format!(
+                "SELECT count(*) || '' FROM account_lines WHERE patron_id = {}",
+                ana.0
+            )
+        ),
+        ["3"]
+    );
+    let log = rows(store, "SELECT command FROM audit_log").join("\n");
+    for private in [
+        "A0001",
+        "Ana Maria",
+        "Acácias",
+        "ana@example.org",
+        "$2a$08$",
+    ] {
+        assert!(!log.contains(private), "{private} still in the audit log");
+    }
+    // Another patron's data is untouched.
+    assert!(log.contains("A0006") && log.contains("elisa@example.org"));
+    assert!(matches!(
+        anonymize(),
+        Err(CommandFailed::Rejected(WriteRefusal::Patrons(
+            PatronRefusal::UnknownPatron
+        )))
+    ));
 }

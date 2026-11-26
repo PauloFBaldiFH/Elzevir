@@ -4,6 +4,7 @@
 {% block content %}
 <div class="patrons">
 <h1>{{ t.get("patrons-title") }}</h1>
+{% if anonymized %}<p class="codes-alert codes-saved" role="status">{{ t.get("patron-anonymized") }}</p>{% endif %}
 <form method="get" action="/equipe/leitores" role="search" class="patron-search">
   <label for="patron-query">{{ t.get("patrons-search-label") }}</label>
   <input type="search" id="patron-query" name="q" value="{{ query }}" maxlength="256" autofocus autocomplete="off">

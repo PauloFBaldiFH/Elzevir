@@ -43,6 +43,7 @@ mod patron_form;
 mod patron_holds;
 mod patron_login;
 mod patron_password;
+mod patron_privacy;
 mod patrons;
 mod pill_loans;
 mod print_notices;
@@ -448,6 +449,10 @@ fn patron_routes() -> Router<AppState> {
         .route(
             "/equipe/leitores/{id}/senha",
             post(patron_password::set_password),
+        )
+        .route(
+            "/equipe/leitores/{id}/anonimizar",
+            post(patron_privacy::anonymize),
         )
 }
 

@@ -22,6 +22,8 @@ pub struct StaffPatrons<'a> {
     pub zoom: &'static str,
     /// Whether the person may manage categories.
     pub can_manage: bool,
+    /// Whether a patron was just anonymized.
+    pub anonymized: bool,
 }
 
 /// One patron found.
@@ -315,6 +317,8 @@ pub struct StaffPatronForm<'a> {
     pub refused: Option<&'static str>,
     /// The OPAC password part, when editing a patron.
     pub password: Option<PasswordSection>,
+    /// The anonymization part, on the edit form.
+    pub anonymize: Option<AnonymizeSection>,
 }
 
 /// The OPAC password part of the patron form (docs/specs/opac/conta-do-leitor.md, item 2).
@@ -328,6 +332,15 @@ pub struct PasswordSection {
     pub notice: Option<&'static str>,
     /// Message key of why the last password was refused.
     pub error: Option<&'static str>,
+}
+
+/// The anonymization part of the patron form (docs/specs/circulacao/lgpd.md, item 1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnonymizeSection {
+    /// Where its form posts.
+    pub action: String,
+    /// Message key of why the last anonymization was refused.
+    pub refused: Option<&'static str>,
 }
 
 /// The texts of the patron form, as typed or as stored.
