@@ -24,15 +24,21 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &PatronCommand) -> Applied {
         PatronCommand::ChangeCategory(change) => change_category(tx.connection(), change)?,
         PatronCommand::Add(fields) => add(tx.connection(), fields)?,
         PatronCommand::Update(update) => update_patron(tx.connection(), update)?,
-        PatronCommand::View(patron) | PatronCommand::RevealCpf(patron) => {
+        PatronCommand::View(patron)
+        | PatronCommand::RevealCpf(patron)
+        | PatronCommand::Export(patron) => {
             if !crate::catalog::exists(
                 tx.connection(),
-                "SELECT 1 FROM patrons WHERE id = ?1",
+                "SELECT 1 FROM patrons WHERE id = ?1 AND anonymized_at IS NULL",
                 patron.0,
             )? {
                 return Err(refused(PatronRefusal::UnknownPatron));
             }
-            PatronOutput::Viewed(*patron)
+            if matches!(command, PatronCommand::Export(_)) {
+                PatronOutput::Exported(*patron)
+            } else {
+                PatronOutput::Viewed(*patron)
+            }
         }
         PatronCommand::SetPassword {
             patron,

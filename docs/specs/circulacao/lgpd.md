@@ -1,6 +1,6 @@
 # LGPD: ferramentas de privacidade do leitor
 
-> Status: tarefa 5.4, parte a (anonimizar um leitor). Partes b (exportar os dados de um leitor) e c (prazos de guarda do histórico e de leitores inativos) virão em PRs próprios. Base: Koha 26.05.05, [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (tabela da Fase 5, linha 5.4) e [leitores.md](leitores.md) §6.
+> Status: tarefa 5.4, partes a (anonimizar um leitor) e b (exportar os dados de um leitor). Parte c (prazos de guarda do histórico e de leitores inativos) virão em PRs próprios. Base: Koha 26.05.05, [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (tabela da Fase 5, linha 5.4) e [leitores.md](leitores.md) §6.
 
 ## 1. Comportamento
 
@@ -14,14 +14,28 @@
 6. **Na tela.** O formulário de edição (`/equipe/leitores/{id}/editar`, permissão de leitores) tem a seção "Anonimizar", com o que será apagado e uma caixa "Entendo que não dá para desfazer". O envio vai para `POST /equipe/leitores/{id}/anonimizar`; sem a caixa marcada, volta 422 com o aviso; uma recusa volta ao formulário com a mensagem (422). Feito, a página redireciona (303) para a busca de leitores com o aviso "O leitor foi anonimizado".
 7. Um leitor anonimizado some da busca, da ficha (404), do formulário, do login do OPAC e do SIP2, e uma nova rodada da migração do Koha não lhe devolve empréstimos nem reservas.
 
+### Exportar os dados de um leitor
+
+8. O comando `patrons.export` recebe o id do leitor e só registra, no `audit_log`, que a equipe tirou a cópia (quem e quando), como a abertura da ficha. Leitor que não existe ou foi anonimizado é recusado.
+9. A cópia é um documento JSON (`"format": "elzevir-patron-export/1"`) com tudo o que o Elzevir guarda do leitor:
+   - `patron`: o cadastro inteiro, com o CPF completo e os nomes da unidade e da categoria; a senha do OPAC aparece só como `opac_password` (sim ou não), nunca o hash;
+   - `loans`, `returned_loans`, `holds`, `ended_holds`: empréstimos em aberto e devolvidos, reservas ativas e encerradas, cada exemplar com código de barras e título;
+   - `account_lines` e `account_offsets`: a conta, linha a linha, e os movimentos entre as linhas;
+   - `restrictions`, `notices` e `notice_items`: suspensões e bloqueios, avisos gerados e os exemplares de cada aviso;
+   - `record_access`: quando a ficha foi aberta, o CPF mostrado ou a cópia tirada, sem dizer por quem (o login é dado do funcionário, não do leitor).
+   Cada lista traz todas as colunas da tabela, de modo que uma coluna nova entra sozinha.
+10. O registro de auditoria entra só como `record_access`; os comandos de cadastro e edição já estão representados pelo próprio cadastro.
+11. **Na tela.** O formulário de edição (permissão de leitores) tem a seção "Dados do leitor", com o botão "Baixar dados", que envia para `POST /equipe/leitores/{id}/exportar`. A resposta é o arquivo `leitor-{id}.json` para download (`Content-Disposition: attachment`, `Cache-Control: no-store`). O registro no `audit_log` acontece antes de os dados saírem do servidor. Cabe à biblioteca entregar o arquivo ao leitor que pedir (LGPD, art. 18, II, e art. 19).
+
 ## 2. Origem no Koha
 
 - `Koha::Patron::anonymize` (`reference/koha/Koha/Patron.pm`): recusa com empréstimos, limpa as colunas pessoais e marca `anonymized`. No Koha, campos obrigatórios recebem texto aleatório; aqui a carteirinha vira `anon-{id}` e os outros ficam vazios.
+- O Koha não tem uma cópia dos dados de um leitor; a preferência `GDPR_Policy` só pede, no OPAC, o consentimento à política de privacidade.
 - `Koha::Old::Checkouts::anonymize` e `misc/cronjobs/batch_anonymise.pl`: o histórico fica, sem o leitor.
 
 ## 3. Paridade
 
-`livre`. Prova: `crates/elzevir-store/tests/patrons.rs` (carteirinha trocada e homônimo poupado no `audit_log`, segunda anonimização recusada), `crates/elzevir-store/tests/koha_migration.rs` (recusa com empréstimos, histórico e conta mantidos sem o leitor, `audit_log` da migração limpo só para o leitor, nova rodada da migração), teste de unidade de `patron_privacy` e `crates/elzevir/tests/patrons.rs` (permissão, confirmação, redirecionamento, ficha 404 e busca vazia).
+`livre`. Prova: `crates/elzevir-store/tests/patrons.rs` (carteirinha trocada e homônimo poupado no `audit_log`, segunda anonimização recusada), `crates/elzevir-store/tests/koha_migration.rs` (recusa com empréstimos, histórico e conta mantidos sem o leitor, `audit_log` da migração limpo só para o leitor, nova rodada da migração, exportação com cadastro sem hash, empréstimos, reservas, conta e `record_access`, nada de outro leitor, e cópia recusada depois de anonimizar), teste de unidade de `patron_privacy` e `crates/elzevir/tests/patrons.rs` (permissão, download com cabeçalho de anexo, confirmação, redirecionamento, ficha 404 e busca vazia).
 
 ## 4. Casos de borda
 

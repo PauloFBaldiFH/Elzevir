@@ -52,6 +52,14 @@
 </section>
 {% endif %}
 {% if let Some(section) = anonymize %}
+<section class="patron-export" aria-labelledby="export-title">
+  <h2 id="export-title">{{ t.get("patron-export-title") }}</h2>
+  <p class="form-hint">{{ t.get("patron-export-hint") }}</p>
+  <form method="post" action="{{ section.export }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button type="submit">{{ t.get("patron-export") }}</button>
+  </form>
+</section>
 <section class="patron-anonymize" aria-labelledby="anonymize-title">
   <h2 id="anonymize-title">{{ t.get("patron-anonymize-title") }}</h2>
   {% if let Some(key) = section.refused %}<p class="codes-alert codes-refused" role="alert">{{ t.get(key) }}</p>{% endif %}

@@ -18,7 +18,10 @@ use elzevir_app::koha_migration::{
 };
 use elzevir_app::matching::Matching;
 use elzevir_app::patron_account::log_in;
-use elzevir_app::patrons::{CategoryChange, PatronCommand, PatronOutput, PatronRefusal};
+use elzevir_app::patrons::{
+    CategoryChange, PatronCommand, PatronDesk, PatronOutput, PatronRefusal,
+};
+use elzevir_app::staff::StaffId;
 use elzevir_domain::catalog::MatchRule;
 use elzevir_domain::patron::Enrolment;
 use elzevir_domain::patron::PatronId;
@@ -440,6 +443,30 @@ fn history_keeps_only_consenting_patrons(store: &ElzevirStore, plan: &KohaPlan) 
     assert_eq!(history(store, plan).already_migrated, 4);
 }
 
+/// docs/specs/circulacao/lgpd.md, items 8 to 11: the copy of what is kept about the patron
+/// brings the record without the password hash, the loans, holds and account, and the
+/// logged export itself.
+fn exporting_brings_everything_kept(store: &ElzevirStore, ana: PatronId) {
+    assert_eq!(
+        store.apply(StaffId(1), PatronCommand::Export(ana)).unwrap(),
+        PatronOutput::Exported(ana)
+    );
+    let document = store.export(ana).unwrap().unwrap();
+    let at = |path: &str| document.pointer(path).unwrap();
+    assert_eq!(at("/format"), "elzevir-patron-export/1");
+    assert_eq!(at("/patron/cardnumber"), "A0001");
+    assert_eq!(at("/patron/opac_password"), true);
+    assert!(document.pointer("/patron/password_hash").is_none());
+    assert!(document.pointer("/patron/row_version").is_none());
+    let count = |list: &str| at(list).as_array().unwrap().len();
+    assert!(count("/loans") > 0 && count("/holds") > 0);
+    assert_eq!(count("/account_lines"), 3);
+    assert!(at("/loans/0/item_barcode").is_string());
+    assert_eq!(at("/record_access/0/kind"), "patrons.export");
+    let text = document.to_string();
+    assert!(!text.contains("$2a$08$") && !text.contains("A0006"));
+}
+
 /// docs/specs/circulacao/lgpd.md, items 1 to 7, on the migrated library: the patron's
 /// data leaves the record, the history and the audit log; another patron's stays.
 fn anonymizing_keeps_the_history_without_the_patron(store: &ElzevirStore, dir: &tempfile::TempDir) {
@@ -465,6 +492,7 @@ fn anonymizing_keeps_the_history_without_the_patron(store: &ElzevirStore, dir: &
             PatronRefusal::HasLoans
         )))
     ));
+    exporting_brings_everything_kept(store, ana);
     // The desk takes the Item back and cancels the holds.
     rusqlite::Connection::open(dir.path().join("elzevir.db"))
         .unwrap()
@@ -508,6 +536,7 @@ fn anonymizing_keeps_the_history_without_the_patron(store: &ElzevirStore, dir: &
         ),
         ["3"]
     );
+    assert_eq!(store.export(ana).unwrap(), None);
     let log = rows(store, "SELECT command FROM audit_log").join("\n");
     for private in [
         "A0001",

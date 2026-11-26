@@ -160,6 +160,12 @@ impl PatronDesk for ElzevirStore {
             .map_err(unavailable)
     }
 
+    fn export(&self, id: PatronId) -> Result<Option<serde_json::Value>, PatronDeskError> {
+        self.readers()
+            .read(|c| crate::patron_export::export(c, id))
+            .map_err(unavailable)
+    }
+
     fn search(&self, query: &PatronQuery) -> Result<Vec<PatronRow>, PatronDeskError> {
         let cpf = query.cpf.as_ref().map(|cpf| cpf.digits().to_owned());
         let name = query.name.as_deref().map(contains);

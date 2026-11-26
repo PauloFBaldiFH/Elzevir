@@ -50,6 +50,7 @@ mod notices;
 mod oai;
 mod overdue_fines;
 mod patron_desk;
+mod patron_export;
 mod patron_privacy;
 mod patrons;
 mod pending;
