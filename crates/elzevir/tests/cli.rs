@@ -205,6 +205,7 @@ fn a_koha_dump_brings_its_patrons_once() {
         "  borrowernumber 4: branchcode not in branches",
         "  borrowernumber 5: categorycode not in categories",
         "restrictions: 2 migrated, 1 already ended",
+        "OPAC passwords: 1 migrated, 1 in a format older than bcrypt left out",
         "  email: 1",
         "  userid: 2",
     ] {

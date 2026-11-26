@@ -6,7 +6,21 @@ use elzevir_domain::patron::PatronId;
 use jiff::civil::Date;
 
 use crate::patrons::ReadingHistory;
-use crate::staff::{DECOY_HASH, verify_password};
+use crate::staff::{DECOY_HASH, hash_password, verify_password};
+
+/// Whether `hash` is a bcrypt hash, as Koha keeps them (`$2a$08$…`).
+#[must_use]
+pub fn is_koha_hash(hash: &str) -> bool {
+    hash.starts_with("$2")
+}
+
+/// Whether `password` matches Koha's bcrypt `hash`. Koha hashes the UTF-8 bytes of the
+/// password; a malformed hash never matches.
+///
+/// Koha: `C4::Auth::checkpw_hash`, `Koha::AuthUtils::hash_password`.
+fn verify_koha_password(password: &str, hash: &str) -> bool {
+    bcrypt::verify(password.as_bytes(), hash).unwrap_or(false)
+}
 
 /// What signing in compares: the patron and their password hash, if any.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,7 +29,8 @@ pub struct PatronCredentials {
     pub id: PatronId,
     /// The first name, or the surname without one; the only name the OPAC home shows.
     pub greeting: String,
-    /// The Argon2id hash; `None` when the staff set no password.
+    /// The Argon2id hash, or Koha's bcrypt hash brought by the migration
+    /// (docs/specs/migracao/leitores-do-koha.md, item 12); `None` when there is no password.
     pub password_hash: Option<String>,
 }
 
@@ -76,6 +91,17 @@ pub trait PatronAccounts: Send + Sync {
         id: PatronId,
         choice: ReadingHistory,
     ) -> Result<(), PatronAccountError>;
+
+    /// Replaces a password hash brought from Koha by the Argon2id hash of the same password,
+    /// once the patron signed in with it; no staff member acts.
+    ///
+    /// # Errors
+    /// [`PatronAccountError`] when storage fails or the patron is gone.
+    fn upgrade_password(
+        &self,
+        id: PatronId,
+        password_hash: String,
+    ) -> Result<(), PatronAccountError>;
 }
 
 /// Why signing in was refused.
@@ -112,7 +138,15 @@ pub fn log_in(
         }
         return Err(PatronLoginRefused::InvalidCredentials);
     };
-    if !verify_password(password, hash) {
+    if is_koha_hash(hash) {
+        if !verify_koha_password(password, hash) {
+            return Err(PatronLoginRefused::InvalidCredentials);
+        }
+        if let Ok(argon) = hash_password(password) {
+            // The patron is in either way; a failed upgrade is tried again at the next sign-in.
+            let _retried_next_time = accounts.upgrade_password(credentials.id, argon);
+        }
+    } else if !verify_password(password, hash) {
         return Err(PatronLoginRefused::InvalidCredentials);
     }
     Ok(PatronIdentity {
@@ -126,7 +160,7 @@ mod tests {
     use super::*;
     use crate::staff::hash_password;
 
-    struct One(PatronCredentials);
+    struct One(PatronCredentials, std::sync::Mutex<Vec<String>>);
 
     impl PatronAccounts for One {
         fn credentials(
@@ -147,14 +181,22 @@ mod tests {
         ) -> Result<(), PatronAccountError> {
             Ok(())
         }
+
+        fn upgrade_password(&self, _: PatronId, hash: String) -> Result<(), PatronAccountError> {
+            self.1.lock().unwrap().push(hash);
+            Ok(())
+        }
     }
 
     fn patron(password_hash: Option<String>) -> One {
-        One(PatronCredentials {
-            id: PatronId(7),
-            greeting: "Ana".to_owned(),
-            password_hash,
-        })
+        One(
+            PatronCredentials {
+                id: PatronId(7),
+                greeting: "Ana".to_owned(),
+                password_hash,
+            },
+            std::sync::Mutex::default(),
+        )
     }
 
     #[test]
@@ -176,5 +218,25 @@ mod tests {
             log_in(&patron(None), "0042", ""),
             Err(PatronLoginRefused::InvalidCredentials)
         );
+    }
+
+    /// Koha 26.05 on the oracle: `bcrypt('Senha fictícia 1', '$2a$08$' . en_base64('0123456789abcdef'))`.
+    const KOHA_HASH: &str = "$2a$08$KBCwKxOzLha2MUDgW0PjXeL8PLapJrHH7Qyn8x/oWtvIYu16Gx/s2";
+
+    #[test]
+    fn a_koha_password_signs_in_once_and_becomes_argon2() {
+        let ana = patron(Some(KOHA_HASH.to_owned()));
+        assert_eq!(
+            log_in(&ana, "0042", "Senha fictícia 2"),
+            Err(PatronLoginRefused::InvalidCredentials)
+        );
+        assert!(ana.1.lock().unwrap().is_empty());
+        let identity = log_in(&ana, "0042", "Senha fictícia 1").unwrap();
+        assert_eq!(identity.id, PatronId(7));
+        let upgraded = ana.1.lock().unwrap().clone();
+        assert_eq!(upgraded.len(), 1);
+        assert!(verify_password("Senha fictícia 1", &upgraded[0]));
+        // A hash that only looks like bcrypt never matches.
+        assert!(!verify_koha_password("x", "$2a$08$broken"));
     }
 }

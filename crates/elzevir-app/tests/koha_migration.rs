@@ -114,6 +114,19 @@ fn patrons_follow_the_table() {
         ]
     );
     assert_eq!(plan.staff, 1);
+    assert!(
+        ana.password_hash
+            .as_deref()
+            .is_some_and(|hash| hash.starts_with("$2a$08$"))
+    );
+    assert_eq!(
+        (
+            school.password_hash.as_deref(),
+            elisa.password_hash.as_deref()
+        ),
+        (None, None)
+    );
+    assert_eq!(plan.old_passwords, 1);
     assert_eq!(
         plan.left_out,
         [

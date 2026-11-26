@@ -27,6 +27,7 @@ elzevir-web = { path = "crates/elzevir-web" }
 elzevir-web-templates = { path = "crates/elzevir-web-templates" }
 
 argon2 = "0.6"
+bcrypt = { version = "0.19", default-features = false, features = ["alloc"] }
 askama = { version = "0.16", default-features = false, features = ["derive", "std"] }
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "form", "query", "json"] }
 clap = { version = "4", features = ["derive"] }

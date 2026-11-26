@@ -286,6 +286,25 @@ impl PatronAccounts for ElzevirStore {
             Err(failure) => Err(PatronAccountError(failure.to_string())),
         }
     }
+
+    fn upgrade_password(
+        &self,
+        id: PatronId,
+        password_hash: String,
+    ) -> Result<(), PatronAccountError> {
+        let command = WriteCommand::Patrons(PatronCommand::SetPassword {
+            patron: id,
+            password_hash: Some(password_hash),
+        });
+        // As for the reading history, the patron acts, not a staff member.
+        let pending = self
+            .submit(command)
+            .map_err(|error| PatronAccountError(error.to_string()))?;
+        match pending.wait() {
+            Ok(_) => Ok(()),
+            Err(failure) => Err(PatronAccountError(failure.to_string())),
+        }
+    }
 }
 
 #[cfg(test)]

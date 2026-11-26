@@ -9,6 +9,7 @@
 
 use elzevir_app::commands::{WriteCommand, WriteOutput};
 use elzevir_app::koha_migration::{KohaMigrated, KohaPlan, plan};
+use elzevir_app::patron_account::log_in;
 use elzevir_app::patrons::{CategoryChange, PatronCommand, PatronOutput};
 use elzevir_domain::patron::Enrolment;
 use elzevir_store::{ElzevirHandler, ElzevirStore, StoreConfig};
@@ -95,6 +96,7 @@ fn migrates_and_runs_again_without_doubling() {
             patrons_added: 3,
             already_migrated: 0,
             restrictions: 2,
+            passwords: 1,
             cardnumber_taken: Vec::new(),
         }
     );
@@ -150,7 +152,20 @@ fn migrates_and_runs_again_without_doubling() {
         ["patrons.migrate_koha"]
     );
 
-    // A second run adds nobody and updates the branches from Koha again.
+    // Koha's password signs in once and is then Argon2id.
+    let identity = log_in(&store, "A0001", "Senha fictícia 1").unwrap();
+    assert_eq!(identity.greeting, "Ana Maria");
+    assert_eq!(
+        rows(
+            &store,
+            "SELECT substr(password_hash, 1, 9) FROM patrons WHERE cardnumber = 'A0001'"
+        ),
+        ["$argon2id"]
+    );
+    assert!(log_in(&store, "A0001", "Senha fictícia 1").is_ok());
+    assert!(log_in(&store, "A0006", "").is_err());
+
+    // A second run adds nobody, keeps the new password and updates the branches.
     let again = migrate(&store, &plan);
     assert_eq!(
         (

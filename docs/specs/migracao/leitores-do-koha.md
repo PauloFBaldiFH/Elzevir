@@ -1,6 +1,6 @@
 # Migração do Koha, parte 1: unidades, categorias e leitores (v0)
 
-> Status: v0, tarefa 5.1 do [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (Fase 5, aprovada por Paulo em 2026-11-26). Parte a (este texto, itens 1 a 20): leitura do dump, unidades, categorias, leitores e restrições. Parte b: senhas do OPAC (bcrypt do Koha). Base: [leitores](../circulacao/leitores.md), [suspensão](../circulacao/suspensao.md), [tabelas de códigos](../catalogo/tabelas-de-codigos.md) (a tabela de borda `koha_codes`) e a [importação do Koha em SQL](../catalogo/importacao-universal.md). Critério: **o dump do oráculo migra sem perda nos campos que o Elzevir guarda, com um relatório do que ficou de fora**.
+> Status: v0, tarefa 5.1 do [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (Fase 5, aprovada por Paulo em 2026-11-26). Parte a: leitura do dump, unidades, categorias, leitores e restrições. Parte b: senhas do OPAC (item 12a). Base: [leitores](../circulacao/leitores.md), [suspensão](../circulacao/suspensao.md), [tabelas de códigos](../catalogo/tabelas-de-codigos.md) (a tabela de borda `koha_codes`) e a [importação do Koha em SQL](../catalogo/importacao-universal.md). Critério: **o dump do oráculo migra sem perda nos campos que o Elzevir guarda, com um relatório do que ficou de fora**.
 
 A biblioteca que troca o Koha pelo Elzevir traz o acervo pela importação (MARC ou SQL) e, depois, os leitores, com este comando. Os códigos do Koha (unidade, categoria, número do leitor) ficam só nas tabelas de borda; o núcleo continua sem siglas.
 
@@ -44,7 +44,8 @@ A biblioteca que troca o Koha pelo Elzevir traz o acervo pela importação (MARC
 9. Data `0000-00-00` ou que não é data conta como vazia.
 10. Um campo opcional que quebra a regra do Elzevir (leitores, item 4: tamanho, e-mail sem `@`, nascimento depois da inscrição, validade antes da inscrição) fica vazio, e o relatório conta por campo. A validade vazia vem da categoria.
 11. Leitor sem carteirinha, sem nome nenhum, com carteirinha de mais de 32 caracteres, com unidade ou categoria que o dump não tem, ou cuja carteirinha já é de outro leitor do Elzevir, **não entra**; o relatório traz o `borrowernumber` e o motivo.
-12. O CPF não vem: o Koha não tem a coluna. A senha do OPAC vem na parte b.
+12. O CPF não vem: o Koha não tem a coluna.
+12a. **Senha do OPAC** (parte b). O hash bcrypt do Koha (`borrowers.password` que começa com `$2`) vem como está, porque a senha não existe fora dele. Senha vazia ou `!` (conta travada) é leitor sem senha. Hash num formato mais antigo (MD5 do Koha de antes de 3.12) não vem, e o relatório conta. Rodar de novo dá a senha a quem foi migrado sem ela e não mexe em quem já tem uma. No primeiro login com ela, o OPAC troca pelo hash Argon2id ([conta do leitor](../opac/conta-do-leitor.md), item 4a).
 13. O `borrowernumber` de cada leitor migrado vai para `koha_keys`, que a migração dos empréstimos (5.2) vai usar. Rodar de novo pula quem já foi migrado (o relatório conta), então uma migração interrompida pode ser repetida.
 
 ### Restrições
@@ -55,7 +56,7 @@ A biblioteca que troca o Koha pelo Elzevir traz o acervo pela importação (MARC
 ### Gravação e relatório
 
 16. A gravação vai pela escritora, em comandos `patrons.migrate_koha` de até 500 leitores, cada um numa transação; o primeiro traz também as unidades e as categorias. Cada comando vai para o `audit_log` inteiro, como todo comando de leitor (leitores, §6).
-17. O relatório vai para a saída padrão, em inglês, **sem dado pessoal**: contagens de unidades e categorias criadas e atualizadas, leitores migrados, já migrados e recusados (com `borrowernumber` e motivo), restrições, campos esvaziados por campo e, para cada coluna de `borrowers` que o Elzevir não guarda (endereço alternativo, contatos, `sex`, `opacnote`, `sort1`, `sort2`, `userid` e as outras), quantos leitores a tinham preenchida.
+17. O relatório vai para a saída padrão, em inglês, **sem dado pessoal**: contagens de unidades e categorias criadas e atualizadas, leitores migrados, já migrados e recusados (com `borrowernumber` e motivo), restrições, senhas migradas e deixadas de fora, campos esvaziados por campo e, para cada coluna de `borrowers` que o Elzevir não guarda (endereço alternativo, contatos, `sex`, `opacnote`, `sort1`, `sort2`, `userid` e as outras), quantos leitores a tinham preenchida.
 18. Leitores com permissão de equipe no Koha (`flags`) entram como leitores; contas da equipe se criam com `elzevir staff add`. O relatório conta quantos tinham permissão.
 
 ## 2. Casos de borda
