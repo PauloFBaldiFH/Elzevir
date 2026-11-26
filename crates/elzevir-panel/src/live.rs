@@ -70,6 +70,8 @@ pub struct Storage {
     pub wal_bytes: Option<u64>,
     /// Free space on the selected data filesystem.
     pub available_bytes: Option<u64>,
+    /// Capacity of the same filesystem as the available-space observation.
+    pub capacity_bytes: Option<u64>,
 }
 
 /// Machine measurements, not the application's exclusive resource usage.

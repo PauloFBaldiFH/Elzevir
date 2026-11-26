@@ -163,6 +163,36 @@ pub(crate) fn interactive(
         );
         return;
     }
+    if scene.gallery && matches!(panel.mode, Mode::Demo) {
+        crate::overview::gallery(frame, messages, scene);
+        return;
+    }
+    if panel.section == Section::Dashboard && matches!(panel.mode, Mode::Live(_)) {
+        crate::overview::draw(frame, panel, messages, ascii, scene);
+    } else {
+        section_body(frame, panel, messages, ascii, scene);
+    }
+    if panel.form.is_some() {
+        scene.clear();
+        ui::dim(frame);
+        crate::operation_view::form(frame, panel, messages, ascii, scene);
+    } else if panel.palette {
+        scene.clear();
+        ui::dim(frame);
+        let popup = menu_area(area, true);
+        frame.render_widget(Clear, popup);
+        menu(frame, panel, messages, popup, ascii, scene);
+    }
+}
+
+fn section_body(
+    frame: &mut Frame,
+    panel: &Panel,
+    messages: &Messages,
+    ascii: bool,
+    scene: &mut Scene,
+) {
+    let area = frame.area();
     let header = Rect::new(area.x, area.y, area.width, 1);
     ui::header(frame, header, panel, messages, ascii);
     let [mut navigation, mut work, mut context] = columns(area);
@@ -215,16 +245,22 @@ pub(crate) fn interactive(
     }
     ui::action_bar(frame, actions, panel, messages, scene, ascii);
     draw_footer(frame, area, panel, messages);
-    if panel.form.is_some() {
-        scene.clear();
-        ui::dim(frame);
-        crate::operation_view::form(frame, panel, messages, ascii, scene);
-    } else if panel.palette {
-        scene.clear();
-        ui::dim(frame);
-        let popup = menu_area(area, true);
-        frame.render_widget(Clear, popup);
-        menu(frame, panel, messages, popup, ascii, scene);
+    if matches!(panel.mode, Mode::Demo) && panel.section == Section::Dashboard {
+        ui::Button::new(
+            messages.get("desk-gallery"),
+            Action::Gallery,
+            ui::Variant::Primary,
+        )
+        .draw(
+            frame,
+            Rect::new(
+                work.x + 2,
+                work.bottom().saturating_sub(4),
+                work.width.saturating_sub(4),
+                3,
+            ),
+            scene,
+        );
     }
 }
 

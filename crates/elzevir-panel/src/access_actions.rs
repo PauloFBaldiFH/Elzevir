@@ -108,6 +108,29 @@ impl Actions {
         panel.scroll = 0;
         true
     }
+    pub(crate) fn endpoint(
+        &mut self,
+        panel: &mut Panel,
+        endpoint: crate::overview::Endpoint,
+        open: bool,
+    ) {
+        let Mode::Live(state) = &panel.mode else {
+            return;
+        };
+        let url = state
+            .snapshot
+            .as_ref()
+            .filter(|_| state.age_seconds <= 5)
+            .and_then(|s| endpoint.url(s));
+        panel.access_notice = Some(if open {
+            self.open(url.map(std::ffi::OsStr::new))
+        } else if url.is_some_and(|s| self.copy(s)) {
+            "address-copy-requested"
+        } else {
+            "address-select-url"
+        });
+    }
+
     pub(crate) fn desktop(&self) -> bool {
         self.opener.is_some()
     }

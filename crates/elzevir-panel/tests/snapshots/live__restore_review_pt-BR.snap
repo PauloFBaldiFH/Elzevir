@@ -7,25 +7,25 @@ Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:
 |  d Painel de controle    |+Backup e agendamentos-----------------------------------------------------------++Instituição selecionada-----+
 |  x Diagnóstico           ||Em execução                                                                     ||Biblioteca de teste         |
 |  a Endereços e acesso    ||                                                                                ||                            |
-|> b Backup e agendamentos ||n Criar · v Verificar · e Exportar · k Chave · o Restaurar · s Agendar          ||Listener configurado        |
-|  u Atualizações          ||Cóp+Operação com confirmação--------------------------------------------------+ ||127.0.0.1:0                 |
-|  r Serviço               ||Bac| Revisar restauração da instituição                                       | ||                            |
-|  g Configurações         ||[Co| Biblioteca de teste                                                      | ||Listener observado          |
-|                          ||[ ]| Sessões ativas observadas da equipe: Não lido                            | ||127.0.0.1:8080              |
-|                          ||   | biblioteca.age                                                           | ||                            |
-|                          ||   | 00112233445566778899aabbccddeeff   2026-11-20T22:30:00Z                  | ||Última consulta: há 0       |
-|                          ||   | Esquema do banco 1                                                       | ||segundos                    |
-|                          ||   | Instituição de origem desconhecida                                       | ||                            |
-|                          ||   | Somente banco. A configuração e as credenciais atuais serão mantidas.    | ||Observações somente de      |
-|                          ||   | O serviço ficará fora do ar durante a troca e a reindexação.             | ||leitura                     |
-|                          ||   |                                                                          | ||                            |
+|> b Backup e agendamentos ||n C+Operação com confirmação--------------------------------------------------+ ||Listener configurado        |
+|  u Atualizações          ||Cóp| Revisar restauração da instituição                                       | ||127.0.0.1:0                 |
+|  r Serviço               ||Bac| Biblioteca de teste                                                      | ||                            |
+|  g Configurações         ||[Co| Sessões ativas observadas da equipe: Não lido                            | ||Listener observado          |
+|                          ||[ ]| biblioteca.age                                                           | ||127.0.0.1:8080              |
+|                          ||   | 00112233445566778899aabbccddeeff   2026-11-20T22:30:00Z                  | ||                            |
+|                          ||   | Esquema do banco 1                                                       | ||Última consulta: há 0       |
+|                          ||   | Instituição de origem desconhecida                                       | ||segundos                    |
+|                          ||   | Somente banco. A configuração e as credenciais atuais serão mantidas.    | ||                            |
+|                          ||   | O serviço ficará fora do ar durante a troca e a reindexação.             | ||Observações somente de      |
+|                          ||   |                                                                          | ||leitura                     |
 |                          ||   | Escolha com as setas e confirme com Enter                                | ||                            |
-|                          ||   |                Voltar                             Restaurar              | ||                            |
+|                          ||   |              (*) Voltar                         ( ) Restaurar            | ||                            |
 |                          ||   | Clique num campo para editar · Tab: próximo · Esc: cancelar              | ||                            |
 |                          ||   |                                                                          | ||                            |
-|                          ||   |           Confirmar escolha                    Cancelar [Esc]            | ||                            |
+|                          ||   |                                                                          | ||                            |
+|                          ||   |           Confirmar escolha                       Cancelar               | ||                            |
+|                          ||   |                                                                          | ||                            |
 |                          ||   +--------------------------------------------------------------------------+ ||                            |
-|                          ||                                                                                ||                            |
 |                          ||                                                                                ||                            |
 |                          ||                                                                                ||                            |
 |                          |+--------------------------------------------------------------------------------++----------------------------+

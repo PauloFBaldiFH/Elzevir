@@ -2,32 +2,33 @@
 source: crates/elzevir-panel/tests/live.rs
 expression: "screen(&panel, \"en\")"
 ---
-Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
-      1 Home             2 Health            3 Access             4 Backup            5 Updates           6 Service          7 Settings
-+ Biblioteca de teste ----------------------------------------------+ + Data protection --------------------------------------------------+
-| Running                                                           | | Local backup status unavailable                                   |
-| Database: OK                                                      | | Cloud transfer: Not read                                          |
-| Indexer: OK                                                       | |                                                                   |
-| Version: 0.0.0                                                    | |                                                                   |
-| Configured listener: 127.0.0.1:0                                  | |                                                                   |
-| Last check: 0 seconds ago                                         | |                                                                   |
-|                                                                   | |                                                                   |
-|                                                                   | |                                                                   |
-|                                                                   | |                                                                   |
-|                                                                   | |                                                                   |
-+-------------------------------------------------------------------+ +-------------------------------------------------------------------+
-+ Access -----------------------------------------------------------+ + Resource usage ---------------------------------------------------+
-| Catalog (this computer): http://127.0.0.1:8080/                   | | Elzevir RAM (resident): Not read                                  |
-| Staff (this computer): http://127.0.0.1:8080/equipe               | | Elzevir CPU (one core = 100%): Not read                           |
-| Addresses from listener binding; HTTP not tested.                 | | Host CPU (%): 12.5                                                |
-| LAN access: not measured                                          | | Host RAM: 1.0 GiB / 8.0 GiB                                       |
-| Public HTTPS test: Not read                                       | | Disk free: 100.0 MiB                                              |
-|                                                                   | | Database: 4.0 MiB                                                 |
-|                                                                   | | WAL: 0 B                                                          |
-|                                                                   | |                                                                   |
-|                                                                   | |                                                                   |
-|                                                                   | |                                                                   |
-+-------------------------------------------------------------------+ +-------------------------------------------------------------------+
+  ELZEVIR      Administration center                                                                       Biblioteca de teste  * Running
+       Overview             Backup             Access              Service            Updates             Health            Settings
+  Installation overview
 
-           Backups and schedules [b]                            Settings [g]                                    Refresh [f]
-Tab/arrows: navigate | f: refresh | PgUp/PgDn: scroll | Ctrl+P: palette | q/Ctrl+C: quit
+   Server                            Data protection                   Internet access                  Updates
+   * Running                         * Not read                        * Not read                       * No release check
+
+
+   Computer resources                                                  Protection and service
+   CPU                                                         12.5%   Local backup status unavailable
+                                                                       Cloud transfer: Not read
+   RAM                                             1.0 GiB / 8.0 GiB
+
+   Disk in use                                   924.0 MiB / 1.0 GiB
+                                                                          + Create backup           Restart               Stop
+   Elzevir · RSS Not read / CPU Not read of 1 core
+   Database: 4.0 MiB
+
+   Addresses and access
+   Local HTTP not tested   |   Public HTTPS test: Not read
+   Configured listener: 127.0.0.1:0   |   Active listener: 127.0.0.1:8080
+   Local catalog         http://127.0.0.1:8080/                                                                   Copy        - Open
+   Local staff           http://127.0.0.1:8080/equipe                                                             Copy        - Open
+   LAN catalog           No address observed                                                                     - Copy       - Open
+
+
+            Backup center                      Restore data                  Addresses and access                    Settings
+
+
+  Click an action   ·   Tab to focus   ·   Esc to close   ·   Q to quit                                            - Scroll up Scroll down

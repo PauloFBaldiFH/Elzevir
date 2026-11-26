@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Interactive geometry recorded from visible widgets.
 
+mod button;
+pub(crate) use button::{Availability, Button, Variant};
 pub(crate) mod theme;
 
 use ratatui::{
@@ -13,9 +15,40 @@ use ratatui::{
 use crate::{Messages, Mode, Panel, Section, ServerStatus};
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Intent {
+    Create,
+    Restore,
+    Start,
+    Stop,
+    Restart,
+    TestLocal,
+    TestPublic,
+    Setup,
+}
+impl Intent {
+    const fn command(self) -> (Section, char) {
+        match self {
+            Self::Create => (Section::Backup, 'n'),
+            Self::Restore => (Section::Backup, 'o'),
+            Self::Start => (Section::Restart, 'i'),
+            Self::Stop => (Section::Restart, 'p'),
+            Self::Restart => (Section::Restart, 't'),
+            Self::TestLocal => (Section::Addresses, 'v'),
+            Self::TestPublic => (Section::Addresses, 't'),
+            Self::Setup => (Section::Settings, 'c'),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Action {
     Section(Section),
+    Launch(Intent),
+    Address(crate::overview::Endpoint, bool),
+    Scroll(bool),
+    Gallery,
+    Sample(bool),
     Key(KeyCode),
     /// Focus a form field.
     Field(usize),
@@ -28,6 +61,12 @@ pub(crate) enum Action {
 #[derive(Default)]
 pub(crate) struct Scene {
     targets: Vec<(Rect, Action)>,
+    pressed: Option<(Rect, Action)>,
+    focused: Option<(Rect, Action)>,
+    pub(crate) scroll_limit: u16,
+    pub(crate) gallery: bool,
+    pub(crate) sample: Option<bool>,
+    pub(crate) desktop: bool,
     pub(crate) pointer: Option<Position>,
 }
 
@@ -36,12 +75,61 @@ impl Scene {
         self.targets.clear();
     }
 
-    pub(crate) fn hit(&self, point: Position) -> Option<Action> {
+    fn target(&self, point: Position) -> Option<(Rect, Action)> {
         self.targets
             .iter()
             .rev()
             .find(|(rect, _)| rect.contains(point))
-            .map(|(_, action)| *action)
+            .copied()
+    }
+
+    pub(crate) fn reconcile(&mut self) {
+        self.pressed = self.pressed.filter(|t| self.targets.contains(t));
+        self.focused = self.focused.filter(|t| self.targets.contains(t));
+    }
+
+    pub(crate) fn reset_input(&mut self) {
+        self.pressed = None;
+        self.focused = None;
+        self.pointer = None;
+    }
+
+    pub(crate) fn press(&mut self, point: Position) {
+        self.pressed = self.target(point);
+        self.focused = None;
+    }
+
+    pub(crate) fn release(&mut self, point: Position) -> Option<Action> {
+        self.pressed
+            .take()
+            .filter(|t| self.target(point) == Some(*t))
+            .map(|(_, action)| action)
+    }
+
+    pub(crate) fn focus_next(&mut self, forward: bool) -> Option<Action> {
+        let current = self
+            .targets
+            .iter()
+            .position(|target| Some(*target) == self.focused);
+        let count = self.targets.len();
+        if count == 0 {
+            return None;
+        }
+        let index = match (current, forward) {
+            (Some(i), true) => (i + 1) % count,
+            (Some(i), false) => (i + count - 1) % count,
+            (None, true) => 0,
+            (None, false) => count - 1,
+        };
+        self.pointer = None;
+        self.focused = self.targets.get(index).copied();
+        self.focus()
+    }
+
+    pub(crate) fn focus(&self) -> Option<Action> {
+        self.focused
+            .filter(|t| self.targets.contains(t))
+            .map(|(_, action)| action)
     }
 
     pub(crate) fn add(&mut self, area: Rect, action: Action) -> bool {
@@ -69,20 +157,59 @@ impl Scene {
         .spacing(1)
         .split(area);
         for ((label, action, selected), rect) in buttons.into_iter().zip(areas.iter().copied()) {
-            let hover = self.add(rect, action);
-            let style = if selected || hover {
-                theme::selected()
-            } else {
-                theme::surface().fg(theme::ACCENT)
-            };
-            frame.render_widget(Paragraph::new(label).style(style).centered(), rect);
+            Button::new(
+                label,
+                action,
+                if selected {
+                    Variant::Primary
+                } else {
+                    Variant::Secondary
+                },
+            )
+            .draw(frame, rect, self);
         }
     }
 }
 
 impl Action {
-    pub(crate) fn apply(self, panel: &mut Panel, area: Rect) {
+    pub(crate) fn apply(
+        self,
+        panel: &mut Panel,
+        area: Rect,
+        scene: &mut Scene,
+        access: &mut crate::access_actions::Actions,
+    ) {
         match self {
+            Self::Gallery => {
+                scene.gallery = !scene.gallery;
+                scene.reset_input();
+            }
+            Self::Sample(ok) => scene.sample = Some(ok),
+            Self::Scroll(down) => {
+                let step = area.height.saturating_sub(11).max(1);
+                panel.scroll = if down {
+                    panel.scroll.saturating_add(step).min(scene.scroll_limit)
+                } else {
+                    panel.scroll.saturating_sub(step)
+                };
+            }
+            Self::Address(endpoint, open) => access.endpoint(panel, endpoint, open),
+            Self::Launch(intent) => {
+                let (section, key) = intent.command();
+                let origin = panel.section;
+                let offset = panel.scroll;
+                panel.access_notice = None;
+                panel.select(section);
+                panel.handle(
+                    &Event::Key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::NONE)),
+                    area.width,
+                    area.height,
+                );
+                if !matches!(intent, Intent::Restore | Intent::Setup) {
+                    panel.select(origin);
+                    panel.scroll = offset;
+                }
+            }
             Self::Section(section) => panel.select(section),
             Self::Key(key) => panel.handle(
                 &Event::Key(KeyEvent::new(key, KeyModifiers::NONE)),
@@ -263,9 +390,13 @@ pub(crate) fn modal_buttons(
 
 pub(crate) fn dim(frame: &mut Frame) {
     let area = frame.area();
-    frame
-        .buffer_mut()
-        .set_style(area, Style::new().add_modifier(Modifier::DIM));
+    frame.buffer_mut().set_style(
+        area,
+        Style::new()
+            .fg(theme::MUTED)
+            .bg(theme::BACKGROUND)
+            .add_modifier(Modifier::DIM),
+    );
 }
 
 pub(crate) fn fill(frame: &mut Frame, area: Rect, style: Style) {
@@ -295,4 +426,26 @@ pub(crate) fn card(
             .scroll((offset, 0)),
         area,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn release_on_the_same_visible_control_dispatches_once() {
+        let mut scene = Scene::default();
+        let area = Rect::new(4, 1, 12, 3);
+        let action = Action::Section(Section::Backup);
+        scene.add(area, action);
+        scene.press((4, 1).into());
+        assert_eq!(scene.release((15, 3).into()), Some(action));
+        assert_eq!(scene.release((15, 3).into()), None);
+        scene.press((5, 2).into());
+        assert_eq!(scene.release((16, 2).into()), None);
+        scene.press((5, 2).into());
+        scene.clear();
+        scene.add(Rect::new(5, 2, 12, 3), action);
+        assert_eq!(scene.release((6, 3).into()), None);
+    }
 }

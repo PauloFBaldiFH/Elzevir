@@ -69,18 +69,6 @@ pub(crate) fn draw(
         Line::from(messages.get(key)).style(Style::default().fg(color)),
         Line::default(),
     ];
-    if panel.section == Section::Dashboard {
-        crate::overview::draw(
-            frame,
-            work.union(context),
-            state,
-            messages,
-            (key, color),
-            panel.scroll,
-            ascii,
-        );
-        return;
-    }
     if panel.section == Section::Diagnostics {
         rows.extend(crate::diagnostic_view::rows(
             snapshot,

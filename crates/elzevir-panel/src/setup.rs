@@ -99,12 +99,21 @@ pub fn setup_with_login(
                 Event::Mouse(mouse) => {
                     let point = (mouse.column, mouse.row).into();
                     scene.pointer = Some(point);
-                    match (mouse.kind, scene.hit(point)) {
-                        (MouseEventKind::Down(MouseButton::Left), Some(Action::Key(key))) => {
-                            Some(KeyEvent::new(key, KeyModifiers::NONE))
+                    match mouse.kind {
+                        MouseEventKind::Down(MouseButton::Left) => {
+                            scene.press(point);
+                            None
                         }
+                        MouseEventKind::Up(MouseButton::Left) => match scene.release(point) {
+                            Some(Action::Key(key)) => Some(KeyEvent::new(key, KeyModifiers::NONE)),
+                            _ => None,
+                        },
                         _ => None,
                     }
+                }
+                Event::Resize(_, _) => {
+                    scene.reset_input();
+                    None
                 }
                 _ => None,
             };

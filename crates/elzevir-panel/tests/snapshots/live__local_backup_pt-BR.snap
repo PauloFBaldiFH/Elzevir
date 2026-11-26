@@ -8,24 +8,24 @@ Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:
 |  x Diagnóstico           ||Em execução                                                                     ||Biblioteca de teste         |
 |  a Endereços e acesso    ||                                                                                ||                            |
 |> b Backup e agendamentos ||n Criar · v Verificar · e Exportar · k Chave · o Restaurar · s Agendar          ||Listener configurado        |
-|  u Atualizações          ||Cópias mantidas: Não lido                                                       ||127.0.0.1:0                 |
-|  r Serviço               ||Bac+Operação com confirmação--------------------------------------------------+ ||                            |
-|  g Configurações         ||[Co| Criar backup cifrado                                                     | ||Listener observado          |
-|                          ||[ ]| Biblioteca de teste                                                      | ||127.0.0.1:8080              |
-|                          ||   | Sessões ativas observadas da equipe: Não lido                            | ||                            |
-|                          ||   | Espaço de trabalho estimado: 12 MiB                                      | ||Última consulta: há 0       |
-|                          ||   |                                                                          | ||segundos                    |
-|                          ||   | Escopo                                                                   | ||                            |
-|                          ||   |         Instituição completa                    Somente banco            | ||Observações somente de      |
-|                          ||   | Zstandard                                                                | ||leitura                     |
-|                          ||   |         Rápida                 Equilibrada            Mais compacta      | ||                            |
+|  u Atualizações          ||Cóp+Operação com confirmação--------------------------------------------------+ ||127.0.0.1:0                 |
+|  r Serviço               ||Bac| Criar backup cifrado                                                     | ||                            |
+|  g Configurações         ||[Co| Biblioteca de teste                                                      | ||Listener observado          |
+|                          ||[ ]| Sessões ativas observadas da equipe: Não lido                            | ||127.0.0.1:8080              |
+|                          ||   | Espaço de trabalho estimado: 12 MiB                                      | ||                            |
+|                          ||   |                                                                          | ||Última consulta: há 0       |
+|                          ||   | Escopo                                                                   | ||segundos                    |
+|                          ||   |       (*) Instituição completa                ( ) Somente banco          | ||                            |
+|                          ||   | Zstandard                                                                | ||Observações somente de      |
+|                          ||   |       ( ) Rápida             (*) Equilibrada        ( ) Mais compacta    | ||leitura                     |
 |                          ||   | Pasta de exportação (F2 explorar, vazio = gerenciada)                    | ||                            |
 |                          ||   |                                                                          | ||                            |
 |                          ||   | Clique num campo para editar · Tab: próximo · Esc: cancelar              | ||                            |
 |                          ||   |                                                                          | ||                            |
-|                          ||   |             Confirmar [Y]                      Cancelar [Esc]            | ||                            |
+|                          ||   |                                                                          | ||                            |
+|                          ||   |            + Criar backup                         Cancelar               | ||                            |
+|                          ||   |                                                                          | ||                            |
 |                          ||   +--------------------------------------------------------------------------+ ||                            |
-|                          ||                                                                                ||                            |
 |                          ||                                                                                ||                            |
 |                          ||                                                                                ||                            |
 |                          |+--------------------------------------------------------------------------------++----------------------------+

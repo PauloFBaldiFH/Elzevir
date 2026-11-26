@@ -2,32 +2,33 @@
 source: crates/elzevir-panel/tests/live.rs
 expression: "screen(&panel, \"pt-BR\")"
 ---
-Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
-     1 Início             2 Saúde            3 Acesso             4 Backup            5 Versões           6 Serviço           7 Ajustes
-+ Biblioteca de teste ----------------------------------------------+ + Proteção dos dados -----------------------------------------------+
-| Em execução                                                       | | Situação do backup local indisponível                             |
-| Banco: OK                                                         | | Envio à nuvem: Não lido                                           |
-| Indexador: OK                                                     | |                                                                   |
-| Versão: 0.0.0                                                     | |                                                                   |
-| Endereço configurado: 127.0.0.1:0                                 | |                                                                   |
-| Última consulta: há 0 segundos                                    | |                                                                   |
-|                                                                   | |                                                                   |
-|                                                                   | |                                                                   |
-|                                                                   | |                                                                   |
-|                                                                   | |                                                                   |
-+-------------------------------------------------------------------+ +-------------------------------------------------------------------+
-+ Acesso -----------------------------------------------------------+ + Uso de recursos --------------------------------------------------+
-| Catálogo (neste computador): http://127.0.0.1:8080/               | | RAM do Elzevir (residente): Não lido                              |
-| Equipe (neste computador): http://127.0.0.1:8080/equipe           | | CPU do Elzevir (um núcleo = 100%): Não lido                       |
-| Endereços derivados do listener; HTTP não testado.                | | CPU da máquina (%): 12.5                                          |
-| Acesso na rede local: não medido                                  | | RAM da máquina: 1.0 GiB / 8.0 GiB                                 |
-| Teste HTTPS público: Não lido                                     | | Espaço livre: 100.0 MiB                                           |
-|                                                                   | | Banco de dados: 4.0 MiB                                           |
-|                                                                   | | WAL: 0 B                                                          |
-|                                                                   | |                                                                   |
-|                                                                   | |                                                                   |
-|                                                                   | |                                                                   |
-+-------------------------------------------------------------------+ +-------------------------------------------------------------------+
+  ELZEVIR      Central de administração                                                                Biblioteca de teste  * Em execução
+      Visão geral           Backup             Acesso              Serviço            Versões              Saúde             Ajustes
+  Visão geral da instalação
 
-           Backup e agendamentos [b]                          Configurações [g]                                Atualizar [f]
-Tab/setas: navegar | f: atualizar | PgUp/PgDn: rolar | Ctrl+P: paleta | q/Ctrl+C: sair
+   Servidor                          Proteção dos dados                Acesso pela internet             Atualizações
+   * Em execução                     * Não lido                        * Não lido                       * Sem consulta recente
+
+
+   Recursos do computador                                              Proteção e serviço
+   CPU                                                         12.5%   Situação do backup local indisponível
+                                                                       Envio à nuvem: Não lido
+   RAM                                             1.0 GiB / 8.0 GiB
+
+   Disco em uso                                  924.0 MiB / 1.0 GiB
+                                                                          + Criar backup           Reiniciar              Parar
+   Elzevir · RSS Não lido / CPU Não lido de 1 núcleo
+   Banco de dados: 4.0 MiB
+
+   Endereços e acesso
+   HTTP local sem teste   |   Teste HTTPS público: Não lido
+   Endereço configurado: 127.0.0.1:0   |   Endereço em uso: 127.0.0.1:8080
+   Catálogo local        http://127.0.0.1:8080/                                                                  Copiar       - Abrir
+   Equipe local          http://127.0.0.1:8080/equipe                                                            Copiar       - Abrir
+   Catálogo na rede      Sem endereço observado                                                                 - Copiar      - Abrir
+
+
+         Central de backups                   Restaurar dados                 Endereços e acesso                      Ajustes
+
+
+  Clique para agir   ·   Tab para focar   ·   Esc para fechar   ·   Q para sair                                      - Subir     Descer

@@ -7,7 +7,7 @@ use crate::{
 };
 use ratatui::{
     Frame,
-    crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind},
+    crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers},
     layout::{Constraint, Rect},
     text::Line,
     widgets::Clear,
@@ -158,7 +158,6 @@ pub(crate) fn handle(
     dialog: &mut Option<Dialog>,
     input: &Event,
     panel: &Panel,
-    scene: &Scene,
     actions: &mut Actions,
 ) -> bool {
     let code = match input {
@@ -176,12 +175,6 @@ pub(crate) fn handle(
                 && dialog.is_some() =>
         {
             Some(KeyCode::Esc)
-        }
-        Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
-            match scene.hit((mouse.column, mouse.row).into()) {
-                Some(Action::Key(code)) => Some(code),
-                _ => None,
-            }
         }
         _ => None,
     };

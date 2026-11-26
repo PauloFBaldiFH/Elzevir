@@ -55,6 +55,7 @@ fn connected() -> Panel {
                 database_bytes: Some(4 * 1024 * 1024),
                 wal_bytes: Some(0),
                 available_bytes: Some(100 * 1024 * 1024),
+                capacity_bytes: Some(1 << 30),
             },
             host: Host {
                 cpu_percent: Some(12.5),

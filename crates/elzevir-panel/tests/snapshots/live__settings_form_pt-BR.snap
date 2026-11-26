@@ -8,23 +8,23 @@ Elzevir TUI  0.1.0-alpha.2  |  Não lido
 |  x Diagnóstico           || * Consultando...                                                               ||Biblioteca de teste         |
 |  a Endereços e acesso    ||                                                                                ||                            |
 |  b Backup e agendamentos ||                                                                                ||Listener configurado        |
-|  u Atualizações          ||                                                                                ||127.0.0.1:7390              |
-|> r Serviço               ||   +Operação com confirmação--------------------------------------------------+ ||                            |
-|  g Configurações         || +-| Salvar as configurações — valem ao reiniciar o servidor                  | ||Listener observado          |
-|                          || | | Biblioteca de teste                                                      | ||Não lido                    |
-|                          || +-| Sessões ativas observadas da equipe: Não lido                            | ||                            |
-|                          || +-|                                                                          | ||Consultando...              |
-|                          || | | Nome da biblioteca                                                       | ||                            |
-|                          || +-|  Biblioteca de teste▏                                                    | ||Observações somente de      |
-|                          ||   | Endereço e porta (ex.: 127.0.0.1:7390)                                   | ||leitura                     |
-|                          ||   |  127.0.0.1:7390                                                          | ||                            |
+|  u Atualizações          ||   +Operação com confirmação--------------------------------------------------+ ||127.0.0.1:7390              |
+|> r Serviço               ||   | Salvar as configurações — valem ao reiniciar o servidor                  | ||                            |
+|  g Configurações         || +-| Biblioteca de teste                                                      | ||Listener observado          |
+|                          || | | Sessões ativas observadas da equipe: Não lido                            | ||Não lido                    |
+|                          || +-|                                                                          | ||                            |
+|                          || +-| Nome da biblioteca                                                       | ||Consultando...              |
+|                          || | |  Biblioteca de teste▏                                                    | ||                            |
+|                          || +-| Endereço e porta (ex.: 127.0.0.1:7390)                                   | ||Observações somente de      |
+|                          ||   |  127.0.0.1:7390                                                          | ||leitura                     |
 |                          ||   | Idioma                                                                   | ||                            |
-|                          ||   |                English                            Português              | ||                            |
+|                          ||   |              ( ) English                        (*) Português            | ||                            |
 |                          ||   | Clique num campo para editar · Tab: próximo · Esc: cancelar              | ||                            |
 |                          ||   |                                                                          | ||                            |
-|                          ||   |             Confirmar [Y]                      Cancelar [Esc]            | ||                            |
+|                          ||   |                                                                          | ||                            |
+|                          ||   |               Confirmar                           Cancelar               | ||                            |
+|                          ||   |                                                                          | ||                            |
 |                          ||   +--------------------------------------------------------------------------+ ||                            |
-|                          ||                                                                                ||                            |
 |                          ||                                                                                ||                            |
 |                          ||                                                                                ||                            |
 |                          ||                                                                                ||                            |

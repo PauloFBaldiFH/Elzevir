@@ -161,6 +161,7 @@ impl Collector {
                 database_bytes,
                 wal_bytes,
                 available_bytes,
+                capacity_bytes: fs4::total_space(&self.directory).ok(),
             },
             host,
             diagnostics,
