@@ -81,3 +81,10 @@ path = "fuzz_targets/sru_response.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "z3950_pdu"
+path = "fuzz_targets/z3950_pdu.rs"
+test = false
+doc = false
+bench = false
