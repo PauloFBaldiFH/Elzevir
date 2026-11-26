@@ -5,7 +5,7 @@
 use std::io::{self, Read, Write};
 use std::time::{Duration, Instant};
 
-use elzevir_app::drafts::{DraftQuery, SourceOutcome};
+use elzevir_app::drafts::{DraftField, SourceOutcome};
 use elzevir_marc::{Field, Limits, Record, RecordRef, marc8_to_utf8};
 
 use crate::ber::{self, BerError};
@@ -80,19 +80,21 @@ impl From<BerError> for Stop {
     }
 }
 
-/// What `server` answers for page `page` of `query` (items 18 to 22).
-pub(crate) fn ask(
+/// What `server` answers for page `page` of the filled `fields`, each record read by
+/// `read` (items 18 to 22).
+pub(crate) fn ask<R>(
     dialer: &impl Dialer,
     server: &Z3950Server,
-    query: &DraftQuery,
+    fields: &[(DraftField, &str)],
     page: u32,
-) -> SourceOutcome {
+    read: &dyn Fn(Record, &str) -> Option<R>,
+) -> SourceOutcome<R> {
     let started = Instant::now();
     let deadline = started.checked_add(server.timeout).unwrap_or(started);
     let Ok(mut stream) = dialer.dial(&server.host, server.port, deadline) else {
         return SourceOutcome::NoResponse;
     };
-    let answer = converse(&mut stream, server, query, page);
+    let answer = converse(&mut stream, server, fields, page, read);
     if !matches!(answer, Err(Stop::Silent)) {
         // The Close expects no answer (item 11); a server already gone changes nothing.
         stream.write_all(&z3950::close_request()).ok();
@@ -105,12 +107,13 @@ pub(crate) fn ask(
 }
 
 /// Init, Search and, when the page holds records, Present.
-fn converse(
+fn converse<R>(
     stream: &mut (impl Read + Write),
     server: &Z3950Server,
-    query: &DraftQuery,
+    fields: &[(DraftField, &str)],
     page: u32,
-) -> Result<SourceOutcome, Stop> {
+    read: &dyn Fn(Record, &str) -> Option<R>,
+) -> Result<SourceOutcome<R>, Stop> {
     stream.write_all(&z3950::init_request(env!("CARGO_PKG_VERSION")))?;
     match read_pdu(stream)? {
         Pdu::InitResponse { accepted: true } => {}
@@ -119,7 +122,7 @@ fn converse(
         }
         other => return Err(unexpected(&other)),
     }
-    stream.write_all(&z3950::search_request(&server.databases, query))?;
+    stream.write_all(&z3950::search_request_of(&server.databases, fields))?;
     let total = match read_pdu(stream)? {
         Pdu::SearchResponse {
             diagnostic: Some(diagnostic),
@@ -133,7 +136,7 @@ fn converse(
     };
     // A page past the total asks for nothing more (item 20).
     let Some(present) = z3950::present_request(page, total) else {
-        return Ok(crate::found(&origin(server), total, Vec::new(), 0));
+        return Ok(crate::found(&origin(server), total, Vec::new(), 0, read));
     };
     stream.write_all(&present)?;
     let records = match read_pdu(stream)? {
@@ -158,7 +161,13 @@ fn converse(
             read
         })
         .collect();
-    Ok(crate::found(&origin(server), total, readable, skipped))
+    Ok(crate::found(
+        &origin(server),
+        total,
+        readable,
+        skipped,
+        read,
+    ))
 }
 
 fn origin(server: &Z3950Server) -> String {

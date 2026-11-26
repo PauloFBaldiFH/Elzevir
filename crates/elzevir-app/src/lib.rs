@@ -3,6 +3,7 @@
 
 pub mod accounts;
 pub mod authorities;
+pub mod authority_sources;
 pub mod batch;
 pub mod board;
 pub mod calendar;

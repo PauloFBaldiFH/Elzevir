@@ -13,6 +13,7 @@ mod z3950_client;
 use std::collections::HashMap;
 use std::time::Duration;
 
+use elzevir_app::authority_sources::{AuthorityDraft, AuthorityQuery, AuthoritySource};
 use elzevir_app::drafts::{
     DRAFTS_PER_PAGE, Draft, DraftField, DraftQuery, DraftSource, DraftSummary, MAX_DRAFT_PAGE,
     SourceOutcome, SourceResult,
@@ -138,18 +139,84 @@ impl<T: Transport, D: Dialer> DraftSources<T, D> {
         &self.dialer
     }
 
-    /// What `server` answers for page `page` of `query`.
-    fn ask(&self, server: &DraftServer, query: &DraftQuery, page: u32) -> SourceOutcome {
+    /// What `server` answers for page `page` of the filled `fields`, each record read by
+    /// `read` with its origin.
+    fn ask<R>(
+        &self,
+        server: &DraftServer,
+        fields: &[(DraftField, &str)],
+        page: u32,
+        read: &(dyn Fn(Record, &str) -> Option<R> + Sync),
+    ) -> SourceOutcome<R> {
         match server {
-            DraftServer::Sru(server) => ask_sru(&self.transport, server, query, page),
-            DraftServer::Z3950(server) => z3950_client::ask(&self.dialer, server, query, page),
+            DraftServer::Sru(server) => ask_sru(&self.transport, server, fields, page, read),
+            DraftServer::Z3950(server) => {
+                z3950_client::ask(&self.dialer, server, fields, page, read)
+            }
         }
+    }
+
+    /// Every server asked at once, one thread each: a slow one never holds the others
+    /// (spec item 4).
+    fn ask_all<R: Send>(
+        &self,
+        fields: &[(DraftField, &str)],
+        page: u32,
+        read: &(dyn Fn(Record, &str) -> Option<R> + Sync),
+    ) -> Vec<SourceResult<R>> {
+        std::thread::scope(|scope| {
+            let asked: Vec<_> = self
+                .servers
+                .iter()
+                .map(|server| {
+                    (
+                        server,
+                        scope.spawn(move || self.ask(server, fields, page, read)),
+                    )
+                })
+                .collect();
+            asked
+                .into_iter()
+                .map(|(server, handle)| SourceResult {
+                    source: server.name().to_owned(),
+                    // A panicking parser would be a bug; the server then counts as silent.
+                    outcome: handle.join().unwrap_or(SourceOutcome::NoResponse),
+                })
+                .collect()
+        })
+    }
+
+    /// Server `index` asked alone.
+    fn ask_one<R>(
+        &self,
+        index: usize,
+        fields: &[(DraftField, &str)],
+        page: u32,
+        read: &(dyn Fn(Record, &str) -> Option<R> + Sync),
+    ) -> Option<SourceResult<R>> {
+        let server = self.servers.get(index)?;
+        Some(SourceResult {
+            source: server.name().to_owned(),
+            outcome: self.ask(server, fields, page, read),
+        })
+    }
+
+    fn names(&self) -> Vec<String> {
+        self.servers
+            .iter()
+            .map(|server| server.name().to_owned())
+            .collect()
     }
 }
 
 /// The searchRetrieve URL of page `page` of `query` on `server` (spec item 11).
 #[must_use]
 pub fn sru_url(server: &SruServer, query: &DraftQuery, page: u32) -> String {
+    sru_url_of(server, &query.fields().collect::<Vec<_>>(), page)
+}
+
+/// The searchRetrieve URL of page `page` of the filled `fields` on `server`.
+fn sru_url_of(server: &SruServer, fields: &[(DraftField, &str)], page: u32) -> String {
     let page = page.clamp(1, MAX_DRAFT_PAGE);
     let start = (page - 1) * DRAFTS_PER_PAGE + 1;
     let (version, packing) = match server.version {
@@ -160,19 +227,20 @@ pub fn sru_url(server: &SruServer, query: &DraftQuery, page: u32) -> String {
         "{}?operation=searchRetrieve&version={version}&query={}&startRecord={start}\
          &maximumRecords={DRAFTS_PER_PAGE}&recordSchema={}&{packing}",
         server.url,
-        cql::encode(&cql(query, &server.fields)),
+        cql::encode(&cql::cql_of(fields.iter().copied(), &server.fields)),
         cql::encode(&server.record_schema),
     )
 }
 
 /// What the SRU `server` answers.
-fn ask_sru(
+fn ask_sru<R>(
     transport: &impl Transport,
     server: &SruServer,
-    query: &DraftQuery,
+    fields: &[(DraftField, &str)],
     page: u32,
-) -> SourceOutcome {
-    let answer = match transport.get(&sru_url(server, query, page), server.timeout) {
+    read: &dyn Fn(Record, &str) -> Option<R>,
+) -> SourceOutcome<R> {
+    let answer = match transport.get(&sru_url_of(server, fields, page), server.timeout) {
         Ok(answer) => answer,
         Err(TransportError::NoResponse) => return SourceOutcome::NoResponse,
         Err(TransportError::TooLarge) => {
@@ -188,27 +256,35 @@ fn ask_sru(
             total,
             records,
             skipped,
-        }) => found(&format!("sru:{}", server.name), total, records, skipped),
+        }) => found(
+            &format!("sru:{}", server.name),
+            total,
+            records,
+            skipped,
+            read,
+        ),
         Err(problem) => SourceOutcome::Refused(problem.to_string()),
     }
 }
 
-/// The drafts of `records`, each with `origin`; a record the list cannot summarize is
+/// The drafts `read` makes of `records`, each with `origin`; a record it cannot read is
 /// counted in `skipped`.
-fn found(origin: &str, total: u64, records: Vec<Record>, skipped: u32) -> SourceOutcome {
+fn found<R>(
+    origin: &str,
+    total: u64,
+    records: Vec<Record>,
+    skipped: u32,
+    read: &dyn Fn(Record, &str) -> Option<R>,
+) -> SourceOutcome<R> {
     let mut skipped = skipped;
     let drafts = records
         .into_iter()
         .filter_map(|record| {
-            let summary = DraftSummary::of(&record);
-            if summary.is_none() {
+            let draft = read(record, origin);
+            if draft.is_none() {
                 skipped = skipped.saturating_add(1);
             }
-            summary.map(|summary| Draft {
-                origin: origin.to_owned(),
-                record,
-                summary,
-            })
+            draft
         })
         .collect();
     SourceOutcome::Found {
@@ -218,38 +294,62 @@ fn found(origin: &str, total: u64, records: Vec<Record>, skipped: u32) -> Source
     }
 }
 
+/// A bibliographic draft of `record`, when the list can summarize it.
+fn bibliographic(record: Record, origin: &str) -> Option<Draft> {
+    DraftSummary::of(&record).map(|summary| Draft {
+        origin: origin.to_owned(),
+        record,
+        summary,
+    })
+}
+
+/// An authority draft of `record`, when it is an authority record with a heading.
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "the same reader type as `bibliographic`, which keeps the record"
+)]
+fn authority(record: Record, origin: &str) -> Option<AuthorityDraft> {
+    AuthorityDraft::of(&record, origin)
+}
+
 impl<T: Transport, D: Dialer> DraftSource for DraftSources<T, D> {
     fn search(&self, query: &DraftQuery, page: u32) -> Vec<SourceResult> {
-        // One thread per server: a slow one never holds the others (spec item 4).
-        std::thread::scope(|scope| {
-            let asked: Vec<_> = self
-                .servers
-                .iter()
-                .map(|server| (server, scope.spawn(move || self.ask(server, query, page))))
-                .collect();
-            asked
-                .into_iter()
-                .map(|(server, handle)| SourceResult {
-                    source: server.name().to_owned(),
-                    // A panicking parser would be a bug; the server then counts as silent.
-                    outcome: handle.join().unwrap_or(SourceOutcome::NoResponse),
-                })
-                .collect()
-        })
+        self.ask_all(&query.fields().collect::<Vec<_>>(), page, &bibliographic)
     }
 
     fn sources(&self) -> Vec<String> {
-        self.servers
-            .iter()
-            .map(|server| server.name().to_owned())
-            .collect()
+        self.names()
     }
 
     fn search_one(&self, index: usize, query: &DraftQuery, page: u32) -> Option<SourceResult> {
-        let server = self.servers.get(index)?;
-        Some(SourceResult {
-            source: server.name().to_owned(),
-            outcome: self.ask(server, query, page),
-        })
+        self.ask_one(
+            index,
+            &query.fields().collect::<Vec<_>>(),
+            page,
+            &bibliographic,
+        )
+    }
+}
+
+impl<T: Transport, D: Dialer> AuthoritySource for DraftSources<T, D> {
+    fn search_authorities(
+        &self,
+        query: &AuthorityQuery,
+        page: u32,
+    ) -> Vec<SourceResult<AuthorityDraft>> {
+        self.ask_all(&[(query.field(), query.name())], page, &authority)
+    }
+
+    fn authority_sources(&self) -> Vec<String> {
+        self.names()
+    }
+
+    fn search_one_authority(
+        &self,
+        index: usize,
+        query: &AuthorityQuery,
+        page: u32,
+    ) -> Option<SourceResult<AuthorityDraft>> {
+        self.ask_one(index, &[(query.field(), query.name())], page, &authority)
     }
 }

@@ -2,7 +2,7 @@
 //! The Z39.50 messages a draft search needs: Init, Search, Present and Close
 //! (docs/specs/catalogo/cliente-z3950.md, items 4 to 13), encoded and read with [`crate::ber`].
 
-use elzevir_app::drafts::{DRAFTS_PER_PAGE, DraftQuery};
+use elzevir_app::drafts::{DRAFTS_PER_PAGE, DraftField, DraftQuery};
 
 use crate::ber::{
     self, BerError, Class, EXTERNAL, Element, INTEGER, OBJECT_IDENTIFIER, OCTET_STRING, context,
@@ -114,6 +114,13 @@ pub fn init_request(version: &str) -> Vec<u8> {
 /// The Search of `query` in `databases` (items 6 and 7).
 #[must_use]
 pub fn search_request(databases: &[String], query: &DraftQuery) -> Vec<u8> {
+    search_request_of(databases, &query.fields().collect::<Vec<_>>())
+}
+
+/// The Search of the filled `fields` in `databases`, each with Koha's Bib-1 attributes,
+/// in Koha's order (items 6 and 7; fontes-de-autoridade.md, items 6 and 7).
+#[must_use]
+pub fn search_request_of(databases: &[String], fields: &[(DraftField, &str)]) -> Vec<u8> {
     let names: Vec<Vec<u8>> = databases
         .iter()
         .map(|name| context(105, name.as_bytes()))
@@ -127,30 +134,52 @@ pub fn search_request(databases: &[String], query: &DraftQuery) -> Vec<u8> {
             context(16, &[0xFF]),
             context(17, b"default"),
             context_of(18, &names),
-            context_of(21, &[context_of(1, &[ber::oid(&BIB1), rpn(query)])]),
+            context_of(21, &[context_of(1, &[ber::oid(&BIB1), rpn(fields)])]),
         ],
     )
 }
 
-/// The Type-1 terms of `query`, in Koha's order (item 7): `author`, `isbn`, `issn`,
-/// `srchany` (the Elzevir's `any`) and `title`, each with its Bib-1 attributes.
-fn terms(query: &DraftQuery) -> Vec<(&'static [(i64, i64)], &str)> {
-    [
-        (&[(1, 1003)][..], &query.author),
-        (&[(1, 7), (5, 1)][..], &query.isbn),
-        (&[(1, 8), (5, 1)][..], &query.issn),
-        (&[(1, 1016)][..], &query.any),
-        (&[(1, 4)][..], &query.title),
-    ]
-    .into_iter()
-    .filter_map(|(attributes, value)| value.as_deref().map(|value| (attributes, value)))
-    .collect()
+/// The Type-1 terms of `fields`, in alphabetical order of Koha's names (item 7): for a
+/// draft search `author`, `isbn`, `issn`, `srchany` (the Elzevir's `any`) and `title`,
+/// each with its Bib-1 attributes.
+///
+/// Koha: `C4::Breeding::_bib_build_query` and `_auth_build_query`.
+fn terms<'a>(fields: &[(DraftField, &'a str)]) -> Vec<(&'static [(i64, i64)], &'a str)> {
+    let mut terms: Vec<_> = fields
+        .iter()
+        .map(|(field, value)| {
+            let (name, attributes) = attributes(*field);
+            (name, attributes, *value)
+        })
+        .collect();
+    terms.sort_by_key(|(name, _, _)| *name);
+    terms
+        .into_iter()
+        .map(|(_, attributes, value)| (attributes, value))
+        .collect()
+}
+
+/// Koha's name of `field` and its Bib-1 attributes.
+const fn attributes(field: DraftField) -> (&'static str, &'static [(i64, i64)]) {
+    match field {
+        DraftField::Author => ("author", &[(1, 1003)]),
+        DraftField::Isbn => ("isbn", &[(1, 7), (5, 1)]),
+        DraftField::Issn => ("issn", &[(1, 8), (5, 1)]),
+        DraftField::Any => ("srchany", &[(1, 1016)]),
+        DraftField::Title => ("title", &[(1, 4)]),
+        DraftField::PersonalName => ("authorpersonal", &[(1, 1)]),
+        DraftField::CorporateName => ("authorcorp", &[(1, 2)]),
+        DraftField::MeetingName => ("authormeetingcon", &[(1, 3)]),
+        DraftField::Name => ("nameany", &[(1, 1002)]),
+        DraftField::Subject => ("subject", &[(1, 21)]),
+        DraftField::UniformTitle => ("uniformtitle", &[(1, 6)]),
+    }
 }
 
 /// The RPN structure: the terms joined by `and` from the left, like Koha's
 /// `@and @and t1 t2 t3` (item 7.3).
-fn rpn(query: &DraftQuery) -> Vec<u8> {
-    let mut terms = terms(query).into_iter().map(|(attributes, value)| {
+fn rpn(fields: &[(DraftField, &str)]) -> Vec<u8> {
+    let mut terms = terms(fields).into_iter().map(|(attributes, value)| {
         let attributes: Vec<Vec<u8>> = attributes
             .iter()
             .map(|(kind, value)| {

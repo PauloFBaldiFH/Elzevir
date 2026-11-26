@@ -13,7 +13,9 @@ use std::io::{self, Cursor, Read, Write};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use elzevir_app::authority_sources::{AuthorityQuery, AuthoritySource};
 use elzevir_app::drafts::{DraftQuery, DraftSource, SourceOutcome, TypedQuery};
+use elzevir_domain::catalog::SubjectKind;
 use elzevir_sources::ber;
 use elzevir_sources::{
     DEFAULT_TIMEOUT, Dialer, DraftServer, DraftSources, HttpAnswer, RecordCharset, Transport,
@@ -26,6 +28,8 @@ const SEARCH_FOUND: &[u8] = include_bytes!("data/z3950-search-found.ber");
 const SEARCH_DIAGNOSTIC: &[u8] = include_bytes!("data/z3950-search-diagnostic.ber");
 const PRESENT_RECORDS: &[u8] = include_bytes!("data/z3950-present-records.ber");
 const CLOSE: &[u8] = include_bytes!("data/z3950-close.ber");
+const SEARCH_ONE: &[u8] = include_bytes!("data/z3950-search-one.ber");
+const PRESENT_AUTHORITIES: &[u8] = include_bytes!("data/z3950-present-authorities.ber");
 
 /// No SRU server here.
 struct NoTransport;
@@ -223,4 +227,43 @@ fn a_server_that_stops_midway_gave_no_response() {
         asked.search_one(0, &isbn(), 1).unwrap().outcome,
         SourceOutcome::NoResponse
     );
+}
+
+#[test]
+fn an_authority_search_asks_by_the_class_and_reads_the_heading() {
+    let asked = sources(
+        vec![server("Autoridades", "auth.example.org")],
+        vec![(
+            "auth.example.org",
+            vec![INIT_ACCEPTED, SEARCH_ONE, PRESENT_AUTHORITIES],
+        )],
+    );
+    let query = AuthorityQuery::new("Rio Paraná", SubjectKind::Place).unwrap();
+    let result = asked.search_one_authority(0, &query, 1).unwrap();
+    let SourceOutcome::Found {
+        total,
+        drafts,
+        skipped,
+    } = result.outcome
+    else {
+        panic!("{:?}", result.outcome);
+    };
+    assert_eq!((total, drafts.len(), skipped), (1, 1, 0));
+    let draft = drafts.first().unwrap();
+    assert_eq!(draft.origin, "z3950:Autoridades");
+    assert_eq!(draft.heading.kind, SubjectKind::Place);
+    // MARC-8 by its leader, brought to UTF-8.
+    assert_eq!(draft.heading.heading, "Parana\u{301}, Rio");
+    assert_eq!(
+        draft.heading.identifier.as_deref(),
+        Some("(XX-Ex)sh00000003")
+    );
+    assert_eq!(draft.heading.variants, ["Rio Parana\u{301}"]);
+    // A place is a subject heading: Bib-1 use attribute 21 (Koha `subject`).
+    let received = asked.dialer().received.lock().unwrap();
+    let sent = received.get("auth.example.org").unwrap();
+    let use_21 = [0x30, 0x08, 0x9F, 0x78, 0x01, 0x01, 0x9F, 0x79, 0x01, 0x15];
+    assert!(sent.windows(use_21.len()).any(|bytes| bytes == use_21));
+    let name = "Rio Paraná".as_bytes();
+    assert!(sent.windows(name.len()).any(|bytes| bytes == name));
 }

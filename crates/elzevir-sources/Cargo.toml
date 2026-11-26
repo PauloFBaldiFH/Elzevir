@@ -14,5 +14,8 @@ elzevir-marc.workspace = true
 quick-xml.workspace = true
 thiserror.workspace = true
 
+[dev-dependencies]
+elzevir-domain.workspace = true
+
 [lints]
 workspace = true

@@ -13,6 +13,7 @@ use std::process::{Command, Output};
 use std::sync::{Arc, Mutex};
 
 const TWO_RECORDS: &str = include_str!("../../elzevir-sources/tests/data/sru-1.2-two-records.xml");
+const AUTHORITIES: &str = include_str!("../../elzevir-sources/tests/data/sru-1.2-authorities.xml");
 const Z3950_ANSWERS: [&[u8]; 3] = [
     include_bytes!("../../elzevir-sources/tests/data/z3950-init-accepted.ber"),
     include_bytes!("../../elzevir-sources/tests/data/z3950-search-found.ber"),
@@ -55,8 +56,8 @@ fn z3950() -> (std::net::SocketAddr, Arc<Mutex<Vec<u8>>>) {
     (address, seen)
 }
 
-/// Answers every request with the recorded response, and keeps the request lines.
-fn answer(stream: TcpStream, seen: &Mutex<Vec<String>>) {
+/// Answers every request with `body`, and keeps the request lines.
+fn answer(stream: TcpStream, seen: &Mutex<Vec<String>>, body: &str) {
     let mut reader = BufReader::new(stream.try_clone().unwrap());
     let mut request_line = String::new();
     reader.read_line(&mut request_line).unwrap();
@@ -74,21 +75,26 @@ fn answer(stream: TcpStream, seen: &Mutex<Vec<String>>) {
     write!(
         stream,
         "HTTP/1.1 200 OK\r\nContent-Type: text/xml\r\nContent-Length: {}\r\n\
-         Connection: close\r\n\r\n{TWO_RECORDS}",
-        TWO_RECORDS.len()
+         Connection: close\r\n\r\n{body}",
+        body.len()
     )
     .unwrap();
 }
 
 /// Starts the stand-in on a free local port: its URL and the requests it saw.
 fn sru() -> (String, Arc<Mutex<Vec<String>>>) {
+    sru_answering(TWO_RECORDS)
+}
+
+/// A stand-in that answers every request with `body`.
+fn sru_answering(body: &'static str) -> (String, Arc<Mutex<Vec<String>>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("http://{}/sru", listener.local_addr().unwrap());
     let seen = Arc::new(Mutex::new(Vec::new()));
     let kept = Arc::clone(&seen);
     std::thread::spawn(move || {
         for stream in listener.incoming().flatten() {
-            answer(stream, &kept);
+            answer(stream, &kept, body);
         }
     });
     (url, seen)
@@ -190,4 +196,51 @@ fn z3950_and_sru_servers_answer_together_in_the_configured_order() {
     // Init [20], Search [22], Present [24] and Close [48], as context-specific
     // constructed tags in their long form (0xBF) or short form (0xB4 for 20).
     assert_eq!(seen.lock().unwrap().as_slice(), [0xB4, 0xB6, 0xB8, 0xBF]);
+}
+
+#[test]
+fn the_authority_servers_answer_from_the_command_line() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().to_str().unwrap();
+    let (books, _) = sru();
+    let (names, seen) = sru_answering(AUTHORITIES);
+    std::fs::write(
+        dir.path().join("elzevir.toml"),
+        format!(
+            "[[draft_sources]]\nname = \"Livros\"\nkind = \"sru\"\nurl = \"{books}\"\n\
+             [[draft_sources]]\nname = \"Nomes\"\nkind = \"sru\"\nurl = \"{names}\"\n\
+             records = \"authority\"\n\
+             [draft_sources.fields]\npersonal_name = \"local.personalName\"\n"
+        ),
+    )
+    .unwrap();
+    let wrong = Command::new(env!("CARGO_BIN_EXE_elzevir"))
+        .args(["authority-search", "--data-dir", data])
+        .args(["--name", "Lemos", "--class", "author"])
+        .output()
+        .unwrap();
+    assert!(text(&wrong.stderr).contains("unknown class author"));
+    let found = Command::new(env!("CARGO_BIN_EXE_elzevir"))
+        .args(["authority-search", "--data-dir", data])
+        .args(["--name", "Lemos", "--class", "person"])
+        .env("NO_PROXY", "127.0.0.1")
+        .env("no_proxy", "127.0.0.1")
+        .output()
+        .unwrap();
+    assert!(found.status.success(), "{}", text(&found.stderr));
+    assert_eq!(
+        text(&found.stdout),
+        "Nomes: 3 found\n  \
+         Lemos, Teodora, 1950- | person | (XX-Ex)n  00000001\n    \
+         see from: Teodora Lemos\n  \
+         Lemos, Teodoro, 1901-1977 | person | (XX-Ex)n  00000002\n  \
+         not readable: 1\n"
+    );
+    assert_eq!(
+        seen.lock().unwrap().as_slice(),
+        [
+            "GET /sru?operation=searchRetrieve&version=1.2&query=local.personalName%3D%22Lemos%22\
+          &startRecord=1&maximumRecords=20&recordSchema=marcxml&recordPacking=xml HTTP/1.1"
+        ]
+    );
 }

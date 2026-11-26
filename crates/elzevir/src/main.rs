@@ -168,8 +168,10 @@ enum Command {
     Export(catalog_cli::ExportArgs),
     /// Names branches, item types, locations and collections as a Koha names them.
     KohaCodes(koha_codes::KohaCodesArgs),
-    /// Asks the draft sources of `elzevir.toml` (SRU), to check them before cataloguing.
+    /// Asks the draft sources of `elzevir.toml` (SRU and Z39.50), to check them before cataloguing.
     DraftSearch(draft_search::DraftSearchArgs),
+    /// Asks the authority sources of `elzevir.toml` for a name of a class.
+    AuthoritySearch(draft_search::AuthoritySearchArgs),
     /// Sets how this library's Koha item types translate into BIBFRAME on import.
     KohaTypes(catalog_cli::KohaTypesArgs),
 }
@@ -254,6 +256,7 @@ fn main() -> ExitCode {
         Command::Export(args) => catalog_cli::export(&args),
         Command::KohaCodes(args) => koha_codes::koha_codes(&args),
         Command::DraftSearch(args) => draft_search::run(&args),
+        Command::AuthoritySearch(args) => draft_search::run_authorities(&args),
         Command::KohaTypes(args) => catalog_cli::koha_types(&args),
     };
     match result {

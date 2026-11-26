@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Made-up SRU 1.2 answer with fictitious authority records, in the shape of real servers. -->
+<zs:searchRetrieveResponse xmlns:zs="http://www.loc.gov/zing/srw/" xmlns:marc="http://www.loc.gov/MARC21/slim">
+  <zs:version>1.2</zs:version>
+  <zs:numberOfRecords>3</zs:numberOfRecords>
+  <zs:records>
+    <zs:record>
+      <zs:recordSchema>marcxml</zs:recordSchema>
+      <zs:recordPacking>xml</zs:recordPacking>
+      <zs:recordData>
+        <marc:record>
+          <marc:leader>00000nz  a2200000n  4500</marc:leader>
+          <marc:controlfield tag="001">n  00000001</marc:controlfield>
+          <marc:controlfield tag="003">XX-Ex</marc:controlfield>
+          <marc:datafield tag="100" ind1="1" ind2=" "><marc:subfield code="a">Lemos, Teodora,</marc:subfield><marc:subfield code="d">1950-</marc:subfield></marc:datafield>
+          <marc:datafield tag="400" ind1="0" ind2=" "><marc:subfield code="a">Teodora Lemos</marc:subfield></marc:datafield>
+          <marc:datafield tag="670" ind1=" " ind2=" "><marc:subfield code="a">O rio das &#xE1;guas claras, 2020.</marc:subfield></marc:datafield>
+        </marc:record>
+      </zs:recordData>
+      <zs:recordPosition>1</zs:recordPosition>
+    </zs:record>
+    <zs:record>
+      <zs:recordSchema>marcxml</zs:recordSchema>
+      <zs:recordPacking>xml</zs:recordPacking>
+      <zs:recordData>
+        <marc:record>
+          <marc:leader>00000nz  a2200000n  4500</marc:leader>
+          <marc:controlfield tag="001">n  00000002</marc:controlfield>
+          <marc:controlfield tag="003">XX-Ex</marc:controlfield>
+          <marc:datafield tag="100" ind1="1" ind2=" "><marc:subfield code="a">Lemos, Teodoro,</marc:subfield><marc:subfield code="d">1901-1977</marc:subfield></marc:datafield>
+        </marc:record>
+      </zs:recordData>
+      <zs:recordPosition>2</zs:recordPosition>
+    </zs:record>
+    <zs:record>
+      <zs:recordSchema>marcxml</zs:recordSchema>
+      <zs:recordPacking>xml</zs:recordPacking>
+      <zs:recordData>
+        <marc:record>
+          <marc:leader>00000nam a2200000 a 4500</marc:leader>
+          <marc:controlfield tag="001">ex-0001</marc:controlfield>
+          <marc:datafield tag="245" ind1="1" ind2="0"><marc:subfield code="a">Um registro bibliogr&#xE1;fico</marc:subfield></marc:datafield>
+        </marc:record>
+      </zs:recordData>
+      <zs:recordPosition>3</zs:recordPosition>
+    </zs:record>
+  </zs:records>
+</zs:searchRetrieveResponse>
