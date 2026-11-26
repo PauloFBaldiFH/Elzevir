@@ -145,8 +145,15 @@ function watch() {
   }
 }
 
+// Only families on screen: in the full view every family is open (interface §24.5), and
+// the rows off screen are drawn by the observer when they scroll in.
+function onScreen(grid) {
+  const box = grid.getBoundingClientRect();
+  return box.bottom > 0 && box.top < window.innerHeight && box.height > 0;
+}
+
 function redrawAll() {
-  const families = [...document.querySelectorAll(".family-focus[open] > .family-grid")];
+  const families = [...document.querySelectorAll(".family-focus[open] > .family-grid")].filter(onScreen);
   const measured = families.map((family) => [family, measure(family)]);
   for (const [family, geometry] of measured) draw(family, geometry);
 }
@@ -343,7 +350,14 @@ function neighbour(card, step) {
   return level ? grid.querySelector(`.card[data-level="${level}"]:not([inert])`) : null;
 }
 
+// The full view (interface §24.5): every family of the page open, read only; focusing a
+// block still edits one family at a time.
+function fullView() {
+  return document.querySelector(".catalog")?.dataset.zoom === "full";
+}
+
 function focused(details) {
+  if (fullView()) return;
   for (const other of document.querySelectorAll(".family-focus[open]")) {
     if (other !== details) other.open = false;
   }
@@ -411,6 +425,23 @@ document.addEventListener("keydown", (event) => {
       else closeNew();
       return;
     }
+    if (fullView()) {
+      // Esc gives back the view the screen was in: the families stay open, and only the
+      // level focus is undone.
+      const grid = document.querySelector(".family-grid[data-focus]");
+      if (!grid) return;
+      const pending = dirtyForm(grid);
+      if (pending) {
+        askDiscard(pending);
+        return;
+      }
+      closeItemGrids(grid);
+      clearLevel(grid);
+      follow(grid);
+      trail(null);
+      grid.querySelector(".card[data-level]")?.focus();
+      return;
+    }
     const open = document.querySelector(".family-focus[open]");
     if (!open) return;
     const pending = dirtyForm(open);
@@ -447,8 +478,24 @@ function openFromFragment() {
   details.scrollIntoView({ block: "start" });
 }
 
+// The zoom button (elzevir-staff.js) only changes the attribute; the families follow it.
+// Back in the compact view, only the family whose level has the focus stays open.
+function followZoom(catalog) {
+  new MutationObserver(() => {
+    const full = fullView();
+    const kept = document.querySelector(".family-grid[data-focus]")?.closest(".family-focus");
+    for (const details of document.querySelectorAll(".family-focus")) {
+      details.open = full || details === kept;
+    }
+    if (!full && kept) focused(kept);
+    redrawAll();
+  }).observe(catalog, { attributes: true, attributeFilter: ["data-zoom"] });
+}
+
 toggles();
 watch();
+const catalogRoot = document.querySelector(".catalog");
+if (catalogRoot) followZoom(catalogRoot);
 openFromFragment();
 window.addEventListener("hashchange", openFromFragment);
 trail(document.querySelector(".family-focus[open]"));

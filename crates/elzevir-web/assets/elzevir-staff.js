@@ -179,6 +179,8 @@
       }
     }
     if (!cross) {
+      // Skipping rejects `ready`; nobody waits on it, so the rejection is not an error.
+      transition.ready.catch(() => {});
       transition.skipTransition();
       return;
     }
@@ -197,6 +199,8 @@
     const transition = event.viewTransition;
     if (!transition) return;
     if (!cross) {
+      // Skipping rejects `ready`; nobody waits on it, so the rejection is not an error.
+      transition.ready.catch(() => {});
       transition.skipTransition();
       return;
     }

@@ -2,7 +2,7 @@
 {% block title %}{{ t.get("staff-catalog-title") }}{% endblock %}
 {% block head %}<script type="module" src="/static/elzevir-catalog.js"></script>{% endblock %}
 {% block content %}
-<div class="wide catalog" data-csrf="{{ csrf }}">
+<div class="wide catalog" data-csrf="{{ csrf }}" data-zoom="{{ zoom }}" data-zoom-screen="catalog">
 <div class="catalog-bar">
   <form class="search catalog-search" action="/equipe/acervo" method="get" role="search"
         hx-get="/equipe/acervo" hx-target="#families" hx-select="#families" hx-swap="outerHTML" hx-push-url="true">
@@ -17,6 +17,7 @@
     <button type="button" class="toggle" data-toggle="auth" aria-pressed="true" hidden>{{ t.get("staff-column-authorities") }}</button>
     <button type="button" class="toggle" data-toggle="hub" aria-pressed="true" hidden>{{ t.get("staff-column-hub") }}</button>
   </div>
+  {% include "zoom_toggle.html" %}
 </div>
 <nav class="trail" aria-label="{{ t.get("staff-catalog-focus-label") }}" hidden><span>{{ t.get("staff-catalog-title") }}</span> › <strong class="trail-family"></strong> <span class="trail-level" hidden></span></nav>
 <div class="selection-bar" role="region" aria-label="{{ t.get("selection-label") }}" hidden>
@@ -99,7 +100,7 @@
   {% block rows %}
   {% for family in rows %}
     <li class="family" id="f-{{ family.head }}" data-head="{{ family.head }}">
-     <details class="family-focus"{% if family.open %} open{% endif %}>
+     <details class="family-focus"{% if family.open || zoom == "full" %} open{% endif %}>
       <summary class="family-row">
         <input type="checkbox" class="family-select" value="{{ family.head }}" aria-label="{{ t.get("selection-select") }}">
         <svg class="row-icon" aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#{{ family.icon }}"></use></svg>
