@@ -30,6 +30,7 @@ pub mod matching;
 pub mod material;
 pub mod memory;
 pub mod notices;
+pub mod oai;
 pub mod opac;
 pub mod parallelism;
 pub mod patron_account;

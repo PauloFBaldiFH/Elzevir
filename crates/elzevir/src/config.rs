@@ -47,6 +47,9 @@ pub(crate) struct Config {
     draft_sources: Vec<DraftSourceEntry>,
     /// The SIP2 server for self-check terminals (docs/specs/circulacao/sip2.md).
     sip2: Option<crate::sip2_server::Sip2Section>,
+    /// The OAI-PMH repository of the public catalog (docs/specs/opac/oai-pmh.md).
+    #[serde(default)]
+    oai: crate::oai_config::OaiSection,
 }
 
 /// One `[[draft_sources]]` entry (fontes-de-rascunho.md, items 16 and 17, and
@@ -479,6 +482,8 @@ pub(crate) struct Loaded {
     pub(crate) authority_sources: Vec<DraftServer>,
     /// The SIP2 server, when `[sip2]` is set.
     pub(crate) sip2: Option<crate::sip2_server::Sip2Settings>,
+    /// The OAI-PMH repository, when `[oai]` turns it on.
+    pub(crate) oai: Option<elzevir_app::oai::OaiSettings>,
 }
 
 /// Reads `data_dir/elzevir.toml` and what it points to; no file is no configuration.
@@ -518,6 +523,10 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         .map(crate::sip2_server::Sip2Section::settings)
         .transpose()
         .map_err(|e| format!("{}: sip2: {e}", path.display()))?;
+    let oai = config
+        .oai
+        .settings()
+        .map_err(|e| format!("{}: oai: {e}", path.display()))?;
     let Some(table) = config.call_number.author_table else {
         return Ok(Loaded {
             author_table: None,
@@ -529,6 +538,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
             draft_sources,
             authority_sources,
             sip2,
+            oai,
         });
     };
     let table_path = data_dir.join(table);
@@ -550,6 +560,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         draft_sources,
         authority_sources,
         sip2,
+        oai,
     })
 }
 

@@ -47,6 +47,7 @@ mod managed_tool_update;
 mod managed_tools;
 mod memory;
 mod notice_mail;
+mod oai_config;
 mod operations;
 mod operations_cli;
 mod operations_config;
@@ -428,7 +429,10 @@ fn web_app(
     data_dir: &Path,
     config: WebConfig,
     language: &str,
-    sources: draft_search::ScreenSources,
+    (sources, oai): (
+        draft_search::ScreenSources,
+        Option<elzevir_web::OaiRepository>,
+    ),
 ) -> Result<WebRuntime, String> {
     let i18n = language_bundle(language)?;
     let opac = OpacPorts {
@@ -490,6 +494,10 @@ fn web_app(
     };
     let state = match sources.authorities {
         Some(authorities) => state.with_authority_sources(Arc::new(authorities)),
+        None => state,
+    };
+    let state = match oai {
+        Some(repository) => state.with_oai(repository),
         None => state,
     };
     Ok(WebRuntime {
@@ -611,7 +619,13 @@ fn serve_controlled(
                 ..WebConfig::default()
             },
             &settings.lang,
-            draft_search::ScreenSources::new(drafts, authorities, &instance)?,
+            (
+                draft_search::ScreenSources::new(drafts, authorities, &instance)?,
+                loaded
+                    .oai
+                    .as_ref()
+                    .map(|settings| oai_config::repository(settings, &store, &instance)),
+            ),
         )?;
         let sip2 = sip2_server::open(
             loaded.sip2.as_ref(),

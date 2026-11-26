@@ -43,6 +43,7 @@ mod long_overdue;
 mod matching;
 mod native_items;
 mod notices;
+mod oai;
 mod overdue_fines;
 mod patron_desk;
 mod patrons;
