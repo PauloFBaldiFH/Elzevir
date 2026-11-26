@@ -66,6 +66,7 @@ mod server_config;
 mod service;
 mod shutdown;
 mod sip2_server;
+mod sru_config;
 mod status;
 mod support_archive;
 mod tools_cli;
@@ -429,9 +430,10 @@ fn web_app(
     data_dir: &Path,
     config: WebConfig,
     language: &str,
-    (sources, oai): (
+    (sources, oai, sru): (
         draft_search::ScreenSources,
         Option<elzevir_web::OaiRepository>,
+        Option<elzevir_web::SruServer>,
     ),
 ) -> Result<WebRuntime, String> {
     let i18n = language_bundle(language)?;
@@ -500,10 +502,36 @@ fn web_app(
         Some(repository) => state.with_oai(repository),
         None => state,
     };
+    let state = match sru {
+        Some(server) => state.with_sru(server),
+        None => state,
+    };
     Ok(WebRuntime {
         router: elzevir_web::router(state.clone()),
         state,
     })
+}
+
+/// The OAI-PMH repository and the SRU server that `[oai]` and `[sru]` turn on.
+fn public_services(
+    loaded: &config::Loaded,
+    store: &Arc<ElzevirStore>,
+    index: &Arc<TantivyIndex>,
+    instance: &str,
+) -> (
+    Option<elzevir_web::OaiRepository>,
+    Option<elzevir_web::SruServer>,
+) {
+    (
+        loaded
+            .oai
+            .as_ref()
+            .map(|settings| oai_config::repository(settings, store, instance)),
+        loaded
+            .sru
+            .as_ref()
+            .map(|settings| sru_config::server(settings, store, index, instance)),
+    )
 }
 
 /// What the server runs besides answering requests: the circulation runs and the mail.
@@ -606,6 +634,7 @@ fn serve_controlled(
             expire_holds: loaded.expire_waiting_holds,
             mail: loaded.mail.clone(),
         };
+        let (oai, sru) = public_services(&loaded, &store, &index, &instance);
         let app = web_app(
             Arc::clone(&lock),
             &store,
@@ -621,10 +650,8 @@ fn serve_controlled(
             &settings.lang,
             (
                 draft_search::ScreenSources::new(drafts, authorities, &instance)?,
-                loaded
-                    .oai
-                    .as_ref()
-                    .map(|settings| oai_config::repository(settings, &store, &instance)),
+                oai,
+                sru,
             ),
         )?;
         let sip2 = sip2_server::open(

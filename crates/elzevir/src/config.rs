@@ -50,6 +50,9 @@ pub(crate) struct Config {
     /// The OAI-PMH repository of the public catalog (docs/specs/opac/oai-pmh.md).
     #[serde(default)]
     oai: crate::oai_config::OaiSection,
+    /// The SRU server of the public catalog (docs/specs/opac/sru.md).
+    #[serde(default)]
+    sru: crate::sru_config::SruSection,
 }
 
 /// One `[[draft_sources]]` entry (fontes-de-rascunho.md, items 16 and 17, and
@@ -484,6 +487,8 @@ pub(crate) struct Loaded {
     pub(crate) sip2: Option<crate::sip2_server::Sip2Settings>,
     /// The OAI-PMH repository, when `[oai]` turns it on.
     pub(crate) oai: Option<elzevir_app::oai::OaiSettings>,
+    /// The SRU server, when `[sru]` turns it on.
+    pub(crate) sru: Option<elzevir_app::sru::SruSettings>,
 }
 
 /// Reads `data_dir/elzevir.toml` and what it points to; no file is no configuration.
@@ -527,6 +532,10 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         .oai
         .settings()
         .map_err(|e| format!("{}: oai: {e}", path.display()))?;
+    let sru = config
+        .sru
+        .settings()
+        .map_err(|e| format!("{}: sru: {e}", path.display()))?;
     let Some(table) = config.call_number.author_table else {
         return Ok(Loaded {
             author_table: None,
@@ -539,6 +548,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
             authority_sources,
             sip2,
             oai,
+            sru,
         });
     };
     let table_path = data_dir.join(table);
@@ -561,6 +571,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         authority_sources,
         sip2,
         oai,
+        sru,
     })
 }
 

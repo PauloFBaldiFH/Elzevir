@@ -209,6 +209,21 @@ fn subscriber(
     tracing_subscriber::registry().with(events)
 }
 
+/// Records an SRU request (docs/specs/opac/sru.md, item 19): no query and no client
+/// address.
+pub(crate) fn sru_request(instance: &str, event: &elzevir_web::SruEvent) {
+    let outcome = event
+        .diagnostic
+        .map_or_else(|| "answered".to_owned(), |code| code.to_string());
+    tracing::info!(target: TARGET, institution = "local", instance, event = "sru.request", operation = event.operation, version = event.version, outcome, total = event.total, records = event.records, "SRU request");
+    if let Some(failure) = &event.failure {
+        tracing::error!(target: TARGET, institution = "local", instance, event = "sru.unavailable", failure, "SRU request failed: catalog or index unavailable");
+    }
+    for instance_id in &event.unavailable {
+        tracing::warn!(target: TARGET, institution = "local", instance, event = "sru.record_unavailable", instance_id, "SRU record sent as a diagnostic: hidden, gone or not writable");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

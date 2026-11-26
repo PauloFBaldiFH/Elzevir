@@ -290,15 +290,18 @@ fn record(
 fn metadata(marc: &Record, format: MetadataFormat) -> Option<String> {
     match format {
         MetadataFormat::OaiDc => Some(dc_xml(marc)),
-        MetadataFormat::Marc21 | MetadataFormat::MarcXml => {
-            let mut document = String::new();
-            marc.write_marcxml_document(&mut document).ok()?;
-            // The `<record>` element alone, as Koha embeds `as_xml_record`.
-            document
-                .split_once("?>\n")
-                .map(|(_, element)| element.trim_end().to_owned())
-        }
+        MetadataFormat::Marc21 | MetadataFormat::MarcXml => marcxml_element(marc),
     }
+}
+
+/// The MARCXML `<record>` element of `marc` alone, as Koha embeds `as_xml_record`;
+/// `None` when the record cannot be written.
+pub(crate) fn marcxml_element(marc: &Record) -> Option<String> {
+    let mut document = String::new();
+    marc.write_marcxml_document(&mut document).ok()?;
+    document
+        .split_once("?>\n")
+        .map(|(_, element)| element.trim_end().to_owned())
 }
 
 fn dc_xml(marc: &Record) -> String {
@@ -382,7 +385,7 @@ fn element(xml: &mut String, name: &str, value: &str) {
 }
 
 /// Text and attribute values escaped; characters XML 1.0 forbids are dropped.
-fn escape(text: &str) -> String {
+pub(crate) fn escape(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for character in text.chars() {
         match character {

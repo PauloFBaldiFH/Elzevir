@@ -16,6 +16,7 @@ use crate::export::{RecordExportError, RecordSource, marc_record};
 pub use dublin_core::{DcElement, dublin_core};
 pub use request::{Datestamp, ListState, MetadataFormat, OaiErrorCode, Request, Verb, parse};
 pub use response::{Answer, respond};
+pub(crate) use response::{escape, marcxml_element};
 
 /// `[oai]` of `elzevir.toml`, checked.
 #[derive(Debug, Clone, PartialEq, Eq)]
