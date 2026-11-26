@@ -30,6 +30,7 @@ mod import_cells;
 mod import_rules;
 mod import_sheets;
 mod importing;
+mod inventory;
 mod items;
 mod new_record;
 mod notice_rules;
@@ -367,6 +368,10 @@ pub fn router(state: AppState) -> Router {
             get(editing::suggest_subjects),
         )
         .route("/equipe/acervo/isbn", get(editing::check_isbn_field))
+        .route(
+            "/equipe/acervo/inventario",
+            get(inventory::form).post(inventory::read),
+        )
         .route("/equipe/acervo/fontes/{n}", get(draft_station::answer))
         .route(
             "/equipe/acervo/nova",

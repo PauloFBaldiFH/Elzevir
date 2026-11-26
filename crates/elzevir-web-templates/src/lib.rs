@@ -54,6 +54,7 @@ mod staff_calendar;
 mod staff_catalog;
 mod staff_circulation_rules;
 mod staff_import;
+mod staff_inventory;
 mod staff_item_grid;
 mod staff_notice_rules;
 mod staff_patrons;
@@ -80,6 +81,9 @@ pub use staff_import::{
     BiblivreForm, ImportBatchLink, ImportChoice, ImportColumn, ImportColumns, ImportDetail,
     ImportDraft, ImportMatching, ImportPage, ImportPreview, ImportReceipt, ImportRule,
     ImportSample, ImportUpload, ImportView, RecordBlocks,
+};
+pub use staff_inventory::{
+    InventoryChoice, InventoryForm, InventoryRow, InventoryView, StaffInventory,
 };
 pub use staff_item_grid::{
     GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid, SuggestedCallNumber,
@@ -542,6 +546,7 @@ mod tests {
             include_str!("../templates/staff_item_grid.html"),
             include_str!("../templates/staff_form_field.html"),
             include_str!("../templates/staff_registries.html"),
+            include_str!("../templates/staff_inventory.html"),
             include_str!("../templates/staff_patrons.html"),
             include_str!("../templates/staff_patron.html"),
             include_str!("../templates/staff_checkout_slip.html"),

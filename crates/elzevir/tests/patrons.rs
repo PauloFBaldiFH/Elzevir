@@ -1209,6 +1209,66 @@ fn a_returned_item_is_set_aside_for_its_hold_at_the_checkin_desk() {
     drop(server);
 }
 
+/// docs/specs/catalogo/inventario.md, items 10 to 13: the shelf is read on the inventory
+/// screen, by who catalogues, and the report comes on the page or as CSV.
+#[test]
+fn the_shelf_is_read_on_the_inventory_screen() {
+    let data = tempfile::tempdir().unwrap();
+    library(data.path());
+    stock(data.path());
+    let (server, address) = start(data.path());
+    let cat = sign_in(address, "cat");
+    let cir = sign_in(address, "cir");
+    let path = "/equipe/acervo/inventario";
+    assert_status(&request(address, "GET", path, &cir, ""), 403);
+    let page = request(address, "GET", path, &cat, "");
+    assert_status(&page, 200);
+    assert!(page.contains("action=\"/equipe/acervo/inventario\"") && page.contains("Anexo"));
+    assert!(
+        request(address, "GET", "/equipe/barra", &cat, "").contains(&format!("href=\"{path}\""))
+    );
+    let token = csrf(&page).to_owned();
+    let form = format!("{cat}Content-Type: application/x-www-form-urlencoded\r\n");
+    let post = |body: &str| {
+        request(
+            address,
+            "POST",
+            path,
+            &form,
+            &format!("csrf={token}&{body}"),
+        )
+    };
+    let nothing = post("seen_on=2026-11-26&barcodes=");
+    assert_status(&nothing, 422);
+    assert!(nothing.contains("Read at least one barcode"));
+    let read = post("seen_on=2026-11-26&compare=1&barcodes=0001%0AZZZ%0A0001");
+    assert_status(&read, 200);
+    assert!(read.contains("2 read, 1 marked as seen, 1 expected on the shelf."));
+    assert!(
+        read.contains("Left out: 1 repeated, 0 too long, 0 with characters that do not print.")
+    );
+    assert!(read.contains("<td>ZZZ</td><td></td><td></td><td>no Item has this barcode</td>"));
+    let csv = post("seen_on=2026-11-26&barcodes=ZZZ&as=csv");
+    assert_status(&csv, 200);
+    assert!(csv.contains("content-type: text/csv; charset=utf-8"));
+    assert!(
+        csv.contains("Barcode,Title,Call number,Problems\r\nZZZ,,,no Item has this barcode\r\n")
+    );
+    drop(server);
+    let store = open(data.path());
+    let seen: String = store
+        .readers()
+        .read(|c| {
+            c.query_row(
+                "SELECT last_seen FROM items WHERE barcode = '0001'",
+                [],
+                |row| row.get(0),
+            )
+        })
+        .unwrap();
+    assert_eq!(seen, "2026-11-26");
+}
+
 #[test]
 fn the_staff_header_offers_only_permitted_scopes_and_dispatches_the_search() {
     let data = tempfile::tempdir().unwrap();

@@ -237,13 +237,20 @@ const MODULES: [LinkEntry; 10] = [
 
 /// Screens that exist today, listed in the drawer under the modules until each module page
 /// gathers its own.
-const TOOLS: [LinkEntry; 6] = [
+const TOOLS: [LinkEntry; 7] = [
     link(
         "tool-import",
         "mod-import",
         "catalog",
         Some("/equipe/acervo/importar"),
         imports,
+    ),
+    link(
+        "tool-inventory",
+        "mod-tools",
+        "catalog",
+        Some("/equipe/acervo/inventario"),
+        catalogues,
     ),
     link(
         "tool-printed-notices",
