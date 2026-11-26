@@ -326,7 +326,7 @@ impl elzevir_app::editing::CatalogEditor for Editor {
                 }
                 1
             }
-            Edit::NewRecord(_) | Edit::NewInstance(_) => 1,
+            Edit::NewRecord(_) | Edit::NewInstance(_) | Edit::Inventory(_) => 1,
         };
         if read != 1 {
             return Err(EditFailed::Refused(CatalogRefusal::Stale {
@@ -686,5 +686,11 @@ fn output_of(edit: &elzevir_app::editing::Edit) -> elzevir_app::catalog::Catalog
             work: new.work,
             instance: InstanceId(902),
         },
+        Edit::Inventory(scan) => {
+            CatalogOutput::Inventory(Box::new(elzevir_app::inventory::InventoryReport {
+                read: scan.barcodes.len(),
+                ..elzevir_app::inventory::InventoryReport::default()
+            }))
+        }
     }
 }

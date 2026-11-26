@@ -1,0 +1,63 @@
+{% extends "staff_base.html" %}
+{% block title %}{{ t.get("inventory-title") }}{% endblock %}
+{% block content %}
+<div class="inventory">
+<h1>{{ t.get("inventory-title") }}</h1>
+<p class="form-hint">{{ t.get("inventory-intro") }}</p>
+{% if let Some(key) = refused %}<p class="codes-alert codes-refused" role="alert">{{ t.get(key) }}</p>{% endif %}
+{% if let Some(view) = report %}
+<section class="inventory-report" aria-labelledby="inventory-report-title">
+  <h2 id="inventory-report-title">{{ t.get("inventory-report") }}</h2>
+  <p class="codes-alert codes-saved" role="status">{{ view.summary }}</p>
+  {% if !view.left_out.is_empty() %}<p class="form-hint">{{ view.left_out }}</p>{% endif %}
+  {% if view.lines.is_empty() %}<p class="form-hint">{{ t.get("inventory-no-problems") }}</p>{% else %}
+  <table class="inventory-lines">
+    <thead><tr><th scope="col">{{ t.get("inventory-barcode") }}</th><th scope="col">{{ t.get("inventory-item-title") }}</th><th scope="col">{{ t.get("inventory-call-number") }}</th><th scope="col">{{ t.get("inventory-problems") }}</th></tr></thead>
+    <tbody>
+    {% for line in view.lines %}<tr><td>{{ line.barcode }}</td><td>{{ line.title }}</td><td>{{ line.call_number }}</td><td>{{ line.problems }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endif %}
+<form method="post" action="/equipe/acervo/inventario" class="inventory-form">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <fieldset>
+    <legend>{{ t.get("inventory-area") }}</legend>
+    <label>{{ t.get("inventory-branch") }}
+      <select name="branch"><option value="">{{ t.get("inventory-any") }}</option>
+      {% for choice in form.branches %}<option value="{{ choice.value }}"{% if choice.selected %} selected{% endif %}>{{ choice.name }}</option>{% endfor %}
+      </select></label>
+    <label><input type="checkbox" name="holding" value="1"{% if form.holding %} checked{% endif %}> {{ t.get("inventory-holding") }}</label>
+    <label>{{ t.get("inventory-sublocation") }}
+      <select name="sublocation"><option value="">{{ t.get("inventory-any") }}</option>
+      {% for choice in form.sublocations %}<option value="{{ choice.value }}"{% if choice.selected %} selected{% endif %}>{{ choice.name }}</option>{% endfor %}
+      </select></label>
+    <label>{{ t.get("inventory-collection") }}
+      <select name="collection"><option value="">{{ t.get("inventory-any") }}</option>
+      {% for choice in form.collections %}<option value="{{ choice.value }}"{% if choice.selected %} selected{% endif %}>{{ choice.name }}</option>{% endfor %}
+      </select></label>
+    <label>{{ t.get("inventory-from") }} <input type="text" name="call_number_from" value="{{ form.call_number_from }}" maxlength="64"></label>
+    <label>{{ t.get("inventory-to") }} <input type="text" name="call_number_to" value="{{ form.call_number_to }}" maxlength="64"></label>
+  </fieldset>
+  <fieldset>
+    <legend>{{ t.get("inventory-expected") }}</legend>
+    <label>{{ t.get("inventory-not-seen-since") }} <input type="date" name="not_seen_since" value="{{ form.not_seen_since }}"></label>
+    <label><input type="checkbox" name="skip_on_loan" value="1"{% if form.skip_on_loan %} checked{% endif %}> {{ t.get("inventory-skip-on-loan") }}</label>
+    <label><input type="checkbox" name="skip_waiting_holds" value="1"{% if form.skip_waiting_holds %} checked{% endif %}> {{ t.get("inventory-skip-waiting") }}</label>
+  </fieldset>
+  <fieldset>
+    <legend>{{ t.get("inventory-reading") }}</legend>
+    <label>{{ t.get("inventory-seen-on") }} <input type="date" name="seen_on" value="{{ form.seen_on }}" required></label>
+    <label>{{ t.get("inventory-barcodes") }}
+      <textarea name="barcodes" rows="10" autocomplete="off" spellcheck="false">{{ form.barcodes }}</textarea></label>
+    <p class="form-hint">{{ t.get("inventory-barcodes-hint") }}</p>
+    <label><input type="checkbox" name="compare" value="1"{% if form.compare %} checked{% endif %}> {{ t.get("inventory-compare") }}</label>
+    <label><input type="checkbox" name="out_of_order" value="1"{% if form.out_of_order %} checked{% endif %}> {{ t.get("inventory-out-of-order") }}</label>
+  </fieldset>
+  <button type="submit">{{ t.get("inventory-run") }}</button>
+  <button type="submit" name="as" value="csv" class="quiet">{{ t.get("inventory-run-csv") }}</button>
+</form>
+</div>
+{% endblock %}
