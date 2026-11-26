@@ -1,6 +1,6 @@
 [package]
 name = "elzevir-sip2"
-description = "SIP2 protocol server for self-check machines (placeholder until Phase 5)."
+description = "SIP2 protocol for self-check machines: the codec, and the server on the circulation rules."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,6 +10,8 @@ publish.workspace = true
 
 [dependencies]
 elzevir-app.workspace = true
+jiff.workspace = true
+thiserror.workspace = true
 
 [lints]
 workspace = true
