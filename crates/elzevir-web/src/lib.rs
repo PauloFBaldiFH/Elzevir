@@ -138,6 +138,8 @@ struct Inner {
     records: opac::RecordCache,
     sessions: Sessions,
     patron_sessions: session::SessionStore<elzevir_app::patron_account::PatronIdentity>,
+    /// The API's patron tokens, apart from the OPAC's cookie sessions (api.md, item 9).
+    api_tokens: session::SessionStore<elzevir_app::patron_account::PatronIdentity>,
     attempts: patron_login::Attempts,
     i18n: I18n,
     config: WebConfig,
@@ -184,6 +186,7 @@ impl AppState {
                 records: opac::RecordCache::default(),
                 sessions: Sessions::new(config.session_idle),
                 patron_sessions: session::SessionStore::new(patron_login::PATRON_IDLE),
+                api_tokens: session::SessionStore::new(patron_login::PATRON_IDLE),
                 attempts: patron_login::Attempts::default(),
                 i18n,
                 config,

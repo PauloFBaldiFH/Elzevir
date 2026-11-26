@@ -3,7 +3,7 @@
   "info": {
     "title": "Elzevir API",
     "version": "1.0.0",
-    "description": "The public catalog of an Elzevir library in JSON of its BIBFRAME model (docs/specs/opac/api.md). Errors are {\"error\": code}.",
+    "description": "The public catalog of an Elzevir library in JSON of its BIBFRAME model, and the patron's own account with a bearer token (docs/specs/opac/api.md). Errors are {\"error\": code}; money is in cents.",
     "license": {
       "name": "GPL-3.0-or-later",
       "url": "https://www.gnu.org/licenses/gpl-3.0.html"
@@ -132,6 +132,590 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/patron/tokens": {
+      "post": {
+        "operationId": "issueToken",
+        "summary": "Sign in with card number and password; the token lasts 30 minutes without use.",
+        "tags": [
+          "patron"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Credentials"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not the credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Card number or password is wrong.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The server has no patron accounts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The card is locked after five refusals in 15 minutes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The patron accounts failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/patron/tokens/current": {
+      "delete": {
+        "operationId": "revokeToken",
+        "summary": "End the token of the request.",
+        "tags": [
+          "patron"
+        ],
+        "security": [
+          {
+            "patronToken": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The token no longer works."
+          },
+          "401": {
+            "description": "No token, or an unknown or expired one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The patron accounts or circulation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/patron/account": {
+      "get": {
+        "operationId": "account",
+        "summary": "The patron's own account.",
+        "tags": [
+          "patron"
+        ],
+        "security": [
+          {
+            "patronToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The server has no patron accounts or circulation, or the resource is not the patron's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or an unknown or expired one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The patron accounts or circulation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/patron/loans": {
+      "get": {
+        "operationId": "loans",
+        "summary": "The patron's loans, the first due first.",
+        "tags": [
+          "patron"
+        ],
+        "security": [
+          {
+            "patronToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The loans.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Loan"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The server has no patron accounts or circulation, or the resource is not the patron's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or an unknown or expired one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The patron accounts or circulation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/patron/loans/{item}/renewal": {
+      "post": {
+        "operationId": "renew",
+        "summary": "Renew one of the patron's loans by the circulation rules.",
+        "tags": [
+          "patron"
+        ],
+        "security": [
+          {
+            "patronToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The new due date.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Renewed"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The server has no patron accounts or circulation, or the resource is not the patron's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The rules refused the renewal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or an unknown or expired one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The patron accounts or circulation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "description": "The Item of the loan.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/patron/debts": {
+      "get": {
+        "operationId": "debts",
+        "summary": "The patron's account lines, newest first.",
+        "tags": [
+          "patron"
+        ],
+        "security": [
+          {
+            "patronToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The lines.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Debt"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The server has no patron accounts or circulation, or the resource is not the patron's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or an unknown or expired one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The patron accounts or circulation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/patron/holds": {
+      "get": {
+        "operationId": "holds",
+        "summary": "The patron's holds, oldest first.",
+        "tags": [
+          "patron"
+        ],
+        "security": [
+          {
+            "patronToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The holds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Hold"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The server has no patron accounts or circulation, or the resource is not the patron's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or an unknown or expired one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The patron accounts or circulation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "placeHold",
+        "summary": "Hold a record for pickup at a branch.",
+        "tags": [
+          "patron"
+        ],
+        "security": [
+          {
+            "patronToken": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The hold placed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Placed"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not a hold request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The server has no patron accounts or circulation, or the resource is not the patron's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The rules refused the hold.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or an unknown or expired one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The patron accounts or circulation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HoldRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/patron/holds/{id}": {
+      "delete": {
+        "operationId": "cancelHold",
+        "summary": "Cancel a hold not yet set aside.",
+        "tags": [
+          "patron"
+        ],
+        "security": [
+          {
+            "patronToken": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The hold is cancelled."
+          },
+          "404": {
+            "description": "The server has no patron accounts or circulation, or the resource is not the patron's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The hold is already set aside.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or an unknown or expired one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The patron accounts or circulation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The hold.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     }
   },
@@ -569,6 +1153,341 @@
           }
         },
         "additionalProperties": false
+      },
+      "Refusal": {
+        "type": "object",
+        "required": [
+          "error",
+          "reason"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "refused"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "no_loan",
+              "on_site",
+              "too_many",
+              "overdue",
+              "owing",
+              "on_hold",
+              "too_soon",
+              "no_due_date",
+              "restricted",
+              "unavailable",
+              "pickup",
+              "unknown_hold",
+              "set_aside",
+              "debt",
+              "already_held",
+              "not_allowed"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "Credentials": {
+        "type": "object",
+        "required": [
+          "card",
+          "password"
+        ],
+        "properties": {
+          "card": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Token": {
+        "type": "object",
+        "required": [
+          "token",
+          "expires_in"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Seconds without use before it expires."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Account": {
+        "type": "object",
+        "required": [
+          "name",
+          "card",
+          "branch",
+          "category",
+          "expires",
+          "restrictions",
+          "owed",
+          "keeps_history"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "card": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "expires": {
+            "type": "string",
+            "format": "date"
+          },
+          "restrictions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Restriction"
+            }
+          },
+          "owed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Outstanding debits, in cents."
+          },
+          "keeps_history": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Restriction": {
+        "type": "object",
+        "required": [
+          "kind",
+          "until"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "suspension",
+              "overdues"
+            ]
+          },
+          "until": {
+            "type": "string",
+            "format": "date",
+            "description": "The day it ends; null until the staff lift it.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Loan": {
+        "type": "object",
+        "required": [
+          "item",
+          "title",
+          "call_number",
+          "branch",
+          "due",
+          "due_at",
+          "renewals",
+          "renewals_left",
+          "on_site"
+        ],
+        "properties": {
+          "item": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "call_number": {
+            "type": "string",
+            "nullable": true
+          },
+          "branch": {
+            "type": "string"
+          },
+          "due": {
+            "type": "string",
+            "format": "date"
+          },
+          "due_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "renewals": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "renewals_left": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "on_site": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Renewed": {
+        "type": "object",
+        "required": [
+          "item",
+          "due",
+          "due_at",
+          "renewals"
+        ],
+        "properties": {
+          "item": {
+            "type": "integer"
+          },
+          "due": {
+            "type": "string",
+            "format": "date"
+          },
+          "due_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "renewals": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "Debt": {
+        "type": "object",
+        "required": [
+          "date",
+          "kind",
+          "amount",
+          "outstanding"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "overdue",
+              "lost",
+              "processing",
+              "payment",
+              "writeoff"
+            ]
+          },
+          "amount": {
+            "type": "integer",
+            "description": "Cents: positive for a debit, negative for a credit."
+          },
+          "outstanding": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Hold": {
+        "type": "object",
+        "required": [
+          "hold",
+          "title",
+          "pickup",
+          "placed_on",
+          "status",
+          "position",
+          "expires_on"
+        ],
+        "properties": {
+          "hold": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "pickup": {
+            "type": "string"
+          },
+          "placed_on": {
+            "type": "string",
+            "format": "date"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "in_transit",
+              "waiting"
+            ]
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "expires_on": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "HoldRequest": {
+        "type": "object",
+        "required": [
+          "instance",
+          "pickup"
+        ],
+        "properties": {
+          "instance": {
+            "type": "integer"
+          },
+          "pickup": {
+            "type": "integer",
+            "description": "The pickup branch."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Placed": {
+        "type": "object",
+        "required": [
+          "hold",
+          "position"
+        ],
+        "properties": {
+          "hold": {
+            "type": "integer"
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "patronToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "A token from POST /api/v1/patron/tokens."
       }
     }
   }

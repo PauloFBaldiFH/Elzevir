@@ -15,7 +15,7 @@
 
 5. **Como entra.** O leitor entra pelo número da carteirinha e pela senha, no painel "Conta do leitor" do início do OPAC ou em `GET /conta/entrar`. O formulário vai para `POST /conta/entrar` e nunca pede o nome.
 6. **Recusa igual.** Carteirinha desconhecida, leitor sem senha e senha errada dão a mesma recusa, "Carteirinha ou senha incorretas". O tempo de resposta também é o mesmo, porque o servidor confere um hash de mentira quando não há hash de verdade. Assim, o OPAC não revela quais carteirinhas existem.
-7. **Tentativas.** Depois de **5 recusas seguidas** para a mesma carteirinha em 15 minutos, essa carteirinha fica bloqueada por 15 minutos, mesmo com a senha certa, com o aviso "Muitas tentativas; tente de novo mais tarde". O controle fica na memória do servidor e some quando ele reinicia. Uma entrada certa zera a contagem.
+7. **Tentativas.** Depois de **5 recusas seguidas** para a mesma carteirinha em 15 minutos, essa carteirinha fica bloqueada por 15 minutos, mesmo com a senha certa, com o aviso "Muitas tentativas; tente de novo mais tarde". O controle fica na memória do servidor e some quando ele reinicia. Uma entrada certa zera a contagem. As recusas da API REST contam junto ([API](api.md), item 13).
 8. **Inscrição vencida ou suspensão** não impedem a entrada. O leitor precisa ver a própria situação. Os bloqueios valem nas ações (partes c e d), com as mesmas recusas do balcão.
 
 ### Sessão (parte a)

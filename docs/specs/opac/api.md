@@ -1,6 +1,6 @@
 # API REST do catálogo público e da conta do leitor (v0)
 
-> Status: v0, tarefa 4.7. Itens 1 a 7 implementados (4.7a: catálogo e contrato); itens 8 a 17 (4.7b: conta do leitor com tokens) vêm no PR seguinte. Base: [doc 03](../../arquitetura/03-estrategia-reconstrucao.md), Fase 4, tarefa 4.7; [busca e registro](busca-e-registro.md); [conta do leitor](conta-do-leitor.md); [ocultar no OPAC](../catalogo/ocultar-no-opac.md). Referência: a `api/v1` do Koha (`api/v1/swagger/swagger.yaml`, `Koha/REST/V1/Auth.pm`). Critério da tarefa: **contrato OpenAPI publicado e testado**.
+> Status: v0, tarefa 4.7. Implementada: 4.7a (itens 1 a 7, catálogo e contrato) e 4.7b (itens 8 a 17, conta do leitor com tokens). Base: [doc 03](../../arquitetura/03-estrategia-reconstrucao.md), Fase 4, tarefa 4.7; [busca e registro](busca-e-registro.md); [conta do leitor](conta-do-leitor.md); [ocultar no OPAC](../catalogo/ocultar-no-opac.md). Referência: a `api/v1` do Koha (`api/v1/swagger/swagger.yaml`, `Koha/REST/V1/Auth.pm`). Critério da tarefa: **contrato OpenAPI publicado e testado**.
 
 Um aplicativo, um site da prefeitura ou um painel de outra biblioteca lê o acervo público e, com um token do leitor, a conta dele, em JSON. A API não está na lista de paridade (CLAUDE.md, "Paridade com o Koha"): o desenho é próprio, em JSON do modelo BIBFRAME, e não copia os caminhos nem os objetos do Koha, que expõem colunas do `biblio` e etiquetas MARC (regra de ouro do [ARCHITECTURE_VISION](../../ARCHITECTURE_VISION.md)). Do Koha ficam as ideias: rotas públicas separadas das da equipe, contrato publicado e validado, um token por cliente.
 
@@ -35,26 +35,25 @@ Um aplicativo, um site da prefeitura ou um painel de outra biblioteca lê o acer
 
 ### Conta do leitor com tokens (4.7b)
 
-8. `POST /api/v1/patron/tokens` com corpo JSON `{"card": "…", "password": "…"}` (até 4 KiB) entra como o login do OPAC ([conta do leitor](conta-do-leitor.md), itens 5 a 8): mesma verificação Argon2 com hash isca, mesma contagem de recusas. Aceito, responde **201** com `{"token": "…", "expires_in": 1800}`.
+8. `POST /api/v1/patron/tokens` com corpo JSON `{"card": "…", "password": "…"}` (todo corpo da API vai até 4 KiB; corpo fora da regra dá `bad_request`) entra como o login do OPAC ([conta do leitor](conta-do-leitor.md), itens 5 a 8): mesma verificação Argon2 com hash isca, mesma contagem de recusas. Aceito, responde **201** com `{"token": "…", "expires_in": 1800}`.
 9. O token é aleatório (256 bits, como o id da sessão do OPAC), guardado só em memória, apartado das sessões de cookie. Vence depois de **30 minutos sem uso** (item 9 da conta), e cada pedido com ele renova o prazo. Reiniciar o servidor apaga os tokens.
 10. As rotas do leitor pedem o cabeçalho `Authorization: Bearer <token>`. Sem ele, ou com token desconhecido ou vencido, `unauthorized` com `WWW-Authenticate: Bearer`. Como o token não vai em cookie, não há CSRF.
 11. `DELETE /api/v1/patron/tokens/current` encerra o token do pedido (**204**).
 12. Respostas com dados do leitor levam `Cache-Control: no-store` (conta do leitor, item 11).
 13. Cinco recusas de um cartão em 15 minutos bloqueiam o cartão por 15 minutos, contando juntas as do OPAC e as da API (o mesmo contador). Bloqueado, `locked`, sem verificar a senha.
-14. `GET /api/v1/patron/account`: nome, cartão, unidade, categoria, validade, `restrictions` (`{kind, until}`), `owed` (centavos) e se guarda histórico de leitura. Sem CPF nem endereço.
-15. `GET /api/v1/patron/loans`: os empréstimos (`item`, `title`, `due`, `renewals`), e `GET /api/v1/patron/debts`: as linhas da conta (`date`, `kind`, `amount`, `outstanding`, `description`).
-16. `GET /api/v1/patron/holds`: as reservas (`hold`, `instance`, `title`, `status`, `position`, `branch`); `POST /api/v1/patron/holds` com `{"instance": n, "branch": n}` reserva (**201**), e `DELETE /api/v1/patron/holds/{id}` cancela uma reserva do próprio leitor (**204**); reserva de outro leitor dá `not_found`.
-17. `POST /api/v1/patron/loans/{item}/renewal` renova um empréstimo do próprio leitor pelas regras de circulação do servidor ([renovação](../circulacao/renovacao.md)): **200** com o novo vencimento, ou `refused` com `reason`, um código fixo da recusa (`too_many`, `on_hold`, `restricted`, `too_soon`…). Empréstimo de outro leitor dá `not_found`.
+14. `GET /api/v1/patron/account`: `name`, `card`, `branch`, `category`, `expires`, `restrictions` (`{kind, until}`, com `kind` `suspension` ou `overdues` e `until` `null` quando só a equipe levanta), `owed` (centavos) e `keeps_history`. Sem CPF nem endereço. Leitor removido depois de o token ser emitido: `unauthorized`, e o token é encerrado.
+15. `GET /api/v1/patron/loans`: os empréstimos, o que vence primeiro antes (`item`, `title`, `call_number`, `branch`, `due` (o dia), `due_at` (o instante, UTC), `renewals`, `renewals_left`, `on_site`). `GET /api/v1/patron/debts`: as linhas da conta, a mais nova antes (`date`, `kind` entre `overdue`, `lost`, `processing`, `payment` e `writeoff`, `amount` positivo no débito e negativo no crédito, `outstanding`).
+16. `GET /api/v1/patron/holds`: as reservas, a mais antiga antes (`hold`, `title`, `pickup` (o nome da unidade), `placed_on`, `status` `pending`, `in_transit` ou `waiting`, `position`, `expires_on`). `POST /api/v1/patron/holds` com `{"instance": n, "pickup": n}` reserva o registro como o OPAC ([conta do leitor](conta-do-leitor.md), item 21): **201** com `{hold, position}`; registro oculto ou inexistente dá `not_found`; recusa dá `refused` com `reason` entre `unavailable`, `pickup`, `restricted`, `debt`, `already_held`, `too_many` e `not_allowed`. `DELETE /api/v1/patron/holds/{id}` cancela uma reserva do próprio leitor ainda não separada (**204**); separada dá `refused` com `set_aside`; reserva de outro leitor ou já cancelada dá `not_found`.
+17. `POST /api/v1/patron/loans/{item}/renewal` renova um empréstimo do próprio leitor pelas regras de circulação do servidor ([renovação](../circulacao/renovacao.md)): **200** com o novo vencimento, ou `refused` com `reason` entre `on_site`, `too_many`, `overdue`, `owing`, `on_hold`, `too_soon`, `no_due_date`, `restricted` e `no_loan`. `{item}` é procurado entre os empréstimos do próprio leitor: Item que não está com ele dá `not_found`.
 
 ## 2. Casos de borda
 
 - `GET /api/v1/instances/abc` e `/api/v1/instances/99999999999999999999`: `not_found`.
 - Rota da API com método errado: **405** com `{"error": "method_not_allowed"}`.
 - Sem as contas de leitor ligadas no servidor, as rotas de `/api/v1/patron` dão `not_found`, como `/conta`.
-- Token válido de um leitor removido depois do login: `unauthorized`, e o token é encerrado.
 
 ## 3. Testes
 
 - 4.7a: o documento OpenAPI é JSON válido, versão 3.0.3, e cada caminho dele responde fora do 404 de rota; cada resposta de exemplo dos testes passa por um verificador de esquema mínimo (tipos, `required`, `properties`, `items`, `nullable`, `enum`, `$ref`) contra o esquema do documento; nenhuma rota `/api/v1` do roteador fica fora do documento.
 - Busca com Instância oculta, registro oculto, exemplar emprestado (com `due`) e perdido, `id` inválido e rota desconhecida.
-- 4.7b: token emitido, usado e vencido; bloqueio por tentativas compartilhado com o OPAC; leitor sem acesso à reserva e ao empréstimo de outro.
+- 4.7b, de ponta a ponta no servidor real, com cada resposta passando pelo mesmo verificador de esquema: token emitido, usado e encerrado; sem token e token forjado; corpo inválido; conta sem CPF; débito da devolução atrasada; renovação aceita e recusada (`too_many`); Item de outro (`not_found`); a sessão do OPAC não aceita o token; reserva feita, repetida (`already_held`), listada e cancelada; bloqueio por tentativas da API que vale também no OPAC.

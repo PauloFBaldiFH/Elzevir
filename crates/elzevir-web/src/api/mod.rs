@@ -6,10 +6,11 @@
 //! tags, which never leave the edge here.
 
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Json, Response};
-use axum::routing::get;
+use axum::routing::{delete, get, post};
 use elzevir_app::catalog::{CodeLists, ItemView, Movement};
 use elzevir_app::material::{CarrierKind, ContentKind, Material};
 use elzevir_app::opac::{self, RecordPage, ResultsPage};
@@ -20,6 +21,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::AppState;
 
+mod patron;
+
 /// The `OpenAPI` document, written by hand and checked against the routes by the tests.
 pub(crate) const OPENAPI: &str = include_str!("openapi.json");
 
@@ -29,11 +32,43 @@ const OPENAPI_PATH: &str = "/api/v1/openapi.json";
 const SEARCH_PATH: &str = "/api/v1/search";
 /// Path of one record.
 const INSTANCE_PATH: &str = "/api/v1/instances/{id}";
+/// Path of the patron's tokens.
+const TOKENS_PATH: &str = "/api/v1/patron/tokens";
+/// Path of the token of the request.
+const CURRENT_TOKEN_PATH: &str = "/api/v1/patron/tokens/current";
+/// Path of the patron's account.
+const ACCOUNT_PATH: &str = "/api/v1/patron/account";
+/// Path of the patron's loans.
+const LOANS_PATH: &str = "/api/v1/patron/loans";
+/// Path of a loan's renewal.
+const RENEWAL_PATH: &str = "/api/v1/patron/loans/{item}/renewal";
+/// Path of the patron's account lines.
+const DEBTS_PATH: &str = "/api/v1/patron/debts";
+/// Path of the patron's holds.
+const HOLDS_PATH: &str = "/api/v1/patron/holds";
+/// Path of one hold.
+const HOLD_PATH: &str = "/api/v1/patron/holds/{id}";
 
-/// Every path the router answers under `/api/v1`, each of which the document describes
-/// (spec, item 2).
+/// Largest body of a request, in bytes (an explicit input limit, spec item 8).
+const MAX_BODY: usize = 4 * 1024;
+
+/// Every operation the router answers under `/api/v1`, as path and method, each of which
+/// the document describes (spec, item 2).
 #[cfg(test)]
-const PATHS: [&str; 3] = [OPENAPI_PATH, SEARCH_PATH, INSTANCE_PATH];
+const OPERATIONS: [(&str, &str); 12] = [
+    (OPENAPI_PATH, "get"),
+    (SEARCH_PATH, "get"),
+    (INSTANCE_PATH, "get"),
+    (TOKENS_PATH, "post"),
+    (CURRENT_TOKEN_PATH, "delete"),
+    (ACCOUNT_PATH, "get"),
+    (LOANS_PATH, "get"),
+    (RENEWAL_PATH, "post"),
+    (DEBTS_PATH, "get"),
+    (HOLDS_PATH, "get"),
+    (HOLDS_PATH, "post"),
+    (HOLD_PATH, "delete"),
+];
 
 /// The API routes, with JSON answers for an unknown path or method (spec, item 3).
 pub(crate) fn routes() -> Router<AppState> {
@@ -41,6 +76,15 @@ pub(crate) fn routes() -> Router<AppState> {
         .route(OPENAPI_PATH, get(openapi))
         .route(SEARCH_PATH, get(search))
         .route(INSTANCE_PATH, get(instance))
+        .route(TOKENS_PATH, post(patron::issue))
+        .route(CURRENT_TOKEN_PATH, delete(patron::revoke))
+        .route(ACCOUNT_PATH, get(patron::account))
+        .route(LOANS_PATH, get(patron::loans))
+        .route(RENEWAL_PATH, post(patron::renew))
+        .route(DEBTS_PATH, get(patron::debts))
+        .route(HOLDS_PATH, get(patron::holds).post(patron::place_hold))
+        .route(HOLD_PATH, delete(patron::cancel_hold))
+        .layer(DefaultBodyLimit::max(MAX_BODY))
         .method_not_allowed_fallback(|| async {
             error(StatusCode::METHOD_NOT_ALLOWED, "method_not_allowed")
         });
@@ -340,12 +384,20 @@ mod tests {
     fn the_document_names_every_route_and_only_them() {
         let document: serde_json::Value = serde_json::from_str(OPENAPI).unwrap_or_default();
         assert_eq!(document["openapi"], "3.0.3");
-        let mut documented: Vec<&str> = document["paths"]
+        let mut documented: Vec<(&str, &str)> = document["paths"]
             .as_object()
-            .map(|paths| paths.keys().map(String::as_str).collect())
-            .unwrap_or_default();
+            .into_iter()
+            .flatten()
+            .flat_map(|(path, operations)| {
+                operations
+                    .as_object()
+                    .into_iter()
+                    .flatten()
+                    .map(move |(method, _)| (path.as_str(), method.as_str()))
+            })
+            .collect();
         documented.sort_unstable();
-        let mut routed = PATHS.to_vec();
+        let mut routed = OPERATIONS.to_vec();
         routed.sort_unstable();
         assert_eq!(documented, routed);
     }

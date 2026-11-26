@@ -32,6 +32,9 @@ use elzevir_domain::patron::{Cpf, Enrolment, PatronCategoryId, PatronId};
 use elzevir_store::{ElzevirHandler, ElzevirStore, StoreConfig};
 use jiff::civil::date;
 
+#[path = "../../elzevir-web/tests/contract/mod.rs"]
+mod contract;
+
 struct Server(Child);
 
 impl Drop for Server {
@@ -1482,4 +1485,220 @@ fn the_patron_chooses_whether_returns_are_kept_in_their_history() {
     );
     let stopped = choose(format!("csrf={}", csrf(&page)));
     assert!(stopped.contains("aviso=historico_nao"), "{stopped}");
+}
+
+// The patron's account through the REST API (docs/specs/opac/api.md, items 8 to 17).
+
+/// Calls the API with an optional bearer token and JSON body; returns the status, the
+/// head and the JSON body (`null` when empty). `operation` is the documented path the
+/// answer is checked against.
+fn api(
+    address: SocketAddr,
+    method: &str,
+    uri: &str,
+    operation: &str,
+    token: Option<&str>,
+    body: &str,
+) -> (u16, String, serde_json::Value) {
+    let bearer = token.map_or_else(String::new, |token| {
+        format!("Authorization: Bearer {token}\r\n")
+    });
+    let headers = format!("Content-Type: application/json\r\n{bearer}");
+    let response = request(address, method, uri, &headers, body);
+    let (head, body) = response.split_once("\r\n\r\n").unwrap();
+    let status: u16 = head.split(' ').nth(1).unwrap().parse().unwrap();
+    let body = if body.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::from_str(body).unwrap()
+    };
+    if status != 204 {
+        contract::check(operation, &method.to_ascii_lowercase(), status, &body);
+    }
+    (status, head.to_ascii_lowercase(), body)
+}
+
+const TOKENS: &str = "/api/v1/patron/tokens";
+
+fn api_token(address: SocketAddr) -> String {
+    let (status, head, body) = api(
+        address,
+        "POST",
+        TOKENS,
+        TOKENS,
+        None,
+        r#"{"card": " 000123 ", "password": "leitura-segura"}"#,
+    );
+    assert_eq!(status, 201, "{body}");
+    assert!(head.contains("cache-control: no-store"), "{head}");
+    assert_eq!(body.get("expires_in"), Some(&1800.into()));
+    body.get("token").unwrap().as_str().unwrap().to_owned()
+}
+
+#[test]
+fn the_patron_reads_the_account_and_renews_a_loan_through_the_api() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    stock(data.path());
+    late_return(data.path(), ana);
+    let store = open(data.path());
+    submit(
+        &store,
+        WriteCommand::Circulation(CirculationCommand::SetRules(RuleChange {
+            scope: RuleScopeKey::default(),
+            values: vec![
+                ("renewalsallowed".to_owned(), Some("1".to_owned())),
+                ("renewalperiod".to_owned(), Some("7".to_owned())),
+            ],
+        })),
+    );
+    // Lent now, as the server reads the real clock: the loan is not overdue.
+    submit(
+        &store,
+        WriteCommand::Circulation(CirculationCommand::Checkout(CheckoutRequest {
+            patron: PatronId(ana),
+            barcode: "0001".to_owned(),
+            desk: BranchId(1),
+            on_site: false,
+            confirmed: true,
+            at: jiff::Zoned::now()
+                .with_time_zone(jiff::tz::TimeZone::get("America/Sao_Paulo").unwrap()),
+        })),
+    );
+    store.shutdown().unwrap();
+    let (_server, address) = start_with_password(data.path(), ana);
+    let account = "/api/v1/patron/account";
+    let (status, head, _) = api(address, "GET", account, account, None, "");
+    assert_eq!(status, 401);
+    assert!(head.contains("www-authenticate: bearer"), "{head}");
+    let (status, _, _) = api(address, "GET", account, account, Some("forged"), "");
+    assert_eq!(status, 401);
+    let (status, _, _) = api(address, "POST", TOKENS, TOKENS, None, "{not json");
+    assert_eq!(status, 400);
+
+    let token = api_token(address);
+    let me = Some(token.as_str());
+    let (status, head, body) = api(address, "GET", account, account, me, "");
+    assert_eq!(status, 200);
+    assert!(head.contains("cache-control: no-store"));
+    assert_eq!(
+        (&body["name"], &body["card"], &body["expires"]),
+        (&"Ana Silva".into(), &"000123".into(), &"2027-01-31".into())
+    );
+    assert!(!body.to_string().contains("529"), "no CPF: {body}");
+    let debts = "/api/v1/patron/debts";
+    let (_, _, lines) = api(address, "GET", debts, debts, me, "");
+    assert!(
+        lines
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|line| line["kind"] == "overdue" && line["amount"] == 500),
+        "{lines}"
+    );
+
+    let loans = "/api/v1/patron/loans";
+    let (_, _, list) = api(address, "GET", loans, loans, me, "");
+    let loan = list
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|loan| loan["renewals_left"] == 1);
+    let item = loan.unwrap()["item"].as_i64().unwrap();
+    let renewal = "/api/v1/patron/loans/{item}/renewal";
+    let renew = |item: i64| {
+        api(
+            address,
+            "POST",
+            &format!("/api/v1/patron/loans/{item}/renewal"),
+            renewal,
+            me,
+            "",
+        )
+    };
+    let (status, _, renewed) = renew(item);
+    assert_eq!(status, 200, "{renewed}");
+    assert_eq!(renewed["renewals"], 1);
+    let (status, _, refused) = renew(item);
+    assert_eq!(status, 409);
+    assert_eq!(
+        refused,
+        serde_json::json!({"error": "refused", "reason": "too_many"})
+    );
+    assert_eq!(renew(9999).0, 404);
+
+    // The OPAC session and the token are apart.
+    let opac = request(
+        address,
+        "GET",
+        "/conta",
+        &format!("Cookie: elzevir_patron={token}\r\n"),
+        "",
+    );
+    assert!(opac.contains("location: /conta/entrar"), "{opac}");
+    let current = "/api/v1/patron/tokens/current";
+    assert_eq!(api(address, "DELETE", current, current, me, "").0, 204);
+    assert_eq!(api(address, "GET", account, account, me, "").0, 401);
+}
+
+#[test]
+fn the_patron_holds_and_cancels_through_the_api_and_refusals_lock_the_card() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    stock(data.path());
+    let store = open(data.path());
+    submit(
+        &store,
+        WriteCommand::Circulation(CirculationCommand::SetRules(RuleChange {
+            scope: RuleScopeKey::default(),
+            values: vec![("reservesallowed".to_owned(), Some("3".to_owned()))],
+        })),
+    );
+    store.shutdown().unwrap();
+    let (_server, address) = start_with_password(data.path(), ana);
+    let token = api_token(address);
+    let me = Some(token.as_str());
+    let holds = "/api/v1/patron/holds";
+    let place = |body: &str| api(address, "POST", holds, holds, me, body);
+    assert_eq!(place(r#"{"instance": 99, "pickup": 1}"#).0, 404);
+    let (status, _, placed) = place(r#"{"instance": 1, "pickup": 1}"#);
+    assert_eq!(status, 201, "{placed}");
+    let (status, _, again) = place(r#"{"instance": 1, "pickup": 1}"#);
+    assert_eq!((status, &again["reason"]), (409, &"already_held".into()));
+    let (_, _, list) = api(address, "GET", holds, holds, me, "");
+    assert_eq!(list[0]["status"], "pending");
+    assert_eq!(list[0]["title"], "Dom Casmurro");
+    let hold = "/api/v1/patron/holds/{id}";
+    let cancel = |id: &str| {
+        api(
+            address,
+            "DELETE",
+            &format!("/api/v1/patron/holds/{id}"),
+            hold,
+            me,
+            "",
+        )
+    };
+    assert_eq!(cancel(&placed["hold"].to_string()).0, 204);
+    assert_eq!(cancel(&placed["hold"].to_string()).0, 404);
+    let (_, _, list) = api(address, "GET", holds, holds, me, "");
+    assert_eq!(list, serde_json::json!([]));
+
+    // Refusals through the API and the OPAC count together (item 13).
+    let wrong = r#"{"card": "000123", "password": "errada-123"}"#;
+    for _ in 0..5 {
+        assert_eq!(api(address, "POST", TOKENS, TOKENS, None, wrong).0, 401);
+    }
+    let right = r#"{"card": "000123", "password": "leitura-segura"}"#;
+    assert_eq!(api(address, "POST", TOKENS, TOKENS, None, right).0, 429);
+    let form = request(address, "GET", "/conta/entrar", "", "");
+    let cookie = session_cookie(&form, "elzevir_patron_csrf");
+    let locked = request(
+        address,
+        "POST",
+        "/conta/entrar",
+        &format!("Cookie: {cookie}\r\nContent-Type: application/x-www-form-urlencoded\r\n"),
+        &format!("csrf={}&card=000123&password=leitura-segura", csrf(&form)),
+    );
+    assert_status(&locked, 429);
 }

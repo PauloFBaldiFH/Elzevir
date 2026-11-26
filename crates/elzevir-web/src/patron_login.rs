@@ -47,14 +47,14 @@ impl Attempts {
     }
 
     /// Whether `card` is locked at `now`.
-    fn locked(&self, card: &str, now: Instant) -> bool {
+    pub(crate) fn locked(&self, card: &str, now: Instant) -> bool {
         self.lock().get(card).is_some_and(|(count, last)| {
             *count >= MAX_FAILURES && now.duration_since(*last) < WINDOW
         })
     }
 
     /// Counts one refusal of `card` at `now`.
-    fn failed(&self, card: &str, now: Instant) {
+    pub(crate) fn failed(&self, card: &str, now: Instant) {
         let mut failures = self.lock();
         if failures.len() >= MAX_FOLLOWED {
             failures.retain(|_, (_, last)| now.duration_since(*last) < WINDOW);
@@ -70,7 +70,7 @@ impl Attempts {
     }
 
     /// Clears the refusals of `card` after a sign-in.
-    fn succeeded(&self, card: &str) {
+    pub(crate) fn succeeded(&self, card: &str) {
         self.lock().remove(card);
     }
 }
