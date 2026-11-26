@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Search by field over the same index (docs/specs/opac/sru.md, items 9 and 10).
 
-use elzevir_app::field_search::{FieldQuery, FieldSearch, FieldTerm, SearchField, WordMatch};
+use elzevir_app::field_search::{
+    FieldQuery, FieldSearch, FieldTerm, SearchField, Truncation, WordMatch,
+};
 use elzevir_app::search::{SearchError, SearchResults, SearchScope, normalized_identifier};
 use elzevir_domain::catalog::IdentifierKind;
 use tantivy::Term;
-use tantivy::query::{BooleanQuery, EmptyQuery, Occur, Query, QueryParser, TermQuery};
+use tantivy::query::{BooleanQuery, EmptyQuery, Occur, Query, QueryParser, RegexQuery, TermQuery};
 use tantivy::schema::{Field, IndexRecordOption};
 
 use crate::TantivyIndex;
@@ -45,6 +47,7 @@ impl TantivyIndex {
     fn term(&self, term: &FieldTerm, scope: SearchScope) -> Box<dyn Query> {
         let f = &self.fields;
         let words = plain(&term.text);
+        let truncation = term.truncation;
         match term.field {
             SearchField::Any => match term.matching {
                 WordMatch::Any => {
@@ -74,12 +77,19 @@ impl TantivyIndex {
                     ]
                     .into_iter()
                     .filter(|value| !value.is_empty())
-                    .map(|value| exact(f.identifier, &value)),
+                    .map(|value| exact(f.identifier, &value, truncation)),
                 )
             }
-            SearchField::Year => exact(f.year, term.text.trim()),
-            SearchField::Language => exact(f.language, &term.text.trim().to_lowercase()),
-            SearchField::Barcode => exact(f.barcode, term.text.trim()),
+            SearchField::Year => exact(f.year, term.text.trim(), truncation),
+            SearchField::Language => {
+                exact(f.language, &term.text.trim().to_lowercase(), truncation)
+            }
+            SearchField::Barcode => exact(f.barcode, term.text.trim(), truncation),
+            SearchField::CallNumber => exact(
+                f.call_number_key,
+                &term.text.trim().to_lowercase(),
+                truncation,
+            ),
             SearchField::Record => match term.text.trim().parse::<u64>() {
                 Ok(number) => Box::new(TermQuery::new(
                     Term::from_field_u64(f.instance, number),
@@ -122,14 +132,41 @@ fn plain(text: &str) -> String {
         .collect()
 }
 
-fn exact(field: Field, value: &str) -> Box<dyn Query> {
+/// `value` whole in `field`, or as its start, end or inside with `truncation`.
+fn exact(field: Field, value: &str, truncation: Truncation) -> Box<dyn Query> {
     if value.is_empty() {
         return Box::new(EmptyQuery);
     }
-    Box::new(TermQuery::new(
-        Term::from_field_text(field, value),
-        IndexRecordOption::Basic,
-    ))
+    let escaped = escape(value);
+    let pattern = match truncation {
+        Truncation::None => {
+            return Box::new(TermQuery::new(
+                Term::from_field_text(field, value),
+                IndexRecordOption::Basic,
+            ));
+        }
+        Truncation::Right => format!("{escaped}.*"),
+        Truncation::Left => format!(".*{escaped}"),
+        Truncation::Both => format!(".*{escaped}.*"),
+    };
+    // The pattern is the escaped term with fixed wildcards, so it always compiles; if
+    // the regex engine refused it anyway, nothing would match rather than everything.
+    RegexQuery::from_pattern(&pattern, field).map_or_else(
+        |_| Box::new(EmptyQuery) as Box<dyn Query>,
+        |query| Box::new(query),
+    )
+}
+
+/// `value` with every character the regex syntax reads specially escaped.
+fn escape(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len() * 2);
+    for c in value.chars() {
+        if "\\.+*?()|[]{}^$#&-~\"".contains(c) {
+            escaped.push('\\');
+        }
+        escaped.push(c);
+    }
+    escaped
 }
 
 fn any_of(queries: impl Iterator<Item = Box<dyn Query>>) -> Box<dyn Query> {

@@ -4,7 +4,7 @@
 //! Koha: the CQL indexes of `etc/z3950/pqf.properties`, which `Koha::Z3950Responder`
 //! hands to YAZ.
 
-use crate::field_search::{FieldQuery, FieldTerm, SearchField, WordMatch};
+use crate::field_search::{FieldQuery, FieldTerm, SearchField, Truncation, WordMatch};
 
 use super::{CONTEXT_SETS, Diagnostic, INDEXES};
 
@@ -268,6 +268,7 @@ fn term(
         field,
         matching,
         text,
+        truncation: Truncation::None,
     }))
 }
 
@@ -316,6 +317,7 @@ mod tests {
             field,
             matching,
             text: text.to_owned(),
+            truncation: Truncation::None,
         })
     }
 

@@ -96,3 +96,17 @@ path = "fuzz_targets/sip2.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "z3950_request"
+path = "fuzz_targets/z3950_request.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cql"
+path = "fuzz_targets/cql.rs"
+test = false
+doc = false
+bench = false

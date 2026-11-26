@@ -13,6 +13,16 @@ use crate::field_search::SearchField;
 pub use request::{Packing, RecordSchema, Version};
 pub use response::{SruAnswer, respond};
 
+/// Reads a CQL query into the search by field, or the diagnostic that refuses it (items
+/// 8 to 10); for the fuzzing target, since `respond` reads queries itself.
+///
+/// # Errors
+///
+/// The diagnostic of a query that is malformed or names what the server does not have.
+pub fn parse_cql(query: &str) -> Result<crate::field_search::FieldQuery, Diagnostic> {
+    cql::parse(query)
+}
+
 /// `[sru]` of `elzevir.toml`, checked.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SruSettings {

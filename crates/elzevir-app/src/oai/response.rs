@@ -296,7 +296,8 @@ fn metadata(marc: &Record, format: MetadataFormat) -> Option<String> {
 
 /// The MARCXML `<record>` element of `marc` alone, as Koha embeds `as_xml_record`;
 /// `None` when the record cannot be written.
-pub(crate) fn marcxml_element(marc: &Record) -> Option<String> {
+#[must_use]
+pub fn marcxml_element(marc: &Record) -> Option<String> {
     let mut document = String::new();
     marc.write_marcxml_document(&mut document).ok()?;
     document

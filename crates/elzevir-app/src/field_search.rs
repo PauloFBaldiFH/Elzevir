@@ -27,6 +27,8 @@ pub enum SearchField {
     Language,
     /// An Item's barcode.
     Barcode,
+    /// An Item's call number.
+    CallNumber,
     /// The Instance's number.
     Record,
 }
@@ -58,6 +60,20 @@ pub enum WordMatch {
     Phrase,
 }
 
+/// Where a code may have more characters than the term (Bib-1 attribute type 5).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum Truncation {
+    /// The whole value.
+    #[default]
+    None,
+    /// The term starts the value.
+    Right,
+    /// The term ends the value.
+    Left,
+    /// The term is inside the value.
+    Both,
+}
+
 /// One term: a field, how it matches and the text asked for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldTerm {
@@ -67,6 +83,8 @@ pub struct FieldTerm {
     pub matching: WordMatch,
     /// The text, without query syntax.
     pub text: String,
+    /// On a code field, whether the value may go on past the term. Words ignore it.
+    pub truncation: Truncation,
 }
 
 /// A query by field.

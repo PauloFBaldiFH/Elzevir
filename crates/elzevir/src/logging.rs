@@ -224,6 +224,21 @@ pub(crate) fn sru_request(instance: &str, event: &elzevir_web::SruEvent) {
     }
 }
 
+/// Records a Z39.50 Search or Present (docs/specs/opac/z3950.md, item 19): no query and
+/// no client address.
+pub(crate) fn z3950_request(instance: &str, event: &elzevir_sources::z3950_server::Z3950Event) {
+    let outcome = event
+        .diagnostic
+        .map_or_else(|| "answered".to_owned(), |code| code.to_string());
+    tracing::info!(target: TARGET, institution = "local", instance, event = "z3950.request", operation = event.operation, outcome, total = event.total, records = event.records, "Z39.50 request");
+    if let Some(failure) = &event.failure {
+        tracing::error!(target: TARGET, institution = "local", instance, event = "z3950.unavailable", failure, "Z39.50 request failed: catalog or index unavailable");
+    }
+    for instance_id in &event.unavailable {
+        tracing::warn!(target: TARGET, institution = "local", instance, event = "z3950.record_unavailable", instance_id, "Z39.50 record sent as a diagnostic: hidden, gone or not writable");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

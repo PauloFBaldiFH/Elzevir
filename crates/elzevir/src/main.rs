@@ -76,6 +76,7 @@ mod tunnel_observe;
 mod update;
 mod update_journal;
 mod update_recovery;
+mod z3950_server;
 
 use std::future::IntoFuture;
 use std::io::BufRead;
@@ -534,6 +535,27 @@ fn public_services(
     )
 }
 
+/// The listeners of the other protocols: SIP2 and Z39.50, each when configured. Dropping
+/// it stops them and waits for their connections.
+struct Listeners {
+    _sip2: Option<sip2_server::Listener>,
+    _z3950: Option<z3950_server::Listener>,
+}
+
+impl Listeners {
+    fn open(
+        loaded: &config::Loaded,
+        store: &Arc<ElzevirStore>,
+        index: &Arc<TantivyIndex>,
+        instance: &str,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            _sip2: sip2_server::open(loaded.sip2.as_ref(), store, &loaded.time_zone, instance)?,
+            _z3950: z3950_server::open(loaded.z3950.as_ref(), store, index, instance)?,
+        })
+    }
+}
+
 /// What the server runs besides answering requests: the circulation runs and the mail.
 struct Background {
     time_zone: jiff::tz::TimeZone,
@@ -635,6 +657,7 @@ fn serve_controlled(
             mail: loaded.mail.clone(),
         };
         let (oai, sru) = public_services(&loaded, &store, &index, &instance);
+        let listeners = Listeners::open(&loaded, &store, &index, &instance)?;
         let app = web_app(
             Arc::clone(&lock),
             &store,
@@ -654,12 +677,6 @@ fn serve_controlled(
                 sru,
             ),
         )?;
-        let sip2 = sip2_server::open(
-            loaded.sip2.as_ref(),
-            &store,
-            &background.time_zone,
-            &instance,
-        )?;
         let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
         let runs = background.spawn(&runtime, &store, &settings.lang, (&instance, control))?;
         let result = runtime.block_on(run_http(
@@ -675,7 +692,7 @@ fn serve_controlled(
             run.abort();
         }
         drop(indexer);
-        drop(sip2);
+        drop(listeners);
         // Runtime drop waits for blocking reads; keep the institution lock until all
         // readers are gone and the existing writer has reported its final checkpoint.
         drop(runtime);

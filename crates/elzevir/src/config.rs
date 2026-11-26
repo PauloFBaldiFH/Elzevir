@@ -47,6 +47,8 @@ pub(crate) struct Config {
     draft_sources: Vec<DraftSourceEntry>,
     /// The SIP2 server for self-check terminals (docs/specs/circulacao/sip2.md).
     sip2: Option<crate::sip2_server::Sip2Section>,
+    /// The Z39.50 server of the public catalog (docs/specs/opac/z3950.md).
+    z3950: Option<crate::z3950_server::Z3950Section>,
     /// The OAI-PMH repository of the public catalog (docs/specs/opac/oai-pmh.md).
     #[serde(default)]
     oai: crate::oai_config::OaiSection,
@@ -489,6 +491,8 @@ pub(crate) struct Loaded {
     pub(crate) oai: Option<elzevir_app::oai::OaiSettings>,
     /// The SRU server, when `[sru]` turns it on.
     pub(crate) sru: Option<elzevir_app::sru::SruSettings>,
+    /// The Z39.50 server, when `[z3950]` is set.
+    pub(crate) z3950: Option<crate::z3950_server::Z3950Settings>,
 }
 
 /// Reads `data_dir/elzevir.toml` and what it points to; no file is no configuration.
@@ -536,6 +540,12 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         .sru
         .settings()
         .map_err(|e| format!("{}: sru: {e}", path.display()))?;
+    let z3950 = config
+        .z3950
+        .as_ref()
+        .map(crate::z3950_server::Z3950Section::settings)
+        .transpose()
+        .map_err(|e| format!("{}: z3950: {e}", path.display()))?;
     let Some(table) = config.call_number.author_table else {
         return Ok(Loaded {
             author_table: None,
@@ -549,6 +559,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
             sip2,
             oai,
             sru,
+            z3950,
         });
     };
     let table_path = data_dir.join(table);
@@ -572,6 +583,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         sip2,
         oai,
         sru,
+        z3950,
     })
 }
 
