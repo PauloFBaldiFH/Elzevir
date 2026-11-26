@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-# precisa atuaizar esse arquivo, houve mais progresso do que está sendo dito aqui
-
 Instruções para quem escreve código no Elzevir (pessoas e agentes). Leia inteiro antes de mexer em qualquer coisa.
 
 ## O projeto em uma frase
@@ -10,7 +8,14 @@ O Elzevir é um sistema de bibliotecas em Rust que reconstrói o **comportamento
 
 ## Estado atual
 
-- **Fase 0 concluída** (PRs #6 a #14). **Fase 1 em andamento** (autorizada por Paulo em 2026-11-12): MARC, modelo bibliográfico, busca e o executor de cenários. O oráculo é a instância de testes de Paulo (doc 04, §3); as credenciais ficam só em variáveis de ambiente de quem grava.
+- **Fases 0 a 4 concluídas** (até o PR #259, 2026-11-26), com as pendências da Fase 3 (modo completo do acervo e "Mostrar CPF"). O plano e o critério de pronto de cada tarefa estão no [doc 03](docs/arquitetura/03-estrategia-reconstrucao.md), §4; a próxima fase só começa depois de Paulo aprovar o plano dela no doc 03.
+- O que existe, por área (cada uma com a sua spec em `docs/specs/`):
+  - **Catálogo:** núcleo BIBFRAME completo, MARC21 e UNIMARC só na borda (UNIMARC pela projeção em MARC21, [unimarc.md](docs/specs/catalogo/unimarc.md)), importação universal, casamento, listagem com foco 80/20, edição por bloco, lote, autoridades, fontes de rascunho e de autoridade (SRU e Z39.50), exportação MARC, RDF e formatos de citação.
+  - **Circulação:** leitores atrás do muro, empréstimo, devolução, renovação, reservas, multas, suspensões, avisos e calendário, com cenários contra o oráculo.
+  - **OPAC e interoperabilidade:** busca e registro, conta do leitor, servidores SIP2, SRU, Z39.50 e OAI-PMH, e a API REST em `/api/v1` com contrato OpenAPI ([api.md](docs/specs/opac/api.md)).
+  - **Operação:** painel TUI, servidor em segundo plano, bandeja, backup, agendador, atualização e túnel (`docs/specs/operacao/`).
+- O oráculo é a instância de testes de Paulo (doc 04, §3); as credenciais ficam só em variáveis de ambiente de quem grava. Paulo liberou o acesso SSH à VM do oráculo para quem trabalha no projeto (2026-11-26), sem guardar credencial em lugar nenhum do repositório.
+- A API REST tem desenho próprio, em JSON do modelo, e não copia a `api/v1` do Koha (Paulo, 2026-11-26). Nos textos em inglês da interface, o CPF se chama "ID number"; no pt-BR, "CPF" (Paulo, 2026-11-26).
 - Fontes de verdade, nesta ordem: [`docs/arquitetura/04-decisoes.md`](docs/arquitetura/04-decisoes.md) e [`05-definicoes-de-implementacao.md`](docs/arquitetura/05-definicoes-de-implementacao.md) > 03 > 02 > 01. Se o código contradiz o doc 04, o código está errado ou o doc 04 precisa de um PR primeiro.
 - **Nome: Elzevir** (Paulo, 2026-11-12). O projeto se chamava Atrium; documentos e commits antigos ainda usam o nome anterior.
 - **Antes de mexer no núcleo BIBFRAME (Hub, Work, Instance, Item), no mapeamento MARC21/Koha ou no frontend, leia [`docs/ARCHITECTURE_VISION.md`](docs/ARCHITECTURE_VISION.md)**: a especificação de Paulo (regra de ouro: nenhuma etiqueta MARC no núcleo, MARC só na borda, ida e volta sem perdas) e o plano de integração com o código, com a ordem das etapas.
