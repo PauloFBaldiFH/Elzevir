@@ -132,6 +132,29 @@ pub struct NewRecordForm<'a> {
     pub station: Option<DraftStation>,
     /// The approved draft the form was filled from (items 11 and 12).
     pub draft: Option<DraftNote>,
+    /// The search of authority sources in the "+ Authority" form, when authority sources
+    /// are configured (docs/specs/catalogo/fontes-de-autoridade.md, items 16 to 19).
+    pub authority_station: Option<AuthorityStation>,
+}
+
+/// The search of authority sources under the "+ Authority" form's row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthorityStation {
+    /// The authority sources' names, in the configured order.
+    pub sources: Vec<String>,
+}
+
+/// What "Approve" puts in the "+ Authority" form's row (fontes-de-autoridade.md, item 19).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthorityApproval {
+    /// The class, as the row's select names it.
+    pub kind: &'static str,
+    /// The heading.
+    pub heading: String,
+    /// The control number, possibly empty.
+    pub identifier: String,
+    /// The source's name.
+    pub source: String,
 }
 
 /// The capture station of a new family's form.
@@ -199,6 +222,8 @@ pub struct DraftLine {
     pub details: String,
     /// ISBNs, joined.
     pub isbns: String,
+    /// For an authority draft, what "Approve" fills the row with instead of a key.
+    pub authority: Option<AuthorityApproval>,
 }
 
 /// The fields of one block of a new record: every field of the entity, by section.

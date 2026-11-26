@@ -46,6 +46,23 @@
     {% endfor %}
   </section>
   {% endfor %}
+  {% if let Some(station) = authority_station %}
+  <section class="authority-station">
+    <div class="draft-tools">
+      <button type="button" data-action="authority-search">{{ t.get("draft-open") }}</button>
+      <p class="authority-approved" data-from="{{ t.get("authority-from") }}" hidden></p>
+    </div>
+    <p class="draft-query-error" role="alert" hidden></p>
+    <ol class="draft-sources" data-endpoint="/equipe/acervo/fontes-de-autoridade" data-waiting="{{ t.get("draft-waiting") }}" data-failed="{{ t.get("draft-failed") }}" hidden>
+      {% for source in station.sources %}
+      <li class="draft-source" data-source="{{ loop.index0 }}">
+        <h4 class="draft-source-name">{{ source }}</h4>
+        <div class="draft-answer" aria-live="polite"></div>
+      </li>
+      {% endfor %}
+    </ol>
+  </section>
+  {% endif %}
   <div class="form-discard" role="alertdialog" hidden>
     <span>{{ t.get("edit-discard-question") }}</span>
     <button type="button" data-action="discard">{{ t.get("edit-discard") }}</button>

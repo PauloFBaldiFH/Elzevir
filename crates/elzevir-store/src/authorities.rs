@@ -207,6 +207,7 @@ pub(crate) fn link_authority(
             kind,
             heading,
             relator,
+            identifier,
         } => {
             let linked = exists_with(
                 connection,
@@ -226,7 +227,7 @@ pub(crate) fn link_authority(
                 role_term: None,
                 primary: false,
                 name_parts: Vec::new(),
-                identifiers: Vec::new(),
+                identifiers: authority_record(identifier.as_deref()),
             };
             let next = next_position(
                 connection,
@@ -239,6 +240,7 @@ pub(crate) fn link_authority(
             kind,
             heading,
             thesaurus,
+            identifier,
         } => {
             let linked = exists_with(
                 connection,
@@ -257,7 +259,7 @@ pub(crate) fn link_authority(
                 thesaurus: thesaurus.clone(),
                 subdivisions: Vec::new(),
                 name_parts: Vec::new(),
-                identifiers: Vec::new(),
+                identifiers: authority_record(identifier.as_deref()),
             };
             let next = next_position(
                 connection,
@@ -289,6 +291,18 @@ pub(crate) fn link_authority(
         record_changed(tx, InstanceId(instance))?;
     }
     Ok(CatalogOutput::WorkUpdated { work, row_version })
+}
+
+/// The `$0` of an authority approved from a source, if any (fontes-de-autoridade.md,
+/// item 20).
+fn authority_record(identifier: Option<&str>) -> Vec<AuthorityLink> {
+    identifier
+        .map(|value| AuthorityLink {
+            kind: AuthorityLinkKind::AuthorityRecord,
+            value: value.to_owned(),
+        })
+        .into_iter()
+        .collect()
 }
 
 /// The place of publication of `instance`, which must be of `work`; only the Instance's

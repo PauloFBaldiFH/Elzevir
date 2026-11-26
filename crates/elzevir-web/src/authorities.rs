@@ -14,8 +14,8 @@ use elzevir_app::editing::{Edit, FieldError};
 use elzevir_app::staff::Permission;
 use elzevir_domain::catalog::{AgentId, InstanceId, SubjectId, WorkId};
 use elzevir_web_templates::{
-    AuthorityNote, FormField, FormInput, FormPart, FormSection, IdentifierChip, NewRecordForm,
-    RecordForm,
+    AuthorityNote, AuthorityStation, FormField, FormInput, FormPart, FormSection, IdentifierChip,
+    NewRecordForm, RecordForm,
 };
 use serde::Deserialize;
 
@@ -252,6 +252,13 @@ pub(crate) async fn link_form(
         }],
         station: None,
         draft: None,
+        authority_station: state
+            .authority_sources
+            .as_ref()
+            .map(|sources| AuthorityStation {
+                sources: sources.authority_sources(),
+            })
+            .filter(|station| !station.sources.is_empty()),
     })
 }
 

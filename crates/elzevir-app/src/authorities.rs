@@ -117,7 +117,15 @@ pub struct LinkRequest {
     /// The thesaurus code of a subject.
     #[serde(default)]
     pub thesaurus: Option<String>,
+    /// The control number of the authority record approved from a source
+    /// (fontes-de-autoridade.md, items 19 to 21).
+    #[serde(default)]
+    pub identifier: Option<String>,
 }
+
+/// Most characters of an approved authority's identifier (fontes-de-autoridade.md,
+/// item 21).
+pub const MAX_IDENTIFIER: usize = 256;
 
 /// The roles the form offers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -156,11 +164,28 @@ pub fn link_request(
             .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty())
     };
+    let identifier = code(request.identifier);
+    if identifier
+        .as_ref()
+        .is_some_and(|identifier| identifier.chars().count() > MAX_IDENTIFIER)
+    {
+        errors.push(FieldError {
+            field: "link",
+            message_key: "link-error-identifier",
+        });
+    }
+    if identifier.is_some() && request.role == LinkRoleName::Place {
+        errors.push(FieldError {
+            field: "link",
+            message_key: "link-error-identifier-place",
+        });
+    }
     let role = match (request.role, request.kind.agent()) {
         (LinkRoleName::Contribution, Some(kind)) => Some(AuthorityRole::Contribution {
             kind,
             heading,
             relator: code(request.relator),
+            identifier,
         }),
         (LinkRoleName::Contribution, None) => {
             errors.push(FieldError {
@@ -192,6 +217,7 @@ pub fn link_request(
             kind: request.kind,
             heading,
             thesaurus: code(request.thesaurus),
+            identifier,
         }),
     };
     match role {
@@ -211,6 +237,7 @@ mod tests {
             role,
             relator: Some(" ill ".to_owned()),
             thesaurus: Some(String::new()),
+            identifier: None,
         }
     }
 
@@ -233,6 +260,7 @@ mod tests {
                 kind: AgentKind::Person,
                 heading: "Portinari, Candido".to_owned(),
                 relator: Some("ill".to_owned()),
+                identifier: None,
             }
         );
         let topic = link_request(
@@ -247,6 +275,7 @@ mod tests {
                 kind: SubjectKind::Topic,
                 heading: "Cafe".to_owned(),
                 thesaurus: None,
+                identifier: None,
             }
         );
         let errors = link_request(

@@ -8,6 +8,7 @@
 mod access;
 mod assets;
 mod authorities;
+mod authority_station;
 mod batch;
 mod board;
 mod calendar;
@@ -118,6 +119,7 @@ pub struct AppState {
     pending: Option<Arc<dyn elzevir_app::pending::PendingReader>>,
     accounts: Option<Arc<dyn elzevir_app::patron_account::PatronAccounts>>,
     drafts: Option<Arc<draft_station::Drafts>>,
+    authority_sources: Option<Arc<dyn elzevir_app::authority_sources::AuthoritySource>>,
 }
 
 struct Inner {
@@ -163,6 +165,7 @@ impl AppState {
             pending: None,
             accounts: None,
             drafts: None,
+            authority_sources: None,
             inner: Arc::new(Inner {
                 staff,
                 memory,
@@ -282,6 +285,18 @@ impl AppState {
     #[must_use]
     pub fn with_draft_sources(mut self, source: Arc<dyn elzevir_app::drafts::DraftSource>) -> Self {
         self.drafts = Some(Arc::new(draft_station::Drafts::new(source)));
+        self
+    }
+
+    /// Connects the institution's authority sources
+    /// (docs/specs/catalogo/fontes-de-autoridade.md, items 16 to 19). Without them the
+    /// "+ Authority" form has no search and its route answers 404.
+    #[must_use]
+    pub fn with_authority_sources(
+        mut self,
+        source: Arc<dyn elzevir_app::authority_sources::AuthoritySource>,
+    ) -> Self {
+        self.authority_sources = Some(source);
         self
     }
 }
@@ -471,6 +486,10 @@ fn admin_routes() -> Router<AppState> {
 /// to Works by role (docs/specs/catalogo/autoridades.md).
 fn authority_routes() -> Router<AppState> {
     Router::new()
+        .route(
+            "/equipe/acervo/fontes-de-autoridade/{n}",
+            get(authority_station::answer),
+        )
         .route(
             "/equipe/acervo/assunto/{id}/campos",
             get(authorities::subject_form),

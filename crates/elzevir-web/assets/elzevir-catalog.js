@@ -863,7 +863,8 @@ async function askSource(station, slot, params) {
   answer.textContent = list.dataset.waiting;
   let response;
   try {
-    response = await fetch(`/equipe/acervo/fontes/${encodeURIComponent(slot.dataset.source)}?${params}`, {
+    const endpoint = list.dataset.endpoint ?? "/equipe/acervo/fontes";
+    response = await fetch(`${endpoint}/${encodeURIComponent(slot.dataset.source)}?${params}`, {
       credentials: "same-origin",
       headers: { Accept: "text/html" },
     });
@@ -897,13 +898,65 @@ function searchStation(form) {
 }
 
 function nextPage(form, button) {
-  const station = stationOf(form);
+  const station = button.closest(".draft-station, .authority-station");
   const slot = button.closest(".draft-source");
   if (!station || !slot) return;
   const params = new URLSearchParams(slot.dataset.query ?? "");
   params.set("page", button.dataset.page);
   askSource(station, slot, params);
 }
+
+// The search of authority sources under the "+ Authority" row (fontes-de-autoridade.md,
+// items 16 to 19): it asks with the name and class typed in the row.
+function linkRow(form) {
+  return form.querySelector('.form-field[data-change="Link"] .form-row');
+}
+
+function searchAuthorities(form) {
+  const station = form.querySelector(".authority-station");
+  const row = linkRow(form);
+  if (!station || !row) return;
+  station.querySelector(".draft-query-error").hidden = true;
+  station.querySelector(".draft-sources").hidden = false;
+  const params = new URLSearchParams();
+  params.set("name", row.querySelector('[data-name="heading"]').value);
+  params.set("class", row.querySelector('[data-name="kind"]').value);
+  for (const slot of station.querySelectorAll(".draft-source")) askSource(station, slot, params);
+}
+
+// Approving fills the row with the class, the heading and the control number; nothing is
+// stored before "Link" (item 19).
+function approveAuthority(form, button) {
+  const row = linkRow(form);
+  const station = form.querySelector(".authority-station");
+  if (!row || !station) return;
+  const kind = row.querySelector('[data-name="kind"]');
+  kind.value = button.dataset.kind;
+  kind.dispatchEvent(new Event("change", { bubbles: true }));
+  const heading = row.querySelector('[data-name="heading"]');
+  heading.value = button.dataset.heading;
+  row.querySelector('[data-name="identifier"]').value = button.dataset.identifier;
+  markNew(heading, false);
+  const note = station.querySelector(".authority-approved");
+  note.textContent = [`${note.dataset.from} ${button.dataset.source}`, button.dataset.identifier]
+    .filter((part) => part.trim())
+    .join(": ");
+  note.hidden = false;
+  station.querySelector(".draft-sources").hidden = true;
+  heading.focus();
+}
+
+// A heading changed by hand no longer is the approved one: its control number goes.
+document.addEventListener("input", (event) => {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement) || !input.matches('[data-change="Link"] [data-name="heading"]')) return;
+  const form = input.closest(".record-form");
+  const identifier = form?.querySelector('[data-change="Link"] [data-name="identifier"]');
+  if (!identifier?.value) return;
+  identifier.value = "";
+  const note = form.querySelector(".authority-approved");
+  if (note) note.hidden = true;
+});
 
 // Approving opens the family's form filled from the draft in place of this one; nothing
 // is stored before "Create" (item 11). Anything typed in this form asks first.
@@ -989,6 +1042,12 @@ document.addEventListener("click", (event) => {
         break;
       case "draft-approve":
         if (action.dataset.draft) approveDraft(action.dataset.draft);
+        break;
+      case "authority-search":
+        searchAuthorities(form);
+        break;
+      case "authority-approve":
+        approveAuthority(form, action);
         break;
       default:
         break;

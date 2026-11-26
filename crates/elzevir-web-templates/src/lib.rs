@@ -96,9 +96,9 @@ pub use staff_patrons::{
 };
 pub use staff_record_fields::{FieldEntry, FieldGroup, FieldValue, ItemFields, RecordFields};
 pub use staff_record_form::{
-    AuthorityNote, ColumnKind, DraftAnswer, DraftLine, DraftNote, DraftOutcome, DraftStation,
-    FormCell, FormColumn, FormField, FormInput, FormOption, FormPart, FormSection, History,
-    HistoryLine, IdentifierChip, NewRecordForm, RecordForm,
+    AuthorityApproval, AuthorityNote, AuthorityStation, ColumnKind, DraftAnswer, DraftLine,
+    DraftNote, DraftOutcome, DraftStation, FormCell, FormColumn, FormField, FormInput, FormOption,
+    FormPart, FormSection, History, HistoryLine, IdentifierChip, NewRecordForm, RecordForm,
 };
 pub use staff_registries::{BranchPart, RegistryRow, StaffRegistries};
 

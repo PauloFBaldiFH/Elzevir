@@ -9,7 +9,11 @@
       {% if !draft.details.is_empty() %}<span class="draft-details">{{ draft.details }}</span>{% endif %}
       {% if !draft.isbns.is_empty() %}<span class="draft-isbns">ISBN {{ draft.isbns }}</span>{% endif %}
     </div>
+    {% if let Some(approval) = draft.authority %}
+    <button type="button" data-action="authority-approve" data-kind="{{ approval.kind }}" data-heading="{{ approval.heading }}" data-identifier="{{ approval.identifier }}" data-source="{{ approval.source }}">{{ t.get("draft-approve") }}</button>
+    {% else %}
     <button type="button" data-action="draft-approve" data-draft="{{ draft.key }}">{{ t.get("draft-approve") }}</button>
+    {% endif %}
   </li>
   {% endfor %}
 </ul>

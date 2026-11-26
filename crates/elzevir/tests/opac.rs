@@ -503,6 +503,7 @@ fn a_linked_authority_joins_the_work_in_its_role() {
         kind: AgentKind::Person,
         heading: "Portinari, Candido".to_owned(),
         relator: Some("ill".to_owned()),
+        identifier: None,
     };
     link(work, illustrator()).unwrap();
     link(
@@ -511,6 +512,8 @@ fn a_linked_authority_joins_the_work_in_its_role() {
             kind: SubjectKind::Topic,
             heading: "Estatistica municipal".to_owned(),
             thesaurus: None,
+            // Approved from an authority source (fontes-de-autoridade.md, item 20).
+            identifier: Some("(XX-Ex)sh00000009".to_owned()),
         },
     )
     .unwrap();
@@ -558,6 +561,7 @@ fn a_linked_authority_joins_the_work_in_its_role() {
     };
     assert!(field("700", "Portinari, Candido"));
     assert!(field("650", "Estatistica municipal"));
+    assert!(field("650", "\u{1f}0(XX-Ex)sh00000009"));
 }
 
 #[test]

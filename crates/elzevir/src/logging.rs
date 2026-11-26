@@ -49,6 +49,13 @@ pub(crate) enum Event {
         outcome: &'static str,
         millis: u64,
     },
+    /// One authority source answered the "+ Authority" form (fontes-de-autoridade.md,
+    /// item 24): its position among the authority sources, never its name or the query.
+    AuthoritySourceAnswered {
+        position: u64,
+        outcome: &'static str,
+        millis: u64,
+    },
 }
 
 /// Records a known event with the identity generated for this execution.
@@ -108,6 +115,13 @@ pub(crate) fn emit(instance: &str, event: Event) {
             millis,
         } => {
             tracing::info!(target: TARGET, institution = "local", instance, event = "drafts.answered", position, outcome, millis, "draft source answered");
+        }
+        Event::AuthoritySourceAnswered {
+            position,
+            outcome,
+            millis,
+        } => {
+            tracing::info!(target: TARGET, institution = "local", instance, event = "authorities.answered", position, outcome, millis, "authority source answered");
         }
         Event::NoticesSendFailed => {
             tracing::warn!(target: TARGET, institution = "local", instance, event = "notices.send_failed", "e-mail notices not sent; tried again in 15 minutes");
