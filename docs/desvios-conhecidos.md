@@ -66,7 +66,7 @@ O `tools/newHolidays.pl` do Koha não grava uma entrada num dia que já é feria
 id: DEV-0003
 area: sip2
 koha: C4::SIP::Sip::MsgType::handle_block_patron, C4::SIP::Sip::MsgType::handle_hold, C4::SIP::Sip::MsgType::handle_item_status_update, C4::SIP::Sip::MsgType::handle_patron_enable, C4::SIP::Sip::MsgType::handle_fee_paid, C4::SIP::Sip::MsgType::handle_renew_all
-scenarios: crates/elzevir-sip2/tests/codec.rs
+scenarios: crates/elzevir-sip2/tests/codec.rs, crates/elzevir/tests/sip2_oracle.rs
 decided_by: Paulo
 date: 2026-11-26
 ```
@@ -79,12 +79,12 @@ O Koha trata bloqueio do leitor (`01`), reserva (`15`), atualização do exempla
 id: DEV-0004
 area: sip2
 koha: C4::SIP::ILS::Patron::new, C4::SIP::ILS::Item::new
-scenarios: crates/elzevir/tests/sip2_server.rs
+scenarios: crates/elzevir/tests/sip2_server.rs, crates/elzevir/tests/sip2_oracle.rs
 decided_by: Paulo
 date: 2026-11-26
 ```
 
-O Koha começa a mensagem de tela do leitor com `Greetings from Koha. ` e escreve as unidades (`AO`, `AQ`, `AP`, `BG`, `CT`) pelo código do `branchcode`. O Elzevir escreve `Greetings from Elzevir. ` e as unidades pelo nome, porque o núcleo não tem códigos de unidade ([fronteira arquitetural](../CLAUDE.md)). Um terminal configurado com o código da unidade do Koha passa a usar o nome cadastrado no Elzevir ([sip2.md](specs/circulacao/sip2.md), itens 16 e 30).
+O Koha começa a mensagem de tela do leitor com `Greetings from Koha. ` escreve as unidades (`AO`, `AQ`, `AP`, `BG`, `CT`) pelo código do `branchcode` e a categoria do leitor (`PC`) pelo `categorycode`. O Elzevir escreve `Greetings from Elzevir. `, as unidades e a categoria pelo nome, porque o núcleo não tem códigos de unidade nem de categoria ([fronteira arquitetural](../CLAUDE.md)). Um terminal configurado com o código da unidade do Koha passa a usar o nome cadastrado no Elzevir ([sip2.md](specs/circulacao/sip2.md), itens 16 e 30).
 
 ## DEV-0005: O SIP2 não cobra taxa de empréstimo nem de renovação
 

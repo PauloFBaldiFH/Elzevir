@@ -22,8 +22,9 @@ Use it only on the disposable test instance, and only with its sample patron.
 
 The output keeps every response as Koha wrote it, except the patron's personal fields
 (name, address, e-mail, phone, birth date), which become NAME, ADDRESS and so on, and
-the card, logins, passwords and barcodes, which become placeholders in requests and
-responses alike. Check the file before sending it.
+the card, logins, passwords and barcode of the run, which become placeholders in requests
+and responses alike, field by field. Checksums are kept as Koha computed them, so they no
+longer match the masked text. Check the file before sending it.
 """
 
 import datetime
@@ -71,28 +72,48 @@ def now():
     return datetime.datetime.now().strftime("%Y%m%d    %H%M%S")
 
 
+# A field starts after a `|`, or right after the fixed fields: a time, or the login's
+# two algorithm digits.
+FIELD_START = r"(?:(?<=\|)|(?<=\d{6})|(?<=^9300))"
+
+
 class Recording:
-    def __init__(self, secrets):
-        # Longest first, so that a secret inside another is replaced after it.
-        self.secrets = sorted(secrets.items(), key=lambda pair: -len(pair[0]))
+    """Keeps each exchange with the run's secrets and the patron's personal fields replaced
+    by placeholders. Values are replaced by field, never as loose substrings, so that a
+    short card or login cannot change other fields or the placeholders themselves."""
+
+    def __init__(self, env):
+        # Field, the run's value, placeholder: only that exact value is replaced, so the
+        # unknown card and barcode asked on purpose stay readable.
+        self.secrets = [
+            ("CN", env["login"], "LOGIN"),
+            ("CO", env["password"], "PASSWORD"),
+            ("AA", env["patron"], "PATRON"),
+            ("CY", env["patron"], "PATRON"),
+            ("AD", env["patron_password"], "PATRON-PASSWORD"),
+            ("AB", env["item"], "ITEM"),
+        ]
+        self.names = set()
         self.exchanges = []
 
     def hide(self, text):
-        for secret, placeholder in self.secrets:
-            if secret:
-                text = text.replace(secret, placeholder)
+        for field, value, placeholder in self.secrets:
+            if value:
+                text = re.sub(rf"{FIELD_START}{field}{re.escape(value)}(?=\|)", field + placeholder, text)
+        for field, placeholder in PERSONAL.items():
+            text = re.sub(rf"{FIELD_START}{field}[^|]+", field + placeholder, text)
+        # The patron's name inside screen messages ("Item not checked out to <name>").
+        for name in self.names:
+            text = text.replace(name, "NAME")
         return text
 
-    def personal(self, response):
-        for field, placeholder in PERSONAL.items():
-            response = re.sub(rf"\|{field}[^|]*", f"|{field}{placeholder}", response)
-        return response
-
     def add(self, name, request, response):
+        for found in re.finditer(rf"{FIELD_START}(?:AE|DA)([^|]+)", response):
+            self.names.add(found.group(1))
         self.exchanges.append({
             "name": name,
             "request": self.hide(request),
-            "response": self.personal(self.hide(response)),
+            "response": self.hide(response),
         })
 
 
@@ -105,7 +126,8 @@ def converse(terminal, recording, env):
         recording.add(name, message, response)
         return response
 
-    if ask("login", f"9300CN{env['login']}|CO{env['password']}|CP{institution}|") != "941":
+    # With error detection, Koha answers `941AY<n>AZ<checksum>`.
+    if not ask("login", f"9300CN{env['login']}|CO{env['password']}|CP{institution}|").startswith("941"):
         raise SystemExit("the SIP login was refused: check the account in SIPconfig.xml")
     ask("sc_status", "9900302.00")
     ask("patron_status", f"23001{now()}AO{institution}|AA{patron}|AC|AD{password}|")
@@ -149,13 +171,7 @@ def main():
     env["institution"] = os.environ.get("ELZEVIR_SIP_INSTITUTION", "MAIN")
     host = os.environ.get("ELZEVIR_SIP_HOST", "127.0.0.1")
     port = int(os.environ.get("ELZEVIR_SIP_PORT", "6001"))
-    recording = Recording({
-        env["login"]: "LOGIN",
-        env["password"]: "PASSWORD",
-        env["patron"]: "PATRON",
-        env["patron_password"]: "PATRON-PASSWORD",
-        env["item"]: "ITEM",
-    })
+    recording = Recording(env)
     terminal = Terminal(host, port)
     lent = converse(terminal, recording, env)
     json.dump({

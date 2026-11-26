@@ -198,6 +198,10 @@ fn lend(
             Err(message) => return Ok(Err(refused(true, title, &message))),
             Ok(message) => {
                 screen_message = message;
+                if borrower.is_some() {
+                    // Koha's AddIssue renews a loan the patron already has.
+                    return renew_as_checkout(session, item, title, screen_message, now);
+                }
                 answer = circulate(session, request(true))?;
             }
         }
@@ -216,6 +220,46 @@ fn lend(
         }),
         Ok(_) => Err(refused(true, title, "Checkout failed")),
         Err(refusal) => Err(refused(true, title, &checkout_message(&refusal))),
+    })
+}
+
+/// A checkout of an Item the patron already has: a renewal, answered as a checkout.
+///
+/// Koha: `C4::Circulation::AddIssue` (`AddRenewal` for the same borrower) and
+/// `CanBookBeIssued` (`NO_MORE_RENEWALS`, `NO_RENEWAL_FOR_ONSITE_CHECKOUTS`).
+fn renew_as_checkout(
+    session: &Session<'_>,
+    item: &SelfCheckItem,
+    title: &str,
+    screen_message: Option<String>,
+    now: &Zoned,
+) -> Result<Result<CheckedOut, CheckoutRefused>, Unavailable> {
+    let command = CirculationCommand::Renew(RenewRequest {
+        barcode: item.barcode.clone(),
+        override_limit: false,
+        at: now.clone(),
+        by_patron: None,
+    });
+    Ok(match circulate(session, command)? {
+        Ok(CirculationOutput::Renewed(renewed)) => Ok(CheckedOut {
+            renewal: true,
+            magnetic_media: false,
+            desensitize: true,
+            title: title.to_owned(),
+            due: Some(minute(&renewed.due)),
+            screen_message,
+            print_line: None,
+            media_type: None,
+            properties: None,
+        }),
+        Err(CirculationRefusal::Renew(RenewRefusal::Refused(RenewalRefusal::OnSite))) => {
+            Err(refused(
+                true,
+                title,
+                "Issue failed : NO_RENEWAL_FOR_ONSITE_CHECKOUTS",
+            ))
+        }
+        Ok(_) | Err(_) => Err(refused(true, title, "Issue failed : NO_MORE_RENEWALS")),
     })
 }
 
