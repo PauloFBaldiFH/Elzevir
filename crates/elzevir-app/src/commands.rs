@@ -171,6 +171,9 @@ impl WriteCommand {
             Self::Patrons(PatronCommand::SetPassword { .. }) => "patrons.set_password",
             Self::Patrons(PatronCommand::SetReadingHistory { .. }) => "patrons.set_reading_history",
             Self::Patrons(PatronCommand::MigrateKoha(_)) => "patrons.migrate_koha",
+            Self::Patrons(PatronCommand::MigrateKohaCirculation(_)) => {
+                "patrons.migrate_koha_circulation"
+            }
             Self::Circulation(CirculationCommand::SetRules(_)) => "circ.set_rules",
             Self::Circulation(CirculationCommand::ChangeCalendar(_)) => "circ.change_calendar",
             Self::Circulation(CirculationCommand::Checkout(_)) => "circ.checkout",

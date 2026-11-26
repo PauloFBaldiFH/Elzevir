@@ -19,10 +19,16 @@ use crate::patrons::{
     MAX_CARDNUMBER, PatronField, PatronFields, PatronRefusal, ReadingHistory, checked_patron,
 };
 
+mod circulation;
 mod dump;
 
+pub use circulation::{
+    CIRCULATION_PER_COMMAND, CirculationLeftover, KohaCirculationBatch, KohaCirculationMigrated,
+    KohaHold, KohaHoldState, KohaItem, KohaLoan,
+};
+
 use dump::{KohaTables, Row, Table};
-pub use dump::{LEFT_OUT_COLUMNS, MAX_KOHA_PATRONS};
+pub use dump::{LEFT_OUT_COLUMNS, MAX_KOHA_ROWS};
 
 /// Most patrons in one write command (item 16).
 pub const PATRONS_PER_COMMAND: usize = 500;
@@ -230,6 +236,18 @@ pub struct KohaPlan {
     pub old_passwords: usize,
     /// For each column of `borrowers` not kept, how many patrons had it filled.
     pub left_out: Vec<(&'static str, usize)>,
+    /// The current loans.
+    pub loans: Vec<KohaLoan>,
+    /// The current holds, each Instance's queue in Koha's order.
+    pub holds: Vec<KohaHold>,
+    /// Loans the dump does not describe well enough, by `issue_id`.
+    pub loans_left: Vec<(u64, CirculationLeftover)>,
+    /// Holds the dump does not describe well enough, by `reserve_id`.
+    pub holds_left: Vec<(u64, CirculationLeftover)>,
+    /// Suspended holds, which come as active ones.
+    pub suspended_holds: usize,
+    /// Queued holds with an end date, which comes without it.
+    pub holds_with_end: usize,
 }
 
 /// A patron field, ordered for the report.
@@ -304,6 +322,7 @@ pub fn plan(input: impl BufRead, today: Date, zone: &TimeZone) -> Result<KohaPla
             Err(left) => plan.left.push(left),
         }
     }
+    circulation::read(&tables.rows, zone, &mut plan);
     Ok(plan)
 }
 

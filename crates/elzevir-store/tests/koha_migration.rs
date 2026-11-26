@@ -7,10 +7,17 @@
     reason = "integration test: helper functions fail the test on error"
 )]
 
+use elzevir_app::catalog::CatalogCommand;
+use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput};
-use elzevir_app::koha_migration::{KohaMigrated, KohaPlan, plan};
+use elzevir_app::import::{ImportOptions, import_marc_text};
+use elzevir_app::koha_migration::{
+    CirculationLeftover, KohaCirculationMigrated, KohaMigrated, KohaPlan, plan,
+};
+use elzevir_app::matching::Matching;
 use elzevir_app::patron_account::log_in;
 use elzevir_app::patrons::{CategoryChange, PatronCommand, PatronOutput};
+use elzevir_domain::catalog::MatchRule;
 use elzevir_domain::patron::Enrolment;
 use elzevir_store::{ElzevirHandler, ElzevirStore, StoreConfig};
 use jiff::civil::date;
@@ -191,4 +198,128 @@ fn a_taken_card_leaves_the_patron_out() {
     plan.patrons = vec![twin];
     let done = migrate(&store, &plan);
     assert_eq!((done.patrons_added, done.cardnumber_taken), (0, vec![99]));
+}
+
+/// The catalog as Koha exported it: two records with their `biblionumber` and Items with
+/// their `itemnumber`, one only with its barcode.
+const CATALOG: &str = "=LDR  00000nam a2200000 a 4500
+=245  10$aPrimeiro livro fictício
+=952  \\\\$9100$aCTR$bCTR$pB100
+=952  \\\\$9101$aCTR$bCTR$pB101
+=942  \\\\$cLIVRO
+=999  \\\\$c10$d10
+
+=LDR  00000nam a2200000 a 4500
+=245  10$aSegundo livro fictício
+=952  \\\\$9110$aCTR$bCTR$pB110
+=952  \\\\$aNRT$bNRT$pB120
+=942  \\\\$cLIVRO
+=999  \\\\$c11$d11
+";
+
+fn circulate(store: &ElzevirStore, plan: &KohaPlan) -> KohaCirculationMigrated {
+    let mut done = KohaCirculationMigrated::default();
+    for batch in plan.circulation_batches() {
+        let PatronOutput::KohaCirculationMigrated(write) = run(
+            store,
+            PatronCommand::MigrateKohaCirculation(Box::new(batch)),
+        ) else {
+            panic!("not a circulation migration");
+        };
+        done.add(write);
+    }
+    done
+}
+
+#[test]
+fn loans_and_holds_follow_the_patrons_and_the_catalog() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = open(&dir);
+    let plan = the_plan();
+    migrate(&store, &plan);
+    store
+        .submit(WriteCommand::Catalog(CatalogCommand::NameCodes(vec![
+            NamedCode {
+                table: CodeTable::ItemType,
+                code: "LIVRO".to_owned(),
+                name: "Livro".to_owned(),
+            },
+        ])))
+        .unwrap()
+        .wait()
+        .unwrap();
+    let options = ImportOptions {
+        origin: Some("koha".into()),
+        matching: Some(Matching::new(MatchRule::KohaBiblionumber)),
+        ..ImportOptions::default()
+    };
+    let loaded = import_marc_text(CATALOG.as_bytes(), &store, &options).unwrap();
+    assert_eq!((loaded.imported, loaded.items), (2, 4), "{loaded:?}");
+
+    let done = circulate(&store, &plan);
+    assert_eq!(
+        done,
+        KohaCirculationMigrated {
+            loans: 2,
+            holds: 4,
+            already_migrated: 0,
+            loans_left: vec![
+                (3, CirculationLeftover::Patron),
+                (4, CirculationLeftover::Item),
+                (5, CirculationLeftover::ItemOnLoan),
+            ],
+            holds_left: vec![
+                (6, CirculationLeftover::Branch),
+                (5, CirculationLeftover::Record),
+            ],
+        }
+    );
+    assert_eq!(
+        rows(
+            &store,
+            "SELECT i.barcode || '|' || p.cardnumber || '|' || l.due || '|' || l.renewals
+                 || '|' || l.on_site
+             FROM loans l JOIN items i ON i.id = l.item_id JOIN patrons p ON p.id = l.patron_id
+             ORDER BY i.barcode"
+        ),
+        [
+            "B100|A0001|2026-12-10T23:59:00-03:00[America/Sao_Paulo]|1|0",
+            // Found by its barcode, lent on site at the other branch.
+            "B120|A0006|2026-11-27T18:00:00-03:00[America/Sao_Paulo]|0|1",
+        ]
+    );
+    assert_eq!(
+        rows(
+            &store,
+            "SELECT p.cardnumber || '|' || h.priority || '|' || coalesce(h.found, '-') || '|'
+                 || coalesce(i.barcode, '-') || '|' || coalesce(h.expires_on, '-')
+             FROM holds h JOIN patrons p ON p.id = h.patron_id
+             LEFT JOIN items i ON i.id = h.item_id
+             ORDER BY h.instance_id, h.priority"
+        ),
+        [
+            "A0001|0|T|B101|-",
+            "A0002|1|-|-|-",
+            "A0006|2|-|-|-",
+            "A0001|0|W|B110|2026-12-01",
+        ]
+    );
+    // The Item set aside in transit travels to the pickup branch.
+    assert_eq!(
+        rows(
+            &store,
+            "SELECT t.reason || '|' || k.code FROM transfers t
+             JOIN koha_codes k ON k.kind = 1 AND k.local_id = t.to_branch
+             WHERE t.arrived_at IS NULL"
+        ),
+        ["Reserve|NRT"]
+    );
+
+    // A second run adds nothing.
+    let again = circulate(&store, &plan);
+    assert_eq!(
+        (again.loans, again.holds, again.already_migrated),
+        (0, 0, 6)
+    );
+    assert_eq!(rows(&store, "SELECT count(*) || '' FROM holds"), ["4"]);
 }

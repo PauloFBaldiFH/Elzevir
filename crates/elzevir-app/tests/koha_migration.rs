@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Reading a whole Koha dump for the patron migration
-//! (docs/specs/migracao/leitores-do-koha.md), with fictitious patrons.
+//! (docs/specs/migracao/leitores-do-koha.md, circulacao-do-koha.md), with fictitious
+//! patrons.
 #![expect(clippy::unwrap_used, reason = "fixed synthetic dump")]
 
 use elzevir_app::import::koha_sql::DumpProblem;
-use elzevir_app::koha_migration::{KohaPlan, Leftover, PatronFieldName, plan};
+use elzevir_app::koha_migration::{
+    CirculationLeftover, KohaHoldState, KohaItem, KohaPlan, Leftover, PatronFieldName, plan,
+};
 use elzevir_app::patrons::ReadingHistory;
 use elzevir_domain::patron::Enrolment;
 use elzevir_domain::suspension::RestrictionKind;
@@ -205,4 +208,86 @@ fn rows_without_their_key_column_are_refused() {
 fn the_catalog_import_still_refuses_a_whole_database() {
     let error = elzevir_app::import::koha_sql::prepare(DUMP).unwrap_err();
     assert_eq!(error.problem, DumpProblem::Unsupported);
+}
+
+#[test]
+fn loans_carry_koha_numbers_and_the_library_zone() {
+    let plan = read(DUMP);
+    let numbers: Vec<u64> = plan.loans.iter().map(|loan| loan.issue_id).collect();
+    assert_eq!(numbers, [1, 2, 3, 4, 5]);
+    let first = &plan.loans[0];
+    assert_eq!(
+        (first.borrowernumber, &first.item, first.branch.as_str()),
+        (
+            1,
+            &KohaItem {
+                itemnumber: 100,
+                barcode: Some("B100".to_owned())
+            },
+            "CTR"
+        )
+    );
+    assert_eq!(
+        first.issued_at,
+        "2026-11-05T14:30:00-03:00[America/Sao_Paulo]"
+    );
+    assert_eq!(first.due, "2026-12-10T23:59:00-03:00[America/Sao_Paulo]");
+    assert_eq!(
+        (first.renewals, first.renewed_at.as_deref(), first.on_site),
+        (
+            1,
+            Some("2026-11-20T10:00:00-03:00[America/Sao_Paulo]"),
+            false
+        )
+    );
+    assert!(plan.loans[1].on_site);
+    // An Item Koha does not list keeps its number, without a barcode.
+    assert_eq!(plan.loans[3].item.barcode, None);
+    assert_eq!(plan.loans_left, [(6, CirculationLeftover::Incomplete)]);
+}
+
+#[test]
+fn holds_come_in_queue_order() {
+    let plan = read(DUMP);
+    let order: Vec<(u64, u64)> = plan
+        .holds
+        .iter()
+        .map(|hold| (hold.biblionumber, hold.reserve_id))
+        .collect();
+    // Set aside first, then by place in the queue.
+    assert_eq!(
+        order,
+        [(10, 4), (10, 1), (10, 2), (11, 3), (11, 6), (99, 5)]
+    );
+    let transit = &plan.holds[0];
+    assert_eq!(transit.state, KohaHoldState::InTransit);
+    assert!(transit.item_level);
+    assert_eq!(transit.item.as_ref().map(|item| item.itemnumber), Some(101));
+    assert_eq!(plan.holds[1].state, KohaHoldState::Queued(1));
+    assert_eq!(plan.holds[1].item, None);
+    let waiting = &plan.holds[3];
+    assert_eq!(
+        waiting.state,
+        KohaHoldState::Waiting {
+            since: date(2026, 11, 24),
+            until: Some(date(2026, 12, 1))
+        }
+    );
+    assert_eq!(
+        (waiting.placed_on, waiting.created_at.as_str()),
+        (
+            date(2026, 11, 1),
+            "2026-11-01T00:00:00-03:00[America/Sao_Paulo]"
+        )
+    );
+    assert!(plan.holds_left.is_empty());
+    assert_eq!((plan.suspended_holds, plan.holds_with_end), (1, 1));
+}
+
+#[test]
+fn circulation_goes_in_batches_of_its_own() {
+    let plan = read(DUMP);
+    let batches = plan.circulation_batches();
+    assert_eq!(batches.len(), 1);
+    assert_eq!((batches[0].loans.len(), batches[0].holds.len()), (5, 6));
 }

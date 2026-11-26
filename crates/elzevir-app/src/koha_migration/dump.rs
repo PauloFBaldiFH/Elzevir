@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 
 use crate::import::koha_sql::{DumpError, DumpProblem, MAX_DATABASE_DUMP_BYTES, Target};
 
-/// Most patrons read from one dump.
-pub const MAX_KOHA_PATRONS: usize = 1_000_000;
+/// Most patrons, Items, loans, holds or restrictions read from one dump.
+pub const MAX_KOHA_ROWS: usize = 1_000_000;
 /// Most rows read from each of the small tables.
 const MAX_SMALL_ROWS: usize = 100_000;
 
@@ -18,6 +18,9 @@ pub(super) enum Table {
     Categories,
     Borrowers,
     Debarments,
+    Items,
+    Issues,
+    Reserves,
 }
 
 impl Table {
@@ -73,6 +76,33 @@ impl Table {
                 "password",
             ],
             Self::Debarments => &["borrowernumber", "type", "expiration", "created"],
+            Self::Items => &["itemnumber", "barcode"],
+            Self::Issues => &[
+                "issue_id",
+                "borrowernumber",
+                "itemnumber",
+                "date_due",
+                "branchcode",
+                "issuedate",
+                "lastreneweddate",
+                "renewals_count",
+                "onsite_checkout",
+            ],
+            Self::Reserves => &[
+                "reserve_id",
+                "borrowernumber",
+                "reservedate",
+                "biblionumber",
+                "branchcode",
+                "priority",
+                "found",
+                "itemnumber",
+                "waitingdate",
+                "expirationdate",
+                "suspend",
+                "item_level_hold",
+                "timestamp",
+            ],
         }
     }
 
@@ -82,6 +112,9 @@ impl Table {
             Self::Branches => "branchcode",
             Self::Categories => "categorycode",
             Self::Borrowers | Self::Debarments => "borrowernumber",
+            Self::Items => "itemnumber",
+            Self::Issues => "issue_id",
+            Self::Reserves => "reserve_id",
         }
     }
 }
@@ -156,6 +189,9 @@ impl Target for KohaTables {
             "categories" => Some(Table::Categories),
             "borrowers" => Some(Table::Borrowers),
             "borrower_debarments" => Some(Table::Debarments),
+            "items" => Some(Table::Items),
+            "issues" => Some(Table::Issues),
+            "reserves" => Some(Table::Reserves),
             _ => None,
         })
     }
@@ -180,10 +216,10 @@ impl Target for KohaTables {
 
     fn push(&mut self, table: Table, offset: u64, cells: Row) -> Result<(), DumpError> {
         let rows = self.rows.entry(table).or_default();
-        let most = if table == Table::Borrowers {
-            MAX_KOHA_PATRONS
-        } else {
+        let most = if matches!(table, Table::Branches | Table::Categories) {
             MAX_SMALL_ROWS
+        } else {
+            MAX_KOHA_ROWS
         };
         if rows.len() == most {
             return Err(DumpError {

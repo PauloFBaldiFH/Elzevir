@@ -35,6 +35,7 @@ mod history;
 mod holds;
 mod import;
 mod items;
+mod koha_circulation;
 mod koha_migration;
 mod koha_types;
 mod listing;

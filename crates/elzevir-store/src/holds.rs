@@ -118,7 +118,7 @@ fn branches(connection: &Connection) -> rusqlite::Result<Vec<BranchId>> {
 /// aside stay out of it.
 ///
 /// Koha: `C4::Reserves::FixPriority` (without lowest priority).
-fn fix_priority(connection: &Connection, instance: i64) -> rusqlite::Result<()> {
+pub(crate) fn fix_priority(connection: &Connection, instance: i64) -> rusqlite::Result<()> {
     let ids = {
         let mut statement = connection.prepare_cached(
             "SELECT id FROM holds WHERE instance_id = ?1 AND found IS NULL
