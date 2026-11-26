@@ -13,6 +13,7 @@ fuzz_target!(|data: &[u8]| {
         max_elements_per_record: 1_000,
         max_input_bytes: 64 * 1024,
         max_records: 64,
+        authorities: true,
     };
     for record in MarcXmlReader::new(data, limits).flatten() {
         // Syntactically valid XML may still exceed ISO field/record limits.

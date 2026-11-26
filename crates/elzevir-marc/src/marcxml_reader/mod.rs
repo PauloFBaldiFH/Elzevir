@@ -40,6 +40,9 @@ pub struct XmlLimits {
     pub max_input_bytes: usize,
     /// Maximum records.
     pub max_records: usize,
+    /// Whether authority records (leader 06 `z`) are read; the catalogue import refuses
+    /// them, the authority sources take them (docs/specs/catalogo/fontes-de-autoridade.md).
+    pub authorities: bool,
 }
 
 impl Default for XmlLimits {
@@ -51,6 +54,7 @@ impl Default for XmlLimits {
             max_elements_per_record: MAX_XML_ELEMENTS_PER_RECORD,
             max_input_bytes: MAX_XML_INPUT_BYTES,
             max_records: MAX_XML_RECORDS,
+            authorities: false,
         }
     }
 }
@@ -210,7 +214,7 @@ impl<R: BufRead> MarcXmlReader<R> {
                     self.state.begin(&start, &self.limits).map_err(fail)?;
                 }
                 Event::End(_) => {
-                    if let Some(record) = self.state.end().map_err(fail)? {
+                    if let Some(record) = self.state.end(&self.limits).map_err(fail)? {
                         let input = self.reader.get_mut();
                         let len = usize::try_from(end.saturating_sub(self.record_start))
                             .map_err(|_| fail(XmlProblem::Limit("record bytes")))?;

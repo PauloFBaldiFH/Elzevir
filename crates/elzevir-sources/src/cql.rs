@@ -11,9 +11,17 @@ use elzevir_app::drafts::{DraftField, DraftQuery};
 /// Koha: `C4::Breeding::_build_query` and `_translate_query`.
 #[must_use]
 pub fn cql<S: BuildHasher>(query: &DraftQuery, fields: &HashMap<DraftField, String, S>) -> String {
+    cql_of(query.fields(), fields)
+}
+
+/// The CQL of the filled `values`, each under its index in `fields` (spec item 8;
+/// fontes-de-autoridade.md, item 7).
+pub(crate) fn cql_of<'a, S: BuildHasher>(
+    values: impl Iterator<Item = (DraftField, &'a str)>,
+    fields: &HashMap<DraftField, String, S>,
+) -> String {
     let any = fields.get(&DraftField::Any);
-    query
-        .fields()
+    values
         .map(|(field, value)| {
             let value = quoted(value);
             match fields.get(&field).or(any) {

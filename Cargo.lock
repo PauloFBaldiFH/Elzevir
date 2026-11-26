@@ -1369,6 +1369,7 @@ name = "elzevir-sources"
 version = "0.1.0-alpha.2"
 dependencies = [
  "elzevir-app",
+ "elzevir-domain",
  "elzevir-marc",
  "quick-xml 0.41.0",
  "thiserror 2.0.21",

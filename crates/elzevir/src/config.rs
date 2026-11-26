@@ -60,6 +60,8 @@ struct DraftSourceEntry {
     timeout_seconds: Option<u64>,
     /// Asked when absent.
     enabled: Option<bool>,
+    /// `bibliographic` (when absent) or `authority` (fontes-de-autoridade.md, item 1).
+    records: Option<String>,
     /// SRU: base URL, `http` or `https`, without a query string.
     url: Option<String>,
     /// SRU: `1.2` (when absent) or `2.0`.
@@ -86,12 +88,55 @@ struct DraftFields {
     title: Option<String>,
     author: Option<String>,
     any: Option<String>,
+    personal_name: Option<String>,
+    corporate_name: Option<String>,
+    meeting_name: Option<String>,
+    name: Option<String>,
+    subject: Option<String>,
+    uniform_title: Option<String>,
+}
+
+impl DraftFields {
+    /// Each key with its field.
+    fn entries(&self) -> Vec<(DraftField, Option<&str>)> {
+        vec![
+            (DraftField::Isbn, self.isbn.as_deref()),
+            (DraftField::Issn, self.issn.as_deref()),
+            (DraftField::Title, self.title.as_deref()),
+            (DraftField::Author, self.author.as_deref()),
+            (DraftField::Any, self.any.as_deref()),
+            (DraftField::PersonalName, self.personal_name.as_deref()),
+            (DraftField::CorporateName, self.corporate_name.as_deref()),
+            (DraftField::MeetingName, self.meeting_name.as_deref()),
+            (DraftField::Name, self.name.as_deref()),
+            (DraftField::Subject, self.subject.as_deref()),
+            (DraftField::UniformTitle, self.uniform_title.as_deref()),
+        ]
+    }
+}
+
+/// What a draft server answers with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Records {
+    Bibliographic,
+    Authority,
 }
 
 /// Most characters of a Z39.50 database name.
 const MAX_DATABASE_CHARS: usize = 64;
 
 impl DraftSourceEntry {
+    /// What the server answers with, or why that cannot be.
+    fn records(&self) -> Result<Records, String> {
+        match self.records.as_deref().unwrap_or("bibliographic") {
+            "bibliographic" => Ok(Records::Bibliographic),
+            "authority" => Ok(Records::Authority),
+            other => Err(format!(
+                "records must be bibliographic or authority, not {other}"
+            )),
+        }
+    }
+
     /// The server, or why it cannot be.
     fn server(&self) -> Result<DraftServer, String> {
         let name = self.name.trim();
@@ -135,20 +180,33 @@ impl DraftSourceEntry {
             "2.0" => SruVersion::V2_0,
             other => return Err(format!("version must be 1.2 or 2.0, not {other}")),
         };
-        let given = self.fields.as_ref();
-        let fields = [
-            (DraftField::Isbn, given.and_then(|f| f.isbn.as_deref())),
-            (DraftField::Issn, given.and_then(|f| f.issn.as_deref())),
-            (DraftField::Title, given.and_then(|f| f.title.as_deref())),
-            (DraftField::Author, given.and_then(|f| f.author.as_deref())),
-            (DraftField::Any, given.and_then(|f| f.any.as_deref())),
-        ]
-        .into_iter()
-        .filter_map(|(field, index)| {
-            let index = index?.trim();
-            (!index.is_empty()).then(|| (field, index.to_owned()))
-        })
-        .collect();
+        let authority = self.records()? == Records::Authority;
+        let entries = self
+            .fields
+            .as_ref()
+            .map(DraftFields::entries)
+            .unwrap_or_default();
+        // `any` serves both kinds of server; every other key belongs to one.
+        if let Some((field, _)) = entries.iter().find(|(field, index)| {
+            index.is_some() && *field != DraftField::Any && field.is_authority() != authority
+        }) {
+            let kind = if authority {
+                "an authority"
+            } else {
+                "a bibliographic"
+            };
+            return Err(format!(
+                "fields.{} does not apply to {kind} server",
+                field.name()
+            ));
+        }
+        let fields = entries
+            .into_iter()
+            .filter_map(|(field, index)| {
+                let index = index?.trim();
+                (!index.is_empty()).then(|| (field, index.to_owned()))
+            })
+            .collect();
         Ok(SruServer {
             name: name.to_owned(),
             url: url.trim_end_matches('/').to_owned(),
@@ -234,12 +292,19 @@ fn refuse_keys(kind: &str, keys: &[(&str, bool)]) -> Result<(), String> {
     }
 }
 
-/// The enabled servers of `[[draft_sources]]`, in order, with unique names.
-fn draft_servers(entries: &[DraftSourceEntry]) -> Result<Vec<DraftServer>, String> {
+/// The enabled servers of `[[draft_sources]]`, in order, with unique names: the
+/// bibliographic ones and the authority ones (fontes-de-autoridade.md, items 1 and 2).
+type Servers = (Vec<DraftServer>, Vec<DraftServer>);
+
+fn draft_servers(entries: &[DraftSourceEntry]) -> Result<Servers, String> {
     let mut servers: Vec<DraftServer> = Vec::new();
+    let mut authorities: Vec<DraftServer> = Vec::new();
     for (index, entry) in entries.iter().enumerate() {
         let server = entry
             .server()
+            .map_err(|e| format!("draft_sources[{index}]: {e}"))?;
+        let records = entry
+            .records()
             .map_err(|e| format!("draft_sources[{index}]: {e}"))?;
         if entries
             .iter()
@@ -252,10 +317,13 @@ fn draft_servers(entries: &[DraftSourceEntry]) -> Result<Vec<DraftServer>, Strin
             ));
         }
         if entry.enabled.unwrap_or(true) {
-            servers.push(server);
+            match records {
+                Records::Bibliographic => servers.push(server),
+                Records::Authority => authorities.push(server),
+            }
         }
     }
-    Ok(servers)
+    Ok((servers, authorities))
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -403,8 +471,10 @@ pub(crate) struct Loaded {
     pub(crate) expire_waiting_holds: bool,
     /// The mail server, when notices go out by e-mail.
     pub(crate) mail: Option<MailSettings>,
-    /// The enabled draft sources, in priority order.
+    /// The enabled bibliographic draft sources, in priority order.
     pub(crate) draft_sources: Vec<DraftServer>,
+    /// The enabled authority sources, in priority order.
+    pub(crate) authority_sources: Vec<DraftServer>,
 }
 
 /// Reads `data_dir/elzevir.toml` and what it points to; no file is no configuration.
@@ -436,7 +506,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         ),
         None => None,
     };
-    let draft_sources =
+    let (draft_sources, authority_sources) =
         draft_servers(&config.draft_sources).map_err(|e| format!("{}: {e}", path.display()))?;
     let Some(table) = config.call_number.author_table else {
         return Ok(Loaded {
@@ -447,6 +517,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
             expire_waiting_holds,
             mail,
             draft_sources,
+            authority_sources,
         });
     };
     let table_path = data_dir.join(table);
@@ -466,6 +537,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         expire_waiting_holds,
         mail,
         draft_sources,
+        authority_sources,
     })
 }
 
@@ -632,6 +704,62 @@ mod tests {
         assert!(load(dir.path()).unwrap_err().contains("lost_status"));
         std::fs::write(&config, "[circulation.long_overdue]\nlost_status = 1\n").unwrap();
         assert!(load(dir.path()).unwrap_err().contains("days"));
+    }
+
+    #[test]
+    fn authority_sources_are_kept_apart_from_draft_sources() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = dir.path().join("elzevir.toml");
+        std::fs::write(
+            &config,
+            "[[draft_sources]]\nname = \"Livros\"\nkind = \"sru\"\nurl = \"https://a\"\n\
+             [[draft_sources]]\nname = \"Nomes\"\nkind = \"sru\"\nurl = \"https://b\"\n\
+             records = \"authority\"\n\
+             [draft_sources.fields]\npersonal_name = \"local.personalName\"\nany = \"cql.anywhere\"\n\
+             [[draft_sources]]\nname = \"Assuntos\"\nkind = \"z3950\"\nhost = \"z\"\n\
+             database = \"auth\"\nrecords = \"authority\"\n",
+        )
+        .unwrap();
+        let loaded = load(dir.path()).unwrap();
+        let names = |servers: &[DraftServer]| -> Vec<String> {
+            servers
+                .iter()
+                .map(|server| server.name().to_owned())
+                .collect()
+        };
+        assert_eq!(names(&loaded.draft_sources), ["Livros"]);
+        assert_eq!(names(&loaded.authority_sources), ["Nomes", "Assuntos"]);
+        let Some(DraftServer::Sru(authority)) = loaded.authority_sources.first() else {
+            panic!("{:?}", loaded.authority_sources);
+        };
+        assert_eq!(
+            authority
+                .fields
+                .get(&DraftField::PersonalName)
+                .map(String::as_str),
+            Some("local.personalName")
+        );
+        for (wrong, says) in [
+            (
+                "[[draft_sources]]\nname = \"A\"\nkind = \"sru\"\nurl = \"https://a\"\n\
+                 records = \"authority\"\n[draft_sources.fields]\nisbn = \"bath.isbn\"\n",
+                "fields.isbn",
+            ),
+            (
+                "[[draft_sources]]\nname = \"A\"\nkind = \"sru\"\nurl = \"https://a\"\n\
+                 [draft_sources.fields]\nsubject = \"dc.subject\"\n",
+                "fields.subject",
+            ),
+            (
+                "[[draft_sources]]\nname = \"A\"\nkind = \"sru\"\nurl = \"https://a\"\n\
+                 records = \"holdings\"\n",
+                "records",
+            ),
+        ] {
+            std::fs::write(&config, wrong).unwrap();
+            let error = load(dir.path()).unwrap_err();
+            assert!(error.contains(says), "{wrong}: {error}");
+        }
     }
 
     #[test]

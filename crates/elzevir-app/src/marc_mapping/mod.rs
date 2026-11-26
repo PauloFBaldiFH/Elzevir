@@ -5,6 +5,7 @@
 //! Everything it does not map stays in the preserved source record.
 
 mod admin;
+mod authority;
 mod books;
 mod classification;
 mod content;
@@ -32,6 +33,7 @@ use elzevir_domain::statement::{Description, Statement};
 
 use crate::catalog::{NewContribution, NewNote, NewRecord, NewSubject};
 
+pub use authority::{AuthorityHeading, authority_heading};
 pub use export::bibframe_to_marc;
 
 /// Why a MARC21 record could not be mapped.

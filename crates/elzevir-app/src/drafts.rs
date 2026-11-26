@@ -107,7 +107,7 @@ impl DraftQuery {
     }
 }
 
-/// One field of a draft query.
+/// One field of a draft or authority query.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DraftField {
     /// Any field (Koha `srchany`).
@@ -120,6 +120,18 @@ pub enum DraftField {
     Issn,
     /// Title.
     Title,
+    /// A person's name heading (Koha `authorpersonal`), in authority searches.
+    PersonalName,
+    /// An organization's name heading (Koha `authorcorp`).
+    CorporateName,
+    /// A meeting's name heading (Koha `authormeetingcon`).
+    MeetingName,
+    /// Any name heading (Koha `nameany`).
+    Name,
+    /// A subject heading (Koha `subject`).
+    Subject,
+    /// A uniform title (Koha `uniformtitle`).
+    UniformTitle,
 }
 
 impl DraftField {
@@ -132,7 +144,27 @@ impl DraftField {
             Self::Isbn => "isbn",
             Self::Issn => "issn",
             Self::Title => "title",
+            Self::PersonalName => "personal_name",
+            Self::CorporateName => "corporate_name",
+            Self::MeetingName => "meeting_name",
+            Self::Name => "name",
+            Self::Subject => "subject",
+            Self::UniformTitle => "uniform_title",
         }
+    }
+
+    /// Whether the field belongs to authority searches rather than bibliographic ones.
+    #[must_use]
+    pub const fn is_authority(self) -> bool {
+        matches!(
+            self,
+            Self::PersonalName
+                | Self::CorporateName
+                | Self::MeetingName
+                | Self::Name
+                | Self::Subject
+                | Self::UniformTitle
+        )
     }
 }
 
@@ -195,16 +227,16 @@ pub struct Draft {
     pub summary: DraftSummary,
 }
 
-/// What one server answered.
+/// What one server answered: bibliographic [`Draft`]s, or authority drafts.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SourceOutcome {
+pub enum SourceOutcome<D = Draft> {
     /// The server's total and the drafts of the page; `skipped` counts records that were
     /// not valid MARC21.
     Found {
         /// Records the server says it has.
         total: u64,
         /// The page's drafts.
-        drafts: Vec<Draft>,
+        drafts: Vec<D>,
         /// Records of the page left out because they could not be read.
         skipped: u32,
     },
@@ -216,11 +248,11 @@ pub enum SourceOutcome {
 
 /// One server's answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SourceResult {
+pub struct SourceResult<D = Draft> {
     /// The server's configured name.
     pub source: String,
     /// What it answered.
-    pub outcome: SourceOutcome,
+    pub outcome: SourceOutcome<D>,
 }
 
 /// The sources configured for the institution, asked together.

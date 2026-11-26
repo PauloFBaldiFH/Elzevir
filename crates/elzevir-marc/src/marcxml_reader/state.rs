@@ -115,7 +115,7 @@ impl State {
         Ok(())
     }
 
-    pub(super) fn end(&mut self) -> Result<Option<Record>, XmlProblem> {
+    pub(super) fn end(&mut self, limits: &XmlLimits) -> Result<Option<Record>, XmlProblem> {
         let node = self
             .path
             .pop()
@@ -137,7 +137,7 @@ impl State {
                 {
                     return Err(XmlProblem::Invalid("leader"));
                 }
-                if leader.get(6) == Some(&b'z') {
+                if leader.get(6) == Some(&b'z') && !limits.authorities {
                     return Err(XmlProblem::Forbidden("authority record"));
                 }
                 *leader.get_mut(9).ok_or(XmlProblem::Invalid("leader"))? = b'a';

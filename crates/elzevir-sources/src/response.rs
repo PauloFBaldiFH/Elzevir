@@ -172,6 +172,9 @@ impl Reading {
         let limits = XmlLimits {
             max_input_bytes: MAX_RESPONSE_BYTES,
             max_records: 1,
+            // Authority servers answer with authority records; a bibliographic search
+            // leaves them out when no summary can be made of them.
+            authorities: true,
             ..XmlLimits::default()
         };
         match MarcXmlReader::new(xml.as_slice(), limits).next() {

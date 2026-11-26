@@ -11,9 +11,11 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use elzevir_app::authority_sources::{AuthorityQuery, AuthoritySource};
 use elzevir_app::drafts::{
     DraftField, DraftQuery, DraftSource, DraftSummary, SourceOutcome, TypedQuery,
 };
+use elzevir_domain::catalog::SubjectKind;
 use elzevir_sources::{
     DEFAULT_TIMEOUT, Dialer, DraftServer, DraftSources, HttpAnswer, SruServer, SruVersion,
     Transport, TransportError,
@@ -22,6 +24,7 @@ use elzevir_sources::{
 const TWO_RECORDS: &[u8] = include_bytes!("data/sru-1.2-two-records.xml");
 const DIAGNOSTIC: &[u8] = include_bytes!("data/sru-1.2-diagnostic.xml");
 const EMPTY: &[u8] = include_bytes!("data/sru-2.0-empty.xml");
+const AUTHORITIES: &[u8] = include_bytes!("data/sru-1.2-authorities.xml");
 
 /// Answers by server URL prefix, and remembers what was asked.
 struct Recorded {
@@ -244,4 +247,55 @@ fn answers_that_are_not_sru_are_refusals() {
         doctype.search(&isbn_and_title(), 1)[0].outcome,
         SourceOutcome::Refused("unreadable SRU response".to_owned())
     );
+}
+
+#[test]
+fn an_authority_search_uses_the_index_of_the_class_and_skips_other_records() {
+    let mut authorities = server("Autoridades", "https://auth.example.org/sru");
+    authorities.fields = HashMap::from([
+        (DraftField::PersonalName, "local.personalName".to_owned()),
+        (DraftField::Any, "cql.anywhere".to_owned()),
+    ]);
+    let asked = sources(
+        vec![authorities],
+        vec![("https://auth.example.org/", ok(AUTHORITIES))],
+    );
+    let query = AuthorityQuery::new("Lemos", SubjectKind::Person).unwrap();
+    let results = asked.search_authorities(&query, 1);
+    assert_eq!(asked.authority_sources(), ["Autoridades"]);
+    let SourceOutcome::Found {
+        total,
+        drafts,
+        skipped,
+    } = &results.first().unwrap().outcome
+    else {
+        panic!("{results:?}");
+    };
+    // The bibliographic record is not an authority: left out and counted.
+    assert_eq!((*total, drafts.len(), *skipped), (3, 2, 1));
+    let headings: Vec<_> = drafts
+        .iter()
+        .map(|draft| draft.heading.heading.as_str())
+        .collect();
+    assert_eq!(
+        headings,
+        ["Lemos, Teodora, 1950-", "Lemos, Teodoro, 1901-1977"]
+    );
+    assert_eq!(
+        drafts.first().unwrap().heading.identifier.as_deref(),
+        Some("(XX-Ex)n  00000001")
+    );
+    let (url, _) = asked_urls(&asked).pop().unwrap();
+    assert!(
+        url.contains("query=local.personalName%3D%22Lemos%22&"),
+        "{url}"
+    );
+    // A family has no index of its own here: `any` stands in.
+    asked.search_one_authority(
+        0,
+        &AuthorityQuery::new("Lemos", SubjectKind::Family).unwrap(),
+        1,
+    );
+    let (url, _) = asked_urls(&asked).pop().unwrap();
+    assert!(url.contains("query=cql.anywhere%3D%22Lemos%22&"), "{url}");
 }

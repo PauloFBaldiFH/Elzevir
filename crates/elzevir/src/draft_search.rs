@@ -9,7 +9,9 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use clap::Args;
+use elzevir_app::authority_sources::{AuthorityQuery, AuthoritySource};
 use elzevir_app::drafts::{DraftQuery, DraftSource, SourceOutcome, SourceResult, TypedQuery};
+use elzevir_domain::catalog::SubjectKind;
 use elzevir_sources::{
     Dialer, DraftServer, DraftSources, HttpAnswer, MAX_RESPONSE_BYTES, MAX_TIMEOUT, Transport,
     TransportError,
@@ -85,6 +87,86 @@ pub(crate) fn run(args: &DraftSearchArgs) -> Result<(), String> {
                     }
                     if !summary.isbns.is_empty() {
                         println!("    ISBN {}", summary.isbns.join(", "));
+                    }
+                }
+                if skipped > 0 {
+                    println!("  not readable: {skipped}");
+                }
+            }
+            SourceOutcome::NoResponse => println!("{}: no response", result.source),
+            SourceOutcome::Refused(message) => {
+                println!("{}: refused: {message}", result.source);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// `elzevir authority-search` (fontes-de-autoridade.md, item 15).
+#[derive(Args)]
+pub(crate) struct AuthoritySearchArgs {
+    /// Institution data directory, whose `elzevir.toml` lists the servers.
+    #[arg(long)]
+    data_dir: PathBuf,
+    /// The name or heading searched.
+    #[arg(long)]
+    name: String,
+    /// person, family, organization, meeting, title, topic, place, genre-form or period.
+    #[arg(long)]
+    class: String,
+    /// Page of 20 records, from 1.
+    #[arg(long, default_value_t = 1)]
+    page: u32,
+}
+
+/// The classes of the authority panel by their command-line names.
+const CLASSES: [(&str, SubjectKind); 9] = [
+    ("person", SubjectKind::Person),
+    ("family", SubjectKind::Family),
+    ("organization", SubjectKind::Organization),
+    ("meeting", SubjectKind::Meeting),
+    ("title", SubjectKind::Title),
+    ("topic", SubjectKind::Topic),
+    ("place", SubjectKind::Place),
+    ("genre-form", SubjectKind::GenreForm),
+    ("period", SubjectKind::Temporal),
+];
+
+/// Asks every enabled authority server and prints what each one answered.
+pub(crate) fn run_authorities(args: &AuthoritySearchArgs) -> Result<(), String> {
+    let kind = CLASSES
+        .iter()
+        .find(|(name, _)| *name == args.class)
+        .map(|(_, kind)| *kind)
+        .ok_or_else(|| format!("unknown class {}", args.class))?;
+    let query = AuthorityQuery::new(&args.name, kind).map_err(|e| e.to_string())?;
+    let servers = config::load(&args.data_dir)?.authority_sources;
+    if servers.is_empty() {
+        return Err("no authority source is configured in elzevir.toml".to_owned());
+    }
+    let sources = DraftSources::new(servers, HttpTransport::new()?, TcpDialer);
+    for result in sources.search_authorities(&query, args.page) {
+        match result.outcome {
+            SourceOutcome::Found {
+                total,
+                drafts,
+                skipped,
+            } => {
+                println!("{}: {total} found", result.source);
+                for draft in drafts {
+                    let heading = draft.heading;
+                    let class = CLASSES
+                        .iter()
+                        .find(|(_, kind)| *kind == heading.kind)
+                        .map_or("", |(name, _)| name);
+                    match heading.identifier {
+                        Some(identifier) => {
+                            println!("  {} | {class} | {identifier}", heading.heading);
+                        }
+                        None => println!("  {} | {class}", heading.heading),
+                    }
+                    if !heading.variants.is_empty() {
+                        println!("    see from: {}", heading.variants.join("; "));
                     }
                 }
                 if skipped > 0 {
