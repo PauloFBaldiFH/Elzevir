@@ -12,7 +12,8 @@ use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput};
 use elzevir_app::import::{ImportOptions, import_marc_text};
 use elzevir_app::koha_migration::{
-    CirculationLeftover, KohaCirculationMigrated, KohaMigrated, KohaPlan, plan,
+    CirculationLeftover, KohaAccountsMigrated, KohaCirculationMigrated, KohaMigrated, KohaPlan,
+    plan,
 };
 use elzevir_app::matching::Matching;
 use elzevir_app::patron_account::log_in;
@@ -231,8 +232,21 @@ fn circulate(store: &ElzevirStore, plan: &KohaPlan) -> KohaCirculationMigrated {
     done
 }
 
+fn accounts(store: &ElzevirStore, plan: &KohaPlan) -> KohaAccountsMigrated {
+    let mut done = KohaAccountsMigrated::default();
+    for batch in plan.account_batches() {
+        let PatronOutput::KohaAccountsMigrated(write) =
+            run(store, PatronCommand::MigrateKohaAccounts(Box::new(batch)))
+        else {
+            panic!("not an account migration");
+        };
+        done.add(write);
+    }
+    done
+}
+
 #[test]
-fn loans_and_holds_follow_the_patrons_and_the_catalog() {
+fn loans_holds_and_accounts_follow_the_patrons_and_the_catalog() {
     let dir = tempfile::tempdir().unwrap();
     let store = open(&dir);
     let plan = the_plan();
@@ -315,11 +329,62 @@ fn loans_and_holds_follow_the_patrons_and_the_catalog() {
         ["Reserve|NRT"]
     );
 
+    accounts_come_whole(&store, &plan);
+
     // A second run adds nothing.
+    assert_eq!(accounts(&store, &plan).already_migrated, 2);
     let again = circulate(&store, &plan);
     assert_eq!(
         (again.loans, again.holds, again.already_migrated),
         (0, 0, 6)
     );
     assert_eq!(rows(&store, "SELECT count(*) || '' FROM holds"), ["4"]);
+}
+
+/// The accounts, after the loans (circulacao-do-koha.md, items 9 to 12).
+fn accounts_come_whole(store: &ElzevirStore, plan: &KohaPlan) {
+    // The accounts, after the loans: the open fine follows its loan.
+    let done = accounts(store, plan);
+    assert_eq!(
+        done,
+        KohaAccountsMigrated {
+            accounts: 2,
+            lines: 5,
+            offsets: 4,
+            already_migrated: 0,
+            accounts_left: vec![3],
+        }
+    );
+    assert_eq!(
+        rows(
+            store,
+            "SELECT p.cardnumber || '|' || coalesce(a.debit_type, a.credit_type) || '|'
+                 || coalesce(a.status, '-') || '|' || a.amount || '|' || a.outstanding || '|'
+                 || coalesce(i.barcode, '-') || '|' || (a.loan_id IS NOT NULL)
+             FROM account_lines a JOIN patrons p ON p.id = a.patron_id
+             LEFT JOIN items i ON i.id = a.item_id ORDER BY a.id"
+        ),
+        [
+            "A0001|OVERDUE|UNRETURNED|200|200|B100|1",
+            "A0001|PAYMENT|-|-100|0|-|0",
+            "A0001|OVERDUE|RETURNED|300|200|B101|0",
+            "A0006|MANUAL|-|33|33|-|0",
+            "A0006|CREDIT|-|-100|-100|-|0",
+        ]
+    );
+    assert_eq!(
+        rows(
+            store,
+            "SELECT o.kind || '|' || coalesce(c.credit_type, '-') || '|'
+                 || coalesce(d.debit_type || d.amount, '-') || '|' || o.amount
+             FROM account_offsets o LEFT JOIN account_lines c ON c.id = o.credit_id
+             LEFT JOIN account_lines d ON d.id = o.debit_id ORDER BY o.id"
+        ),
+        [
+            "CREATE|-|OVERDUE200|200",
+            "CREATE|PAYMENT|-|-100",
+            "APPLY|PAYMENT|OVERDUE300|-100",
+            "CREATE|-|OVERDUE300|300",
+        ]
+    );
 }

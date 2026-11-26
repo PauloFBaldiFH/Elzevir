@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! `elzevir migrate-koha`: branches, patron categories, patrons and their restrictions,
-//! then current loans and holds, from a whole Koha database dump
+//! then current loans, holds and patron accounts, from a whole Koha database dump
 //! (docs/specs/migracao/leitores-do-koha.md, circulacao-do-koha.md).
 
 use std::fs::File;
@@ -10,7 +10,8 @@ use std::path::PathBuf;
 use clap::Args;
 use elzevir_app::commands::{WriteCommand, WriteOutput};
 use elzevir_app::koha_migration::{
-    CirculationLeftover, KohaCirculationMigrated, KohaMigrated, KohaPlan, Leftover, plan,
+    CirculationLeftover, KohaAccountsMigrated, KohaCirculationMigrated, KohaMigrated, KohaPlan,
+    Leftover, plan,
 };
 use elzevir_app::patrons::{PatronCommand, PatronOutput};
 
@@ -64,8 +65,24 @@ pub(crate) fn run(args: &MigrateKohaArgs) -> Result<(), String> {
         };
         circulation.add(write);
     }
+    let mut accounts = KohaAccountsMigrated::default();
+    for batch in plan.account_batches() {
+        let answer = data
+            .store
+            .submit(WriteCommand::Patrons(PatronCommand::MigrateKohaAccounts(
+                Box::new(batch),
+            )))
+            .map_err(|e| e.to_string())?
+            .wait()
+            .map_err(|e| e.to_string())?;
+        let WriteOutput::Patrons(PatronOutput::KohaAccountsMigrated(write)) = answer else {
+            return Err("unexpected answer from the store".to_owned());
+        };
+        accounts.add(write);
+    }
     print!("{}", report(&plan, &done));
     print!("{}", circulation_report(&plan, &circulation));
+    print!("{}", accounts_report(&plan, &accounts));
     Ok(())
 }
 
@@ -157,7 +174,7 @@ const fn circulation_leftover(why: CirculationLeftover) -> &'static str {
     }
 }
 
-/// The report of loans and holds, by Koha's numbers only (circulacao-do-koha.md, item 6).
+/// The report of loans and holds, by Koha's numbers only (circulacao-do-koha.md, item 8).
 fn circulation_report(plan: &KohaPlan, done: &KohaCirculationMigrated) -> String {
     let mut loans_left = plan.loans_left.clone();
     loans_left.extend(done.loans_left.iter().copied());
@@ -191,6 +208,42 @@ fn circulation_report(plan: &KohaPlan, done: &KohaCirculationMigrated) -> String
         "loans and holds already migrated: {}",
         done.already_migrated
     ));
+    let mut text = lines.join("\n");
+    text.push('\n');
+    text
+}
+
+/// The report of the accounts, by Koha's numbers only (circulacao-do-koha.md, item 13).
+fn accounts_report(plan: &KohaPlan, done: &KohaAccountsMigrated) -> String {
+    let read = &plan.accounts_read;
+    let mut lines = vec![format!(
+        "patron accounts: {} migrated with {} lines and {} offsets, {} already migrated, {} left out",
+        done.accounts,
+        done.lines,
+        done.offsets,
+        done.already_migrated,
+        done.accounts_left.len()
+    )];
+    for number in &done.accounts_left {
+        lines.push(format!("  borrowernumber {number}: patron not migrated"));
+    }
+    lines.push(format!(
+        "account lines left out: {}; offsets left out: {}; amounts rounded to cents: {}",
+        read.lines_left.len(),
+        read.offsets_left,
+        read.rounded
+    ));
+    for number in &read.lines_left {
+        lines.push(format!(
+            "  accountlines_id {number}: a number, patron, type, amount or date missing"
+        ));
+    }
+    if !read.other_types.is_empty() {
+        lines.push("types of this Koha brought as MANUAL or CREDIT:".to_owned());
+        for (code, count) in &read.other_types {
+            lines.push(format!("  {code}: {count}"));
+        }
+    }
     let mut text = lines.join("\n");
     text.push('\n');
     text

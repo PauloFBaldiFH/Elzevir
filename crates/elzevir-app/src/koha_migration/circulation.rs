@@ -139,15 +139,16 @@ impl KohaCirculationMigrated {
 }
 
 /// A Koha date and time, in the library's zone.
-fn zoned(value: Option<&str>, zone: &TimeZone) -> Option<String> {
+pub(super) fn zoned(value: Option<&str>, zone: &TimeZone) -> Option<String> {
     let at: DateTime = value?.parse().ok()?;
     Some(at.to_zoned(zone.clone()).ok()?.to_string())
 }
 
-/// Reads `issues` and `reserves` into the plan, with the Items' barcodes.
-pub(super) fn read(tables: &BTreeMap<Table, Vec<Row>>, zone: &TimeZone, plan: &mut KohaPlan) {
-    let rows = |table| tables.get(&table).map_or(&[][..], Vec::as_slice);
-    let barcodes: BTreeMap<u64, String> = rows(Table::Items)
+/// Each Item's barcode, by `itemnumber`.
+pub(super) fn barcodes(tables: &BTreeMap<Table, Vec<Row>>) -> BTreeMap<u64, String> {
+    tables
+        .get(&Table::Items)
+        .map_or(&[][..], Vec::as_slice)
         .iter()
         .filter_map(|row| {
             Some((
@@ -155,13 +156,22 @@ pub(super) fn read(tables: &BTreeMap<Table, Vec<Row>>, zone: &TimeZone, plan: &m
                 text(row, "barcode")?,
             ))
         })
-        .collect();
-    let item = |row: &Row| {
-        number(text(row, "itemnumber").as_deref()).map(|itemnumber| KohaItem {
-            itemnumber,
-            barcode: barcodes.get(&itemnumber).cloned(),
-        })
-    };
+        .collect()
+}
+
+/// The Item a row names by `itemnumber`, with its barcode.
+pub(super) fn row_item(row: &Row, barcodes: &BTreeMap<u64, String>) -> Option<KohaItem> {
+    number(text(row, "itemnumber").as_deref()).map(|itemnumber| KohaItem {
+        itemnumber,
+        barcode: barcodes.get(&itemnumber).cloned(),
+    })
+}
+
+/// Reads `issues` and `reserves` into the plan, with the Items' barcodes.
+pub(super) fn read(tables: &BTreeMap<Table, Vec<Row>>, zone: &TimeZone, plan: &mut KohaPlan) {
+    let rows = |table| tables.get(&table).map_or(&[][..], Vec::as_slice);
+    let barcodes = barcodes(tables);
+    let item = |row: &Row| row_item(row, &barcodes);
     for row in rows(Table::Issues) {
         let issue_id = number(text(row, "issue_id").as_deref()).unwrap_or(0);
         match loan(row, issue_id, item(row), zone) {

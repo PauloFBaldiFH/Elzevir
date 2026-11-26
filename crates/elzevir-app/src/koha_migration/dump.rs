@@ -21,6 +21,8 @@ pub(super) enum Table {
     Items,
     Issues,
     Reserves,
+    AccountLines,
+    AccountOffsets,
 }
 
 impl Table {
@@ -103,6 +105,28 @@ impl Table {
                 "item_level_hold",
                 "timestamp",
             ],
+            Self::AccountLines => &[
+                "accountlines_id",
+                "issue_id",
+                "borrowernumber",
+                "itemnumber",
+                "date",
+                "amount",
+                "credit_type_code",
+                "debit_type_code",
+                "status",
+                "amountoutstanding",
+                "timestamp",
+                "branchcode",
+            ],
+            Self::AccountOffsets => &[
+                "id",
+                "credit_id",
+                "debit_id",
+                "type",
+                "amount",
+                "created_on",
+            ],
         }
     }
 
@@ -115,6 +139,8 @@ impl Table {
             Self::Items => "itemnumber",
             Self::Issues => "issue_id",
             Self::Reserves => "reserve_id",
+            Self::AccountLines => "accountlines_id",
+            Self::AccountOffsets => "id",
         }
     }
 }
@@ -192,6 +218,8 @@ impl Target for KohaTables {
             "items" => Some(Table::Items),
             "issues" => Some(Table::Issues),
             "reserves" => Some(Table::Reserves),
+            "accountlines" => Some(Table::AccountLines),
+            "account_offsets" => Some(Table::AccountOffsets),
             _ => None,
         })
     }

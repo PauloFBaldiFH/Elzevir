@@ -30,6 +30,7 @@
 24. A unidade das cobranças, das regras e da devolução registrada é a unidade onde o exemplar está (`LostChargesControl` = `ItemHomeLibrary` com `HomeOrHoldingBranch` = `holdingbranch`). O empréstimo terminado vai para o histórico como numa devolução, com o dia da rodada.
 25. O resultado vai para o log (`long_overdue.marked`, com quantos exemplares ficaram perdidos e quantos foram cobrados; `long_overdue.failed` quando falha). Ela roda logo depois da multa diária, como no cron do Koha.
 26. A ficha do leitor mostra os débitos `LOST` ("Exemplar perdido") e `PROCESSING` ("Taxa de processamento de perda") como os outros, e eles contam na dívida do item 8.
+27. **Tipos de lançamento.** A conta conhece os tipos que todo Koha instala: os débitos `ACCOUNT`, `ACCOUNT_RENEW`, `ARTICLE_REQUEST`, `LOST`, `MANUAL`, `NEW_CARD`, `OVERDUE`, `PAYOUT`, `PROCESSING`, `RENT`, `RENT_DAILY`, `RENT_DAILY_RENEW`, `RENT_RENEW`, `RESERVE`, `RESERVE_EXPIRED` e `VOID`, e os créditos `CANCELLATION`, `CREDIT`, `DISCOUNT`, `FORGIVEN`, `LOST_FOUND`, `OVERPAYMENT`, `PAYMENT`, `PROCESSING_FOUND`, `PURCHASE`, `REFUND` e `WRITEOFF`. O Elzevir só lança, por enquanto, os dos itens 3, 12 e 22; os outros chegam pela [migração do Koha](../migracao/circulacao-do-koha.md) e aparecem na ficha, no OPAC e na API com o nome de cada um. Todo débito conta na dívida do item 8.
 
 ## 2. Origem no Koha
 

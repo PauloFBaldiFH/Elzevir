@@ -216,6 +216,12 @@ fn a_koha_dump_brings_its_patrons_once() {
         "holds: 0 migrated, 6 left out, 1 suspended in Koha (active here), 1 queued with an end date (dropped)",
         "  reserve_id 4: no record, or two, with its biblionumber",
         "loans and holds already migrated: 0",
+        "patron accounts: 2 migrated with 5 lines and 4 offsets, 0 already migrated, 1 left out",
+        "  borrowernumber 3: patron not migrated",
+        "account lines left out: 1; offsets left out: 1; amounts rounded to cents: 1",
+        "  accountlines_id 6: a number, patron, type, amount or date missing",
+        "  DOACAO: 1",
+        "  MULTA_LOCAL: 1",
     ] {
         assert!(
             report.lines().any(|found| found == line),
@@ -227,7 +233,12 @@ fn a_koha_dump_brings_its_patrons_once() {
         assert!(!report.contains(private), "{private} in the report");
     }
     let again = elzevir(&["migrate-koha", "--data-dir", &data, &gz]);
-    assert!(text(&again.stdout).contains("patrons: 0 migrated, 3 already migrated"));
+    let again = text(&again.stdout);
+    assert!(again.contains("patrons: 0 migrated, 3 already migrated"));
+    assert!(
+        again
+            .contains("patron accounts: 0 migrated with 0 lines and 0 offsets, 2 already migrated")
+    );
     let broken = path(dir.path(), "broken.sql");
     std::fs::write(
         &broken,
