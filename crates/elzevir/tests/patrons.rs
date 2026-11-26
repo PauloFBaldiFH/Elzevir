@@ -446,8 +446,8 @@ fn a_patron_is_enrolled_and_edited_on_the_form() {
 }
 
 #[test]
-fn a_patron_is_anonymized_from_the_edit_form_after_confirming() {
-    // docs/specs/circulacao/lgpd.md, item 6.
+fn a_patron_is_exported_then_anonymized_from_the_edit_form() {
+    // docs/specs/circulacao/lgpd.md, items 6 and 11.
     let data = tempfile::tempdir().unwrap();
     let ana = library(data.path());
     let (server, address) = start(data.path());
@@ -468,6 +468,25 @@ fn a_patron_is_anonymized_from_the_edit_form_after_confirming() {
         )
     };
     assert_status(&post(&cir, "&confirm=1"), 403);
+    // Item 11: the copy of the data comes first, as a download.
+    let export = format!("/equipe/leitores/{ana}/exportar");
+    assert!(page.contains(&format!("action=\"{export}\"")));
+    let download = |who: &str| {
+        request(
+            address,
+            "POST",
+            &export,
+            &format!("{who}Content-Type: application/x-www-form-urlencoded\r\n"),
+            &format!("csrf={token}"),
+        )
+    };
+    assert_status(&download(&cir), 403);
+    let copy = download(&lei);
+    assert_status(&copy, 200);
+    assert!(copy.contains(&format!(
+        "content-disposition: attachment; filename=\"leitor-{ana}.json\""
+    )));
+    assert!(copy.contains("\"cardnumber\": \"000123\"") && copy.contains("\"patrons.export\""));
     let unconfirmed = post(&lei, "");
     assert_status(&unconfirmed, 422);
     assert!(unconfirmed.contains("Tick the box to confirm."));
@@ -484,6 +503,7 @@ fn a_patron_is_anonymized_from_the_edit_form_after_confirming() {
     );
     assert!(!request(address, "GET", "/equipe/leitores?q=silva", &cir, "").contains("Silva, Ana"));
     assert_status(&post(&lei, "&confirm=1"), 404);
+    assert_status(&download(&lei), 404);
     drop(server);
 }
 

@@ -454,6 +454,10 @@ fn patron_routes() -> Router<AppState> {
             "/equipe/leitores/{id}/anonimizar",
             post(patron_privacy::anonymize),
         )
+        .route(
+            "/equipe/leitores/{id}/exportar",
+            post(patron_privacy::export),
+        )
 }
 
 /// The notice board's form (docs/specs/interface/mural.md, item 7).

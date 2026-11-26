@@ -334,10 +334,13 @@ pub struct PasswordSection {
     pub error: Option<&'static str>,
 }
 
-/// The anonymization part of the patron form (docs/specs/circulacao/lgpd.md, item 1).
+/// The privacy part of the patron form: the copy of the patron's data and the
+/// anonymization (docs/specs/circulacao/lgpd.md, items 6 and 11).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnonymizeSection {
-    /// Where its form posts.
+    /// Where the export form posts.
+    pub export: String,
+    /// Where the anonymization form posts.
     pub action: String,
     /// Message key of why the last anonymization was refused.
     pub refused: Option<&'static str>,

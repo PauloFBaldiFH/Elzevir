@@ -1128,9 +1128,9 @@ button.quiet { border: 1px solid var(--elzevir-color-border-strong); background:
 .account-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 18px; margin: 0 0 16px; }
 .account-facts dt { color: var(--elzevir-color-muted); }
 .account-facts dd { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
-.patron-password { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--elzevir-color-border); }
-.patron-password h2 { margin: 0 0 6px; font-size: 18px; }
-.patron-password form { margin-top: 10px; }
+.patron-password, .patron-export, .patron-anonymize { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--elzevir-color-border); }
+.patron-password h2, .patron-export h2, .patron-anonymize h2 { margin: 0 0 6px; font-size: 18px; }
+.patron-password form, .patron-export form, .patron-anonymize form { margin-top: 10px; }
 @media (max-width: 64rem) { .opac-home { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .opac-home .recent { grid-column: 1 / -1; grid-row: 1; } }
 @media (max-width: 46rem) { .opac-home { grid-template-columns: minmax(0, 1fr); } }
 @media (prefers-reduced-motion: reduce) { .recent-card a { transition: none; } .recent-card a:hover { transform: none; } }

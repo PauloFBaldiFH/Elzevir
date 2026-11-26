@@ -57,6 +57,9 @@ pub enum PatronCommand {
     /// history and the audit log; what was lent and owed stays, without a name
     /// (docs/specs/circulacao/lgpd.md, items 1 to 7).
     Anonymize(PatronId),
+    /// Records that a staff member took a copy of everything kept about the patron; changes
+    /// nothing else (docs/specs/circulacao/lgpd.md, items 8 to 11).
+    Export(PatronId),
     /// Brings branches, categories and patrons from a Koha dump
     /// (docs/specs/migracao/leitores-do-koha.md, item 16).
     MigrateKoha(Box<crate::koha_migration::KohaBatch>),
@@ -165,6 +168,8 @@ pub enum PatronOutput {
     ReadingHistorySet(PatronId),
     /// The patron was anonymized.
     Anonymized(PatronId),
+    /// The export of the patron's data was logged.
+    Exported(PatronId),
     /// What a write of the Koha migration did.
     KohaMigrated(crate::koha_migration::KohaMigrated),
     /// What a write of Koha's loans and holds did.
@@ -531,6 +536,14 @@ pub trait PatronDesk: Send + Sync {
     ///
     /// When storage fails.
     fn search(&self, query: &PatronQuery) -> Result<Vec<PatronRow>, PatronDeskError>;
+
+    /// Everything kept about the patron, as one JSON document
+    /// (docs/specs/circulacao/lgpd.md, item 9); `None` when there is no such patron.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn export(&self, id: PatronId) -> Result<Option<serde_json::Value>, PatronDeskError>;
 
     /// Every category, by name.
     ///
