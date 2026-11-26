@@ -91,6 +91,14 @@
 44. A Instância mostra também a **tabela de exemplares**: situação (o mesmo sinal da pílula), código de barras, tombo, número de chamada, biblioteca (com a de posse quando difere), localização, coleção, tipo de item, exemplar e data de aquisição. Preço fica para a aquisição.
 45. Campo vazio não aparece. Um tipo de valor que esta versão não conhece (código guardado por outra versão) recusa a leitura com 503, como o resto do acervo; Instância inexistente dá 404 e `level` desconhecido, 400. A edição desses campos no próprio bloco é a tarefa 2.5.
 
+### Modo completo (pendência da Fase 3, interface §24.5)
+
+46. A listagem tem o botão **Zoom** da interface §24.1 (lupa, `Alt+Z`, `aria-pressed`), à direita dos botões de colunas. O modo fica no cookie `elzevir_zoom_catalog` (caminho `/equipe`), lido pelo servidor só para abrir a página no modo certo; valor desconhecido vale o inicial, que é o **compacto**. Sem JavaScript, a página fica no modo do cookie.
+47. **Compacto** é a linha-família dos itens 27 a 32, sem mudança. **Completo** abre todas as famílias da página com os blocos e as cordas, só para leitura: o servidor manda cada `<details>` já aberto, também nas linhas que o carregador da próxima página traz. O tamanho da página não muda.
+48. No completo, o foco continua por família e por nível (itens 37 a 45): clicar ou dar `Enter` num bloco foca aquele nível, e só ele carrega os campos e o formulário de edição. Abrir uma família não fecha as outras, e a URL não muda ao abrir. `Esc` desfaz o foco de nível e devolve o cursor ao primeiro bloco da família, sem fechar nada; edição pendente pergunta antes, como no item 40.
+49. Voltar ao compacto fecha as famílias, menos a que tem um nível em foco, que passa a ser a família em foco (item 29). As cordas são desenhadas só nas famílias que estão na tela e refeitas quando as outras entram nela (item 31).
+50. Nos dois modos ficam a caixa de seleção do lote, o sinal de disponibilidade, a grade de exemplares, "Emprestar" na pílula disponível e a exportação.
+
 ## 2. Origem no Koha
 
 Não há equivalente direto. A lista de resultados da equipe do Koha (`catalogue/search.pl`) é por registro (`biblio`), não por família, e não tem listagem sem busca.

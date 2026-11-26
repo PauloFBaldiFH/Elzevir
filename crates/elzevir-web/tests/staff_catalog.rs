@@ -409,6 +409,45 @@ async fn the_first_page_shows_families_with_pills_and_a_loader_for_the_next() {
 }
 
 #[tokio::test]
+async fn the_full_view_opens_every_family_of_the_page_and_the_rows_that_follow() {
+    let app = app();
+    let session = signed_in(&app).await;
+    let compact = body(send(&app, get("/equipe/acervo", Some(&session), None)).await).await;
+    assert!(compact.contains(r#"data-zoom="compact" data-zoom-screen="catalog""#));
+    assert!(compact.contains(r#"class="zoom-toggle" data-zoom-toggle aria-pressed="false""#));
+    // The cookie this browser chose opens the page full, with no flash of the other view.
+    let full_cookie = format!("{session}; elzevir_zoom_catalog=full");
+    let full = body(send(&app, get("/equipe/acervo", Some(&full_cookie), None)).await).await;
+    assert!(full.contains(r#"data-zoom="full" data-zoom-screen="catalog""#));
+    assert!(full.contains(r#"aria-pressed="true""#));
+    assert_eq!(
+        full.matches(r#"<details class="family-focus" open>"#)
+            .count(),
+        30
+    );
+    // Selection, signal and export stay (interface §24.5, item 3).
+    assert_eq!(full.matches(r#"class="family-select""#).count(), 30);
+    assert!(full.contains("1 of 1 available"));
+    let rows = body(
+        send(
+            &app,
+            get("/equipe/acervo?after=w30.030", Some(&full_cookie), Some("")),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(
+        rows.matches(r#"<details class="family-focus" open>"#)
+            .count(),
+        5
+    );
+    // An unknown value is the screen's own, compact.
+    let odd = format!("{session}; elzevir_zoom_catalog=huge");
+    let page = body(send(&app, get("/equipe/acervo", Some(&odd), None)).await).await;
+    assert!(!page.contains(r#"<details class="family-focus" open>"#));
+}
+
+#[tokio::test]
 async fn a_search_shows_the_families_found_on_the_same_screen() {
     let app = app();
     let session = signed_in(&app).await;

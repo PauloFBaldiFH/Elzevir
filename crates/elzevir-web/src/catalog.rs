@@ -285,6 +285,7 @@ pub(crate) async fn catalog(
     let can_catalogue = session.identity.can(Permission::Cataloguing);
     let can_circulate = state.loans.is_some() && session.identity.can(Permission::Circulation);
     let (strip, batch) = with_saved(strip, &page, &saved, &codes, can_catalogue, rows_only);
+    let zoom = crate::patron_card::zoom(&headers, crate::patron_card::ZoomScreen::Catalog);
     let lines = |rows: &[FamilyRow]| -> Vec<FamilyLine> {
         rows.iter().map(|row| family_line(row, &codes, t)).collect()
     };
@@ -304,6 +305,7 @@ pub(crate) async fn catalog(
                 .map(|next| format!("/equipe/acervo?after={}", url_encode(&next.token()))),
             strip,
             batch,
+            zoom,
         },
         Page::Search(page, scan) => StaffCatalog {
             t: &state.inner.i18n,
@@ -322,6 +324,7 @@ pub(crate) async fn catalog(
             }),
             strip,
             batch,
+            zoom,
         },
         Page::List(page, list) => StaffCatalog {
             t: &state.inner.i18n,
@@ -337,6 +340,7 @@ pub(crate) async fn catalog(
                 .map(|from| format!("{}&from={from}", facets::list_url(*list))),
             strip,
             batch,
+            zoom,
         },
     };
     respond(&page, rows_only)

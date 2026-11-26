@@ -22,6 +22,8 @@ pub(crate) enum ZoomScreen {
     PatronRecord,
     /// The patron search, which opens compact.
     PatronList,
+    /// The catalog listing, which opens compact (interface §24.5).
+    Catalog,
 }
 
 impl ZoomScreen {
@@ -29,13 +31,14 @@ impl ZoomScreen {
         match self {
             Self::PatronRecord => "elzevir_zoom_patron",
             Self::PatronList => "elzevir_zoom_patrons",
+            Self::Catalog => "elzevir_zoom_catalog",
         }
     }
 
     const fn default(self) -> &'static str {
         match self {
             Self::PatronRecord => "full",
-            Self::PatronList => "compact",
+            Self::PatronList | Self::Catalog => "compact",
         }
     }
 }

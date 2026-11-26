@@ -34,6 +34,9 @@ pub struct StaffCatalog<'a> {
     /// What the batch change of Items offers, for a viewer who may catalogue
     /// (docs/specs/catalogo/lote.md, item 9).
     pub batch: Option<BatchChoices>,
+    /// `compact` or `full`: in the full view every family of the page opens with its
+    /// blocks, read only (interface §24.5).
+    pub zoom: &'static str,
 }
 
 /// The rows the batch change of Items chooses from, each list in name order.
