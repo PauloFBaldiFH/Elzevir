@@ -1,0 +1,138 @@
+{
+  "koha": "26.05.05.000",
+  "recorded_with": "tools/sip2-recorder/record.py",
+  "notes": "Sample patron and one Item of the disposable test instance. Login, passwords, card, barcode, title and personal fields are placeholders; the patron's OPAC password was sent empty.",
+  "institution": "MAIN",
+  "exchanges": [
+    {
+      "name": "login",
+      "request": "9300CNLOGIN|COPASSWORD|CPMAIN|",
+      "response": "941AY0AZFDFD"
+    },
+    {
+      "name": "sc_status",
+      "request": "9900302.00",
+      "response": "98YYYYNN10000520261126    0734392.00AOMAIN|BXYYYYYYYYYYYNYYYY|AY1AZEE29"
+    },
+    {
+      "name": "patron_status",
+      "request": "2300120261126    073439AOMAIN|AAPATRON|AC|AD|",
+      "response": "24              00120261126    073440AENAME|AAPATRON|BLY|CQN|BHREA|BV0|AFGreetings from Koha. |AOMAIN|AY2AZDFB9"
+    },
+    {
+      "name": "patron_status_wrong_password",
+      "request": "2300120261126    073440AOMAIN|AAPATRON|AC|ADnot-the-password|",
+      "response": "24              00120261126    073440AENAME|AAPATRON|BLY|CQN|BHREA|BV0|AFGreetings from Koha.  -- Invalid password|AOMAIN|AY3AZD8C4"
+    },
+    {
+      "name": "patron_status_unknown",
+      "request": "2300120261126    073440AOMAIN|AAELZEVIR-NO-SUCH-ITEM|AC|AD|",
+      "response": "24YYYY          00120261126    073440AE|AAELZEVIR-NO-SUCH-ITEM|BLN|AFInvalid cardnumber|AOMAIN|AY4AZE479"
+    },
+    {
+      "name": "patron_information",
+      "request": "6300120261126    073440          AOMAIN|AAPATRON|AD|",
+      "response": "64              00120261126    073440000000000000000000000000AOMAIN|AAPATRON|AENAME|BLY|CQN|BHREA|BV0|CC5|BDADDRESS|BEEMAIL|BFPHONE|PB19900101|PCB|PIY|AFGreetings from Koha.  -- Invalid password|AY5AZAB24"
+    },
+    {
+      "name": "item_information",
+      "request": "1720261126    073440AOMAIN|ABITEM|AC|",
+      "response": "1803020120261126    073440ABITEM|AJITEMTITLE|AQMAIN|APMAIN|BGMAIN|AY6AZE92A"
+    },
+    {
+      "name": "item_information_unknown",
+      "request": "1720261126    073440AOMAIN|ABELZEVIR-NO-SUCH-ITEM|AC|",
+      "response": "1801010120261126    073440ABELZEVIR-NO-SUCH-ITEM|AJ|AY7AZF215"
+    },
+    {
+      "name": "checkout",
+      "request": "11YN20261126    073440                  AOMAIN|AAPATRON|ABITEM|AC|AD|BON|BIN|",
+      "response": "121NNY20261126    073440AOMAIN|AAPATRON|ABITEM|AJITEMTITLE|AH20261210    235900|AY8AZE7F8"
+    },
+    {
+      "name": "checkout_unknown_item",
+      "request": "11YN20261126    073440                  AOMAIN|AAPATRON|ABELZEVIR-NO-SUCH-ITEM|AC|AD|BON|BIN|",
+      "response": "120NUN20261126    073440AOMAIN|AAPATRON|ABELZEVIR-NO-SUCH-ITEM|AJ|AH|AFInvalid Item|BLY|AY9AZE6BB"
+    },
+    {
+      "name": "checkout_again",
+      "request": "11YN20261126    073440                  AOMAIN|AAPATRON|ABITEM|AC|AD|BON|BIN|",
+      "response": "121YNY20261126    073440AOMAIN|AAPATRON|ABITEM|AJITEMTITLE|AH20261210    235900|AFItem already checked out to you: renewing item.|AY0AZD5CC"
+    },
+    {
+      "name": "item_information_lent",
+      "request": "1720261126    073440AOMAIN|ABITEM|AC|",
+      "response": "1804020120261126    073440ABITEM|AJITEMTITLE|AQMAIN|APMAIN|BGMAIN|AH20261210    235900|AY1AZE4E8"
+    },
+    {
+      "name": "patron_information_summary_0",
+      "request": "6300120261126    073440Y         AOMAIN|AAPATRON|AD|BP1|BQ5|",
+      "response": "64              00120261126    073440000000000001000000000000AOMAIN|AAPATRON|AENAME|BLY|CQN|BHREA|BV0|CC5|BDADDRESS|BEEMAIL|BFPHONE|PB19900101|PCB|PIY|AFGreetings from Koha.  -- Invalid password|AY2AZAB26"
+    },
+    {
+      "name": "patron_information_summary_1",
+      "request": "6300120261126    073440 Y        AOMAIN|AAPATRON|AD|BP1|BQ5|",
+      "response": "64              00120261126    073440000000000001000000000000AOMAIN|AAPATRON|AENAME|BLY|CQN|BHREA|BV0|CC5|BDADDRESS|BEEMAIL|BFPHONE|PB19900101|PCB|PIY|AFGreetings from Koha.  -- Invalid password|AY3AZAB25"
+    },
+    {
+      "name": "patron_information_summary_2",
+      "request": "6300120261126    073441  Y       AOMAIN|AAPATRON|AD|BP1|BQ5|",
+      "response": "64              00120261126    073441000000000001000000000000AOMAIN|AAPATRON|AENAME|BLY|CQN|BHREA|BV0|CC5|AUITEM|BDADDRESS|BEEMAIL|BFPHONE|PB19900101|PCB|PIY|AFGreetings from Koha.  -- Invalid password|AY4AZA91B"
+    },
+    {
+      "name": "patron_information_summary_3",
+      "request": "6300120261126    073441   Y      AOMAIN|AAPATRON|AD|BP1|BQ5|",
+      "response": "64              00120261126    073441000000000001000000000000AOMAIN|AAPATRON|AENAME|BLY|CQN|BHREA|BV0|CC5|BDADDRESS|BEEMAIL|BFPHONE|PB19900101|PCB|PIY|AFGreetings from Koha.  -- Invalid password|AY5AZAB22"
+    },
+    {
+      "name": "patron_information_summary_4",
+      "request": "6300120261126    073441    Y     AOMAIN|AAPATRON|AD|BP1|BQ5|",
+      "response": "64              00120261126    073441000000000001000000000000AOMAIN|AAPATRON|AENAME|BLY|CQN|BHREA|BV0|CC5|BDADDRESS|BEEMAIL|BFPHONE|PB19900101|PCB|PIY|AFGreetings from Koha.  -- Invalid password|AY6AZAB21"
+    },
+    {
+      "name": "patron_information_summary_5",
+      "request": "6300120261126    073441     Y    AOMAIN|AAPATRON|AD|BP1|BQ5|",
+      "response": "64              00120261126    073441000000000001000000000000AOMAIN|AAPATRON|AENAME|BLY|CQN|BHREA|BV0|CC5|BDADDRESS|BEEMAIL|BFPHONE|PB19900101|PCB|PIY|AFGreetings from Koha.  -- Invalid password|AY7AZAB20"
+    },
+    {
+      "name": "renew",
+      "request": "29NN20261126    073441                  AOMAIN|AAPATRON|AD|ABITEM|AC|BON|",
+      "response": "301YNN20261126    073441AAPATRON|ABITEM|AJITEMTITLE|AH20261210    235900|CK|AOMAIN|AY8AZE6ED"
+    },
+    {
+      "name": "renew_unknown_item",
+      "request": "29NN20261126    073441                  AOMAIN|AAPATRON|AD|ABELZEVIR-NO-SUCH-ITEM|AC|BON|",
+      "response": "300NUN20261126    073441AAPATRON|ABELZEVIR-NO-SUCH-ITEM|AJ|AH|AOMAIN|AFItem not checked out to NAME|AY9AZDE02"
+    },
+    {
+      "name": "checkin",
+      "request": "09N20261126    07344120261126    073441APMAIN|AOMAIN|ABITEM|AC|BIN|",
+      "response": "101YNN20261126    073441AOMAIN|ABITEM|AQMAIN|AJITEMTITLE|AAPATRON|CSB869.3 R28|AY0AZE6DC"
+    },
+    {
+      "name": "checkin_not_lent",
+      "request": "09N20261126    07344120261126    073441APMAIN|AOMAIN|ABITEM|AC|BIN|",
+      "response": "100YNY20261126    073441AOMAIN|ABITEM|AQMAIN|AJITEMTITLE|CSB869.3 R28|AFItem not checked out|AY1AZDFBD"
+    },
+    {
+      "name": "checkin_unknown_item",
+      "request": "09N20261126    07344120261126    073441APMAIN|AOMAIN|ABELZEVIR-NO-SUCH-ITEM|AC|BIN|",
+      "response": "100NUY20261126    073441AOMAIN|ABELZEVIR-NO-SUCH-ITEM|AQ|CV99|AFInvalid Item|AY2AZE8E0"
+    },
+    {
+      "name": "item_information_returned",
+      "request": "1720261126    073441AOMAIN|ABITEM|AC|",
+      "response": "1803020120261126    073441ABITEM|AJITEMTITLE|AQMAIN|APMAIN|BGMAIN|AY3AZE92C"
+    },
+    {
+      "name": "end_patron_session",
+      "request": "3520261126    073441AOMAIN|AAPATRON|AC|AD|",
+      "response": "36Y20261126    073441AOMAIN|AAPATRON|AFThank you!|AY4AZF278"
+    },
+    {
+      "name": "resend",
+      "request": "97",
+      "response": "36Y20261126    073441AOMAIN|AAPATRON|AFThank you!|"
+    }
+  ]
+}
