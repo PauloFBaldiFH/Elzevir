@@ -12,7 +12,7 @@ use crate::codes::{
     INSTITUTION_ID, ITEM_ID, ITEM_PROPERTIES, MEDIA_TYPE, OWNER, PATRON_ID, PERMANENT_LOCATION,
     PRINT_LINE, SCREEN_MESSAGE, SORT_BIN, TITLE_ID, VALID_PATRON,
 };
-use crate::text::{Writer, day};
+use crate::text::{Writer, day, timestamp};
 
 /// The screen message of a damaged item.
 const DAMAGED: &str = "Item is damaged";
@@ -57,8 +57,8 @@ pub struct KnownItem {
     pub owner: Option<String>,
     /// `CF`, written when more than zero.
     pub hold_queue_length: usize,
-    /// `AH`.
-    pub due: Option<Date>,
+    /// `AH`: when it is due, cut to the minute.
+    pub due: Option<DateTime>,
     /// `CM`.
     pub hold_pickup_date: Option<Date>,
     /// `AF`.
@@ -102,7 +102,7 @@ impl ItemInformationResponse {
             writer.field(HOLD_QUEUE_LENGTH, &item.hold_queue_length.to_string());
         }
         if let Some(due) = item.due {
-            writer.field(DUE_DATE, &day(due));
+            writer.field(DUE_DATE, &timestamp(due));
         }
         if let Some(date) = item.hold_pickup_date {
             writer.field(HOLD_PICKUP_DATE, &day(date));
@@ -142,8 +142,8 @@ pub struct CheckedOut {
     pub desensitize: bool,
     /// The title.
     pub title: String,
-    /// The due date.
-    pub due: Option<Date>,
+    /// When it is due, cut to the minute.
+    pub due: Option<DateTime>,
     /// `AF`.
     pub screen_message: Option<String>,
     /// `AG`.
@@ -181,7 +181,7 @@ impl CheckoutResponse {
                     .timestamp(self.now);
                 self.identify(&mut writer, &loan.title);
                 writer
-                    .field(DUE_DATE, &loan.due.map(day).unwrap_or_default())
+                    .field(DUE_DATE, &loan.due.map(timestamp).unwrap_or_default())
                     .maybe(SCREEN_MESSAGE, loan.screen_message.as_deref())
                     .maybe(PRINT_LINE, loan.print_line.as_deref());
                 if v2 {
@@ -351,8 +351,8 @@ pub struct Renewed {
     pub item_id: String,
     /// The title.
     pub title: String,
-    /// The new due date.
-    pub due: Option<Date>,
+    /// When it is due now, cut to the minute.
+    pub due: Option<DateTime>,
     /// The item is magnetic media.
     pub magnetic_media: bool,
     /// The terminal should turn the security strip off.
@@ -387,7 +387,7 @@ impl RenewResponse {
                     .field(PATRON_ID, &renewed.patron_id)
                     .field(ITEM_ID, &renewed.item_id)
                     .field(TITLE_ID, &renewed.title)
-                    .field(DUE_DATE, &renewed.due.map(day).unwrap_or_default())
+                    .field(DUE_DATE, &renewed.due.map(timestamp).unwrap_or_default())
                     .field(MEDIA_TYPE, &renewed.media_type)
                     .maybe(ITEM_PROPERTIES, renewed.properties.as_deref());
             }

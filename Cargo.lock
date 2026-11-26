@@ -1362,6 +1362,7 @@ name = "elzevir-sip2"
 version = "0.1.0-alpha.2"
 dependencies = [
  "elzevir-app",
+ "elzevir-domain",
  "jiff",
  "thiserror 2.0.21",
 ]

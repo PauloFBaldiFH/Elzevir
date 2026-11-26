@@ -40,6 +40,7 @@ pub mod rdf;
 pub mod registries;
 pub mod repository;
 pub mod search;
+pub mod self_check;
 pub mod staff;
 pub mod statement_rows;
 pub mod suggestions;

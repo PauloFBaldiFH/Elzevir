@@ -53,18 +53,51 @@ A tarefa tem duas partes, cada uma num PR:
     - um campo obrigatório sai mesmo vazio (`AF|`); um campo opcional vazio não sai;
     - CR, LF e CRLF dentro de um valor viram um espaço, e o `|` vira `&#124;`;
     - datas e horas saem como `AAAAMMDD    HHMMSS` (quatro espaços), no fuso da biblioteca;
-    - o vencimento sai pelo dia, sempre com `235900`, como o Koha faz ao formatar a data de vencimento (`C4::SIP::Sip::timestamp`);
+    - o vencimento sai com a hora do empréstimo, cortada no minuto (`C4::SIP::ILS::Item`); a data em que uma reserva deixa de esperar (`CM`) sai pelo dia, sempre com `235900` (`C4::SIP::Sip::timestamp` de uma data sem hora);
     - valores sim/não saem `Y`/`N`; as bandeiras de "negado" saem `Y` quando negado e branco quando não;
     - contagens saem com quatro dígitos (`0003`), e o tempo limite e as tentativas do `98` com três.
 15. As respostas escritas são `94`, `98`, `24`, `64`, `18`, `12`, `10`, `30`, `36` e `96`, cada uma com os campos que o servidor da 4.5b preenche (itens 16 em diante).
 
-### Servidor (4.5b)
+### Configuração e conexão (4.5b)
 
-16. O servidor SIP2 é ligado por `[sip2]` no `elzevir.toml` (endereço de escuta e as contas de terminal: usuário, senha, unidade e `terminator`). Sem a seção, não abre porta.
-17. A primeira mensagem de uma conexão tem de ser `93`. Login recusado é respondido `940` e espera outro; uma primeira mensagem que não é `93` fecha a conexão sem resposta (`raw_transport` do Koha). Algoritmos de cifra diferentes de `0` são recusados.
-18. `99` responde `98` com o que a unidade permite, a hora, a versão e, na 2.00, as mensagens aceitas (`BX`).
-19. `23`, `63`, `17`, `11`, `09`, `29` e `35` usam as mesmas regras e as mesmas recusas do balcão de circulação; as mensagens de tela (`AF`) são as do Koha para cada recusa.
-20. O log segue o da circulação, com a senha do terminal e a do leitor trocadas por `***` (`remove_password_from_message` do Koha).
+16. O servidor é ligado pela seção `[sip2]` do `elzevir.toml`; sem ela, nenhuma porta abre:
+    - `listen`: endereço e porta (o Koha usa 6001);
+    - `timeout_seconds`: inatividade que fecha a conexão (padrão 300, o `client_timeout` do Koha);
+    - `currency`: a moeda do `BH` (até três letras; sem ela, o campo não sai);
+    - `[[sip2.terminals]]`, uma por terminal: `login` (uma conta da equipe), `unit` (o nome da unidade, que é o balcão das transações e o `AO` das respostas) e `terminator` (`crlf`, padrão, ou `cr`).
+17. Até 64 conexões ao mesmo tempo; a seguinte é fechada sem resposta.
+18. **Login** (`93`): a primeira mensagem da conexão tem de ser `93`; outra fecha a conexão sem resposta (`raw_transport` do Koha). `CN` e `CO` são o login e a senha de uma conta da equipe com a permissão `circulation`, e o login tem de estar em `[[sip2.terminals]]`. Recusado (ou com algoritmo de cifra diferente de `0`), responde `940` e espera outro `93`.
+19. **Estado do terminal** (`99`): responde `98` com a política do exemplo do Koha (`SIPconfig.xml`): devolução, empréstimo e renovação sim, atualização de exemplar e modo offline não, tempo limite `100` e tentativas `005`, a hora, a versão e, na 2.00, o `BX` do item 13.
+
+### Leitor (4.5b)
+
+20. O leitor é achado pelo cartão (`AA`). Para o terminal, o leitor está **bloqueado** quando tem suspensão, cadastro vencido, ou deve mais que o limite de débito do balcão (`noissuescharge`, padrão 5,00); bloqueado, as quatro bandeiras de "negado" (empréstimo, renovação, recall e reserva) saem `Y`. Deve mais que o limite: as bandeiras de multas e taxas excessivas (posições 11 e 12) também. As outras bandeiras saem em branco (o Elzevir não tem cartão perdido, devolução contestada nem cobrança).
+21. O nome é `<nome> <sobrenome>`. A mensagem de tela segue `C4::SIP::ILS::Patron::new`: `Greetings from Elzevir. `, mais `Your account has expired as of <data>` com o cadastro vencido, ` -- Patron blocked by fines` acima do limite e ` -- Patron owes <valor>` com débito (ou ` -- Patron has credit of <valor>` com crédito). A senha do leitor (`AD`) é a senha do OPAC: errada, a mensagem ganha ` -- Invalid password`.
+22. Valores em dinheiro (`BV`, `CC` e as mensagens) saem como o Perl escreve um número: sem zeros à direita (`12.5`, `5`, `0`). `BV` sai sempre, mesmo zero; `CC` é o limite de débito.
+23. **Informações do leitor** (`64`): reservas (todas), empréstimos atrasados, empréstimos, multas por exemplar (0), recalls (0) e reservas ainda não à espera; a lista pedida sai pelos códigos de barras, cortada por `BP` e `BQ` (de 1) como no `x_items` do Koha. Saem também `BD` (endereço), `BE`, `BF`, `PB` (nascimento `AAAAMMDD`), `PC` (categoria) e `PI` (`Y` só quando o leitor não está bloqueado de jeito nenhum: suspensão, cadastro vencido ou dívida acima do limite, porque no Koha o `noissues` da dívida também desliga o `inet`).
+24. **Fim da sessão** (`35`): responde `36` com `Y` e `Thank you!`.
+
+### Exemplar e circulação (4.5b)
+
+25. **Informações do exemplar** (`17`), pelo código de barras: estado `10` em trânsito, `12` perdido, `04` emprestado, `08` separado para uma reserva, `01` danificado, `02` com "não emprestável" negativo, `03` disponível; marcador de segurança `02` e tipo de taxa `01` fixos, como no Koha; `AQ`, `AP` e `BG` com os nomes das unidades da casa, atual e da casa; `CF` com as reservas do registro; `AH` com o vencimento; `CM` com o último dia de uma reserva que espera por ele.
+26. **Empréstimo** (`11`), na ordem do `C4::SIP::ILS::checkout`, no balcão da unidade do terminal:
+    1. cartão desconhecido: `Invalid Patron`; código de barras desconhecido: `Invalid Item`;
+    2. leitor bloqueado: `Patron debarred` (suspensão), `Patron expired on <data>`, `Patron has fines` ou `Patron blocked`;
+    3. emprestado a outro leitor: `Item checked out to another patron`;
+    4. recusa do balcão: `Issue failed : <motivo>`, com o nome do motivo no Koha (`TOO_MANY`, `NOT_FOR_LOAN`, `WTHDRAWN`, `RESTRICTED`, `DEBT`, `EXPIRED`, `DEBARRED`);
+    5. confirmação pedida: já emprestado ao mesmo leitor renova, com `Item already checked out to you: renewing item.` e a renovação `Y`; reserva de outro leitor: `Item is reserved for another patron upon return.` ou, separado ou em trânsito para ela, `Item is on hold for another patron.`; débito: `Outstanding Fines block issue`; outra: `Item cannot be issued: <motivo>`.
+    O empréstimo feito responde com o vencimento, `desensitize` `Y` e mídia magnética `N`.
+27. **Devolução** (`09`), no balcão da unidade do terminal (`AP`, quando vem, não muda o balcão):
+    - código de barras desconhecido: recusa com alerta `99` e `Invalid Item`; exemplar baixado: alerta `99` e `Item withdrawn, return not allowed`; não emprestado: recusa com `Item not checked out`;
+    - devolvido: `AA` com o cartão de quem o tinha, `AQ` (unidade da casa), `AJ`, `CS`;
+    - com reserva: o exemplar é separado para ela, como faz o Koha (`holds_get_captured`); retirada nesta unidade, alerta `01`; em outra, alerta `02` (vai em trânsito); `CY` e `DA` (nome, com e-mail e telefone entre parênteses) de quem reservou e `CT` com a unidade de retirada;
+    - sem reserva, mas a voltar para outra unidade: alerta `04` e `CT` com ela; quando a transferência fica para a equipe, `This item must still be transferred to <unidade> branch.`;
+    - `resensitize` `Y` quando devolvido; o alerta sai `Y` quando houve recusa ou tipo de alerta.
+28. **Renovação** (`29`): cartão desconhecido: `Invalid patron barcode.`; leitor bloqueado: `Renewals not allowed.`; exemplar fora dos empréstimos do leitor: `Item not checked out to <nome>`; recusa do balcão com o código do `CanBookBeRenewed`, traduzido como no Koha: `Item unavailable due to outstanding holds`, `Item has reached maximum renewals`, e `too_soon`, `overdue`, `onsite_checkout`, `too_much_owing` e `restriction` como vêm. Renovada: o vencimento novo, `CK` vazio e `desensitize` `N`.
+29. Mensagens com "sem bloqueio" (`no_block`) são tratadas como as outras: o Elzevir não aceita transações offline.
+30. Cada mensagem tratada vai para o log com o evento `sip2.message`: terminal, código e resultado, sem senhas, cartões ou códigos de barras.
+
+**Desvios** ([desvios conhecidos](../../desvios-conhecidos.md)): a saudação diz `Elzevir`; as unidades saem pelo nome, porque o núcleo não tem códigos de unidade; não há taxas de empréstimo (`BV` no `12` e no `30`); as mensagens do item 13; as transações offline do item 29.
 
 ## 2. Origem no Koha
 

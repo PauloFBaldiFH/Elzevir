@@ -57,6 +57,7 @@ mod restrictions;
 mod returns;
 mod saved_lists;
 mod schema;
+mod self_check;
 mod statements;
 mod suggestions;
 mod worklist;

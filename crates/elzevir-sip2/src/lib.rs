@@ -10,6 +10,7 @@ pub mod codes;
 mod frame;
 mod request;
 mod response;
+mod server;
 mod text;
 
 pub use channel::{Channel, Received, Terminator, Version};
@@ -26,3 +27,4 @@ pub use response::{
     PatronStatusResponse, RenewRefused, RenewResponse, Renewed, Response, SUPPORTED_MESSAGES,
     Summary,
 };
+pub use server::{Desk, SipEvent, Terminal, serve};
