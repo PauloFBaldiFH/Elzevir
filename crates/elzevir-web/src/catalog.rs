@@ -467,14 +467,8 @@ pub(crate) async fn export_marc(
     if current_session(&state, &headers).is_none() {
         return Redirect::to("/equipe/login").into_response();
     }
-    let (format, content_type, extension) = match params.format.as_deref() {
-        None | Some("marc21") => (RecordFormat::Marc21, "application/marc", "mrc"),
-        Some("marcxml") => (
-            RecordFormat::MarcXml,
-            "application/marcxml+xml; charset=utf-8",
-            "xml",
-        ),
-        Some(_) => return (StatusCode::BAD_REQUEST, "unknown format").into_response(),
+    let Some(format) = RecordFormat::of(params.format.as_deref()) else {
+        return (StatusCode::BAD_REQUEST, "unknown format").into_response();
     };
     let records = Arc::clone(&state.inner.staff_ports.records);
     let written = tokio::task::spawn_blocking(move || {
@@ -489,10 +483,13 @@ pub(crate) async fn export_marc(
     match written {
         Ok(Ok(Some(bytes))) => (
             [
-                (header::CONTENT_TYPE, content_type.to_owned()),
+                (header::CONTENT_TYPE, format.content_type().to_owned()),
                 (
                     header::CONTENT_DISPOSITION,
-                    format!("attachment; filename=\"elzevir-{id}.{extension}\""),
+                    format!(
+                        "attachment; filename=\"elzevir-{id}{}\"",
+                        format.file_suffix()
+                    ),
                 ),
             ],
             bytes,

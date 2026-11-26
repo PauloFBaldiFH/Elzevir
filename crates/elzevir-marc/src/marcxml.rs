@@ -22,6 +22,13 @@ pub const MARCXML_COLLECTION_HEADER: &str = "<?xml version=\"1.0\" encoding=\"UT
 /// Koha: `MARC::File::XML::footer`, then `"\n"` (`Koha::Exporter::Record::export`).
 pub const MARCXML_COLLECTION_FOOTER: &str = "</collection>\n";
 
+/// Where a record declares its character set: MARC21 in Leader/09, UNIMARC in `100 $a`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Family {
+    Marc21,
+    Unimarc,
+}
+
 impl Record {
     /// Appends the record as a standalone MARCXML document (XML declaration and namespaced
     /// `<record>`), as the OPAC export writes it. On error `out` is left as it was.
@@ -32,10 +39,24 @@ impl Record {
     ///
     /// [`WriteError::NotUtf8`] when the leader does not declare UTF-8 or a value is not UTF-8.
     pub fn write_marcxml_document(&self, out: &mut String) -> Result<(), WriteError> {
+        self.write_document(out, Family::Marc21)
+    }
+
+    /// [`Record::write_marcxml_document`] for a UNIMARC record, which declares UTF-8 in
+    /// `100 $a` rather than in the leader (docs/specs/catalogo/unimarc.md, item 15).
+    ///
+    /// # Errors
+    ///
+    /// [`WriteError::NotUtf8`] when a value is not UTF-8.
+    pub fn write_unimarc_xml_document(&self, out: &mut String) -> Result<(), WriteError> {
+        self.write_document(out, Family::Unimarc)
+    }
+
+    fn write_document(&self, out: &mut String, family: Family) -> Result<(), WriteError> {
         let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<record");
         xml.push_str(NAMESPACES);
         xml.push_str("\n\n");
-        self.write_marcxml_body(&mut xml)?;
+        self.write_marcxml_body(&mut xml, family)?;
         out.push_str(&xml);
         Ok(())
     }
@@ -50,17 +71,30 @@ impl Record {
     ///
     /// [`WriteError::NotUtf8`] when the leader does not declare UTF-8 or a value is not UTF-8.
     pub fn write_marcxml_collection_record(&self, out: &mut String) -> Result<(), WriteError> {
+        self.write_collection_record(out, Family::Marc21)
+    }
+
+    /// [`Record::write_marcxml_collection_record`] for a UNIMARC record.
+    ///
+    /// # Errors
+    ///
+    /// [`WriteError::NotUtf8`] when a value is not UTF-8.
+    pub fn write_unimarc_xml_collection_record(&self, out: &mut String) -> Result<(), WriteError> {
+        self.write_collection_record(out, Family::Unimarc)
+    }
+
+    fn write_collection_record(&self, out: &mut String, family: Family) -> Result<(), WriteError> {
         let mut xml = String::from("<record>\n");
-        self.write_marcxml_body(&mut xml)?;
+        self.write_marcxml_body(&mut xml, family)?;
         xml.push('\n');
         out.push_str(&xml);
         Ok(())
     }
 
     /// Leader, fields and `</record>\n`, one element per line.
-    fn write_marcxml_body(&self, xml: &mut String) -> Result<(), WriteError> {
+    fn write_marcxml_body(&self, xml: &mut String, family: Family) -> Result<(), WriteError> {
         let leader = utf8(Tag::LEADER, &self.leader)?;
-        if self.leader.get(9) != Some(&b'a') {
+        if family == Family::Marc21 && self.leader.get(9) != Some(&b'a') {
             return Err(WriteError::NotUtf8 { tag: Tag::LEADER });
         }
         xml.push_str("  <leader>");

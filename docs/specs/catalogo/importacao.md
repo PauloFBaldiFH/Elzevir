@@ -64,5 +64,5 @@ web da equipe e pela CLI. A proposta preserva o contrato descrito acima;
 I0 contém somente documentos, sem novos formatos disponíveis.
 
 - Casamento com registros existentes e reimportação sem duplicar: tarefa 1.10.
-- MARCXML passa a ser planejado em I3 da spec universal; UNIMARC continua na Fase 4. A linha de comando está em [linha de comando](linha-de-comando.md).
+- MARCXML passa a ser planejado em I3 da spec universal; UNIMARC entra pela projeção MARC21 ([UNIMARC](unimarc.md)). A linha de comando está em [linha de comando](linha-de-comando.md).
 - Acelerar a escritora (por exemplo, não serializar os bytes do registro de origem como lista JSON no `audit_log`): quando um caso real pedir.

@@ -154,6 +154,45 @@ pub enum RecordFormat {
     Marc21,
     /// A MARCXML document with one `<record>`.
     MarcXml,
+    /// UNIMARC in ISO 2709, UTF-8 (docs/specs/catalogo/unimarc.md).
+    Unimarc,
+    /// UNIMARC in the MARCXML layout.
+    UnimarcXml,
+}
+
+impl RecordFormat {
+    /// The format a `format=` value names: `marc21` (also when absent), `marcxml`,
+    /// `unimarc` or `unimarcxml`.
+    #[must_use]
+    pub fn of(name: Option<&str>) -> Option<Self> {
+        match name {
+            None | Some("marc21") => Some(Self::Marc21),
+            Some("marcxml") => Some(Self::MarcXml),
+            Some("unimarc") => Some(Self::Unimarc),
+            Some("unimarcxml") => Some(Self::UnimarcXml),
+            Some(_) => None,
+        }
+    }
+
+    /// The `Content-Type` of the file.
+    #[must_use]
+    pub const fn content_type(self) -> &'static str {
+        match self {
+            Self::Marc21 | Self::Unimarc => "application/marc",
+            Self::MarcXml | Self::UnimarcXml => "application/marcxml+xml; charset=utf-8",
+        }
+    }
+
+    /// The end of the file's name: `.mrc` and `.xml`, after `-unimarc` for UNIMARC.
+    #[must_use]
+    pub const fn file_suffix(self) -> &'static str {
+        match self {
+            Self::Marc21 => ".mrc",
+            Self::MarcXml => ".xml",
+            Self::Unimarc => "-unimarc.mrc",
+            Self::UnimarcXml => "-unimarc.xml",
+        }
+    }
 }
 
 /// Why one record could not be exported.
@@ -182,19 +221,95 @@ pub fn export_record<S: RecordSource + ?Sized>(
     let Some(stored) = stored_record(source, instance)? else {
         return Ok(None);
     };
+    let mut bytes = Vec::new();
+    let mut xml = String::new();
+    write_record(
+        &stored.record,
+        format,
+        limits,
+        &mut bytes,
+        &mut xml,
+        Layout::Document,
+    )?;
+    Ok(Some(if xml.is_empty() {
+        bytes
+    } else {
+        xml.into_bytes()
+    }))
+}
+
+/// Whether a MARCXML record stands alone or goes inside a `<collection>`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Layout {
+    Document,
+    Collection,
+}
+
+/// `record` in `format`: ISO 2709 appended to `bytes`, MARCXML to `xml`.
+fn write_record(
+    record: &NewRecord,
+    format: RecordFormat,
+    limits: &Limits,
+    bytes: &mut Vec<u8>,
+    xml: &mut String,
+    layout: Layout,
+) -> Result<(), ExportFailure> {
+    if matches!(format, RecordFormat::Unimarc | RecordFormat::UnimarcXml) {
+        let unimarc = to_unimarc(record, limits)?;
+        return match (format, layout) {
+            (RecordFormat::Unimarc, _) => unimarc.write_iso2709(bytes),
+            (_, Layout::Document) => unimarc.write_unimarc_xml_document(xml),
+            (_, Layout::Collection) => unimarc.write_unimarc_xml_collection_record(xml),
+        }
+        .map_err(ExportFailure::Write);
+    }
     let mut marc21 = Vec::new();
-    to_marc(&stored.record, limits, &mut marc21)?;
-    match format {
-        RecordFormat::Marc21 => Ok(Some(marc21)),
-        RecordFormat::MarcXml => {
-            let record = RecordRef::parse(&marc21, limits).map_err(ExportFailure::Source)?;
-            let mut xml = String::new();
-            Record::from_ref(&record)
-                .write_marcxml_document(&mut xml)
-                .map_err(ExportFailure::Write)?;
-            Ok(Some(xml.into_bytes()))
+    to_marc(record, limits, &mut marc21)?;
+    if format == RecordFormat::Marc21 {
+        bytes.extend_from_slice(&marc21);
+        return Ok(());
+    }
+    let record =
+        Record::from_ref(&RecordRef::parse(&marc21, limits).map_err(ExportFailure::Source)?);
+    match layout {
+        Layout::Document => record.write_marcxml_document(xml),
+        Layout::Collection => record.write_marcxml_collection_record(xml),
+    }
+    .map_err(ExportFailure::Write)
+}
+
+/// `record` as UNIMARC (docs/specs/catalogo/unimarc.md, items 17 to 19): a record read from
+/// UNIMARC and not changed since leaves as it came, in UTF-8; any other goes through its
+/// MARC21 export, with the fields of its UNIMARC original that the projection does not
+/// read.
+fn to_unimarc(record: &NewRecord, limits: &Limits) -> Result<Record, ExportFailure> {
+    let original = record
+        .instance
+        .original
+        .as_ref()
+        .filter(|original| original.family == "UNIMARC")
+        .and_then(|original| RecordRef::parse(&original.bytes, limits).ok())
+        .map(|parsed| Record::from_ref(&parsed))
+        // An original the import read always decodes again; one that does not is left out.
+        .and_then(|mut original| crate::unimarc::decode(&mut original).ok().map(|_| original));
+    if let (Some(original), Some(source)) = (&original, record.source.as_deref()) {
+        let projection =
+            Record::from_ref(&RecordRef::parse(source, limits).map_err(ExportFailure::Source)?);
+        if unchanged(record, &projection) {
+            let mut out = original.clone();
+            out.leader[9] = b' ';
+            return Ok(out);
         }
     }
+    let mut marc21 = Vec::new();
+    to_marc(record, limits, &mut marc21)?;
+    let marc21 =
+        Record::from_ref(&RecordRef::parse(&marc21, limits).map_err(ExportFailure::Source)?);
+    let mut out = crate::unimarc::from_marc21(&marc21);
+    if let Some(original) = &original {
+        crate::unimarc::keep_unread(&mut out, original);
+    }
+    Ok(out)
 }
 
 /// One stored record as the export writes it, read back as a MARC record; `None` when
@@ -241,33 +356,34 @@ pub fn export_selection<S: RecordSource + ?Sized>(
     limits: &Limits,
 ) -> Result<SelectionExport, CatalogReadError> {
     let mut export = SelectionExport::default();
+    let xml_format = matches!(format, RecordFormat::MarcXml | RecordFormat::UnimarcXml);
     let mut xml = String::new();
-    if format == RecordFormat::MarcXml {
+    if xml_format {
         xml.push_str(MARCXML_COLLECTION_HEADER);
     }
-    let mut marc21 = Vec::new();
     for &instance in instances {
         let Some(stored) = stored_record(source, instance)? else {
             continue;
         };
-        marc21.clear();
-        let written = to_marc(&stored.record, limits, &mut marc21).and_then(|()| match format {
-            RecordFormat::Marc21 => {
-                export.bytes.extend_from_slice(&marc21);
-                Ok(())
+        // A record that fails leaves nothing behind: each is written apart first.
+        let mut bytes = Vec::new();
+        let mut one = String::new();
+        match write_record(
+            &stored.record,
+            format,
+            limits,
+            &mut bytes,
+            &mut one,
+            Layout::Collection,
+        ) {
+            Ok(()) => {
+                export.bytes.extend_from_slice(&bytes);
+                xml.push_str(&one);
             }
-            RecordFormat::MarcXml => {
-                let record = RecordRef::parse(&marc21, limits).map_err(ExportFailure::Source)?;
-                Record::from_ref(&record)
-                    .write_marcxml_collection_record(&mut xml)
-                    .map_err(ExportFailure::Write)
-            }
-        });
-        if let Err(failure) = written {
-            export.failures.push(FailedExport { instance, failure });
+            Err(failure) => export.failures.push(FailedExport { instance, failure }),
         }
     }
-    if format == RecordFormat::MarcXml {
+    if xml_format {
         xml.push_str(MARCXML_COLLECTION_FOOTER);
         export.bytes = xml.into_bytes();
     }

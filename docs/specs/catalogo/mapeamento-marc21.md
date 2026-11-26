@@ -125,4 +125,4 @@ Nenhum (área livre).
 - Contribuição alterada (por exemplo, o papel) é gerada de novo e perde `$d`, `$0` e `$1` do campo original; manter esses subcampos fica para quando houver autoridades.
 - Hub a partir de título uniforme e relações a partir de `76X`–`78X` (`775` aparece no corpus): depois, com teste próprio.
 - Autoridades (`$0`, `$9`): fase seguinte.
-- Registros UNIMARC: Fase 4.
+- Registros UNIMARC: entram pela projeção MARC21 ([UNIMARC](unimarc.md)).

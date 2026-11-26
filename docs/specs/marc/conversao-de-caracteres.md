@@ -78,6 +78,6 @@ Nenhum.
 
 - **Versão da `MARC::Charset`.** A versão 1.36 (outubro de 2026) acrescenta um caractere CCCII (`0x212024` → U+FF65) e corrige uma falha com `%` no texto. Esta spec segue a 1.35, a anterior, sem esse caractere; falta confirmar a versão instalada no oráculo (`dpkg -l libmarc-charset-perl`).
 - Registro com líder 9 = `a` cujos bytes não são UTF-8 válido: o `MARC::File::USMARC` do Koha decodifica antes da conversão, e esse caminho não foi verificado.
-- Conversão de registros UNIMARC (ISO 5426 em nível de registro e marcação no `100$a`): Fase 4. A conversão de texto ISO 5426 já está aqui.
+- A conversão de registros UNIMARC (ISO 5426 em nível de registro e marcação no `100$a`) está em [UNIMARC](../catalogo/unimarc.md), item 2; a conversão de texto ISO 5426 está aqui.
 - Normalização NFC/NFD depois da conversão: exportação (1.11) e importação (1.7).
 - Codificações escolhidas pelo usuário (`$source_encoding` via `Text::Iconv`).
