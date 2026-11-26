@@ -56,6 +56,9 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &PatronCommand) -> Applied {
             }
             PatronOutput::PasswordSet(*patron)
         }
+        PatronCommand::ApplyRetention { today, retention } => {
+            crate::patron_retention::apply(tx.connection(), *today, *retention)?
+        }
         PatronCommand::Anonymize(patron) => {
             crate::patron_privacy::anonymize(tx.connection(), *patron)?
         }

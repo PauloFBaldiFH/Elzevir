@@ -172,6 +172,7 @@ impl WriteCommand {
             Self::Patrons(PatronCommand::SetReadingHistory { .. }) => "patrons.set_reading_history",
             Self::Patrons(PatronCommand::Anonymize(_)) => "patrons.anonymize",
             Self::Patrons(PatronCommand::Export(_)) => "patrons.export",
+            Self::Patrons(PatronCommand::ApplyRetention { .. }) => "patrons.apply_retention",
             Self::Patrons(PatronCommand::MigrateKoha(_)) => "patrons.migrate_koha",
             Self::Patrons(PatronCommand::MigrateKohaCirculation(_)) => {
                 "patrons.migrate_koha_circulation"
