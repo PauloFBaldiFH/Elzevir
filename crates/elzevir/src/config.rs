@@ -11,7 +11,10 @@ use std::time::Duration;
 use elzevir_app::drafts::DraftField;
 use elzevir_domain::call_number::{AuthorTable, MAX_TABLE_LINES, TableReport};
 use elzevir_domain::long_overdue::{DEFAULT_MAX_DAYS, LongOverdueSettings};
-use elzevir_sources::{DEFAULT_TIMEOUT, MAX_NAME_CHARS, SruServer, SruVersion};
+use elzevir_sources::{
+    DEFAULT_TIMEOUT, DEFAULT_Z3950_PORT, DraftServer, MAX_NAME_CHARS, RecordCharset, SruServer,
+    SruVersion, Z3950Server,
+};
 use jiff::tz::TimeZone;
 use serde::Deserialize;
 
@@ -44,27 +47,35 @@ pub(crate) struct Config {
     draft_sources: Vec<DraftSourceEntry>,
 }
 
-/// One `[[draft_sources]]` entry (spec items 16 and 17).
+/// One `[[draft_sources]]` entry (fontes-de-rascunho.md, items 16 and 17, and
+/// cliente-z3950.md, items 15 and 16).
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct DraftSourceEntry {
-    /// Shown in the origin, `sru:<name>`.
+    /// Shown in the origin, `sru:<name>` or `z3950:<name>`.
     name: String,
-    /// Only `sru` for now.
+    /// `sru` or `z3950`.
     kind: String,
-    /// Base URL, `http` or `https`, without a query string.
-    url: String,
-    /// `1.2` (when absent) or `2.0`.
-    version: Option<String>,
-    /// `marcxml` when absent.
-    record_schema: Option<String>,
     /// From 1 to 60; 10 when absent.
     timeout_seconds: Option<u64>,
     /// Asked when absent.
     enabled: Option<bool>,
-    /// The server's CQL index of each query field.
-    #[serde(default)]
-    fields: DraftFields,
+    /// SRU: base URL, `http` or `https`, without a query string.
+    url: Option<String>,
+    /// SRU: `1.2` (when absent) or `2.0`.
+    version: Option<String>,
+    /// SRU: `marcxml` when absent.
+    record_schema: Option<String>,
+    /// SRU: the server's CQL index of each query field.
+    fields: Option<DraftFields>,
+    /// Z39.50: host name or address, without scheme or port.
+    host: Option<String>,
+    /// Z39.50: 210 when absent.
+    port: Option<u16>,
+    /// Z39.50: one or more databases, separated by commas.
+    database: Option<String>,
+    /// Z39.50: `auto` (when absent), `utf-8` or `marc-8`.
+    encoding: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -77,17 +88,40 @@ struct DraftFields {
     any: Option<String>,
 }
 
+/// Most characters of a Z39.50 database name.
+const MAX_DATABASE_CHARS: usize = 64;
+
 impl DraftSourceEntry {
     /// The server, or why it cannot be.
-    fn server(&self) -> Result<SruServer, String> {
+    fn server(&self) -> Result<DraftServer, String> {
         let name = self.name.trim();
         if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
             return Err(format!("name must have 1 to {MAX_NAME_CHARS} characters"));
         }
-        if self.kind != "sru" {
-            return Err(format!("kind must be sru, not {}", self.kind));
+        let timeout = match self.timeout_seconds {
+            None => DEFAULT_TIMEOUT,
+            Some(seconds @ 1..=60) => Duration::from_secs(seconds),
+            Some(other) => return Err(format!("timeout_seconds must be 1 to 60, not {other}")),
+        };
+        match self.kind.as_str() {
+            "sru" => self.sru(name, timeout).map(DraftServer::Sru),
+            "z3950" => self.z3950(name, timeout).map(DraftServer::Z3950),
+            other => Err(format!("kind must be sru or z3950, not {other}")),
         }
-        let url = self.url.trim();
+    }
+
+    /// The SRU server; Z39.50 keys are refused.
+    fn sru(&self, name: &str, timeout: Duration) -> Result<SruServer, String> {
+        refuse_keys(
+            "sru",
+            &[
+                ("host", self.host.is_some()),
+                ("port", self.port.is_some()),
+                ("database", self.database.is_some()),
+                ("encoding", self.encoding.is_some()),
+            ],
+        )?;
+        let url = self.url.as_deref().unwrap_or_default().trim();
         if !(url.starts_with("https://") || url.starts_with("http://"))
             || url.contains(['?', '#'])
             || url.chars().any(char::is_whitespace)
@@ -101,21 +135,17 @@ impl DraftSourceEntry {
             "2.0" => SruVersion::V2_0,
             other => return Err(format!("version must be 1.2 or 2.0, not {other}")),
         };
-        let timeout = match self.timeout_seconds {
-            None => DEFAULT_TIMEOUT,
-            Some(seconds @ 1..=60) => Duration::from_secs(seconds),
-            Some(other) => return Err(format!("timeout_seconds must be 1 to 60, not {other}")),
-        };
+        let given = self.fields.as_ref();
         let fields = [
-            (DraftField::Isbn, &self.fields.isbn),
-            (DraftField::Issn, &self.fields.issn),
-            (DraftField::Title, &self.fields.title),
-            (DraftField::Author, &self.fields.author),
-            (DraftField::Any, &self.fields.any),
+            (DraftField::Isbn, given.and_then(|f| f.isbn.as_deref())),
+            (DraftField::Issn, given.and_then(|f| f.issn.as_deref())),
+            (DraftField::Title, given.and_then(|f| f.title.as_deref())),
+            (DraftField::Author, given.and_then(|f| f.author.as_deref())),
+            (DraftField::Any, given.and_then(|f| f.any.as_deref())),
         ]
         .into_iter()
         .filter_map(|(field, index)| {
-            let index = index.as_deref()?.trim();
+            let index = index?.trim();
             (!index.is_empty()).then(|| (field, index.to_owned()))
         })
         .collect();
@@ -132,11 +162,81 @@ impl DraftSourceEntry {
             fields,
         })
     }
+
+    /// The Z39.50 server; SRU keys are refused.
+    fn z3950(&self, name: &str, timeout: Duration) -> Result<Z3950Server, String> {
+        refuse_keys(
+            "z3950",
+            &[
+                ("url", self.url.is_some()),
+                ("version", self.version.is_some()),
+                ("record_schema", self.record_schema.is_some()),
+                ("fields", self.fields.is_some()),
+            ],
+        )?;
+        let host = self.host.as_deref().unwrap_or_default().trim();
+        // A colon belongs only to an IPv6 address; a port has its own key.
+        if host.is_empty()
+            || host.contains(['/', '@', '[', ']'])
+            || host.chars().any(char::is_whitespace)
+            || (host.contains(':') && host.parse::<std::net::Ipv6Addr>().is_err())
+        {
+            return Err(format!(
+                "host must be a name or address, without scheme or port: {host}"
+            ));
+        }
+        let port = match self.port {
+            None => DEFAULT_Z3950_PORT,
+            Some(0) => return Err("port must be 1 to 65535, not 0".to_owned()),
+            Some(port) => port,
+        };
+        let databases: Vec<String> = self
+            .database
+            .as_deref()
+            .unwrap_or_default()
+            .split(',')
+            .map(|database| database.trim().to_owned())
+            .collect();
+        if databases
+            .iter()
+            .any(|database| database.is_empty() || database.chars().count() > MAX_DATABASE_CHARS)
+        {
+            return Err(format!(
+                "database must name one or more databases of 1 to {MAX_DATABASE_CHARS} characters"
+            ));
+        }
+        let charset = match self.encoding.as_deref().unwrap_or("auto") {
+            "auto" => RecordCharset::Auto,
+            "utf-8" => RecordCharset::Utf8,
+            "marc-8" => RecordCharset::Marc8,
+            other => {
+                return Err(format!(
+                    "encoding must be auto, utf-8 or marc-8, not {other}"
+                ));
+            }
+        };
+        Ok(Z3950Server {
+            name: name.to_owned(),
+            host: host.to_owned(),
+            port,
+            databases,
+            charset,
+            timeout,
+        })
+    }
+}
+
+/// An error naming the first of `keys` that is set, which `kind` does not take.
+fn refuse_keys(kind: &str, keys: &[(&str, bool)]) -> Result<(), String> {
+    match keys.iter().find(|(_, set)| *set) {
+        Some((key, _)) => Err(format!("{key} does not apply to kind {kind}")),
+        None => Ok(()),
+    }
 }
 
 /// The enabled servers of `[[draft_sources]]`, in order, with unique names.
-fn draft_servers(entries: &[DraftSourceEntry]) -> Result<Vec<SruServer>, String> {
-    let mut servers: Vec<SruServer> = Vec::new();
+fn draft_servers(entries: &[DraftSourceEntry]) -> Result<Vec<DraftServer>, String> {
+    let mut servers: Vec<DraftServer> = Vec::new();
     for (index, entry) in entries.iter().enumerate() {
         let server = entry
             .server()
@@ -144,11 +244,11 @@ fn draft_servers(entries: &[DraftSourceEntry]) -> Result<Vec<SruServer>, String>
         if entries
             .iter()
             .take(index)
-            .any(|other| other.name.trim() == server.name)
+            .any(|other| other.name.trim() == server.name())
         {
             return Err(format!(
                 "draft_sources[{index}]: the name {} is repeated",
-                server.name
+                server.name()
             ));
         }
         if entry.enabled.unwrap_or(true) {
@@ -304,7 +404,7 @@ pub(crate) struct Loaded {
     /// The mail server, when notices go out by e-mail.
     pub(crate) mail: Option<MailSettings>,
     /// The enabled draft sources, in priority order.
-    pub(crate) draft_sources: Vec<SruServer>,
+    pub(crate) draft_sources: Vec<DraftServer>,
 }
 
 /// Reads `data_dir/elzevir.toml` and what it points to; no file is no configuration.
@@ -535,6 +635,41 @@ mod tests {
     }
 
     #[test]
+    fn z3950_sources_are_read_with_their_defaults() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("elzevir.toml"),
+            "[[draft_sources]]\nname = \"Z\"\nkind = \"z3950\"\nhost = \" z.example.org \"\n\
+             database = \"livros, periodicos\"\n\
+             [[draft_sources]]\nname = \"V6\"\nkind = \"z3950\"\nhost = \"::1\"\nport = 2100\n\
+             database = \"db\"\nencoding = \"marc-8\"\ntimeout_seconds = 3\n",
+        )
+        .unwrap();
+        let servers = load(dir.path()).unwrap().draft_sources;
+        assert_eq!(
+            servers,
+            [
+                DraftServer::Z3950(Z3950Server {
+                    name: "Z".to_owned(),
+                    host: "z.example.org".to_owned(),
+                    port: 210,
+                    databases: vec!["livros".to_owned(), "periodicos".to_owned()],
+                    charset: RecordCharset::Auto,
+                    timeout: DEFAULT_TIMEOUT,
+                }),
+                DraftServer::Z3950(Z3950Server {
+                    name: "V6".to_owned(),
+                    host: "::1".to_owned(),
+                    port: 2100,
+                    databases: vec!["db".to_owned()],
+                    charset: RecordCharset::Marc8,
+                    timeout: Duration::from_secs(3),
+                }),
+            ]
+        );
+    }
+
+    #[test]
     fn draft_sources_are_read_in_order_and_checked() {
         let dir = tempfile::tempdir().unwrap();
         assert!(load(dir.path()).unwrap().draft_sources.is_empty());
@@ -549,7 +684,15 @@ mod tests {
              [[draft_sources]]\nname = \"Segunda\"\nkind = \"sru\"\n\
              url = \"http://dois.example.org/sru\"\nversion = \"2.0\"\n",
         );
-        let servers = load(dir.path()).unwrap().draft_sources;
+        let servers: Vec<SruServer> = load(dir.path())
+            .unwrap()
+            .draft_sources
+            .into_iter()
+            .map(|server| match server {
+                DraftServer::Sru(server) => server,
+                DraftServer::Z3950(other) => panic!("{other:?}"),
+            })
+            .collect();
         let names: Vec<_> = servers.iter().map(|server| server.name.as_str()).collect();
         assert_eq!(names, ["Exemplo", "Segunda"]);
         let first = &servers[0];
@@ -566,7 +709,33 @@ mod tests {
         );
         let entry = |extra: &str| format!("[[draft_sources]]\nname = \"A\"\n{extra}");
         for (wrong, says) in [
-            (entry("kind = \"z3950\"\nurl = \"https://a\"\n"), "kind"),
+            (entry("kind = \"wais\"\nurl = \"https://a\"\n"), "kind"),
+            (entry("kind = \"z3950\"\nurl = \"https://a\"\n"), "url"),
+            (entry("kind = \"z3950\"\ndatabase = \"a\"\n"), "host"),
+            (
+                entry("kind = \"z3950\"\nhost = \"z.example.org:210\"\ndatabase = \"a\"\n"),
+                "host",
+            ),
+            (
+                entry("kind = \"z3950\"\nhost = \"z3950://z.example.org\"\ndatabase = \"a\"\n"),
+                "host",
+            ),
+            (
+                entry("kind = \"z3950\"\nhost = \"z.example.org\"\ndatabase = \"a,\"\n"),
+                "database",
+            ),
+            (
+                entry("kind = \"z3950\"\nhost = \"z.example.org\"\n"),
+                "database",
+            ),
+            (
+                entry("kind = \"z3950\"\nhost = \"z\"\ndatabase = \"a\"\nport = 0\n"),
+                "port",
+            ),
+            (
+                entry("kind = \"z3950\"\nhost = \"z\"\ndatabase = \"a\"\nencoding = \"latin1\"\n"),
+                "encoding",
+            ),
             (entry("kind = \"sru\"\nurl = \"ftp://a\"\n"), "url"),
             (entry("kind = \"sru\"\nurl = \"https://a?x=1\"\n"), "url"),
             (

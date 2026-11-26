@@ -24,7 +24,7 @@ A tarefa tem duas partes, cada uma num PR:
 ### Mensagens (4.3a)
 
 4. **Init**: versões 2 e 3, opções `search` e `present`, tamanho preferido de mensagem e tamanho excepcional de registro de 8 MiB, nome da implementação `Elzevir` e a versão do programa. Sem autenticação nesta tarefa.
-5. **Resposta ao Init**: o resultado (aceito ou recusado) e, se houver, a mensagem do servidor.
+5. **Resposta ao Init**: o resultado (aceito ou recusado). A mensagem do servidor não é lida: ela vem em campos livres (`userInformationField`, `otherInfo`) que cada servidor preenche de um jeito.
 6. **Search**: base(s) da configuração, conjunto de resultados `default`, `smallSetUpperBound = 0`, `largeSetLowerBound = 1`, `mediumSetPresentNumber = 0` (nenhum registro volta na busca; eles vêm no Present) e a consulta Type-1 (RPN) com o conjunto de atributos Bib-1.
 7. **Consulta Type-1**, pela regra do Koha (`C4::Breeding::_bib_build_query` e `_build_query`):
    1. os campos preenchidos, na ordem alfabética dos nomes do Koha (`author`, `isbn`, `issn`, `srchany`, `title`; `any` do Elzevir é o `srchany` do Koha);
@@ -55,12 +55,12 @@ A tarefa tem duas partes, cada uma num PR:
     enabled = true             # opcional
     ```
 
-16. `name`, `timeout_seconds` e `enabled` valem como no SRU; `host` é obrigatório (nome ou endereço, sem esquema nem porta); `port` de 1 a 65535; `database` obrigatório, cada nome com até 64 caracteres.
+16. `name`, `timeout_seconds` e `enabled` valem como no SRU; `host` é obrigatório (nome ou endereço, sem esquema nem porta; dois-pontos só num endereço IPv6); `port` de 1 a 65535; `database` obrigatório, cada nome com até 64 caracteres. As chaves do SRU (`url`, `version`, `record_schema`, `fields`) num servidor Z39.50 são erro, e as do Z39.50 num servidor SRU também.
 17. A origem de um rascunho é `z3950:<name>`.
 18. A conversa é: conectar, Init, Search e, se o total alcança a página, Present; depois Close. O tempo-limite do servidor vale para a conversa inteira, não para cada passo.
-19. Conexão recusada, nome que não resolve ou tempo estourado: **sem resposta**. Init recusado: **recusa** "init refused" (com a mensagem do servidor, se houver). Diagnóstico na busca ou no Present: **recusa** com o texto do item 13.
+19. Conexão recusada, nome que não resolve ou tempo estourado: **sem resposta**. Init recusado: **recusa** "init refused". Mensagem incompleta (o servidor fecha a conexão no meio): **sem resposta**; mensagem ilegível: **recusa** "unreadable Z39.50 message". Diagnóstico na busca ou no Present: **recusa** com o texto do item 13.
 20. Página além do total: **achados** com o total e nenhum rascunho, sem Present.
-21. Conjunto de caracteres de cada registro, como o Koha (`C4::Charset::MarcToUTF8Record` para MARC21): com `encoding = "auto"`, posição 09 do líder `a` é UTF-8 e o resto é MARC-8; `utf-8` e `marc-8` forçam a leitura. O registro passa a UTF-8 (líder 09 = `a`) antes do resumo e do mapeamento.
+21. Conjunto de caracteres de cada registro, pela conversão do Koha (`C4::Charset::MarcToUTF8Record` para MARC21): com `encoding = "auto"`, posição 09 do líder `a` é UTF-8 e o resto é MARC-8; `utf-8` e `marc-8` forçam a leitura. O registro passa a UTF-8 (líder 09 = `a`) antes do resumo e do mapeamento; os diacríticos ficam decompostos, como o `MARC::Charset` os deixa. Diferença intencional: o Koha só lê o conjunto da configuração do servidor (`iso-5426` quando falta) e ignora erros de conversão; aqui `auto` confia no líder e o registro que não converte é pulado (item 22).
 22. Registro que não é ISO 2709 válido, ou que não se converte, é pulado e contado, como no SRU.
 23. A rede fica fora da crate `elzevir-sources`: ela recebe uma porta de conexão (abrir um fluxo de bytes com prazo), e o binário dá a conexão TCP.
 24. A conexão TCP usa o prazo restante da conversa em cada leitura e escrita e não usa TLS (o Z39.50 das bibliotecas é TCP simples).
