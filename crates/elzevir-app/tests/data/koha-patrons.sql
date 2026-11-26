@@ -144,6 +144,80 @@ CREATE TABLE `borrower_debarments` (
 LOCK TABLES `borrower_debarments` WRITE;
 INSERT INTO `borrower_debarments` VALUES (1,1,'2099-01-01','SUSPENSION','Atraso',NULL,'2024-03-01 10:00:00',NULL),(2,1,'9999-12-31','MANUAL','Bloqueio',NULL,'2024-02-01 09:30:00',NULL),(3,1,NULL,'OVERDUES','Aviso',NULL,'2024-04-01 08:00:00',NULL),(4,6,'2000-01-01','SUSPENSION',NULL,NULL,'1999-12-01 08:00:00',NULL),(5,3,NULL,'MANUAL',NULL,NULL,'2024-01-01 08:00:00',NULL);
 UNLOCK TABLES;
+DROP TABLE IF EXISTS `items`;
+CREATE TABLE `items` (
+  `itemnumber` int(11) NOT NULL AUTO_INCREMENT,
+  `biblionumber` int(11) NOT NULL DEFAULT 0,
+  `barcode` varchar(20) DEFAULT NULL,
+  `homebranch` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`itemnumber`)
+) ENGINE=InnoDB AUTO_INCREMENT=121 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+LOCK TABLES `items` WRITE;
+INSERT INTO `items` VALUES (100,10,'B100','CTR'),(101,10,'B101','CTR'),(110,11,'B110','CTR'),(120,11,'B120','CTR');
+UNLOCK TABLES;
+
+DROP TABLE IF EXISTS `issues`;
+CREATE TABLE `issues` (
+  `issue_id` int(11) NOT NULL AUTO_INCREMENT,
+  `borrowernumber` int(11) DEFAULT NULL,
+  `issuer_id` int(11) DEFAULT NULL,
+  `itemnumber` int(11) DEFAULT NULL,
+  `date_due` datetime DEFAULT NULL,
+  `branchcode` varchar(10) DEFAULT NULL,
+  `returndate` datetime DEFAULT NULL,
+  `lastreneweddate` datetime DEFAULT NULL,
+  `renewals_count` tinyint(4) NOT NULL DEFAULT 0,
+  `unseen_renewals` tinyint(4) NOT NULL DEFAULT 0,
+  `auto_renew` tinyint(1) DEFAULT 0,
+  `auto_renew_error` varchar(32) DEFAULT NULL,
+  `timestamp` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `issuedate` datetime DEFAULT NULL,
+  `onsite_checkout` int(1) NOT NULL DEFAULT 0,
+  `note` longtext DEFAULT NULL,
+  `notedate` datetime DEFAULT NULL,
+  `noteseen` int(1) DEFAULT NULL,
+  PRIMARY KEY (`issue_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+LOCK TABLES `issues` WRITE;
+INSERT INTO `issues` VALUES (1,1,NULL,100,'2026-12-10 23:59:00','CTR',NULL,'2026-11-20 10:00:00',1,0,0,NULL,'2026-11-20 10:00:00','2026-11-05 14:30:00',0,NULL,NULL,NULL),(2,6,NULL,120,'2026-11-27 18:00:00','NRT',NULL,NULL,0,0,0,NULL,'2026-11-26 09:00:00','2026-11-26 09:00:00',1,NULL,NULL,NULL),(3,3,NULL,101,'2026-12-10 23:59:00','CTR',NULL,NULL,0,0,0,NULL,'2026-11-05 14:30:00','2026-11-05 14:30:00',0,NULL,NULL,NULL),(4,1,NULL,999,'2026-12-10 23:59:00','CTR',NULL,NULL,0,0,0,NULL,'2026-11-05 14:30:00','2026-11-05 14:30:00',0,NULL,NULL,NULL),(5,2,NULL,100,'2026-12-10 23:59:00','CTR',NULL,NULL,0,0,0,NULL,'2026-11-05 14:30:00','2026-11-05 14:30:00',0,NULL,NULL,NULL),(6,2,NULL,110,'2026-12-10 23:59:00','CTR',NULL,NULL,0,0,0,NULL,'2026-11-05 14:30:00',NULL,0,NULL,NULL,NULL);
+UNLOCK TABLES;
+
+DROP TABLE IF EXISTS `reserves`;
+CREATE TABLE `reserves` (
+  `reserve_id` int(11) NOT NULL AUTO_INCREMENT,
+  `borrowernumber` int(11) NOT NULL DEFAULT 0,
+  `reservedate` date DEFAULT NULL,
+  `biblionumber` int(11) NOT NULL DEFAULT 0,
+  `deleted_biblionumber` int(11) DEFAULT NULL,
+  `item_group_id` int(11) DEFAULT NULL,
+  `branchcode` varchar(10) NOT NULL,
+  `desk_id` int(11) DEFAULT NULL,
+  `notificationdate` date DEFAULT NULL,
+  `reminderdate` date DEFAULT NULL,
+  `cancellationdate` date DEFAULT NULL,
+  `cancellation_reason` varchar(80) DEFAULT NULL,
+  `reservenotes` longtext DEFAULT NULL,
+  `priority` smallint(6) NOT NULL DEFAULT 1,
+  `found` varchar(1) DEFAULT NULL,
+  `timestamp` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `itemnumber` int(11) DEFAULT NULL,
+  `waitingdate` date DEFAULT NULL,
+  `expirationdate` date DEFAULT NULL,
+  `patron_expiration_date` date DEFAULT NULL,
+  `lowestPriority` tinyint(1) NOT NULL DEFAULT 0,
+  `suspend` tinyint(1) NOT NULL DEFAULT 0,
+  `suspend_until` datetime DEFAULT NULL,
+  `itemtype` varchar(10) DEFAULT NULL,
+  `item_level_hold` tinyint(1) NOT NULL DEFAULT 0,
+  `non_priority` tinyint(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`reserve_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+LOCK TABLES `reserves` WRITE;
+INSERT INTO `reserves` VALUES (1,2,'2026-11-10',10,NULL,NULL,'CTR',NULL,NULL,NULL,NULL,NULL,NULL,1,NULL,'2026-11-10 10:00:00',NULL,NULL,NULL,NULL,0,0,NULL,NULL,0,0),(2,6,'2026-11-12',10,NULL,NULL,'NRT',NULL,NULL,NULL,NULL,NULL,NULL,2,NULL,'2026-11-12 10:00:00',NULL,NULL,'2027-01-31',NULL,0,1,NULL,NULL,0,0),(3,1,'2026-11-01',11,NULL,NULL,'CTR',NULL,NULL,NULL,NULL,NULL,NULL,0,'W','2026-11-24 10:00:00',110,'2026-11-24','2026-12-01',NULL,0,0,NULL,NULL,0,0),(4,1,'2026-11-03',10,NULL,NULL,'NRT',NULL,NULL,NULL,NULL,NULL,NULL,0,'T','2026-11-25 10:00:00',101,NULL,NULL,NULL,0,0,NULL,NULL,1,0),(5,2,'2026-11-15',99,NULL,NULL,'CTR',NULL,NULL,NULL,NULL,NULL,NULL,1,NULL,'2026-11-15 10:00:00',NULL,NULL,NULL,NULL,0,0,NULL,NULL,0,0),(6,6,'2026-11-16',11,NULL,NULL,'ZZZ',NULL,NULL,NULL,NULL,NULL,NULL,1,NULL,'2026-11-16 10:00:00',NULL,NULL,NULL,NULL,0,0,NULL,NULL,0,0);
+UNLOCK TABLES;
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
 
 -- Dump completed on 2026-11-26 12:00:00

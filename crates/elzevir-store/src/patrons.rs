@@ -72,6 +72,9 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &PatronCommand) -> Applied {
             PatronOutput::ReadingHistorySet(*patron)
         }
         PatronCommand::MigrateKoha(batch) => crate::koha_migration::apply(tx.connection(), batch)?,
+        PatronCommand::MigrateKohaCirculation(batch) => {
+            crate::koha_circulation::apply(tx.connection(), batch)?
+        }
     };
     Ok(WriteOutput::Patrons(output))
 }

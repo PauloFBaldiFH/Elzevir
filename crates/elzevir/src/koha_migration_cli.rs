@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! `elzevir migrate-koha`: branches, patron categories, patrons and their restrictions
-//! from a whole Koha database dump (docs/specs/migracao/leitores-do-koha.md).
+//! `elzevir migrate-koha`: branches, patron categories, patrons and their restrictions,
+//! then current loans and holds, from a whole Koha database dump
+//! (docs/specs/migracao/leitores-do-koha.md, circulacao-do-koha.md).
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -8,7 +9,9 @@ use std::path::PathBuf;
 
 use clap::Args;
 use elzevir_app::commands::{WriteCommand, WriteOutput};
-use elzevir_app::koha_migration::{KohaMigrated, KohaPlan, Leftover, plan};
+use elzevir_app::koha_migration::{
+    CirculationLeftover, KohaCirculationMigrated, KohaMigrated, KohaPlan, Leftover, plan,
+};
 use elzevir_app::patrons::{PatronCommand, PatronOutput};
 
 use crate::open_store;
@@ -46,7 +49,23 @@ pub(crate) fn run(args: &MigrateKohaArgs) -> Result<(), String> {
         };
         done.add(write);
     }
+    let mut circulation = KohaCirculationMigrated::default();
+    for batch in plan.circulation_batches() {
+        let answer = data
+            .store
+            .submit(WriteCommand::Patrons(
+                PatronCommand::MigrateKohaCirculation(Box::new(batch)),
+            ))
+            .map_err(|e| e.to_string())?
+            .wait()
+            .map_err(|e| e.to_string())?;
+        let WriteOutput::Patrons(PatronOutput::KohaCirculationMigrated(write)) = answer else {
+            return Err("unexpected answer from the store".to_owned());
+        };
+        circulation.add(write);
+    }
     print!("{}", report(&plan, &done));
+    print!("{}", circulation_report(&plan, &circulation));
     Ok(())
 }
 
@@ -122,6 +141,56 @@ fn report(plan: &KohaPlan, done: &KohaMigrated) -> String {
         }
     }
     lines.push("not migrated: CPF (Koha has no column)".to_owned());
+    let mut text = lines.join("\n");
+    text.push('\n');
+    text
+}
+
+const fn circulation_leftover(why: CirculationLeftover) -> &'static str {
+    match why {
+        CirculationLeftover::Incomplete => "a number, patron, Item or date missing",
+        CirculationLeftover::Patron => "patron not migrated",
+        CirculationLeftover::Item => "no Item, or two, with its itemnumber or barcode",
+        CirculationLeftover::Record => "no record, or two, with its biblionumber",
+        CirculationLeftover::Branch => "branchcode not in branches",
+        CirculationLeftover::ItemOnLoan => "Item already lent to another patron",
+    }
+}
+
+/// The report of loans and holds, by Koha's numbers only (circulacao-do-koha.md, item 6).
+fn circulation_report(plan: &KohaPlan, done: &KohaCirculationMigrated) -> String {
+    let mut loans_left = plan.loans_left.clone();
+    loans_left.extend(done.loans_left.iter().copied());
+    let mut holds_left = plan.holds_left.clone();
+    holds_left.extend(done.holds_left.iter().copied());
+    let mut lines = vec![format!(
+        "loans: {} migrated, {} left out",
+        done.loans,
+        loans_left.len()
+    )];
+    for (number, why) in &loans_left {
+        lines.push(format!(
+            "  issue_id {number}: {}",
+            circulation_leftover(*why)
+        ));
+    }
+    lines.push(format!(
+        "holds: {} migrated, {} left out, {} suspended in Koha (active here), {} queued with an end date (dropped)",
+        done.holds,
+        holds_left.len(),
+        plan.suspended_holds,
+        plan.holds_with_end
+    ));
+    for (number, why) in &holds_left {
+        lines.push(format!(
+            "  reserve_id {number}: {}",
+            circulation_leftover(*why)
+        ));
+    }
+    lines.push(format!(
+        "loans and holds already migrated: {}",
+        done.already_migrated
+    ));
     let mut text = lines.join("\n");
     text.push('\n');
     text

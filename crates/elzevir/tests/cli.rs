@@ -208,6 +208,14 @@ fn a_koha_dump_brings_its_patrons_once() {
         "OPAC passwords: 1 migrated, 1 in a format older than bcrypt left out",
         "  email: 1",
         "  userid: 2",
+        // No catalog in this directory: the loans and holds wait for it.
+        "loans: 0 migrated, 6 left out",
+        "  issue_id 6: a number, patron, Item or date missing",
+        "  issue_id 3: patron not migrated",
+        "  issue_id 1: no Item, or two, with its itemnumber or barcode",
+        "holds: 0 migrated, 6 left out, 1 suspended in Koha (active here), 1 queued with an end date (dropped)",
+        "  reserve_id 4: no record, or two, with its biblionumber",
+        "loans and holds already migrated: 0",
     ] {
         assert!(
             report.lines().any(|found| found == line),
