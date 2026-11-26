@@ -38,14 +38,8 @@ pub(crate) async fn export_marc(
         .rev()
         .find(|(name, _)| name == "format")
         .map(|(_, value)| value.as_str());
-    let (format, content_type, extension) = match format {
-        None | Some("marc21") => (RecordFormat::Marc21, "application/marc", "mrc"),
-        Some("marcxml") => (
-            RecordFormat::MarcXml,
-            "application/marcxml+xml; charset=utf-8",
-            "xml",
-        ),
-        Some(_) => return (StatusCode::BAD_REQUEST, "unknown format").into_response(),
+    let Some(format) = RecordFormat::of(format) else {
+        return (StatusCode::BAD_REQUEST, "unknown format").into_response();
     };
     let heads = selection(
         pairs
@@ -79,10 +73,13 @@ pub(crate) async fn export_marc(
         .join(",");
     let mut response = (
         [
-            (header::CONTENT_TYPE, content_type.to_owned()),
+            (header::CONTENT_TYPE, format.content_type().to_owned()),
             (
                 header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"elzevir-lote.{extension}\""),
+                format!(
+                    "attachment; filename=\"elzevir-lote{}\"",
+                    format.file_suffix()
+                ),
             ),
         ],
         export.bytes,

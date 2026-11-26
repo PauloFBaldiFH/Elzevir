@@ -752,6 +752,24 @@ async fn one_record_is_exported_as_marc21_or_marcxml() {
     assert!(xml.starts_with("<?xml"));
     assert!(xml.contains("Dom Casmurro"));
 
+    // UNIMARC (docs/specs/catalogo/unimarc.md, item 16).
+    let unimarc = send(
+        &app,
+        get(
+            "/equipe/acervo/instancia/10/marc?format=unimarc",
+            Some(&session),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(
+        unimarc.headers()[header::CONTENT_DISPOSITION],
+        r#"attachment; filename="elzevir-10-unimarc.mrc""#
+    );
+    let unimarc = body(unimarc).await;
+    assert!(unimarc.contains("Dom Casmurro") && unimarc.contains("50  "));
+    assert!(page.contains(r#"href="/equipe/acervo/instancia/10/marc?format=unimarcxml""#));
+
     let missing = send(
         &app,
         get("/equipe/acervo/instancia/20/marc", Some(&session), None),

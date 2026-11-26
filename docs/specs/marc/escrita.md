@@ -66,4 +66,4 @@ Nenhum. Os itens 3 e 4 do §4 seguem a exportação da equipe; o OPAC do Koha en
 
 - Escolha de campos e itens embutidos (`952`), filtros de visibilidade do OPAC e de campos ocultos: tarefas 1.6 e 1.11.
 - Normalização Unicode na exportação: o formato `utf8` do OPAC converte os campos de dados para NFD (`C4::Charset::SetUTF8Flag`), e o `marcxml` do OPAC aplica NFC e entidades `&#x…;`. Ficam para a tarefa 1.11, junto com as telas e a linha de comando de exportação.
-- MARC-8 e UNIMARC no XML (`encoding` ISO-8859-1 do UNIMARC): tarefas 1.4 e Fase 4.
+- MARC-8 no XML: tarefa 1.4. O UNIMARC sai em UTF-8 ([UNIMARC](../catalogo/unimarc.md), item 15).

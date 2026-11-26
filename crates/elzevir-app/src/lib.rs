@@ -48,4 +48,5 @@ pub mod sru;
 pub mod staff;
 pub mod statement_rows;
 pub mod suggestions;
+pub mod unimarc;
 pub mod worklist;

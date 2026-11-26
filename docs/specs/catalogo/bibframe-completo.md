@@ -259,4 +259,4 @@ As tarefas 2.9 (autoridades) e 2.10 (listas de trabalho e facetas) vêm depois d
 
 - Triple store ou SPARQL (doc 04, decisão 5).
 - BIBFRAME como formato de **importação** (só MARC entra, por ora).
-- UNIMARC (Fase 4).
+- UNIMARC: pela projeção MARC21 ([UNIMARC](unimarc.md)).

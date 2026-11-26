@@ -211,6 +211,7 @@ selection-count = Selected:
 selection-full = The limit is 500 families.
 selection-export-marc21 = Export MARC21
 selection-export-marcxml = Export MARCXML
+selection-export-unimarc = Export UNIMARC
 selection-clear = Clear selection
 batch-items-open = Change items
 batch-items-title = Change the items of the selected families

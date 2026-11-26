@@ -13,8 +13,8 @@
 
 ### Exportar a seleção (parte a)
 
-5. A barra exporta a seleção em MARC21 (ISO 2709) ou MARCXML, para qualquer pessoa da equipe, como a exportação de um registro ([listagem](listagem.md), itens 33 a 36).
-6. `GET /equipe/acervo/lote/marc?format=marc21|marcxml&head=h12&head=w7` exige sessão da equipe. `head` é a família como a listagem a escreve: `h` e o número da Matriz, ou `w` e o número da Obra. Família repetida conta uma vez; malformada é ignorada; passando de 500, as que sobram são ignoradas. Sem nenhuma família válida, ou com formato desconhecido, é 400.
+5. A barra exporta a seleção em MARC21 (ISO 2709), MARCXML ou UNIMARC ([UNIMARC](unimarc.md), item 16), para qualquer pessoa da equipe, como a exportação de um registro ([listagem](listagem.md), itens 33 a 36).
+6. `GET /equipe/acervo/lote/marc?format=marc21|marcxml|unimarc|unimarcxml&head=h12&head=w7` exige sessão da equipe. `head` é a família como a listagem a escreve: `h` e o número da Matriz, ou `w` e o número da Obra. Família repetida conta uma vez; malformada é ignorada; passando de 500, as que sobram são ignoradas. Sem nenhuma família válida, ou com formato desconhecido, é 400.
 7. Saem todas as Instâncias de cada família, na ordem da seleção, e dentro da família na ordem da listagem (Obra, depois Instância). Cada registro sai pela mesma regra da exportação de um registro e da linha de comando. O MARCXML é uma coleção (`<collection>`), como a exportação em lote do Koha.
 8. O arquivo vem como anexo, `elzevir-lote.mrc` (`application/marc`) ou `elzevir-lote.xml` (`application/marcxml+xml`). Registro que não pode ser escrito fica de fora, e o cabeçalho `X-Elzevir-Not-Exported` lista as Instâncias que ficaram. Família que deixou de existir é ignorada.
 

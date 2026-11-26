@@ -24,6 +24,7 @@
   <span class="selection-full muted" hidden>{{ t.get("selection-full") }}</span>
   <a class="selection-export" data-format="marc21" href="/equipe/acervo/lote/marc" download>{{ t.get("selection-export-marc21") }}</a>
   <a class="selection-export" data-format="marcxml" href="/equipe/acervo/lote/marc" download>{{ t.get("selection-export-marcxml") }}</a>
+  <a class="selection-export" data-format="unimarc" href="/equipe/acervo/lote/marc" download>{{ t.get("selection-export-unimarc") }}</a>
   {% if let Some(batch) = batch %}
   <button type="button" class="selection-items">{{ t.get("batch-items-open") }}</button>
   <span class="selection-list">
@@ -181,6 +182,8 @@
               <ul>
                 <li><a href="/equipe/acervo/instancia/{{ instance.id }}/marc?format=marc21" download>MARC21</a></li>
                 <li><a href="/equipe/acervo/instancia/{{ instance.id }}/marc?format=marcxml" download>MARCXML</a></li>
+                <li><a href="/equipe/acervo/instancia/{{ instance.id }}/marc?format=unimarc" download>UNIMARC</a></li>
+                <li><a href="/equipe/acervo/instancia/{{ instance.id }}/marc?format=unimarcxml" download>UNIMARC XML</a></li>
                 <li><a href="/equipe/acervo/instancia/{{ instance.id }}/bibframe?format=turtle" download>BIBFRAME Turtle</a></li>
                 <li><a href="/equipe/acervo/instancia/{{ instance.id }}/bibframe?format=rdfxml" download>BIBFRAME RDF/XML</a></li>
                 <li><a href="/equipe/acervo/instancia/{{ instance.id }}/citacao?format=ris" download>RIS</a></li>
