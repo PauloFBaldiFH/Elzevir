@@ -105,6 +105,10 @@ fn report(plan: &KohaPlan, done: &KohaMigrated) -> String {
         "restrictions: {} migrated, {} already ended",
         done.restrictions, plan.ended_restrictions
     ));
+    lines.push(format!(
+        "OPAC passwords: {} migrated, {} in a format older than bcrypt left out",
+        done.passwords, plan.old_passwords
+    ));
     if !plan.cleared.is_empty() {
         lines.push("fields emptied for breaking a rule:".to_owned());
         for (field, count) in &plan.cleared {
@@ -117,9 +121,7 @@ fn report(plan: &KohaPlan, done: &KohaMigrated) -> String {
             lines.push(format!("  {column}: {count}"));
         }
     }
-    lines.push(
-        "not migrated: CPF (Koha has no column); OPAC passwords come in task 5.1b".to_owned(),
-    );
+    lines.push("not migrated: CPF (Koha has no column)".to_owned());
     let mut text = lines.join("\n");
     text.push('\n');
     text

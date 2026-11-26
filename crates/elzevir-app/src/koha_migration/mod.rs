@@ -14,6 +14,7 @@ use jiff::tz::TimeZone;
 use serde::{Deserialize, Serialize};
 
 use crate::import::koha_sql::{self, DumpError};
+use crate::patron_account::is_koha_hash;
 use crate::patrons::{
     MAX_CARDNUMBER, PatronField, PatronFields, PatronRefusal, ReadingHistory, checked_patron,
 };
@@ -101,6 +102,8 @@ pub struct KohaPatron {
     pub reading_history: ReadingHistory,
     /// The restrictions still holding.
     pub restrictions: Vec<KohaRestriction>,
+    /// Koha's bcrypt hash of the OPAC password, kept until the patron signs in (item 12).
+    pub password_hash: Option<String>,
 }
 
 impl KohaPatron {
@@ -168,6 +171,8 @@ pub struct KohaMigrated {
     pub already_migrated: usize,
     /// Restrictions added.
     pub restrictions: usize,
+    /// OPAC passwords brought, also to patrons a former run added without one.
+    pub passwords: usize,
     /// Patrons left out because another patron has the card number.
     pub cardnumber_taken: Vec<u64>,
 }
@@ -182,6 +187,7 @@ impl KohaMigrated {
         self.patrons_added += other.patrons_added;
         self.already_migrated += other.already_migrated;
         self.restrictions += other.restrictions;
+        self.passwords += other.passwords;
         self.cardnumber_taken.extend(other.cardnumber_taken);
     }
 }
@@ -220,6 +226,8 @@ pub struct KohaPlan {
     pub staff: usize,
     /// Restrictions that already ended, not brought.
     pub ended_restrictions: usize,
+    /// Passwords in a format older than bcrypt, not brought.
+    pub old_passwords: usize,
     /// For each column of `borrowers` not kept, how many patrons had it filled.
     pub left_out: Vec<(&'static str, usize)>,
 }
@@ -273,6 +281,11 @@ pub fn plan(input: impl BufRead, today: Date, zone: &TimeZone) -> Result<KohaPla
     let mut restrictions = restrictions(rows(Table::Debarments), today, zone, &mut plan);
     for row in rows(Table::Borrowers) {
         plan.staff += usize::from(number(text(row, "flags").as_deref()).is_some());
+        let password = text(row, "password").filter(|hash| hash != "!");
+        let (bcrypt, old): (Option<String>, Option<String>) = match password {
+            Some(hash) if is_koha_hash(&hash) => (Some(hash), None),
+            other => (None, other),
+        };
         match patron(row, today, &plan).and_then(|mut patron| {
             let cleared = clean(&mut patron).map_err(|why| (patron.borrowernumber, why))?;
             Ok((patron, cleared))
@@ -284,6 +297,8 @@ pub fn plan(input: impl BufRead, today: Date, zone: &TimeZone) -> Result<KohaPla
                 patron.restrictions = restrictions
                     .remove(&patron.borrowernumber)
                     .unwrap_or_default();
+                patron.password_hash = bcrypt;
+                plan.old_passwords += usize::from(old.is_some());
                 plan.patrons.push(patron);
             }
             Err(left) => plan.left.push(left),
@@ -472,6 +487,7 @@ fn patron(row: &Row, today: Date, plan: &KohaPlan) -> Result<KohaPatron, (u64, L
             ReadingHistory::NotKept
         },
         restrictions: Vec::new(),
+        password_hash: None,
     })
 }
 

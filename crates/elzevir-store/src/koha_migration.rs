@@ -151,8 +151,10 @@ fn add_patron(
     done: &mut KohaMigrated,
 ) -> Result<(), CommandFailed<WriteRefusal>> {
     let number = patron.borrowernumber.to_string();
-    if key(connection, Keyed::Patron, &number)?.is_some() {
+    if let Some(id) = key(connection, Keyed::Patron, &number)? {
         done.already_migrated += 1;
+        // A run before the passwords came (item 12) left them out; a set one stays.
+        done.passwords += set_password(connection, id, patron, "password_hash IS NULL")?;
         return Ok(());
     }
     let taken = connection
@@ -177,6 +179,7 @@ fn add_patron(
         return Err(StoreError::Sqlite("adding a patron answered otherwise".to_owned()).into());
     };
     set_key(connection, Keyed::Patron, &number, id.0)?;
+    done.passwords += set_password(connection, id.0, patron, "1")?;
     for restriction in &patron.restrictions {
         connection
             .execute(
@@ -194,4 +197,22 @@ fn add_patron(
     }
     done.patrons_added += 1;
     Ok(())
+}
+
+/// Gives the patron Koha's hash when `condition`, a constant of this file, holds; 1 when
+/// it did.
+fn set_password(
+    connection: &Connection,
+    id: i64,
+    patron: &KohaPatron,
+    condition: &'static str,
+) -> Result<usize, StoreError> {
+    let Some(hash) = &patron.password_hash else {
+        return Ok(0);
+    };
+    // `condition` is one of two constants above, never input.
+    Ok(connection.execute(
+        &format!("UPDATE patrons SET password_hash = ?1 WHERE id = ?2 AND {condition}"),
+        params![hash, id],
+    )?)
 }

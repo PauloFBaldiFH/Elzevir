@@ -70,6 +70,7 @@ impl Table {
                 "borrowernotes",
                 "privacy",
                 "flags",
+                "password",
             ],
             Self::Debarments => &["borrowernumber", "type", "expiration", "created"],
         }
