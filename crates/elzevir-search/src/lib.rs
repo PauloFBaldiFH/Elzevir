@@ -8,6 +8,7 @@
 //! documents and the cursor can never disagree after a crash.
 
 mod facets;
+mod fields;
 mod merge;
 mod schema;
 
@@ -403,6 +404,55 @@ impl TantivyIndex {
             call_number: text(self.fields.call_number),
         })
     }
+    /// Runs `query`: by relevance, or in Instance order when every score is the same.
+    fn run(
+        &self,
+        query: &dyn Query,
+        by_instance: bool,
+        offset: usize,
+        limit: usize,
+    ) -> Result<SearchResults, SearchError> {
+        let searcher = self.reader.searcher();
+        if limit == 0 {
+            let total = searcher.search(query, &Count).map_err(error)?;
+            return Ok(SearchResults {
+                total,
+                hits: Vec::new(),
+            });
+        }
+        let top = TopDocs::with_limit(limit).and_offset(offset);
+        let (found, total) = if by_instance {
+            // Without words every score is the same: Instance order keeps pages stable.
+            let (found, total) = searcher
+                .search(
+                    query,
+                    &(top.order_by_u64_field("instance", Order::Asc), Count),
+                )
+                .map_err(error)?;
+            let found = found
+                .into_iter()
+                .map(|(_, address)| (1.0, address))
+                .collect();
+            (found, total)
+        } else {
+            searcher
+                .search(query, &(top.order_by_score(), Count))
+                .map_err(error)?
+        };
+        let mut hits = Vec::with_capacity(found.len());
+        for (score, address) in found {
+            let document: TantivyDocument = searcher.doc(address).map_err(error)?;
+            if let Some(hit) = self.hit(score, &document) {
+                hits.push(hit);
+            }
+        }
+        hits.sort_by(|a, b| {
+            b.score
+                .total_cmp(&a.score)
+                .then(a.instance.0.cmp(&b.instance.0))
+        });
+        Ok(SearchResults { total, hits })
+    }
 }
 
 impl SearchIndex for TantivyIndex {
@@ -446,47 +496,8 @@ impl SearchIndex for TantivyIndex {
         offset: usize,
         limit: usize,
     ) -> Result<SearchResults, SearchError> {
-        let searcher = self.reader.searcher();
         let query = self.scoped(self.filtered(asked, scope), scope);
-        if limit == 0 {
-            let total = searcher.search(&*query, &Count).map_err(error)?;
-            return Ok(SearchResults {
-                total,
-                hits: Vec::new(),
-            });
-        }
-        let top = TopDocs::with_limit(limit).and_offset(offset);
-        let (found, total) = if asked.text.trim().is_empty() {
-            // Without words every score is the same: Instance order keeps pages stable.
-            let (found, total) = searcher
-                .search(
-                    &*query,
-                    &(top.order_by_u64_field("instance", Order::Asc), Count),
-                )
-                .map_err(error)?;
-            let found = found
-                .into_iter()
-                .map(|(_, address)| (1.0, address))
-                .collect();
-            (found, total)
-        } else {
-            searcher
-                .search(&*query, &(top.order_by_score(), Count))
-                .map_err(error)?
-        };
-        let mut hits = Vec::with_capacity(found.len());
-        for (score, address) in found {
-            let document: TantivyDocument = searcher.doc(address).map_err(error)?;
-            if let Some(hit) = self.hit(score, &document) {
-                hits.push(hit);
-            }
-        }
-        hits.sort_by(|a, b| {
-            b.score
-                .total_cmp(&a.score)
-                .then(a.instance.0.cmp(&b.instance.0))
-        });
-        Ok(SearchResults { total, hits })
+        self.run(&*query, asked.text.trim().is_empty(), offset, limit)
     }
 
     fn facets(

@@ -52,6 +52,7 @@ mod repository_discovery;
 mod repository_staff;
 mod security;
 mod session;
+mod sru;
 mod staff;
 mod staff_bar;
 
@@ -74,6 +75,7 @@ pub use oai::{OaiEvent, OaiRepository};
 pub use opac::OpacPorts;
 pub use print_notices::notice_text;
 pub use session::Sessions;
+pub use sru::{SruEvent, SruServer};
 
 /// Web settings.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,6 +125,7 @@ pub struct AppState {
     drafts: Option<Arc<draft_station::Drafts>>,
     authority_sources: Option<Arc<dyn elzevir_app::authority_sources::AuthoritySource>>,
     oai: Option<OaiRepository>,
+    sru: Option<SruServer>,
 }
 
 struct Inner {
@@ -170,6 +173,7 @@ impl AppState {
             drafts: None,
             authority_sources: None,
             oai: None,
+            sru: None,
             inner: Arc::new(Inner {
                 staff,
                 memory,
@@ -310,6 +314,13 @@ impl AppState {
         self.oai = Some(repository);
         self
     }
+
+    /// Opens the SRU server at `/sru` (docs/specs/opac/sru.md).
+    #[must_use]
+    pub fn with_sru(mut self, server: SruServer) -> Self {
+        self.sru = Some(server);
+        self
+    }
 }
 
 /// All routes, with security headers on every response.
@@ -321,6 +332,7 @@ pub fn router(state: AppState) -> Router {
         .merge(repository_staff::routes(&state))
         .route("/record/{id}", get(opac::record))
         .route("/oai", get(oai::get).post(oai::post))
+        .route("/sru", get(sru::get).post(sru::post))
         .route("/equipe/barra", get(staff_bar::bar))
         .route("/equipe/busca", get(staff_bar::search))
         .route("/equipe", get(staff::home))
