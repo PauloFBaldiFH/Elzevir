@@ -3,6 +3,8 @@
 //! (docs/specs/opac/busca-e-registro.md).
 #![expect(
     clippy::unwrap_used,
+    clippy::indexing_slicing,
+    clippy::panic,
     reason = "integration test: helper functions fail the test on error"
 )]
 
@@ -332,4 +334,218 @@ async fn unknown_records_are_404() {
         assert_eq!(status, StatusCode::NOT_FOUND, "{uri}");
         assert!(html.contains("Record not found"));
     }
+}
+
+// The REST API (docs/specs/opac/api.md).
+
+/// Whether `value` fits `schema` of the `OpenAPI` `document`: the part of the schema
+/// language the document uses (`$ref`, `type`, `nullable`, `enum`, `required`,
+/// `properties`, closed objects, `items`, `minimum`, `maximum`).
+fn fits(
+    document: &serde_json::Value,
+    schema: &serde_json::Value,
+    value: &serde_json::Value,
+) -> Result<(), String> {
+    use serde_json::Value;
+    if let Some(reference) = schema["$ref"].as_str() {
+        let name = reference.trim_start_matches("#/components/schemas/");
+        return fits(document, &document["components"]["schemas"][name], value);
+    }
+    if value.is_null() {
+        return if schema["nullable"] == true {
+            Ok(())
+        } else {
+            Err(format!("null where {schema} is not nullable"))
+        };
+    }
+    if let Some(allowed) = schema["enum"].as_array()
+        && !allowed.contains(value)
+    {
+        return Err(format!("{value} is not one of {allowed:?}"));
+    }
+    let typed = match schema["type"].as_str() {
+        Some("string") => value.is_string(),
+        Some("integer") => value.is_i64() || value.is_u64(),
+        Some("boolean") => value.is_boolean(),
+        Some("array") => value.is_array(),
+        Some("object") => value.is_object(),
+        _ => true,
+    };
+    if !typed {
+        return Err(format!("{value} is not a {}", schema["type"]));
+    }
+    if let Some(number) = value.as_i64()
+        && (schema["minimum"]
+            .as_i64()
+            .is_some_and(|minimum| number < minimum)
+            || schema["maximum"]
+                .as_i64()
+                .is_some_and(|maximum| number > maximum))
+    {
+        return Err(format!("{number} is out of range in {schema}"));
+    }
+    if let Value::Array(values) = value {
+        for value in values {
+            fits(document, &schema["items"], value)?;
+        }
+    }
+    if let (Value::Object(fields), Some(properties)) = (value, schema["properties"].as_object()) {
+        for required in schema["required"].as_array().into_iter().flatten() {
+            let name = required.as_str().unwrap();
+            if !fields.contains_key(name) {
+                return Err(format!("{name} missing from {value}"));
+            }
+        }
+        for (name, field) in fields {
+            let Some(property) = properties.get(name) else {
+                return Err(format!("{name} is not in {schema}"));
+            };
+            fits(document, property, field).map_err(|error| format!("{name}: {error}"))?;
+        }
+    }
+    Ok(())
+}
+
+async fn call(
+    app: &Router,
+    method: &str,
+    uri: &str,
+) -> (StatusCode, Option<String>, serde_json::Value) {
+    let request = Request::builder()
+        .method(method)
+        .uri(uri)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    let status = response.status();
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .map(|value| value.to_str().unwrap().to_owned());
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    (
+        status,
+        content_type,
+        serde_json::from_slice(&bytes).unwrap(),
+    )
+}
+
+/// Calls `uri` and checks the answer against the response schema the document gives for
+/// `path` and the status.
+async fn checked(app: &Router, uri: &str, path: &str) -> (StatusCode, serde_json::Value) {
+    let (_, _, document) = call(app, "GET", "/api/v1/openapi.json").await;
+    let (status, content_type, body) = call(app, "GET", uri).await;
+    assert_eq!(content_type.as_deref(), Some("application/json"), "{uri}");
+    let schema = &document["paths"][path]["get"]["responses"][status.as_str()]["content"]["application/json"]
+        ["schema"];
+    assert!(!schema.is_null(), "{uri}: {status} is not in the document");
+    if let Err(error) = fits(&document, schema, &body) {
+        panic!("{uri}: {error}");
+    }
+    (status, body)
+}
+
+#[tokio::test]
+async fn the_api_publishes_its_contract() {
+    let app = app(Arc::new(catalog()), Vec::new());
+    let (status, content_type, document) = call(&app, "GET", "/api/v1/openapi.json").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        content_type.as_deref(),
+        Some("application/json; charset=utf-8")
+    );
+    assert_eq!(document["openapi"], "3.0.3");
+    // Every documented path is routed.
+    for path in document["paths"].as_object().unwrap().keys() {
+        let uri = path.replace("{id}", "1");
+        let (status, _, _) = call(&app, "GET", &uri).await;
+        assert_eq!(status, StatusCode::OK, "{uri}");
+    }
+}
+
+#[tokio::test]
+async fn the_api_searches_like_the_opac() {
+    let app = app(
+        Arc::new(catalog()),
+        vec![hit(1, "Perfil <Anuário>"), hit(2, "Sem exemplares")],
+    );
+    let (status, body) = checked(&app, "/api/v1/search?q=perfil&page=x", "/api/v1/search").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        (body["total"].as_u64(), body["page"].as_u64()),
+        (Some(2), Some(1))
+    );
+    let first = &body["results"][0];
+    assert_eq!(first["title"], "Perfil <Anuário>");
+    assert_eq!(
+        (first["items"].as_u64(), first["available"].as_u64()),
+        (Some(2), Some(1))
+    );
+    assert_eq!(
+        (&first["content"], &first["carrier"]),
+        (&"text".into(), &"print".into())
+    );
+    let (_, empty) = checked(&app, "/api/v1/search?q=+", "/api/v1/search").await;
+    assert_eq!(empty["results"], serde_json::json!([]));
+}
+
+#[tokio::test]
+async fn the_api_gives_a_record_without_who_has_its_items() {
+    let catalog = Arc::new(catalog());
+    {
+        let mut records = catalog.records.lock().unwrap();
+        let items = &mut records.get_mut(&1).unwrap().2;
+        items[0].due = Some(jiff::civil::date(2026, 12, 4));
+        items.push(ItemView {
+            movement: Movement::InTransit,
+            location: None,
+            ..item(3, ItemStatus::default())
+        });
+        let mut hidden = view(3, "Oculto");
+        hidden.opac_hidden = true;
+        records.insert(3, (1, hidden, vec![item(5, ItemStatus::default())]));
+    }
+    let app = app(catalog, Vec::new());
+    let path = "/api/v1/instances/{id}";
+    let (status, body) = checked(&app, "/api/v1/instances/1", path).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body["contributors"][0],
+        serde_json::json!({"kind": "person", "name": "Silva, Ana"})
+    );
+    assert_eq!(
+        body["notes"][1],
+        serde_json::json!({"kind": "contents", "value": "Parte 1 -- Parte 2."})
+    );
+    let items = &body["items"];
+    assert_eq!(items[0]["status"], "on_loan");
+    assert_eq!(items[0]["due"], "2026-12-04");
+    assert_eq!(items[0]["branch"], "Main Library");
+    assert_eq!(items[0]["location"], "General stacks");
+    assert_eq!(items[1]["status"], "lost");
+    assert_eq!(
+        (&items[2]["status"], &items[2]["location"]),
+        (&"in_transit".into(), &serde_json::Value::Null)
+    );
+    assert!(!body.to_string().contains("B1"), "no barcode: {body}");
+    for uri in [
+        "/api/v1/instances/3",
+        "/api/v1/instances/99",
+        "/api/v1/instances/abc",
+    ] {
+        let (status, body) = checked(&app, uri, path).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{uri}");
+        assert_eq!(body, serde_json::json!({"error": "not_found"}));
+    }
+}
+
+#[tokio::test]
+async fn unknown_api_routes_and_methods_answer_in_json() {
+    let app = app(Arc::new(catalog()), Vec::new());
+    let (status, _, body) = call(&app, "GET", "/api/v1/biblios/1").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body, serde_json::json!({"error": "not_found"}));
+    let (status, _, body) = call(&app, "POST", "/api/v1/search").await;
+    assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
+    assert_eq!(body, serde_json::json!({"error": "method_not_allowed"}));
 }

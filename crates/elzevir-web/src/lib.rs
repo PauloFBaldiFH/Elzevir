@@ -6,6 +6,7 @@
 //! `elzevir-app` ports; it never opens the database.
 
 mod access;
+mod api;
 mod assets;
 mod authorities;
 mod authority_station;
@@ -416,6 +417,7 @@ pub fn router(state: AppState) -> Router {
         .merge(authority_routes())
         .merge(importing::routes())
         .merge(circulation::routes())
+        .merge(api::routes())
         .layer(axum::middleware::map_response(security::headers))
         .with_state(state)
 }
