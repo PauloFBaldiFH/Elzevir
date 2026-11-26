@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Draft sources at the edge: the SRU client behind the application's
-//! [`DraftSource`] port (docs/specs/catalogo/fontes-de-rascunho.md). The HTTP transport
-//! is a port of its own, so this crate holds the protocol and nothing that talks to the
-//! network; the binary gives it the TLS client.
+//! Draft sources at the edge: the SRU and Z39.50 clients behind the application's
+//! [`DraftSource`] port (docs/specs/catalogo/fontes-de-rascunho.md and cliente-z3950.md).
+//! The HTTP transport and the TCP connection are ports of their own, so this crate holds
+//! the protocols and nothing that talks to the network; the binary gives it the clients.
 
 pub mod ber;
 mod cql;
 mod response;
 pub mod z3950;
+mod z3950_client;
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -16,9 +17,11 @@ use elzevir_app::drafts::{
     DRAFTS_PER_PAGE, Draft, DraftField, DraftQuery, DraftSource, DraftSummary, MAX_DRAFT_PAGE,
     SourceOutcome, SourceResult,
 };
+use elzevir_marc::Record;
 
 pub use cql::cql;
 pub use response::{MAX_RESPONSE_BYTES, ParsedResponse, parse};
+pub use z3950_client::{DEFAULT_Z3950_PORT, Dialer, RecordCharset, Z3950Server, to_utf8};
 
 /// Most characters of a server's name.
 pub const MAX_NAME_CHARS: usize = 80;
@@ -54,6 +57,26 @@ pub struct SruServer {
     pub fields: HashMap<DraftField, String>,
 }
 
+/// One draft server of the institution, SRU or Z39.50, in the configured order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DraftServer {
+    /// An SRU server.
+    Sru(SruServer),
+    /// A Z39.50 server.
+    Z3950(Z3950Server),
+}
+
+impl DraftServer {
+    /// The server's name.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Sru(server) => &server.name,
+            Self::Z3950(server) => &server.name,
+        }
+    }
+}
+
 /// What the transport got back.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpAnswer {
@@ -84,92 +107,118 @@ pub trait Transport: Send + Sync {
     fn get(&self, url: &str, timeout: Duration) -> Result<HttpAnswer, TransportError>;
 }
 
-/// The institution's SRU servers, asked together.
-pub struct SruSources<T> {
-    servers: Vec<SruServer>,
+/// The institution's draft servers, SRU and Z39.50, asked together.
+pub struct DraftSources<T, D> {
+    servers: Vec<DraftServer>,
     transport: T,
+    dialer: D,
 }
 
-impl<T: Transport> SruSources<T> {
-    /// The sources of `servers`, in priority order, over `transport`.
+impl<T: Transport, D: Dialer> DraftSources<T, D> {
+    /// The sources of `servers`, in priority order: SRU over `transport`, Z39.50 over
+    /// connections from `dialer`.
     #[must_use]
-    pub const fn new(servers: Vec<SruServer>, transport: T) -> Self {
-        Self { servers, transport }
+    pub const fn new(servers: Vec<DraftServer>, transport: T, dialer: D) -> Self {
+        Self {
+            servers,
+            transport,
+            dialer,
+        }
     }
 
-    /// The transport the sources talk through.
+    /// The transport the SRU sources talk through.
     #[must_use]
     pub const fn transport(&self) -> &T {
         &self.transport
     }
 
-    /// The searchRetrieve URL of page `page` of `query` on `server` (spec item 11).
+    /// The dialer the Z39.50 sources connect through.
     #[must_use]
-    pub fn url(server: &SruServer, query: &DraftQuery, page: u32) -> String {
-        let page = page.clamp(1, MAX_DRAFT_PAGE);
-        let start = (page - 1) * DRAFTS_PER_PAGE + 1;
-        let (version, packing) = match server.version {
-            SruVersion::V1_2 => ("1.2", "recordPacking=xml"),
-            SruVersion::V2_0 => ("2.0", "recordXMLEscaping=xml"),
-        };
-        format!(
-            "{}?operation=searchRetrieve&version={version}&query={}&startRecord={start}\
-             &maximumRecords={DRAFTS_PER_PAGE}&recordSchema={}&{packing}",
-            server.url,
-            cql::encode(&cql(query, &server.fields)),
-            cql::encode(&server.record_schema),
-        )
+    pub const fn dialer(&self) -> &D {
+        &self.dialer
     }
 
-    fn ask(&self, server: &SruServer, query: &DraftQuery, page: u32) -> SourceOutcome {
-        let answer = match self
-            .transport
-            .get(&Self::url(server, query, page), server.timeout)
-        {
-            Ok(answer) => answer,
-            Err(TransportError::NoResponse) => return SourceOutcome::NoResponse,
-            Err(TransportError::TooLarge) => {
-                return SourceOutcome::Refused("response too large".to_owned());
-            }
-        };
-        if !(200..300).contains(&answer.status) {
-            return SourceOutcome::Refused(format!("HTTP {}", answer.status));
-        }
-        match parse(&answer.body) {
-            Ok(ParsedResponse::Diagnostic(message)) => SourceOutcome::Refused(message),
-            Ok(ParsedResponse::Records {
-                total,
-                records,
-                skipped,
-            }) => {
-                let origin = format!("sru:{}", server.name);
-                let mut skipped = skipped;
-                let drafts = records
-                    .into_iter()
-                    .filter_map(|record| {
-                        let summary = DraftSummary::of(&record);
-                        if summary.is_none() {
-                            skipped = skipped.saturating_add(1);
-                        }
-                        summary.map(|summary| Draft {
-                            origin: origin.clone(),
-                            record,
-                            summary,
-                        })
-                    })
-                    .collect();
-                SourceOutcome::Found {
-                    total,
-                    drafts,
-                    skipped,
-                }
-            }
-            Err(problem) => SourceOutcome::Refused(problem.to_string()),
+    /// What `server` answers for page `page` of `query`.
+    fn ask(&self, server: &DraftServer, query: &DraftQuery, page: u32) -> SourceOutcome {
+        match server {
+            DraftServer::Sru(server) => ask_sru(&self.transport, server, query, page),
+            DraftServer::Z3950(server) => z3950_client::ask(&self.dialer, server, query, page),
         }
     }
 }
 
-impl<T: Transport> DraftSource for SruSources<T> {
+/// The searchRetrieve URL of page `page` of `query` on `server` (spec item 11).
+#[must_use]
+pub fn sru_url(server: &SruServer, query: &DraftQuery, page: u32) -> String {
+    let page = page.clamp(1, MAX_DRAFT_PAGE);
+    let start = (page - 1) * DRAFTS_PER_PAGE + 1;
+    let (version, packing) = match server.version {
+        SruVersion::V1_2 => ("1.2", "recordPacking=xml"),
+        SruVersion::V2_0 => ("2.0", "recordXMLEscaping=xml"),
+    };
+    format!(
+        "{}?operation=searchRetrieve&version={version}&query={}&startRecord={start}\
+         &maximumRecords={DRAFTS_PER_PAGE}&recordSchema={}&{packing}",
+        server.url,
+        cql::encode(&cql(query, &server.fields)),
+        cql::encode(&server.record_schema),
+    )
+}
+
+/// What the SRU `server` answers.
+fn ask_sru(
+    transport: &impl Transport,
+    server: &SruServer,
+    query: &DraftQuery,
+    page: u32,
+) -> SourceOutcome {
+    let answer = match transport.get(&sru_url(server, query, page), server.timeout) {
+        Ok(answer) => answer,
+        Err(TransportError::NoResponse) => return SourceOutcome::NoResponse,
+        Err(TransportError::TooLarge) => {
+            return SourceOutcome::Refused("response too large".to_owned());
+        }
+    };
+    if !(200..300).contains(&answer.status) {
+        return SourceOutcome::Refused(format!("HTTP {}", answer.status));
+    }
+    match parse(&answer.body) {
+        Ok(ParsedResponse::Diagnostic(message)) => SourceOutcome::Refused(message),
+        Ok(ParsedResponse::Records {
+            total,
+            records,
+            skipped,
+        }) => found(&format!("sru:{}", server.name), total, records, skipped),
+        Err(problem) => SourceOutcome::Refused(problem.to_string()),
+    }
+}
+
+/// The drafts of `records`, each with `origin`; a record the list cannot summarize is
+/// counted in `skipped`.
+fn found(origin: &str, total: u64, records: Vec<Record>, skipped: u32) -> SourceOutcome {
+    let mut skipped = skipped;
+    let drafts = records
+        .into_iter()
+        .filter_map(|record| {
+            let summary = DraftSummary::of(&record);
+            if summary.is_none() {
+                skipped = skipped.saturating_add(1);
+            }
+            summary.map(|summary| Draft {
+                origin: origin.to_owned(),
+                record,
+                summary,
+            })
+        })
+        .collect();
+    SourceOutcome::Found {
+        total,
+        drafts,
+        skipped,
+    }
+}
+
+impl<T: Transport, D: Dialer> DraftSource for DraftSources<T, D> {
     fn search(&self, query: &DraftQuery, page: u32) -> Vec<SourceResult> {
         // One thread per server: a slow one never holds the others (spec item 4).
         std::thread::scope(|scope| {
@@ -181,7 +230,7 @@ impl<T: Transport> DraftSource for SruSources<T> {
             asked
                 .into_iter()
                 .map(|(server, handle)| SourceResult {
-                    source: server.name.clone(),
+                    source: server.name().to_owned(),
                     // A panicking parser would be a bug; the server then counts as silent.
                     outcome: handle.join().unwrap_or(SourceOutcome::NoResponse),
                 })
@@ -192,14 +241,14 @@ impl<T: Transport> DraftSource for SruSources<T> {
     fn sources(&self) -> Vec<String> {
         self.servers
             .iter()
-            .map(|server| server.name.clone())
+            .map(|server| server.name().to_owned())
             .collect()
     }
 
     fn search_one(&self, index: usize, query: &DraftQuery, page: u32) -> Option<SourceResult> {
         let server = self.servers.get(index)?;
         Some(SourceResult {
-            source: server.name.clone(),
+            source: server.name().to_owned(),
             outcome: self.ask(server, query, page),
         })
     }

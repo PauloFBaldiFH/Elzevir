@@ -9,13 +9,14 @@
 
 use std::collections::HashMap;
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use elzevir_app::drafts::{
     DraftField, DraftQuery, DraftSource, DraftSummary, SourceOutcome, TypedQuery,
 };
 use elzevir_sources::{
-    DEFAULT_TIMEOUT, HttpAnswer, SruServer, SruSources, SruVersion, Transport, TransportError,
+    DEFAULT_TIMEOUT, Dialer, DraftServer, DraftSources, HttpAnswer, SruServer, SruVersion,
+    Transport, TransportError,
 };
 
 const TWO_RECORDS: &[u8] = include_bytes!("data/sru-1.2-two-records.xml");
@@ -62,16 +63,28 @@ fn server(name: &str, url: &str) -> SruServer {
     }
 }
 
+/// No Z39.50 server here: every connection is refused.
+struct NoDialer;
+
+impl Dialer for NoDialer {
+    type Stream = std::io::Cursor<Vec<u8>>;
+
+    fn dial(&self, _: &str, _: u16, _: Instant) -> std::io::Result<Self::Stream> {
+        Err(std::io::ErrorKind::ConnectionRefused.into())
+    }
+}
+
 fn sources(
     servers: Vec<SruServer>,
     answers: Vec<(&'static str, Result<HttpAnswer, TransportError>)>,
-) -> SruSources<Recorded> {
-    SruSources::new(
-        servers,
+) -> DraftSources<Recorded, NoDialer> {
+    DraftSources::new(
+        servers.into_iter().map(DraftServer::Sru).collect(),
         Recorded {
             answers,
             asked: Mutex::new(Vec::new()),
         },
+        NoDialer,
     )
 }
 
@@ -203,7 +216,7 @@ fn the_request_carries_the_koha_cql_the_page_and_each_servers_time_limit() {
     );
 }
 
-fn asked_urls(sources: &SruSources<Recorded>) -> Vec<(String, Duration)> {
+fn asked_urls(sources: &DraftSources<Recorded, NoDialer>) -> Vec<(String, Duration)> {
     sources.transport().asked.lock().unwrap().clone()
 }
 

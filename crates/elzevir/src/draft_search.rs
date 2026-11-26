@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! `elzevir draft-search`: asks the configured draft sources from the command line, so a
 //! library can check its servers before cataloguing (docs/specs/catalogo/fontes-de-rascunho.md,
-//! item 23), and the HTTP transport the sources talk through.
+//! item 23), and the HTTP transport and TCP connections the sources talk through.
 
+use std::io::{self, Read, Write};
+use std::net::{TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use clap::Args;
 use elzevir_app::drafts::{DraftQuery, DraftSource, SourceOutcome, SourceResult, TypedQuery};
 use elzevir_sources::{
-    HttpAnswer, MAX_RESPONSE_BYTES, MAX_TIMEOUT, SruServer, SruSources, Transport, TransportError,
+    Dialer, DraftServer, DraftSources, HttpAnswer, MAX_RESPONSE_BYTES, MAX_TIMEOUT, Transport,
+    TransportError,
 };
 
 use crate::config;
@@ -56,7 +59,7 @@ pub(crate) fn run(args: &DraftSearchArgs) -> Result<(), String> {
     if servers.is_empty() {
         return Err("no draft source is configured in elzevir.toml".to_owned());
     }
-    let sources = SruSources::new(servers, HttpTransport::new()?);
+    let sources = DraftSources::new(servers, HttpTransport::new()?, TcpDialer);
     for result in sources.search(&query, args.page) {
         match result.outcome {
             SourceOutcome::Found {
@@ -135,22 +138,77 @@ impl Transport for HttpTransport {
     }
 }
 
+/// Plain TCP connections to Z39.50 servers, without TLS (cliente-z3950.md, item 24).
+pub(crate) struct TcpDialer;
+
+/// A TCP connection whose every read and write must end before the conversation's
+/// deadline.
+pub(crate) struct DeadlineStream {
+    stream: TcpStream,
+    deadline: Instant,
+}
+
+/// The time left before `deadline`, or a time-out error once it has passed.
+fn remaining(deadline: Instant) -> io::Result<Duration> {
+    let left = deadline.saturating_duration_since(Instant::now());
+    if left.is_zero() {
+        Err(io::ErrorKind::TimedOut.into())
+    } else {
+        Ok(left)
+    }
+}
+
+impl Dialer for TcpDialer {
+    type Stream = DeadlineStream;
+
+    fn dial(&self, host: &str, port: u16, deadline: Instant) -> io::Result<DeadlineStream> {
+        let mut last = io::Error::from(io::ErrorKind::NotFound);
+        for address in (host, port).to_socket_addrs()? {
+            match TcpStream::connect_timeout(&address, remaining(deadline)?) {
+                Ok(stream) => return Ok(DeadlineStream { stream, deadline }),
+                Err(error) => last = error,
+            }
+        }
+        Err(last)
+    }
+}
+
+impl Read for DeadlineStream {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        self.stream
+            .set_read_timeout(Some(remaining(self.deadline)?))?;
+        self.stream.read(buffer)
+    }
+}
+
+impl Write for DeadlineStream {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.stream
+            .set_write_timeout(Some(remaining(self.deadline)?))?;
+        self.stream.write(bytes)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.stream.flush()
+    }
+}
+
 /// The sources the staff screen asks, each answer logged with the source's position,
 /// outcome and time, never the query (docs/specs/catalogo/estacao-de-captura.md, item 15).
 pub(crate) struct LoggedSources {
-    sources: SruSources<HttpTransport>,
+    sources: DraftSources<HttpTransport, TcpDialer>,
     instance: String,
 }
 
 impl LoggedSources {
     /// The sources of `servers`, logged under the server's `instance`; `None` without
     /// servers, so the screen offers no station (fontes-de-rascunho.md, item 18).
-    pub(crate) fn new(servers: Vec<SruServer>, instance: &str) -> Result<Option<Self>, String> {
+    pub(crate) fn new(servers: Vec<DraftServer>, instance: &str) -> Result<Option<Self>, String> {
         if servers.is_empty() {
             return Ok(None);
         }
         Ok(Some(Self {
-            sources: SruSources::new(servers, HttpTransport::new()?),
+            sources: DraftSources::new(servers, HttpTransport::new()?, TcpDialer),
             instance: instance.to_owned(),
         }))
     }

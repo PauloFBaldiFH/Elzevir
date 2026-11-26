@@ -56,7 +56,7 @@ Quem cataloga um livro que a biblioteca ainda não tem quer partir do registro d
     any = "cql.anywhere"
     ```
 
-17. `name` é obrigatório, único e tem até 80 caracteres; é o que aparece na origem (`sru:<name>`). `kind` só aceita `sru` nesta tarefa. Configuração inválida impede o servidor de subir, com a mensagem do campo errado, como no resto do `elzevir.toml`.
+17. `name` é obrigatório, único e tem até 80 caracteres; é o que aparece na origem (`sru:<name>`). `kind` aceita `sru` e `z3950` ([cliente Z39.50](cliente-z3950.md), itens 15 e 16); uma chave de um tipo num servidor do outro é erro. Configuração inválida impede o servidor de subir, com a mensagem do campo errado, como no resto do `elzevir.toml`.
 18. Sem nenhum servidor configurado (ou todos com `enabled = false`), a porta não existe e a tela não oferece a estação.
 19. A configuração não traz servidores de exemplo de nenhuma instituição: cada biblioteca cadastra os seus.
 
