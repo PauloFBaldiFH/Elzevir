@@ -34,6 +34,9 @@ pub enum PatronCommand {
     /// Records that a staff member opened the patron's record; changes nothing else
     /// (interface §18.1: who saw which patron, and when).
     View(PatronId),
+    /// Records that a staff member asked to see the patron's whole CPF; changes nothing
+    /// else (interface §18.4: the whole CPF only by an explicit, logged action).
+    RevealCpf(PatronId),
     /// Sets the patron's OPAC password, or takes it away (docs/specs/opac/conta-do-leitor.md,
     /// items 1 to 4). Carries only the hash, never the password.
     SetPassword {

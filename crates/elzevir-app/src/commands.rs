@@ -167,6 +167,7 @@ impl WriteCommand {
             Self::Patrons(PatronCommand::Add(_)) => "patrons.add",
             Self::Patrons(PatronCommand::Update(_)) => "patrons.update",
             Self::Patrons(PatronCommand::View(_)) => "patrons.view",
+            Self::Patrons(PatronCommand::RevealCpf(_)) => "patrons.reveal_cpf",
             Self::Patrons(PatronCommand::SetPassword { .. }) => "patrons.set_password",
             Self::Patrons(PatronCommand::SetReadingHistory { .. }) => "patrons.set_reading_history",
             Self::Circulation(CirculationCommand::SetRules(_)) => "circ.set_rules",
@@ -222,7 +223,9 @@ impl WriteCommand {
                 | CirculationCommand::LiftRestriction { .. }
                 | CirculationCommand::MarkNotice { .. },
             )
-            | Self::Patrons(PatronCommand::View(_)) => Permission::Circulation,
+            | Self::Patrons(PatronCommand::View(_) | PatronCommand::RevealCpf(_)) => {
+                Permission::Circulation
+            }
             // Koha: `tools.edit_additional_contents` for all news; here the staff notes are
             // the whole team's, as in the draft, and only what the public sees needs
             // administration (docs/specs/interface/mural.md, item 3).

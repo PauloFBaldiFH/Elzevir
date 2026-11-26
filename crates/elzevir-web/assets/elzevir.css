@@ -935,6 +935,7 @@ main:has(.patron-page), main:has(.patron-list-page) { max-width: 90rem; }
 .patron-fields { display: grid; grid-template-columns: auto 1fr; gap: 7px 12px; margin: 0; font-size: 14px; }
 .patron-fields dt { color: var(--elzevir-color-muted); }
 .patron-fields dd { margin: 0; text-align: right; font-weight: 600; overflow-wrap: anywhere; }
+.patron-fields .cpf-show { margin-left: 6px; padding: 0; border: 0; background: none; color: var(--elzevir-color-primary); font: inherit; font-weight: 400; text-decoration: underline; cursor: pointer; }
 .patron-fields-empty { margin: 0; font-size: 14px; color: var(--elzevir-color-muted); }
 .loan-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .loan { position: relative; display: grid; gap: 4px; padding: 9px 12px; border: 1.5px solid var(--elzevir-color-border); border-radius: 12px; background: var(--elzevir-color-surface); }

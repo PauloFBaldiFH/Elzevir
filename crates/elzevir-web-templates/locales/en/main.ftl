@@ -17,7 +17,7 @@ bar-scope-authorities = Authorities
 bar-scope-repositories = Repositories
 bar-scope-checkin = Checkin
 bar-scope-renewal = Renewal
-bar-hint-patrons = Name, CPF or card number…
+bar-hint-patrons = Name, ID number or card number…
 bar-hint-catalog = Title, author, ISBN or subject…
 bar-hint-authorities = Person, organization or controlled subject…
 bar-hint-repositories = Institution, Z39.50 or SRU server…
@@ -769,9 +769,9 @@ import-advanced = Advanced: edit the recipe as JSON
 
 ## Patrons (docs/specs/circulacao/leitores.md)
 patrons-title = Patrons
-patrons-search-label = Card number, CPF or name
+patrons-search-label = Card number, ID number or name
 patrons-search = Search
-patrons-search-hint = A card number or a CPF finds the patron exactly; two letters or more search inside names.
+patrons-search-hint = A card number or an ID number finds the patron exactly; two letters or more search inside names.
 patrons-found = { $count ->
     [one] 1 patron found
    *[other] { $count } patrons found
@@ -786,7 +786,8 @@ patron-expires = Enrolled until
 patron-enrolled = Enrolled on
 patron-expired = expired
 patron-expired-alert = This patron's enrolment is over.
-patron-cpf = CPF
+patron-cpf = ID number
+patron-cpf-show = Show ID number
 patron-date-of-birth = Date of birth
 patron-email = E-mail
 patron-phone = Phone
@@ -855,7 +856,7 @@ patron-error-category = Give the category a name of at most 256 characters and e
 patron-error-category-taken = Another category already has this name.
 patron-error-category-in-use = This category has patrons, so it stays. Move them first.
 patron-error-cardnumber-taken = Another patron already has this card number.
-patron-error-cpf-taken = Another patron already has this CPF.
+patron-error-cpf-taken = Another patron already has this ID number.
 patron-error-unknown-category = That category no longer exists.
 patron-error-unknown-branch = That branch no longer exists.
 patron-error-unknown = That patron no longer exists.
@@ -866,7 +867,7 @@ patron-surname = Surname
 patron-first-name = First name
 patron-expires-hint = Leave the expiry empty on a new patron to take it from the category.
 patron-history-consent = The patron agreed to keep the reading history
-patron-error-cpf = This is not a valid CPF: 11 digits whose last two check the others.
+patron-error-cpf = This is not a valid ID number: 11 digits whose last two check the others.
 patron-error-no-category = Create a patron category first.
 
 ## Circulation rules (docs/specs/circulacao/regras.md)
@@ -1340,14 +1341,14 @@ patron-password-title = OPAC password
 patron-password-none = This patron has no password and cannot sign in to the OPAC.
 patron-password-set = This patron can sign in to the OPAC with the card number and a password.
 patron-password-new = New password
-patron-password-hint = At least 8 characters, and not the card number or the CPF. Tell the patron in person; it is never shown again.
+patron-password-hint = At least 8 characters, and not the card number or the ID number. Tell the patron in person; it is never shown again.
 patron-password-save = Set password
 patron-password-remove = Remove OPAC access
 patron-password-saved = The OPAC password was saved.
 patron-password-removed = The patron can no longer sign in to the OPAC.
 patron-password-short = The password needs at least 8 characters.
 patron-password-long = The password can have at most 128 characters.
-patron-password-guessable = The password cannot be the card number or the CPF.
+patron-password-guessable = The password cannot be the card number or the ID number.
 
 import-origin = Source installation for local identifiers
 import-local-notes = Local note visibility

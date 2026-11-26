@@ -46,6 +46,8 @@ pub(crate) struct Outcome {
     pub(crate) desk: Option<BranchId>,
     /// The barcode just lent, whose cord is drawn.
     pub(crate) lent: Option<String>,
+    /// The staff asked for the whole CPF, which is logged before it is shown (§18.4).
+    pub(crate) reveal_cpf: bool,
 }
 
 pub(crate) fn now(state: &AppState) -> Zoned {
@@ -247,6 +249,7 @@ pub(crate) fn routes() -> axum::Router<AppState> {
     axum::Router::new()
         .route("/equipe/leitores/{id}", get(record))
         .route("/equipe/leitores/{id}/circulacao", post(circulate))
+        .route("/equipe/leitores/{id}/cpf", post(reveal_cpf))
         .route(
             "/equipe/leitores/{id}/conta",
             post(crate::patron_account::pay),
@@ -326,9 +329,13 @@ pub(crate) async fn page(
 ) -> Response {
     let actor = session.identity.id;
     let day = today(state);
+    let reveal_cpf = outcome.reveal_cpf;
     let read = tokio::task::spawn_blocking(move || {
         // The opening is logged before the data leaves the server.
         patrons.apply(actor, PatronCommand::View(id))?;
+        if reveal_cpf {
+            patrons.apply(actor, PatronCommand::RevealCpf(id))?;
+        }
         let Some(patron) = patrons.patron(id)? else {
             return Ok(None);
         };
@@ -365,7 +372,7 @@ pub(crate) async fn page(
     let mut response = render(&StaffPatron {
         t,
         name: full_name(&patron.fields.surname, patron.fields.first_name.as_deref()),
-        header: header(t, &patron, &current, &moment, (owed, expired)),
+        header: header(t, &patron, &current, &moment, (owed, expired, reveal_cpf)),
         zoom: zoom(headers, ZoomScreen::PatronRecord),
         expired,
         edit_url: session
@@ -390,7 +397,49 @@ pub(crate) async fn page(
     if response.status() == StatusCode::OK {
         *response.status_mut() = status;
     }
-    response
+    if reveal_cpf {
+        crate::patron_login::no_store(response)
+    } else {
+        response
+    }
+}
+
+/// Fields of the "Show CPF" button, which submits the record's form.
+#[derive(serde::Deserialize)]
+pub(crate) struct RevealFields {
+    csrf: String,
+    desk: Option<i64>,
+}
+
+/// `POST /equipe/leitores/{id}/cpf`: the record again with the whole CPF, after logging
+/// that the staff member asked for it (interface §18.4).
+pub(crate) async fn reveal_cpf(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+    Form(form): Form<RevealFields>,
+) -> Response {
+    let (session, patrons, loans) = match open(&state, &headers) {
+        Ok(opened) => opened,
+        Err(response) => return *response,
+    };
+    if !tokens_match(&session.csrf, &form.csrf) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let outcome = Outcome {
+        desk: form.desk.map(BranchId),
+        reveal_cpf: true,
+        ..Outcome::default()
+    };
+    page(
+        &state,
+        &session,
+        &headers,
+        (patrons, loans),
+        PatronId(id),
+        outcome,
+    )
+    .await
 }
 
 /// The patron's restrictions as shown: a suspension with its end, or the restriction of
