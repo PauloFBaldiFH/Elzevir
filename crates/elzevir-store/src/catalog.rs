@@ -98,6 +98,7 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CatalogCommand) -> Applied {
         CatalogCommand::UpdateAgent(update) => crate::authorities::update_agent(tx, update)?,
         CatalogCommand::LinkAuthority(link) => crate::authorities::link_authority(tx, link)?,
         CatalogCommand::UpdateSubject(update) => crate::authorities::update_subject(tx, update)?,
+        CatalogCommand::Inventory(scan) => crate::inventory::scan(tx, scan)?,
         CatalogCommand::AddItem(new) => {
             if !exists(
                 connection,

@@ -37,7 +37,11 @@ pub(crate) fn database(connection: &Connection) -> Result<String, crate::StoreEr
         let columns: Vec<String> = column_names(connection, &table)?
             .into_iter()
             // When a command ran is not content: two runs of the same import differ in it.
-            .filter(|column| !(table == "audit_log" && column == "at"))
+            // Nor is when an Item was last seen on the shelf (catalogo/inventario.md).
+            .filter(|column| {
+                !(table == "audit_log" && column == "at"
+                    || table == "items" && column == "last_seen")
+            })
             .collect();
         let list = columns
             .iter()

@@ -98,6 +98,9 @@ pub enum CatalogCommand {
     /// Changes a subject, and so every record that names it, if the subject is still at
     /// `row_version` (docs/specs/catalogo/autoridades.md).
     UpdateSubject(Box<SubjectUpdate>),
+    /// Marks the Items read off the shelf as seen and reports what is wrong
+    /// (docs/specs/catalogo/inventario.md).
+    Inventory(Box<crate::inventory::InventoryScan>),
 }
 
 /// An edit of a subject heading, read at `row_version`.
@@ -980,6 +983,8 @@ pub enum CatalogOutput {
         /// Its new version.
         row_version: i64,
     },
+    /// What a reading of the shelf did and found.
+    Inventory(Box<crate::inventory::InventoryReport>),
     /// An Instance was added to a Work.
     InstanceAdded {
         /// The Work.
@@ -1032,6 +1037,9 @@ pub enum CatalogRefusal {
     /// item 11).
     #[error("{} items of the batch change were refused", .0.len())]
     BatchItems(Vec<crate::batch::ItemRefusal>),
+    /// An inventory without a barcode to read and without the list of the expected Items.
+    #[error("the inventory read no barcode")]
+    NoBarcodes,
     /// A batch change with nothing to change, or no Instance.
     #[error("the batch change names no change or no instance")]
     NothingToChange,

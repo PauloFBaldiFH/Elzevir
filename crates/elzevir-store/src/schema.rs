@@ -835,14 +835,14 @@ const MIGRATIONS: &[&str] = &[
      ) STRICT;",
     // 60: the OPAC password, Argon2id (opac/conta-do-leitor.md); 66: anonymization.
     "ALTER TABLE patrons ADD COLUMN password_hash TEXT;",
-    // 61: installation-local identifiers per source catalog; 62: offline repository.
+    // 61-65: source identifiers, offline repository, OAI datestamps, Koha patron keys.
     include_str!("import_provenance.sql"),
     include_str!("repository/schema.sql"),
-    // 63: OAI-PMH datestamps; 64, 65: the Koha keys of migrated patrons and returned loans.
     include_str!("oai_datestamps.sql"),
     include_str!("koha_keys.sql"),
     include_str!("koha_history.sql"),
     "ALTER TABLE patrons ADD COLUMN anonymized_at TEXT;",
+    "ALTER TABLE items ADD COLUMN last_seen TEXT;", // 67: inventory (catalogo/inventario.md)
 ];
 
 /// The migration that creates `match_keys`.

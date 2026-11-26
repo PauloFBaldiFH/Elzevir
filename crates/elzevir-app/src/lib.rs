@@ -23,6 +23,7 @@ pub mod history;
 pub mod holds;
 pub mod import;
 pub mod import_detection;
+pub mod inventory;
 pub mod items;
 pub mod koha_migration;
 pub mod koha_types;
