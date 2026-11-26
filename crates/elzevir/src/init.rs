@@ -21,7 +21,7 @@ pub(crate) struct InitArgs {
     data_dir: Option<PathBuf>,
     /// First administrator's login.
     #[arg(long, default_value = "admin")]
-    pub(crate) login: String,
+    login: String,
     /// Server IP and port.
     #[arg(long, default_value_t = crate::server_config::default_listen())]
     pub(crate) listen: SocketAddr,
@@ -70,6 +70,13 @@ impl InitArgs {
 }
 
 pub(crate) fn run(args: &InitArgs) -> Result<(), String> {
+    initialize(args, None)
+}
+
+pub(crate) fn initialize(
+    args: &InitArgs,
+    selected: Option<elzevir_panel::Setup>,
+) -> Result<(), String> {
     let _listener = if args.check_port {
         Some(
             std::net::TcpListener::bind(args.listen)
@@ -89,19 +96,9 @@ pub(crate) fn run(args: &InitArgs) -> Result<(), String> {
     if config == data_dir {
         return Err("configuration and data directory must have different paths".to_owned());
     }
-    if args.login.is_empty()
-        || args.login.len() > 64
-        || !args
-            .login
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.'))
-    {
-        return Err(
-            "login must contain 1 to 64 ASCII letters, digits, dots, underscores or hyphens"
-                .to_owned(),
-        );
-    }
-    let (name, password, profile) = initial_choices(args, &messages, language)?;
+    let choices = initial_choices(args, &messages, language, selected)?;
+    let (name, login, password, profile) = choices;
+    validate_login(&login)?;
     let insecure = args
         .insecure_cookies
         .unwrap_or_else(|| using_default && args.listen.ip().is_loopback());
@@ -141,13 +138,7 @@ pub(crate) fn run(args: &InitArgs) -> Result<(), String> {
         .map_err(|error| format!("cannot create new data directory: {error}"))
         .and_then(|directory| {
             finish(
-                directory,
-                &config,
-                &source,
-                &args.login,
-                hash,
-                profile,
-                &messages,
+                directory, &config, &source, &login, hash, profile, &messages,
             )
         });
     if restore_empty && result.is_err() {
@@ -220,30 +211,55 @@ fn paths(args: &InitArgs) -> Result<Paths, String> {
     })
 }
 
+fn validate_login(login: &str) -> Result<(), String> {
+    if login.is_empty()
+        || login.len() > 64
+        || !login
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.'))
+    {
+        return Err(
+            "login must contain 1 to 64 ASCII letters, digits, dots, underscores or hyphens"
+                .to_owned(),
+        );
+    }
+    Ok(())
+}
+
 fn initial_choices(
     args: &InitArgs,
     messages: &Messages,
     language: &str,
-) -> Result<(String, zeroize::Zeroizing<String>, Option<Profile>), String> {
+    selected: Option<elzevir_panel::Setup>,
+) -> Result<(String, String, zeroize::Zeroizing<String>, Option<Profile>), String> {
     if let Some(name) = &args.name {
         // Reject invalid explicit names before reading a secret.
         crate::server_config::validate_name(name).map_err(|error| error.to_string())?;
+        validate_login(&args.login)?;
         let secret = zeroize::Zeroizing::new(password(args.password_stdin, messages)?);
-        return Ok((name.clone(), secret, args.profile));
+        return Ok((name.clone(), args.login.clone(), secret, args.profile));
     }
     if !crate::first_use::interactive() {
         return Err("use --name for noninteractive initialization".into());
     }
-    let selected = elzevir_panel::setup(language)
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| messages.get("setup-cancelled"))?;
+    let selected = match selected {
+        Some(selected) => selected,
+        None => elzevir_panel::setup_with_login(language, &args.login, false)
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| messages.get("setup-cancelled"))?,
+    };
     let profile = match selected.profile {
         elzevir_panel::SetupProfile::Empty => None,
         elzevir_panel::SetupProfile::Public => Some(Profile::Public),
         elzevir_panel::SetupProfile::School => Some(Profile::School),
         elzevir_panel::SetupProfile::University => Some(Profile::University),
     };
-    Ok((selected.name, selected.password, args.profile.or(profile)))
+    Ok((
+        selected.name,
+        selected.login,
+        selected.password,
+        args.profile.or(profile),
+    ))
 }
 
 fn finish(

@@ -3,14 +3,14 @@ source: crates/elzevir-panel/tests/panel.rs
 expression: "screen(&panel, \"en\", 120, 24)"
 ---
 🦀  Elzevir TUI  0.1.0-alpha.2  ·  Fictitious institution
-╭Sections──────────────────╮    1 Home         2 Health       3 Access       4 Backup        5 Updates      6 Service
+╭Sections──────────────────╮    Home        Health        Access       Backup       Updates      Service      Settings
 │▌ d Dashboard             │╭Dashboard───────────────────────────────────────────────────╮╭Selected institution────────╮
 │  x Diagnostics           ││DEMONSTRATION - simulated data                              ││Demonstration library       │
 │  a Addresses and access  ││                                                            ││                            │
 │  b Backups and schedules ││Service status, addresses and health will appear here when  ││Fictitious institution      │
 │  u Updates               ││connected.                                                  ││                            │
 │  r Service               ││                                                            ││Server status: not read     │
-│                          ││Demo only. No operation is available and no system changes  ││                            │
+│  g Settings              ││Demo only. No operation is available and no system changes  ││                            │
 │                          ││are made.                                                   ││| Demo animation            │
 │                          ││                                                            ││                            │
 │                          ││                                                            ││                            │
@@ -20,7 +20,7 @@ expression: "screen(&panel, \"en\", 120, 24)"
 │                          ││                                                            ││                            │
 │                          ││                                                            ││                            │
 │                          ││                                                            ││                            │
-│                          ││                                                            ││                            │
+│                          ││                       Control gallery                      ││                            │
 │                          ││                                                            ││                            │
 │                          │╰────────────────────────────────────────────────────────────╯╰────────────────────────────╯
 ╰──────────────────────────╯

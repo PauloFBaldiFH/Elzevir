@@ -192,11 +192,27 @@ pub struct RestoreReview {
     pub managed: bool,
 }
 
+/// Local evidence of backups authenticated before publication.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LocalBackup {
+    /// Catalog or corresponding artifact could not be confirmed.
+    #[default]
+    Unknown,
+    /// No managed or unclassified artifacts in the backup directory.
+    Empty,
+    /// The latest catalog entry corresponds to a published regular file.
+    Verified,
+}
+
 /// Operational state from the selected institution.
 #[derive(Debug, Clone, Default)]
 pub struct Operations {
     /// Completed validation awaiting review.
     pub review: Option<RestoreReview>,
+    /// Result of checking the local catalog and the retained file.
+    pub local_backup: LocalBackup,
+    /// Whether the latest dated export receipt records a failure.
+    pub latest_export_failed: Option<bool>,
     /// Identities in the institution's local ownership catalog.
     pub managed_ids: Vec<String>,
     /// Operator-visible default managed backup directory.

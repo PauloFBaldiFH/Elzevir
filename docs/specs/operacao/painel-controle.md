@@ -80,3 +80,15 @@ Botões de operação, logs ao vivo/diagnóstico completo (P3), edição e teste
 endereços (P4), backup, serviço, atualização, lista de instituições, histórico
 de erros por 24h e contagem de efeitos pendentes. Métricas são instantâneas;
 num contêiner, as métricas de host dependem do que o SO disponibiliza.
+
+## Visão geral operacional
+
+A projeção de proteção separa quatro observações: cópia local publicada e verificada na criação, última tentativa do servidor, resultado de exportação pelo operador e transferência do plano de nuvem. Um recibo de exportação antigo não identifica o artefato. O painel informa o resultado como observação independente. Arquivo não catalogado, catálogo ilegível e cópia catalogada ausente impedem afirmar que há proteção verificada. A tela não recalcula hashes a cada coleta. O histórico usa a hora da solicitação. Informação vencida perde a indicação positiva.
+
+Na visão geral, saúde, proteção, recursos e acesso têm cartões próprios. As medidas do processo vêm do PID confirmado e CPU exige duas amostras. Em tela compacta as seções conservam seus nomes e o conteúdo pode rolar sem deslocar as ações.
+
+### Interação da visão geral (Marco A)
+
+O botão registra a área que desenhou. O pressionamento captura o controle, e a soltura na mesma área ativa uma única intenção. Uma mudança de tamanho, diálogo, seção ou posição do controle invalida a captura. Controles indisponíveis ou ocupados não aceitam ativação. Tab e Shift+Tab percorrem as ações disponíveis; Enter ou Espaço as acionam. Campos de texto preservam o espaço como entrada. O diálogo captura a interação até a confirmação ou o cancelamento.
+
+A visão geral mantém navegação e ações rápidas visíveis. Em larguras menores, os grupos se reorganizam e a roda ou os controles de rolagem revelam o conteúdo. A barra de disco usa o espaço disponível e a capacidade observados no mesmo sistema de arquivos. A ausência de medição não representa zero. Um endereço anunciado, um teste HTTP local e um teste HTTPS público são evidências distintas.

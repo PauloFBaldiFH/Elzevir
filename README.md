@@ -29,20 +29,22 @@ houver release estável, usam o pré-lançamento mais novo. O terminal em que
 o instalador rodou no Linux ainda não conhece o comando: rode
 `source ~/.bashrc` ou abra outro terminal, como o instalador indica.
 
-Abra o Elzevir pelo terminal. No primeiro uso, informe o nome da
-biblioteca, crie a senha do administrador e selecione um perfil inicial
-opcional.
+Abra o Elzevir pelo terminal.
 
 ```sh
 elzevir
 ```
 
-O comando sem argumentos (o mesmo que `elzevir start`) abre o painel
-Ratatui e serve o catálogo em `http://127.0.0.1:7390`. O servidor continua
-rodando em segundo plano depois que o painel fecha; `elzevir stop` o para.
-Também é possível usar `elzevir serve` e `elzevir panel` em terminais
-separados. Use `elzevir panel --demo` para explorar a interface com dados
-simulados.
+Na primeira execução, o painel mostra a pasta selecionada. Você pode explorar
+as abas ou sair. Para criar a biblioteca, abra **Ajustes → Configurar biblioteca**,
+escolha o nome, o usuário administrador, a senha e o perfil inicial. Ao terminar,
+abra **Serviço → Iniciar** para atender o catálogo.
+
+Nas próximas aberturas, `elzevir` e `elzevir start` iniciam automaticamente
+uma instalação pessoal saudável que esteja parada. O servidor continua ativo
+quando o painel fecha. Use `elzevir stop` para encerrá-lo. Também é possível
+usar `elzevir serve` e `elzevir panel` em terminais separados ou
+`elzevir panel --demo` para explorar com dados simulados.
 
 ## Primeira inicialização
 

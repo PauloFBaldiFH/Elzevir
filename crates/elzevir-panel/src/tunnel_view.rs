@@ -3,7 +3,7 @@
 use crate::dashboard::{row, text};
 use crate::{Messages, Operations, PublicCheck, TunnelLog, TunnelState, TunnelTab};
 use ratatui::text::Line;
-fn check(messages: &Messages, value: PublicCheck) -> String {
+pub(crate) fn check(messages: &Messages, value: PublicCheck) -> String {
     messages.get(match value {
         PublicCheck::NotRun => "panel-check-not-run",
         PublicCheck::Ok => "panel-component-ok",

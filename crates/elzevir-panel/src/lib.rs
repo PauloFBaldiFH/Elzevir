@@ -22,15 +22,19 @@ mod live;
 mod messages;
 mod operation_view;
 mod operations;
+mod overview;
 mod port;
 pub use port::{MIN_PORT, PortForm, PortStep, Refusal, choose_port};
 mod folder_picker;
+mod inspection;
 mod restore_paths;
 mod runtime;
 mod service_view;
 mod setup;
-pub use setup::{Setup, SetupProfile, setup};
+pub use inspection::{Inspection, InspectionAction, InstallationIssue};
+pub use setup::{Setup, SetupProfile, setup, setup_with_login};
 mod sharing;
+mod transfer;
 mod tunnel_view;
 mod ui;
 mod view;
@@ -47,8 +51,8 @@ pub use live::{
     Component, Details, Host, Institution, LiveState, Mode, ServerStatus, Snapshot, Storage,
 };
 pub use messages::Messages;
-pub use operations::{Form, Job, Operation, Operations, RestoreReview, ServerAction};
-pub use runtime::{run, run_live, run_live_until};
+pub use operations::{Form, Job, LocalBackup, Operation, Operations, RestoreReview, ServerAction};
+pub use runtime::{inspect_installation, run, run_live, run_live_until};
 pub use view::draw;
 
 use ratatui::crossterm::event::{
@@ -82,17 +86,20 @@ pub enum Section {
     Updates,
     /// Service and machine restart.
     Restart,
+    /// Institution preferences and initial setup.
+    Settings,
 }
 
 impl Section {
     /// Navigation order.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Dashboard,
         Self::Diagnostics,
         Self::Addresses,
         Self::Backup,
         Self::Updates,
         Self::Restart,
+        Self::Settings,
     ];
 
     /// Fluent message key for this section.
@@ -105,6 +112,7 @@ impl Section {
             Self::Backup => "panel-backup",
             Self::Updates => "panel-updates",
             Self::Restart => "panel-restart",
+            Self::Settings => "section-settings",
         }
     }
 
@@ -118,6 +126,7 @@ impl Section {
             Self::Backup => 'b',
             Self::Updates => 'u',
             Self::Restart => 'r',
+            Self::Settings => 'g',
         }
     }
 
@@ -137,6 +146,10 @@ impl Section {
 /// Pure presentation state. It owns no database, filesystem or network handles.
 #[derive(Debug, Default)]
 pub struct Panel {
+    /// Read-only presentation of an installation that needs attention.
+    pub inspection: Option<Inspection>,
+    /// Explicit choice returned to the launcher when inspection finishes.
+    pub inspection_action: Option<InspectionAction>,
     /// Demo or a selected institution's observations.
     pub mode: Mode,
     /// Coalesced manual refresh request.
@@ -338,11 +351,17 @@ impl Panel {
     }
 
     fn live_diagnostics(&self) -> bool {
-        matches!(&self.mode, Mode::Live(_)) && self.section == Section::Diagnostics && !self.palette
+        self.inspection.is_none()
+            && matches!(&self.mode, Mode::Live(_))
+            && self.section == Section::Diagnostics
+            && !self.palette
     }
 
     fn live_addresses(&self) -> bool {
-        matches!(&self.mode, Mode::Live(_)) && self.section == Section::Addresses && !self.palette
+        self.inspection.is_none()
+            && matches!(&self.mode, Mode::Live(_))
+            && self.section == Section::Addresses
+            && !self.palette
     }
 }
 
@@ -557,7 +576,31 @@ impl Panel {
         self.scroll = 0;
         true
     }
+    fn inspection_shortcut(&mut self, key: char) -> bool {
+        let Some(inspection) = &self.inspection else {
+            return false;
+        };
+        if self.palette || key != 'c' {
+            return false;
+        }
+        if self.section == Section::Dashboard {
+            self.select(Section::Settings);
+        } else if self.section == Section::Settings {
+            self.inspection_action = if inspection.issue == InstallationIssue::New {
+                Some(InspectionAction::Create)
+            } else if inspection.running {
+                Some(InspectionAction::Connect)
+            } else {
+                None
+            };
+            self.quit = self.inspection_action.is_some();
+        }
+        true
+    }
     fn begin_operation(&mut self, key: char) -> bool {
+        if self.inspection.is_some() {
+            return self.inspection_shortcut(key);
+        }
         if !matches!(&self.mode, Mode::Live(_)) || self.palette || self.diagnostics.pending {
             return false;
         }
@@ -620,7 +663,7 @@ impl Panel {
                     None
                 },
             ),
-            (Section::Restart, 'c') => match self.settings() {
+            (Section::Restart | Section::Settings, 'c') => match self.settings() {
                 Some(operation) => operation,
                 None => return false,
             },

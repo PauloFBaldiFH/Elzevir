@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Operational forms and job history; only recognized presentation keys are localized.
 use crate::dashboard::{row, text};
-use crate::ui::{Action, theme};
+use crate::ui::{Action, Button, Variant, theme};
 use crate::{Messages, Panel, Snapshot};
 use ratatui::{
     Frame,
@@ -308,7 +308,8 @@ pub(crate) fn form(
     let header_rows = u16::try_from(header.len())
         .unwrap_or(4)
         .min(area.height.saturating_sub(8));
-    let height = (header_rows + 2 * field_count + 6).min(area.height);
+    let button_height = if area.height >= 24 { 3 } else { 1 };
+    let height = (header_rows + 2 * field_count + 6 + button_height - 1).min(area.height);
     let popup = Rect::new(
         area.x + area.width.saturating_sub(76) / 2,
         area.y + area.height.saturating_sub(height) / 2,
@@ -316,7 +317,8 @@ pub(crate) fn form(
         height,
     );
     frame.render_widget(Clear, popup);
-    let block = crate::view::block(messages.get("op-dialog"), ascii);
+    let block = crate::view::block(messages.get("op-dialog"), ascii)
+        .title_style(Style::new().fg(theme::TEXT).add_modifier(Modifier::BOLD));
     let inner = block.inner(popup).inner(ratatui::layout::Margin::new(1, 0));
     frame.render_widget(block, popup);
     // Keep every review item on screen, including scope and outage, even for a long filename.
@@ -337,12 +339,17 @@ pub(crate) fn form(
             inner.x,
             inner.y + header_rows + 1,
             inner.width,
-            inner.height.saturating_sub(header_rows + 4),
+            inner.height.saturating_sub(header_rows + 3 + button_height),
         ),
         messages,
         scene,
     );
-    let help = Rect::new(inner.x, inner.bottom().saturating_sub(3), inner.width, 1);
+    let help = Rect::new(
+        inner.x,
+        inner.bottom().saturating_sub(2 + button_height),
+        inner.width,
+        1,
+    );
     frame.render_widget(
         Paragraph::new(messages.get(if form.labels.is_empty() {
             "op-confirm"
@@ -352,26 +359,30 @@ pub(crate) fn form(
         .style(Style::new().fg(theme::MUTED)),
         help,
     );
-    let buttons = Rect::new(inner.x, inner.bottom().saturating_sub(1), inner.width, 1);
-    scene.buttons(
-        frame,
-        buttons,
-        [
-            (
-                crate::ui::label(
-                    messages.get(match form.operation {
-                        crate::Operation::Restore { .. } => "restore-validate",
-                        crate::Operation::ApplyRestore(_) => "restore-confirm",
-                        _ => "ui-save",
-                    }),
-                    ascii,
-                ),
-                Action::Submit,
-                true,
-            ),
-            (messages.get("ui-cancel"), Action::Key(KeyCode::Esc), false),
-        ],
+    let buttons = Rect::new(
+        inner.x,
+        inner.bottom().saturating_sub(button_height),
+        inner.width,
+        button_height,
     );
+    let [confirm, cancel] =
+        ratatui::layout::Layout::horizontal([ratatui::layout::Constraint::Fill(1); 2])
+            .spacing(1)
+            .areas(buttons);
+    let (key, variant) = match form.operation {
+        crate::Operation::Restore { .. } => ("restore-validate", Variant::Primary),
+        crate::Operation::ApplyRestore(_) => ("restore-confirm", Variant::Danger),
+        crate::Operation::Server(crate::ServerAction::Stop) => ("desk-stop", Variant::Danger),
+        crate::Operation::BackupNow { .. } => ("desk-create", Variant::Primary),
+        _ => ("desk-confirm", Variant::Primary),
+    };
+    Button::new(messages.get(key), Action::Submit, variant).draw(frame, confirm, scene);
+    Button::new(
+        messages.get("desk-cancel"),
+        Action::Key(KeyCode::Esc),
+        Variant::Secondary,
+    )
+    .draw(frame, cancel, scene);
 }
 
 fn destination_header(
@@ -578,15 +589,26 @@ fn fields(
         if let Some(choices) = crate::operations::choices(key) {
             choice_buttons(frame, input, (index, value, choices), messages, scene);
         } else {
-            let hover = scene.add(input, Action::Field(index));
+            let hover = scene.add(Rect::new(area.x, y, area.width, 2), Action::Field(index));
             let shown = field_value(key, value);
             let cursor = if focused { "▏" } else { "" };
             frame.render_widget(
-                Paragraph::new(format!(" {shown}{cursor}")).style(if focused || hover {
-                    Style::new().fg(theme::TEXT).bg(theme::BORDER)
-                } else {
-                    Style::new().fg(theme::TEXT).bg(theme::BACKGROUND)
-                }),
+                Paragraph::new(format!(" {shown}{cursor}"))
+                    .scroll((
+                        0,
+                        if focused {
+                            u16::try_from(Line::from(shown.as_str()).width() + 2)
+                                .unwrap_or(u16::MAX)
+                                .saturating_sub(input.width)
+                        } else {
+                            0
+                        },
+                    ))
+                    .style(if focused || hover {
+                        Style::new().fg(theme::TEXT).bg(theme::BORDER)
+                    } else {
+                        Style::new().fg(theme::TEXT).bg(theme::BACKGROUND)
+                    }),
                 input,
             );
         }
@@ -611,17 +633,25 @@ fn choice_buttons(
     messages: &Messages,
     scene: &mut crate::ui::Scene,
 ) {
-    scene.buttons(
-        frame,
-        area,
-        choices.iter().map(|(choice, key)| {
-            (
-                messages.get(key),
-                Action::Choose(index, choice),
-                *choice == value,
-            )
-        }),
-    );
+    let slots = ratatui::layout::Layout::horizontal(
+        choices.iter().map(|_| ratatui::layout::Constraint::Fill(1)),
+    )
+    .spacing(1)
+    .split(area);
+    for ((choice, key), slot) in choices.iter().zip(slots.iter().copied()) {
+        let selected = *choice == value;
+        let mark = if selected { "(*)" } else { "( )" };
+        Button::new(
+            format!("{mark} {}", messages.get(key)),
+            Action::Choose(index, choice),
+            if selected {
+                Variant::Secondary
+            } else {
+                Variant::Quiet
+            },
+        )
+        .draw(frame, slot, scene);
+    }
 }
 
 fn field_value(key: &str, value: &str) -> String {

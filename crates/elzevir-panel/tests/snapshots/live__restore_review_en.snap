@@ -3,31 +3,31 @@ source: crates/elzevir-panel/tests/live.rs
 expression: "screen(&panel, lang)"
 ---
 Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
-+Sections------------------+      1 Home            2 Health          3 Access           4 Backup           5 Updates         6 Service
++Sections------------------+    1 Home         2 Health        3 Access         4 Backup        5 Updates       6 Service      7 Settings
 |  d Dashboard             |+Backups and schedules-----------------------------------------------------------++Selected institution--------+
 |  x Diagnostics           ||Running                                                                         ||Biblioteca de teste         |
 |  a Addresses and access  ||                                                                                ||                            |
-|> b Backups and schedules ||n Create · v Verify · e Export · k Recovery key · o Restore · s Schedule        ||Configured listener         |
-|  u Updates               ||Cop+Confirmed operation-------------------------------------------------------+ ||127.0.0.1:0                 |
-|  r Service               ||Dai| Review institution restore                                               | ||                            |
-|                          ||[Co| Biblioteca de teste                                                      | ||Observed listener           |
-|                          ||[ ]| Observed active staff sessions: Not read                                 | ||127.0.0.1:8080              |
-|                          ||   | biblioteca.age                                                           | ||                            |
-|                          ||   | 00112233445566778899aabbccddeeff   2026-11-20T22:30:00Z                  | ||Last check: 0 seconds ago   |
-|                          ||   | Database schema 1                                                        | ||                            |
-|                          ||   | Source institution unknown                                               | ||Read-only observations      |
-|                          ||   | Database only. Current configuration and credentials will be retained.   | ||                            |
+|> b Backups and schedules ||n C+Confirmed operation-------------------------------------------------------+ ||Configured listener         |
+|  u Updates               ||Cop| Review institution restore                                               | ||127.0.0.1:0                 |
+|  r Service               ||Dai| Biblioteca de teste                                                      | ||                            |
+|  g Settings              ||[Co| Observed active staff sessions: Not read                                 | ||Observed listener           |
+|                          ||[ ]| biblioteca.age                                                           | ||127.0.0.1:8080              |
+|                          ||   | 00112233445566778899aabbccddeeff   2026-11-20T22:30:00Z                  | ||                            |
+|                          ||   | Database schema 1                                                        | ||Last check: 0 seconds ago   |
+|                          ||   | Source institution unknown                                               | ||                            |
+|                          ||   | Database only. Current configuration and credentials will be retained.   | ||Read-only observations      |
 |                          ||   | Service will be offline during replacement and reindexing.               | ||                            |
 |                          ||   |                                                                          | ||                            |
 |                          ||   | Choose with the arrows and confirm with Enter                            | ||                            |
-|                          ||   |                 Back                               Restore               | ||                            |
+|                          ||   |               (*) Back                           ( ) Restore             | ||                            |
 |                          ||   | Click a field to edit · Tab: next · Esc: cancel                          | ||                            |
 |                          ||   |                                                                          | ||                            |
-|                          ||   |           Confirm selection                     Cancel [Esc]             | ||                            |
+|                          ||   |                                                                          | ||                            |
+|                          ||   |           Confirm selection                        Cancel                | ||                            |
+|                          ||   |                                                                          | ||                            |
 |                          ||   +--------------------------------------------------------------------------+ ||                            |
 |                          ||                                                                                ||                            |
 |                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
 |                          |+--------------------------------------------------------------------------------++----------------------------+
-+--------------------------+       New backup [N]                Verify [V]                  Config [S]                  Refresh [F]
++--------------------------+    New backup [n]          Verify [v]            Transfer [z]           Config [s]             Refresh [f]
 Tab/arrows: navigate | f: refresh | PgUp/PgDn: scroll | Ctrl+P: palette | q/Ctrl+C: quit

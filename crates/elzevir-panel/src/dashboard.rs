@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Connected dashboard rendering. All values arrive as observations.
 
-use crate::{Component, Details, LiveState, Messages, Panel, Section, ServerStatus};
+use crate::{Component, LiveState, Messages, Panel, Section, ServerStatus};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -69,9 +69,7 @@ pub(crate) fn draw(
         Line::from(messages.get(key)).style(Style::default().fg(color)),
         Line::default(),
     ];
-    if panel.section == Section::Dashboard {
-        rows.extend(readings(snapshot, details, messages));
-    } else if panel.section == Section::Diagnostics {
+    if panel.section == Section::Diagnostics {
         rows.extend(crate::diagnostic_view::rows(
             snapshot,
             details,
@@ -82,6 +80,23 @@ pub(crate) fn draw(
         rows.extend(address_rows(panel, snapshot, state, messages));
     } else if matches!(panel.section, Section::Backup | Section::Updates) {
         rows.extend(crate::operation_view::rows(snapshot, panel, messages));
+    } else if panel.section == Section::Settings {
+        rows.push(row(
+            messages,
+            "settings-name",
+            state.institution.name.as_deref().map(text),
+        ));
+        rows.push(row(
+            messages,
+            "home-bind",
+            state.institution.configured_listen.map(|a| a.to_string()),
+        ));
+        rows.push(row(
+            messages,
+            "settings-language",
+            state.institution.language.as_deref().map(text),
+        ));
+        rows.push(Line::from(messages.get("settings-edit-help")));
     } else if panel.section == Section::Restart {
         // The service view draws its state and buttons over this block.
         rows.clear();
@@ -98,6 +113,17 @@ pub(crate) fn draw(
             ),
         work,
     );
+    draw_context(frame, context, state, details, messages, ascii);
+}
+
+fn draw_context(
+    frame: &mut Frame,
+    context: Rect,
+    state: &LiveState,
+    details: Option<&crate::Details>,
+    messages: &Messages,
+    ascii: bool,
+) {
     let name = state
         .institution
         .name
@@ -207,90 +233,4 @@ fn address_rows(
         ));
     }
     rows
-}
-
-fn readings(
-    snapshot: Option<&crate::Snapshot>,
-    details: Option<&Details>,
-    messages: &Messages,
-) -> Vec<Line<'static>> {
-    let host = snapshot.map(|sample| &sample.host);
-    let storage = snapshot.map(|sample| &sample.storage);
-    vec![
-        row(messages, "panel-version", details.map(|d| text(&d.version))),
-        row(messages, "panel-pid", details.map(|d| d.pid.to_string())),
-        row(
-            messages,
-            "panel-uptime",
-            details.map(|d| d.uptime_seconds.to_string()),
-        ),
-        row(
-            messages,
-            "panel-database-state",
-            details.map(|d| component(d.database, messages)),
-        ),
-        row(
-            messages,
-            "panel-indexer-state",
-            details.map(|d| component(d.indexer, messages)),
-        ),
-        Line::default(),
-        row(
-            messages,
-            "panel-host-cpu",
-            host.and_then(|h| h.cpu_percent)
-                .filter(|n| n.is_finite() && (0.0..=100.0).contains(n))
-                .map(|n| format!("{n:.1}")),
-        ),
-        row(
-            messages,
-            "panel-host-memory",
-            host.and_then(|h| h.memory_bytes)
-                .map(|(used, total)| format!("{} / {}", used / 1_048_576, total / 1_048_576)),
-        ),
-        row(
-            messages,
-            "panel-space",
-            storage
-                .and_then(|s| s.available_bytes)
-                .map(|n| n.to_string()),
-        ),
-        row(
-            messages,
-            "panel-database-size",
-            storage
-                .and_then(|s| s.database_bytes)
-                .map(|n| n.to_string()),
-        ),
-        row(
-            messages,
-            "panel-wal-size",
-            storage.and_then(|s| s.wal_bytes).map(|n| n.to_string()),
-        ),
-        Line::default(),
-        row(
-            messages,
-            "panel-local-catalog",
-            snapshot
-                .and_then(|s| s.addresses.catalog.as_deref())
-                .map(text),
-        ),
-        row(
-            messages,
-            "panel-local-staff",
-            snapshot
-                .and_then(|s| s.addresses.staff.as_deref())
-                .map(text),
-        ),
-        Line::from(messages.get(
-            if snapshot.is_some_and(|s| s.addresses.tested_at.is_some()) {
-                "panel-access-tests-reference"
-            } else {
-                "panel-binding-only"
-            },
-        )),
-        Line::from(messages.get("panel-lan-unknown")),
-        Line::from(messages.get("panel-internet-unknown")),
-        Line::from(messages.get("panel-backup-unknown")),
-    ]
 }

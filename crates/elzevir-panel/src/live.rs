@@ -70,11 +70,17 @@ pub struct Storage {
     pub wal_bytes: Option<u64>,
     /// Free space on the selected data filesystem.
     pub available_bytes: Option<u64>,
+    /// Capacity of the same filesystem as the available-space observation.
+    pub capacity_bytes: Option<u64>,
 }
 
 /// Machine measurements, not the application's exclusive resource usage.
 #[derive(Debug, Clone, Default)]
 pub struct Host {
+    /// Resident bytes for the confirmed server process.
+    pub resident: Option<u64>,
+    /// Server process CPU, as a percentage of one core.
+    pub process_cpu: Option<f32>,
     /// CPU percentage after a sufficient observation interval.
     pub cpu_percent: Option<f32>,
     /// Used and total memory, in bytes.

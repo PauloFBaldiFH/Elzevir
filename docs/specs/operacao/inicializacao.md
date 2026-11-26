@@ -95,16 +95,17 @@ no Linux e macOS e `%LOCALAPPDATA%\Elzevir\data` no Windows. A
 configuração operacional padrão fica em `server.toml` nessa pasta.
 As opções explícitas continuam atendendo às instalações personalizadas.
 
-`init` em terminal pede o nome, a senha oculta com confirmação e, se
+`init` em terminal pede o nome da biblioteca, o login, a senha oculta com confirmação e, se
 desejado, um perfil inicial público, escolar ou universitário. O perfil
 usa os comandos existentes de unidade e política de circulação. O
 vocabulário de materiais continua vindo das listas oficiais de BIBFRAME.
 A instalação prepara SQLite e Tantivy antes de publicar a configuração.
 
-`serve`, `panel` e `start` oferecem o assistente no primeiro uso do
-diretório padrão em terminal. `start` deixa o servidor rodando em segundo
-plano (`elzevir background`, processo separado do terminal) e abre o painel
-ligado a ele; fechar o painel não para o servidor (Paulo, 2026-11-20).
+`panel` e `start` abrem a visão geral. Na pasta pessoal nova, o operador
+inicia o assistente em Configurações. O comando explícito `serve` mantém
+o percurso interativo próprio. Em instituição pessoal saudável, `start`
+inicia o processo separado `elzevir background` e abre o painel ligado a
+ele. Fechar o painel preserva o servidor.
 `elzevir background` inicia o servidor da instituição padrão sem abrir
 nada e não faz nada se ele já estiver rodando. No login, o servidor sobe
 pela bandeja: no Linux, pela entrada em `~/.config/autostart` criada por
@@ -153,3 +154,9 @@ exceto quando veio de `--listen`, que nunca reescreve o arquivo. Esc
 cancela. Sem terminal interativo, o erro pede `--listen`.
 `--lang` seleciona o idioma explicitamente. Locales em português selecionam
 pt-BR por padrão.
+
+## Entrada pelo painel
+
+O lançamento interativo abre o painel na instalação nova ou incompleta. A inspeção distingue destino novo, dados preexistentes sem configuração, configuração ilegível ou inválida e configuração sem banco. Abrir, navegar e sair nessa situação não cria dados e não inicia o servidor. Configurações abre o assistente por escolha explícita apenas em destino novo compatível com o inicializador. Cancelar volta ao painel. Em banco parado, a consulta à permissão de administração exige a trava existente e uma base sem diário pendente. Uma leitura imutável do SQLite preserva os arquivos da instituição. Para dados legados com servidor ativo identificado, Configurações oferece abrir a sessão operacional existente. Instalações pessoais configuradas preservam o início automático quando a parada está confirmada. A edição de instalações existentes e a recuperação de um administrador exigem autoridade e verificação próprias; ausência de TOML não prova ausência de administrador.
+
+O assistente suspende a edição e a confirmação quando o terminal fica menor que 38 colunas ou dez linhas. Ampliar a janela recupera os valores digitados. O operador pode cancelar também na tela de tamanho insuficiente.

@@ -69,7 +69,7 @@ pub use backup::{
     supported_schema_version,
 };
 pub use config::StoreConfig;
-pub use elzevir::{ElzevirHandler, ElzevirStore};
+pub use elzevir::{ElzevirHandler, ElzevirStore, inspect_offline_administrator};
 pub use error::{CommandFailed, StoreError, SubmitError};
 pub use import::PendingAdd;
 pub use preview::{preview_import, preview_sheet, preview_table_source};

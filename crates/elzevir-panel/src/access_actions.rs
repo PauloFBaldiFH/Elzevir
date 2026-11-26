@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Operator-initiated actions on the terminal host. Only a public catalog URL is copied.
+//! Operator-initiated actions on the terminal host. Clipboard and desktop opening require an explicit operator action.
 use crate::{Mode, Panel, Section, TunnelState};
 use base64::Engine as _;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
@@ -90,23 +90,12 @@ impl Actions {
         });
         let folder = ops.and_then(|ops| ops.backup_folder.as_deref());
         panel.access_notice = Some(if action == 'Y' {
-            if let Some(url) = url
-                && self.clipboard
-            {
-                let content = base64::engine::general_purpose::STANDARD.encode(url);
-                let mut out = std::io::stdout().lock();
-                if write!(out, "\x1b]52;c;{content}\x07")
-                    .and_then(|()| out.flush())
-                    .is_ok()
-                {
-                    "address-copy-requested"
-                } else {
-                    "address-select-url"
-                }
+            if url.is_some_and(|url| self.copy(url)) {
+                "address-copy-requested"
             } else {
                 "address-select-url"
             }
-        } else if let Some(program) = &self.opener {
+        } else {
             let target = if action == 'B' {
                 url.map(std::ffi::OsStr::new)
             } else {
@@ -114,6 +103,51 @@ impl Actions {
                     .filter(|path| path.is_absolute())
                     .map(std::path::Path::as_os_str)
             };
+            self.open(target)
+        });
+        panel.scroll = 0;
+        true
+    }
+    pub(crate) fn endpoint(
+        &mut self,
+        panel: &mut Panel,
+        endpoint: crate::overview::Endpoint,
+        open: bool,
+    ) {
+        let Mode::Live(state) = &panel.mode else {
+            return;
+        };
+        let url = state
+            .snapshot
+            .as_ref()
+            .filter(|_| state.age_seconds <= 5)
+            .and_then(|s| endpoint.url(s));
+        panel.access_notice = Some(if open {
+            self.open(url.map(std::ffi::OsStr::new))
+        } else if url.is_some_and(|s| self.copy(s)) {
+            "address-copy-requested"
+        } else {
+            "address-select-url"
+        });
+    }
+
+    pub(crate) fn desktop(&self) -> bool {
+        self.opener.is_some()
+    }
+
+    pub(crate) fn copy(&self, value: &str) -> bool {
+        if !self.clipboard {
+            return false;
+        }
+        let content = base64::engine::general_purpose::STANDARD.encode(value);
+        let mut out = std::io::stdout().lock();
+        write!(out, "\x1b]52;c;{content}\x07")
+            .and_then(|()| out.flush())
+            .is_ok()
+    }
+
+    pub(crate) fn open(&mut self, target: Option<&std::ffi::OsStr>) -> &'static str {
+        if let Some(program) = &self.opener {
             if self.opening.is_some() {
                 "address-opening"
             } else if let Some(target) = target {
@@ -135,8 +169,6 @@ impl Actions {
             }
         } else {
             "address-terminal"
-        });
-        panel.scroll = 0;
-        true
+        }
     }
 }

@@ -14,7 +14,7 @@ fn mode(messages: &Messages, value: Option<&StaffAccess>) -> String {
     })
 }
 
-fn check(messages: &Messages, result: CheckResult) -> String {
+pub(crate) fn check(messages: &Messages, result: CheckResult) -> String {
     messages.get(match result {
         CheckResult::Ok => "panel-component-ok",
         CheckResult::Failed => "panel-component-failed",

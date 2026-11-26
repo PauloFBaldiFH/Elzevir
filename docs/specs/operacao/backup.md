@@ -123,3 +123,7 @@ F3 abre a pasta pessoal e F4 a pasta gerenciada. Use Tab entre lista, caminho
 e ação. A confirmação da exportação cria a pasta informada quando necessário.
 O serviço grava na pasta gerenciada e a exportação para o destino escolhido
 é feita sob a identidade do operador, sem sobrescrever arquivo existente.
+
+### Levar a cópia ao computador
+
+Em Backups, Transferir parte da última cópia gerenciada que o catálogo identifica como verificada na criação. O operador informa o usuário e o endereço ou alias SSH que utiliza no próprio computador. O painel mostra o comando SCP para OpenSSH 9 ou posterior e só solicita a cópia para a área de transferência mediante ação explícita. O destino é a pasta atual do computador do operador, que deve estar vazia. Em um desktop local, Abrir pasta usa o gerenciador de arquivos. Arquivo cifrado e chave de recuperação seguem percursos separados.

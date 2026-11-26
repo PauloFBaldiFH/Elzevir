@@ -55,10 +55,12 @@ fn connected() -> Panel {
                 database_bytes: Some(4 * 1024 * 1024),
                 wal_bytes: Some(0),
                 available_bytes: Some(100 * 1024 * 1024),
+                capacity_bytes: Some(1 << 30),
             },
             host: Host {
                 cpu_percent: Some(12.5),
                 memory_bytes: Some((1024 * 1024 * 1024, 8 * 1024 * 1024 * 1024)),
+                ..Host::default()
             },
             addresses: elzevir_panel::AddressBook {
                 observed_mode: Some(elzevir_panel::StaffAccess::SameAddress),
@@ -176,7 +178,7 @@ fn wildcard_binding_is_rendered_as_a_local_address_not_a_publication_claim() {
         let text = screen(&panel, "en");
         assert!(text.contains(local));
         assert!(text.contains("HTTP not tested"));
-        assert!(text.contains("Internet access: not configured"));
+        assert!(text.contains("Public HTTPS test: Not read"));
     }
 }
 
@@ -941,4 +943,42 @@ fn advanced_broker_field_stays_visible_at_compact_sizes() {
             assert!(shown.contains("Z▏"), "{shown}");
         }
     }
+}
+
+#[test]
+fn dashboard_reports_a_published_backup_even_after_an_export_failure() {
+    let mut panel = connected();
+    if let Mode::Live(state) = &mut panel.mode {
+        let ops = &mut state.snapshot.as_mut().unwrap().operations;
+        ops.local_backup = elzevir_panel::LocalBackup::Verified;
+        ops.latest_export_failed = Some(true);
+        ops.jobs = vec![elzevir_panel::Job {
+            id: String::new(),
+            at: "10:00 UTC".to_owned(),
+            action: "op-backup-now",
+            state: "op-failed",
+            phase: None,
+        }];
+        ops.cloud = Some(elzevir_panel::CloudView {
+            transfers: vec![(
+                elzevir_panel::CloudTarget {
+                    plan: String::new(),
+                    connection: String::new(),
+                    folder: String::new(),
+                },
+                String::new(),
+                "op-queued".to_owned(),
+            )],
+            ..Default::default()
+        });
+    }
+    let rendered = screen(&panel, "en");
+    assert!(rendered.contains("Verified at creation"));
+    assert!(rendered.contains("Export failed"));
+    assert!(rendered.contains("Last request: Failed"));
+    assert!(rendered.contains("Cloud transfer: Queued"));
+    if let Mode::Live(state) = &mut panel.mode {
+        state.age_seconds = 6;
+    }
+    assert!(!screen(&panel, "en").contains("Verified at creation"));
 }

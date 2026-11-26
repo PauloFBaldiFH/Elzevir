@@ -16,6 +16,43 @@ pub struct ElzevirHandler;
 /// A store running the application's commands.
 pub type ElzevirStore = Store<ElzevirHandler>;
 
+/// Observe admin membership on a checkpointed, stationary institution database.
+/// The caller must hold the institution lock until the read completes.
+///
+/// # Errors
+/// Refuses uncheckpointed journals, unsafe paths, unreadable and unsupported schemas.
+pub fn inspect_offline_administrator(path: &std::path::Path) -> Result<bool, StoreError> {
+    use rusqlite::{Connection, OpenFlags};
+    let unavailable = || StoreError::Backup("offline institution unavailable".to_owned());
+    if !std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_file()) {
+        return Err(unavailable());
+    }
+    for suffix in ["-wal", "-journal"] {
+        let mut sidecar = path.as_os_str().to_owned();
+        sidecar.push(suffix);
+        match std::fs::symlink_metadata(sidecar) {
+            Ok(meta) if meta.is_file() && meta.len() == 0 => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            _ => return Err(unavailable()),
+        }
+    }
+    let absolute = std::path::absolute(path).map_err(|_| unavailable())?;
+    let mut uri = url::Url::from_file_path(absolute).map_err(|()| unavailable())?;
+    // immutable prevents SQLite from creating -wal or -shm on first contact.
+    uri.set_query(Some("immutable=1&mode=ro"));
+    let conn = Connection::open_with_flags(
+        uri.as_str(),
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI,
+    )?;
+    let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+    if !(1..=crate::supported_schema_version()).contains(&version) {
+        return Err(unavailable());
+    }
+    Ok(conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM staff_permissions p JOIN staff_accounts a ON a.id = p.staff_id WHERE p.permission = ?1)",
+        [Permission::Administration.as_str()], |r| r.get(0))?)
+}
+
 impl CommandHandler for ElzevirHandler {
     type Command = WriteCommand;
     type Output = WriteOutput;

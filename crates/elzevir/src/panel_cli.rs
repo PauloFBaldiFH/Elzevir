@@ -39,8 +39,7 @@ pub(crate) fn run(args: PanelArgs, no_self_update: bool) -> Result<(), String> {
     }
     let mut input = crate::server_config::ServeArgs::for_status(args.config, args.data_dir);
     input.lang = args.lang;
-    let (settings, config) = crate::first_use::resolve(input)?;
-    connected(&settings, config, args.ascii, no_self_update, || false)
+    crate::panel_startup::open(&input, args.ascii, false, no_self_update)
 }
 
 pub(crate) fn connected(
@@ -79,7 +78,7 @@ pub(crate) fn connected(
 
 /// Whether this program belongs to an installation run by the system's
 /// service manager (`install.sh`/`install.ps1` with service options).
-fn managed() -> bool {
+pub(crate) fn managed() -> bool {
     std::env::current_exe()
         .ok()
         .and_then(|executable| crate::installation::record_path(&executable).ok())
@@ -96,6 +95,7 @@ struct Collector {
     system: Option<sysinfo::System>,
     cpu_at: Option<Instant>,
     cpu: Option<f32>,
+    process_sample: Option<(sysinfo::Pid, u64, Instant)>,
     diagnostics: crate::diagnostics::Context,
     operation_result: Option<&'static str>,
     config: Option<PathBuf>,
@@ -112,6 +112,7 @@ impl Collector {
             cpu_at: None,
             restore: None,
             cpu: None,
+            process_sample: None,
             diagnostics: crate::diagnostics::Context::default(),
             operation_result: None,
             config: None,
@@ -135,6 +136,7 @@ impl Collector {
             indexer: component(health.indexer),
             listen: observed.listen,
         });
+        let host = self.host(details.as_ref().map(|detail| detail.pid));
         let status = match (observed.state, details) {
             ("running", Some(details)) => ServerStatus::Running(details),
             ("degraded", Some(details)) => ServerStatus::Degraded(details),
@@ -159,15 +161,16 @@ impl Collector {
                 database_bytes,
                 wal_bytes,
                 available_bytes,
+                capacity_bytes: fs4::total_space(&self.directory).ok(),
             },
-            host: self.host(),
+            host,
             diagnostics,
             addresses: self.diagnostics.addresses(),
             operations,
         }
     }
 
-    fn host(&mut self) -> Host {
+    fn host(&mut self, pid: Option<u32>) -> Host {
         if self.system.is_none() {
             // Unsupported/temporarily unavailable host information stays unknown and is retried.
             self.system = sysinfo::System::new().ok();
@@ -189,7 +192,30 @@ impl Collector {
             self.cpu_at = Some(now);
         }
         let memory = (system.used_memory(), system.total_memory());
+        let mut process_cpu = None;
+        let mut resident = None;
+        let sample = pid.map(sysinfo::Pid::from_u32).and_then(|pid| {
+            use sysinfo::{ProcessRefreshKind, ProcessesToUpdate};
+            let count = system.refresh_processes_specifics(
+                ProcessesToUpdate::Some(&[pid]),
+                true,
+                ProcessRefreshKind::nothing().with_memory().with_cpu(),
+            );
+            let process = system.process(pid).filter(|_| count == 1)?;
+            resident = Some(process.memory());
+            if self.process_sample.is_some_and(|(old, birth, at)| {
+                old == pid
+                    && birth == process.start_time()
+                    && at.elapsed() >= sysinfo::MINIMUM_CPU_UPDATE_INTERVAL
+            }) {
+                process_cpu = Some(process.cpu_usage()).filter(|n| n.is_finite() && *n >= 0.0);
+            }
+            Some((pid, process.start_time(), now))
+        });
+        self.process_sample = sample;
         Host {
+            process_cpu,
+            resident,
             cpu_percent: self.cpu,
             memory_bytes: (memory.1 > 0 && memory.0 <= memory.1).then_some(memory),
         }
@@ -218,7 +244,6 @@ impl Collector {
         let mut result = elzevir_panel::Operations {
             result: self.operation_result,
             review: self.restore.as_ref().map(|r| r.review.clone()),
-            managed_ids: crate::local_artifacts::ids(&self.directory).unwrap_or_default(),
             backup_folder: Some(self.directory.join("backups")),
             latest: self.latest.as_ref().map(|release| release.tag_name.clone()),
             update_available: self.latest.as_ref().is_some_and(|release| {
@@ -230,6 +255,10 @@ impl Collector {
                 .and_then(|release| release.body.clone()),
             ..elzevir_panel::Operations::default()
         };
+        if let Ok(ids) = crate::local_artifacts::ids(&self.directory) {
+            result.local_backup = crate::local_artifacts::observation(&self.directory, &ids);
+            result.managed_ids = ids;
+        }
         // Unreadable cloud or broker state is shown as unknown in the panel, not as an error.
         result.cloud = crate::cloud::view(&self.directory).ok();
         result.remote_address = crate::broker::observe(&self.directory).ok().flatten();
@@ -267,7 +296,10 @@ impl Collector {
                 .map(|job| elzevir_panel::Job {
                     phase: job.phase.map(crate::backup_archive::Phase::label),
                     id: job.id,
-                    at: job.at,
+                    at: job
+                        .at
+                        .parse::<jiff::Timestamp>()
+                        .map_or(job.at, |t| t.strftime("%F %R UTC").to_string()),
                     action: match job.task {
                         crate::operations::Task::Backup { .. } => "op-backup-now",
                         crate::operations::Task::ConfigureCloud => "cloud-operation",
@@ -289,6 +321,21 @@ impl Collector {
 
     fn host_history(&self, result: &mut elzevir_panel::Operations) {
         if let Ok(receipts) = crate::host_jobs::receipts(&self.directory) {
+            let exports = receipts.iter().filter(|r| r.action == "export_backup");
+            if let Some(latest) = exports
+                .clone()
+                .map(|r| r.created)
+                .max()
+                .filter(|at| *at > 0)
+            {
+                let mut dated = exports.filter(|r| r.created == latest);
+                if let Some(receipt) = dated.next()
+                    && dated.next().is_none()
+                {
+                    result.latest_export_failed =
+                        Some(matches!(receipt.state.as_str(), "failed" | "interrupted"));
+                }
+            }
             result.authorization_uris = receipts
                 .iter()
                 .filter_map(|receipt| receipt.authorization_uri.clone())

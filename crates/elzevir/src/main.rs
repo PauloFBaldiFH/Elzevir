@@ -53,6 +53,7 @@ mod operations_cli;
 mod operations_config;
 mod overdue_run;
 mod panel_cli;
+mod panel_startup;
 mod personal_update;
 mod private_temp;
 mod process_runner;
@@ -218,7 +219,7 @@ fn main() -> ExitCode {
         Command::Desktop(args) => desktop::run(&args),
         Command::Background(args) => background::run(args),
         Command::Tray(args) => tray::run(args),
-        Command::Stop(args) => first_use::resolve(args)
+        Command::Stop(args) => first_use::existing(args)
             .and_then(|(settings, _)| background::stop(&settings.data_dir))
             .map(drop),
         Command::Address(args) => broker_cli::run(args),
@@ -227,7 +228,7 @@ fn main() -> ExitCode {
         Command::Update(args) => update::run(args, no_self_update),
         Command::RecoverUpdate(args) => update_recovery::run(&args),
         Command::Serve(args) => first_use::resolve(args).and_then(|(settings, _)| serve(&settings)),
-        Command::Start(args) => first_use::start(args, no_self_update),
+        Command::Start(args) => first_use::start(&args, no_self_update),
         Command::Init(args) => init::run(&args),
         Command::Status(args) => status::run(args),
         Command::Panel(args) => panel_cli::run(args, no_self_update),

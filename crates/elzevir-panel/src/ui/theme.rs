@@ -3,14 +3,14 @@
 
 use ratatui::style::{Color, Modifier, Style};
 
-pub(crate) const BACKGROUND: Color = Color::Rgb(0x16, 0x18, 0x21);
-pub(crate) const SURFACE: Color = Color::Rgb(0x1e, 0x21, 0x30);
-pub(crate) const BORDER: Color = Color::Rgb(0x3b, 0x42, 0x61);
-pub(crate) const ACCENT: Color = Color::Rgb(0x7a, 0xa2, 0xf7);
-pub(crate) const SUCCESS: Color = Color::Rgb(0x9e, 0xce, 0x6a);
-pub(crate) const WARNING: Color = Color::Rgb(0xe0, 0xaf, 0x68);
-pub(crate) const TEXT: Color = Color::Rgb(0xc0, 0xca, 0xf5);
-pub(crate) const MUTED: Color = Color::Rgb(0x78, 0x7c, 0x99);
+pub(crate) const BACKGROUND: Color = Color::Rgb(0x0b, 0x17, 0x25);
+pub(crate) const SURFACE: Color = Color::Rgb(0x16, 0x29, 0x3b);
+pub(crate) const BORDER: Color = Color::Rgb(0x36, 0x50, 0x67);
+pub(crate) const ACCENT: Color = Color::Rgb(0x79, 0xc2, 0xfa);
+pub(crate) const SUCCESS: Color = Color::Rgb(0x75, 0xda, 0xad);
+pub(crate) const WARNING: Color = Color::Rgb(0xff, 0xb4, 0x57);
+pub(crate) const TEXT: Color = Color::Rgb(0xe5, 0xef, 0xf8);
+pub(crate) const MUTED: Color = Color::Rgb(0xa0, 0xb4, 0xc6);
 
 pub(crate) const fn surface() -> Style {
     Style::new().fg(TEXT).bg(SURFACE)
@@ -26,3 +26,6 @@ pub(crate) const fn selected() -> Style {
 pub(crate) const fn muted() -> Style {
     Style::new().fg(MUTED).bg(BACKGROUND)
 }
+
+pub(crate) const STEEL: Color = Color::Rgb(43, 74, 98);
+pub(crate) const DANGER: Color = Color::Rgb(142, 61, 71);

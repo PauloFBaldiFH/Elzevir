@@ -3,7 +3,12 @@
 use crate::{Messages, Snapshot, TunnelState};
 use ratatui::text::Line;
 pub(crate) fn public_url(url: &str) -> Option<&str> {
-    let host = url.strip_prefix("https://")?.strip_suffix('/')?;
+    public_route(url, "/")
+}
+
+/// Exact HTTPS route advertised by the connector for this endpoint.
+pub(crate) fn public_route<'a>(url: &'a str, route: &str) -> Option<&'a str> {
+    let host = url.strip_prefix("https://")?.strip_suffix(route)?;
     if host.is_empty()
         || host.len() > 253
         || !host
