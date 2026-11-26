@@ -1362,6 +1362,8 @@ name = "elzevir-sip2"
 version = "0.1.0-alpha.2"
 dependencies = [
  "elzevir-app",
+ "jiff",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
