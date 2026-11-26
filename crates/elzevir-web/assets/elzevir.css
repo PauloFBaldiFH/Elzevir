@@ -736,6 +736,9 @@ a.chip-identifier:hover { text-decoration: underline; }
 .draft-note { margin: 0 0 10px; padding: 8px 12px; border: 1px dashed var(--pill-text); border-radius: 8px; font-size: 0.88rem; }
 .draft-note p { margin: 0; }
 .draft-note .draft-duplicate { margin-top: 4px; font-weight: 600; }
+.authority-station { margin: 10px 0 0; }
+.authority-station .draft-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.authority-approved { margin: 0; font-size: 0.88rem; }
 .form-part + .form-part { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--card-border); }
 .form-part-heading { margin: 0 0 8px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--pill-text); }
 .record-form .form-actions button[data-action="cancel-new"] { font: inherit; border: 1px solid var(--card-border); border-radius: 8px; padding: 6px 14px; background: transparent; color: var(--text-muted); cursor: pointer; }

@@ -134,6 +134,10 @@ pub enum AuthorityRole {
         heading: String,
         /// The relator code, such as `ill`.
         relator: Option<String>,
+        /// The control number of the authority record it was approved from, kept as `$0`
+        /// (fontes-de-autoridade.md, item 20).
+        #[serde(default)]
+        identifier: Option<String>,
     },
     /// A subject (`bf:subject`): any kind of authority.
     Subject {
@@ -143,6 +147,9 @@ pub enum AuthorityRole {
         heading: String,
         /// The thesaurus code, such as `lcsh`.
         thesaurus: Option<String>,
+        /// The control number of the authority record it was approved from, kept as `$0`.
+        #[serde(default)]
+        identifier: Option<String>,
     },
     /// The place of publication of one Instance of the Work (`bf:place` of its
     /// `bf:provisionActivity`): only a place.

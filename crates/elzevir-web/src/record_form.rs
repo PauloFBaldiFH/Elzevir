@@ -88,6 +88,22 @@ fn name_of<T: PartialEq + Copy>(
         .map_or("", |(_, name, _)| name)
 }
 
+/// The subject class named `name` in the forms, such as `genre_form`.
+pub(crate) fn subject_kind(name: &str) -> Option<SubjectKind> {
+    SUBJECTS
+        .iter()
+        .find(|(_, value, _)| *value == name)
+        .map(|(kind, _, _)| *kind)
+}
+
+/// The forms' name of a subject class and its label's message key.
+pub(crate) fn subject_names(kind: SubjectKind) -> Option<(&'static str, &'static str)> {
+    SUBJECTS
+        .iter()
+        .find(|(subject, _, _)| *subject == kind)
+        .map(|(_, value, label)| (*value, *label))
+}
+
 fn options<T>(t: &I18n, table: &[(T, &'static str, &'static str)]) -> Vec<FormOption> {
     table
         .iter()
@@ -192,8 +208,16 @@ pub(crate) fn link_field(t: &I18n) -> FormField {
         column("role", "link-column-role", ColumnKind::Select(roles), false),
         column("relator", "link-column-relator", ColumnKind::Text, true),
         column("thesaurus", "edit-column-thesaurus", ColumnKind::Text, true),
+        // The control number of an authority approved from a source
+        // (fontes-de-autoridade.md, item 19).
+        column(
+            "identifier",
+            "link-column-identifier",
+            ColumnKind::Hidden,
+            true,
+        ),
     ];
-    let values = ["person", "", "contribution", "", ""].map(str::to_owned);
+    let values = ["person", "", "contribution", "", "", ""].map(str::to_owned);
     field(
         "Link",
         "link",

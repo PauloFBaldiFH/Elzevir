@@ -167,6 +167,7 @@ fn shown(drafts: &Drafts, t: &I18n, outcome: SourceOutcome, page: u32) -> DraftO
                         title: summary.title,
                         details,
                         isbns: summary.isbns.join(", "),
+                        authority: None,
                     })
                 })
                 .collect();

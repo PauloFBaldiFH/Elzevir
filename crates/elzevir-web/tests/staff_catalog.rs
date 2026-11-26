@@ -12,6 +12,8 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, Response, StatusCode, header};
+use elzevir_app::authority_sources::{AuthorityDraft, AuthorityQuery, AuthoritySource};
+use elzevir_app::catalog::AuthorityRole;
 use elzevir_app::catalog::{
     InstanceView, ItemData, ItemStatus, ItemView, NewContribution, NewIdentifier, NewInstance,
     NewNote, NewRecord,
@@ -22,7 +24,7 @@ use elzevir_app::drafts::{
 use elzevir_app::editing::Edit;
 use elzevir_app::export::StoredRecord;
 use elzevir_app::listing::{Family, FamilyCursor, FamilyHead, FamilyInstance, FamilyWork};
-use elzevir_app::marc_mapping::bibframe_to_marc;
+use elzevir_app::marc_mapping::{AuthorityHeading, bibframe_to_marc};
 use elzevir_app::material::{ContentKind, Material};
 use elzevir_app::memory::{MemoryProbe, MemoryReport};
 use elzevir_app::search::SearchHit;
@@ -2158,5 +2160,181 @@ async fn an_approved_draft_fills_the_new_family_and_is_stored_only_on_create() {
         body(refused)
             .await
             .contains(r#""field":"draft","key":"draft-expired""#)
+    );
+}
+
+/// One made-up authority source, `Nomes`, that finds one person.
+struct Authorities;
+
+impl AuthoritySource for Authorities {
+    fn search_authorities(
+        &self,
+        query: &AuthorityQuery,
+        page: u32,
+    ) -> Vec<SourceResult<AuthorityDraft>> {
+        self.search_one_authority(0, query, page)
+            .into_iter()
+            .collect()
+    }
+
+    fn authority_sources(&self) -> Vec<String> {
+        vec!["Nomes".to_owned()]
+    }
+
+    fn search_one_authority(
+        &self,
+        index: usize,
+        query: &AuthorityQuery,
+        _: u32,
+    ) -> Option<SourceResult<AuthorityDraft>> {
+        (index == 0).then(|| SourceResult {
+            source: "Nomes".to_owned(),
+            outcome: SourceOutcome::Found {
+                total: 1,
+                drafts: vec![AuthorityDraft {
+                    origin: "sru:Nomes".to_owned(),
+                    heading: AuthorityHeading {
+                        kind: query.kind(),
+                        heading: "Portinari, Candido, 1903-1962".to_owned(),
+                        dates: Some("1903-1962".to_owned()),
+                        identifier: Some("(XX-Ex)n  00000003".to_owned()),
+                        variants: vec!["Portinari, C.".to_owned()],
+                    },
+                }],
+                skipped: 0,
+            },
+        })
+    }
+}
+
+#[tokio::test]
+async fn the_authority_form_searches_the_authority_sources() {
+    // Without authority sources the form has no search, and the route answers 404.
+    let plain = app();
+    let ana = signed_in(&plain).await;
+    let form = body(
+        send(
+            &plain,
+            get("/equipe/acervo/obra/3/autoridade/nova", Some(&ana), None),
+        )
+        .await,
+    )
+    .await;
+    assert!(!form.contains("authority-station"));
+    let none = send(
+        &plain,
+        get(
+            "/equipe/acervo/fontes-de-autoridade/0?name=a&class=person",
+            Some(&ana),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(none.status(), StatusCode::NOT_FOUND);
+
+    let editor = Arc::new(common::Editor::default());
+    let app = router(state(Arc::clone(&editor)).with_authority_sources(Arc::new(Authorities)));
+    let ana = signed_in(&app).await;
+    let bia = signed_in_as(&app, "bia").await;
+    let form = body(
+        send(
+            &app,
+            get("/equipe/acervo/obra/3/autoridade/nova", Some(&ana), None),
+        )
+        .await,
+    )
+    .await;
+    assert!(form.contains(r#"data-action="authority-search""#));
+    assert!(form.contains(r#"data-endpoint="/equipe/acervo/fontes-de-autoridade""#));
+    assert!(form.contains(r#"<h4 class="draft-source-name">Nomes</h4>"#));
+    assert!(form.contains(r#"data-name="identifier""#));
+
+    let ask = |session: Option<&str>, query: &str| {
+        get(
+            &format!("/equipe/acervo/fontes-de-autoridade/{query}"),
+            session,
+            None,
+        )
+    };
+    assert_eq!(
+        send(&app, ask(None, "0?name=a&class=person"))
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        send(&app, ask(Some(&bia), "0?name=a&class=person"))
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    let empty = send(&app, ask(Some(&ana), "0?name=+&class=person")).await;
+    assert_eq!(empty.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let unknown = send(&app, ask(Some(&ana), "0?name=a&class=author")).await;
+    assert_eq!(unknown.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body(unknown).await, "Choose a class.");
+    assert_eq!(
+        send(&app, ask(Some(&ana), "1?name=a&class=person"))
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+    let found = body(send(&app, ask(Some(&ana), "0?name=Portinari&class=person")).await).await;
+    assert!(found.contains("1 found"), "{found}");
+    assert!(found.contains(r#"<span class="draft-title">Portinari, Candido, 1903-1962</span>"#));
+    assert!(
+        found.contains("(XX-Ex)n  00000003 | See from: Portinari, C."),
+        "{found}"
+    );
+    assert!(found.contains(
+        r#"data-action="authority-approve" data-kind="person" data-heading="Portinari, Candido, 1903-1962" data-identifier="(XX-Ex)n  00000003" data-source="Nomes""#
+    ));
+}
+
+#[tokio::test]
+async fn the_authority_form_links_the_approved_identifier() {
+    let editor = Arc::new(common::Editor::default());
+    let app = router(state(Arc::clone(&editor)).with_authority_sources(Arc::new(Authorities)));
+    let ana = signed_in(&app).await;
+    // "Link" sends the approved identifier with the row; it becomes the `$0`.
+    let token = page_token(&app, &ana).await;
+    let post = |json: &'static str| {
+        post_json(
+            "/equipe/acervo/obra/3/autoridades?instancia=30",
+            Some(&ana),
+            Some(&token),
+            json,
+        )
+    };
+    let placed = body(
+        send(
+            &app,
+            post(r#"{"changes": [{"Link": {"kind": "place", "heading": "Rio", "role": "place", "relator": null, "thesaurus": null, "identifier": "(XX-Ex)sh1"}}]}"#),
+        )
+        .await,
+    )
+    .await;
+    assert!(
+        placed.contains(r#""key":"link-error-identifier-place""#),
+        "{placed}"
+    );
+    let linked = send(
+        &app,
+        post(r#"{"changes": [{"Link": {"kind": "person", "heading": "Portinari, Candido, 1903-1962", "role": "contribution", "relator": null, "thesaurus": null, "identifier": "(XX-Ex)n  00000003"}}]}"#),
+    )
+    .await;
+    assert_eq!(body(linked).await, r#"{"version":2}"#);
+    let edits = editor.0.lock().unwrap();
+    let Some((_, Edit::Link(link))) = edits.last() else {
+        panic!("no link");
+    };
+    assert_eq!(
+        link.role,
+        AuthorityRole::Contribution {
+            kind: AgentKind::Person,
+            heading: "Portinari, Candido, 1903-1962".to_owned(),
+            relator: None,
+            identifier: Some("(XX-Ex)n  00000003".to_owned()),
+        }
     );
 }

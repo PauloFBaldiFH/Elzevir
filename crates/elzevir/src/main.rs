@@ -427,7 +427,7 @@ fn web_app(
     data_dir: &Path,
     config: WebConfig,
     language: &str,
-    drafts: Option<draft_search::LoggedSources>,
+    sources: draft_search::ScreenSources,
 ) -> Result<WebRuntime, String> {
     let i18n = language_bundle(language)?;
     let opac = OpacPorts {
@@ -483,8 +483,12 @@ fn web_app(
     .with_board(Arc::clone(store) as _)
     .with_pending(Arc::clone(store) as _)
     .with_patron_accounts(Arc::clone(store) as _);
-    let state = match drafts {
+    let state = match sources.drafts {
         Some(drafts) => state.with_draft_sources(Arc::new(drafts)),
+        None => state,
+    };
+    let state = match sources.authorities {
+        Some(authorities) => state.with_authority_sources(Arc::new(authorities)),
         None => state,
     };
     Ok(WebRuntime {
@@ -575,6 +579,7 @@ fn serve_controlled(
             Arc::clone(&probe),
         )?;
         let drafts = loaded.draft_sources.clone();
+        let authorities = loaded.authority_sources.clone();
         let background = Background {
             time_zone: loaded.time_zone.clone(),
             long_overdue: loaded.long_overdue,
@@ -594,7 +599,7 @@ fn serve_controlled(
                 ..WebConfig::default()
             },
             &settings.lang,
-            draft_search::LoggedSources::new(drafts, &instance)?,
+            draft_search::ScreenSources::new(drafts, authorities, &instance)?,
         )?;
         let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
         let runs = background.spawn(&runtime, &store, &settings.lang, (&instance, control))?;

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use clap::Args;
-use elzevir_app::authority_sources::{AuthorityQuery, AuthoritySource};
+use elzevir_app::authority_sources::{AuthorityDraft, AuthorityQuery, AuthoritySource};
 use elzevir_app::drafts::{DraftQuery, DraftSource, SourceOutcome, SourceResult, TypedQuery};
 use elzevir_domain::catalog::SubjectKind;
 use elzevir_sources::{
@@ -276,15 +276,38 @@ impl Write for DeadlineStream {
 }
 
 /// The sources the staff screen asks, each answer logged with the source's position,
-/// outcome and time, never the query (docs/specs/catalogo/estacao-de-captura.md, item 15).
+/// outcome and time, never the query (docs/specs/catalogo/estacao-de-captura.md, item 15,
+/// and fontes-de-autoridade.md, item 24).
 pub(crate) struct LoggedSources {
     sources: DraftSources<HttpTransport, TcpDialer>,
     instance: String,
 }
 
+/// The screen's sources: the bibliographic ones of the capture station and the authority
+/// ones of the "+ Authority" form, each `None` without servers, so the screen offers no
+/// search (fontes-de-rascunho.md, item 18; fontes-de-autoridade.md, item 16).
+pub(crate) struct ScreenSources {
+    pub(crate) drafts: Option<LoggedSources>,
+    pub(crate) authorities: Option<LoggedSources>,
+}
+
+impl ScreenSources {
+    /// The sources of `drafts` and `authorities`, logged under the server's `instance`.
+    pub(crate) fn new(
+        drafts: Vec<DraftServer>,
+        authorities: Vec<DraftServer>,
+        instance: &str,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            drafts: LoggedSources::new(drafts, instance)?,
+            authorities: LoggedSources::new(authorities, instance)?,
+        })
+    }
+}
+
 impl LoggedSources {
     /// The sources of `servers`, logged under the server's `instance`; `None` without
-    /// servers, so the screen offers no station (fontes-de-rascunho.md, item 18).
+    /// servers.
     pub(crate) fn new(servers: Vec<DraftServer>, instance: &str) -> Result<Option<Self>, String> {
         if servers.is_empty() {
             return Ok(None);
@@ -293,6 +316,24 @@ impl LoggedSources {
             sources: DraftSources::new(servers, HttpTransport::new()?, TcpDialer),
             instance: instance.to_owned(),
         }))
+    }
+
+    /// Logs the answer of source `index`, asked at `started`, as `event`.
+    fn log<R>(
+        &self,
+        index: usize,
+        outcome: &SourceOutcome<R>,
+        started: Instant,
+        event: fn(u64, &'static str, u64) -> Event,
+    ) {
+        let position = u64::try_from(index).map_or(u64::MAX, |index| index.saturating_add(1));
+        let outcome = match outcome {
+            SourceOutcome::Found { .. } => "found",
+            SourceOutcome::NoResponse => "no_response",
+            SourceOutcome::Refused(_) => "refused",
+        };
+        let millis = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        logging::emit(&self.instance, event(position, outcome, millis));
     }
 }
 
@@ -308,16 +349,49 @@ impl DraftSource for LoggedSources {
     fn search_one(&self, index: usize, query: &DraftQuery, page: u32) -> Option<SourceResult> {
         let started = Instant::now();
         let result = self.sources.search_one(index, query, page)?;
-        logging::emit(
-            &self.instance,
-            Event::DraftSourceAnswered {
-                position: u64::try_from(index).map_or(u64::MAX, |index| index.saturating_add(1)),
-                outcome: match result.outcome {
-                    SourceOutcome::Found { .. } => "found",
-                    SourceOutcome::NoResponse => "no_response",
-                    SourceOutcome::Refused(_) => "refused",
-                },
-                millis: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+        self.log(
+            index,
+            &result.outcome,
+            started,
+            |position, outcome, millis| Event::DraftSourceAnswered {
+                position,
+                outcome,
+                millis,
+            },
+        );
+        Some(result)
+    }
+}
+
+impl AuthoritySource for LoggedSources {
+    fn search_authorities(
+        &self,
+        query: &AuthorityQuery,
+        page: u32,
+    ) -> Vec<SourceResult<AuthorityDraft>> {
+        self.sources.search_authorities(query, page)
+    }
+
+    fn authority_sources(&self) -> Vec<String> {
+        self.sources.authority_sources()
+    }
+
+    fn search_one_authority(
+        &self,
+        index: usize,
+        query: &AuthorityQuery,
+        page: u32,
+    ) -> Option<SourceResult<AuthorityDraft>> {
+        let started = Instant::now();
+        let result = self.sources.search_one_authority(index, query, page)?;
+        self.log(
+            index,
+            &result.outcome,
+            started,
+            |position, outcome, millis| Event::AuthoritySourceAnswered {
+                position,
+                outcome,
+                millis,
             },
         );
         Some(result)

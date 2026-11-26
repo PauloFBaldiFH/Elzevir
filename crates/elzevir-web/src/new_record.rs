@@ -193,6 +193,7 @@ pub(crate) async fn new_instance(
         }],
         station: None,
         draft: None,
+        authority_station: None,
     })
 }
 
@@ -319,6 +320,7 @@ fn family_form<'a>(t: &'a I18n, start: &NewRecord, inherited: bool) -> NewRecord
         ],
         station: None,
         draft: None,
+        authority_station: None,
     }
 }
 
