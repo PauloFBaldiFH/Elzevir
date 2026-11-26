@@ -1,0 +1,575 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Elzevir API",
+    "version": "1.0.0",
+    "description": "The public catalog of an Elzevir library in JSON of its BIBFRAME model (docs/specs/opac/api.md). Errors are {\"error\": code}.",
+    "license": {
+      "name": "GPL-3.0-or-later",
+      "url": "https://www.gnu.org/licenses/gpl-3.0.html"
+    }
+  },
+  "paths": {
+    "/api/v1/openapi.json": {
+      "get": {
+        "operationId": "openapi",
+        "summary": "This document.",
+        "tags": [
+          "meta"
+        ],
+        "responses": {
+          "200": {
+            "description": "The OpenAPI document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/search": {
+      "get": {
+        "operationId": "search",
+        "summary": "Search the public catalog, 20 results a page.",
+        "tags": [
+          "catalog"
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Words to look for; cut at 256 characters. Empty gives no results.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Page from 1 to 500; anything else is read as 1, and a higher page as 500.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResults"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The index or the catalog failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/instances/{id}": {
+      "get": {
+        "operationId": "instance",
+        "summary": "One record visible on the OPAC, with its Items.",
+        "tags": [
+          "catalog"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The Instance number.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The record.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Instance"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such Instance, or hidden from the OPAC.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The catalog failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "not_found",
+              "bad_request",
+              "unauthorized",
+              "locked",
+              "refused",
+              "unavailable",
+              "method_not_allowed"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "Content": {
+        "type": "string",
+        "enum": [
+          "text",
+          "notated-music",
+          "audio",
+          "moving-image",
+          "still-image",
+          "serial",
+          "tactile",
+          "cartography",
+          "object",
+          "multimedia",
+          "mixed",
+          "dataset",
+          null
+        ],
+        "description": "The Work's content, or null when unknown.",
+        "nullable": true
+      },
+      "Carrier": {
+        "type": "string",
+        "enum": [
+          "print",
+          "online",
+          "disc",
+          null
+        ],
+        "description": "The Instance's carrier, or null when unknown.",
+        "nullable": true
+      },
+      "SearchResults": {
+        "type": "object",
+        "required": [
+          "query",
+          "total",
+          "page",
+          "has_next",
+          "results"
+        ],
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500
+          },
+          "has_next": {
+            "type": "boolean"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchResult"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "SearchResult": {
+        "type": "object",
+        "required": [
+          "instance",
+          "work",
+          "hub",
+          "title",
+          "contributor",
+          "date",
+          "call_number",
+          "content",
+          "carrier",
+          "items",
+          "available"
+        ],
+        "properties": {
+          "instance": {
+            "type": "integer"
+          },
+          "work": {
+            "type": "integer"
+          },
+          "hub": {
+            "type": "integer",
+            "nullable": true
+          },
+          "title": {
+            "type": "string"
+          },
+          "contributor": {
+            "type": "string",
+            "nullable": true
+          },
+          "date": {
+            "type": "string",
+            "nullable": true
+          },
+          "call_number": {
+            "type": "string",
+            "nullable": true
+          },
+          "content": {
+            "$ref": "#/components/schemas/Content"
+          },
+          "carrier": {
+            "$ref": "#/components/schemas/Carrier"
+          },
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "available": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "Instance": {
+        "type": "object",
+        "required": [
+          "instance",
+          "work",
+          "hub",
+          "title",
+          "work_title",
+          "other_titles",
+          "publisher",
+          "date",
+          "classification",
+          "summary",
+          "audience",
+          "genres",
+          "languages",
+          "content",
+          "carrier",
+          "contributors",
+          "subjects",
+          "identifiers",
+          "notes",
+          "relations",
+          "items"
+        ],
+        "properties": {
+          "instance": {
+            "type": "integer"
+          },
+          "work": {
+            "type": "integer"
+          },
+          "hub": {
+            "type": "integer",
+            "nullable": true
+          },
+          "title": {
+            "type": "string"
+          },
+          "work_title": {
+            "type": "string"
+          },
+          "other_titles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "publisher": {
+            "type": "string",
+            "nullable": true
+          },
+          "date": {
+            "type": "string",
+            "nullable": true
+          },
+          "classification": {
+            "type": "string",
+            "nullable": true
+          },
+          "summary": {
+            "type": "string",
+            "nullable": true
+          },
+          "audience": {
+            "type": "string",
+            "nullable": true
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "content": {
+            "$ref": "#/components/schemas/Content"
+          },
+          "carrier": {
+            "$ref": "#/components/schemas/Carrier"
+          },
+          "contributors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Contributor"
+            }
+          },
+          "subjects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Subject"
+            }
+          },
+          "identifiers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Identifier"
+            }
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Note"
+            }
+          },
+          "relations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Relation"
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Item"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "Contributor": {
+        "type": "object",
+        "required": [
+          "kind",
+          "name"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "person",
+              "organization",
+              "meeting",
+              "family"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Subject": {
+        "type": "object",
+        "required": [
+          "kind",
+          "name"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "topic",
+              "place",
+              "person",
+              "title",
+              "genre_form",
+              "temporal",
+              "organization",
+              "meeting",
+              "family"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Identifier": {
+        "type": "object",
+        "required": [
+          "kind",
+          "value"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "isbn",
+              "issn",
+              "lccn",
+              "ean",
+              "system_control_number",
+              "doi",
+              "ismn"
+            ]
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Note": {
+        "type": "object",
+        "required": [
+          "kind",
+          "value"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "general",
+              "contents",
+              "local"
+            ]
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Relation": {
+        "type": "object",
+        "required": [
+          "kind",
+          "work"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "translation_of",
+              "adaptation_of",
+              "part_of",
+              "supplement_to",
+              "continuation_of"
+            ]
+          },
+          "work": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Item": {
+        "type": "object",
+        "required": [
+          "branch",
+          "location",
+          "call_number",
+          "available",
+          "status"
+        ],
+        "properties": {
+          "branch": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string",
+            "nullable": true
+          },
+          "call_number": {
+            "type": "string",
+            "nullable": true
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "lost",
+              "on_loan",
+              "in_transit",
+              "on_hold_shelf",
+              "withdrawn",
+              "damaged",
+              "restricted",
+              "not_for_loan",
+              "available"
+            ]
+          },
+          "due": {
+            "type": "string",
+            "format": "date",
+            "description": "The day it is due, only while it is on loan."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}
