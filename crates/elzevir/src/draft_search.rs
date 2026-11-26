@@ -4,16 +4,17 @@
 //! item 23), and the HTTP transport the sources talk through.
 
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use clap::Args;
-use elzevir_app::drafts::{DraftQuery, DraftSource, SourceOutcome, TypedQuery};
+use elzevir_app::drafts::{DraftQuery, DraftSource, SourceOutcome, SourceResult, TypedQuery};
 use elzevir_sources::{
-    HttpAnswer, MAX_RESPONSE_BYTES, MAX_TIMEOUT, SruSources, Transport, TransportError,
+    HttpAnswer, MAX_RESPONSE_BYTES, MAX_TIMEOUT, SruServer, SruSources, Transport, TransportError,
 };
 
 use crate::config;
 use crate::http_client::agent;
+use crate::logging::{self, Event};
 
 /// `elzevir draft-search`.
 #[derive(Args)]
@@ -131,5 +132,54 @@ impl Transport for HttpTransport {
                 _ => TransportError::NoResponse,
             })?;
         Ok(HttpAnswer { status, body })
+    }
+}
+
+/// The sources the staff screen asks, each answer logged with the source's position,
+/// outcome and time, never the query (docs/specs/catalogo/estacao-de-captura.md, item 15).
+pub(crate) struct LoggedSources {
+    sources: SruSources<HttpTransport>,
+    instance: String,
+}
+
+impl LoggedSources {
+    /// The sources of `servers`, logged under the server's `instance`; `None` without
+    /// servers, so the screen offers no station (fontes-de-rascunho.md, item 18).
+    pub(crate) fn new(servers: Vec<SruServer>, instance: &str) -> Result<Option<Self>, String> {
+        if servers.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(Self {
+            sources: SruSources::new(servers, HttpTransport::new()?),
+            instance: instance.to_owned(),
+        }))
+    }
+}
+
+impl DraftSource for LoggedSources {
+    fn search(&self, query: &DraftQuery, page: u32) -> Vec<SourceResult> {
+        self.sources.search(query, page)
+    }
+
+    fn sources(&self) -> Vec<String> {
+        self.sources.sources()
+    }
+
+    fn search_one(&self, index: usize, query: &DraftQuery, page: u32) -> Option<SourceResult> {
+        let started = Instant::now();
+        let result = self.sources.search_one(index, query, page)?;
+        logging::emit(
+            &self.instance,
+            Event::DraftSourceAnswered {
+                position: u64::try_from(index).map_or(u64::MAX, |index| index.saturating_add(1)),
+                outcome: match result.outcome {
+                    SourceOutcome::Found { .. } => "found",
+                    SourceOutcome::NoResponse => "no_response",
+                    SourceOutcome::Refused(_) => "refused",
+                },
+                millis: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+            },
+        );
+        Some(result)
     }
 }

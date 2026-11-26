@@ -12,21 +12,43 @@ pub(crate) enum Event {
     ServerStarted,
     ServerStopped,
     ServerFailed,
-    IndexerCommitted { effects: u64 },
+    IndexerCommitted {
+        effects: u64,
+    },
     IndexerFailed,
     IndexerPanicked,
     RuntimeCleanupFailed,
     AdminHandlerFailed,
-    OverdueFinesCharged { overdue: u64, charged: u64 },
+    OverdueFinesCharged {
+        overdue: u64,
+        charged: u64,
+    },
     OverdueFinesFailed,
-    LongOverdueMarked { lost: u64, charged: u64 },
+    LongOverdueMarked {
+        lost: u64,
+        charged: u64,
+    },
     LongOverdueFailed,
-    HoldsExpired { cancelled: u64 },
+    HoldsExpired {
+        cancelled: u64,
+    },
     HoldsExpiryFailed,
-    OverdueNoticesQueued { queued: u64 },
+    OverdueNoticesQueued {
+        queued: u64,
+    },
     OverdueNoticesFailed,
-    NoticesSent { sent: u64, failed: u64 },
+    NoticesSent {
+        sent: u64,
+        failed: u64,
+    },
     NoticesSendFailed,
+    /// One draft source answered the capture station (estacao-de-captura.md, item 15):
+    /// its position in `elzevir.toml`, never its name or the query.
+    DraftSourceAnswered {
+        position: u64,
+        outcome: &'static str,
+        millis: u64,
+    },
 }
 
 /// Records a known event with the identity generated for this execution.
@@ -79,6 +101,13 @@ pub(crate) fn emit(instance: &str, event: Event) {
         }
         Event::NoticesSent { sent, failed } => {
             tracing::info!(target: TARGET, institution = "local", instance, event = "notices.sent", sent, failed, "e-mail notices sent");
+        }
+        Event::DraftSourceAnswered {
+            position,
+            outcome,
+            millis,
+        } => {
+            tracing::info!(target: TARGET, institution = "local", instance, event = "drafts.answered", position, outcome, millis, "draft source answered");
         }
         Event::NoticesSendFailed => {
             tracing::warn!(target: TARGET, institution = "local", instance, event = "notices.send_failed", "e-mail notices not sent; tried again in 15 minutes");

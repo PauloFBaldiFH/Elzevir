@@ -978,3 +978,30 @@ desk-error-object_unavailable = O arquivo armazenado está ausente ou falhou na 
 desk-error-unavailable = O repositório está temporariamente indisponível. Tente novamente em instantes.
 desk-error-commit_unknown = Não foi possível confirmar o resultado do envio. Repita o mesmo formulário com o mesmo arquivo.
 desk-hidden = Esta instância está oculta no catálogo público.
+## Estação de captura (docs/specs/catalogo/estacao-de-captura.md)
+draft-open = Buscar nas fontes
+draft-heading = Fontes de rascunho
+draft-isbn = ISBN
+draft-title = Título
+draft-author = Autor
+draft-any = Qualquer campo
+draft-search = Buscar
+draft-back = ← Voltar
+draft-waiting = Buscando…
+draft-failed = A busca não chegou ao servidor.
+draft-found = { $total ->
+    [one] 1 achado
+   *[other] { $total } achados
+}
+draft-nothing = Nada achado.
+draft-no-response = Sem resposta.
+draft-refused = Recusa:
+draft-unreadable = Registros ilegíveis:
+draft-next = Próxima página
+draft-approve = ✓ Aprovar
+draft-from = Rascunho de
+draft-duplicate = A base já tem o ISBN
+draft-duplicate-open = Abrir a grade
+draft-expired = O rascunho expirou; busque nas fontes de novo.
+draft-query-empty = Preencha pelo menos um campo.
+draft-query-long = Cada campo aceita no máximo 256 caracteres.

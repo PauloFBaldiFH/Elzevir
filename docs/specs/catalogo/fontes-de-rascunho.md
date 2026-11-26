@@ -13,7 +13,7 @@ Quem cataloga um livro que a biblioteca ainda não tem quer partir do registro d
    - **sem resposta**: o servidor não respondeu dentro do tempo-limite ou a conexão falhou;
    - **recusa**: o servidor respondeu com um diagnóstico (consulta não suportada, índice desconhecido), com o texto do servidor.
 2. Um rascunho é um registro MARC21 lido pelo leitor de MARCXML do Elzevir (com os limites dele) e a sua origem, `sru:<nome do servidor>`. O rascunho não é gravado em lugar nenhum nesta tarefa: vive só na resposta.
-3. Para a lista de resultados, cada rascunho traz um resumo tirado do MARC pelo mesmo mapeamento da importação: título, responsabilidade, publicação (lugar, editora, data) e ISBNs.
+3. Para a lista de resultados, cada rascunho traz um resumo tirado do MARC pelo mesmo mapeamento da importação, sem os campos locais `9XX` da biblioteca de origem (um `952` incompleto faria o mapeamento recusar o registro): título, responsabilidade, edição, publicação (lugar, editora, data) e ISBNs.
 4. Os servidores são consultados **em paralelo**, cada um com o seu tempo-limite. Um servidor lento não segura os outros: a porta devolve quando todos responderam ou estouraram o prazo.
 5. A ordem dos resultados é a ordem dos servidores na configuração.
 
@@ -64,7 +64,7 @@ Quem cataloga um livro que a biblioteca ainda não tem quer partir do registro d
 
 20. A consulta vai só do servidor do Elzevir à fonte. O navegador nunca fala com a fonte.
 21. A consulta leva só os termos bibliográficos digitados: nunca dado de leitor nem da sessão.
-22. Quando a tela consultar as fontes (tarefa 4.2), o log registra o nome do servidor, o resultado (achados, sem resposta, recusa) e o tempo, sem os termos da consulta.
+22. Quando a tela consulta as fontes, o log registra a posição do servidor na configuração, o resultado (achados, sem resposta, recusa) e o tempo, sem os termos da consulta nem o nome do servidor ([estação de captura](estacao-de-captura.md), item 15).
 
 ### Diagnóstico pela linha de comando
 

@@ -541,7 +541,11 @@ function filled(scope) {
 function createBody(form) {
   if (form.dataset.create !== "family") return { changes: filled(form) };
   const part = (name) => form.querySelector(`[data-part="${name}"]`);
-  return { work: filled(part("work")), instance: filled(part("instance")) };
+  const body = { work: filled(part("work")), instance: filled(part("instance")) };
+  // The server keeps the draft's MARC; the page only names it (estacao-de-captura.md, item 14).
+  const draft = form.querySelector(".draft-note")?.dataset.draft;
+  if (draft) body.draft = draft;
+  return body;
 }
 
 const dirty = (form) => changes(form).length > 0;
@@ -695,18 +699,24 @@ async function openNew(url, place) {
   (empty ?? form.querySelector("input, textarea, select"))?.focus();
 }
 
-function newFamily(isbn) {
+async function newFamily(isbn) {
   const params = new URLSearchParams();
   const previous = recalled(PREVIOUS);
   if (previous) params.set("from", previous);
   // A scanned ISBN the catalog does not have (bipe.md, item 10).
   if (isbn) params.set("isbn", isbn);
   const query = params.toString();
-  openNew(`/equipe/acervo/nova${query ? `?${query}` : ""}`, (panel) => {
+  await openNew(`/equipe/acervo/nova${query ? `?${query}` : ""}`, (panel) => {
     const families = document.getElementById("families");
     if (families) families.before(panel);
     else document.querySelector(".catalog")?.append(panel);
   });
+  // A scanned ISBN the catalog lacks goes to the sources at once (item 6).
+  const form = newPanel()?.querySelector(".record-form");
+  if (form && stationOf(form)?.hasAttribute("data-auto")) {
+    toggleStation(form, true);
+    searchStation(form);
+  }
 }
 
 function newInstance(from, copy) {
@@ -803,9 +813,106 @@ async function submitNew(form) {
   }
   if (response.status === 422) {
     const answer = await response.json().catch(() => null);
+    const expired = answer?.errors?.find((error) => error.field === "draft");
+    if (expired) return showAlert(form, expired.message);
     if (answer?.errors) return showFieldErrors(form, answer);
   }
   showAlert(form, form.dataset.failed);
+}
+
+// The capture station (estacao-de-captura.md, items 1 to 6): it takes the place of the
+// form's blocks while open; every source is asked on its own, and each answer shows as
+// it arrives.
+function stationOf(form) {
+  return form.querySelector(".draft-station");
+}
+
+function stationOpen(form) {
+  const station = stationOf(form);
+  return Boolean(station && !station.hidden);
+}
+
+function toggleStation(form, open) {
+  const station = stationOf(form);
+  if (!station) return;
+  station.hidden = !open;
+  for (const part of form.querySelectorAll(".form-part, .form-actions, .draft-tools")) part.hidden = open;
+  if (!open) {
+    form.querySelector(".form-field input, .form-field textarea")?.focus();
+    return;
+  }
+  const title = station.querySelector('input[name="title"]');
+  const typed = form.querySelector('[data-part="work"] .form-field[data-change="Title"] input');
+  if (title && !title.value && typed?.value) title.value = typed.value;
+  const isbn = station.querySelector('input[name="isbn"]');
+  (isbn && !isbn.value && title?.value ? title : isbn)?.focus();
+}
+
+function stationQuery(station, page) {
+  const params = new URLSearchParams();
+  for (const input of station.querySelectorAll(".draft-query input")) {
+    if (input.value.trim()) params.set(input.name, input.value);
+  }
+  if (page) params.set("page", String(page));
+  return params;
+}
+
+async function askSource(station, slot, params) {
+  const answer = slot.querySelector(".draft-answer");
+  const list = station.querySelector(".draft-sources");
+  answer.textContent = list.dataset.waiting;
+  let response;
+  try {
+    response = await fetch(`/equipe/acervo/fontes/${encodeURIComponent(slot.dataset.source)}?${params}`, {
+      credentials: "same-origin",
+      headers: { Accept: "text/html" },
+    });
+  } catch {
+    answer.textContent = list.dataset.failed;
+    return;
+  }
+  if (response.status === 422) {
+    // An empty or long query: one message for the whole station.
+    const error = station.querySelector(".draft-query-error");
+    error.textContent = await response.text();
+    error.hidden = false;
+    answer.textContent = "";
+    return;
+  }
+  if (!response.ok) {
+    answer.textContent = list.dataset.failed;
+    return;
+  }
+  // Server-rendered by Askama, which escapes every value.
+  answer.innerHTML = await response.text();
+  slot.dataset.query = params.toString();
+}
+
+function searchStation(form) {
+  const station = stationOf(form);
+  if (!station) return;
+  station.querySelector(".draft-query-error").hidden = true;
+  const params = stationQuery(station);
+  for (const slot of station.querySelectorAll(".draft-source")) askSource(station, slot, params);
+}
+
+function nextPage(form, button) {
+  const station = stationOf(form);
+  const slot = button.closest(".draft-source");
+  if (!station || !slot) return;
+  const params = new URLSearchParams(slot.dataset.query ?? "");
+  params.set("page", button.dataset.page);
+  askSource(station, slot, params);
+}
+
+// Approving opens the family's form filled from the draft in place of this one; nothing
+// is stored before "Create" (item 11). Anything typed in this form asks first.
+function approveDraft(key) {
+  openNew(`/equipe/acervo/nova?rascunho=${encodeURIComponent(key)}`, (panel) => {
+    const families = document.getElementById("families");
+    if (families) families.before(panel);
+    else document.querySelector(".catalog")?.append(panel);
+  });
 }
 
 // A carried-over value is confirmed once the cataloguer reaches its field (item 18).
@@ -868,6 +975,21 @@ document.addEventListener("click", (event) => {
         form.querySelector(".form-discard").hidden = true;
         form.querySelector("input, textarea, select")?.focus();
         break;
+      case "draft-open":
+        toggleStation(form, true);
+        break;
+      case "draft-back":
+        toggleStation(form, false);
+        break;
+      case "draft-search":
+        searchStation(form);
+        break;
+      case "draft-more":
+        nextPage(form, action);
+        break;
+      case "draft-approve":
+        if (action.dataset.draft) approveDraft(action.dataset.draft);
+        break;
       default:
         break;
     }
@@ -886,6 +1008,14 @@ document.addEventListener("click", (event) => {
 document.addEventListener("keydown", (event) => {
   const form = event.target instanceof Element ? event.target.closest(".record-form") : null;
   if (!form) return;
+  if (stationOpen(form) && (event.key === "Escape" || event.key === "Enter")) {
+    // The station is passing: Esc goes back to the form, Enter searches (items 2 and 3).
+    if (event.key === "Enter" && !event.target.closest(".draft-query input")) return;
+    event.preventDefault();
+    if (event.key === "Escape") toggleStation(form, false);
+    else searchStation(form);
+    return;
+  }
   if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
     event.preventDefault();
     submitForm(form);

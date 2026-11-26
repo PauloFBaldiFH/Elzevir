@@ -7,14 +7,15 @@ use std::sync::Arc;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
-use elzevir_app::catalog::{NewIdentifier, NewInstance, NewRecord};
+use elzevir_app::catalog::{CatalogReadError, NewIdentifier, NewInstance, NewRecord};
 use elzevir_app::description::printed_book;
+use elzevir_app::drafts::approved;
 use elzevir_app::export::stored_record;
-use elzevir_app::listing::scanned_isbn;
+use elzevir_app::listing::{ScanCode, scanned_isbn};
 use elzevir_app::staff::Permission;
 use elzevir_domain::catalog::{IdentifierKind, InstanceId};
 use elzevir_domain::statement::Description;
-use elzevir_web_templates::{FormPart, FormSection, I18n, NewRecordForm};
+use elzevir_web_templates::{DraftNote, DraftStation, FormPart, FormSection, I18n, NewRecordForm};
 use serde::Deserialize;
 
 use crate::form_sections::{instance_sections, work_sections};
@@ -34,6 +35,9 @@ pub(crate) struct NewFamilyParams {
     from: Option<i64>,
     /// A scanned ISBN the new family starts with (docs/specs/catalogo/bipe.md, item 10).
     isbn: Option<String>,
+    /// The key of an approved draft the family starts from
+    /// (docs/specs/catalogo/estacao-de-captura.md, item 8).
+    rascunho: Option<String>,
 }
 
 /// `GET /equipe/acervo/nova?from=&isbn=`: the form of a new family (items 14 and 17).
@@ -44,6 +48,9 @@ pub(crate) async fn new_family(
 ) -> Response {
     if let Some(refused) = refused(&state, &headers) {
         return refused;
+    }
+    if let Some(key) = &params.rascunho {
+        return drafted_family(&state, key).await;
     }
     let previous = match params.from {
         Some(id) => match read(&state, InstanceId(id)).await {
@@ -59,14 +66,72 @@ pub(crate) async fn new_family(
         (blank(), false)
     };
     // Checked again here: only a valid ISBN is taken, as its 13 digits.
-    if let Some(isbn) = params.isbn.as_deref().and_then(scanned_isbn) {
+    let isbn = params.isbn.as_deref().and_then(scanned_isbn);
+    if let Some(isbn) = &isbn {
         start.instance.identifiers = vec![NewIdentifier {
             kind: IdentifierKind::Isbn,
-            value: isbn,
+            value: isbn.clone(),
             qualifier: None,
         }];
     }
-    render(&family_form(t, &start, inherited))
+    let mut form = family_form(t, &start, inherited);
+    // A scanned ISBN the catalog lacks is looked up in the sources at once (item 6).
+    form.station = station(&state, isbn);
+    render(&form)
+}
+
+/// The capture station of a new family, when the institution has draft sources.
+fn station(state: &AppState, isbn: Option<String>) -> Option<DraftStation> {
+    state.drafts.as_ref().map(|drafts| DraftStation {
+        sources: drafts.sources(),
+        auto: isbn.is_some(),
+        isbn: isbn.unwrap_or_default(),
+    })
+}
+
+/// The form of a new family filled from the draft kept under `key`, with the ISBNs the
+/// catalog already has (docs/specs/catalogo/estacao-de-captura.md, items 11 and 12).
+async fn drafted_family(state: &AppState, key: &str) -> Response {
+    let Some(draft) = state.drafts.as_ref().and_then(|drafts| drafts.kept(key)) else {
+        return (StatusCode::NOT_FOUND, state.inner.i18n.get("draft-expired")).into_response();
+    };
+    let Ok(start) = approved(&draft) else {
+        return StatusCode::UNPROCESSABLE_ENTITY.into_response();
+    };
+    let isbns: Vec<String> = start
+        .instance
+        .identifiers
+        .iter()
+        .filter(|identifier| identifier.kind == IdentifierKind::Isbn)
+        .filter_map(|identifier| scanned_isbn(&identifier.value))
+        .collect();
+    let listing = Arc::clone(&state.inner.staff_ports.listing);
+    let duplicates = tokio::task::spawn_blocking(move || {
+        isbns
+            .into_iter()
+            .map(|isbn| {
+                let found = listing.scanned(ScanCode::Isbn(&isbn))?;
+                Ok(found.map(|_| isbn))
+            })
+            .collect::<Result<Vec<_>, CatalogReadError>>()
+    })
+    .await;
+    let Ok(Ok(duplicates)) = duplicates else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "catalog unavailable").into_response();
+    };
+    let t = &state.inner.i18n;
+    let mut form = family_form(t, &start, false);
+    form.station = station(state, None);
+    form.draft = Some(DraftNote {
+        key: key.to_owned(),
+        source: draft
+            .origin
+            .split_once(':')
+            .map_or(draft.origin.as_str(), |(_, name)| name)
+            .to_owned(),
+        duplicates: duplicates.into_iter().flatten().collect(),
+    });
+    render(&form)
 }
 
 /// Query string of a new Instance's form.
@@ -126,6 +191,8 @@ pub(crate) async fn new_instance(
             heading_key: "new-instance-part",
             sections: instance_sections(t, &start),
         }],
+        station: None,
+        draft: None,
     })
 }
 
@@ -250,6 +317,8 @@ fn family_form<'a>(t: &'a I18n, start: &NewRecord, inherited: bool) -> NewRecord
                 sections: instance,
             },
         ],
+        station: None,
+        draft: None,
     }
 }
 

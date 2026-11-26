@@ -491,6 +491,34 @@ new-instance-part = Instance
 new-create = Create
 new-cancel = Cancel
 
+## Capture station (docs/specs/catalogo/estacao-de-captura.md)
+draft-open = Search the sources
+draft-heading = Draft sources
+draft-isbn = ISBN
+draft-title = Title
+draft-author = Author
+draft-any = Any field
+draft-search = Search
+draft-back = ← Back
+draft-waiting = Searching…
+draft-failed = The search did not reach the server.
+draft-found = { $total ->
+    [one] 1 found
+   *[other] { $total } found
+}
+draft-nothing = Nothing found.
+draft-no-response = No response.
+draft-refused = Refused:
+draft-unreadable = Unreadable records:
+draft-next = Next page
+draft-approve = ✓ Approve
+draft-from = Draft from
+draft-duplicate = This catalog already has ISBN
+draft-duplicate-open = Open its items
+draft-expired = The draft expired; search the sources again.
+draft-query-empty = Fill in at least one field.
+draft-query-long = Each field takes at most 256 characters.
+
 ## Code tables (docs/specs/catalogo/tabelas-de-codigos.md)
 registries-title = Branches and policies
 registries-intro = Branches, their shelving places and collections, and circulation policies are the library's own lists. Items point at them; a name can change at any time.
