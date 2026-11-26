@@ -198,7 +198,7 @@ fn done_key(code: &str) -> Option<(bool, &'static str)> {
 }
 
 /// The code a refusal travels as in the address after the redirect.
-const fn refusal_code(refusal: &RenewRefusal) -> &'static str {
+pub(crate) const fn refusal_code(refusal: &RenewRefusal) -> &'static str {
     match refusal {
         RenewRefusal::UnknownBarcode | RenewRefusal::NotOnLoan => "no_loan",
         RenewRefusal::Refused(RenewalRefusal::OnSite) => "on_site",
