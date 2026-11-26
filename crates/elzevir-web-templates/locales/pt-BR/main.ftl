@@ -336,6 +336,7 @@ patron-enrolled = Inscrito em
 patron-expired = vencido
 patron-expired-alert = A inscrição deste leitor venceu.
 patron-cpf = CPF
+patron-cpf-show = Mostrar CPF
 patron-date-of-birth = Nascimento
 patron-email = E-mail
 patron-phone = Telefone

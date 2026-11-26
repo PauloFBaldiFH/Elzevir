@@ -280,7 +280,7 @@ fn the_staff_sets_and_takes_away_a_password() {
     assert!(short.contains("at least 8 characters"), "{short}");
     let cpf = set(&lei, "52998224725");
     assert_status(&cpf, 422);
-    assert!(cpf.contains("cannot be the card number or the CPF"));
+    assert!(cpf.contains("cannot be the card number or the ID number"));
     assert_status(&set(&lei, "leitura-segura"), 303);
     let form = request(address, "GET", &format!("{edit}?senha=1"), &lei, "");
     assert!(form.contains("The OPAC password was saved."), "{form}");

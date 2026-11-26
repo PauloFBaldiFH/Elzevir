@@ -24,7 +24,7 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &PatronCommand) -> Applied {
         PatronCommand::ChangeCategory(change) => change_category(tx.connection(), change)?,
         PatronCommand::Add(fields) => add(tx.connection(), fields)?,
         PatronCommand::Update(update) => update_patron(tx.connection(), update)?,
-        PatronCommand::View(patron) => {
+        PatronCommand::View(patron) | PatronCommand::RevealCpf(patron) => {
             if !crate::catalog::exists(
                 tx.connection(),
                 "SELECT 1 FROM patrons WHERE id = ?1",

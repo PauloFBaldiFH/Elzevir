@@ -117,6 +117,20 @@ impl Cpf {
         let (left, right) = middle.split_at(middle.len().min(3));
         format!("***.{left}.{right}-**")
     }
+
+    /// The whole CPF with its punctuation, `123.456.789-09`, for the explicit "Show CPF"
+    /// (interface §18.4).
+    #[must_use]
+    pub fn formatted(&self) -> String {
+        let part = |range: std::ops::Range<usize>| self.0.get(range).unwrap_or_default();
+        format!(
+            "{}.{}.{}-{}",
+            part(0..3),
+            part(3..6),
+            part(6..9),
+            part(9..11)
+        )
+    }
 }
 
 /// The check digit of `digits`: weights from `len + 1` down to 2, sum × 10 mod 11, and
@@ -159,6 +173,7 @@ mod tests {
         assert_eq!(cpf.digits(), "52998224725");
         assert_eq!(Cpf::parse("52998224725").unwrap(), cpf);
         assert_eq!(cpf.masked(), "***.982.247-**");
+        assert_eq!(cpf.formatted(), "529.982.247-25");
     }
 
     #[test]

@@ -124,8 +124,10 @@ pub struct PatronHeader {
     pub contact: Vec<(&'static str, String)>,
     /// Library use rows.
     pub usage: Vec<(&'static str, String)>,
-    /// Identification rows; the CPF only masked.
+    /// Identification rows; the CPF masked unless the staff asked for it.
     pub identity: Vec<(&'static str, String)>,
+    /// The CPF is masked, so "Show CPF" is offered (interface §18.4).
+    pub cpf_hidden: bool,
 }
 
 /// One mark of how the patron stands, never colour alone.

@@ -6,7 +6,7 @@ use axum::http::HeaderMap;
 use elzevir_app::loans::{LoanUrgency, PatronLoan};
 use elzevir_app::patrons::{Patron, PatronRow, ReadingHistory};
 use elzevir_domain::catalog::Money;
-use elzevir_domain::patron::{Cpf, is_expired};
+use elzevir_domain::patron::is_expired;
 use elzevir_web_templates::{I18n, LoanLine, PatronHeader, PatronLine, StatusChip};
 use jiff::Zoned;
 
@@ -113,7 +113,7 @@ pub(crate) fn header(
     patron: &Patron,
     loans: &[PatronLoan],
     now: &Zoned,
-    (owed, expired): (Money, bool),
+    (owed, expired, reveal_cpf): (Money, bool, bool),
 ) -> PatronHeader {
     let fields = &patron.fields;
     let overdue = loans
@@ -152,9 +152,19 @@ pub(crate) fn header(
                 })),
             ),
         ]),
+        cpf_hidden: fields.cpf.is_some() && !reveal_cpf,
         identity: present([
             ("patron-cardnumber", Some(fields.cardnumber.clone())),
-            ("patron-cpf", fields.cpf.as_ref().map(Cpf::masked)),
+            (
+                "patron-cpf",
+                fields.cpf.as_ref().map(|cpf| {
+                    if reveal_cpf {
+                        cpf.formatted()
+                    } else {
+                        cpf.masked()
+                    }
+                }),
+            ),
             ("patron-staff-note", fields.staff_note.clone()),
         ]),
     }

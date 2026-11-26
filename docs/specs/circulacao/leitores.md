@@ -34,7 +34,7 @@
 5. Validade calculada pela categoria: com período em meses, a inscrição mais os meses, limitada ao último dia do mês quando o dia não existe (31/01 + 1 mês = 28/02 ou 29/02); com data fixa, a própria data.
 6. O leitor está **vencido** quando a validade é anterior ao dia de hoje no fuso da biblioteca.
 7. Criar devolve o leitor; editar troca todos os campos de uma vez e exige o `row_version` lido (edição concorrente é recusada). Cada criação e edição vai para o `audit_log` com quem fez.
-8. O CPF é mostrado mascarado (`***.456.789-**`) em toda tela; o inteiro só aparece no campo de edição, para quem tem a permissão de cadastro de leitores.
+8. O CPF é mostrado mascarado (`***.456.789-**`) em toda tela. O inteiro aparece no campo de edição, para quem tem a permissão de cadastro de leitores, e na ficha só pelo botão "Mostrar CPF" (interface §18.4): o botão envia o formulário da ficha com o token dela para `POST /equipe/leitores/{id}/cpf`, que exige a permissão de circulação, grava `patrons.reveal_cpf` no `audit_log` (além da abertura, `patrons.view`) **antes** de mostrar e devolve a ficha com o CPF inteiro e `Cache-Control: no-store`. Token errado ou sem permissão: 403. Na interface em inglês o rótulo é "ID number"; no pt-BR, "CPF".
 9. Permissões novas: **circulação** (Koha: `circulate`), que vai abrir a ficha e emprestar, e **leitores** (Koha: `borrowers`), que cria e edita leitores e categorias.
 
 ### Na tela (parte b)
@@ -71,7 +71,7 @@
 
 ## 3. Paridade
 
-`livre` (cadastro e interface), menos a validade, que segue o Koha (item 5). Prova: testes de unidade no domínio (CPF, máscara, validade) e em `elzevir-app::patrons` (limites dos campos); `crates/elzevir-store/tests/patrons.rs` (criar, editar, recusas de carteirinha e CPF repetidos, categoria em uso, edição concorrente, `audit_log`, busca e registro da abertura). `crates/elzevir/tests/patrons.rs`, com o servidor de verdade: permissões de cada página, busca por nome, carteirinha que abre a ficha, CPF mascarado, abertura no `audit_log`, categorias com meses ou data, cadastro com CPF inválido e carteirinha repetida recusados, CPF inteiro só no formulário de edição, edição concorrente recusada.
+`livre` (cadastro e interface), menos a validade, que segue o Koha (item 5). Prova: testes de unidade no domínio (CPF, máscara, validade) e em `elzevir-app::patrons` (limites dos campos); `crates/elzevir-store/tests/patrons.rs` (criar, editar, recusas de carteirinha e CPF repetidos, categoria em uso, edição concorrente, `audit_log`, busca e registro da abertura). `crates/elzevir/tests/patrons.rs`, com o servidor de verdade: permissões de cada página, busca por nome, carteirinha que abre a ficha, CPF mascarado, "Mostrar CPF" com `patrons.reveal_cpf` no `audit_log`, abertura no `audit_log`, categorias com meses ou data, cadastro com CPF inválido e carteirinha repetida recusados, CPF inteiro só no formulário de edição, edição concorrente recusada.
 
 ## 4. Casos de borda
 

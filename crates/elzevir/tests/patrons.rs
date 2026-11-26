@@ -255,6 +255,24 @@ fn the_record_is_behind_the_wall_and_every_opening_is_logged() {
     assert!(page.contains("***.982.247-**"));
     assert!(!page.contains("52998224725") && !page.contains("529.982.247-25"));
     assert!(page.contains("ana@example.org"));
+    // The whole CPF only by the explicit button, logged (interface §18.4).
+    let show = format!("formaction=\"/equipe/leitores/{ana}/cpf\" formnovalidate>Show ID number<");
+    assert!(page.contains(&show), "{page}");
+    let reveal = format!("/equipe/leitores/{ana}/cpf");
+    let form = "Content-Type: application/x-www-form-urlencoded\r\n";
+    let post_reveal =
+        |who: &str, body: &str| request(address, "POST", &reveal, &format!("{who}{form}"), body);
+    assert_status(&post_reveal(&cir, "csrf=forged"), 403);
+    assert_status(&post_reveal(&lei, "csrf=forged"), 403);
+    let shown = post_reveal(&cir, &format!("csrf={}&barcode=&desk=1", csrf(&page)));
+    assert_status(&shown, 200);
+    assert!(shown.contains("529.982.247-25"), "{shown}");
+    assert!(!shown.contains("Show ID number"));
+    assert!(
+        shown
+            .to_ascii_lowercase()
+            .contains("cache-control: no-store")
+    );
     // The home page links to patrons only for who may see them.
     assert!(request(address, "GET", "/equipe", &cir, "").contains("href=\"/equipe/leitores\""));
     assert!(!request(address, "GET", "/equipe", &cat, "").contains("href=\"/equipe/leitores\""));
@@ -272,7 +290,20 @@ fn the_record_is_behind_the_wall_and_every_opening_is_logged() {
             )
         })
         .unwrap();
-    assert_eq!(viewed, 1);
+    // The first opening and the one that showed the CPF.
+    assert_eq!(viewed, 2);
+    let revealed: i64 = store
+        .readers()
+        .read(|c| {
+            c.query_row(
+                "SELECT count(*) FROM audit_log a JOIN staff_accounts s ON s.id = a.actor
+                 WHERE a.kind = 'patrons.reveal_cpf' AND s.login = 'cir'",
+                [],
+                |row| row.get(0),
+            )
+        })
+        .unwrap();
+    assert_eq!(revealed, 1);
 }
 
 #[test]
@@ -343,7 +374,7 @@ fn a_patron_is_enrolled_and_edited_on_the_form() {
         &format!("cardnumber=000200&cpf=111.111.111-11&{fields}"),
     );
     assert_status(&bad_cpf, 422);
-    assert!(bad_cpf.contains("This is not a valid CPF"));
+    assert!(bad_cpf.contains("This is not a valid ID number"));
     // What was typed comes back in the form.
     assert!(bad_cpf.contains("value=\"Souza\""));
     let same_card = post(
