@@ -15,7 +15,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use crate::places::{Coded, by_code};
 use crate::{CommandFailed, StoreError};
 
-type Found<T> = Result<T, CirculationLeftover>;
+pub(crate) type Found<T> = Result<T, CirculationLeftover>;
 
 /// Applies one write: the loans, then the holds.
 pub(crate) fn apply(
@@ -57,7 +57,10 @@ fn only(
     })
 }
 
-fn patron(connection: &Connection, borrowernumber: u64) -> Result<Found<i64>, StoreError> {
+pub(crate) fn patron(
+    connection: &Connection,
+    borrowernumber: u64,
+) -> Result<Found<i64>, StoreError> {
     only(
         connection,
         "SELECT local_id FROM koha_keys WHERE kind = 2 AND koha_key = ?1",
@@ -67,7 +70,7 @@ fn patron(connection: &Connection, borrowernumber: u64) -> Result<Found<i64>, St
 }
 
 /// The Item imported with Koha's `itemnumber`, or else the one with its barcode.
-fn item(connection: &Connection, item: &KohaItem) -> Result<Found<i64>, StoreError> {
+pub(crate) fn item(connection: &Connection, item: &KohaItem) -> Result<Found<i64>, StoreError> {
     let by_number = only(
         connection,
         "SELECT DISTINCT item_id FROM item_origins

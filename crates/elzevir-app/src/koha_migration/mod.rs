@@ -19,8 +19,14 @@ use crate::patrons::{
     MAX_CARDNUMBER, PatronField, PatronFields, PatronRefusal, ReadingHistory, checked_patron,
 };
 
+mod accounts;
 mod circulation;
 mod dump;
+
+pub use accounts::{
+    ACCOUNT_LINES_PER_COMMAND, AccountsRead, KohaAccount, KohaAccountBatch, KohaAccountLine,
+    KohaAccountsMigrated, KohaOffset,
+};
 
 pub use circulation::{
     CIRCULATION_PER_COMMAND, CirculationLeftover, KohaCirculationBatch, KohaCirculationMigrated,
@@ -248,6 +254,10 @@ pub struct KohaPlan {
     pub suspended_holds: usize,
     /// Queued holds with an end date, which comes without it.
     pub holds_with_end: usize,
+    /// The patrons' accounts, by `borrowernumber`.
+    pub accounts: Vec<KohaAccount>,
+    /// What reading the accounts left out or changed.
+    pub accounts_read: AccountsRead,
 }
 
 /// A patron field, ordered for the report.
@@ -323,6 +333,7 @@ pub fn plan(input: impl BufRead, today: Date, zone: &TimeZone) -> Result<KohaPla
         }
     }
     circulation::read(&tables.rows, zone, &mut plan);
+    accounts::read(&tables.rows, zone, &mut plan);
     Ok(plan)
 }
 

@@ -31,7 +31,7 @@ use elzevir_app::patrons::{
     CategoryChange, PatronCommand, PatronFields, PatronOutput, ReadingHistory,
 };
 use elzevir_app::pending::PendingReader;
-use elzevir_domain::account::{CreditType, PaymentRefusal};
+use elzevir_domain::account::{PaymentKind, PaymentRefusal};
 use elzevir_domain::catalog::{BranchId, InstanceId, Money};
 use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome, TransferReason};
 use elzevir_domain::checkout::{Alert, Confirm, HeldFor, Impossible, TooManyReason};
@@ -807,7 +807,7 @@ fn a_late_return_charges_its_fine_and_debts_hold_back_checkouts() {
 
 fn pay(
     library: &Library,
-    kind: CreditType,
+    kind: PaymentKind,
     amount: i64,
     lines: &[i64],
 ) -> Result<Paid, PayRefusal> {
@@ -866,31 +866,31 @@ fn payments_settle_the_oldest_debits_first_and_write_offs_the_chosen_ones() {
         )
     };
     assert_eq!(
-        pay(&library, CreditType::Payment, 0, &[]),
+        pay(&library, PaymentKind::Payment, 0, &[]),
         Err(PayRefusal::Amount(PaymentRefusal::NotPositive))
     );
     assert_eq!(
-        pay(&library, CreditType::Payment, 801, &[]),
+        pay(&library, PaymentKind::Payment, 801, &[]),
         Err(PayRefusal::Amount(PaymentRefusal::OverDue {
             due: Money(800)
         }))
     );
     // 3.00 with nothing chosen: the older fine first.
-    let paid = pay(&library, CreditType::Payment, 300, &[]).unwrap();
+    let paid = pay(&library, PaymentKind::Payment, 300, &[]).unwrap();
     assert_eq!(paid.owed, Money(500));
     assert_eq!(outstanding(), "0 500");
     // Line 1 owes nothing now, so it cannot be chosen.
     assert_eq!(
-        pay(&library, CreditType::Payment, 100, &[1]),
+        pay(&library, PaymentKind::Payment, 100, &[1]),
         Err(PayRefusal::UnknownLine)
     );
     assert_eq!(
-        pay(&library, CreditType::Writeoff, 600, &[2]),
+        pay(&library, PaymentKind::Writeoff, 600, &[2]),
         Err(PayRefusal::Amount(PaymentRefusal::OverDue {
             due: Money(500)
         }))
     );
-    let written = pay(&library, CreditType::Writeoff, 500, &[2]).unwrap();
+    let written = pay(&library, PaymentKind::Writeoff, 500, &[2]).unwrap();
     assert_eq!(written.owed, Money(0));
     assert_eq!(outstanding(), "0 0");
     assert_eq!(

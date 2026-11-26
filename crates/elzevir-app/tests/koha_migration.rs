@@ -4,11 +4,14 @@
 //! patrons.
 #![expect(clippy::unwrap_used, reason = "fixed synthetic dump")]
 
+use elzevir_app::accounts::LineKind;
 use elzevir_app::import::koha_sql::DumpProblem;
 use elzevir_app::koha_migration::{
     CirculationLeftover, KohaHoldState, KohaItem, KohaPlan, Leftover, PatronFieldName, plan,
 };
 use elzevir_app::patrons::ReadingHistory;
+use elzevir_domain::account::{CreditType, DebitType};
+use elzevir_domain::catalog::Money;
 use elzevir_domain::patron::Enrolment;
 use elzevir_domain::suspension::RestrictionKind;
 use jiff::civil::date;
@@ -290,4 +293,64 @@ fn circulation_goes_in_batches_of_its_own() {
     let batches = plan.circulation_batches();
     assert_eq!(batches.len(), 1);
     assert_eq!((batches[0].loans.len(), batches[0].holds.len()), (5, 6));
+}
+
+#[test]
+fn accounts_come_whole_by_patron() {
+    let plan = read(DUMP);
+    let owners: Vec<(u64, usize, usize)> = plan
+        .accounts
+        .iter()
+        .map(|account| {
+            (
+                account.borrowernumber,
+                account.lines.len(),
+                account.offsets.len(),
+            )
+        })
+        .collect();
+    assert_eq!(owners, [(1, 3, 4), (3, 1, 1), (6, 2, 0)]);
+    let fine = &plan.accounts[0].lines[0];
+    assert_eq!(fine.kind, LineKind::Debit(DebitType::Overdue));
+    assert_eq!(fine.status.as_deref(), Some("UNRETURNED"));
+    assert_eq!((fine.amount, fine.outstanding), (Money(200), Money(200)));
+    assert_eq!(fine.loan.as_ref().map(|item| item.itemnumber), Some(100));
+    assert_eq!(
+        fine.created_at,
+        "2026-11-25T23:59:00-03:00[America/Sao_Paulo]"
+    );
+    let payment = &plan.accounts[0].lines[1];
+    assert_eq!(payment.kind, LineKind::Credit(CreditType::Payment));
+    assert_eq!(
+        (payment.amount, payment.outstanding),
+        (Money(-100), Money(0))
+    );
+    let apply = &plan.accounts[0].offsets[2];
+    assert_eq!(
+        (apply.credit, apply.debit, apply.kind.as_str(), apply.amount),
+        (Some(2), Some(3), "APPLY", Money(-100))
+    );
+    // A type of this Koha comes as MANUAL or CREDIT, counted; without `date`, `timestamp`.
+    let local = &plan.accounts[2].lines[0];
+    assert_eq!(local.kind, LineKind::Debit(DebitType::Manual));
+    assert_eq!(local.amount, Money(33));
+    assert_eq!(
+        local.created_at,
+        "2026-11-20T09:00:00-03:00[America/Sao_Paulo]"
+    );
+    assert_eq!(
+        plan.accounts[2].lines[1].kind,
+        LineKind::Credit(CreditType::Credit)
+    );
+    let read = &plan.accounts_read;
+    assert_eq!(read.lines_left, [6]);
+    assert_eq!((read.offsets_left, read.rounded), (1, 1));
+    assert_eq!(
+        read.other_types
+            .iter()
+            .map(|(code, n)| (code.as_str(), *n))
+            .collect::<Vec<_>>(),
+        [("DOACAO", 1), ("MULTA_LOCAL", 1)]
+    );
+    assert_eq!(plan.account_batches().len(), 1);
 }

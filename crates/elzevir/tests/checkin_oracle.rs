@@ -26,7 +26,7 @@ use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::loans::{
     CheckinRequest, CheckoutRefusal, CheckoutRequest, LoanDesk, RenewRefusal, RenewRequest,
 };
-use elzevir_domain::account::{CreditType, rule_money};
+use elzevir_domain::account::{PaymentKind, rule_money};
 use elzevir_domain::calendar::{AnnualHoliday, DatedEntry};
 use elzevir_domain::catalog::Money;
 use elzevir_domain::checkout::{Confirm, Impossible};
@@ -426,7 +426,13 @@ fn same_lines(ours: &[(AccountLineId, Money, Money)], koha: &[RecordedLine], whe
     assert_eq!(ours, koha, "{when}");
 }
 
-fn credit(library: &Library, kind: CreditType, amount: Money, lines: Vec<AccountLineId>, at: &str) {
+fn credit(
+    library: &Library,
+    kind: PaymentKind,
+    amount: Money,
+    lines: Vec<AccountLineId>,
+    at: &str,
+) {
     let Ok(WriteOutput::Circulation(CirculationOutput::Paid(_))) = circulate(
         library,
         CirculationCommand::Pay(PaymentRequest {
@@ -518,7 +524,7 @@ fn late_returns_are_fined_and_settled_as_the_oracle_did() {
     let at = &recording.debt.at;
     credit(
         &library,
-        CreditType::Payment,
+        PaymentKind::Payment,
         cents(&recording.payment.amount),
         Vec::new(),
         at,
@@ -533,7 +539,7 @@ fn late_returns_are_fined_and_settled_as_the_oracle_did() {
     let second = after_payment.last().unwrap().0;
     credit(
         &library,
-        CreditType::Writeoff,
+        PaymentKind::Writeoff,
         cents(&recording.writeoff.amount),
         vec![second],
         at,

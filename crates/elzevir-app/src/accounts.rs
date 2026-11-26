@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Paying and writing off what a patron owes (docs/specs/circulacao/conta.md).
 
-use elzevir_domain::account::{CreditType, DebitType, PaymentRefusal};
+use elzevir_domain::account::{CreditType, DebitType, PaymentKind, PaymentRefusal};
 use elzevir_domain::catalog::{BranchId, Money};
 use elzevir_domain::patron::PatronId;
 use jiff::Zoned;
@@ -21,7 +21,7 @@ pub struct PaymentRequest {
     /// Who pays, or whose debt is written off.
     pub patron: PatronId,
     /// A payment or a write-off.
-    pub kind: CreditType,
+    pub kind: PaymentKind,
     /// How much.
     pub amount: Money,
     /// The debits to pay first, in their order; none means every debit.
@@ -69,7 +69,7 @@ impl PayRefusal {
 }
 
 /// What a line of the account is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum LineKind {
     /// The patron owes.
     Debit(DebitType),

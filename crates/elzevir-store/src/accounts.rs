@@ -288,7 +288,7 @@ pub(crate) fn pay(connection: &Connection, request: &PaymentRequest) -> Applied 
              VALUES (?1, ?2, ?3, ?3, ?4, ?5, ?5)",
             params![
                 request.patron.0,
-                request.kind.code(),
+                request.kind.credit().code(),
                 -request.amount.0,
                 request.desk.0,
                 at
