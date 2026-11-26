@@ -89,6 +89,8 @@ pub(crate) fn full_name(surname: &str, first_name: Option<&str>) -> String {
 pub(crate) struct SearchParams {
     #[serde(default)]
     q: String,
+    /// `1` after a patron was anonymized.
+    anonimizado: Option<String>,
 }
 
 /// `GET /equipe/leitores`: the search. A card number found alone opens its record.
@@ -127,6 +129,7 @@ pub(crate) async fn search(
             .collect(),
         zoom: zoom(&headers, ZoomScreen::PatronList),
         can_manage: session.identity.can(Permission::Patrons),
+        anonymized: params.anonimizado.as_deref() == Some("1"),
     })
 }
 

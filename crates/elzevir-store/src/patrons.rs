@@ -14,7 +14,7 @@ use crate::{CommandFailed, StoreError, WriteTx};
 
 type Applied = Result<WriteOutput, CommandFailed<WriteRefusal>>;
 
-const fn refused(refusal: PatronRefusal) -> CommandFailed<WriteRefusal> {
+pub(crate) const fn refused(refusal: PatronRefusal) -> CommandFailed<WriteRefusal> {
     CommandFailed::Rejected(WriteRefusal::Patrons(refusal))
 }
 
@@ -49,6 +49,9 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &PatronCommand) -> Applied {
                 return Err(refused(PatronRefusal::UnknownPatron));
             }
             PatronOutput::PasswordSet(*patron)
+        }
+        PatronCommand::Anonymize(patron) => {
+            crate::patron_privacy::anonymize(tx.connection(), *patron)?
         }
         PatronCommand::SetReadingHistory {
             patron,

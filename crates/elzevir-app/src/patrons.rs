@@ -53,6 +53,10 @@ pub enum PatronCommand {
         /// The choice.
         reading_history: ReadingHistory,
     },
+    /// Anonymizes the patron for good: personal data leaves the record, the reading
+    /// history and the audit log; what was lent and owed stays, without a name
+    /// (docs/specs/circulacao/lgpd.md, items 1 to 7).
+    Anonymize(PatronId),
     /// Brings branches, categories and patrons from a Koha dump
     /// (docs/specs/migracao/leitores-do-koha.md, item 16).
     MigrateKoha(Box<crate::koha_migration::KohaBatch>),
@@ -159,6 +163,8 @@ pub enum PatronOutput {
     PasswordSet(PatronId),
     /// The patron's choice about the reading history was recorded.
     ReadingHistorySet(PatronId),
+    /// The patron was anonymized.
+    Anonymized(PatronId),
     /// What a write of the Koha migration did.
     KohaMigrated(crate::koha_migration::KohaMigrated),
     /// What a write of Koha's loans and holds did.
@@ -227,6 +233,12 @@ pub enum PatronRefusal {
     /// The patron changed since the form was read.
     #[error("the patron changed since it was read")]
     Stale,
+    /// The patron still has Items on loan (Koha: `anonymize` refuses with issues).
+    #[error("the patron still has Items on loan")]
+    HasLoans,
+    /// The patron still has holds.
+    #[error("the patron still has holds")]
+    HasHolds,
 }
 
 impl PatronRefusal {
@@ -253,6 +265,8 @@ impl PatronRefusal {
             Self::UnknownBranch => "patron-error-unknown-branch",
             Self::UnknownPatron => "patron-error-unknown",
             Self::Stale => "patron-error-stale",
+            Self::HasLoans => "patron-error-has-loans",
+            Self::HasHolds => "patron-error-has-holds",
         }
     }
 }

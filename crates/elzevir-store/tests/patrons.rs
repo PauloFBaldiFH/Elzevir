@@ -422,3 +422,48 @@ fn a_search_finds_card_numbers_cpfs_and_parts_of_names_and_views_are_logged() {
         1
     );
 }
+
+#[test]
+fn anonymizing_follows_a_changed_card_number_and_spares_a_namesake() {
+    // docs/specs/circulacao/lgpd.md, item 5.
+    let dir = tempfile::tempdir().unwrap();
+    let (store, branch, category) = library(&dir);
+    let PatronOutput::Added(ana) = add(&store, fields(branch, category)).unwrap() else {
+        panic!("not added");
+    };
+    let mut namesake = fields(branch, category);
+    namesake.cardnumber = "000200".to_owned();
+    namesake.cpf = None;
+    namesake.first_name = Some("Bruno".to_owned());
+    add(&store, namesake).unwrap();
+    // A new card number: the first enrolment is found through the CPF both share.
+    let mut changed = fields(branch, category);
+    changed.cardnumber = "000124".to_owned();
+    changed.email = Some("ana@example.org".to_owned());
+    run(
+        &store,
+        PatronCommand::Update(Box::new(PatronUpdate {
+            patron: ana,
+            row_version: 1,
+            fields: changed,
+        })),
+    )
+    .unwrap();
+    assert_eq!(
+        run(&store, PatronCommand::Anonymize(ana)).unwrap(),
+        PatronOutput::Anonymized(ana)
+    );
+    let log: String = read(
+        &store,
+        "SELECT group_concat(command, char(10)) FROM audit_log",
+    );
+    for private in ["000123", "000124", "52998224725", "Ana", "ana@example.org"] {
+        assert!(!log.contains(private), "{private} still in the audit log");
+    }
+    assert!(log.contains("000200") && log.contains("Bruno") && log.contains("Silva"));
+    assert!(log.contains("patrons.anonymize") || log.contains("Anonymize"));
+    assert_eq!(
+        refusal(run(&store, PatronCommand::Anonymize(ana))),
+        PatronRefusal::UnknownPatron
+    );
+}

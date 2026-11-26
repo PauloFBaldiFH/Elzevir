@@ -51,5 +51,17 @@
   {% endif %}
 </section>
 {% endif %}
+{% if let Some(section) = anonymize %}
+<section class="patron-anonymize" aria-labelledby="anonymize-title">
+  <h2 id="anonymize-title">{{ t.get("patron-anonymize-title") }}</h2>
+  {% if let Some(key) = section.refused %}<p class="codes-alert codes-refused" role="alert">{{ t.get(key) }}</p>{% endif %}
+  <p class="form-hint">{{ t.get("patron-anonymize-hint") }}</p>
+  <form method="post" action="{{ section.action }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label><input type="checkbox" name="confirm" value="1" required> {{ t.get("patron-anonymize-confirm") }}</label>
+    <button type="submit" class="danger">{{ t.get("patron-anonymize") }}</button>
+  </form>
+</section>
+{% endif %}
 </div>
 {% endblock %}

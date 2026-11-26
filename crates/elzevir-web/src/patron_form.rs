@@ -14,7 +14,7 @@ use elzevir_app::patrons::{
 use elzevir_app::staff::Permission;
 use elzevir_domain::catalog::BranchId;
 use elzevir_domain::patron::{Cpf, PatronCategoryId, PatronId};
-use elzevir_web_templates::{PasswordSection, PatronFormValues, StaffPatronForm};
+use elzevir_web_templates::{AnonymizeSection, PasswordSection, PatronFormValues, StaffPatronForm};
 use jiff::civil::Date;
 use serde::Deserialize;
 
@@ -162,6 +162,7 @@ pub(crate) struct FormPage {
     pub(crate) refused: Option<&'static str>,
     pub(crate) status: StatusCode,
     pub(crate) password: Option<PasswordSection>,
+    pub(crate) anonymize: Option<AnonymizeSection>,
 }
 
 pub(crate) async fn form_page(
@@ -205,6 +206,7 @@ pub(crate) async fn form_page(
         saved: page.saved,
         refused,
         password: page.password,
+        anonymize: page.anonymize,
     });
     *response.status_mut() = page.status;
     response
@@ -236,6 +238,7 @@ pub(crate) async fn new_patron(State(state): State<AppState>, headers: HeaderMap
         refused: None,
         status: StatusCode::OK,
         password: None,
+        anonymize: None,
     };
     form_page(&state, &session, desk, page).await
 }
@@ -262,6 +265,7 @@ pub(crate) async fn add_patron(
         refused: Some(refusal.message_key()),
         status: status_of(refusal),
         password: None,
+        anonymize: None,
     };
     let fields = match form.fields(today(&state)) {
         Ok(fields) => fields,
@@ -344,6 +348,7 @@ pub(crate) async fn edit_patron(
             crate::patron_password::notice(params.senha.as_deref()),
             None,
         )),
+        anonymize: Some(crate::patron_privacy::section(id, None)),
     };
     form_page(&state, &session, desk, page).await
 }
@@ -384,6 +389,7 @@ pub(crate) async fn update_patron(
             None,
             None,
         )),
+        anonymize: Some(crate::patron_privacy::section(id, None)),
     };
     let fields = match form.fields(stored.fields.enrolled) {
         Ok(fields) => fields,

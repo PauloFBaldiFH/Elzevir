@@ -42,7 +42,7 @@ const PATRON: &str = "SELECT p.id, p.row_version, p.cardnumber, p.surname, p.fir
                       FROM patrons p
                       JOIN branches b ON b.id = p.branch_id
                       JOIN patron_categories c ON c.id = p.category_id
-                      WHERE p.id = ?1";
+                      WHERE p.id = ?1 AND p.anonymized_at IS NULL";
 
 fn patron_of(row: &Row<'_>) -> rusqlite::Result<Patron> {
     let cpf: Option<String> = row.get(5)?;
@@ -92,11 +92,12 @@ const SEARCH: &str = "SELECT p.id, p.cardnumber, p.surname, p.first_name, c.name
                       FROM patrons p
                       JOIN patron_categories c ON c.id = p.category_id
                       JOIN branches b ON b.id = p.branch_id
-                      WHERE p.cardnumber = ?1
+                      WHERE p.anonymized_at IS NULL
+                        AND (p.cardnumber = ?1
                          OR p.cpf = ?2
                          OR (?3 IS NOT NULL
                              AND (p.surname || ' ' || coalesce(p.first_name, '') LIKE ?3 ESCAPE '\\'
-                                  OR coalesce(p.first_name, '') || ' ' || p.surname LIKE ?3 ESCAPE '\\'))
+                                  OR coalesce(p.first_name, '') || ' ' || p.surname LIKE ?3 ESCAPE '\\')))
                       ORDER BY p.surname, p.first_name, p.id
                       LIMIT ?4";
 
@@ -233,7 +234,7 @@ impl PatronAccounts for ElzevirStore {
             .read(|c| {
                 c.query_row(
                     "SELECT id, coalesce(nullif(first_name, ''), surname), password_hash
-                     FROM patrons WHERE cardnumber = ?1",
+                     FROM patrons WHERE cardnumber = ?1 AND anonymized_at IS NULL",
                     params![cardnumber],
                     |row| {
                         Ok(PatronCredentials {

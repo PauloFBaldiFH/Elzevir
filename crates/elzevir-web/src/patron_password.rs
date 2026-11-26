@@ -98,6 +98,7 @@ pub(crate) async fn set_password(
                 None,
                 Some(refusal_key(refusal)),
             )),
+            anonymize: Some(crate::patron_privacy::section(id, None)),
         };
         return form_page(&state, &session, desk, page).await;
     }
