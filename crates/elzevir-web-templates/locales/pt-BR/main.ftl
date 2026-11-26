@@ -845,6 +845,7 @@ opac-account-branch = Biblioteca
 opac-account-category = Categoria
 opac-account-expires = Inscrição válida até
 opac-hold-place = Reservar
+opac-save-record = Salvar registro
 opac-hold-hint = O primeiro exemplar que ficar livre é separado para você na biblioteca escolhida; avisamos quando estiver à sua espera.
 opac-hold-confirm = Confirmar reserva
 opac-hold-back = Voltar ao registro

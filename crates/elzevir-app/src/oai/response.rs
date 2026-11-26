@@ -8,7 +8,7 @@ use std::fmt::Write as _;
 
 use elzevir_marc::Record;
 
-use super::dublin_core::dublin_core;
+use super::dublin_core::{DcElement, dublin_core};
 use super::request::{ListState, MetadataFormat, OaiError, OaiErrorCode, Request, parse};
 use super::{Datestamp, OaiCatalog, OaiHeader, OaiRecordError, OaiSettings, OaiUnavailable};
 
@@ -306,6 +306,12 @@ pub fn marcxml_element(marc: &Record) -> Option<String> {
 }
 
 fn dc_xml(marc: &Record) -> String {
+    dc_element(&dublin_core(marc))
+}
+
+/// The `oai_dc:dc` element of `elements`, which the citation export also writes
+/// (citacao-e-intercambio.md, item 12).
+pub(crate) fn dc_element(elements: &[(DcElement, String)]) -> String {
     let mut xml = String::from(
         "<oai_dc:dc xmlns:oai_dc=\"http://www.openarchives.org/OAI/2.0/oai_dc/\" \
          xmlns:dc=\"http://purl.org/dc/elements/1.1/\" \
@@ -313,8 +319,8 @@ fn dc_xml(marc: &Record) -> String {
          xsi:schemaLocation=\"http://www.openarchives.org/OAI/2.0/oai_dc/ \
          http://www.openarchives.org/OAI/2.0/oai_dc.xsd\">",
     );
-    for (element, value) in dublin_core(marc) {
-        let _written = write!(xml, "<dc:{0}>{1}</dc:{0}>", element.name(), escape(&value));
+    for (element, value) in elements {
+        let _written = write!(xml, "<dc:{0}>{1}</dc:{0}>", element.name(), escape(value));
     }
     xml.push_str("</oai_dc:dc>");
     xml

@@ -16,6 +16,7 @@ mod catalog;
 mod checkout_slip;
 mod circulation;
 mod circulation_rules;
+mod citation;
 mod creating;
 mod described;
 mod draft_station;
@@ -350,17 +351,8 @@ pub fn router(state: AppState) -> Router {
             "/equipe/leitores/{id}/editar",
             get(patron_form::edit_patron).post(patron_form::update_patron),
         )
-        .route("/equipe/acervo/lote/marc", get(batch::export_marc))
         .route("/equipe/acervo/lote/exemplares", post(batch::change_items))
         .route("/equipe/acervo/listas", post(batch::change_list))
-        .route(
-            "/equipe/acervo/instancia/{id}/marc",
-            get(catalog::export_marc),
-        )
-        .route(
-            "/equipe/acervo/instancia/{id}/bibframe",
-            get(catalog::export_bibframe),
-        )
         .route(
             "/equipe/acervo/sugestoes/agentes",
             get(editing::suggest_agents),
@@ -417,6 +409,7 @@ pub fn router(state: AppState) -> Router {
         .route("/equipe/login", get(staff::login_form).post(staff::log_in))
         .route("/equipe/logout", post(staff::log_out))
         .merge(static_routes())
+        .merge(export_routes())
         .merge(board_routes())
         .merge(patron_routes())
         .merge(admin_routes())
@@ -463,6 +456,26 @@ fn board_routes() -> Router<AppState> {
             get(board::edit_note).post(board::update_note),
         )
         .route("/equipe/mural/{id}/remover", post(board::remove_note))
+}
+
+/// The records as files: MARC, BIBFRAME and the citation formats, for the staff and the
+/// OPAC.
+fn export_routes() -> Router<AppState> {
+    Router::new()
+        .route("/record/{id}/export", get(citation::opac))
+        .route("/equipe/acervo/lote/marc", get(batch::export_marc))
+        .route(
+            "/equipe/acervo/instancia/{id}/marc",
+            get(catalog::export_marc),
+        )
+        .route(
+            "/equipe/acervo/instancia/{id}/bibframe",
+            get(catalog::export_bibframe),
+        )
+        .route(
+            "/equipe/acervo/instancia/{id}/citacao",
+            get(citation::staff),
+        )
 }
 
 /// The stylesheet, scripts and images, all served from the binary.

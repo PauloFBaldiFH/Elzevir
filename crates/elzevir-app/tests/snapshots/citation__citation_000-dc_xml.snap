@@ -1,0 +1,6 @@
+---
+source: crates/elzevir-app/tests/citation.rs
+expression: "written.replace(\"\\r\\n\", \"\\n\")"
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<oai_dc:dc xmlns:oai_dc="http://www.openarchives.org/OAI/2.0/oai_dc/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd"><dc:title>Perfil - Anuário Estatístico</dc:title><dc:creator>PREFEITURA MUNICIPAL DE FOZ DO IGUACU</dc:creator><dc:type>text</dc:type><dc:publisher>Foz do IGUAÇU : Secretaria Municipal da Coordenacao e Planejamento,</dc:publisher><dc:date>1995.</dc:date><dc:language>por</dc:language><dc:subject>ESTATÍSTICA FOZ DO IGUAÇU</dc:subject><dc:subject>PARANÁ ESTATÍSTICA</dc:subject></oai_dc:dc>

@@ -1,0 +1,66 @@
+---
+source: crates/elzevir-app/tests/citation.rs
+expression: "written.replace(\"\\r\\n\", \"\\n\")"
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<mods xmlns="http://www.loc.gov/mods/v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="3.1" xsi:schemaLocation="http://www.loc.gov/mods/v3 http://www.loc.gov/standards/mods/v3/mods-3-1.xsd">
+  <titleInfo>
+    <nonSort>As </nonSort>
+    <title>aventuras de Karl Marx contra o Barão de Munchhausen</title>
+    <subTitle>marxismo e positivismo na sociologia do conhecimento</subTitle>
+  </titleInfo>
+  <name type="personal">
+    <namePart>Löwy, Michael</namePart>
+    <namePart type="date">1938-</namePart>
+    <role>
+      <roleTerm authority="marcrelator" type="text">creator</roleTerm>
+    </role>
+  </name>
+  <typeOfResource>text</typeOfResource>
+  <originInfo>
+    <place>
+      <placeTerm type="code" authority="marccountry">spb</placeTerm>
+    </place>
+    <place>
+      <placeTerm type="text">São Paulo</placeTerm>
+    </place>
+    <publisher>Busca Vida</publisher>
+    <dateIssued>1987</dateIssued>
+    <dateIssued encoding="marc" point="start">1988</dateIssued>
+    <edition>3. ed.</edition>
+    <issuance>monographic</issuance>
+  </originInfo>
+  <language>
+    <languageTerm authority="iso639-2b" type="code">por</languageTerm>
+  </language>
+  <physicalDescription>
+    <extent>210 p.</extent>
+  </physicalDescription>
+  <note type="statement of responsibility">Michael Lowy</note>
+  <note>Inclui bibliografia.</note>
+  <subject>
+    <topic>Sociologia educacional</topic>
+  </subject>
+  <subject>
+    <topic>Sociologia do conhecimento</topic>
+  </subject>
+  <subject>
+    <topic>Filosofia marxista</topic>
+  </subject>
+  <subject>
+    <topic>Socialismo</topic>
+  </subject>
+  <subject>
+    <topic>Positivismo</topic>
+  </subject>
+  <classification authority="udc">316.7</classification>
+  <recordInfo>
+    <recordContentSource authority="marcorg">BIBLIODATA</recordContentSource>
+    <recordCreationDate encoding="marc">900503</recordCreationDate>
+    <recordChangeDate encoding="iso8601">20260921094407.0</recordChangeDate>
+    <recordIdentifier source="BR-FlUSC">76329</recordIdentifier>
+    <languageOfCataloging>
+      <languageTerm authority="iso639-2b" type="code">por</languageTerm>
+    </languageOfCataloging>
+  </recordInfo>
+</mods>

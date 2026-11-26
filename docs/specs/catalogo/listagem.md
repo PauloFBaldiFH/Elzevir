@@ -71,7 +71,7 @@
 
 ### Exportar o registro (tarefa 2.4, parte 2)
 
-33. O cartão da Instância tem "Export", um menu (`<details>`, sem JavaScript) com MARC21 e MARCXML (spec de UI §20 item 11).
+33. O cartão da Instância tem "Export", um menu (`<details>`, sem JavaScript) com MARC21, MARCXML, BIBFRAME (Turtle e RDF/XML) e os formatos de citação RIS, BibTeX, MODS e Dublin Core (spec de UI §20 item 11; [citação e intercâmbio](citacao-e-intercambio.md)).
 34. `GET /equipe/acervo/instancia/{id}/marc?format=marc21|marcxml` exige sessão da equipe e devolve o registro como anexo: `elzevir-{id}.mrc` (`application/marc`) ou `elzevir-{id}.xml` (`application/marcxml+xml`). Sem `format`, é MARC21. Formato desconhecido é 400; Instância que não existe é 404.
 35. O registro sai pela mesma regra da exportação em lote (`docs/specs/catalogo/linha-de-comando.md`): registro que ninguém editou sai com os bytes guardados, e editado sai por `bibframe_to_marc` a partir do original. O MARCXML é esse mesmo registro escrito como documento MARCXML, igual ao do Koha (`MARC::File::XML::record`).
 36. Registro que não cabe em ISO 2709, ou fonte guardada ilegível, é 500 com o motivo no corpo da resposta (a rota é só da equipe, e o motivo diz o que corrigir no registro).

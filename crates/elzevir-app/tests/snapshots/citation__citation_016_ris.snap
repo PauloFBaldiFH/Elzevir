@@ -1,0 +1,14 @@
+---
+source: crates/elzevir-app/tests/citation.rs
+expression: "written.replace(\"\\r\\n\", \"\\n\")"
+---
+TY  - BOOK
+ED  - Brasil
+TI  - Discursos
+PY  - 1984///
+CY  - Brasilia,DF
+PB  - Presidência da República Secretária de Imprensa e Divulgação
+KW  - Administração pública
+KW  - Discurso
+KW  - Brasil
+ER  -

@@ -1,0 +1,20 @@
+---
+source: crates/elzevir-app/tests/citation.rs
+expression: "written.replace(\"\\r\\n\", \"\\n\")"
+---
+TY  - BOOK
+AU  - Ramalho Júnior,Francisco
+AU  - Ferraro,Nicolau Gilberto
+AU  - Soares,Paulo Antônio de Toledo
+TI  - Os fundamentos da física
+SN  - 8516009165
+U1  - 530.07 21
+PY  - 1997///
+CY  - São Paulo, SP
+PB  - Moderna
+KW  - Física
+KW  - Estudo e ensino
+UR  - https://biblioteca.utfpr.edu.br/pergamumweb/vinculos/000046/0000464f.png
+UR  - https://biblioteca.utfpr.edu.br/pergamumweb/vinculos/000046/00004650.png
+UR  - https://biblioteca.utfpr.edu.br/pergamumweb/vinculos/000046/00004651.png
+ER  -

@@ -833,6 +833,76 @@ async fn one_record_is_exported_as_bibframe_turtle_or_rdf_xml() {
 }
 
 #[tokio::test]
+async fn one_record_is_cited_in_the_four_formats() {
+    let app = app();
+    let uri = "/equipe/acervo/instancia/10/citacao?format=ris";
+    assert_eq!(
+        send(&app, get(uri, None, None)).await.status(),
+        StatusCode::SEE_OTHER
+    );
+
+    let session = signed_in(&app).await;
+    let page = body(send(&app, get("/equipe/acervo", Some(&session), None)).await).await;
+    assert!(page.contains(r#"href="/equipe/acervo/instancia/10/citacao?format=bibtex""#));
+
+    for (format, content_type, file, title) in [
+        (
+            "ris",
+            "application/x-research-info-systems; charset=utf-8",
+            "elzevir-10.ris",
+            "TI  - Dom Casmurro",
+        ),
+        (
+            "bibtex",
+            "application/x-bibtex; charset=utf-8",
+            "elzevir-10.bib",
+            "title = {Dom Casmurro",
+        ),
+        (
+            "mods",
+            "application/mods+xml; charset=utf-8",
+            "elzevir-10-mods.xml",
+            "<title>Dom Casmurro",
+        ),
+        (
+            "dc",
+            "application/xml; charset=utf-8",
+            "elzevir-10-dc.xml",
+            "<dc:title>Dom Casmurro",
+        ),
+    ] {
+        let uri = format!("/equipe/acervo/instancia/10/citacao?format={format}");
+        let response = send(&app, get(&uri, Some(&session), None)).await;
+        assert_eq!(response.status(), StatusCode::OK, "{format}");
+        assert_eq!(response.headers()[header::CONTENT_TYPE], content_type);
+        assert_eq!(
+            response.headers()[header::CONTENT_DISPOSITION],
+            format!("attachment; filename=\"{file}\"").as_str()
+        );
+        let text = body(response).await;
+        assert!(text.contains(title), "{format}: {text}");
+    }
+
+    for (uri, status) in [
+        (
+            "/equipe/acervo/instancia/20/citacao?format=ris",
+            StatusCode::NOT_FOUND,
+        ),
+        (
+            "/equipe/acervo/instancia/10/citacao?format=endnote",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "/equipe/acervo/instancia/10/citacao",
+            StatusCode::BAD_REQUEST,
+        ),
+    ] {
+        let response = send(&app, get(uri, Some(&session), None)).await;
+        assert_eq!(response.status(), status, "{uri}");
+    }
+}
+
+#[tokio::test]
 async fn a_focused_block_loads_every_filled_field() {
     let app = app();
     let refused = send(&app, get("/equipe/acervo/instancia/10/campos", None, None)).await;

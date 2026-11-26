@@ -563,6 +563,12 @@ fn iri_base(state: &AppState, headers: &HeaderMap) -> Option<IriBase> {
     if let Some(base) = &state.inner.config.iri_base {
         return Some(IriBase::new(base));
     }
+    request_origin(state, headers).map(|origin| IriBase::new(&format!("{origin}/bibframe")))
+}
+
+/// `https://` (or `http://` without secure cookies) and the requested host. A host with
+/// characters no host name has is refused, so it never reaches an address.
+pub(crate) fn request_origin(state: &AppState, headers: &HeaderMap) -> Option<String> {
     let host = headers.get(header::HOST)?.to_str().ok()?;
     let valid = !host.is_empty()
         && host
@@ -573,7 +579,7 @@ fn iri_base(state: &AppState, headers: &HeaderMap) -> Option<IriBase> {
     } else {
         "http"
     };
-    valid.then(|| IriBase::new(&format!("{scheme}://{host}/bibframe")))
+    valid.then(|| format!("{scheme}://{host}"))
 }
 
 fn family_line(row: &FamilyRow, codes: &CodeLists, t: &I18n) -> FamilyLine {

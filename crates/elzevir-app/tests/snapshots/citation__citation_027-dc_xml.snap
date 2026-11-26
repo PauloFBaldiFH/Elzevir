@@ -1,0 +1,6 @@
+---
+source: crates/elzevir-app/tests/citation.rs
+expression: "written.replace(\"\\r\\n\", \"\\n\")"
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<oai_dc:dc xmlns:oai_dc="http://www.openarchives.org/OAI/2.0/oai_dc/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd"><dc:title>As aventuras de Karl Marx contra o Barão de Munchhausen : marxismo e positivismo na sociologia do conhecimento /</dc:title><dc:creator>Löwy, Michael, 1938-</dc:creator><dc:type>text</dc:type><dc:publisher>São Paulo: Busca Vida,</dc:publisher><dc:date>1987.</dc:date><dc:language>por</dc:language><dc:description>Inclui bibliografia.</dc:description><dc:subject>Sociologia educacional</dc:subject><dc:subject>Sociologia do conhecimento</dc:subject><dc:subject>Filosofia marxista</dc:subject><dc:subject>Socialismo</dc:subject><dc:subject>Positivismo</dc:subject></oai_dc:dc>

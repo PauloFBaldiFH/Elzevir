@@ -2,6 +2,18 @@
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
 {{ body|safe }}
+<div class="record-actions">
+  {% if let Some(url) = deposit_url %}<a href="{{ url }}">{{ t.get("repository-title") }}</a>{% endif %}
+  <details class="record-export">
+    <summary>{{ t.get("opac-save-record") }}</summary>
+    <ul>
+      <li><a href="/record/{{ id }}/export?format=ris" download>RIS</a></li>
+      <li><a href="/record/{{ id }}/export?format=bibtex" download>BibTeX</a></li>
+      <li><a href="/record/{{ id }}/export?format=mods" download>MODS</a></li>
+      <li><a href="/record/{{ id }}/export?format=dc" download>Dublin Core</a></li>
+    </ul>
+  </details>
+</div>
 <section class="record-items">
   <div class="record-items-head">
   <h2>{{ t.get("opac-record-items") }}</h2>

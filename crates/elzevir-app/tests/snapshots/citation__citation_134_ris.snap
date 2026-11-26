@@ -1,0 +1,17 @@
+---
+source: crates/elzevir-app/tests/citation.rs
+expression: "written.replace(\"\\r\\n\", \"\\n\")"
+---
+TY  - SER
+ED  - Universidade de São Paulo.
+TI  - Economia aplicada: EA / [Universidade de Sao Paulo, Departamento de Economia; Fundacao Instituto de Pesquisas Economicas]
+SN  - 1413-8050
+PY  - 1997///-
+CY  - São Paulo
+PB  - Departamento de Economia da Universidade de Sao Paulo : FIPE
+KW  - Economia
+KW  - Brasil
+KW  - Condições econômicas
+KW  - Política econômica
+N1  - Trimestral; Alguns artigos em ingles; Resumos em portugues e ingles; Jan./mar.2000-    titulo tambem em ingles: Brazilian journal of applied economics; Formato varia
+ER  -

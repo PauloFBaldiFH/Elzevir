@@ -1,0 +1,55 @@
+---
+source: crates/elzevir-app/tests/citation.rs
+expression: "written.replace(\"\\r\\n\", \"\\n\")"
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<mods xmlns="http://www.loc.gov/mods/v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="3.1" xsi:schemaLocation="http://www.loc.gov/mods/v3 http://www.loc.gov/standards/mods/v3/mods-3-1.xsd">
+  <titleInfo>
+    <title>Discursos</title>
+  </titleInfo>
+  <name type="corporate">
+    <namePart>Brasil</namePart>
+    <namePart>Presidente (1979-1985 : Figueiredo)</namePart>
+    <role>
+      <roleTerm authority="marcrelator" type="text">creator</roleTerm>
+    </role>
+    <role>
+      <roleTerm authority="marcrelator" type="code">aut</roleTerm>
+    </role>
+  </name>
+  <typeOfResource>text</typeOfResource>
+  <originInfo>
+    <place>
+      <placeTerm type="code" authority="marccountry">bl-</placeTerm>
+    </place>
+    <place>
+      <placeTerm type="text">Brasilia,DF</placeTerm>
+    </place>
+    <publisher>Presidência da República Secretária de Imprensa e Divulgação</publisher>
+    <dateIssued>1984</dateIssued>
+    <dateIssued encoding="marc">1979</dateIssued>
+    <issuance>monographic</issuance>
+  </originInfo>
+  <language>
+    <languageTerm authority="iso639-2b" type="code">por</languageTerm>
+  </language>
+  <note type="statement of responsibility">Presidente João Figueiredo</note>
+  <subject>
+    <topic>Administração pública</topic>
+  </subject>
+  <subject>
+    <topic>Discurso</topic>
+  </subject>
+  <subject>
+    <geographic>Brasil</geographic>
+  </subject>
+  <recordInfo>
+    <recordContentSource authority="marcorg">BR-PaURS</recordContentSource>
+    <recordCreationDate encoding="marc">981116</recordCreationDate>
+    <recordChangeDate encoding="iso8601">20260921083942.0</recordChangeDate>
+    <recordIdentifier>000579176</recordIdentifier>
+    <languageOfCataloging>
+      <languageTerm authority="iso639-2b" type="code">por</languageTerm>
+    </languageOfCataloging>
+  </recordInfo>
+</mods>

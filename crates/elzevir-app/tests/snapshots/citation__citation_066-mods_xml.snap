@@ -1,0 +1,74 @@
+---
+source: crates/elzevir-app/tests/citation.rs
+expression: "written.replace(\"\\r\\n\", \"\\n\")"
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<mods xmlns="http://www.loc.gov/mods/v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="3.1" xsi:schemaLocation="http://www.loc.gov/mods/v3 http://www.loc.gov/standards/mods/v3/mods-3-1.xsd">
+  <titleInfo>
+    <nonSort>Os </nonSort>
+    <title>fundamentos da física</title>
+  </titleInfo>
+  <name type="personal">
+    <namePart>Ramalho Júnior, Francisco</namePart>
+    <role>
+      <roleTerm authority="marcrelator" type="text">creator</roleTerm>
+    </role>
+  </name>
+  <name type="personal">
+    <namePart>Ferraro, Nicolau Gilberto</namePart>
+    <namePart type="date">1940-</namePart>
+  </name>
+  <name type="personal">
+    <namePart>Soares, Paulo Antônio de Toledo</namePart>
+  </name>
+  <typeOfResource>text</typeOfResource>
+  <originInfo>
+    <place>
+      <placeTerm type="code" authority="marccountry">spb</placeTerm>
+    </place>
+    <place>
+      <placeTerm type="text">São Paulo, SP</placeTerm>
+    </place>
+    <publisher>Moderna</publisher>
+    <dateIssued>1997</dateIssued>
+    <dateIssued encoding="marc">1993</dateIssued>
+    <edition>6. ed.</edition>
+    <issuance>monographic</issuance>
+  </originInfo>
+  <language>
+    <languageTerm authority="iso639-2b" type="code">por</languageTerm>
+  </language>
+  <physicalDescription>
+    <extent>3 v.: il.; 24 cm</extent>
+  </physicalDescription>
+  <note type="statement of responsibility">Francisco Ramalho Junior, Nicolau Gilberto Ferraro, Paulo Antônio de Toledo Soares</note>
+  <subject>
+    <topic>Física</topic>
+    <topic>Estudo e ensino</topic>
+  </subject>
+  <classification authority="ddc" edition="21">530.07</classification>
+  <identifier type="isbn">8516009165</identifier>
+  <identifier type="isbn">8516009173</identifier>
+  <identifier type="isbn">8516009181</identifier>
+  <identifier type="uri">https://biblioteca.utfpr.edu.br/pergamumweb/vinculos/000046/0000464f.png</identifier>
+  <identifier type="uri">https://biblioteca.utfpr.edu.br/pergamumweb/vinculos/000046/00004650.png</identifier>
+  <identifier type="uri">https://biblioteca.utfpr.edu.br/pergamumweb/vinculos/000046/00004651.png</identifier>
+  <location>
+    <url>https://biblioteca.utfpr.edu.br/pergamumweb/vinculos/000046/0000464f.png</url>
+  </location>
+  <location>
+    <url>https://biblioteca.utfpr.edu.br/pergamumweb/vinculos/000046/00004650.png</url>
+  </location>
+  <location>
+    <url>https://biblioteca.utfpr.edu.br/pergamumweb/vinculos/000046/00004651.png</url>
+  </location>
+  <recordInfo>
+    <recordContentSource authority="marcorg">BlCuPUC</recordContentSource>
+    <recordCreationDate encoding="marc">030328</recordCreationDate>
+    <recordChangeDate encoding="iso8601">20261111110943.0</recordChangeDate>
+    <recordIdentifier source="BR-CuUTF">67</recordIdentifier>
+    <languageOfCataloging>
+      <languageTerm authority="iso639-2b" type="code">por</languageTerm>
+    </languageOfCataloging>
+  </recordInfo>
+</mods>
