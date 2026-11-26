@@ -45,6 +45,8 @@ pub(crate) struct Config {
     /// Other catalogues to copy records from (docs/specs/catalogo/fontes-de-rascunho.md).
     #[serde(default)]
     draft_sources: Vec<DraftSourceEntry>,
+    /// The SIP2 server for self-check terminals (docs/specs/circulacao/sip2.md).
+    sip2: Option<crate::sip2_server::Sip2Section>,
 }
 
 /// One `[[draft_sources]]` entry (fontes-de-rascunho.md, items 16 and 17, and
@@ -475,6 +477,8 @@ pub(crate) struct Loaded {
     pub(crate) draft_sources: Vec<DraftServer>,
     /// The enabled authority sources, in priority order.
     pub(crate) authority_sources: Vec<DraftServer>,
+    /// The SIP2 server, when `[sip2]` is set.
+    pub(crate) sip2: Option<crate::sip2_server::Sip2Settings>,
 }
 
 /// Reads `data_dir/elzevir.toml` and what it points to; no file is no configuration.
@@ -508,6 +512,12 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
     };
     let (draft_sources, authority_sources) =
         draft_servers(&config.draft_sources).map_err(|e| format!("{}: {e}", path.display()))?;
+    let sip2 = config
+        .sip2
+        .as_ref()
+        .map(crate::sip2_server::Sip2Section::settings)
+        .transpose()
+        .map_err(|e| format!("{}: sip2: {e}", path.display()))?;
     let Some(table) = config.call_number.author_table else {
         return Ok(Loaded {
             author_table: None,
@@ -518,6 +528,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
             mail,
             draft_sources,
             authority_sources,
+            sip2,
         });
     };
     let table_path = data_dir.join(table);
@@ -538,6 +549,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         mail,
         draft_sources,
         authority_sources,
+        sip2,
     })
 }
 

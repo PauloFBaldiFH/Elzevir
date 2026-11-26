@@ -278,7 +278,7 @@ fn item_information_gives_the_status_or_an_unknown_barcode() {
         fee: None,
         owner: Some("Central".to_owned()),
         hold_queue_length: 1,
-        due: Some(date(2026, 12, 10)),
+        due: Some(date(2026, 12, 10).at(23, 59, 0, 0)),
         hold_pickup_date: None,
         screen_message: None,
         print_line: None,
@@ -332,7 +332,7 @@ fn a_checkout_answers_the_loan_or_the_refusal() {
         magnetic_media: false,
         desensitize: true,
         title: "Contos do sertão".to_owned(),
-        due: Some(date(2026, 12, 10)),
+        due: Some(date(2026, 12, 10).at(23, 59, 0, 0)),
         screen_message: None,
         print_line: None,
         media_type: Some("001".to_owned()),
@@ -420,7 +420,7 @@ fn a_renewal_and_the_end_of_a_session() {
         patron_id: "0001".to_owned(),
         item_id: "1001".to_owned(),
         title: "Contos do sertão".to_owned(),
-        due: Some(date(2026, 12, 24)),
+        due: Some(date(2026, 12, 24).at(18, 30, 0, 0)),
         magnetic_media: false,
         desensitize: true,
         media_type: String::new(),
@@ -429,7 +429,7 @@ fn a_renewal_and_the_end_of_a_session() {
     assert_eq!(
         renew(Ok(renewed)),
         format!(
-            "301YNY{NOW}AA0001|AB1001|AJContos do sertão|AH20261224    235900|CK|AOCentral|AFItem renewed|"
+            "301YNY{NOW}AA0001|AB1001|AJContos do sertão|AH20261224    183000|CK|AOCentral|AFItem renewed|"
         )
     );
     let refused = RenewRefused {
@@ -446,11 +446,11 @@ fn a_renewal_and_the_end_of_a_session() {
         now: now(),
         institution: "Central".to_owned(),
         patron_id: "0001".to_owned(),
-        screen_message: Some("Thank you !".to_owned()),
+        screen_message: Some("Thank you!".to_owned()),
         print_line: None,
     });
     assert_eq!(
         end.encode(Version::V2),
-        format!("36Y{NOW}AOCentral|AA0001|AFThank you !|")
+        format!("36Y{NOW}AOCentral|AA0001|AFThank you!|")
     );
 }

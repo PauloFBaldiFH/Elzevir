@@ -64,6 +64,7 @@ mod runtime_info;
 mod server_config;
 mod service;
 mod shutdown;
+mod sip2_server;
 mod status;
 mod support_archive;
 mod tools_cli;
@@ -533,6 +534,17 @@ impl Background {
     }
 }
 
+/// Shuts the store down once nothing else holds it, with its final checkpoint.
+fn close_store(store: Arc<ElzevirStore>) -> Result<(), String> {
+    Arc::try_unwrap(store)
+        .map_err(|_| "database still in use during shutdown".to_owned())
+        .and_then(|store| {
+            store
+                .shutdown()
+                .map_err(|_| "database shutdown/checkpoint failed".to_owned())
+        })
+}
+
 fn serve(settings: &server_config::Settings) -> Result<(), String> {
     serve_controlled(settings, &shutdown::Control::default(), || Ok(()))
 }
@@ -601,6 +613,12 @@ fn serve_controlled(
             &settings.lang,
             draft_search::ScreenSources::new(drafts, authorities, &instance)?,
         )?;
+        let sip2 = sip2_server::open(
+            loaded.sip2.as_ref(),
+            &store,
+            &background.time_zone,
+            &instance,
+        )?;
         let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
         let runs = background.spawn(&runtime, &store, &settings.lang, (&instance, control))?;
         let result = runtime.block_on(run_http(
@@ -616,19 +634,13 @@ fn serve_controlled(
             run.abort();
         }
         drop(indexer);
+        drop(sip2);
         // Runtime drop waits for blocking reads; keep the institution lock until all
         // readers are gone and the existing writer has reported its final checkpoint.
         drop(runtime);
         operations.finish()?;
         drop(probe);
-        let closed = Arc::try_unwrap(store)
-            .map_err(|_| "database still in use during shutdown".to_owned())
-            .and_then(|store| {
-                store
-                    .shutdown()
-                    .map_err(|_| "database shutdown/checkpoint failed".to_owned())
-            });
-        result.and(closed)
+        result.and(close_store(store))
     })();
     logging::emit(
         &instance,

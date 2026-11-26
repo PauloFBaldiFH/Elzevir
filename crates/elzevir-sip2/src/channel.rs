@@ -67,6 +67,11 @@ impl Channel {
         }
     }
 
+    /// Ends the next responses with `terminator` (the terminal signed in).
+    pub const fn set_terminator(&mut self, terminator: Terminator) {
+        self.terminator = terminator;
+    }
+
     /// The protocol version now.
     #[must_use]
     pub const fn version(&self) -> Version {
@@ -121,6 +126,13 @@ impl Channel {
     pub fn reply(&mut self, response: &Response) -> Vec<u8> {
         let text = response.encode(self.version);
         self.write(text)
+    }
+
+    /// `96`, written as Koha writes it outside a handler: when the server cannot answer
+    /// the message read (storage failed).
+    pub fn ask_again(&mut self) -> Vec<u8> {
+        self.last_response = Some(RESEND_PLEASE.to_owned());
+        raw(RESEND_PLEASE)
     }
 
     /// The last response again (`97`).

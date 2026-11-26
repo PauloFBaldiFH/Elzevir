@@ -58,6 +58,12 @@ pub(crate) enum Event {
     },
 }
 
+/// Records a message a SIP2 terminal sent (docs/specs/circulacao/sip2.md, item 30): no
+/// password, card or barcode.
+pub(crate) fn sip2_message(instance: &str, terminal: &str, message: &str, outcome: &str) {
+    tracing::info!(target: TARGET, institution = "local", instance, event = "sip2.message", terminal, message, outcome, "SIP2 message");
+}
+
 /// Records a known event with the identity generated for this execution.
 pub(crate) fn emit(instance: &str, event: Event) {
     match event {

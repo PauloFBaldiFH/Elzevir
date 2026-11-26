@@ -10,6 +10,7 @@ publish.workspace = true
 
 [dependencies]
 elzevir-app.workspace = true
+elzevir-domain.workspace = true
 jiff.workspace = true
 thiserror.workspace = true
 
