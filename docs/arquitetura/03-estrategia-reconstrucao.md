@@ -420,6 +420,28 @@ Plano registrado em 2026-11-21, depois da Fase 3. Ficam pendentes da Fase 3 o mo
 
 Ordem: 4.1 a 4.3 em sequência, 4.4 depois da 4.2; 4.5 a 4.9 em seguida, na ordem que Paulo escolher.
 
+### Fase 5: migração do Koha e operação da biblioteca (proposta)
+
+> **Proposta de 2026-11-26, aguardando a aprovação de Paulo.** As Fases 0 a 4 estão concluídas, com as pendências da Fase 3 (PRs #258 e #259). Nada desta fase começa antes da aprovação.
+
+Com o catálogo, a circulação e a interoperabilidade prontos, o que falta para uma biblioteca trocar o Koha pelo Elzevir é **trazer os dados vivos** (leitores, empréstimos, reservas, débitos) e as ferramentas do dia a dia que o Koha tem e o Elzevir ainda não tem. Periódicos e aquisições ficam fora desta proposta, para Paulo decidir se entram numa Fase 6 (seção abaixo da tabela).
+
+| # | Tarefa | Referência | Pronto quando |
+|---|---|---|---|
+| 5.1 | Migrador Koha → Elzevir, parte 1: unidades, categorias, leitores (com senha do OPAC, consentimento do histórico e restrições) a partir de um dump do Koha 26.05 | Koha: `borrowers`, `categories`, `branches`, `borrower_debarments`; doc 03 §3.4 (só Koha 26.05; versões antigas passam antes pelo atualizador do Koha) | O dump do oráculo migra sem perda nos campos que o Elzevir guarda, com relatório do que ficou de fora; os testes usam leitores fictícios |
+| 5.2 | Migrador, parte 2: empréstimos em aberto, reservas (fila e separadas), débitos e créditos, histórico de leitura só de quem consentiu | Koha: `issues`, `reserves`, `accountlines`, `old_issues`, `privacy` | Depois da migração, os cenários de vencimento, multa e fila dão o mesmo resultado no Elzevir e no oráculo para os mesmos leitores e exemplares |
+| 5.3 | Preferências do Koha para o `elzevir.toml` (`elzevir import-koha-prefs`), com `[koha_legado]` para revisão e a página "cada syspref ao lado do seu campo" | doc 03 §3.4; `tools/sysprefs-triage.json` | As preferências do oráculo viram um `elzevir.toml` válido e o resto aparece listado para revisão |
+| 5.4 | Ferramentas LGPD: anonimizar leitor (também nos registros do `audit_log`), exportar os dados de um leitor, prazo de retenção do histórico e dos leitores inativos | Koha: `batch_anonymise.pl`, `cleanup_database.pl`, `GDPR_Policy`; interface §18.4 | Anonimizar remove o leitor de todas as tabelas e logs e mantém as estatísticas; a exportação traz tudo o que o Elzevir guarda dele |
+| 5.5 | Inventário por leitura de código de barras: lista por unidade, localização e faixa de chamada, marca "visto em", aponta perdidos e fora do lugar | Koha: `tools/inventory.pl` | Uma leitura de prateleira gera o relatório de não vistos, fora do lugar e emprestados, e a marca de visto fica no exemplar |
+| 5.6 | Etiquetas de lombada e carteirinhas em Typst (já previstas no doc 03 §3.4), a partir da seleção do acervo e da lista de leitores | Koha: `labels/`, `patroncards/` | A seleção imprime etiquetas com o número de chamada PHA e carteirinhas com código de barras, em modelos editáveis |
+| 5.7 | Relatórios e estatísticas fixos: circulação por período, unidade e categoria; acervo por classe e material; leitores ativos; exportação em CSV | Koha: `reports/` (relatórios prontos, não SQL livre) | Cada relatório bate com a contagem direta no banco de teste e sai em CSV |
+
+Ordem proposta: 5.1 e 5.2 primeiro, porque destravam a troca do Koha na biblioteca de Paulo; depois 5.4 (LGPD, antes de dados reais entrarem), 5.5, 5.6, 5.7 e 5.3.
+
+**Para Paulo decidir (Fase 6 ou não):**
+- **Periódicos** (assinaturas, previsão de fascículos, recebimento e cobrança): já sugerido para a v1 em 2026-11-15, ainda pendente.
+- **Aquisições** (sugestões dos leitores, orçamento e pedidos): o Koha tem um módulo grande; uma versão mínima seria sugestões do leitor e registro de pedidos.
+
 ### Ordem e trilha crítica
 
 ```mermaid
