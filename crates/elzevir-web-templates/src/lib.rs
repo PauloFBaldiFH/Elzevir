@@ -96,8 +96,9 @@ pub use staff_patrons::{
 };
 pub use staff_record_fields::{FieldEntry, FieldGroup, FieldValue, ItemFields, RecordFields};
 pub use staff_record_form::{
-    AuthorityNote, ColumnKind, FormCell, FormColumn, FormField, FormInput, FormOption, FormPart,
-    FormSection, History, HistoryLine, IdentifierChip, NewRecordForm, RecordForm,
+    AuthorityNote, ColumnKind, DraftAnswer, DraftLine, DraftNote, DraftOutcome, DraftStation,
+    FormCell, FormColumn, FormField, FormInput, FormOption, FormPart, FormSection, History,
+    HistoryLine, IdentifierChip, NewRecordForm, RecordForm,
 };
 pub use staff_registries::{BranchPart, RegistryRow, StaffRegistries};
 
@@ -537,6 +538,7 @@ mod tests {
             include_str!("../templates/staff_record_fields.html"),
             include_str!("../templates/staff_record_form.html"),
             include_str!("../templates/staff_new_record.html"),
+            include_str!("../templates/staff_draft_answer.html"),
             include_str!("../templates/staff_item_grid.html"),
             include_str!("../templates/staff_form_field.html"),
             include_str!("../templates/staff_registries.html"),

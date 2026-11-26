@@ -16,8 +16,13 @@ use elzevir_app::catalog::{
     InstanceView, ItemData, ItemStatus, ItemView, NewContribution, NewIdentifier, NewInstance,
     NewNote, NewRecord,
 };
+use elzevir_app::drafts::{
+    Draft, DraftQuery, DraftSource, DraftSummary, SourceOutcome, SourceResult,
+};
+use elzevir_app::editing::Edit;
 use elzevir_app::export::StoredRecord;
 use elzevir_app::listing::{Family, FamilyCursor, FamilyHead, FamilyInstance, FamilyWork};
+use elzevir_app::marc_mapping::bibframe_to_marc;
 use elzevir_app::material::{ContentKind, Material};
 use elzevir_app::memory::{MemoryProbe, MemoryReport};
 use elzevir_app::search::SearchHit;
@@ -219,6 +224,10 @@ fn catalog_with_record() -> common::Catalog {
 }
 
 fn app() -> Router {
+    router(state(Arc::new(common::Editor::default())))
+}
+
+fn state(editor: Arc<common::Editor>) -> AppState {
     let accounts = Accounts(vec![
         StaffAccount {
             id: StaffId(1),
@@ -239,7 +248,7 @@ fn app() -> Router {
             _ => family(n, &format!("Livro {n:03}"), false),
         })
         .collect();
-    router(AppState::new(
+    AppState::new(
         Arc::new(accounts),
         Arc::new(NoCounters),
         OpacPorts {
@@ -249,7 +258,7 @@ fn app() -> Router {
         StaffPorts {
             listing: Arc::new(common::Families(families)),
             records: Arc::new(common::Records(vec![stored(10)])),
-            editor: Arc::new(common::Editor::default()),
+            editor: editor as _,
             suggestions: Arc::new(common::Suggestions),
             items: Arc::new(common::ItemGrid),
             statements: Arc::new(common::Statements),
@@ -268,7 +277,7 @@ fn app() -> Router {
             )),
             ..WebConfig::default()
         },
-    ))
+    )
 }
 
 async fn send(app: &Router, request: Request<Body>) -> Response<Body> {
@@ -1928,4 +1937,226 @@ async fn a_cataloguer_renames_a_subject_from_the_authorities_column() {
     )
     .await;
     assert_eq!(body(saved).await, r#"{"version":2}"#);
+}
+
+/// Two made-up sources: `Exemplo` finds one draft of Instance 10's record (25 in all), and
+/// `Fora` never answers.
+struct Sources;
+
+impl DraftSource for Sources {
+    fn search(&self, query: &DraftQuery, page: u32) -> Vec<SourceResult> {
+        (0..2)
+            .filter_map(|index| self.search_one(index, query, page))
+            .collect()
+    }
+
+    fn sources(&self) -> Vec<String> {
+        vec!["Exemplo".to_owned(), "Fora".to_owned()]
+    }
+
+    fn search_one(&self, index: usize, _: &DraftQuery, _: u32) -> Option<SourceResult> {
+        let record = bibframe_to_marc(&stored(10).record, None);
+        let outcome = match index {
+            0 => SourceOutcome::Found {
+                total: 25,
+                drafts: vec![Draft {
+                    origin: "sru:Exemplo".to_owned(),
+                    summary: DraftSummary::of(&record).unwrap(),
+                    record,
+                }],
+                skipped: 0,
+            },
+            1 => SourceOutcome::NoResponse,
+            _ => return None,
+        };
+        Some(SourceResult {
+            source: self.sources().get(index)?.clone(),
+            outcome,
+        })
+    }
+}
+
+fn station_app() -> (Router, Arc<common::Editor>) {
+    let editor = Arc::new(common::Editor::default());
+    let app = router(state(Arc::clone(&editor)).with_draft_sources(Arc::new(Sources)));
+    (app, editor)
+}
+
+/// The key of the draft `Exemplo` finds.
+async fn draft_key(app: &Router, session: &str) -> String {
+    let found = body(
+        send(
+            app,
+            get(
+                "/equipe/acervo/fontes/0?isbn=9788535910667",
+                Some(session),
+                None,
+            ),
+        )
+        .await,
+    )
+    .await;
+    found
+        .split(r#"data-draft=""#)
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .unwrap()
+        .to_owned()
+}
+
+#[tokio::test]
+async fn the_capture_station_asks_each_source_on_its_own() {
+    // Without sources there is no station.
+    let plain = app();
+    let ana = signed_in(&plain).await;
+    let form = body(send(&plain, get("/equipe/acervo/nova", Some(&ana), None)).await).await;
+    assert!(!form.contains("draft-open"));
+    let none = send(
+        &plain,
+        get("/equipe/acervo/fontes/0?isbn=1", Some(&ana), None),
+    )
+    .await;
+    assert_eq!(none.status(), StatusCode::NOT_FOUND);
+
+    let (app, _) = station_app();
+    let ana = signed_in(&app).await;
+    let bia = signed_in_as(&app, "bia").await;
+    let form = body(send(&app, get("/equipe/acervo/nova", Some(&ana), None)).await).await;
+    assert!(form.contains(r#"data-action="draft-open""#));
+    assert!(form.contains(r#"<h4 class="draft-source-name">Exemplo</h4>"#));
+    assert!(!form.contains("data-auto"));
+    // A scanned ISBN the catalog lacks opens the station and searches at once (item 6).
+    let scanned = body(
+        send(
+            &app,
+            get("/equipe/acervo/nova?isbn=85-359-0277-5", Some(&ana), None),
+        )
+        .await,
+    )
+    .await;
+    assert!(scanned.contains(r#"class="draft-station" data-auto hidden"#));
+    assert!(scanned.contains(r#"name="isbn" value="9788535902778""#));
+
+    let anonymous = send(&app, get("/equipe/acervo/fontes/0?isbn=1", None, None)).await;
+    assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
+    let reader = send(
+        &app,
+        get("/equipe/acervo/fontes/0?isbn=1", Some(&bia), None),
+    )
+    .await;
+    assert_eq!(reader.status(), StatusCode::FORBIDDEN);
+    let empty = send(
+        &app,
+        get("/equipe/acervo/fontes/0?title=+", Some(&ana), None),
+    )
+    .await;
+    assert_eq!(empty.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body(empty).await, "Fill in at least one field.");
+
+    let found = body(
+        send(
+            &app,
+            get(
+                "/equipe/acervo/fontes/0?isbn=9788535910667",
+                Some(&ana),
+                None,
+            ),
+        )
+        .await,
+    )
+    .await;
+    assert!(found.contains("25 found"), "{found}");
+    assert!(found.contains(r#"<span class="draft-title">Dom Casmurro</span>"#));
+    assert!(found.contains("ISBN 9788535910667"));
+    assert!(found.contains(r#"data-action="draft-approve" data-draft=""#));
+    assert!(found.contains(r#"data-action="draft-more" data-page="2""#));
+    let silent = body(
+        send(
+            &app,
+            get("/equipe/acervo/fontes/1?isbn=1", Some(&ana), None),
+        )
+        .await,
+    )
+    .await;
+    assert!(silent.contains("No response."));
+    let missing = send(
+        &app,
+        get("/equipe/acervo/fontes/2?isbn=1", Some(&ana), None),
+    )
+    .await;
+    assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn an_approved_draft_fills_the_new_family_and_is_stored_only_on_create() {
+    let (app, editor) = station_app();
+    let ana = signed_in(&app).await;
+    let key = draft_key(&app, &ana).await;
+    // Approving fills the form; the ISBN the catalog has leads to its grid (item 12).
+    let drafted = body(
+        send(
+            &app,
+            get(
+                &format!("/equipe/acervo/nova?rascunho={key}"),
+                Some(&ana),
+                None,
+            ),
+        )
+        .await,
+    )
+    .await;
+    assert!(drafted.contains(&format!(r#"class="draft-note" data-draft="{key}""#)));
+    assert!(drafted.contains("Draft from Exemplo"));
+    assert!(drafted.contains(
+        r#"This catalog already has ISBN 9788535910667. <a href="/equipe/acervo?q=9788535910667">"#
+    ));
+    assert!(drafted.contains(r#"value="Dom Casmurro""#));
+    let expired = send(
+        &app,
+        get("/equipe/acervo/nova?rascunho=nope", Some(&ana), None),
+    )
+    .await;
+    assert_eq!(expired.status(), StatusCode::NOT_FOUND);
+    assert!(
+        editor.0.lock().unwrap().is_empty(),
+        "nothing stored before Create"
+    );
+
+    // Creating keeps the record as received, with its origin (item 13).
+    let token = page_token(&app, &ana).await;
+    let family = format!(
+        r#"{{"work": [{{"Title": "Dom Casmurro"}}, {{"Classes": [{{"class": "Text"}}]}}], "instance": [], "draft": "{key}"}}"#
+    );
+    let created = send(
+        &app,
+        post_json("/equipe/acervo/nova", Some(&ana), Some(&token), &family),
+    )
+    .await;
+    assert_eq!(created.status(), StatusCode::CREATED);
+    {
+        let edits = editor.0.lock().unwrap();
+        let Some((_, Edit::NewRecord(record))) = edits.last() else {
+            panic!("no new record");
+        };
+        assert_eq!(record.instance.origin.as_deref(), Some("sru:Exemplo"));
+        assert!(
+            record
+                .source
+                .as_ref()
+                .is_some_and(|source| !source.is_empty())
+        );
+        assert!(record.items.is_empty());
+    }
+    let stale = family.replace(&key, "nope");
+    let refused = send(
+        &app,
+        post_json("/equipe/acervo/nova", Some(&ana), Some(&token), &stale),
+    )
+    .await;
+    assert_eq!(refused.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(
+        body(refused)
+            .await
+            .contains(r#""field":"draft","key":"draft-expired""#)
+    );
 }

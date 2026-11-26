@@ -1,0 +1,24 @@
+{% match outcome %}
+{% when DraftOutcome::Found with { total, drafts, skipped, next_page } %}
+<p class="draft-status">{{ total }}</p>
+<ul class="draft-list">
+  {% for draft in drafts %}
+  <li class="draft">
+    <div class="draft-text">
+      <span class="draft-title">{{ draft.title }}</span>
+      {% if !draft.details.is_empty() %}<span class="draft-details">{{ draft.details }}</span>{% endif %}
+      {% if !draft.isbns.is_empty() %}<span class="draft-isbns">ISBN {{ draft.isbns }}</span>{% endif %}
+    </div>
+    <button type="button" data-action="draft-approve" data-draft="{{ draft.key }}">{{ t.get("draft-approve") }}</button>
+  </li>
+  {% endfor %}
+</ul>
+{% if *skipped > 0 %}<p class="draft-status">{{ t.get("draft-unreadable") }} {{ skipped }}</p>{% endif %}
+{% if let Some(page) = next_page %}<button type="button" data-action="draft-more" data-page="{{ page }}">{{ t.get("draft-next") }}</button>{% endif %}
+{% when DraftOutcome::Nothing %}
+<p class="draft-status">{{ t.get("draft-nothing") }}</p>
+{% when DraftOutcome::NoResponse %}
+<p class="draft-status draft-silent">{{ t.get("draft-no-response") }}</p>
+{% when DraftOutcome::Refused with (message) %}
+<p class="draft-status draft-refused">{{ t.get("draft-refused") }} {{ message }}</p>
+{% endmatch %}

@@ -186,4 +186,19 @@ impl<T: Transport> DraftSource for SruSources<T> {
                 .collect()
         })
     }
+
+    fn sources(&self) -> Vec<String> {
+        self.servers
+            .iter()
+            .map(|server| server.name.clone())
+            .collect()
+    }
+
+    fn search_one(&self, index: usize, query: &DraftQuery, page: u32) -> Option<SourceResult> {
+        let server = self.servers.get(index)?;
+        Some(SourceResult {
+            source: server.name.clone(),
+            outcome: self.ask(server, query, page),
+        })
+    }
 }

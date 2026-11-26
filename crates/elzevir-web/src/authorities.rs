@@ -250,6 +250,8 @@ pub(crate) async fn link_form(
                 fields: vec![link_field(t)],
             }],
         }],
+        station: None,
+        draft: None,
     })
 }
 

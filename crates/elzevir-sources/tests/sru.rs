@@ -119,6 +119,13 @@ fn a_search_brings_each_servers_drafts_with_their_origin() {
         .map(|result| result.source.as_str())
         .collect();
     assert_eq!(names, ["Exemplo", "Lenta", "Recusa", "Fora", "Vazia"]);
+    assert_eq!(asked.sources(), names);
+    // One server alone answers as it does among the others.
+    assert_eq!(
+        asked.search_one(2, &isbn_and_title(), 2).as_ref(),
+        results.get(2)
+    );
+    assert_eq!(asked.search_one(5, &isbn_and_title(), 2), None);
 
     let SourceOutcome::Found {
         total,

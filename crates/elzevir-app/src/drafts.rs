@@ -4,9 +4,10 @@
 //! is stored until it is approved.
 
 use elzevir_domain::catalog::IdentifierKind;
-use elzevir_marc::Record;
+use elzevir_marc::{Field, Record, WriteError};
 
-use crate::marc_mapping::marc_to_bibframe;
+use crate::catalog::{NewRecord, RecordItems};
+use crate::marc_mapping::{MappingError, marc_to_bibframe};
 
 /// Most characters of one query value.
 pub const MAX_QUERY_VALUE_CHARS: usize = 256;
@@ -151,11 +152,11 @@ pub struct DraftSummary {
 }
 
 impl DraftSummary {
-    /// The summary of a MARC21 record, by the same mapping as the import. A record the
-    /// mapping refuses has no summary.
+    /// The summary of a MARC21 record, by the same mapping as the import, without the
+    /// source library's `9XX` fields. A record the mapping refuses has no summary.
     #[must_use]
     pub fn of(record: &Record) -> Option<Self> {
-        let mapped = marc_to_bibframe(record, None).ok()?;
+        let mapped = marc_to_bibframe(&without_local_fields(record), None).ok()?;
         let instance = mapped.instance;
         let publication = [&instance.place, &instance.publisher, &instance.date]
             .into_iter()
@@ -227,11 +228,104 @@ pub trait DraftSource: Send + Sync {
     /// Asks every enabled server for page `page` (from 1) of `query`, in parallel, and
     /// answers in the configured order once each one answered or ran out of time.
     fn search(&self, query: &DraftQuery, page: u32) -> Vec<SourceResult>;
+
+    /// The enabled servers' names, in the configured order.
+    fn sources(&self) -> Vec<String>;
+
+    /// Asks server `index` (from 0, in the configured order) alone, so that a screen can
+    /// show each answer as it arrives (estacao-de-captura.md, item 4). `None` when there
+    /// is no such server.
+    fn search_one(&self, index: usize, query: &DraftQuery, page: u32) -> Option<SourceResult>;
+}
+
+/// Why an approved draft cannot become a new record.
+#[derive(Debug, thiserror::Error)]
+pub enum ApprovalError {
+    /// The mapping refuses the record.
+    #[error(transparent)]
+    Mapping(#[from] MappingError),
+    /// The record cannot be written as ISO 2709.
+    #[error(transparent)]
+    Write(#[from] WriteError),
+}
+
+/// The new family an approved draft starts (estacao-de-captura.md, items 11 and 13): the
+/// record's mapping without the source library's local `9XX` fields and without Items,
+/// with the record, also without `9XX`, as its source and the draft's origin as the
+/// Instance's.
+///
+/// # Errors
+///
+/// When the mapping refuses the record, or it cannot be written as ISO 2709.
+pub fn approved(draft: &Draft) -> Result<NewRecord, ApprovalError> {
+    let record = without_local_fields(&draft.record);
+    let mut source = Vec::new();
+    record.write_iso2709(&mut source)?;
+    let mut new = marc_to_bibframe(&record, Some(source))?;
+    new.items = RecordItems::default();
+    new.instance.origin = Some(draft.origin.clone());
+    Ok(new)
+}
+
+/// `record` without its `9XX` fields: the holdings, types and record number of the
+/// library the draft came from, which describe its collection rather than the book (and
+/// whose incomplete `952` would make the mapping refuse the record).
+fn without_local_fields(record: &Record) -> Record {
+    let mut record = record.clone();
+    record
+        .fields
+        .retain(|field: &Field| field.tag().as_bytes().first() != Some(&b'9'));
+    record
 }
 
 #[cfg(test)]
 mod tests {
+    use elzevir_marc::{Subfield, Tag};
+
     use super::*;
+
+    fn data(tag: [u8; 3], subfields: &[(u8, &str)]) -> Field {
+        Field::Data {
+            tag: Tag::new(tag),
+            indicators: *b"  ",
+            subfields: subfields
+                .iter()
+                .map(|(code, value)| Subfield {
+                    code: *code,
+                    value: value.as_bytes().to_vec(),
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn an_approved_draft_leaves_the_source_librarys_local_fields_behind() {
+        let record = Record {
+            leader: *b"00000nam a2200000 a 4500",
+            fields: vec![
+                data(*b"020", &[(b'a', "9780000000002")]),
+                data(*b"245", &[(b'a', "O rio das águas claras")]),
+                data(*b"942", &[(b'c', "BK")]),
+                data(*b"952", &[(b'p', "000123"), (b'y', "BK")]),
+                data(*b"999", &[(b'c', "4321")]),
+            ],
+        };
+        let summary = DraftSummary::of(&record).unwrap();
+        let draft = Draft {
+            origin: "sru:Exemplo".to_owned(),
+            record,
+            summary,
+        };
+        let new = approved(&draft).unwrap();
+        assert_eq!(new.instance.origin.as_deref(), Some("sru:Exemplo"));
+        assert!(new.items.is_empty());
+        assert_eq!(new.instance.title, "O rio das águas claras");
+        let source = new.source.unwrap();
+        let kept =
+            elzevir_marc::RecordRef::parse(&source, &elzevir_marc::Limits::default()).unwrap();
+        let tags: Vec<_> = kept.fields().map(|field| *field.tag().as_bytes()).collect();
+        assert_eq!(tags, [*b"020", *b"245"]);
+    }
 
     #[test]
     fn a_query_keeps_filled_fields_in_koha_order_and_normalises_the_isbn() {

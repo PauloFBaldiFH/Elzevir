@@ -2,6 +2,37 @@
       data-failed="{{ t.get("edit-failed") }}" data-new-entity="{{ t.get("edit-new-entity") }}" novalidate>
   <h2 class="new-record-heading">{{ t.get(heading_key) }}</h2>
   <p class="form-alert" role="alert" hidden></p>
+  {% if let Some(draft) = draft %}
+  <div class="draft-note" data-draft="{{ draft.key }}">
+    <p>{{ t.get("draft-from") }} {{ draft.source }}</p>
+    {% for isbn in draft.duplicates %}
+    <p class="draft-duplicate">{{ t.get("draft-duplicate") }} {{ isbn }}. <a href="/equipe/acervo?q={{ isbn }}">{{ t.get("draft-duplicate-open") }}</a></p>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if let Some(station) = station %}
+  <div class="draft-tools"><button type="button" data-action="draft-open">{{ t.get("draft-open") }}</button></div>
+  <section class="draft-station"{% if station.auto %} data-auto{% endif %} hidden>
+    <h3 class="form-part-heading">{{ t.get("draft-heading") }}</h3>
+    <div class="draft-query">
+      <label>{{ t.get("draft-isbn") }} <input type="text" name="isbn" value="{{ station.isbn }}" maxlength="256" autocomplete="off"></label>
+      <label>{{ t.get("draft-title") }} <input type="text" name="title" maxlength="256" autocomplete="off"></label>
+      <label>{{ t.get("draft-author") }} <input type="text" name="author" maxlength="256" autocomplete="off"></label>
+      <label>{{ t.get("draft-any") }} <input type="text" name="any" maxlength="256" autocomplete="off"></label>
+      <button type="button" data-action="draft-search">{{ t.get("draft-search") }}</button>
+      <button type="button" data-action="draft-back">{{ t.get("draft-back") }}</button>
+    </div>
+    <p class="draft-query-error" role="alert" hidden></p>
+    <ol class="draft-sources" data-waiting="{{ t.get("draft-waiting") }}" data-failed="{{ t.get("draft-failed") }}">
+      {% for source in station.sources %}
+      <li class="draft-source" data-source="{{ loop.index0 }}">
+        <h4 class="draft-source-name">{{ source }}</h4>
+        <div class="draft-answer" aria-live="polite"></div>
+      </li>
+      {% endfor %}
+    </ol>
+  </section>
+  {% endif %}
   {% for part in parts %}
   <section class="form-part" data-part="{{ part.name }}">
     {% if parts.len() > 1 %}<h3 class="form-part-heading">{{ t.get(part.heading_key) }}</h3>{% endif %}

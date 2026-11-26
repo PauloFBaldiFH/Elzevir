@@ -17,6 +17,7 @@ mod circulation;
 mod circulation_rules;
 mod creating;
 mod described;
+mod draft_station;
 mod editing;
 mod facets;
 mod form_sections;
@@ -116,6 +117,7 @@ pub struct AppState {
     board: Option<Arc<dyn elzevir_app::board::NoticeBoard>>,
     pending: Option<Arc<dyn elzevir_app::pending::PendingReader>>,
     accounts: Option<Arc<dyn elzevir_app::patron_account::PatronAccounts>>,
+    drafts: Option<Arc<draft_station::Drafts>>,
 }
 
 struct Inner {
@@ -160,6 +162,7 @@ impl AppState {
             board: None,
             pending: None,
             accounts: None,
+            drafts: None,
             inner: Arc::new(Inner {
                 staff,
                 memory,
@@ -273,6 +276,16 @@ impl AppState {
     }
 }
 
+impl AppState {
+    /// Connects the institution's draft sources (docs/specs/catalogo/estacao-de-captura.md).
+    /// Without them the new family's form has no capture station and its routes answer 404.
+    #[must_use]
+    pub fn with_draft_sources(mut self, source: Arc<dyn elzevir_app::drafts::DraftSource>) -> Self {
+        self.drafts = Some(Arc::new(draft_station::Drafts::new(source)));
+        self
+    }
+}
+
 /// All routes, with security headers on every response.
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -318,6 +331,7 @@ pub fn router(state: AppState) -> Router {
             get(editing::suggest_subjects),
         )
         .route("/equipe/acervo/isbn", get(editing::check_isbn_field))
+        .route("/equipe/acervo/fontes/{n}", get(draft_station::answer))
         .route(
             "/equipe/acervo/nova",
             get(new_record::new_family).post(creating::create_family),

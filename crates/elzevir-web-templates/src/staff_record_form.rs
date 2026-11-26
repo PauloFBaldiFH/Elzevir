@@ -127,6 +127,78 @@ pub struct NewRecordForm<'a> {
     pub submit_key: &'static str,
     /// The blocks being created, in order.
     pub parts: Vec<FormPart>,
+    /// The capture station, when draft sources are configured
+    /// (docs/specs/catalogo/estacao-de-captura.md, items 1 to 6).
+    pub station: Option<DraftStation>,
+    /// The approved draft the form was filled from (items 11 and 12).
+    pub draft: Option<DraftNote>,
+}
+
+/// The capture station of a new family's form.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DraftStation {
+    /// The sources' names, in the configured order.
+    pub sources: Vec<String>,
+    /// The ISBN the search starts with.
+    pub isbn: String,
+    /// Whether the station opens and searches at once (a scanned ISBN, item 6).
+    pub auto: bool,
+}
+
+/// The approved draft behind a new family's form.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DraftNote {
+    /// The key the creation sends back.
+    pub key: String,
+    /// The source's name.
+    pub source: String,
+    /// ISBNs of the draft the catalog already has, as 13 digits.
+    pub duplicates: Vec<String>,
+}
+
+/// One source's answer in the capture station (item 5).
+#[derive(Template)]
+#[template(path = "staff_draft_answer.html")]
+pub struct DraftAnswer<'a> {
+    /// Interface texts.
+    pub t: &'a I18n,
+    /// What the source answered.
+    pub outcome: DraftOutcome,
+}
+
+/// What one source answered, as the station shows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DraftOutcome {
+    /// Drafts found.
+    Found {
+        /// "N found", in the interface's language.
+        total: String,
+        /// The page's drafts.
+        drafts: Vec<DraftLine>,
+        /// Records of the page that could not be read.
+        skipped: u32,
+        /// The next page, when there is one.
+        next_page: Option<u32>,
+    },
+    /// The source has nothing for the query.
+    Nothing,
+    /// No answer in time.
+    NoResponse,
+    /// The source refused, with its message.
+    Refused(String),
+}
+
+/// One draft in the station's list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DraftLine {
+    /// The key "Approve" sends.
+    pub key: String,
+    /// Title and statement of responsibility.
+    pub title: String,
+    /// Author, edition and publication, joined.
+    pub details: String,
+    /// ISBNs, joined.
+    pub isbns: String,
 }
 
 /// The fields of one block of a new record: every field of the entity, by section.
