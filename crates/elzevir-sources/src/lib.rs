@@ -4,8 +4,10 @@
 //! is a port of its own, so this crate holds the protocol and nothing that talks to the
 //! network; the binary gives it the TLS client.
 
+pub mod ber;
 mod cql;
 mod response;
+pub mod z3950;
 
 use std::collections::HashMap;
 use std::time::Duration;
