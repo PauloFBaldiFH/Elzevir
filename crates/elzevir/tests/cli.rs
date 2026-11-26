@@ -176,3 +176,56 @@ fn a_data_directory_in_use_is_refused() {
             .success()
     );
 }
+
+#[test]
+fn a_koha_dump_brings_its_patrons_once() {
+    // docs/specs/migracao/leitores-do-koha.md: the dump as `koha-dump` writes it, gzipped.
+    let dump = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../elzevir-app/tests/data/koha-patrons.sql"
+    ))
+    .unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let gz = path(dir.path(), "library-2026-11-26.sql.gz");
+    let mut encoder = flate2::write::GzEncoder::new(
+        std::fs::File::create(&gz).unwrap(),
+        flate2::Compression::fast(),
+    );
+    std::io::Write::write_all(&mut encoder, &dump).unwrap();
+    encoder.finish().unwrap();
+    let data = path(dir.path(), "data");
+    let first = elzevir(&["migrate-koha", "--data-dir", &data, &gz]);
+    assert!(first.status.success(), "{}", text(&first.stderr));
+    let report = text(&first.stdout);
+    for line in [
+        "branches: 2 created, 0 updated",
+        "patron categories: 3 created, 0 found by name, 1 with the default period of 12 months",
+        "patrons: 3 migrated, 0 already migrated, 3 left out, 1 with staff permissions in Koha",
+        "  borrowernumber 3: no card number, or a longer one than 32 characters",
+        "  borrowernumber 4: branchcode not in branches",
+        "  borrowernumber 5: categorycode not in categories",
+        "restrictions: 2 migrated, 1 already ended",
+        "  email: 1",
+        "  userid: 2",
+    ] {
+        assert!(
+            report.lines().any(|found| found == line),
+            "{line} not in\n{report}"
+        );
+    }
+    // No name, card number or address of a patron reaches the report.
+    for private in ["Silva", "A0001", "Acácias", "ana@example.org"] {
+        assert!(!report.contains(private), "{private} in the report");
+    }
+    let again = elzevir(&["migrate-koha", "--data-dir", &data, &gz]);
+    assert!(text(&again.stdout).contains("patrons: 0 migrated, 3 already migrated"));
+    let broken = path(dir.path(), "broken.sql");
+    std::fs::write(
+        &broken,
+        "CREATE TABLE `branches` (`branchcode` varchar(10));\n",
+    )
+    .unwrap();
+    let refused = elzevir(&["migrate-koha", "--data-dir", &data, &broken]);
+    assert!(!refused.status.success());
+    assert!(text(&refused.stderr).contains("no Koha patrons in this dump"));
+}

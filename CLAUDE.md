@@ -8,7 +8,7 @@ O Elzevir é um sistema de bibliotecas em Rust que reconstrói o **comportamento
 
 ## Estado atual
 
-- **Fases 0 a 4 concluídas** (até o PR #259, 2026-11-26), com as pendências da Fase 3 (modo completo do acervo e "Mostrar CPF"). O plano e o critério de pronto de cada tarefa estão no [doc 03](docs/arquitetura/03-estrategia-reconstrucao.md), §4; a próxima fase só começa depois de Paulo aprovar o plano dela no doc 03.
+- **Fases 0 a 4 concluídas** (até o PR #259, 2026-11-26), com as pendências da Fase 3 (modo completo do acervo e "Mostrar CPF"). O plano e o critério de pronto de cada tarefa estão no [doc 03](docs/arquitetura/03-estrategia-reconstrucao.md), §4; a **Fase 5** (migração do Koha e operação da biblioteca) foi aprovada em 2026-11-26 e começa pela migração (5.1 e 5.2). Cada fase nova só começa depois de Paulo aprovar o plano dela no doc 03.
 - O que existe, por área (cada uma com a sua spec em `docs/specs/`):
   - **Catálogo:** núcleo BIBFRAME completo, MARC21 e UNIMARC só na borda (UNIMARC pela projeção em MARC21, [unimarc.md](docs/specs/catalogo/unimarc.md)), importação universal, casamento, listagem com foco 80/20, edição por bloco, lote, autoridades, fontes de rascunho e de autoridade (SRU e Z39.50), exportação MARC, RDF e formatos de citação.
   - **Circulação:** leitores atrás do muro, empréstimo, devolução, renovação, reservas, multas, suspensões, avisos e calendário, com cenários contra o oráculo.

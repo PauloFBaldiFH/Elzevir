@@ -53,6 +53,9 @@ pub enum PatronCommand {
         /// The choice.
         reading_history: ReadingHistory,
     },
+    /// Brings branches, categories and patrons from a Koha dump
+    /// (docs/specs/migracao/leitores-do-koha.md, item 16).
+    MigrateKoha(Box<crate::koha_migration::KohaBatch>),
 }
 
 /// One change to the patron categories.
@@ -133,7 +136,7 @@ pub struct PatronUpdate {
 }
 
 /// What a patron command returns.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PatronOutput {
     /// The category created or changed; `None` after a delete.
     CategoryChanged(Option<PatronCategoryId>),
@@ -147,6 +150,8 @@ pub enum PatronOutput {
     PasswordSet(PatronId),
     /// The patron's choice about the reading history was recorded.
     ReadingHistorySet(PatronId),
+    /// What a write of the Koha migration did.
+    KohaMigrated(crate::koha_migration::KohaMigrated),
 }
 
 /// A field of the patron form, to name the one refused.

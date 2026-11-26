@@ -6,20 +6,21 @@ use std::io::{BufRead, Bytes};
 
 use super::{DumpError, DumpProblem, MAX_SQL_DDL_DEPTH, MAX_SQL_IDENTIFIER_BYTES};
 use super::{MAX_SQL_STATEMENT_BYTES, MAX_SQL_VALUE_BYTES};
-use crate::import::preview::MAX_IMPORT_FILE_BYTES;
 
 pub(super) struct Lexer<R> {
     input: Bytes<R>,
     ahead: VecDeque<u8>,
+    max_bytes: u64,
     pub(super) offset: u64,
     pub(super) statement: Option<u64>,
 }
 
 impl<R: BufRead> Lexer<R> {
-    pub(super) fn new(input: R) -> Self {
+    pub(super) fn new(input: R, max_bytes: u64) -> Self {
         Self {
             input: input.bytes(),
             ahead: VecDeque::with_capacity(3),
+            max_bytes,
             offset: 0,
             statement: None,
         }
@@ -51,7 +52,7 @@ impl<R: BufRead> Lexer<R> {
         if self.peek(0)?.is_none() {
             return Ok(None);
         }
-        if self.offset == MAX_IMPORT_FILE_BYTES as u64 {
+        if self.offset == self.max_bytes {
             return Err(self.error(DumpProblem::Limit("input bytes")));
         }
         if self
@@ -184,10 +185,75 @@ impl<R: BufRead> Lexer<R> {
                 }
                 return Ok(None);
             }
+            Some(b'x' | b'X') if self.peek(1)? == Some(b'\'') => {
+                self.take()?;
+                self.hex_string(&mut value)?;
+            }
+            Some(b'_') => {
+                // A character set introducer, as `_binary 'bytes'`.
+                self.name(false)?;
+                match self.head()? {
+                    Some(quote @ (b'\'' | b'"')) => self.quoted(quote, &mut value)?,
+                    _ => return Err(self.syntax("expected a string after the introducer")),
+                }
+            }
+            Some(b'0') if matches!(self.peek(1)?, Some(b'x' | b'X')) => {
+                self.take()?;
+                self.take()?;
+                self.hex_digits(&mut value, None)?;
+            }
             Some(b'0'..=b'9' | b'+' | b'-') => self.decimal(&mut value)?,
             _ => return Err(self.syntax("expected a literal SQL value")),
         }
         Ok(value)
+    }
+
+    /// Skips the rest of a statement this reader does not interpret.
+    pub(super) fn rest(&mut self) -> Result<(), DumpError> {
+        loop {
+            match self.head()? {
+                Some(b';') | None => return Ok(()),
+                Some(quote @ (b'\'' | b'"' | b'`')) => self.quoted(quote, &mut None)?,
+                Some(_) => {
+                    self.take()?;
+                }
+            }
+        }
+    }
+
+    fn hex_string(&mut self, value: &mut Option<Vec<u8>>) -> Result<(), DumpError> {
+        self.take()?;
+        self.hex_digits(value, Some(b'\''))?;
+        if self.take()? == Some(b'\'') {
+            Ok(())
+        } else {
+            Err(self.syntax("unterminated hexadecimal string"))
+        }
+    }
+
+    /// Hexadecimal digits up to `end`, or to the first other byte; kept as the bytes they spell.
+    fn hex_digits(
+        &mut self,
+        value: &mut Option<Vec<u8>>,
+        end: Option<u8>,
+    ) -> Result<(), DumpError> {
+        let mut high = None;
+        loop {
+            let next = self.peek(0)?;
+            let Some(digit) = next.and_then(|byte| char::from(byte).to_digit(16)) else {
+                if high.is_some() || end.is_some_and(|end| next != Some(end)) {
+                    return Err(self.syntax("expected hexadecimal digits"));
+                }
+                return Ok(());
+            };
+            self.take()?;
+            // `to_digit(16)` is below 16, so both fit in a byte.
+            let digit = u8::try_from(digit).unwrap_or_default();
+            match high.take() {
+                None => high = Some(digit),
+                Some(high) => self.collect(value, high << 4 | digit)?,
+            }
+        }
     }
 
     fn decimal(&mut self, value: &mut Option<Vec<u8>>) -> Result<(), DumpError> {
@@ -199,6 +265,15 @@ impl<R: BufRead> Lexer<R> {
         if self.peek(0)? == Some(b'.') {
             self.take()?;
             self.collect(value, b'.')?;
+            self.digits(value)?;
+        }
+        if let Some(letter @ (b'e' | b'E')) = self.peek(0)? {
+            self.take()?;
+            self.collect(value, letter)?;
+            if let Some(sign @ (b'+' | b'-')) = self.peek(0)? {
+                self.take()?;
+                self.collect(value, sign)?;
+            }
             self.digits(value)?;
         }
         Ok(())

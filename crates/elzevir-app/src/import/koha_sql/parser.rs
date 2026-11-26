@@ -5,16 +5,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::BufRead;
 
 use super::lexer::Lexer;
-use super::{CatalogRows, Cells, Column, DumpError, DumpProblem, MAX_SQL_COLUMNS, Table};
-use crate::import_detection::{ImportFormat, sql::Inventory};
+use super::{DumpError, DumpProblem, MAX_SQL_COLUMNS, Target};
 
-pub(super) fn parse<R: BufRead>(input: R) -> Result<CatalogRows, DumpError> {
+type Cells<C> = Vec<(C, Option<Vec<u8>>)>;
+
+pub(super) fn parse<R: BufRead, T: Target>(input: R, target: T) -> Result<T, DumpError> {
     let mut parser = Parser {
-        lexer: Lexer::new(input),
+        lexer: Lexer::new(input, T::MAX_BYTES),
         schema: None,
         columns: BTreeMap::new(),
-        inventory: Inventory::default(),
-        rows: CatalogRows::default(),
+        target,
     };
     parser.lexer.bom()?;
     let mut any = false;
@@ -30,24 +30,32 @@ pub(super) fn parse<R: BufRead>(input: R) -> Result<CatalogRows, DumpError> {
             .expect(b';', "expected the statement terminator")?;
         parser.lexer.statement = None;
     }
-    if any && parser.inventory.detection().format != ImportFormat::KohaSqlDump {
-        return Err(parser.lexer.error(DumpProblem::MissingCatalog));
-    }
-    Ok(parser.rows)
+    parser
+        .target
+        .finish(any)
+        .map_err(|problem| parser.lexer.error(problem))?;
+    Ok(parser.target)
 }
 
-struct Parser<R> {
+struct Parser<R, T: Target> {
     lexer: Lexer<R>,
     schema: Option<String>,
-    columns: BTreeMap<Table, Vec<String>>,
-    inventory: Inventory,
-    rows: CatalogRows,
+    columns: BTreeMap<T::Table, Vec<String>>,
+    target: T,
 }
 
-impl<R: BufRead> Parser<R> {
+impl<R: BufRead, T: Target> Parser<R, T> {
     fn statement(&mut self) -> Result<(), DumpError> {
         match self.lexer.keyword()?.as_str() {
-            "create" => self.create(),
+            "create" => match self.lexer.keyword()?.as_str() {
+                "table" => self.create(),
+                // `mysqldump --databases` names the database before its tables.
+                "database" if T::WHOLE_DATABASE => self.lexer.rest(),
+                _ => Err(self.lexer.error(DumpProblem::Unsupported)),
+            },
+            // MariaDB 11 wraps each table's rows in a transaction with autocommit off, set
+            // through session variables (`SET @OLD_AUTOCOMMIT=…`); Koha's tables are UTF-8.
+            "use" | "commit" | "set" if T::WHOLE_DATABASE => self.lexer.rest(),
             "insert" => self.insert(),
             "drop" => {
                 self.lexer.word("table")?;
@@ -82,7 +90,7 @@ impl<R: BufRead> Parser<R> {
         }
     }
 
-    fn table(&mut self, name: String, declared: bool) -> Result<Table, DumpError> {
+    fn table(&mut self, name: String, declared: bool) -> Result<Option<T::Table>, DumpError> {
         let name = if self.lexer.accept(b'.')? {
             if self.schema.as_ref().is_some_and(|schema| *schema != name) {
                 return Err(self.lexer.syntax("tables from multiple schemas"));
@@ -92,17 +100,12 @@ impl<R: BufRead> Parser<R> {
         } else {
             name
         };
-        if declared {
-            self.inventory.observe(name.as_bytes());
-            if self.inventory.detection().format == ImportFormat::KohaFullBackup {
-                return Err(self.lexer.error(DumpProblem::FullBackup));
-            }
-        }
-        Ok(Table::from_name(&name.to_ascii_lowercase()))
+        self.target
+            .table(&name.to_ascii_lowercase(), declared)
+            .map_err(|problem| self.lexer.error(problem))
     }
 
     fn create(&mut self) -> Result<(), DumpError> {
-        self.lexer.word("table")?;
         let quoted = self.lexer.head()? == Some(b'`');
         let mut name = self.lexer.name(true)?;
         if !quoted && name.eq_ignore_ascii_case("if") {
@@ -114,7 +117,9 @@ impl<R: BufRead> Parser<R> {
         self.lexer.expect(b'(', "expected table columns")?;
         let columns = self.column_names(true)?;
         self.options()?;
-        if table.is_catalog() && self.columns.insert(table, columns).is_some() {
+        if let Some(table) = table
+            && self.columns.insert(table, columns).is_some()
+        {
             return Err(self
                 .lexer
                 .error(DumpProblem::Duplicate("table declaration")));
@@ -200,7 +205,7 @@ impl<R: BufRead> Parser<R> {
         } else {
             None
         };
-        let schema = self.columns.get(&table);
+        let schema = table.and_then(|table| self.columns.get(&table));
         if let (Some(explicit), Some(schema)) = (&explicit, schema)
             && explicit.iter().any(|column| !schema.contains(column))
         {
@@ -209,13 +214,20 @@ impl<R: BufRead> Parser<R> {
                 .syntax("INSERT column absent from the table declaration"));
         }
         let columns = explicit.as_ref().or(schema);
-        let layout = columns.map(|names| {
-            names
-                .iter()
-                .map(|name| table.column(name))
-                .collect::<Vec<_>>()
-        });
-        if table.is_catalog() && layout.as_ref().is_none_or(|layout| !table.has_keys(layout)) {
+        let layout = match (table, columns) {
+            (Some(table), Some(names)) => Some(
+                names
+                    .iter()
+                    .map(|name| self.target.column(table, name))
+                    .collect::<Vec<_>>(),
+            ),
+            _ => None,
+        };
+        if let Some(table) = table
+            && layout
+                .as_ref()
+                .is_none_or(|layout| !self.target.has_keys(table, layout))
+        {
             return Err(self.lexer.error(DumpProblem::MissingColumns));
         }
         self.lexer.word("values")?;
@@ -225,8 +237,8 @@ impl<R: BufRead> Parser<R> {
             let offset = self.lexer.offset;
             let (count, values) = self.tuple(layout.as_deref(), width)?;
             width = Some(count);
-            if table.is_catalog() {
-                self.rows.push(table, offset, values)?;
+            if let Some(table) = table {
+                self.target.push(table, offset, values)?;
             }
             if !self.lexer.accept(b',')? {
                 return Ok(());
@@ -236,9 +248,9 @@ impl<R: BufRead> Parser<R> {
 
     fn tuple(
         &mut self,
-        layout: Option<&[Column]>,
+        layout: Option<&[Option<T::Column>]>,
         width: Option<usize>,
-    ) -> Result<(usize, Cells), DumpError> {
+    ) -> Result<(usize, Cells<T::Column>), DumpError> {
         self.lexer.expect(b'(', "expected an INSERT row")?;
         let mut values = Vec::new();
         let mut count = 0;
@@ -254,9 +266,9 @@ impl<R: BufRead> Parser<R> {
             let column = layout
                 .and_then(|layout| layout.get(count))
                 .copied()
-                .unwrap_or(Column::Ignored);
-            let value = self.lexer.literal(column != Column::Ignored)?;
-            if column != Column::Ignored {
+                .flatten();
+            let value = self.lexer.literal(column.is_some())?;
+            if let Some(column) = column {
                 values.push((column, value));
             }
             count += 1;

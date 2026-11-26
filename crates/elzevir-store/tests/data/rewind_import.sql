@@ -1,4 +1,5 @@
--- Undo migration 63, then 62, for fixtures that reconstruct an older catalog schema.
+-- Undo migration 64, then 63 and 62, for fixtures that reconstruct an older catalog schema.
+DROP TABLE koha_keys;
 DROP TRIGGER instance_datestamp_added;
 DROP TRIGGER instance_datestamp_changed;
 DROP TABLE instance_datestamps;
