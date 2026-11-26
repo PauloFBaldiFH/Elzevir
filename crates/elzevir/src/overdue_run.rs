@@ -4,7 +4,9 @@
 //! docs/specs/circulacao/reservas.md).
 //!
 //! Koha runs `misc/cronjobs/fines.pl`, `overdue_notices.pl -t`, `longoverdue.pl` and
-//! `holds/cancel_expired_holds.pl` from cron; here the server runs
+//! `holds/cancel_expired_holds.pl` from cron, and `batch_anonymise.pl` and
+//! `cleanup_database.pl` for the retention periods (docs/specs/circulacao/lgpd.md); here the
+//! server runs
 //! them when it starts and then every hour, so no system scheduler is needed. A run only
 //! changes a fine when its cents change, and an Item already lost is left alone, so
 //! running more often than daily charges the same.
@@ -14,6 +16,7 @@ use std::time::Duration;
 
 use elzevir_app::circulation_rules::{CirculationCommand, CirculationOutput};
 use elzevir_app::commands::{WriteCommand, WriteOutput};
+use elzevir_app::patrons::{PatronCommand, PatronOutput, Retention};
 use elzevir_domain::long_overdue::LongOverdueSettings;
 use elzevir_store::ElzevirStore;
 use jiff::tz::TimeZone;
@@ -41,16 +44,39 @@ async fn submit(
     }
 }
 
+/// Applies the retention periods, once a day; `None` when it failed.
+async fn retain(
+    store: &Arc<ElzevirStore>,
+    today: jiff::civil::Date,
+    retention: Retention,
+) -> Option<PatronOutput> {
+    let store = Arc::clone(store);
+    let done = tokio::task::spawn_blocking(move || {
+        store
+            .submit(WriteCommand::Patrons(PatronCommand::ApplyRetention {
+                today,
+                retention,
+            }))
+            .map(elzevir_store::Pending::wait)
+    })
+    .await;
+    match done {
+        Ok(Ok(Ok(WriteOutput::Patrons(output)))) => Some(output),
+        _ => None,
+    }
+}
+
 fn count(value: usize) -> u64 {
     u64::try_from(value).unwrap_or(u64::MAX)
 }
 
-/// Runs the overdue fines and queues the overdue notices, and then the long overdue Items and the expired holds when they
-/// are configured, now and then every hour, until `shutdown` turns true.
+/// Runs the overdue fines and queues the overdue notices, and then the expired holds, the
+/// retention periods and the long overdue Items when they are configured, now and then every
+/// hour, until `shutdown` turns true.
 pub(crate) async fn run(
     store: Arc<ElzevirStore>,
     time_zone: TimeZone,
-    (long_overdue, expire_holds): (Option<LongOverdueSettings>, bool),
+    (long_overdue, expire_holds, retention): (Option<LongOverdueSettings>, bool, Retention),
     instance: String,
     mut shutdown: tokio::sync::watch::Receiver<bool>,
 ) {
@@ -93,6 +119,22 @@ pub(crate) async fn run(
             _ => Event::OverdueNoticesFailed,
         };
         logging::emit(&instance, event);
+        if retention != Retention::default() {
+            match retain(&store, at.date(), retention).await {
+                Some(PatronOutput::RetentionApplied(applied)) if applied.ran => {
+                    logging::emit(
+                        &instance,
+                        Event::RetentionApplied {
+                            history: count(applied.history),
+                            anonymized: count(applied.anonymized),
+                            kept: count(applied.kept),
+                        },
+                    );
+                }
+                Some(_) => {}
+                None => logging::emit(&instance, Event::RetentionFailed),
+            }
+        }
         if let Some(settings) = long_overdue {
             let event = match submit(&store, CirculationCommand::MarkLongOverdue { at, settings })
                 .await

@@ -1678,8 +1678,8 @@
       "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
     },
     "LockExpiredDelay": {
-      "destino": "revisar",
-      "nota": "Decidir na spec de leitores (Fase 2)."
+      "destino": "fixo",
+      "nota": "Sem bloqueio de conta: o leitor vencido não entra no OPAC pela validade, e a anonimização segue [privacy] (docs/specs/circulacao/lgpd.md, item 14)."
     },
     "LostChargesControl": {
       "destino": "revisar",
@@ -2542,8 +2542,8 @@
       "nota": "Decidir na spec de leitores (Fase 2)."
     },
     "PatronAnonymizeDelay": {
-      "destino": "revisar",
-      "nota": "Decidir na spec de leitores (Fase 2)."
+      "destino": "config",
+      "nota": "anonymize_expired_days em elzevir.toml [privacy] (docs/specs/circulacao/lgpd.md, item 14), sem exigir conta bloqueada."
     },
     "PatronAutoComplete": {
       "destino": "revisar",
@@ -2562,8 +2562,8 @@
       "nota": "Decidir na spec de leitores (Fase 2)."
     },
     "PatronRemovalDelay": {
-      "destino": "revisar",
-      "nota": "Decidir na spec de leitores (Fase 2)."
+      "destino": "fixo",
+      "nota": "O leitor anonimizado nunca é apagado: fica para as estatísticas e para a conta (docs/specs/circulacao/lgpd.md, item 16)."
     },
     "PatronRestrictionTypes": {
       "destino": "revisar",

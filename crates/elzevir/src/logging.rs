@@ -37,6 +37,13 @@ pub(crate) enum Event {
         queued: u64,
     },
     OverdueNoticesFailed,
+    /// The retention periods ran (docs/specs/circulacao/lgpd.md, item 15).
+    RetentionApplied {
+        history: u64,
+        anonymized: u64,
+        kept: u64,
+    },
+    RetentionFailed,
     NoticesSent {
         sent: u64,
         failed: u64,
@@ -121,6 +128,16 @@ pub(crate) fn emit(instance: &str, event: Event) {
         }
         Event::OverdueNoticesFailed => {
             tracing::warn!(target: TARGET, institution = "local", instance, event = "notices.overdue_failed", "overdue notices run failed; retried next hour");
+        }
+        Event::RetentionApplied {
+            history,
+            anonymized,
+            kept,
+        } => {
+            tracing::info!(target: TARGET, institution = "local", instance, event = "patrons.retention_applied", history, anonymized, kept, "retention periods applied");
+        }
+        Event::RetentionFailed => {
+            tracing::warn!(target: TARGET, institution = "local", instance, event = "patrons.retention_failed", "retention run failed; retried next hour");
         }
         Event::NoticesSent { sent, failed } => {
             tracing::info!(target: TARGET, institution = "local", instance, event = "notices.sent", sent, failed, "e-mail notices sent");

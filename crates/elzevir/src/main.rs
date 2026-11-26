@@ -566,6 +566,7 @@ struct Background {
     time_zone: jiff::tz::TimeZone,
     long_overdue: Option<elzevir_domain::long_overdue::LongOverdueSettings>,
     expire_holds: bool,
+    retention: elzevir_app::patrons::Retention,
     mail: Option<notice_mail::MailSettings>,
 }
 
@@ -581,7 +582,7 @@ impl Background {
         let mut runs = vec![runtime.spawn(overdue_run::run(
             Arc::clone(store),
             self.time_zone.clone(),
-            (self.long_overdue, self.expire_holds),
+            (self.long_overdue, self.expire_holds, self.retention),
             instance.to_owned(),
             control.receiver(),
         ))];
@@ -659,6 +660,7 @@ fn serve_controlled(
             time_zone: loaded.time_zone.clone(),
             long_overdue: loaded.long_overdue,
             expire_holds: loaded.expire_waiting_holds,
+            retention: loaded.retention,
             mail: loaded.mail.clone(),
         };
         let (oai, sru) = public_services(&loaded, &store, &index, &instance);

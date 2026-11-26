@@ -60,6 +60,14 @@ pub enum PatronCommand {
     /// Records that a staff member took a copy of everything kept about the patron; changes
     /// nothing else (docs/specs/circulacao/lgpd.md, items 8 to 11).
     Export(PatronId),
+    /// Applies the library's retention periods, once a day (docs/specs/circulacao/lgpd.md,
+    /// items 12 to 16).
+    ApplyRetention {
+        /// The library's day.
+        today: Date,
+        /// The periods, from `elzevir.toml`.
+        retention: Retention,
+    },
     /// Brings branches, categories and patrons from a Koha dump
     /// (docs/specs/migracao/leitores-do-koha.md, item 16).
     MigrateKoha(Box<crate::koha_migration::KohaBatch>),
@@ -151,6 +159,31 @@ pub struct PatronUpdate {
     pub fields: PatronFields,
 }
 
+/// How long the library keeps a patron's history and an expired patron
+/// (docs/specs/circulacao/lgpd.md, item 12); each period is off when `None`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Retention {
+    /// Days after which a returned loan or an ended hold loses its patron, even one who
+    /// keeps a reading history (Koha: `batch_anonymise.pl --days`).
+    pub reading_history_days: Option<u32>,
+    /// Days after the enrolment expired after which the patron is anonymized (Koha:
+    /// `PatronAnonymizeDelay`).
+    pub anonymize_expired_days: Option<u32>,
+}
+
+/// What a run of the retention periods did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RetentionApplied {
+    /// Whether it ran: it runs once a day, and a later run on the same day does nothing.
+    pub ran: bool,
+    /// Returned loans and ended holds that lost their patron.
+    pub history: usize,
+    /// Patrons anonymized.
+    pub anonymized: usize,
+    /// Expired patrons left as they are, for a loan, a hold or a debt.
+    pub kept: usize,
+}
+
 /// What a patron command returns.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PatronOutput {
@@ -170,6 +203,8 @@ pub enum PatronOutput {
     Anonymized(PatronId),
     /// The export of the patron's data was logged.
     Exported(PatronId),
+    /// What a run of the retention periods did.
+    RetentionApplied(RetentionApplied),
     /// What a write of the Koha migration did.
     KohaMigrated(crate::koha_migration::KohaMigrated),
     /// What a write of Koha's loans and holds did.

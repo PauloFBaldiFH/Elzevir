@@ -39,6 +39,9 @@ pub(crate) struct Config {
     /// Circulation settings that are not rules.
     #[serde(default)]
     circulation: Circulation,
+    /// How long patrons' data is kept (docs/specs/circulacao/lgpd.md).
+    #[serde(default)]
+    privacy: Privacy,
     /// How notices go out (docs/specs/circulacao/avisos.md).
     #[serde(default)]
     notices: Notices,
@@ -453,6 +456,16 @@ impl LongOverdue {
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct Privacy {
+    /// Days a returned loan or an ended hold keeps its patron; forever when absent
+    /// (docs/specs/circulacao/lgpd.md, item 12).
+    reading_history_days: Option<u32>,
+    /// Days after the enrolment expired before the patron is anonymized; never when absent.
+    anonymize_expired_days: Option<u32>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Library {
     /// The IANA name of its time zone, such as `America/Sao_Paulo`; the system's when
     /// absent (docs/specs/catalogo/facetas.md, item 16).
@@ -479,6 +492,8 @@ pub(crate) struct Loaded {
     pub(crate) long_overdue: Option<LongOverdueSettings>,
     /// Whether holds waiting past their last day are cancelled.
     pub(crate) expire_waiting_holds: bool,
+    /// How long history and expired patrons are kept.
+    pub(crate) retention: elzevir_app::patrons::Retention,
     /// The mail server, when notices go out by e-mail.
     pub(crate) mail: Option<MailSettings>,
     /// The enabled bibliographic draft sources, in priority order.
@@ -516,6 +531,10 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         None => None,
     };
     let expire_waiting_holds = config.circulation.holds.expire_waiting.unwrap_or(false);
+    let retention = elzevir_app::patrons::Retention {
+        reading_history_days: config.privacy.reading_history_days,
+        anonymize_expired_days: config.privacy.anonymize_expired_days,
+    };
     let mail = match &config.notices.email {
         Some(section) => Some(
             section
@@ -553,6 +572,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
             time_zone,
             long_overdue,
             expire_waiting_holds,
+            retention,
             mail,
             draft_sources,
             authority_sources,
@@ -577,6 +597,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         time_zone,
         long_overdue,
         expire_waiting_holds,
+        retention,
         mail,
         draft_sources,
         authority_sources,
@@ -705,6 +726,26 @@ mod tests {
         assert_eq!(zone.iana_name(), Some("America/Sao_Paulo"));
         std::fs::write(&config, "[library]\ntime_zone = \"Mars/Olympus\"\n").unwrap();
         assert!(load(dir.path()).unwrap_err().contains("library.time_zone"));
+    }
+
+    #[test]
+    fn retention_periods_are_off_unless_given() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(
+            load(dir.path()).unwrap().retention,
+            elzevir_app::patrons::Retention::default()
+        );
+        let config = dir.path().join("elzevir.toml");
+        std::fs::write(
+            &config,
+            "[privacy]\nreading_history_days = 730\nanonymize_expired_days = 1095\n",
+        )
+        .unwrap();
+        let retention = load(dir.path()).unwrap().retention;
+        assert_eq!(retention.reading_history_days, Some(730));
+        assert_eq!(retention.anonymize_expired_days, Some(1095));
+        std::fs::write(&config, "[privacy]\nkeep_forever = true\n").unwrap();
+        assert!(load(dir.path()).unwrap_err().contains("keep_forever"));
     }
 
     #[test]

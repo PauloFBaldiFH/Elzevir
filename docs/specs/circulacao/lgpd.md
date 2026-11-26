@@ -1,6 +1,6 @@
 # LGPD: ferramentas de privacidade do leitor
 
-> Status: tarefa 5.4, partes a (anonimizar um leitor) e b (exportar os dados de um leitor). Parte c (prazos de guarda do histórico e de leitores inativos) virão em PRs próprios. Base: Koha 26.05.05, [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (tabela da Fase 5, linha 5.4) e [leitores.md](leitores.md) §6.
+> Status: tarefa 5.4 completa: partes a (anonimizar um leitor), b (exportar os dados de um leitor) e c (prazos de guarda do histórico e dos leitores vencidos). Base: Koha 26.05.05, [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (tabela da Fase 5, linha 5.4) e [leitores.md](leitores.md) §6.
 
 ## 1. Comportamento
 
@@ -27,26 +27,47 @@
 10. O registro de auditoria entra só como `record_access`; os comandos de cadastro e edição já estão representados pelo próprio cadastro.
 11. **Na tela.** O formulário de edição (permissão de leitores) tem a seção "Dados do leitor", com o botão "Baixar dados", que envia para `POST /equipe/leitores/{id}/exportar`. A resposta é o arquivo `leitor-{id}.json` para download (`Content-Disposition: attachment`, `Cache-Control: no-store`). O registro no `audit_log` acontece antes de os dados saírem do servidor. Cabe à biblioteca entregar o arquivo ao leitor que pedir (LGPD, art. 18, II, e art. 19).
 
+### Prazos de guarda
+
+12. Dois prazos em `[privacy]` no `elzevir.toml`, em dias, os dois desligados por padrão:
+
+    ```toml
+    [privacy]
+    reading_history_days = 730      # histórico com leitor por até 2 anos
+    anonymize_expired_days = 1095   # leitor vencido há 3 anos é anonimizado
+    ```
+
+    Chave desconhecida na seção é erro ao subir o servidor.
+13. **Histórico.** Com `reading_history_days`, o empréstimo devolvido e a reserva encerrada cujo dia (no fuso da biblioteca) é anterior a hoje menos o prazo perdem o leitor, mesmo de quem consentiu em guardar o histórico. O registro fica, sem o leitor, como no item 3.
+14. **Leitores vencidos.** Com `anonymize_expired_days`, o leitor cuja validade é hoje menos o prazo, ou antes, é anonimizado como no item 2, com a limpeza do `audit_log` (item 5). Fica como está, e é contado à parte, o leitor com empréstimo em aberto, reserva ativa ou saldo devedor na conta: a equipe resolve a pendência e a rodada seguinte o anonimiza.
+15. **Quando roda.** O servidor aplica os prazos ao subir e depois de hora em hora, junto com as multas e os avisos, pelo comando `patrons.apply_retention`; o comando só trabalha na primeira rodada de cada dia (`daily_runs`). O log operacional registra `patrons.retention_applied` com quantos registros do histórico perderam o leitor, quantos leitores foram anonimizados e quantos ficaram por pendência, ou `patrons.retention_failed`.
+16. O leitor anonimizado nunca é apagado: o registro fica para as estatísticas e para a conta.
+
 ## 2. Origem no Koha
 
 - `Koha::Patron::anonymize` (`reference/koha/Koha/Patron.pm`): recusa com empréstimos, limpa as colunas pessoais e marca `anonymized`. No Koha, campos obrigatórios recebem texto aleatório; aqui a carteirinha vira `anon-{id}` e os outros ficam vazios.
 - O Koha não tem uma cópia dos dados de um leitor; a preferência `GDPR_Policy` só pede, no OPAC, o consentimento à política de privacidade.
-- `Koha::Old::Checkouts::anonymize` e `misc/cronjobs/batch_anonymise.pl`: o histórico fica, sem o leitor.
+- `Koha::Old::Checkouts::anonymize` e `misc/cronjobs/batch_anonymise.pl --days`: o histórico fica, sem o leitor (item 13).
+- `misc/cronjobs/cleanup_database.pl` com `PatronAnonymizeDelay` (`Koha::Patrons::search_anonymize_candidates`): anonimiza quem venceu há mais dias que o prazo (item 14). `LockExpiredDelay` e `PatronRemovalDelay` não têm equivalente (item 16 e desvios).
 
 ## 3. Paridade
 
-`livre`. Prova: `crates/elzevir-store/tests/patrons.rs` (carteirinha trocada e homônimo poupado no `audit_log`, segunda anonimização recusada), `crates/elzevir-store/tests/koha_migration.rs` (recusa com empréstimos, histórico e conta mantidos sem o leitor, `audit_log` da migração limpo só para o leitor, nova rodada da migração, exportação com cadastro sem hash, empréstimos, reservas, conta e `record_access`, nada de outro leitor, e cópia recusada depois de anonimizar), teste de unidade de `patron_privacy` e `crates/elzevir/tests/patrons.rs` (permissão, download com cabeçalho de anexo, confirmação, redirecionamento, ficha 404 e busca vazia).
+`livre`. Prova: `crates/elzevir-store/tests/patrons.rs` (carteirinha trocada e homônimo poupado no `audit_log`, segunda anonimização recusada), `crates/elzevir-store/tests/koha_migration.rs` (recusa com empréstimos, histórico e conta mantidos sem o leitor, `audit_log` da migração limpo só para o leitor, nova rodada da migração, exportação com cadastro sem hash, empréstimos, reservas, conta e `record_access`, nada de outro leitor, e cópia recusada depois de anonimizar), teste de unidade de `patron_privacy` e `crates/elzevir/tests/patrons.rs` (permissão, download com cabeçalho de anexo, confirmação, redirecionamento, ficha 404 e busca vazia). Prazos: `crates/elzevir-store/tests/patrons.rs` (histórico antigo sem o leitor e o recente com ele, só o vencido sem pendência anonimizado, dívida e empréstimo poupam, a mesma data não repete e o dia seguinte roda), teste de unidade de `patron_retention` (contagem dos dias) e `crates/elzevir/src/config.rs` (a seção `[privacy]`).
 
 ## 4. Casos de borda
 
 1. Leitor que trocou de carteirinha e manteve o CPF: a inscrição com a carteirinha antiga é achada pelo CPF.
 2. Leitor que trocou de carteirinha e tirou o CPF na mesma edição: a edição registrada traz a carteirinha nova; a antiga só é achada se outro registro a ligar a ele (item 5).
-3. Leitor com dívida em aberto: a anonimização é aceita, e a dívida continua na conta do registro anonimizado.
+3. Leitor com dívida em aberto: a anonimização pela equipe é aceita, e a dívida continua na conta do registro anonimizado; o prazo do item 14 não o anonimiza enquanto deve.
+4. Prazo de histórico de 1 dia: o devolvido ontem fica; o de anteontem perde o leitor.
 
 ## 5. Desvios
 
 - O Koha anonimiza leitor e histórico em passos separados (`anonymize` e `batch_anonymise.pl`); aqui um só comando faz os dois para o leitor.
 - O Koha não mexe no `action_logs`; o Elzevir limpa o `audit_log` (item 5).
+- No Koha, `batch_anonymise.pl` poupa quem escolheu guardar o histórico "para sempre" (`privacy = 0`); no Elzevir a escolha do leitor é só guardar ou não, e o prazo da biblioteca vale para todos (item 13).
+- O Koha só anonimiza o leitor vencido que também está bloqueado (`LockExpiredDelay`) e não olha a dívida; o Elzevir não bloqueia contas e poupa quem deve (item 14).
+- O Koha pode apagar o leitor anonimizado (`PatronRemovalDelay`); o Elzevir o mantém (item 16).
 
 ## 6. Limites
 
