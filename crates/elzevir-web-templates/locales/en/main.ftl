@@ -1286,6 +1286,7 @@ opac-account-branch = Library
 opac-account-category = Category
 opac-account-expires = Enrolment valid until
 opac-hold-place = Place a hold
+opac-save-record = Save record
 opac-hold-hint = The first copy to come free is set aside for you at the library you choose; we let you know when it is waiting.
 opac-hold-confirm = Confirm hold
 opac-hold-back = Back to the record

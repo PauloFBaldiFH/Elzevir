@@ -1,0 +1,15 @@
+---
+source: crates/elzevir-app/tests/citation.rs
+expression: "written.replace(\"\\r\\n\", \"\\n\")"
+---
+TY  - BOOK
+ED  - PREFEITURA MUNICIPAL DE FOZ DO IGUACU
+TI  - Perfil - Anuário Estatístico
+T2  - Parana
+U1  - 310.62
+PY  - 1995///
+CY  - Foz do IGUAÇU
+PB  - Secretaria Municipal da Coordenacao e Planejamento
+KW  - ESTATÍSTICA FOZ DO IGUAÇU
+KW  - PARANÁ ESTATÍSTICA
+ER  -

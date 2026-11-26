@@ -195,6 +195,7 @@ pub(crate) async fn record(State(state): State<AppState>, Path(id): Path<String>
             t: &state.inner.i18n,
             title: &record.title,
             body: &record.body,
+            id: id.0,
             deposit_url: deposit.map(|d| format!("/repository/{:032x}", d.0)),
             // The same link for everyone: the hold page asks who is signed in.
             hold_url: (state.accounts.is_some() && state.loans.is_some() && !items.is_empty())
@@ -345,7 +346,7 @@ pub(crate) const fn status_key(status: ItemStatus) -> &'static str {
     }
 }
 
-fn not_found(state: &AppState) -> Response {
+pub(crate) fn not_found(state: &AppState) -> Response {
     let page = OpacNotFound {
         t: &state.inner.i18n,
     };
@@ -356,7 +357,7 @@ fn not_found(state: &AppState) -> Response {
 }
 
 /// The catalog or the index failed: answer 503 without details for the visitor.
-fn unavailable() -> Response {
+pub(crate) fn unavailable() -> Response {
     (StatusCode::SERVICE_UNAVAILABLE, "catalog unavailable").into_response()
 }
 

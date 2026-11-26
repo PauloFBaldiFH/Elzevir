@@ -1,0 +1,12 @@
+---
+source: crates/elzevir-app/tests/citation.rs
+expression: "written.replace(\"\\r\\n\", \"\\n\")"
+---
+@book{28,
+	author = {Löwy, Michael,},
+	title = {As aventuras de Karl Marx contra o Barão de Munchhausen :},
+	publisher = {Busca Vida,},
+	year = {1987.},
+	address = {São Paulo:},
+	edition = {3. ed.}
+}

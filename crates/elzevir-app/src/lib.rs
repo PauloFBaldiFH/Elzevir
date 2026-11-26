@@ -10,6 +10,7 @@ pub mod calendar;
 pub mod call_number;
 pub mod catalog;
 pub mod circulation_rules;
+pub mod citation;
 pub mod codes;
 pub mod commands;
 pub mod creating;

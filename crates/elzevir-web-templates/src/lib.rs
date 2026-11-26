@@ -234,7 +234,7 @@ impl I18n {
 
 /// OPAC home page.
 #[derive(Template)]
-#[template(path = "opac_home_repository.html")]
+#[template(path = "opac_home.html")]
 pub struct OpacHome<'a> {
     /// Whether repository discovery is available.
     pub repository: bool,
@@ -427,12 +427,14 @@ pub struct OpacRecordBody<'a> {
 
 /// A record page around an already rendered body.
 #[derive(Template)]
-#[template(path = "opac_record_repository.html")]
+#[template(path = "opac_record.html")]
 pub struct OpacRecord<'a> {
-    /// Published digital deposit of this instance.
-    pub deposit_url: Option<String>,
     /// Interface texts.
     pub t: &'a I18n,
+    /// The Instance, for the links that save the record.
+    pub id: i64,
+    /// The page of the Instance's published digital deposit, when it has one.
+    pub deposit_url: Option<String>,
     /// Title, for `<title>`.
     pub title: &'a str,
     /// The rendered [`OpacRecordBody`].
@@ -520,11 +522,9 @@ mod tests {
         let templates = [
             include_str!("../templates/base.html"),
             include_str!("../templates/opac_home.html"),
-            include_str!("../templates/opac_record_repository.html"),
             include_str!("../templates/repository.html"),
             include_str!("../templates/staff_repository.html"),
             include_str!("../templates/repository_search.html"),
-            include_str!("../templates/opac_home_repository.html"),
             include_str!("../templates/opac_results.html"),
             include_str!("../templates/opac_results_list.html"),
             include_str!("../templates/opac_record.html"),

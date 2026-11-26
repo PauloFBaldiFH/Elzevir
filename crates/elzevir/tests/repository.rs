@@ -424,6 +424,29 @@ fn public_http_exposes_only_the_current_authorized_version() {
             .unwrap()
             .contains(&format!("/repository/{deposit}"))
     );
+    // The citation formats carry the deposit's absolute address (citacao-e-intercambio.md, 5).
+    let mut cited = agent
+        .get(format!("{host}/record/1/export?format=bibtex"))
+        .call()
+        .unwrap();
+    assert_eq!(cited.status(), 200);
+    assert!(
+        cited
+            .body_mut()
+            .read_to_string()
+            .unwrap()
+            .contains(&format!(
+                "://{}/repository/{deposit}}}",
+                host.strip_prefix("http://").unwrap()
+            ))
+    );
+    let mut home = agent.get(format!("{host}/")).call().unwrap();
+    assert!(
+        home.body_mut()
+            .read_to_string()
+            .unwrap()
+            .contains(r#"<a href="/repository">"#)
+    );
     let mut page = agent.get(&url).call().unwrap();
     assert_eq!(page.status(), 200);
     assert_eq!(page.headers()["cache-control"], "no-store");
@@ -506,7 +529,7 @@ fn opac_conceals_drafts_then_distinguishes_unavailable_bytes_and_withdrawal() {
     let receipt = upload(d, &deposit, &file, 1, None, b"article");
     let path = format!("/repository/{deposit}");
     let version = format!("{path}/files/{file}/versions/1");
-    let assert_status = |page, download, linked| {
+    let assert_status = |page, download, linked, exported: u16| {
         let (_server, host, agent) = start_http(d);
         let response = agent.get(format!("{host}{path}")).call().unwrap();
         assert_eq!(response.status().as_u16(), page);
@@ -525,8 +548,17 @@ fn opac_conceals_drafts_then_distinguishes_unavailable_bytes_and_withdrawal() {
             bib.body_mut().read_to_string().unwrap().contains(&path),
             linked
         );
+        let mut cited = agent
+            .get(format!("{host}/record/1/export?format=ris"))
+            .call()
+            .unwrap();
+        assert_eq!(cited.status().as_u16(), exported);
+        assert_eq!(
+            cited.body_mut().read_to_string().unwrap().contains(&path),
+            linked
+        );
     };
-    assert_status(404, 404, false);
+    assert_status(404, 404, false, 200);
     run(d, &["publish", &deposit]);
     let hash = receipt
         .split_whitespace()
@@ -538,11 +570,11 @@ fn opac_conceals_drafts_then_distinguishes_unavailable_bytes_and_withdrawal() {
         .join(hash.get(2..4).unwrap())
         .join(hash);
     fs::write(&object, b"changed").unwrap();
-    assert_status(200, 503, true);
+    assert_status(200, 503, true, 200);
     fs::remove_file(object).unwrap();
-    assert_status(200, 503, true);
+    assert_status(200, 503, true, 200);
     run(d, &["withdraw", &deposit]);
-    assert_status(410, 404, false);
+    assert_status(410, 404, false, 200);
     let store = ElzevirStore::open(
         &d.join("elzevir.db"),
         &StoreConfig::default(),
@@ -563,7 +595,8 @@ fn opac_conceals_drafts_then_distinguishes_unavailable_bytes_and_withdrawal() {
         .wait()
         .unwrap();
     store.shutdown().unwrap();
-    assert_status(404, 404, false);
+    // A record the OPAC hides is not exported either.
+    assert_status(404, 404, false, 404);
 }
 
 #[test]

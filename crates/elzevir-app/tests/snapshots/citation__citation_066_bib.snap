@@ -1,0 +1,13 @@
+---
+source: crates/elzevir-app/tests/citation.rs
+expression: "written.replace(\"\\r\\n\", \"\\n\")"
+---
+@book{67,
+	author = {Ramalho Júnior, Francisco and Ferraro, Nicolau Gilberto,},
+	title = {Os fundamentos da física /},
+	publisher = {Moderna,},
+	year = {1997.},
+	address = {São Paulo, SP:},
+	edition = {6. ed.},
+	url = {https://biblioteca.utfpr.edu.br/pergamumweb/vinculos/000046/0000464f.png}
+}

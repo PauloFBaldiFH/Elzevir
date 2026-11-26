@@ -1,0 +1,13 @@
+---
+source: crates/elzevir-app/tests/citation.rs
+expression: "written.replace(\"\\r\\n\", \"\\n\")"
+---
+@book{1,
+	author = {PREFEITURA MUNICIPAL DE FOZ DO IGUACU},
+	title = {Perfil - Anuário Estatístico},
+	publisher = {Secretaria Municipal da Coordenacao e Planejamento,},
+	year = {1995.},
+	series = {Parana},
+	address = {Foz do IGUAÇU :},
+	edition = {1. ed}
+}

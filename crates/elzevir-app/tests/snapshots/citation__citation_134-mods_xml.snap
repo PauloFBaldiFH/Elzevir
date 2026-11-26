@@ -1,0 +1,65 @@
+---
+source: crates/elzevir-app/tests/citation.rs
+expression: "written.replace(\"\\r\\n\", \"\\n\")"
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<mods xmlns="http://www.loc.gov/mods/v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="3.1" xsi:schemaLocation="http://www.loc.gov/mods/v3 http://www.loc.gov/standards/mods/v3/mods-3-1.xsd">
+  <titleInfo>
+    <title>Economia aplicada</title>
+    <subTitle>EA / [Universidade de Sao Paulo, Departamento de Economia; Fundacao Instituto de Pesquisas Economicas]</subTitle>
+  </titleInfo>
+  <titleInfo type="alternative">
+    <title>Revista de economia aplicada; Brazilian journal of applied economics</title>
+  </titleInfo>
+  <name type="corporate">
+    <namePart>Universidade de São Paulo</namePart>
+    <namePart>Fundação Instituto de Pesquisas Econômicas (SP)</namePart>
+    <namePart>Departamento de Economia.</namePart>
+  </name>
+  <typeOfResource>text</typeOfResource>
+  <originInfo>
+    <place>
+      <placeTerm type="code" authority="marccountry">xx#</placeTerm>
+    </place>
+    <place>
+      <placeTerm type="text">São Paulo</placeTerm>
+    </place>
+    <publisher>Departamento de Economia da Universidade de Sao Paulo : FIPE</publisher>
+    <dateIssued>1997-</dateIssued>
+    <dateIssued encoding="marc" point="start">1997</dateIssued>
+    <dateIssued encoding="marc" point="end">9999</dateIssued>
+    <issuance>continuing</issuance>
+  </originInfo>
+  <language>
+    <languageTerm authority="iso639-2b" type="code">por</languageTerm>
+  </language>
+  <note>Trimestral</note>
+  <note>Alguns artigos em ingles</note>
+  <note>Resumos em portugues e ingles</note>
+  <note>Jan./mar.2000-    titulo tambem em ingles: Brazilian journal of applied economics</note>
+  <note>Formato varia.</note>
+  <note>Depósito legal BR-RjBN</note>
+  <note>Português b</note>
+  <note>Não publica índice</note>
+  <subject>
+    <topic>Economia</topic>
+  </subject>
+  <subject>
+    <geographic>Brasil</geographic>
+    <topic>Condições econômicas</topic>
+  </subject>
+  <subject>
+    <geographic>Brasil</geographic>
+    <topic>Política econômica</topic>
+  </subject>
+  <identifier type="issn">1413-8050</identifier>
+  <recordInfo>
+    <recordContentSource authority="marcorg">BR-RjBN</recordContentSource>
+    <recordCreationDate encoding="marc">081201</recordCreationDate>
+    <recordChangeDate encoding="iso8601">20260924114029.0</recordChangeDate>
+    <recordIdentifier source="BR-RjBN">000896374</recordIdentifier>
+    <languageOfCataloging>
+      <languageTerm authority="iso639-2b" type="code">por</languageTerm>
+    </languageOfCataloging>
+  </recordInfo>
+</mods>

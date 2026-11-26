@@ -264,6 +264,11 @@ async fn a_record_shows_its_items_and_is_rendered_once_per_version() {
     assert!(html.contains("elzevir-icons.svg#status-unavailable"));
     assert!(html.contains("<dt>Notes</dt>\n    <dd>Inclui índice.</dd>"));
     assert!(!html.contains("<Anuário>"));
+    // The four citation formats (docs/specs/catalogo/citacao-e-intercambio.md, item 2).
+    assert!(html.contains("<summary>Save record</summary>"));
+    for format in ["ris", "bibtex", "mods", "dc"] {
+        assert!(html.contains(&format!(r#"href="/record/1/export?format={format}""#)));
+    }
     assert_eq!(catalog.reads.load(Ordering::SeqCst), 1);
     let (_, again) = get(&app, "/record/1", false).await;
     assert_eq!(again, html);
