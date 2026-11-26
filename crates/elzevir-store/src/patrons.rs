@@ -71,6 +71,7 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &PatronCommand) -> Applied {
             }
             PatronOutput::ReadingHistorySet(*patron)
         }
+        PatronCommand::MigrateKoha(batch) => crate::koha_migration::apply(tx.connection(), batch)?,
     };
     Ok(WriteOutput::Patrons(output))
 }
@@ -154,7 +155,7 @@ fn change_category(
     }
 }
 
-fn enrolment_columns(enrolment: Enrolment) -> (Option<u16>, Option<String>) {
+pub(crate) fn enrolment_columns(enrolment: Enrolment) -> (Option<u16>, Option<String>) {
     match enrolment {
         Enrolment::Months(months) => (Some(months), None),
         Enrolment::Until(day) => (None, Some(day.to_string())),
@@ -256,7 +257,8 @@ fn values(fields: &PatronFields, expires: Date) -> [Box<dyn rusqlite::ToSql + '_
     ]
 }
 
-fn add(
+/// Adds a patron whose fields pass every check.
+pub(crate) fn add(
     connection: &Connection,
     fields: &PatronFields,
 ) -> Result<PatronOutput, CommandFailed<WriteRefusal>> {

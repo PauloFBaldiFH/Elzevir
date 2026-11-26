@@ -834,15 +834,15 @@ const MIGRATIONS: &[&str] = &[
          day         TEXT NOT NULL,
          row_version INTEGER NOT NULL DEFAULT 1
      ) STRICT;",
-    // 60: the patron's OPAC password, as an Argon2id hash (docs/specs/opac/
-    // conta-do-leitor.md, items 1 to 4); NULL is no OPAC access.
+    // 60: the patron's OPAC password, Argon2id (opac/conta-do-leitor.md); NULL: no access.
     "ALTER TABLE patrons ADD COLUMN password_hash TEXT;",
     // 61: keep installation-local identifiers separate across source catalogs.
     include_str!("import_provenance.sql"),
     // 62: offline institutional repository.
     include_str!("repository/schema.sql"),
-    // 63: the OAI-PMH datestamp of each Instance.
+    // 63: the OAI-PMH datestamp of each Instance; 64: the Koha keys of migrated patrons.
     include_str!("oai_datestamps.sql"),
+    include_str!("koha_keys.sql"),
 ];
 
 /// The migration that creates `match_keys`.

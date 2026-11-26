@@ -24,6 +24,7 @@ pub mod holds;
 pub mod import;
 pub mod import_detection;
 pub mod items;
+pub mod koha_migration;
 pub mod koha_types;
 pub mod listing;
 pub mod loans;

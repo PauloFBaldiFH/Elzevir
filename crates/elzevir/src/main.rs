@@ -38,6 +38,7 @@ mod init;
 mod installation;
 mod institution_repository;
 mod koha_codes;
+mod koha_migration_cli;
 mod listen_port;
 mod local_artifacts;
 mod local_disk;
@@ -179,6 +180,8 @@ enum Command {
     AuthoritySearch(draft_search::AuthoritySearchArgs),
     /// Sets how this library's Koha item types translate into BIBFRAME on import.
     KohaTypes(catalog_cli::KohaTypesArgs),
+    /// Brings branches, patron categories and patrons from a whole Koha database dump.
+    MigrateKoha(koha_migration_cli::MigrateKohaArgs),
 }
 
 #[derive(Subcommand)]
@@ -263,6 +266,7 @@ fn main() -> ExitCode {
         Command::DraftSearch(args) => draft_search::run(&args),
         Command::AuthoritySearch(args) => draft_search::run_authorities(&args),
         Command::KohaTypes(args) => catalog_cli::koha_types(&args),
+        Command::MigrateKoha(args) => koha_migration_cli::run(&args),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
