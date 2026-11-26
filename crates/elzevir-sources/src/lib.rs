@@ -9,6 +9,7 @@ mod cql;
 mod response;
 pub mod z3950;
 mod z3950_client;
+pub mod z3950_server;
 
 use std::collections::HashMap;
 use std::time::Duration;

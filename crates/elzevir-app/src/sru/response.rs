@@ -3,11 +3,10 @@
 
 use std::fmt::Write as _;
 
-use elzevir_marc::{Limits, Record};
+use elzevir_marc::Record;
 
-use crate::export::{RecordExportError, marc_record};
 use crate::field_search::FieldSearch;
-use crate::oai::{OaiCatalog, dublin_core, escape, marcxml_element};
+use crate::oai::{OaiCatalog, dublin_core, escape, marcxml_element, visible_marc};
 use crate::search::SearchScope;
 
 use super::request::{Operation, Packing, RecordSchema, SearchRetrieve, Version, parse};
@@ -206,17 +205,8 @@ fn search(
     for (place, hit) in found.hits.iter().enumerate() {
         let position = asked.start + place;
         let instance = hit.instance;
-        let record = match catalog.header(instance) {
-            Ok(Some(header)) if !header.hidden => {
-                match marc_record(catalog, instance, &Limits::default()) {
-                    Ok(record) => record.and_then(|marc| data(&marc, asked.schema)),
-                    Err(RecordExportError::Read(error)) => {
-                        return Err(failed(answer, error.to_string()));
-                    }
-                    Err(RecordExportError::Failure(_)) => None,
-                }
-            }
-            Ok(_) => None,
+        let record = match visible_marc(catalog, instance) {
+            Ok(record) => record.and_then(|marc| data(&marc, asked.schema)),
             Err(error) => return Err(failed(answer, error.to_string())),
         };
         let written = if let Some(data) = record {

@@ -286,6 +286,7 @@ mod tests {
                     field: SearchField::Any,
                     matching: WordMatch::All,
                     text: "rio".to_owned(),
+                    truncation: crate::field_search::Truncation::None,
                 }),
                 start: 1,
                 maximum: 10,

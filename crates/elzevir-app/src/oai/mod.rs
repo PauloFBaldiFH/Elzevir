@@ -15,8 +15,9 @@ use crate::export::{RecordExportError, RecordSource, marc_record};
 
 pub use dublin_core::{DcElement, dublin_core};
 pub use request::{Datestamp, ListState, MetadataFormat, OaiErrorCode, Request, Verb, parse};
+pub(crate) use response::escape;
+pub use response::marcxml_element;
 pub use response::{Answer, respond};
-pub(crate) use response::{escape, marcxml_element};
 
 /// `[oai]` of `elzevir.toml`, checked.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,6 +104,29 @@ pub fn marc(
         })),
         Err(RecordExportError::Read(error)) => Err(OaiUnavailable(error.to_string()).into()),
         Err(RecordExportError::Failure(error)) => Err(OaiRecordError::Invalid(error.to_string())),
+    }
+}
+
+/// The MARC record of `instance` as the export writes it, with the Items, when the OPAC
+/// shows it now: `None` when it is hidden, does not exist or cannot be written. The SRU
+/// and Z39.50 servers check each record with it after the search (docs/specs/opac/sru.md,
+/// item 15).
+///
+/// # Errors
+///
+/// When storage fails.
+pub fn visible_marc(
+    catalog: &dyn OaiCatalog,
+    instance: InstanceId,
+) -> Result<Option<Record>, OaiUnavailable> {
+    match catalog.header(instance)? {
+        Some(header) if !header.hidden => {}
+        _ => return Ok(None),
+    }
+    match marc_record(catalog, instance, &Limits::default()) {
+        Ok(record) => Ok(record),
+        Err(RecordExportError::Read(error)) => Err(OaiUnavailable(error.to_string())),
+        Err(RecordExportError::Failure(_)) => Ok(None),
     }
 }
 
