@@ -15,12 +15,18 @@ use crate::{CommandFailed, StoreError};
 
 /// What `koha_keys` names. The numbers are stored.
 #[derive(Clone, Copy)]
-enum Keyed {
+pub(crate) enum Keyed {
     Category = 1,
     Patron = 2,
+    /// A returned loan, by `issue_id` (circulacao-do-koha.md, item 16).
+    ReturnedLoan = 3,
 }
 
-fn key(connection: &Connection, keyed: Keyed, key: &str) -> Result<Option<i64>, StoreError> {
+pub(crate) fn key(
+    connection: &Connection,
+    keyed: Keyed,
+    key: &str,
+) -> Result<Option<i64>, StoreError> {
     Ok(connection
         .query_row(
             "SELECT local_id FROM koha_keys WHERE kind = ?1 AND koha_key = ?2",
@@ -30,7 +36,12 @@ fn key(connection: &Connection, keyed: Keyed, key: &str) -> Result<Option<i64>, 
         .optional()?)
 }
 
-fn set_key(connection: &Connection, keyed: Keyed, key: &str, id: i64) -> Result<(), StoreError> {
+pub(crate) fn set_key(
+    connection: &Connection,
+    keyed: Keyed,
+    key: &str,
+    id: i64,
+) -> Result<(), StoreError> {
     connection.execute(
         "INSERT OR REPLACE INTO koha_keys (kind, koha_key, local_id) VALUES (?1, ?2, ?3)",
         params![keyed as i64, key, id],

@@ -12,8 +12,8 @@ use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput};
 use elzevir_app::import::{ImportOptions, import_marc_text};
 use elzevir_app::koha_migration::{
-    CirculationLeftover, KohaAccountsMigrated, KohaCirculationMigrated, KohaMigrated, KohaPlan,
-    plan,
+    CirculationLeftover, KohaAccountsMigrated, KohaCirculationMigrated, KohaHistoryMigrated,
+    KohaMigrated, KohaPlan, plan,
 };
 use elzevir_app::matching::Matching;
 use elzevir_app::patron_account::log_in;
@@ -330,6 +330,7 @@ fn loans_holds_and_accounts_follow_the_patrons_and_the_catalog() {
     );
 
     accounts_come_whole(&store, &plan);
+    history_keeps_only_consenting_patrons(&store, &plan);
 
     // A second run adds nothing.
     assert_eq!(accounts(&store, &plan).already_migrated, 2);
@@ -387,4 +388,50 @@ fn accounts_come_whole(store: &ElzevirStore, plan: &KohaPlan) {
             "CREATE|-|OVERDUE300|300",
         ]
     );
+}
+
+fn history(store: &ElzevirStore, plan: &KohaPlan) -> KohaHistoryMigrated {
+    let mut done = KohaHistoryMigrated::default();
+    for batch in plan.history_batches() {
+        let PatronOutput::KohaHistoryMigrated(write) =
+            run(store, PatronCommand::MigrateKohaHistory(Box::new(batch)))
+        else {
+            panic!("not a history migration");
+        };
+        done.add(write);
+    }
+    done
+}
+
+/// The returned loans (circulacao-do-koha.md, items 14 to 16): the patron stays only when
+/// they keep a reading history.
+fn history_keeps_only_consenting_patrons(store: &ElzevirStore, plan: &KohaPlan) {
+    assert_eq!(
+        history(store, plan),
+        KohaHistoryMigrated {
+            returned: 4,
+            with_patron: 1,
+            already_migrated: 0,
+            left: vec![(14, CirculationLeftover::Item)],
+        }
+    );
+    assert_eq!(
+        rows(
+            store,
+            "SELECT i.barcode || '|' || coalesce(p.cardnumber, '-') || '|' || r.returned_at
+                 || '|' || k.code || '|' || r.renewals
+             FROM returned_loans r JOIN items i ON i.id = r.item_id
+             LEFT JOIN patrons p ON p.id = r.patron_id
+             JOIN koha_codes k ON k.kind = 1 AND k.local_id = r.return_branch_id
+             ORDER BY r.issued_at"
+        ),
+        [
+            "B100|-|2026-08-10T10:00:00-03:00[America/Sao_Paulo]|CTR|0",
+            "B101|-|2026-09-10T10:00:00-03:00[America/Sao_Paulo]|CTR|0",
+            "B110|A0001|2026-10-10T16:00:00-03:00[America/Sao_Paulo]|NRT|1",
+            // The school does not keep a reading history.
+            "B110|-|2026-10-20T10:00:00-03:00[America/Sao_Paulo]|CTR|0",
+        ]
+    );
+    assert_eq!(history(store, plan).already_migrated, 4);
 }

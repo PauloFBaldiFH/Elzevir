@@ -222,6 +222,9 @@ fn a_koha_dump_brings_its_patrons_once() {
         "  accountlines_id 6: a number, patron, type, amount or date missing",
         "  DOACAO: 1",
         "  MULTA_LOCAL: 1",
+        "returned loans: 0 migrated (0 in a reading history, the others without patron), 0 already migrated, 6 left out",
+        "  issue_id 15: a number, patron, Item or date missing",
+        "  issue_id 10: no Item, or two, with its itemnumber or barcode",
     ] {
         assert!(
             report.lines().any(|found| found == line),

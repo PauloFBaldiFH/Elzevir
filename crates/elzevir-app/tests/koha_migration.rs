@@ -354,3 +354,33 @@ fn accounts_come_whole_by_patron() {
     );
     assert_eq!(plan.account_batches().len(), 1);
 }
+
+#[test]
+fn returned_loans_keep_where_they_came_back() {
+    let plan = read(DUMP);
+    let numbers: Vec<u64> = plan.returned.iter().map(|loan| loan.issue_id).collect();
+    assert_eq!(numbers, [10, 11, 12, 13, 14]);
+    let first = &plan.returned[0];
+    assert_eq!(
+        (
+            first.borrowernumber,
+            first.item.itemnumber,
+            first.branch.as_str(),
+            first.return_branch.as_str(),
+            first.renewals
+        ),
+        (Some(1), 110, "CTR", "NRT", 1)
+    );
+    assert_eq!(
+        first.returned_at,
+        "2026-10-10T16:00:00-03:00[America/Sao_Paulo]"
+    );
+    // Anonymised in Koha; without `checkin_library`, it came back where it was lent.
+    let anonymous = &plan.returned[2];
+    assert_eq!(
+        (anonymous.borrowernumber, anonymous.return_branch.as_str()),
+        (None, "CTR")
+    );
+    assert_eq!(plan.returned_left, [(15, CirculationLeftover::Incomplete)]);
+    assert_eq!(plan.history_batches().len(), 1);
+}

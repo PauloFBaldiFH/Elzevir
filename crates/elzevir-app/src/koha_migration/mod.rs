@@ -22,6 +22,7 @@ use crate::patrons::{
 mod accounts;
 mod circulation;
 mod dump;
+mod history;
 
 pub use accounts::{
     ACCOUNT_LINES_PER_COMMAND, AccountsRead, KohaAccount, KohaAccountBatch, KohaAccountLine,
@@ -35,6 +36,7 @@ pub use circulation::{
 
 use dump::{KohaTables, Row, Table};
 pub use dump::{LEFT_OUT_COLUMNS, MAX_KOHA_ROWS};
+pub use history::{KohaHistoryBatch, KohaHistoryMigrated, KohaReturnedLoan, RETURNED_PER_COMMAND};
 
 /// Most patrons in one write command (item 16).
 pub const PATRONS_PER_COMMAND: usize = 500;
@@ -258,6 +260,10 @@ pub struct KohaPlan {
     pub accounts: Vec<KohaAccount>,
     /// What reading the accounts left out or changed.
     pub accounts_read: AccountsRead,
+    /// The returned loans, oldest first.
+    pub returned: Vec<KohaReturnedLoan>,
+    /// Returned loans the dump does not describe well enough, by `issue_id`.
+    pub returned_left: Vec<(u64, CirculationLeftover)>,
 }
 
 /// A patron field, ordered for the report.
@@ -334,6 +340,7 @@ pub fn plan(input: impl BufRead, today: Date, zone: &TimeZone) -> Result<KohaPla
     }
     circulation::read(&tables.rows, zone, &mut plan);
     accounts::read(&tables.rows, zone, &mut plan);
+    history::read(&tables.rows, zone, &mut plan);
     Ok(plan)
 }
 

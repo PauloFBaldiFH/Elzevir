@@ -261,6 +261,34 @@ CREATE TABLE `account_offsets` (
 LOCK TABLES `account_offsets` WRITE;
 INSERT INTO `account_offsets` VALUES (1,NULL,1,'CREATE',2.000000,'2026-11-25 23:59:00'),(2,2,NULL,'CREATE',-1.000000,'2026-11-26 10:00:00'),(3,2,3,'APPLY',-1.000000,'2026-11-26 10:00:00'),(4,NULL,3,'CREATE',3.000000,'2026-10-01 12:00:00'),(5,NULL,99,'CREATE',1.000000,'2026-01-01 08:00:00'),(6,NULL,5,'CREATE',5.000000,'2026-11-20 09:00:00');
 UNLOCK TABLES;
+DROP TABLE IF EXISTS `old_issues`;
+CREATE TABLE `old_issues` (
+  `issue_id` int(11) NOT NULL,
+  `borrowernumber` int(11) DEFAULT NULL,
+  `issuer_id` int(11) DEFAULT NULL,
+  `itemnumber` int(11) DEFAULT NULL,
+  `booking_id` int(11) DEFAULT NULL,
+  `date_due` datetime DEFAULT NULL,
+  `branchcode` varchar(10) DEFAULT NULL,
+  `returndate` datetime DEFAULT NULL,
+  `checkin_library` varchar(10) DEFAULT NULL,
+  `lastreneweddate` datetime DEFAULT NULL,
+  `renewals_count` tinyint(4) NOT NULL DEFAULT 0,
+  `unseen_renewals` tinyint(4) NOT NULL DEFAULT 0,
+  `auto_renew` tinyint(1) DEFAULT 0,
+  `auto_renew_error` varchar(32) DEFAULT NULL,
+  `timestamp` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `issuedate` datetime DEFAULT NULL,
+  `onsite_checkout` tinyint(1) NOT NULL DEFAULT 0,
+  `note` longtext DEFAULT NULL,
+  `notedate` datetime DEFAULT NULL,
+  `noteseen` tinyint(1) DEFAULT NULL,
+  PRIMARY KEY (`issue_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+LOCK TABLES `old_issues` WRITE;
+INSERT INTO `old_issues` VALUES (10,1,NULL,110,NULL,'2026-10-15 23:59:00','CTR','2026-10-10 16:00:00','NRT',NULL,1,0,0,NULL,'2026-10-20 10:00:00','2026-10-01 10:00:00',0,NULL,NULL,NULL),(11,2,NULL,110,NULL,'2026-10-15 23:59:00','CTR','2026-10-20 10:00:00',NULL,NULL,0,0,0,NULL,'2026-10-20 10:00:00','2026-10-12 09:00:00',0,NULL,NULL,NULL),(12,NULL,NULL,101,NULL,'2026-10-15 23:59:00','CTR','2026-09-10 10:00:00',NULL,NULL,0,0,0,NULL,'2026-10-20 10:00:00','2026-09-01 10:00:00',0,NULL,NULL,NULL),(13,3,NULL,100,NULL,'2026-10-15 23:59:00','CTR','2026-08-10 10:00:00','CTR',NULL,0,0,0,NULL,'2026-10-20 10:00:00','2026-08-01 10:00:00',0,NULL,NULL,NULL),(14,1,NULL,999,NULL,'2026-10-15 23:59:00','CTR','2026-07-10 10:00:00','CTR',NULL,0,0,0,NULL,'2026-10-20 10:00:00','2026-07-01 10:00:00',0,NULL,NULL,NULL),(15,1,NULL,100,NULL,'2026-10-15 23:59:00','CTR',NULL,NULL,NULL,0,0,0,NULL,'2026-10-20 10:00:00','2026-11-01 10:00:00',0,NULL,NULL,NULL);
+UNLOCK TABLES;
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
 
 -- Dump completed on 2026-11-26 12:00:00

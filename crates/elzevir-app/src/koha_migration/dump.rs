@@ -11,6 +11,53 @@ pub const MAX_KOHA_ROWS: usize = 1_000_000;
 /// Most rows read from each of the small tables.
 const MAX_SMALL_ROWS: usize = 100_000;
 
+/// The columns kept of `reserves`.
+const RESERVES: &[&str] = &[
+    "reserve_id",
+    "borrowernumber",
+    "reservedate",
+    "biblionumber",
+    "branchcode",
+    "priority",
+    "found",
+    "itemnumber",
+    "waitingdate",
+    "expirationdate",
+    "suspend",
+    "item_level_hold",
+    "timestamp",
+];
+
+/// The columns kept of `accountlines`.
+const ACCOUNT_LINES: &[&str] = &[
+    "accountlines_id",
+    "issue_id",
+    "borrowernumber",
+    "itemnumber",
+    "date",
+    "amount",
+    "credit_type_code",
+    "debit_type_code",
+    "status",
+    "amountoutstanding",
+    "timestamp",
+    "branchcode",
+];
+
+/// The columns kept of `old_issues`.
+const OLD_ISSUES: &[&str] = &[
+    "issue_id",
+    "borrowernumber",
+    "itemnumber",
+    "date_due",
+    "branchcode",
+    "returndate",
+    "checkin_library",
+    "renewals_count",
+    "issuedate",
+    "onsite_checkout",
+];
+
 /// The table a kept row came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum Table {
@@ -23,6 +70,7 @@ pub(super) enum Table {
     Reserves,
     AccountLines,
     AccountOffsets,
+    OldIssues,
 }
 
 impl Table {
@@ -90,35 +138,9 @@ impl Table {
                 "renewals_count",
                 "onsite_checkout",
             ],
-            Self::Reserves => &[
-                "reserve_id",
-                "borrowernumber",
-                "reservedate",
-                "biblionumber",
-                "branchcode",
-                "priority",
-                "found",
-                "itemnumber",
-                "waitingdate",
-                "expirationdate",
-                "suspend",
-                "item_level_hold",
-                "timestamp",
-            ],
-            Self::AccountLines => &[
-                "accountlines_id",
-                "issue_id",
-                "borrowernumber",
-                "itemnumber",
-                "date",
-                "amount",
-                "credit_type_code",
-                "debit_type_code",
-                "status",
-                "amountoutstanding",
-                "timestamp",
-                "branchcode",
-            ],
+            Self::Reserves => RESERVES,
+            Self::AccountLines => ACCOUNT_LINES,
+            Self::OldIssues => OLD_ISSUES,
             Self::AccountOffsets => &[
                 "id",
                 "credit_id",
@@ -137,7 +159,7 @@ impl Table {
             Self::Categories => "categorycode",
             Self::Borrowers | Self::Debarments => "borrowernumber",
             Self::Items => "itemnumber",
-            Self::Issues => "issue_id",
+            Self::Issues | Self::OldIssues => "issue_id",
             Self::Reserves => "reserve_id",
             Self::AccountLines => "accountlines_id",
             Self::AccountOffsets => "id",
@@ -220,6 +242,7 @@ impl Target for KohaTables {
             "reserves" => Some(Table::Reserves),
             "accountlines" => Some(Table::AccountLines),
             "account_offsets" => Some(Table::AccountOffsets),
+            "old_issues" => Some(Table::OldIssues),
             _ => None,
         })
     }

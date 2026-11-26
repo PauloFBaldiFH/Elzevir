@@ -78,6 +78,9 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &PatronCommand) -> Applied {
         PatronCommand::MigrateKohaAccounts(batch) => {
             crate::koha_accounts::apply(tx.connection(), batch)?
         }
+        PatronCommand::MigrateKohaHistory(batch) => {
+            crate::koha_history::apply(tx.connection(), batch)?
+        }
     };
     Ok(WriteOutput::Patrons(output))
 }

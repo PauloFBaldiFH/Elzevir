@@ -62,6 +62,9 @@ pub enum PatronCommand {
     /// Brings Koha's patron accounts, after the loans
     /// (docs/specs/migracao/circulacao-do-koha.md).
     MigrateKohaAccounts(Box<crate::koha_migration::KohaAccountBatch>),
+    /// Brings Koha's returned loans, after the accounts
+    /// (docs/specs/migracao/circulacao-do-koha.md).
+    MigrateKohaHistory(Box<crate::koha_migration::KohaHistoryBatch>),
 }
 
 /// One change to the patron categories.
@@ -162,6 +165,8 @@ pub enum PatronOutput {
     KohaCirculationMigrated(crate::koha_migration::KohaCirculationMigrated),
     /// What a write of Koha's accounts did.
     KohaAccountsMigrated(crate::koha_migration::KohaAccountsMigrated),
+    /// What a write of Koha's returned loans did.
+    KohaHistoryMigrated(crate::koha_migration::KohaHistoryMigrated),
 }
 
 /// A field of the patron form, to name the one refused.
