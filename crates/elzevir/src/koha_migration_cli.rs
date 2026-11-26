@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! `elzevir migrate-koha`: branches, patron categories, patrons and their restrictions,
-//! then current loans, holds and patron accounts, from a whole Koha database dump
+//! then current loans, holds, patron accounts and returned loans, from a whole Koha database dump
 //! (docs/specs/migracao/leitores-do-koha.md, circulacao-do-koha.md).
 
 use std::fs::File;
@@ -10,8 +10,8 @@ use std::path::PathBuf;
 use clap::Args;
 use elzevir_app::commands::{WriteCommand, WriteOutput};
 use elzevir_app::koha_migration::{
-    CirculationLeftover, KohaAccountsMigrated, KohaCirculationMigrated, KohaMigrated, KohaPlan,
-    Leftover, plan,
+    CirculationLeftover, KohaAccountsMigrated, KohaCirculationMigrated, KohaHistoryMigrated,
+    KohaMigrated, KohaPlan, Leftover, plan,
 };
 use elzevir_app::patrons::{PatronCommand, PatronOutput};
 
@@ -80,9 +80,25 @@ pub(crate) fn run(args: &MigrateKohaArgs) -> Result<(), String> {
         };
         accounts.add(write);
     }
+    let mut history = KohaHistoryMigrated::default();
+    for batch in plan.history_batches() {
+        let answer = data
+            .store
+            .submit(WriteCommand::Patrons(PatronCommand::MigrateKohaHistory(
+                Box::new(batch),
+            )))
+            .map_err(|e| e.to_string())?
+            .wait()
+            .map_err(|e| e.to_string())?;
+        let WriteOutput::Patrons(PatronOutput::KohaHistoryMigrated(write)) = answer else {
+            return Err("unexpected answer from the store".to_owned());
+        };
+        history.add(write);
+    }
     print!("{}", report(&plan, &done));
     print!("{}", circulation_report(&plan, &circulation));
     print!("{}", accounts_report(&plan, &accounts));
+    print!("{}", history_report(&plan, &history));
     Ok(())
 }
 
@@ -243,6 +259,29 @@ fn accounts_report(plan: &KohaPlan, done: &KohaAccountsMigrated) -> String {
         for (code, count) in &read.other_types {
             lines.push(format!("  {code}: {count}"));
         }
+    }
+    let mut text = lines.join("\n");
+    text.push('\n');
+    text
+}
+
+/// The report of the returned loans, by Koha's numbers only (circulacao-do-koha.md,
+/// item 17).
+fn history_report(plan: &KohaPlan, done: &KohaHistoryMigrated) -> String {
+    let mut left = plan.returned_left.clone();
+    left.extend(done.left.iter().copied());
+    let mut lines = vec![format!(
+        "returned loans: {} migrated ({} in a reading history, the others without patron), {} already migrated, {} left out",
+        done.returned,
+        done.with_patron,
+        done.already_migrated,
+        left.len()
+    )];
+    for (number, why) in &left {
+        lines.push(format!(
+            "  issue_id {number}: {}",
+            circulation_leftover(*why)
+        ));
     }
     let mut text = lines.join("\n");
     text.push('\n');

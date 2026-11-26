@@ -1,8 +1,8 @@
-# Migração do Koha, parte 2: empréstimos, reservas e contas (v0)
+# Migração do Koha, parte 2: empréstimos, reservas, contas e histórico (v0)
 
-> Status: v0, tarefas 5.2a (empréstimos e reservas, itens 1 a 8) e 5.2b (contas dos leitores, itens 9 a 13) do [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (Fase 5). Depois vem o histórico de leitura de quem consentiu (5.2c). Base: [parte 1](leitores-do-koha.md), [empréstimo](../circulacao/emprestimo.md), [renovação](../circulacao/renovacao.md), [reservas](../circulacao/reservas.md), [conta](../circulacao/conta.md) e a [importação do Koha](../catalogo/importacao-universal.md). Critério: **cada empréstimo e cada reserva em curso no Koha chega ao leitor e ao exemplar certos, na ordem da fila, e cada conta chega inteira, com o mesmo saldo, ou aparece no relatório com o motivo**.
+> Status: v0, tarefas 5.2a (empréstimos e reservas, itens 1 a 8) 5.2b (contas dos leitores, itens 9 a 13) e 5.2c (empréstimos devolvidos, itens 14 a 17) do [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (Fase 5). Base: [parte 1](leitores-do-koha.md), [empréstimo](../circulacao/emprestimo.md), [renovação](../circulacao/renovacao.md), [reservas](../circulacao/reservas.md), [conta](../circulacao/conta.md), [devolução](../circulacao/devolucao.md) e a [importação do Koha](../catalogo/importacao-universal.md). Critério: **cada empréstimo e cada reserva em curso no Koha chega ao leitor e ao exemplar certos, na ordem da fila, e cada conta chega inteira, com o mesmo saldo, ou aparece no relatório com o motivo**.
 
-O mesmo `elzevir migrate-koha` da parte 1, depois de gravar os leitores, grava os empréstimos e as reservas do dump e, por fim, as contas dos leitores. O acervo precisa ter vindo antes, pela importação com origem e casamento por `biblionumber`: é por ela que o Elzevir sabe qual Instância e qual exemplar correspondem aos números do Koha. Nenhum número do Koha entra no núcleo; tudo é achado pelas tabelas de borda que a importação e a parte 1 preencheram.
+O mesmo `elzevir migrate-koha` da parte 1, depois de gravar os leitores, grava os empréstimos e as reservas do dump as contas dos leitores e, por fim, os empréstimos já devolvidos. O acervo precisa ter vindo antes, pela importação com origem e casamento por `biblionumber`: é por ela que o Elzevir sabe qual Instância e qual exemplar correspondem aos números do Koha. Nenhum número do Koha entra no núcleo; tudo é achado pelas tabelas de borda que a importação e a parte 1 preencheram.
 
 ## 1. Comportamento
 
@@ -42,8 +42,15 @@ O mesmo `elzevir migrate-koha` da parte 1, depois de gravar os leitores, grava o
 12. A conta de um leitor vai inteira num só comando (`patrons.migrate_koha_accounts`, cerca de 500 lançamentos por comando). Leitor que não veio deixa a conta de fora. Leitor que já tem algum lançamento no Elzevir conta como já migrado e não recebe nada: a migração roda com o servidor parado, logo depois dos leitores, e uma conta só começa com ela.
 13. O relatório diz quantas contas, lançamentos e movimentos vieram, quantas já estavam migradas, os leitores cujas contas ficaram de fora, os lançamentos de fora com o `accountlines_id`, os movimentos de fora, os valores arredondados e os tipos locais trazidos como `MANUAL` ou `CREDIT`, com o código e a contagem.
 
+### Empréstimos devolvidos
+
+14. Cada linha de `old_issues` vira um empréstimo devolvido: `issuedate`, `date_due` e `returndate` no fuso da biblioteca, `branchcode` como unidade do empréstimo, `checkin_library` como unidade da devolução (sem ela, a do empréstimo), `renewals_count` e `onsite_checkout`. Linha sem `issue_id`, exemplar, unidade, saída, vencimento ou devolução fica de fora como incompleta; exemplar ou unidade que não está no Elzevir também.
+15. O leitor fica no empréstimo devolvido só quando veio na migração e guarda o histórico de leitura (`privacy` do Koha, [parte 1](leitores-do-koha.md), item 8), como numa devolução feita no Elzevir ([devolução](../circulacao/devolucao.md)). Os outros, e os que o Koha já tinha anonimizado, vêm sem leitor: contam para o exemplar, nunca para uma pessoa.
+16. Cada `issue_id` trazido fica na tabela de borda `koha_keys` (tipo 3, migração 65). Rodar de novo não traz o mesmo empréstimo duas vezes. São no máximo 500 por comando de escrita (`patrons.migrate_koha_history`).
+17. O relatório diz quantos vieram, quantos guardam o leitor, quantos já estavam migrados e os de fora, com o `issue_id` e o motivo.
+
 ## 2. Testes
 
-- `crates/elzevir-app/tests/koha_migration.rs`: leitura de `issues`, `reserves`, `accountlines` e `account_offsets` do dump fictício, fuso, ordem da fila, tipos locais, centavos e lotes.
-- `crates/elzevir-store/tests/koha_migration.rs`: com o acervo fictício importado, empréstimos (por `itemnumber` e por código de barras), reservas na fila, esperando e em trânsito com a transferência, as contas com os movimentos e a multa ligada ao empréstimo, cada motivo de fora e a segunda execução sem duplicar.
+- `crates/elzevir-app/tests/koha_migration.rs`: leitura de `issues`, `reserves`, `accountlines`, `account_offsets` e `old_issues` do dump fictício, fuso, ordem da fila, tipos locais, centavos e lotes.
+- `crates/elzevir-store/tests/koha_migration.rs`: com o acervo fictício importado, empréstimos (por `itemnumber` e por código de barras), reservas na fila, esperando e em trânsito com a transferência, as contas com os movimentos e a multa ligada ao empréstimo, os devolvidos com leitor só para quem consentiu, cada motivo de fora e a segunda execução sem duplicar.
 - `crates/elzevir/tests/cli.rs`: o relatório do comando, sem dados pessoais.

@@ -108,7 +108,7 @@ fn instance(connection: &Connection, biblionumber: u64) -> Result<Found<i64>, St
     })
 }
 
-fn branch(connection: &Connection, code: &str) -> Result<Found<i64>, StoreError> {
+pub(crate) fn branch(connection: &Connection, code: &str) -> Result<Found<i64>, StoreError> {
     Ok(by_code(connection, Coded::Branch, code)?.ok_or(CirculationLeftover::Branch))
 }
 
