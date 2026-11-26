@@ -31,6 +31,7 @@ mod importing;
 mod items;
 mod new_record;
 mod notice_rules;
+mod oai;
 mod opac;
 mod opac_account;
 mod opac_holds;
@@ -69,6 +70,7 @@ use elzevir_web_templates::I18n;
 
 pub use access::{AccessError, AccessPolicy, normalize_hostname, restrict_access};
 pub use catalog::StaffPorts;
+pub use oai::{OaiEvent, OaiRepository};
 pub use opac::OpacPorts;
 pub use print_notices::notice_text;
 pub use session::Sessions;
@@ -120,6 +122,7 @@ pub struct AppState {
     accounts: Option<Arc<dyn elzevir_app::patron_account::PatronAccounts>>,
     drafts: Option<Arc<draft_station::Drafts>>,
     authority_sources: Option<Arc<dyn elzevir_app::authority_sources::AuthoritySource>>,
+    oai: Option<OaiRepository>,
 }
 
 struct Inner {
@@ -166,6 +169,7 @@ impl AppState {
             accounts: None,
             drafts: None,
             authority_sources: None,
+            oai: None,
             inner: Arc::new(Inner {
                 staff,
                 memory,
@@ -299,6 +303,13 @@ impl AppState {
         self.authority_sources = Some(source);
         self
     }
+
+    /// Opens the OAI-PMH repository at `/oai` (docs/specs/opac/oai-pmh.md).
+    #[must_use]
+    pub fn with_oai(mut self, repository: OaiRepository) -> Self {
+        self.oai = Some(repository);
+        self
+    }
 }
 
 /// All routes, with security headers on every response.
@@ -309,6 +320,7 @@ pub fn router(state: AppState) -> Router {
         .merge(repository::routes())
         .merge(repository_staff::routes(&state))
         .route("/record/{id}", get(opac::record))
+        .route("/oai", get(oai::get).post(oai::post))
         .route("/equipe/barra", get(staff_bar::bar))
         .route("/equipe/busca", get(staff_bar::search))
         .route("/equipe", get(staff::home))

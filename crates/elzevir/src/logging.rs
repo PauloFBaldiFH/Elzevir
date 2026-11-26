@@ -64,6 +64,16 @@ pub(crate) fn sip2_message(instance: &str, terminal: &str, message: &str, outcom
     tracing::info!(target: TARGET, institution = "local", instance, event = "sip2.message", terminal, message, outcome, "SIP2 message");
 }
 
+/// Records an OAI-PMH request (docs/specs/opac/oai-pmh.md, item 19): no client address.
+pub(crate) fn oai_request(instance: &str, event: &elzevir_web::OaiEvent) {
+    let verb = event.verb.unwrap_or_default();
+    let format = event.format.unwrap_or_default();
+    tracing::info!(target: TARGET, institution = "local", instance, event = "oai.request", verb, format, outcome = event.outcome, records = event.records, "OAI-PMH request");
+    for instance_id in &event.broken {
+        tracing::warn!(target: TARGET, institution = "local", instance, event = "oai.record_unwritable", instance_id, "OAI-PMH record sent as deleted: its MARC cannot be written");
+    }
+}
+
 /// Records a known event with the identity generated for this execution.
 pub(crate) fn emit(instance: &str, event: Event) {
     match event {

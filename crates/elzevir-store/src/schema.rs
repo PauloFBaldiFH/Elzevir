@@ -841,6 +841,8 @@ const MIGRATIONS: &[&str] = &[
     include_str!("import_provenance.sql"),
     // 62: offline institutional repository.
     include_str!("repository/schema.sql"),
+    // 63: the OAI-PMH datestamp of each Instance.
+    include_str!("oai_datestamps.sql"),
 ];
 
 /// The migration that creates `match_keys`.

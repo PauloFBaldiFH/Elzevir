@@ -197,6 +197,26 @@ pub fn export_record<S: RecordSource + ?Sized>(
     }
 }
 
+/// One stored record as the export writes it, read back as a MARC record; `None` when
+/// the Instance does not exist (docs/specs/opac/oai-pmh.md, item 15).
+///
+/// # Errors
+///
+/// [`RecordExportError`] when reading the catalog or writing the record fails.
+pub fn marc_record<S: RecordSource + ?Sized>(
+    source: &S,
+    instance: InstanceId,
+    limits: &Limits,
+) -> Result<Option<Record>, RecordExportError> {
+    let Some(stored) = stored_record(source, instance)? else {
+        return Ok(None);
+    };
+    let mut marc21 = Vec::new();
+    to_marc(&stored.record, limits, &mut marc21)?;
+    let record = RecordRef::parse(&marc21, limits).map_err(ExportFailure::Source)?;
+    Ok(Some(Record::from_ref(&record)))
+}
+
 /// A selection of records written as one file (docs/specs/catalogo/lote.md, items 7
 /// and 8).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
