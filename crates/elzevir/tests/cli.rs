@@ -319,3 +319,161 @@ fn koha_preferences_become_an_elzevir_toml() {
     let refused = elzevir(&["import-koha-prefs", &path(dir.path(), "missing.sql")]);
     assert!(!refused.status.success());
 }
+
+/// A record of the synthetic catalog, as `biblio_metadata.metadata` keeps it.
+fn marcxml(biblionumber: u32, title: &str) -> String {
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\\n<record xmlns=\"http://www.loc.gov/MARC21/slim\">\
+         <leader>00000nam a2200000 a 4500</leader>\
+         <datafield tag=\"245\" ind1=\"0\" ind2=\"0\"><subfield code=\"a\">{title}</subfield></datafield>\
+         <datafield tag=\"999\" ind1=\" \" ind2=\" \"><subfield code=\"c\">{biblionumber}</subfield>\
+         <subfield code=\"d\">{biblionumber}</subfield></datafield></record>"
+    )
+}
+
+/// The patrons' synthetic dump, with the catalog, the item types and the preferences of
+/// the same database, and the patrons' dump alone.
+fn switch_dump() -> (String, String) {
+    let patrons = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../elzevir-app/tests/data/koha-patrons.sql"
+    ))
+    .unwrap();
+    let items = "  `homebranch` varchar(10) DEFAULT NULL,\n  PRIMARY KEY (`itemnumber`)";
+    assert!(patrons.contains(items));
+    let rows =
+        "(100,10,'B100','CTR'),(101,10,'B101','CTR'),(110,11,'B110','CTR'),(120,11,'B120','CTR')";
+    assert!(patrons.contains(rows));
+    let dump = patrons.clone()
+        .replace(
+            items,
+            "  `homebranch` varchar(10) DEFAULT NULL,\n  `holdingbranch` varchar(10) DEFAULT NULL,\n  \
+             `itype` varchar(10) DEFAULT NULL,\n  PRIMARY KEY (`itemnumber`)",
+        )
+        .replace(
+            rows,
+            "(100,10,'B100','CTR','CTR','LIV'),(101,10,'B101','CTR','CTR','LIV'),\
+             (110,11,'B110','CTR','CTR','DVD'),(120,11,'B120','NRT','NRT','LIV'),\
+             (130,12,'B130','LUA','LUA','LIV')",
+        )
+        .replace(
+            "-- Dump completed",
+            &format!(
+                "CREATE TABLE `itemtypes` (`itemtype` varchar(10) NOT NULL, `description` longtext);\n\
+                 INSERT INTO `itemtypes` VALUES ('LIV','Livros'),('REV','Revistas');\n\
+                 CREATE TABLE `biblio_metadata` (`id` int(11) NOT NULL, `biblionumber` int(11) NOT NULL, \
+                 `format` varchar(16) NOT NULL, `schema` varchar(16) NOT NULL, `metadata` longtext NOT NULL);\n\
+                 INSERT INTO `biblio_metadata` VALUES (1,10,'marcxml','MARC21','{}'),(2,11,'marcxml','MARC21','{}'),\
+                 (3,12,'marcxml','MARC21','{}');\n\
+                 CREATE TABLE `systempreferences` (`variable` varchar(50) NOT NULL, `value` mediumtext);\n\
+                 INSERT INTO `systempreferences` VALUES ('PatronAnonymizeDelay','1095'),('LocalPreference','x');\n\
+                 -- Dump completed",
+                marcxml(10, "Memórias de um sargento de milícias"),
+                marcxml(11, "O cortiço"),
+                marcxml(12, "Dom Casmurro")
+            ),
+        );
+    (dump, patrons)
+}
+
+#[test]
+fn a_koha_dump_switches_to_elzevir_in_one_command() {
+    // docs/specs/migracao/troca-do-koha.md.
+    let (dump, patrons) = switch_dump();
+    let dir = tempfile::tempdir().unwrap();
+    let sql = path(dir.path(), "library-2026-11-27.sql");
+    std::fs::write(&sql, &dump).unwrap();
+    let data = path(dir.path(), "data");
+    let switch = elzevir(&["switch-from-koha", "--data-dir", &data, &sql]);
+    assert!(switch.status.success(), "{}", text(&switch.stderr));
+    let report = text(&switch.stdout);
+    for line in [
+        "written to elzevir.toml",
+        "branches: 2 created, 0 updated",
+        "patrons: 3 migrated, 0 already migrated, 3 left out, 1 with staff permissions in Koha",
+        // DVD has no row in `itemtypes`: named by its code.
+        "item types: 2 created with Koha's names",
+        // A branch not in `branches` refuses its record, as the import does.
+        "records: 3 read, 2 stored, 1 refused",
+        "  biblionumber 12: unknown branch `LUA`",
+        "Items: 4 stored, 0 refused",
+        "loans: 2 migrated, 4 left out",
+        "loans and holds already migrated: 0",
+        "search index: 2 documents",
+    ] {
+        assert!(
+            report.lines().any(|found| found == line),
+            "{line} not in\n{report}"
+        );
+    }
+    for step in [
+        "reading the dump",
+        "preferences",
+        "catalog",
+        "circulation",
+        "search index",
+    ] {
+        assert!(
+            report.contains(&format!("== {step} (")),
+            "{step} not in\n{report}"
+        );
+    }
+    for private in ["Silva", "A0001", "Acácias", "ana@example.org"] {
+        assert!(!report.contains(private), "{private} in the report");
+    }
+    let toml = std::fs::read_to_string(dir.path().join("data/elzevir.toml")).unwrap();
+    assert!(toml.contains("anonymize_expired_days = 1095"), "{toml}");
+
+    // The index is ready before the first `serve`.
+    let index = elzevir_search::TantivyIndex::open(
+        &dir.path().join("data/index"),
+        elzevir_app::parallelism::Parallelism::Serial,
+    )
+    .unwrap();
+    let found = elzevir_app::search::SearchIndex::search(
+        &index,
+        &elzevir_app::search::SearchQuery::words("cortiço"),
+        elzevir_app::search::SearchScope::Staff,
+        0,
+        10,
+    )
+    .unwrap();
+    assert_eq!(found.hits.len(), 1);
+    drop(index);
+
+    // A second run finds a catalog and writes nothing.
+    let again = elzevir(&["switch-from-koha", "--data-dir", &data, &sql]);
+    assert!(!again.status.success());
+    assert!(text(&again.stderr).contains("starts from a new data directory"));
+    assert!(!dir.path().join("data/elzevir.koha.toml").exists());
+
+    // A library that already has its own configuration keeps it; the preferences go beside.
+    let configured = dir.path().join("configured");
+    std::fs::create_dir(&configured).unwrap();
+    std::fs::write(configured.join("elzevir.toml"), "# the library's own\n").unwrap();
+    let beside = elzevir(&[
+        "switch-from-koha",
+        "--data-dir",
+        configured.to_str().unwrap(),
+        &sql,
+    ]);
+    assert!(beside.status.success(), "{}", text(&beside.stderr));
+    assert!(text(&beside.stdout).contains("written to elzevir.koha.toml\n"));
+    assert_eq!(
+        std::fs::read_to_string(configured.join("elzevir.toml")).unwrap(),
+        "# the library's own\n"
+    );
+    assert!(
+        std::fs::read_to_string(configured.join("elzevir.koha.toml"))
+            .unwrap()
+            .contains("anonymize_expired_days = 1095")
+    );
+
+    // A dump without the catalog is refused before anything is written.
+    let fresh = path(dir.path(), "fresh");
+    let without = path(dir.path(), "without.sql");
+    std::fs::write(&without, patrons).unwrap();
+    let refused = elzevir(&["switch-from-koha", "--data-dir", &fresh, &without]);
+    assert!(!refused.status.success());
+    assert!(!dir.path().join("fresh/elzevir.toml").exists());
+}

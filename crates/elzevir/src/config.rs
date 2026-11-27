@@ -543,7 +543,11 @@ pub(crate) fn check(text: &str) -> Result<(), String> {
 }
 
 /// The configuration `text` says, with the files it names read from `data_dir`.
-fn from_text(data_dir: &Path, path: &Path, text: Option<&str>) -> Result<Loaded, String> {
+pub(crate) fn from_text(
+    data_dir: &Path,
+    path: &Path,
+    text: Option<&str>,
+) -> Result<Loaded, String> {
     let config: Config = match text {
         None => Config::default(),
         Some(text) => toml::from_str(text).map_err(|e| format!("{}: {e}", path.display()))?,

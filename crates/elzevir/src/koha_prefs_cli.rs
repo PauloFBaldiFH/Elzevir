@@ -30,7 +30,7 @@ pub(crate) fn run(args: &ImportKohaPrefsArgs) -> Result<(), String> {
 }
 
 /// The report, by name only: preferences can hold addresses and keys (item 8).
-fn report(report: &PrefsReport) -> String {
+pub(crate) fn report(report: &PrefsReport) -> String {
     let mut lines = vec![format!(
         "system preferences: {} read, {} at Koha's default left out, {} in fields, {} in [koha_legacy] ({} not from Koha 26.05), {} passwords or keys not copied",
         report.read,

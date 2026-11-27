@@ -72,6 +72,7 @@ mod sip2_server;
 mod sru_config;
 mod status;
 mod support_archive;
+mod switch_cli;
 mod tools_cli;
 mod tray;
 mod tunnel_cli;
@@ -185,6 +186,9 @@ enum Command {
     MigrateKoha(koha_migration_cli::MigrateKohaArgs),
     /// Writes an `elzevir.toml` from the system preferences of a Koha database dump.
     ImportKohaPrefs(koha_prefs_cli::ImportKohaPrefsArgs),
+    /// Brings preferences, patrons, catalog and circulation from a whole Koha database
+    /// dump into a new data directory, and builds the search index.
+    SwitchFromKoha(switch_cli::SwitchFromKohaArgs),
 }
 
 #[derive(Subcommand)]
@@ -271,6 +275,7 @@ fn main() -> ExitCode {
         Command::KohaTypes(args) => catalog_cli::koha_types(&args),
         Command::MigrateKoha(args) => koha_migration_cli::run(&args),
         Command::ImportKohaPrefs(args) => koha_prefs_cli::run(&args),
+        Command::SwitchFromKoha(args) => switch_cli::run(&args),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,

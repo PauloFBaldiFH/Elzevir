@@ -8,7 +8,7 @@ O Elzevir é um sistema de bibliotecas em Rust que reconstrói o **comportamento
 
 ## Estado atual
 
-- **Fases 0 a 4 concluídas** (até o PR #259, 2026-11-26), com as pendências da Fase 3 (modo completo do acervo e "Mostrar CPF"). O plano e o critério de pronto de cada tarefa estão no [doc 03](docs/arquitetura/03-estrategia-reconstrucao.md), §4; a **Fase 5** (migração do Koha e operação da biblioteca), aprovada em 2026-11-26, fecha com a 5.3 (`elzevir import-koha-prefs`, [preferencias-do-koha.md](docs/specs/migracao/preferencias-do-koha.md)). Cada fase nova só começa depois de Paulo aprovar o plano dela no doc 03.
+- **Fases 0 a 4 concluídas** (até o PR #259, 2026-11-26), com as pendências da Fase 3 (modo completo do acervo e "Mostrar CPF"). O plano e o critério de pronto de cada tarefa estão no [doc 03](docs/arquitetura/03-estrategia-reconstrucao.md), §4; a **Fase 5** (migração do Koha e operação da biblioteca) terminou com a 5.3 (PR #274). A **Fase 6** (ensaio da troca real numa cópia da Castro Alves) e o roadmap das Fases 7 a 12 foram aprovados em 2026-11-27 (doc 03, §4). **Dados reais de leitores:** o dump da produção fica só na máquina de Paulo e na VM do oráculo, nunca na nuvem nem no repositório; aqui chegam só relatórios agregados, sem dados pessoais. Cada fase nova só começa depois de Paulo aprovar o plano dela no doc 03.
 - O que existe, por área (cada uma com a sua spec em `docs/specs/`):
   - **Catálogo:** núcleo BIBFRAME completo, MARC21 e UNIMARC só na borda (UNIMARC pela projeção em MARC21, [unimarc.md](docs/specs/catalogo/unimarc.md)), importação universal, casamento, listagem com foco 80/20, edição por bloco, lote, autoridades, fontes de rascunho e de autoridade (SRU e Z39.50), exportação MARC, RDF e formatos de citação.
   - **Circulação:** leitores atrás do muro, empréstimo, devolução, renovação, reservas, multas, suspensões, avisos e calendário, com cenários contra o oráculo.
@@ -111,7 +111,15 @@ cargo xtask codegen --check
 
 (`cargo xtask ci` roda as três verificações `xtask` de uma vez. Ao mexer em `reference/koha` ou `koha-lock.json`, rode também `perl tools/koha-extractor/extract.pl --check`.)
 
-Definition of Done: spec atualizada se mudou comportamento; testes do nível certo; tudo acima verde; ADR em `docs/adr/` se tomou decisão de arquitetura; sem regressão de desempenho.
+Definition of Done: spec atualizada se mudou comportamento; testes do nível certo; tudo acima verde; ADR em `docs/adr/` se tomou decisão de arquitetura; sem regressão de desempenho. A partir da Fase 6, todo item cumpre também as **sete regras de método** (Paulo, 2026-11-27):
+
+1. **Spec antes do código**, com as regras de negócio do Koha lidas no código e nos testes `.t` dele, casos de borda e o que fica de fora.
+2. **Persistência real:** migração do SQLite, escrita só pela thread escritora; nada guardado só em memória ou em arquivo solto.
+3. **Busca real:** o que o usuário procura entra no índice Tantivy, com teste de busca.
+4. **BIBFRAME nativo:** cada necessidade vira classe ou propriedade da ontologia da LC, ou entidade própria quando a ontologia não tem (listas, assinaturas, verbas); MARC21 e UNIMARC só na borda, com ida e volta testada. Nada de copiar frameworks ou conceitos legados do Koha.
+5. **Prova no oráculo:** circulação, multas, reservas, protocolos e migração com cenário gravado no Koha; diferença só como desvio aprovado.
+6. **Sem caminho feliz só:** testes de recusa, limite, concorrência e dado inválido; nenhum placeholder, mock no lugar de comportamento ou TODO sem issue.
+7. **Fatia vertical:** spec, modelo, comando, tela, índice, migração do Koha e prova no mesmo item, um item por vez, fechado antes de abrir o próximo.
 
 PRs pequenos (até ~500 linhas), um assunto por PR. Commits no formato Conventional Commits, em português: `feat(circ): ...`, `fix(marc): ...`. Arquivos-fonte com cabeçalho `// SPDX-License-Identifier: GPL-3.0-or-later`.
 
