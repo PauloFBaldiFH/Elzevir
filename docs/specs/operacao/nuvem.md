@@ -41,3 +41,5 @@ histórico. Uma interrupção descarta entradas pendentes e pede nova resposta.
 A limpeza de variáveis herdadas de rclone ignora maiúsculas/minúsculas no
 prefixo RCLONE_, pois o Windows trata nomes de ambiente dessa forma. Assim,
 flags de depuração ou configuração com grafia mista não contornam a limpeza.
+
+A descoberta admite nomes técnicos compostos como `google cloud storage` quando constam do catálogo do binário rclone. O nome tem até 64 bytes e cada palavra contém apenas letras ASCII minúsculas, números e sublinhado. Um espaço separa cada palavra. A configuração envia o nome como um único argumento ao executável. Nomes de opções continuam sujeitos à validação mais restrita.
