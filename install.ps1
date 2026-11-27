@@ -161,6 +161,13 @@ function Invoke-ElzevirNative([string] $Program, [string[]] $Arguments) {
     & $Program @Arguments
     if ($LASTEXITCODE -ne 0) { throw 'Native Elzevir operation failed; configuration and data were preserved' }
 }
+function Test-ElzevirCommand([string] $Program, [string] $Command) {
+    # Windows PowerShell 5.1 treats redirected native stderr as an error record.
+    # An older binary prints usage to stderr for an unsupported subcommand.
+    $ErrorActionPreference = 'Continue'
+    & $Program $Command --help *> $null
+    return ($LASTEXITCODE -eq 0)
+}
 function Set-ElzevirPrivateDirectory([string] $Path, [switch] $ForUser) {
     $grants = @('*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F')
     if ($ForUser) {
@@ -221,8 +228,7 @@ function Install-ElzevirForUser([string] $Payload, [string] $BinDirectory, [stri
     Write-Output "Installed: $destination"
     Write-Output "Data: $Data"
     Write-Output 'Other terminals opened before this installation need to be reopened to find elzevir.'
-    & $destination start --help *> $null
-    if ($LASTEXITCODE -eq 0) {
+    if (Test-ElzevirCommand $destination start) {
         $menu = New-ElzevirShortcut ([Environment]::GetFolderPath('Programs')) $destination 'start'
         $desktop = New-ElzevirShortcut ([Environment]::GetFolderPath('Desktop')) $destination 'start'
         if ($menu -or $desktop) { Write-Output 'Elzevir is in the Start menu and on the desktop.' }
@@ -237,8 +243,7 @@ function Install-ElzevirForUser([string] $Payload, [string] $BinDirectory, [stri
             Write-Output 'The Elzevir server and its notification-area icon start when you sign in.'
             $script:OpenTray = $trayDestination
         } else {
-            & $destination background --help *> $null
-            if ($LASTEXITCODE -eq 0 -and (New-ElzevirShortcut $startup $destination 'background' 'Elzevir (server)' 7)) {
+            if ((Test-ElzevirCommand $destination background) -and (New-ElzevirShortcut $startup $destination 'background' 'Elzevir (server)' 7)) {
                 Write-Output 'The Elzevir server starts when you sign in.'
             }
         }
