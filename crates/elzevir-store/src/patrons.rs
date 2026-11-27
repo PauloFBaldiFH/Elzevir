@@ -93,6 +93,7 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &PatronCommand) -> Applied {
         PatronCommand::MigrateKohaHistory(batch) => {
             crate::koha_history::apply(tx.connection(), batch)?
         }
+        PatronCommand::MigrateKohaRules(batch) => crate::koha_rules::apply(tx.connection(), batch)?,
     };
     Ok(WriteOutput::Patrons(output))
 }

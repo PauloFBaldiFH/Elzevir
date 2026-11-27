@@ -40,6 +40,7 @@ mod koha_accounts;
 mod koha_circulation;
 mod koha_history;
 mod koha_migration;
+mod koha_rules;
 mod koha_types;
 mod koha_verify;
 mod listing;

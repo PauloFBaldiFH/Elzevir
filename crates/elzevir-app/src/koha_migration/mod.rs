@@ -23,6 +23,7 @@ mod accounts;
 mod circulation;
 mod dump;
 mod history;
+mod rules;
 
 pub use accounts::{
     ACCOUNT_LINES_PER_COMMAND, AccountsRead, KohaAccount, KohaAccountBatch, KohaAccountLine,
@@ -37,6 +38,9 @@ pub use circulation::{
 use dump::{KohaTables, Row, Table};
 pub use dump::{LEFT_OUT_COLUMNS, MAX_KOHA_ROWS};
 pub use history::{KohaHistoryBatch, KohaHistoryMigrated, KohaReturnedLoan, RETURNED_PER_COMMAND};
+pub use rules::{
+    KohaRule, KohaRulesBatch, KohaRulesMigrated, RuleLeftover, checked as checked_rule,
+};
 
 /// Most patrons in one write command (item 16).
 pub const PATRONS_PER_COMMAND: usize = 500;
@@ -264,6 +268,10 @@ pub struct KohaPlan {
     pub returned: Vec<KohaReturnedLoan>,
     /// Returned loans the dump does not describe well enough, by `issue_id`.
     pub returned_left: Vec<(u64, CirculationLeftover)>,
+    /// Circulation rules that come, by `id` (troca-do-koha.md, item 7a).
+    pub rules: Vec<KohaRule>,
+    /// Circulation rules left out, by `id`.
+    pub rules_left: Vec<(u64, RuleLeftover)>,
 }
 
 /// A patron field, ordered for the report.
@@ -341,6 +349,7 @@ pub fn plan(input: impl BufRead, today: Date, zone: &TimeZone) -> Result<KohaPla
     circulation::read(&tables.rows, zone, &mut plan);
     accounts::read(&tables.rows, zone, &mut plan);
     history::read(&tables.rows, zone, &mut plan);
+    rules::read(&tables.rows, &mut plan);
     Ok(plan)
 }
 

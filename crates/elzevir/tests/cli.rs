@@ -367,6 +367,12 @@ fn switch_dump() -> (String, String) {
                  (3,12,'marcxml','MARC21','{}');\n\
                  CREATE TABLE `systempreferences` (`variable` varchar(50) NOT NULL, `value` mediumtext);\n\
                  INSERT INTO `systempreferences` VALUES ('PatronAnonymizeDelay','1095'),('LocalPreference','x');\n\
+                 CREATE TABLE `circulation_rules` (`id` int(11) NOT NULL, `branchcode` varchar(10), \
+                 `categorycode` varchar(10), `itemtype` varchar(10), `rule_name` varchar(32) NOT NULL, \
+                 `rule_value` varchar(32) NOT NULL);\n\
+                 INSERT INTO `circulation_rules` VALUES (1,NULL,NULL,NULL,'issuelength','21'),\
+                 (2,'CTR','ADU','LIV','issuelength','14'),(3,NULL,NULL,'REV','renewalsallowed','0'),\
+                 (4,'LUA',NULL,NULL,'issuelength','7'),(5,NULL,NULL,NULL,'no_such_rule','1');\n\
                  -- Dump completed",
                 marcxml(10, "Memórias de um sargento de milícias"),
                 marcxml(11, "O cortiço"),
@@ -391,8 +397,11 @@ fn a_koha_dump_switches_to_elzevir_in_one_command() {
         "written to elzevir.toml",
         "branches: 2 created, 0 updated",
         "patrons: 3 migrated, 0 already migrated, 3 left out, 1 with staff permissions in Koha",
-        // DVD has no row in `itemtypes`: named by its code.
-        "item types: 2 created with Koha's names",
+        // DVD has no row in `itemtypes`: named by its code; REV only a rule names.
+        "item types: 3 created with Koha's names",
+        "circulation rules: 3 set, 2 left out",
+        "  id 4: branchcode not in the Elzevir",
+        "  id 5: a rule_name Koha 26.05 does not have",
         // A branch not in `branches` refuses its record, as the import does.
         "records: 3 read, 2 stored, 1 refused",
         "  biblionumber 12: unknown branch `LUA`",
@@ -500,6 +509,8 @@ fn verify_after_the_switch(dir: &Path, data: &str, sql: &str) {
         "  a branch the Elzevir lacks (ZZZ): 1 (reserve_id 6)",
         "patron accounts: 3 in the dump, 2 in the Elzevir, 1 left out with a cause, 0 differences without a cause",
         "returned loans: 6 in the dump, 4 in the Elzevir, 2 left out with a cause, 0 differences without a cause",
+        "circulation rules: 5 in the dump, 3 in the Elzevir, 2 left out with a cause, 0 differences without a cause",
+        "  a branch the Elzevir lacks (LUA): 1 (id 4)",
     ] {
         assert!(
             report.lines().any(|found| found == line),

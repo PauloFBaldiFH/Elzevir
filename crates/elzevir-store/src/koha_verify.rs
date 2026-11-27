@@ -29,6 +29,8 @@ impl crate::ElzevirStore {
                 holds: holds(connection)?,
                 accounts: accounts(connection)?,
                 returned: returned(connection)?,
+                item_types: item_types(connection)?,
+                rules: rules(connection)?,
             })
         })
     }
@@ -229,6 +231,52 @@ fn returned(
         .query_map(params![Keyed::ReturnedLoan as i64], |row| {
             Ok((row.get(0)?, row.get(1)?))
         })?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(rows)
+}
+
+fn item_types(connection: &Connection) -> Result<std::collections::BTreeSet<String>, StoreError> {
+    let mut statement = connection.prepare(
+        "SELECT k.code FROM koha_codes k JOIN circulation_policies p ON p.id = k.local_id
+         WHERE k.kind = ?1",
+    )?;
+    let rows = statement
+        .query_map(params![Coded::Policy as i64], |row| row.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(rows)
+}
+
+fn rules(
+    connection: &Connection,
+) -> Result<std::collections::BTreeMap<elzevir_app::koha_verify::RuleKey, String>, StoreError> {
+    let mut statement = connection.prepare(
+        "SELECT CASE WHEN r.branch_id IS NULL THEN NULL ELSE coalesce(
+                    (SELECT code FROM koha_codes WHERE kind = ?1 AND local_id = r.branch_id),
+                    '#' || r.branch_id) END,
+                CASE WHEN r.category_id IS NULL THEN NULL ELSE coalesce(
+                    (SELECT koha_key FROM koha_keys WHERE kind = ?2 AND local_id = r.category_id
+                     ORDER BY koha_key LIMIT 1),
+                    '#' || r.category_id) END,
+                CASE WHEN r.policy_id IS NULL THEN NULL ELSE coalesce(
+                    (SELECT code FROM koha_codes WHERE kind = ?3 AND local_id = r.policy_id),
+                    '#' || r.policy_id) END,
+                r.kind, r.value
+         FROM circulation_rules r",
+    )?;
+    let rows = statement
+        .query_map(
+            params![
+                Coded::Branch as i64,
+                Keyed::Category as i64,
+                Coded::Policy as i64
+            ],
+            |row| {
+                Ok((
+                    (row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?),
+                    row.get(4)?,
+                ))
+            },
+        )?
         .collect::<rusqlite::Result<_>>()?;
     Ok(rows)
 }

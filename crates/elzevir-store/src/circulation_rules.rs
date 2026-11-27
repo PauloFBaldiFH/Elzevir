@@ -112,7 +112,7 @@ pub(crate) fn scope_exists(
     Ok(())
 }
 
-fn set_rules(connection: &Connection, change: &RuleChange) -> Applied {
+pub(crate) fn set_rules(connection: &Connection, change: &RuleChange) -> Applied {
     let rules = checked_rules(change).map_err(refused)?;
     scope_exists(connection, &change.scope)?;
     let scope = &change.scope;

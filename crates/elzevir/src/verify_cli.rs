@@ -56,6 +56,7 @@ const fn names(table: Table) -> (&'static str, &'static str) {
         Table::Holds => ("holds", "reserve_id"),
         Table::Accounts => ("patron accounts", "borrowernumber"),
         Table::Returned => ("returned loans", "issue_id"),
+        Table::Rules => ("circulation rules", "id"),
     }
 }
 
@@ -71,6 +72,8 @@ fn cause(cause: &Cause) -> String {
         Cause::ItemLeftOut => "its Item did not come".to_owned(),
         Cause::ItemOnLoan => "its Item came lent by another loan of the dump".to_owned(),
         Cause::AlreadyHeld => "the patron already holds the record in the dump".to_owned(),
+        Cause::Rule(why) => crate::switch_cli::rule_leftover(*why).to_owned(),
+        Cause::UnknownCode(column) => format!("{column} not in the Elzevir"),
     }
 }
 

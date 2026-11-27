@@ -6,9 +6,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::import::koha_sql::KohaCatalogRecord;
-use crate::koha_migration::{CirculationLeftover, KohaPlan, Leftover};
+use crate::koha_migration::{CirculationLeftover, KohaPlan, Leftover, RuleLeftover};
 
 mod circulation;
+mod rules;
+
+/// A rule by its scope as Koha's codes (`None` is "any") and its `rule_name`.
+pub type RuleKey = (Option<String>, Option<String>, Option<String>, String);
 
 pub use circulation::{FoundHold, FoundLoan, HoldState};
 
@@ -33,6 +37,11 @@ pub struct Footprint {
     pub accounts: BTreeMap<String, (i64, usize)>,
     /// Returned loans, by `issue_id`: whether the patron is kept with it.
     pub returned: BTreeMap<String, bool>,
+    /// The Koha item type codes of the circulation policies.
+    pub item_types: BTreeSet<String>,
+    /// Circulation rules and their values. A dimension the Elzevir has without a Koha code
+    /// is named `#` and its id, so that it never passes for "any".
+    pub rules: BTreeMap<RuleKey, String>,
 }
 
 /// A patron as the Elzevir holds it, with its branch and category as Koha codes.
@@ -84,6 +93,8 @@ pub enum Table {
     Accounts,
     /// `old_issues`, by `issue_id`.
     Returned,
+    /// `circulation_rules`, by `id`.
+    Rules,
 }
 
 /// Why a number of the dump is not in the Elzevir, found in the dump or the database
@@ -110,6 +121,10 @@ pub enum Cause {
     ItemOnLoan,
     /// An earlier hold of the dump has the same patron and record.
     AlreadyHeld,
+    /// The rule cannot be set, as `circ.set_rules` checks it.
+    Rule(RuleLeftover),
+    /// The rule names a code of this column that the Elzevir does not have.
+    UnknownCode(&'static str),
 }
 
 /// A difference without a cause.
@@ -195,6 +210,7 @@ pub fn verify(
         circulation::holds(plan, found),
         circulation::accounts(plan, found),
         circulation::returned(plan, found),
+        rules::rules(plan, found),
     ]
 }
 
@@ -476,7 +492,90 @@ mod tests {
             }
         }
         circulate(plan, &mut found);
+        for rule in &plan.rules {
+            found.item_types.extend(rule.item_type.clone());
+            let key = (
+                rule.branch.clone(),
+                rule.category.clone(),
+                rule.item_type.clone(),
+                rule.name.clone(),
+            );
+            found.rules.insert(key, rule.value.clone());
+        }
         found
+    }
+
+    fn rule(
+        id: u64,
+        branch: Option<&str>,
+        item_type: Option<&str>,
+        value: &str,
+    ) -> crate::koha_migration::KohaRule {
+        crate::koha_migration::KohaRule {
+            id,
+            branch: branch.map(str::to_owned),
+            category: None,
+            item_type: item_type.map(str::to_owned),
+            name: "issuelength".to_owned(),
+            value: value.to_owned(),
+        }
+    }
+
+    #[test]
+    fn each_rule_is_compared_at_its_scope_by_koha_codes() {
+        let mut plan = plan();
+        plan.rules = vec![
+            rule(1, None, None, "21"),
+            rule(2, Some("CTR"), Some("LIV"), "14"),
+            rule(3, Some("LUA"), None, "7"),
+            rule(4, None, Some("REV"), "7"),
+            rule(5, Some("NRT"), None, "10"),
+        ];
+        plan.rules_left = vec![(6, RuleLeftover::UnknownKind)];
+        let mut found = faithful(&plan, &[]);
+        for id in [3, 4] {
+            let lost = &plan.rules[id - 1];
+            found.rules.remove(&(
+                lost.branch.clone(),
+                None,
+                lost.item_type.clone(),
+                lost.name.clone(),
+            ));
+        }
+        found.item_types.remove("REV");
+        *found
+            .rules
+            .get_mut(&(None, None, None, "issuelength".to_owned()))
+            .unwrap() = "20".to_owned();
+        found
+            .rules
+            .remove(&(Some("NRT".to_owned()), None, None, "issuelength".to_owned()));
+        found.rules.insert(
+            (Some("#9".to_owned()), None, None, "issuelength".to_owned()),
+            "5".to_owned(),
+        );
+        let checks = verify(&plan, &[], &found);
+        let rules = check(&checks, Table::Rules);
+        assert_eq!((rules.in_dump, rules.arrived), (6, 2));
+        assert_eq!(
+            rules.explained,
+            BTreeMap::from([
+                (Cause::UnknownBranch("LUA".to_owned()), vec!["3".to_owned()]),
+                (Cause::Rule(RuleLeftover::UnknownKind), vec!["6".to_owned()]),
+                (Cause::UnknownCode("itemtype"), vec!["4".to_owned()]),
+            ])
+        );
+        assert_eq!(
+            rules.unexplained,
+            vec![
+                ("1".to_owned(), Unexplained::Field("rule_value")),
+                ("5".to_owned(), Unexplained::Missing),
+                (
+                    "issuelength (#9, *, *)".to_owned(),
+                    Unexplained::ExtraBy("rule")
+                ),
+            ]
+        );
     }
 
     /// The loans, holds, accounts and returned loans a faithful migration writes, given
