@@ -3754,7 +3754,7 @@ pub const KOHA_SYSPREFS: &[KohaSyspref] = &[
     KohaSyspref {
         name: "QueryAutoTruncate",
         default: "1",
-        field: None,
+        field: Some("[search] complete_words"),
         secret: false,
     },
     KohaSyspref {

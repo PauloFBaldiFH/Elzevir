@@ -76,6 +76,8 @@ pub struct SearchDocument {
     pub subjects: Vec<String>,
     /// Publisher.
     pub publisher: Option<String>,
+    /// Place of publication, as written.
+    pub place: Option<String>,
     /// The Work's summary.
     pub summary: Option<String>,
     /// The notes: general, contents and local, then the typed notes, in order.
@@ -132,7 +134,14 @@ pub fn document_of(instance: &InstanceView, items: &[ItemView]) -> SearchDocumen
         hub: instance.hub,
         title: instance.title.clone(),
         work_title: instance.work_title.clone(),
-        other_titles: instance.other_titles.clone(),
+        // The series is searched as a title, as in Koha's title index, so a search for
+        // the series' name finds its volumes.
+        other_titles: instance
+            .other_titles
+            .iter()
+            .chain(&instance.series)
+            .cloned()
+            .collect(),
         main_contributor: instance
             .contributors
             .first()
@@ -148,6 +157,7 @@ pub fn document_of(instance: &InstanceView, items: &[ItemView]) -> SearchDocumen
             .map(|(_, heading)| heading.clone())
             .collect(),
         publisher: instance.publisher.clone(),
+        place: instance.place.clone(),
         summary: instance.summary.clone(),
         notes: instance
             .notes
@@ -662,6 +672,8 @@ mod tests {
                 relations: Vec::new(),
                 title: format!("Title {}", id.0),
                 other_titles: Vec::new(),
+                series: None,
+                place: None,
                 typed_notes: Vec::new(),
                 publisher: None,
                 date: None,

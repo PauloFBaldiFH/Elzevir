@@ -9,6 +9,7 @@ use elzevir_domain::catalog::IdentifierKind;
 use tantivy::Term;
 use tantivy::query::{BooleanQuery, EmptyQuery, Occur, Query, QueryParser, RegexQuery, TermQuery};
 use tantivy::schema::{Field, IndexRecordOption};
+use tantivy::tokenizer::{AsciiFoldingFilter, LowerCaser, SimpleTokenizer, TextAnalyzer};
 
 use crate::TantivyIndex;
 
@@ -49,24 +50,58 @@ impl TantivyIndex {
         let words = plain(&term.text);
         let truncation = term.truncation;
         match term.field {
+            // A term of every field truncated on the right is the search box with each
+            // word completed, codes included (docs/specs/catalogo/busca.md, item 5a).
+            SearchField::Any
+                if truncation == Truncation::Right && term.matching != WordMatch::Any =>
+            {
+                self.query(&term.text, scope, true)
+            }
+            SearchField::Any if truncation != Truncation::None => self.truncated_words(
+                &[
+                    f.title,
+                    f.work_title,
+                    f.other_title,
+                    f.contributor,
+                    f.subject,
+                    f.publisher,
+                    f.place,
+                    f.summary,
+                    f.note,
+                ],
+                term.matching,
+                &words,
+                truncation,
+            ),
             SearchField::Any => match term.matching {
-                WordMatch::Any => {
-                    any_of(words.split_whitespace().map(|word| self.query(word, scope)))
-                }
+                WordMatch::Any => any_of(
+                    words
+                        .split_whitespace()
+                        .map(|word| self.query(word, scope, false)),
+                ),
                 WordMatch::All | WordMatch::Phrase if words.trim().is_empty() => {
                     Box::new(EmptyQuery)
                 }
-                WordMatch::All | WordMatch::Phrase => self.query(&term.text, scope),
+                WordMatch::All | WordMatch::Phrase => self.query(&term.text, scope, false),
             },
-            SearchField::Title => self.words(
+            SearchField::Title => self.truncated_words(
                 &[f.title, f.work_title, f.other_title],
                 term.matching,
                 &words,
+                truncation,
             ),
-            SearchField::Contributor => self.words(&[f.contributor], term.matching, &words),
-            SearchField::Subject => self.words(&[f.subject], term.matching, &words),
-            SearchField::Publisher => self.words(&[f.publisher], term.matching, &words),
-            SearchField::Note => self.words(&[f.summary, f.note], term.matching, &words),
+            SearchField::Contributor => {
+                self.truncated_words(&[f.contributor], term.matching, &words, truncation)
+            }
+            SearchField::Subject => {
+                self.truncated_words(&[f.subject], term.matching, &words, truncation)
+            }
+            SearchField::Publisher => {
+                self.truncated_words(&[f.publisher], term.matching, &words, truncation)
+            }
+            SearchField::Note => {
+                self.truncated_words(&[f.summary, f.note], term.matching, &words, truncation)
+            }
             SearchField::Identifier => {
                 let typed = term.text.trim();
                 any_of(
@@ -100,6 +135,41 @@ impl TantivyIndex {
         }
     }
 
+    /// `words` in `fields`, each truncated as asked: a truncated word finds the indexed
+    /// words it starts (right), ends (left) or is inside (both), besides its own stem,
+    /// since the index keeps stems. With truncation, a phrase asks for all the words.
+    pub(crate) fn truncated_words(
+        &self,
+        fields: &[Field],
+        matching: WordMatch,
+        words: &str,
+        truncation: Truncation,
+    ) -> Box<dyn Query> {
+        if truncation == Truncation::None {
+            return self.words(fields, matching, words);
+        }
+        let occur = if matching == WordMatch::Any {
+            Occur::Should
+        } else {
+            Occur::Must
+        };
+        let clauses: Vec<(Occur, Box<dyn Query>)> = words
+            .split_whitespace()
+            .map(|word| {
+                let folded = fold(word);
+                let stem = self.words(fields, WordMatch::All, word);
+                let starts = fields
+                    .iter()
+                    .map(|field| exact(*field, &folded, truncation));
+                (occur, any_of(std::iter::once(stem).chain(starts)))
+            })
+            .collect();
+        if clauses.is_empty() {
+            return Box::new(EmptyQuery);
+        }
+        Box::new(BooleanQuery::new(clauses))
+    }
+
     /// `words` in `fields`: all of them, any of them, or as a phrase.
     fn words(&self, fields: &[Field], matching: WordMatch, words: &str) -> Box<dyn Query> {
         if words.trim().is_empty() {
@@ -124,9 +194,23 @@ impl TantivyIndex {
     }
 }
 
+/// `word` lower-cased and without accents, as the index keeps its words before the stem.
+fn fold(word: &str) -> String {
+    let mut analyzer = TextAnalyzer::builder(SimpleTokenizer::default())
+        .filter(LowerCaser)
+        .filter(AsciiFoldingFilter)
+        .build();
+    let mut stream = analyzer.token_stream(word);
+    let mut folded = String::new();
+    while let Some(token) = stream.next() {
+        folded.push_str(&token.text);
+    }
+    folded
+}
+
 /// The text with every character that is not a letter or a digit made a space, so the
 /// query parser reads words and nothing else.
-fn plain(text: &str) -> String {
+pub(crate) fn plain(text: &str) -> String {
     text.chars()
         .map(|c| if c.is_alphanumeric() { c } else { ' ' })
         .collect()

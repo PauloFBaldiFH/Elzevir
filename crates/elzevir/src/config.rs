@@ -42,6 +42,9 @@ pub(crate) struct Config {
     /// How long patrons' data is kept (docs/specs/circulacao/lgpd.md).
     #[serde(default)]
     privacy: Privacy,
+    /// How the search box reads what is typed (docs/specs/catalogo/busca.md).
+    #[serde(default)]
+    search: Search,
     /// How notices go out (docs/specs/circulacao/avisos.md).
     #[serde(default)]
     notices: Notices,
@@ -489,6 +492,14 @@ struct Privacy {
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct Search {
+    /// Complete each word typed in the search box; on when absent (docs/specs/catalogo/busca.md,
+    /// item 5a; Koha: `QueryAutoTruncate`).
+    complete_words: Option<bool>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Library {
     /// The IANA name of its time zone, such as `America/Sao_Paulo`; the system's when
     /// absent (docs/specs/catalogo/facetas.md, item 16).
@@ -519,6 +530,8 @@ pub(crate) struct Loaded {
     pub(crate) patrons_suspend_holds: bool,
     /// Where a renewal's new period starts.
     pub(crate) renewal_base: elzevir_domain::circulation::RenewalBase,
+    /// Whether the search box completes each word.
+    pub(crate) complete_words: bool,
     /// How long history and expired patrons are kept.
     pub(crate) retention: elzevir_app::patrons::Retention,
     /// The mail server, when notices go out by e-mail.
@@ -628,6 +641,7 @@ pub(crate) fn from_text(
         expire_waiting_holds: config.circulation.holds.expire_waiting.unwrap_or(false),
         patrons_suspend_holds: config.circulation.holds.patrons_suspend.unwrap_or(true),
         renewal_base: config.circulation.renewal_base.unwrap_or_default(),
+        complete_words: config.search.complete_words.unwrap_or(true),
         retention,
         mail,
         templates,
@@ -836,6 +850,18 @@ mod tests {
         )
         .unwrap();
         assert!(load(dir.path()).unwrap().expire_waiting_holds);
+    }
+
+    #[test]
+    fn the_search_box_completes_words_unless_turned_off() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(load(dir.path()).unwrap().complete_words);
+        std::fs::write(
+            dir.path().join("elzevir.toml"),
+            "[search]\ncomplete_words = false\n",
+        )
+        .unwrap();
+        assert!(!load(dir.path()).unwrap().complete_words);
     }
 
     #[test]

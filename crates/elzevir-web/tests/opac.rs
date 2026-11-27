@@ -65,6 +65,8 @@ fn view(id: i64, title: &str) -> InstanceView {
         relations: Vec::new(),
         title: title.to_owned(),
         other_titles: Vec::new(),
+        series: None,
+        place: None,
         typed_notes: Vec::new(),
         publisher: Some("Editora".to_owned()),
         date: Some("1995".to_owned()),

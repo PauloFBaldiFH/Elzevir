@@ -56,7 +56,8 @@ Um cliente SRU (outro Koha, o próprio Elzevir, um catálogo coletivo) busca o a
     - tudo (`serverChoice`): `=`, `all` e `adj` como a caixa do OPAC; `any`, qualquer palavra;
     - códigos (identificador, ano, idioma, código de barras, número): `=`, `==` e `exact`, valor inteiro.
     Outra relação dá **19** com a relação. Modificador (`=/stem`) dá **20**; modificador em booleano e `prox` dão **37**.
-11. Termo vazio (`""`) dá **27**. `*` ou `?` sem `\` dá **28**. Parênteses sem par dão **13**. `sortBy` dá **80**. Atribuição de prefixo (`>dc="…"`) e o resto que a gramática não lê dão **10**.
+10a. **Truncagem**: `*` sem `\` no começo ou no fim do termo, com ou sem aspas, trunca como o atributo 5 do Z39.50 ([Z39.50](z3950.md), item 10): `dc.title=brasi*` acha "Brasil" e "brasileiro", `*ileiro` acha pelo fim, `*asil*` pelo meio. Sem `*`, a palavra acha só o seu radical. Um termo sem índice (`cql.anywhere`, `dc.anywhere` ou só o termo) com `*` no fim, sem a relação `any`, é a caixa de busca do OPAC com as palavras completadas ([busca](../catalogo/busca.md), item 5a): `"historia do brasil*"` completa as três palavras e acha também o ISBN digitado.
+11. Termo vazio (`""`, ou só `*`) dá **27**. `*` no meio do termo e `?` sem `\` dão **28**. Parênteses sem par dão **13**. `sortBy` dá **80**. Atribuição de prefixo (`>dc="…"`) e o resto que a gramática não lê dão **10**.
 12. **Limites**: até 64 cláusulas e 16 níveis de parênteses; mais que isso dá **10**.
 
 ### Resultado

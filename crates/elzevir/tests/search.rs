@@ -182,6 +182,43 @@ fn a_variant_title_finds_its_record() {
 }
 
 #[test]
+fn a_series_finds_its_volumes() {
+    let (_dir, store) = imported();
+    let index = indexed(&store, Parallelism::Serial, 1024);
+    // The series is in 490 and 830 only: no title, subject or note names it.
+    let found = titles(&store, &index, "grandes vultos que honraram o senado");
+    assert_eq!(found.len(), 1, "{found:?}");
+}
+
+#[test]
+fn the_place_of_publication_finds_its_records() {
+    let (_dir, store) = imported();
+    let index = indexed(&store, Parallelism::Serial, 1024);
+    // "Tatuí" is only in 260 $a of two records, as Koha's keyword index has it.
+    assert_eq!(titles(&store, &index, "tatui").len(), 2);
+}
+
+#[test]
+fn the_search_box_completes_words_when_asked() {
+    let (_dir, store) = imported();
+    let mut index = indexed(&store, Parallelism::Serial, 1024);
+    let title = ["Perfil - Anuário Estatístico"];
+    // "anuar" and "estatis" are no words of any record: only completing them finds it.
+    assert!(titles(&store, &index, "anuar estatis").is_empty());
+    index.complete_words(true);
+    let found = titles(&store, &index, "anuar estatis");
+    assert!(
+        found.iter().any(|found| title.contains(&found.as_str())),
+        "{found:?}"
+    );
+    // Every completed word must be there, and a phrase in quotes is never completed.
+    assert!(titles(&store, &index, "anuar estatis zzzz").is_empty());
+    assert!(titles(&store, &index, "\"anuar estatis\"").is_empty());
+    // A whole word still finds its other forms through the stem.
+    assert!(!titles(&store, &index, "educação").is_empty());
+}
+
+#[test]
 fn a_classification_prefix_finds_the_class() {
     let (_dir, store) = imported();
     let index = indexed(&store, Parallelism::Serial, 1024);

@@ -1126,6 +1126,10 @@ pub struct InstanceView {
     /// The other titles of the Work and of the Instance (variant, parallel, abbreviated),
     /// each as its main title and subtitle.
     pub other_titles: Vec<String>,
+    /// The Instance's series statement, as transcribed.
+    pub series: Option<String>,
+    /// Place of publication, as written.
+    pub place: Option<String>,
     /// Publisher.
     pub publisher: Option<String>,
     /// Date of publication.
