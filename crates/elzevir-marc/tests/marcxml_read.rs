@@ -122,6 +122,30 @@ fn xml_text_is_utf8_even_when_the_marc_leader_was_blank() {
 }
 
 #[test]
+fn a_blank_subfield_code_is_kept_as_koha_keeps_it() {
+    // Found in a real Koha catalog: `500 $a` empty followed by a subfield coded with a space.
+    let xml = document(
+        "<datafield tag='500' ind1=' ' ind2=' '><subfield code='a'></subfield><subfield code=' '>- 19166</subfield></datafield>",
+    );
+    let record = records(&xml).remove(0);
+    let Some(Field::Data { subfields, .. }) = record.fields.first() else {
+        panic!("one data field");
+    };
+    let codes: Vec<(u8, &[u8])> = subfields
+        .iter()
+        .map(|subfield| (subfield.code, subfield.value.as_slice()))
+        .collect();
+    assert_eq!(codes, vec![(b'a', &b""[..]), (b' ', &b"- 19166"[..])]);
+    let mut written = String::new();
+    record.write_marcxml_document(&mut written).unwrap();
+    assert!(
+        written.contains("<subfield code=\" \">- 19166</subfield>"),
+        "{written}"
+    );
+    assert_eq!(records(&written), vec![record]);
+}
+
+#[test]
 fn malformed_structure_and_missing_attributes_are_refused_without_echoing_input() {
     for xml in [
         document("<datafield tag='245' ind2='0'/>"),
