@@ -50,6 +50,11 @@ $temporary = Join-Path ([IO.Path]::GetTempPath()) ('elzevir-bootstrap-test-' + [
 New-Item -ItemType Directory -Path $temporary | Out-Null
 try {
     $originalResponse = (Get-Item Function:Get-ElzevirResponse).ScriptBlock
+    $probe = Join-Path $temporary 'old release.cmd'
+    [IO.File]::WriteAllLines($probe, @('@echo off', 'if "%1 %2"=="start --help" exit /b 0', 'echo unrecognized subcommand 1>&2', 'exit /b 2'))
+    Assert-True (Test-ElzevirCommand $probe start) 'Supported start command was missed'
+    Assert-True (-not (Test-ElzevirCommand $probe background)) 'Unsupported background command was accepted'
+    Assert-True ($ErrorActionPreference -eq 'Stop') 'Probe changed installer error handling'
     $script:declaredLength = -1
     try {
         function Get-ElzevirResponse {
