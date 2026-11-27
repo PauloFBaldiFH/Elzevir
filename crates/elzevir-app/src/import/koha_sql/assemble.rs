@@ -10,8 +10,16 @@ use crate::marc_mapping::items::cents;
 
 const ITEM_TAG: Tag = Tag::new(*b"952");
 
-pub(super) fn records(rows: CatalogRows) -> Result<Vec<super::MetadataRecord>, DumpError> {
+/// The records with their Items. With `unreadable`, a record whose MARCXML cannot be read
+/// is set aside there with its Items instead of failing the whole dump (troca-do-koha.md,
+/// item 8); without it, as in `import`, it fails the dump.
+pub(super) fn records(
+    rows: CatalogRows,
+    mut unreadable: Option<&mut Vec<super::UnreadableRecord>>,
+) -> Result<Vec<super::MetadataRecord>, DumpError> {
     let mut records = Vec::with_capacity(rows.biblios.len());
+    // The biblionumbers set aside, with their place in `unreadable`.
+    let mut aside = BTreeMap::new();
     let mut bibs = BTreeMap::new();
     let mut primary = BTreeSet::new();
     let mut embedded = Embedded::default();
@@ -23,7 +31,20 @@ pub(super) fn records(rows: CatalogRows) -> Result<Vec<super::MetadataRecord>, D
         {
             return Err(error(at, DumpProblem::Duplicate("bibliographic key")));
         }
-        let (record, declares_utf8) = xml(&biblio)?;
+        let (record, declares_utf8) = match (xml(&biblio), unreadable.as_deref_mut()) {
+            (Ok(read), _) => read,
+            (Err(failure), Some(unreadable)) => {
+                // `bibs` above already refused a repeated biblionumber.
+                aside.insert(biblio.number, unreadable.len());
+                unreadable.push(super::UnreadableRecord {
+                    biblionumber: biblio.number,
+                    problem: failure.problem,
+                    itemnumbers: Vec::new(),
+                });
+                continue;
+            }
+            (Err(failure), None) => return Err(failure),
+        };
         embedded.index(index, at, &record)?;
         records.push(super::MetadataRecord {
             record,
@@ -42,6 +63,13 @@ pub(super) fn records(rows: CatalogRows) -> Result<Vec<super::MetadataRecord>, D
                 .is_some_and(|barcode| !barcodes.insert(barcode.to_owned()))
         {
             return Err(error(at, DumpProblem::Duplicate("itemnumber or barcode")));
+        }
+        if let Some(set_aside) = aside
+            .get(&item.biblio)
+            .and_then(|place| unreadable.as_deref_mut()?.get_mut(*place))
+        {
+            set_aside.itemnumbers.push(item.number);
+            continue;
         }
         let owner = *bibs
             .get(&item.biblio)

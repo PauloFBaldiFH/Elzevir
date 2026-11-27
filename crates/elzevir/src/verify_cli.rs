@@ -67,6 +67,7 @@ fn cause(cause: &Cause) -> String {
         Cause::Patron(why) => leftover(*why).to_owned(),
         Cause::UnknownBranch(code) => format!("a branch the Elzevir lacks ({code})"),
         Cause::RecordLeftOut => "its record did not come".to_owned(),
+        Cause::UnreadableRecord => "MARCXML the Elzevir cannot read".to_owned(),
         Cause::RepeatedBarcode => "barcode repeated in the dump".to_owned(),
         Cause::Anonymized => "anonymized after the migration (counted as arrived)".to_owned(),
         Cause::Circulation(why) => circulation_leftover(*why).to_owned(),
