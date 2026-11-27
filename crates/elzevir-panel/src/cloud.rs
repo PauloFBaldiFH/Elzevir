@@ -148,6 +148,8 @@ impl CloudOperation {
                 RemoteCommand::Send(_) => "cloud-send",
                 RemoteCommand::Download(_) => "cloud-download",
             },
+            Self::Plan { id, .. } if !id.is_empty() => "schedule-edit-plan",
+            Self::Plan { connection, .. } if !connection.is_empty() => "cc-new-plan",
             Self::Plan { .. } => "cloud-plan",
             Self::RunPlan { .. } => "cloud-run-plan",
             Self::DisablePlan { .. } => "cloud-disable-plan",
@@ -160,6 +162,18 @@ impl CloudOperation {
             Self::Test { .. } => "cloud-test",
         }
     }
+    pub(crate) fn new_plan(connection: String) -> Self {
+        Self::Plan {
+            id: String::new(),
+            name: String::new(),
+            connection,
+            folder: "Elzevir/backups".to_owned(),
+            keep: "7".to_owned(),
+            time: String::new(),
+            zone: "UTC".to_owned(),
+        }
+    }
+
     pub(crate) fn fields(&self) -> (Vec<&'static str>, Vec<String>) {
         match self {
             Self::SendGroup(_, id) => (vec!["cloud-artifact"], vec![id.clone()]),
@@ -168,6 +182,25 @@ impl CloudOperation {
                 RemoteCommand::Browse(page) => (vec!["cloud-page"], vec![page.to_string()]),
                 RemoteCommand::Send(id) => (vec!["cloud-artifact"], vec![id.clone()]),
             },
+            Self::Plan {
+                id,
+                name,
+                connection,
+                folder,
+                keep,
+                time,
+                zone,
+            } if !connection.is_empty() || !id.is_empty() => {
+                let mut labels = vec!["cloud-plan-name"];
+                let mut values = vec![name.clone()];
+                if id.is_empty() {
+                    labels.push("cloud-folder");
+                    values.push(folder.clone());
+                }
+                labels.extend(["op-keep", "op-time", "op-zone"]);
+                values.extend([keep.clone(), time.clone(), zone.clone()]);
+                (labels, values)
+            }
             Self::Plan {
                 id,
                 name,
@@ -240,6 +273,24 @@ impl CloudOperation {
                     RemoteCommand::Download(id) => RemoteCommand::Download(id),
                 },
             ),
+            Self::Plan {
+                id,
+                connection,
+                folder,
+                ..
+            } if !id.is_empty() || !connection.is_empty() => Self::Plan {
+                name: values.next()?,
+                folder: if id.is_empty() {
+                    values.next()?
+                } else {
+                    folder
+                },
+                id,
+                connection,
+                keep: values.next()?,
+                time: values.next()?,
+                zone: values.next()?,
+            },
             Self::Plan { .. } => Self::Plan {
                 id: values.next()?,
                 name: values.next()?,
@@ -359,6 +410,22 @@ pub struct CloudPlan {
 }
 
 impl CloudPlan {
+    pub(crate) fn policy(&self) -> Option<CloudOperation> {
+        let (time, zone) = match self.daily.as_deref() {
+            Some(daily) => daily.split_once(' ')?,
+            None => ("", "UTC"),
+        };
+        Some(CloudOperation::Plan {
+            id: self.id.clone(),
+            name: self.name.clone(),
+            connection: self.connection.clone(),
+            folder: self.folder.clone(),
+            keep: self.keep.to_string(),
+            time: time.into(),
+            zone: zone.into(),
+        })
+    }
+
     pub(crate) fn target(&self) -> CloudTarget {
         CloudTarget {
             plan: self.id.clone(),
@@ -370,15 +437,7 @@ impl CloudPlan {
 
 pub(crate) fn shortcut(key: char, view: Option<&CloudView>) -> Option<CloudOperation> {
     Some(match key {
-        'g' => CloudOperation::Plan {
-            id: String::new(),
-            name: String::new(),
-            connection: String::new(),
-            folder: "Elzevir/backups".to_owned(),
-            keep: "7".to_owned(),
-            time: String::new(),
-            zone: "UTC".to_owned(),
-        },
+        'g' => CloudOperation::new_plan(String::new()),
         'u' => CloudOperation::RunPlan { id: String::new() },
         'h' => CloudOperation::DisablePlan { id: String::new() },
         'G' => CloudOperation::RemovePlan { id: String::new() },
@@ -408,4 +467,44 @@ pub(crate) fn shortcut(key: char, view: Option<&CloudView>) -> Option<CloudOpera
         }
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod guided_creation_tests {
+    use super::*;
+
+    #[test]
+    fn new_plan_with_selected_connection_pins_its_identity() {
+        let mut op = shortcut('g', None).unwrap();
+        let CloudOperation::Plan { connection, .. } = &mut op else {
+            panic!("expected a plan")
+        };
+        *connection = "a".repeat(32);
+        let (labels, mut values) = op.fields();
+        assert_eq!(
+            labels,
+            [
+                "cloud-plan-name",
+                "cloud-folder",
+                "op-keep",
+                "op-time",
+                "op-zone"
+            ]
+        );
+        values[0] = "Archive".into();
+        values[1] = "Daily".into();
+        let Some(CloudOperation::Plan {
+            id,
+            name,
+            connection,
+            folder,
+            ..
+        }) = op.finish(values)
+        else {
+            panic!("incomplete form")
+        };
+        assert!(id.is_empty());
+        assert_eq!(connection, "a".repeat(32));
+        assert_eq!((name.as_str(), folder.as_str()), ("Archive", "Daily"));
+    }
 }

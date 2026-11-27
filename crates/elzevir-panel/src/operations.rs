@@ -231,6 +231,16 @@ pub struct BackupArtifact {
     /// Latest explicit recheck observed for this archive in the daemon history.
     pub recheck: Option<&'static str>,
 }
+/// Latest cloud-backup request accepted for one plan in the retained worker history.
+#[derive(Debug, Clone)]
+pub struct PlanAttempt {
+    /// Acceptance time displayed in UTC.
+    pub at: String,
+    /// Known translation key for the durable job state.
+    pub state: &'static str,
+    /// Destination captured by the request when available.
+    pub target: Option<crate::CloudTarget>,
+}
 /// Operational state from the selected institution.
 #[derive(Debug, Clone, Default)]
 pub struct Operations {
@@ -256,6 +266,8 @@ pub struct Operations {
     pub daily: Option<String>,
     /// At most 64 recognized job observations.
     pub jobs: Vec<Job>,
+    /// Latest request per plan, absent when the worker history could not be read.
+    pub plan_attempts: Option<std::collections::BTreeMap<String, PlanAttempt>>,
     /// Most recent client action result, expressed by a known translation key.
     pub result: Option<&'static str>,
     /// Current server session count; absent when no trusted observation is available.
@@ -266,7 +278,9 @@ pub struct Operations {
     pub update_available: bool,
     /// Bounded plain-text official release notes.
     pub release_notes: Option<String>,
-    /// Allowlisted sign-in URLs for pending interactive jobs.
+    /// Worker-validated loopback URL for an active rclone authorization.
+    pub cloud_authorization_uri: Option<String>,
+    /// Allowlisted sign-in URLs for pending host connector jobs.
     pub authorization_uris: Vec<String>,
     /// Public tunnel candidates and bounded evidence.
     pub tunnel: crate::TunnelState,

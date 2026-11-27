@@ -172,7 +172,6 @@ pub(crate) fn interactive(
     } else if panel.section == Section::Backup
         && panel.inspection.is_none()
         && matches!(panel.mode, Mode::Live(_))
-        && panel.backups.page != crate::BackupPage::Connections
     {
         crate::backup_center::draw(frame, panel, messages, scene);
     } else {

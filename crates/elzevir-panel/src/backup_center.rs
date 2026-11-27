@@ -25,7 +25,13 @@ pub enum BackupPage {
     History,
     /// Progress and evidence for one backup.
     Result,
-    /// Existing cloud management workspace.
+    /// Local and cloud backup schedules.
+    Schedules,
+    /// Searchable catalogue of installed rclone providers.
+    Providers,
+    /// Ready connections for creating a new plan.
+    PlanConnection,
+    /// Cloud management workspace.
     Connections,
 }
 
@@ -35,7 +41,9 @@ pub struct BackupCenter {
     /// Current local or cloud view.
     pub page: BackupPage,
     pub(crate) selected: Option<u128>,
-    offset: usize,
+    pub(crate) offset: usize,
+    pub(crate) schedule: Option<crate::CloudTarget>,
+    pub(crate) provider_query: String,
     pub(crate) waiting_ack: bool,
 }
 
@@ -43,6 +51,13 @@ pub struct BackupCenter {
 pub(crate) enum Command {
     Page(BackupPage),
     Select(u128),
+    CloudTab(usize),
+    Provider(crate::provider_picker::Name),
+    ClearFilter,
+    NewPlan(u128),
+    SelectSchedule(u128),
+    RunSchedule(u128),
+    EditSchedule(u128, bool),
     Details(u128),
     Verify(u128),
     Export(u128),
@@ -53,7 +68,7 @@ pub(crate) enum Command {
     Scroll(bool),
 }
 
-fn sample(panel: &Panel) -> Option<&Snapshot> {
+pub(super) fn sample(panel: &Panel) -> Option<&Snapshot> {
     let Mode::Live(live) = &panel.mode else {
         return None;
     };
@@ -113,9 +128,16 @@ pub(crate) fn scroll(panel: &mut Panel, down: bool, by: usize, limit: u16) {
 }
 pub(crate) fn scrollable(panel: &Panel) -> bool {
     panel.section == Section::Backup
+        && matches!(panel.mode, Mode::Live(_))
+        && panel.inspection.is_none()
         && matches!(
             panel.backups.page,
-            BackupPage::Overview | BackupPage::History
+            BackupPage::Overview
+                | BackupPage::History
+                | BackupPage::PlanConnection
+                | BackupPage::Providers
+                | BackupPage::Schedules
+                | BackupPage::Connections
         )
 }
 pub(crate) fn apply(cmd: Command, panel: &mut Panel, access: &mut Actions, limit: u16) {
@@ -126,6 +148,30 @@ pub(crate) fn apply(cmd: Command, panel: &mut Panel, access: &mut Actions, limit
             panel.backups.offset = 0;
             panel.access_notice = None;
         }
+        Command::Provider(name) => crate::provider_picker::choose(panel, name),
+        Command::ClearFilter => {
+            panel.backups.provider_query.clear();
+            panel.backups.offset = 0;
+        }
+        Command::CloudTab(tab) => {
+            panel.cloud_tab = tab;
+            panel.backups.offset = 0;
+            panel.access_notice = None;
+        }
+        Command::NewPlan(id) => crate::cloud_view::choose_connection(panel, id),
+        Command::SelectSchedule(id) => {
+            panel.backups.schedule = ops
+                .and_then(|o| o.cloud.as_ref())
+                .and_then(|v| {
+                    v.plans
+                        .iter()
+                        .find(|p| u128::from_str_radix(&p.id, 16) == Ok(id))
+                })
+                .map(crate::CloudPlan::target);
+            panel.access_notice = None;
+        }
+        Command::EditSchedule(id, pause) => crate::schedule_view::edit(panel, id, pause),
+        Command::RunSchedule(id) => crate::schedule_view::review(panel, id),
         Command::Scroll(down) => scroll(panel, down, 1, limit),
         Command::Select(id) | Command::Details(id) => {
             if ops.and_then(|o| entry(o, id)).is_some() {
@@ -246,10 +292,10 @@ impl Controls<'_, '_> {
     }
 }
 
-fn key(c: char) -> Action {
+pub(super) fn key(c: char) -> Action {
     Action::Key(ratatui::crossterm::event::KeyCode::Char(c))
 }
-fn go(page: BackupPage) -> Action {
+pub(super) fn go(page: BackupPage) -> Action {
     Action::Backup(Command::Page(page))
 }
 pub(super) fn bytes(size: u64) -> String {
@@ -276,6 +322,7 @@ pub(crate) fn draw(f: &mut Frame, panel: &Panel, m: &Messages, scene: &mut Scene
         )
     });
     let h = if desktop { 3 } else { 1 };
+    scene.scroll_limit = 0;
     let mut ui = Controls { f, scene, m };
     line(
         ui.f,
@@ -292,7 +339,11 @@ pub(crate) fn draw(f: &mut Frame, panel: &Panel, m: &Messages, scene: &mut Scene
         m.get(match panel.backups.page {
             BackupPage::History => "bc-history",
             BackupPage::Result => "bc-result",
-            _ => "bc-center",
+            BackupPage::Schedules => "bc-schedule",
+            BackupPage::Connections => "bc-cloud",
+            BackupPage::Overview => "bc-center",
+            BackupPage::Providers => "cc-choose",
+            BackupPage::PlanConnection => "cc-plan-choose",
         }),
         theme::TEXT,
         true,
@@ -305,7 +356,10 @@ pub(crate) fn draw(f: &mut Frame, panel: &Panel, m: &Messages, scene: &mut Scene
         BackupPage::Overview => overview(&mut ui, work, panel, obs),
         BackupPage::History => history(&mut ui, work, panel, ops),
         BackupPage::Result => result(&mut ui, work, panel, ops),
-        BackupPage::Connections => {}
+        BackupPage::Schedules => crate::schedule_view::draw(&mut ui, work, panel, ops),
+        BackupPage::PlanConnection => crate::cloud_view::connections_for_plan(&mut ui, work, panel),
+        BackupPage::Providers => crate::provider_picker::draw(&mut ui, work, panel, ops),
+        BackupPage::Connections => crate::cloud_view::draw(&mut ui, work, panel, obs),
     }
     footer(&mut ui, row(r, bottom, buttons_h), panel, ops, online);
     line(
@@ -314,7 +368,17 @@ pub(crate) fn draw(f: &mut Frame, panel: &Panel, m: &Messages, scene: &mut Scene
         m.get(
             panel
                 .access_notice
-                .or_else(|| ops.and_then(|o| o.result))
+                .or_else(|| {
+                    ops.and_then(|o| o.result).filter(|key| {
+                        !matches!(
+                            panel.backups.page,
+                            BackupPage::Schedules
+                                | BackupPage::Connections
+                                | BackupPage::Providers
+                                | BackupPage::PlanConnection
+                        ) || *key != "op-submitted"
+                    })
+                })
                 .unwrap_or("desk-help"),
         ),
         theme::MUTED,
@@ -328,7 +392,55 @@ fn footer(
     ops: Option<&Operations>,
     online: bool,
 ) {
-    if panel.backups.page == BackupPage::Result {
+    let back = (
+        "bc-return",
+        go(BackupPage::Overview),
+        Variant::Secondary,
+        true,
+    );
+    let picker_back = match panel.backups.page {
+        BackupPage::Providers => Some("cc-back"),
+        BackupPage::PlanConnection => Some("cc-back-plans"),
+        _ => None,
+    };
+    if let Some(label) = picker_back {
+        ui.buttons(
+            area,
+            &[(label, go(BackupPage::Connections), Variant::Secondary, true)],
+        );
+    } else if panel.backups.page == BackupPage::Connections {
+        ui.buttons(
+            area,
+            &[
+                (
+                    "bc-schedule",
+                    go(BackupPage::Schedules),
+                    Variant::Secondary,
+                    true,
+                ),
+                back,
+            ],
+        );
+    } else if panel.backups.page == BackupPage::Schedules {
+        ui.buttons(
+            area,
+            &[
+                (
+                    "schedule-edit",
+                    key('s'),
+                    Variant::Primary,
+                    online && ops.is_some_and(|o| o.keep.is_some()) && !panel.diagnostics.pending,
+                ),
+                (
+                    "bc-cloud",
+                    go(BackupPage::Connections),
+                    Variant::Secondary,
+                    true,
+                ),
+                back,
+            ],
+        );
+    } else if panel.backups.page == BackupPage::Result {
         ui.buttons(
             area,
             &[
@@ -338,12 +450,7 @@ fn footer(
                     Variant::Secondary,
                     true,
                 ),
-                (
-                    "bc-return",
-                    go(BackupPage::Overview),
-                    Variant::Secondary,
-                    true,
-                ),
+                back,
             ],
         );
     } else {
@@ -366,9 +473,9 @@ fn footer(
                 ),
                 (
                     "bc-schedule",
-                    key('s'),
+                    go(BackupPage::Schedules),
                     Variant::Secondary,
-                    online && !panel.diagnostics.pending,
+                    true,
                 ),
                 (
                     "bc-key",
@@ -410,7 +517,7 @@ fn navigation(ui: &mut Controls<'_, '_>, area: Rect, page: BackupPage) {
         (
             "bc-cloud",
             go(BackupPage::Connections),
-            Variant::Secondary,
+            active(BackupPage::Connections),
             true,
         ),
     ];
@@ -689,7 +796,7 @@ fn artifact_history(
         );
     }
 }
-fn pager(ui: &mut Controls<'_, '_>, r: Rect, start: usize, count: usize, page: usize) {
+pub(super) fn pager(ui: &mut Controls<'_, '_>, r: Rect, start: usize, count: usize, page: usize) {
     ui.scene.scroll_limit = u16::try_from(count.saturating_sub(page)).unwrap_or(u16::MAX);
     ui.buttons(
         r,

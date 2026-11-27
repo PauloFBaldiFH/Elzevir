@@ -33,7 +33,9 @@ pub(crate) fn rows(
     if panel.diagnostics.pending {
         rows.push(Line::from(messages.get("op-pending")));
     }
-    if let Some(result) = operations.and_then(|ops| ops.result) {
+    if section != crate::Section::Backup
+        && let Some(result) = operations.and_then(|ops| ops.result)
+    {
         rows.push(Line::from(messages.get(result)));
     }
     if section == crate::Section::Updates
@@ -94,39 +96,12 @@ fn backup_rows(
     panel: &Panel,
     m: &Messages,
 ) -> Vec<Line<'static>> {
-    let mut rows = vec![Line::from(m.get("op-backup-help"))];
-    if let Some(ops) = operations {
-        rows.push(row(m, "op-retention", ops.keep.map(|n| n.to_string())));
-        rows.push(row(
-            m,
-            "op-daily",
-            Some(ops.daily.clone().unwrap_or_else(|| m.get("op-disabled"))),
-        ));
-        if ops.review.is_some() {
-            rows.push(Line::from(m.get("restore-ready")));
-        }
+    let mut rows = Vec::new();
+    if operations.is_some_and(|ops| ops.review.is_some()) {
+        rows.push(Line::from(m.get("restore-ready")));
     }
-    let tabs = [
-        "cloud-connections-tab",
-        "cloud-plans-tab",
-        "cloud-files-tab",
-        "cloud-history-tab",
-    ]
-    .iter()
-    .enumerate()
-    .map(|(i, k)| {
-        let label = m.get(k);
-        if panel.cloud_tab == i {
-            format!("[{label}]")
-        } else {
-            label
-        }
-    })
-    .collect::<Vec<_>>()
-    .join("  ");
-    rows.push(Line::from(tabs));
-    rows.push(Line::from(m.get("cloud-tab-keys")));
     let Some(view) = operations.and_then(|o| o.cloud.as_ref()) else {
+        rows.push(Line::from(m.get("schedule-cloud-unknown")));
         return rows;
     };
     let plan = view
@@ -150,11 +125,18 @@ fn backup_rows(
         rows.push(Line::from(m.get("cloud-marked")));
     }
     match panel.cloud_tab {
-        0 => connection_rows(&mut rows, view, operations, m),
+        0 => connection_rows(&mut rows, view, operations, panel, m),
         1 => {
+            if !view.connections.iter().any(|c| c.ready) {
+                rows.push(Line::from(m.get("cc-no-ready")));
+            }
             rows.push(Line::from(m.get("cloud-plan-help")));
             rows.push(Line::from(m.get("cloud-send-keys")));
             if let Some(plan) = plan {
+                let (attempt, requested) =
+                    crate::schedule_view::attempt_details(operations, plan, m);
+                rows.push(Line::from(attempt));
+                rows.extend(requested.map(Line::from));
                 rows.push(row(m, "cloud-plan-id", Some(text(&plan.id))));
                 rows.push(row(m, "op-retention", Some(plan.keep.to_string())));
                 rows.push(row(
@@ -189,9 +171,21 @@ fn connection_rows(
     rows: &mut Vec<Line<'static>>,
     view: &crate::CloudView,
     operations: Option<&crate::Operations>,
+    panel: &Panel,
     m: &Messages,
 ) {
-    rows.push(Line::from(m.get("cloud-help")));
+    if let Some(uri) = operations.and_then(|o| o.cloud_authorization_uri.as_deref()) {
+        let guide = if panel.access_help == Some("address-desktop") {
+            "cc-oauth-desktop"
+        } else {
+            "cc-oauth-terminal"
+        };
+        rows.push(Line::from(m.get(guide)));
+        rows.push(Line::from(crate::dashboard::safe_text(uri, 1024)));
+    }
+    if !view.connections.is_empty() {
+        rows.push(Line::from(m.get("cc-advanced")));
+    }
     if view.connections.is_empty() {
         rows.push(Line::from(m.get("cloud-no-connections")));
     }
@@ -221,9 +215,6 @@ fn connection_rows(
             rows.push(Line::from(format!("{} · {}", text(v), text(h))));
         }
         rows.push(Line::from(m.get("cloud-answer-help")));
-    }
-    for uri in operations.into_iter().flat_map(|o| &o.authorization_uris) {
-        rows.push(row(m, "op-authorize-uri", Some(text(uri))));
     }
     if view.connections.is_empty() {
         for (name, desc) in &view.providers {
@@ -391,36 +382,57 @@ fn destination_header(
     messages: &Messages,
     header: &mut Vec<Line<'static>>,
 ) {
-    let target = match &form.operation {
+    let destination = match &form.operation {
         crate::Operation::Cloud(crate::CloudOperation::SendGroup(targets, _)) => {
             header.push(row(
                 messages,
                 "cloud-target-page",
                 Some(format!("{} / {}", form.target_page + 1, targets.len())),
             ));
-            targets.get(form.target_page)
+            targets
+                .get(form.target_page)
+                .map(|t| (&t.connection, Some(&t.folder)))
         }
         crate::Operation::Cloud(crate::CloudOperation::Remote(target, cmd)) => {
             if let crate::RemoteCommand::Download(id) = cmd {
                 header.push(Line::from(format!("elzevir-{}.age", text(id))));
             }
-            Some(target)
+            Some((&target.connection, Some(&target.folder)))
         }
+        crate::Operation::Cloud(crate::CloudOperation::Plan {
+            id,
+            connection,
+            folder,
+            ..
+        }) if !connection.is_empty() => Some((connection, (!id.is_empty()).then_some(folder))),
         _ => None,
     };
-    if let Some(target) = target {
+    if let Some((connection, folder)) = destination {
         header.push(row(
             messages,
-            "cloud-id",
-            Some(panel.cloud_view().map_or_else(
-                || text(&target.connection),
-                |v| connection_name(v, &target.connection),
-            )),
+            "cc-destination-connection",
+            Some(
+                panel
+                    .cloud_view()
+                    .map_or_else(|| text(connection), |v| connection_name(v, connection)),
+            ),
         ));
-        let folder = messages.values("cloud-folder", &[("value", text(&target.folder))]);
-        for line in folder.chars().collect::<Vec<_>>().chunks(60) {
-            header.push(Line::from(line.iter().collect::<String>()));
+        if let Some(folder) = folder {
+            let folder = messages.values("cloud-folder", &[("value", text(folder))]);
+            for line in folder.chars().collect::<Vec<_>>().chunks(60) {
+                header.push(Line::from(line.iter().collect::<String>()));
+            }
         }
+    }
+    if let crate::Operation::Cloud(crate::CloudOperation::Plan { id, .. }) = &form.operation
+        && !id.is_empty()
+        && form
+            .labels
+            .iter()
+            .zip(&form.values)
+            .any(|(label, value)| *label == "op-time" && value.is_empty())
+    {
+        header.push(Line::from(messages.get("schedule-after-pause")));
     }
 }
 

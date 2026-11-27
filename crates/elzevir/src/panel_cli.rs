@@ -286,10 +286,9 @@ impl Collector {
         let Ok(view) = crate::admin::operations(&info) else {
             return result;
         };
-        if let Some(uri) = view.authorization_uri {
-            result.authorization_uris.push(uri);
-        }
+        result.cloud_authorization_uri = view.authorization_uri;
         result.keep = Some(view.policy.keep);
+        result.plan_attempts = Some(plan_attempts(&view.jobs));
         result.daily = view
             .policy
             .daily
@@ -313,10 +312,7 @@ impl Collector {
                 .map(|job| elzevir_panel::Job {
                     phase: job.phase.map(crate::backup_archive::Phase::label),
                     id: job.id,
-                    at: job
-                        .at
-                        .parse::<jiff::Timestamp>()
-                        .map_or(job.at, |t| t.strftime("%F %R UTC").to_string()),
+                    at: job_time(&job.at),
                     action: match job.task {
                         crate::operations::Task::Backup { .. } => "op-backup-now",
                         crate::operations::Task::ConfigureCloud => "cloud-operation",
@@ -832,6 +828,31 @@ impl Collector {
     }
 }
 
+fn job_time(at: &str) -> String {
+    at.parse::<jiff::Timestamp>()
+        .map_or_else(|_| at.to_owned(), |t| t.strftime("%F %R UTC").to_string())
+}
+
+fn plan_attempts(
+    jobs: &[crate::operations::Job],
+) -> std::collections::BTreeMap<String, elzevir_panel::PlanAttempt> {
+    // The durable queue appends on acceptance. Wall-clock adjustments can reorder timestamps.
+    let mut latest = std::collections::BTreeMap::new();
+    for job in jobs {
+        if let crate::operations::Task::CloudBackup { plan, target } = &job.task {
+            latest.insert(
+                plan.clone(),
+                elzevir_panel::PlanAttempt {
+                    at: job_time(&job.at),
+                    state: job_state(job.state),
+                    target: target.clone(),
+                },
+            );
+        }
+    }
+    latest
+}
+
 fn job_state(state: crate::operations::State) -> &'static str {
     match state {
         crate::operations::State::Queued => "op-queued",
@@ -851,6 +872,53 @@ fn receipt_time(seconds: i64) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn plan_attempts_follow_acceptance_order_and_keep_the_observed_destination() {
+        use crate::operations::{Job, State, Task};
+        let target = elzevir_panel::CloudTarget {
+            plan: "p".into(),
+            connection: "c".into(),
+            folder: "old".into(),
+        };
+        let first = Job {
+            id: "first".into(),
+            at: "2026-01-01T12:02:00Z".into(),
+            phase: None,
+            state: State::Completed,
+            task: Task::CloudBackup {
+                plan: "p".into(),
+                target: None,
+            },
+        };
+        let second = Job {
+            id: "second".into(),
+            at: "2026-01-01T12:01:00Z".into(),
+            state: State::Failed,
+            task: Task::CloudBackup {
+                plan: "p".into(),
+                target: Some(target.clone()),
+            },
+            ..first.clone()
+        };
+        let legacy = Job {
+            task: Task::CloudBackup {
+                plan: "other".into(),
+                target: None,
+            },
+            ..first.clone()
+        };
+        let discovery = Job {
+            task: Task::ConfigureCloud,
+            ..first.clone()
+        };
+        let attempts = plan_attempts(&[first, second, legacy, discovery]);
+        assert_eq!(attempts.len(), 2);
+        assert_eq!(attempts["p"].state, "op-failed");
+        assert_eq!(attempts["p"].at, "2026-01-01 12:01 UTC");
+        assert_eq!(attempts["p"].target.as_ref(), Some(&target));
+        assert_eq!(attempts["other"].target, None);
+    }
 
     #[test]
     fn validating_a_replaced_archive_leaves_the_active_institution_and_clears_review() {

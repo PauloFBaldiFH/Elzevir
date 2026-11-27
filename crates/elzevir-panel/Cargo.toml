@@ -12,7 +12,7 @@ publish.workspace = true
 fs4 = "0.13"
 jiff.workspace = true
 base64 = "0.23"
-ratatui = { version = "0.30", default-features = false, features = ["crossterm"] }
+ratatui = { version = "0.30", default-features = false, features = ["crossterm", "unstable-rendered-line-info"] }
 fluent-bundle.workspace = true
 unic-langid.workspace = true
 thiserror.workspace = true

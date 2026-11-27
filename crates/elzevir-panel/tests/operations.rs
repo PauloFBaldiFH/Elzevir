@@ -70,3 +70,24 @@ fn interrupted_update_recovery_requires_a_target_and_explicit_confirmation() {
         }))
     );
 }
+
+#[test]
+fn editing_a_selected_plan_keeps_the_destination_out_of_editable_fields() {
+    use elzevir_panel::{CloudOperation, Form};
+    let policy = CloudOperation::Plan {
+        id: "a".repeat(32),
+        name: "Daily".into(),
+        connection: "b".repeat(32),
+        folder: "copies".into(),
+        keep: "12".into(),
+        time: "04:30".into(),
+        zone: "UTC".into(),
+    };
+    let mut form = Form::new(Operation::Cloud(policy.clone()));
+    assert_eq!(
+        form.labels,
+        ["cloud-plan-name", "op-keep", "op-time", "op-zone"]
+    );
+    form.field = form.labels.len();
+    assert_eq!(form.finish(), Some(Operation::Cloud(policy)));
+}

@@ -96,6 +96,10 @@ fn word(value: &str) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
 }
+fn provider_name(value: &str) -> bool {
+    value.len() <= 64 && value.split(' ').all(word)
+}
+
 pub(crate) fn valid_id(value: &str) -> bool {
     value.len() == 32 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
@@ -129,7 +133,7 @@ fn catalog(directory: &Path) -> Result<Catalog, String> {
             || !valid_id(&connection.config_id)
             || !ids.insert(&connection.id)
             || !names.insert(&connection.name)
-            || !word(&connection.provider)
+            || !provider_name(&connection.provider)
             || connection.name.is_empty()
             || connection.name.len() > 64
             || connection.name.chars().any(char::is_control)
@@ -285,7 +289,7 @@ fn providers_with(
         serde_json::from_slice(&output.stdout).map_err(|_| "invalid rclone provider catalog")?;
     if providers.len() > 256
         || providers.iter().any(|provider| {
-            !word(&provider.name)
+            !provider_name(&provider.name)
                 || provider.description.len() > 4096
                 || provider.options.len() > 256
                 || provider.options.iter().any(|field| {
@@ -501,7 +505,7 @@ fn begin(
     if name.trim().is_empty()
         || name.len() > 64
         || name.chars().any(char::is_control)
-        || !word(provider)
+        || !provider_name(provider)
     {
         return Err("invalid cloud connection name or provider".to_owned());
     }
@@ -1195,6 +1199,79 @@ fn remove_connection(
 mod tests {
     use super::*;
     use std::cell::RefCell;
+    #[test]
+    fn provider_names_accept_single_spaces_between_bounded_words() {
+        assert!(provider_name("google cloud storage"));
+        assert!(provider_name("sftp"));
+        for invalid in [
+            "",
+            " drive",
+            "drive ",
+            "a  b",
+            "drive/path",
+            "--config",
+            "drive\n",
+        ] {
+            assert!(!provider_name(invalid));
+        }
+        assert!(!provider_name(&"a".repeat(65)));
+        assert!(!word("google cloud storage"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[ignore = "requires /usr/bin/rclone"]
+    fn installed_provider_catalogue_and_private_alias_test_preserve_other_files() {
+        let institution = tempfile::tempdir().unwrap();
+        let directory = institution.path();
+        let remote_disk = tempfile::tempdir().unwrap();
+        std::fs::create_dir(directory.join("secrets")).unwrap();
+        let program = Path::new("/usr/bin/rclone");
+        let apply = |action| execute_with(directory, &action, program, &Native, None);
+        apply(Action::Providers).unwrap();
+        assert!(
+            view(directory)
+                .unwrap()
+                .providers
+                .iter()
+                .any(|(name, _)| name == "alias")
+        );
+        apply(Action::Begin {
+            name: "Library archive".into(),
+            provider: "alias".into(),
+            parent: None,
+        })
+        .unwrap();
+        let question = view(directory).unwrap().question.unwrap();
+        assert_eq!(question.name, "remote");
+        apply(Action::Answer {
+            id: question.id.clone(),
+            revision: question.revision,
+            value: remote_disk.path().to_str().unwrap().into(),
+        })
+        .unwrap();
+        let connection = connection(directory, &question.id).unwrap();
+        assert!(connection.ready);
+        let folder = remote_disk.path().join("checks");
+        std::fs::create_dir(&folder).unwrap();
+        let other = folder.join("keep.txt");
+        std::fs::write(&other, b"other file").unwrap();
+        apply(Action::Test {
+            id: question.id,
+            folder: "checks".into(),
+        })
+        .unwrap();
+        assert_eq!(std::fs::read(other).unwrap(), b"other file");
+        assert_eq!(std::fs::read_dir(folder).unwrap().count(), 1);
+        assert!(
+            view(directory)
+                .unwrap()
+                .connections
+                .iter()
+                .any(|c| c.ready && c.tested_at.is_some())
+        );
+    }
+
     struct Fake(RefCell<Vec<Request>>);
     impl Runner for Fake {
         fn run(&self, request: Request) -> Result<Output, String> {
