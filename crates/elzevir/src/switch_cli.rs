@@ -98,7 +98,12 @@ pub(crate) fn run(args: &SwitchFromKohaArgs) -> Result<(), String> {
     ));
 
     let started = Instant::now();
-    let biblionumbers = read.catalog.biblionumbers();
+    let biblionumbers: Vec<Option<String>> = read
+        .catalog
+        .koha_records()
+        .into_iter()
+        .map(|record| record.biblionumber)
+        .collect();
     let imported = import_catalog(store, read.catalog).map_err(|e| format!("catalog: {e}"))?;
     report.push(step("catalog", started.elapsed()));
     report.push(catalog_report(&imported, &biblionumbers));

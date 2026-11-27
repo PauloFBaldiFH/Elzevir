@@ -72,24 +72,68 @@ impl DatabaseCatalog {
         codes
     }
 
-    /// Each record's Koha `biblionumber` (its first `999 $c`), in import order, so that a
-    /// report can name a refused record by Koha's number instead of its title (item 11).
+    /// Each record's Koha numbers and the Item values the verifier compares, in import
+    /// order: the `biblionumber` (first `999 $c`) and, for each `952`, `$9`, `$p`, `$a`, `$b`
+    /// and `$y` (verificacao-do-koha.md, items 7 and 8).
     #[must_use]
-    pub fn biblionumbers(&self) -> Vec<Option<String>> {
+    pub fn koha_records(&self) -> Vec<KohaCatalogRecord> {
         self.records
             .iter()
             .map(|record| {
-                record.record.fields.iter().find_map(|field| match field {
-                    Field::Data { tag, subfields, .. } if *tag == BIBLIO_TAG => subfields
-                        .iter()
-                        .find(|subfield| subfield.code == b'c')
-                        .and_then(|subfield| std::str::from_utf8(&subfield.value).ok())
-                        .map(|number| number.trim().to_owned()),
-                    _ => None,
-                })
+                let mut entry = KohaCatalogRecord::default();
+                for field in &record.record.fields {
+                    let Field::Data { tag, subfields, .. } = field else {
+                        continue;
+                    };
+                    let value = |code: u8| {
+                        subfields
+                            .iter()
+                            .find(|subfield| subfield.code == code)
+                            .and_then(|subfield| std::str::from_utf8(&subfield.value).ok())
+                            .map(str::trim)
+                            .filter(|value| !value.is_empty())
+                            .map(str::to_owned)
+                    };
+                    if *tag == BIBLIO_TAG && entry.biblionumber.is_none() {
+                        entry.biblionumber = value(b'c');
+                    } else if *tag == ITEM_TAG {
+                        entry.items.push(KohaCatalogItem {
+                            itemnumber: value(b'9'),
+                            barcode: value(b'p'),
+                            home: value(b'a'),
+                            holding: value(b'b'),
+                            item_type: value(b'y'),
+                        });
+                    }
+                }
+                entry
             })
             .collect()
     }
+}
+
+/// A record of the dump by its Koha numbers.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct KohaCatalogRecord {
+    /// `biblionumber`, as `999 $c` carries it.
+    pub biblionumber: Option<String>,
+    /// Its Items, in `952` order.
+    pub items: Vec<KohaCatalogItem>,
+}
+
+/// An Item of the dump, as its `952` carries it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct KohaCatalogItem {
+    /// `itemnumber` (`$9`).
+    pub itemnumber: Option<String>,
+    /// `barcode` (`$p`).
+    pub barcode: Option<String>,
+    /// `homebranch` (`$a`).
+    pub home: Option<String>,
+    /// `holdingbranch` (`$b`).
+    pub holding: Option<String>,
+    /// `itype` (`$y`).
+    pub item_type: Option<String>,
 }
 
 /// Reads `biblio_metadata`, `items` and `itemtypes` from a whole Koha database dump,
@@ -218,7 +262,19 @@ mod tests {
             catalog.item_type_codes(),
             BTreeSet::from(["LIV".to_owned()])
         );
-        assert_eq!(catalog.biblionumbers(), vec![Some("1".to_owned())]);
+        assert_eq!(
+            catalog.koha_records(),
+            vec![KohaCatalogRecord {
+                biblionumber: Some("1".to_owned()),
+                items: vec![KohaCatalogItem {
+                    itemnumber: Some("10".to_owned()),
+                    barcode: Some("0001".to_owned()),
+                    home: Some("BR1".to_owned()),
+                    holding: Some("BR1".to_owned()),
+                    item_type: Some("LIV".to_owned()),
+                }],
+            }]
+        );
         // The partial-dump reader still refuses a whole database.
         assert!(super::super::prepare(dump().as_bytes()).is_err());
     }

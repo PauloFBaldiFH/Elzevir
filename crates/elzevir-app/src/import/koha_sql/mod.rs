@@ -94,7 +94,7 @@ pub fn prepare(input: impl BufRead) -> Result<Vec<(Record, u64)>, DumpError> {
         .collect())
 }
 
-pub use database::{DatabaseCatalog, read_database_catalog};
+pub use database::{DatabaseCatalog, KohaCatalogItem, KohaCatalogRecord, read_database_catalog};
 
 pub(super) struct MetadataRecord {
     pub declares_utf8: bool,

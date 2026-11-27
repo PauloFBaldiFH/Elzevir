@@ -449,7 +449,7 @@ Trocar o Koha pelo Elzevir numa cópia da Biblioteca Pública Municipal Castro A
 | # | Tarefa | Referência | Pronto quando |
 |---|---|---|---|
 | 6.1 | Roteiro da troca: do dump do `koha-dump` ao servidor no ar (acervo, leitores, circulação, preferências e índice), num comando cronometrado e documentado | [troca-do-koha.md](../specs/migracao/troca-do-koha.md) | O roteiro roda do dump até o servidor no ar sem passo manual fora dele |
-| 6.2 | Verificador da migração (`elzevir verify-koha`): compara o dump com o banco do Elzevir e lista cada diferença pelo número do Koha | Tabelas do Koha migradas nas 5.1 a 5.3 | Zero diferença sem explicação, sem dado pessoal no relatório |
+| 6.2 | Verificador da migração (`elzevir verify-koha`): compara o dump com o banco do Elzevir e lista cada diferença pelo número do Koha | [verificacao-do-koha.md](../specs/migracao/verificacao-do-koha.md); tabelas do Koha migradas nas 5.1 a 5.3 | Zero diferença sem explicação, sem dado pessoal no relatório |
 | 6.3 | Paridade sobre os dados migrados: vencimento, multa, renovação e fila de uma amostra real contra o Koha de homologação com a mesma cópia | Gravadores em `tools/` | Toda divergência é bug corrigido ou desvio aprovado |
 | 6.4 | Um dia de balcão encenado nos dois sistemas (empréstimo, devolução, renovação, reserva, pagamento, SIP2, OPAC, Z39.50, SRU) | Cenários existentes | Mesmos resultados, ou diferença listada com causa |
 | 6.5 | Desempenho com o acervo real: importação, migração, busca, índice, backup e restauração | doc 02 | Números medidos e registrados, com meta para o que ficar lento |

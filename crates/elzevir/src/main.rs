@@ -80,6 +80,7 @@ mod tunnel_observe;
 mod update;
 mod update_journal;
 mod update_recovery;
+mod verify_cli;
 mod z3950_server;
 
 use std::future::IntoFuture;
@@ -189,6 +190,8 @@ enum Command {
     /// Brings preferences, patrons, catalog and circulation from a whole Koha database
     /// dump into a new data directory, and builds the search index.
     SwitchFromKoha(switch_cli::SwitchFromKohaArgs),
+    /// Compares a Koha database dump with what the Elzevir holds from it, by Koha's numbers.
+    VerifyKoha(verify_cli::VerifyKohaArgs),
 }
 
 #[derive(Subcommand)]
@@ -276,6 +279,7 @@ fn main() -> ExitCode {
         Command::MigrateKoha(args) => koha_migration_cli::run(&args),
         Command::ImportKohaPrefs(args) => koha_prefs_cli::run(&args),
         Command::SwitchFromKoha(args) => switch_cli::run(&args),
+        Command::VerifyKoha(args) => verify_cli::run(&args),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,

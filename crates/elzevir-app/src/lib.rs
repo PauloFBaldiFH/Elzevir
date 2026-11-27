@@ -28,6 +28,7 @@ pub mod items;
 pub mod koha_migration;
 pub mod koha_prefs;
 pub mod koha_types;
+pub mod koha_verify;
 pub mod listing;
 pub mod loans;
 pub mod marc_mapping;

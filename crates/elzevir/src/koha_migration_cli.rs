@@ -141,7 +141,7 @@ pub(crate) fn open(path: &PathBuf) -> Result<Box<dyn BufRead>, String> {
     })
 }
 
-const fn leftover(why: Leftover) -> &'static str {
+pub(crate) const fn leftover(why: Leftover) -> &'static str {
     match why {
         Leftover::NoNumber => "no borrowernumber",
         Leftover::Cardnumber => "no card number, or a longer one than 32 characters",
