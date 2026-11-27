@@ -24,10 +24,51 @@ class InstallerTests(unittest.TestCase):
     def test_additional_institutions_have_independent_executables(self):
         plans = []
         for institution in ["library", "alpha", "beta"]:
-            result = subprocess.run(["bash", str(ROOT / "install.sh"), "--dry-run", "--id", institution], capture_output=True, text=True)
+            result = subprocess.run(["bash", str(ROOT / "install.sh"), "--dry-run", "--version", "v1.2.3", "--id", institution], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             plans.append(dict(line.split("=", 1) for line in result.stdout.splitlines())["binary"])
         self.assertEqual(len(set(plans)), 3)
+
+    def test_linux_release_urls(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            mock = Path(tmp)
+            for arch, libc, archive in [
+                ("x86_64", "glibc 2.35", "elzevir-linux-x86_64.tar.gz"),
+                ("x86_64", "glibc 2.34", "elzevir-v1.2.3-x86_64-unknown-linux-musl.tar.gz"),
+                ("aarch64", "glibc 2.35", "elzevir-v1.2.3-aarch64-unknown-linux-musl.tar.gz"),
+            ]:
+                for command, arg, yes, no in [
+                    ("uname", "-m", arch, "Linux"),
+                    ("getconf", "LONG_BIT", "64", libc),
+                ]:
+                    stub = mock / command
+                    stub.write_text(f'#!/bin/sh\nif [ "$1" = "{arg}" ]; then echo "{yes}"; else echo "{no}"; fi\n')
+                    stub.chmod(0o700)
+                plan = subprocess.check_output(
+                    ["bash", str(ROOT / "install.sh"), "--dry-run", "--version", "v1.2.3"],
+                    env={**os.environ, "PATH": tmp + os.pathsep + os.environ["PATH"]}, text=True,
+                ).splitlines()
+                base = "https://github.com/PauloFBaldiFH/Elzevir/releases/download/v1.2.3"
+                self.assertIn(f"asset_url={base}/{archive}", plan)
+                self.assertIn(f"checksums_url={base}/SHA256SUMS", plan)
+
+    def test_feed_resolves_latest_when_release_requests_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            curl = Path(tmp) / "curl"
+            curl.write_text("""#!/usr/bin/env bash
+case ${!#} in
+    */releases.atom) echo '<id>tag:github.com,2008:Repository/123/v1.2.3-beta.1</id>' ;;
+    *) exit 22 ;;
+esac
+""")
+            curl.chmod(0o700)
+            result = subprocess.run(
+                ["bash", str(ROOT / "install.sh"), "--dry-run"],
+                env={**os.environ, "PATH": tmp + os.pathsep + os.environ["PATH"]},
+                capture_output=True, text=True, check=True,
+            )
+            self.assertIn("version=v1.2.3-beta.1", result.stdout.splitlines())
+            self.assertIn("request failed: https://github.com/PauloFBaldiFH/Elzevir/releases/latest", result.stderr)
 
     def download(self, *, bad_hash=False, symlink=False, quick_install=False, latest=None, launcher=False):
         with tempfile.TemporaryDirectory() as temporary:
@@ -73,7 +114,7 @@ args = sys.argv[1:]
 fixture = Path(os.environ['ELZEVIR_TEST_FIXTURE'])
 destination = args[args.index('--output') + 1]
 url = args[-1]
-if url.endswith('/releases?per_page=1'):
+if url.endswith('/releases?per_page=10'):
     assert url.startswith('https://api.github.com/repos/'), url
     print(json.dumps([{"url": "x", "tag_name": os.environ['ELZEVIR_TEST_TAG'], "prerelease": True}], indent=2))
 elif url.endswith('/releases/latest'):

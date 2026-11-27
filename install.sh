@@ -93,12 +93,8 @@ else
     fi
 fi
 program_parent=${binary%/*}
-if $plan; then
-    printf 'target=%s\nversion=%s\nbinary=%s\nconfig=%s\ndata=%s\nservice=%s\nfirewall=%s\n' "$target" "$version" "$binary" "$config" "$data" "$service" "$firewall"
-    exit 0
-fi
 for utility in curl tar sha256sum awk mktemp stat; do command -v "$utility" >/dev/null || fail "required utility unavailable: $utility"; done
-if $managed && [[ -z $download_only ]]; then
+if ! $plan && $managed && [[ -z $download_only ]]; then
     [[ $EUID -eq 0 ]] || fail 'run the installer as root'
     [[ -d /run/systemd/system || -x /sbin/openrc ]] || fail 'systemd or OpenRC is required'
     for utility in install chown chmod id; do command -v "$utility" >/dev/null || fail "required utility unavailable: $utility"; done
@@ -124,27 +120,63 @@ if $managed && [[ -z $download_only ]]; then
         [[ ! -e $data ]] || fail 'data directory already exists; configuration will not be guessed'
     fi
 fi
+request() {
+    local url=$1
+    shift
+    curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location --max-redirs 5 "$@" "$url" ||
+        { printf 'elzevir: request failed: %s\n' "$url" >&2; return 1; }
+}
+api_tag() {
+    local endpoint=$1
+    local -a headers=()
+    command -v python3 >/dev/null || return 1
+    if [[ -n ${GITHUB_TOKEN:-} ]]; then
+        headers=(--header "Authorization: Bearer $GITHUB_TOKEN")
+    fi
+    request "$api/$endpoint" "${headers[@]}" --max-time 60 --max-filesize 4194304 --output - |
+        python3 -c 'import json, sys
+data = sys.stdin.read()
+if data:
+    releases = json.loads(data)
+    if isinstance(releases, dict):
+        releases = [releases]
+    print(next((r["tag_name"] for r in releases if not r.get("draft")), ""))'
+}
+resolve_latest() {
+    local redirect tag
+    if redirect=$(request "$repository/releases/latest" --max-time 60 --output /dev/null --write-out '%{url_effective}'); then
+        if [[ $redirect == "$repository/releases/tag/"* ]]; then
+            printf '%s\n' "${redirect#"$repository/releases/tag/"}"
+            return
+        fi
+    elif tag=$(api_tag releases/latest) && valid_version "$tag"; then
+        printf '%s\n' "$tag"
+        return
+    fi
+    if tag=$(api_tag 'releases?per_page=10') && valid_version "$tag"; then
+        printf '%s\n' "$tag"
+        return
+    fi
+    # GitHub publishes this Atom feed even when /latest has no stable tag.
+    request "$repository/releases.atom" --max-time 60 --max-filesize 4194304 |
+        sed -nE 's@^[[:space:]]*<id>tag:github.com,2008:Repository/[0-9]+/([^<]+)</id>.*@\1@p' |
+        sed -n '1p'
+}
 if [[ $version == latest ]]; then
-    resolved=$(curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location --max-redirs 5 --max-time 60 --output /dev/null --write-out '%{url_effective}' "$repository/releases/latest")
-    case $resolved in
-        "$repository/releases/tag/"*) version=${resolved#"$repository/releases/tag/"} ;;
-        "$repository/releases")
-            # No stable release yet: GitHub's /latest skips pre-releases, so ask the
-            # API for the newest published one instead of pinning an old tag.
-            version=$(curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location --max-redirs 5 --max-time 60 --max-filesize 1048576 --output - "$api/releases?per_page=1" |
-                awk 'match($0, /"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"/) { value = substr($0, RSTART, RLENGTH); sub(/^"tag_name"[[:space:]]*:[[:space:]]*"/, "", value); sub(/"$/, "", value); print value; exit }') ||
-                fail 'cannot list releases; pass --version vX.Y.Z' ;;
-        *) fail 'cannot resolve an official release' ;;
-    esac
-    valid_version "$version" || fail 'invalid official release tag'
+    version=$(resolve_latest) && valid_version "$version" || fail 'no published release resolved; pass --version with a published tag'
+fi
+name=elzevir-$version-$target.tar.gz
+[[ $target != x86_64-unknown-linux-gnu ]] || name=elzevir-linux-x86_64.tar.gz
+base=$repository/releases/download/$version
+if $plan; then
+    printf 'target=%s\nversion=%s\nbinary=%s\nconfig=%s\ndata=%s\nservice=%s\nfirewall=%s\n' "$target" "$version" "$binary" "$config" "$data" "$service" "$firewall"
+    printf 'asset_url=%s\nchecksums_url=%s\n' "$base/$name" "$base/SHA256SUMS"
+    exit 0
 fi
 temporary=$(mktemp -d)
 staged_binary=
 trap 'if [[ -n $staged_binary ]]; then rm -f -- "$staged_binary"; fi; rm -rf -- "$temporary"' EXIT
-name=elzevir-$version-$target.tar.gz
-[[ $target != x86_64-unknown-linux-gnu ]] || name=elzevir-linux-x86_64.tar.gz
-base=$repository/releases/download/$version
-fetch() { curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location --max-redirs 5 --max-time 900 --max-filesize "${3:-536870912}" --output "$2" "$1"; }
+fetch() { request "$1" --max-time 900 --max-filesize "${3:-536870912}" --output "$2"; }
 fetch "$base/SHA256SUMS" "$temporary/SHA256SUMS" 65536
 [[ $(stat -c %s "$temporary/SHA256SUMS") -le 65536 ]] || fail 'checksum document exceeds limit'
 expected=$(awk -v name="$name" '$2==name || $2=="*"name { if (found++) exit 2; hash=$1 } END {if(found!=1) exit 1; print hash}' "$temporary/SHA256SUMS") || fail 'package checksum absent or duplicated'
