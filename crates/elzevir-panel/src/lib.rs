@@ -9,8 +9,10 @@ mod addresses;
 mod backup_center;
 mod backup_options;
 mod manual_backup;
+mod schedule_view;
 pub use backup_center::{BackupCenter, BackupPage};
 mod cloud;
+mod cloud_view;
 mod dashboard;
 mod domain;
 pub use backup_options::{BackupOptions, BackupProfile, BackupScope};
@@ -27,6 +29,7 @@ mod operation_view;
 mod operations;
 mod overview;
 mod port;
+mod provider_picker;
 pub use port::{MIN_PORT, PortForm, PortStep, Refusal, choose_port};
 mod folder_picker;
 mod inspection;
@@ -240,7 +243,7 @@ impl Panel {
             }
             return;
         }
-        if self.form.is_some() && self.handle_form(event) {
+        if (self.form.is_some() && self.handle_form(event)) || provider_picker::input(self, event) {
             return;
         }
         if self.section == Section::Addresses && self.tunnel_tab == TunnelTab::Share {
@@ -295,7 +298,8 @@ impl Panel {
                         KeyCode::PageDown => self.scroll = self.scroll.saturating_add(5).min(500),
                         KeyCode::PageUp => self.scroll = self.scroll.saturating_sub(5),
                         KeyCode::Home => self.scroll = 0,
-                        KeyCode::Esc | KeyCode::Enter => self.palette = false,
+                        KeyCode::Esc => self.dismiss(),
+                        KeyCode::Enter => self.palette = false,
                         KeyCode::Tab | KeyCode::Down | KeyCode::Right => {
                             self.section = self.section.adjacent(true);
                         }
@@ -349,6 +353,20 @@ impl Panel {
         if self.section != section {
             self.section = section;
             self.enter_section();
+        }
+        self.palette = false;
+    }
+
+    fn dismiss(&mut self) {
+        if !self.palette
+            && self.section == Section::Backup
+            && matches!(
+                self.backups.page,
+                BackupPage::Schedules | BackupPage::Connections
+            )
+        {
+            self.backups.page = BackupPage::Overview;
+            self.backups.offset = 0;
         }
         self.palette = false;
     }
@@ -439,20 +457,28 @@ impl Panel {
         }
     }
 
+    fn step_cloud_plan(&mut self, forward: bool) {
+        self.cloud_file = None;
+        let count = self.cloud_view().map_or(0, |v| v.plans.len()).max(1);
+        self.cloud_plan = cycle(self.cloud_plan, count, forward);
+    }
+
     fn cloud_navigation(&mut self, key: char) -> bool {
+        if cloud_view::handle_guard(self, key) {
+            return true;
+        }
         self.initialize_cloud_file();
         match key {
             '[' | ']' => {
                 self.backups.page = BackupPage::Connections;
+                self.backups.offset = 0;
                 self.cloud_tab = (self.cloud_tab + if key == ']' { 1 } else { 3 }) % 4;
             }
             ',' | '.' => {
                 self.step_cloud_file(key == '.');
             }
             '<' | '>' => {
-                self.cloud_file = None;
-                let count = self.cloud_view().map_or(0, |v| v.plans.len()).max(1);
-                self.cloud_plan = cycle(self.cloud_plan, count, key == '>');
+                self.step_cloud_plan(key == '>');
             }
             'l' | 'D' | 'U' | 'O' | 'u' | '+' | 'M' => {
                 let Mode::Live(state) = &self.mode else {
@@ -668,9 +694,14 @@ impl Panel {
                 };
                 operation
             }
-            (Section::Backup, 'n' | 'v' | 'e' | 'k' | 'o' | 's') => {
-                backup_operation(key, self.observed_operations())
+            (Section::Backup, 's') => {
+                let Some(policy) = schedule_view::policy(self) else {
+                    self.access_notice = Some("schedule-policy-unknown");
+                    return true;
+                };
+                policy
             }
+            (Section::Backup, 'n' | 'v' | 'e' | 'k' | 'o') => backup_operation(key),
             (Section::Restart | Section::Settings, 'c') => match self.settings() {
                 Some(operation) => operation,
                 None => return false,
@@ -705,6 +736,14 @@ impl Panel {
 
     /// Confirms the current form using the same validation as its primary button.
     pub fn submit_form(&mut self) {
+        if let Some(form) = &self.form
+            && matches!(form.operation, Operation::Policy { .. })
+            && schedule_view::policy(self).as_ref() != Some(&form.operation)
+        {
+            self.form = None;
+            self.access_notice = Some("schedule-reopen");
+            return;
+        }
         if let Some(Operation::Cloud(CloudOperation::Remote(target, RemoteCommand::Download(id)))) =
             self.form.as_ref().map(|form| &form.operation)
             && !self
@@ -847,7 +886,7 @@ fn cycle(current: usize, count: usize, forward: bool) -> usize {
     (current % count + if forward { 1 } else { count - 1 }) % count
 }
 
-fn backup_operation(key: char, observed: Option<&Operations>) -> Operation {
+fn backup_operation(key: char) -> Operation {
     match key {
         'n' => Operation::BackupNow {
             options: BackupOptions::default(),
@@ -860,20 +899,9 @@ fn backup_operation(key: char, observed: Option<&Operations>) -> Operation {
         'k' => Operation::ExportKey {
             output: String::new(),
         },
-        'o' => Operation::Restore {
+        _ => Operation::Restore {
             input: String::new(),
             key: String::new(),
-        },
-        _ => Operation::Policy {
-            keep: observed.and_then(|ops| ops.keep).unwrap_or(7).to_string(),
-            time: observed
-                .and_then(|ops| ops.daily.as_deref())
-                .and_then(|daily| daily.split_once(' '))
-                .map_or_else(String::new, |(time, _)| time.to_owned()),
-            zone: observed
-                .and_then(|ops| ops.daily.as_deref())
-                .and_then(|daily| daily.split_once(' '))
-                .map_or_else(|| "UTC".to_owned(), |(_, zone)| zone.to_owned()),
         },
     }
 }

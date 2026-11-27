@@ -257,7 +257,7 @@ fn interact(
             transfer.is_some(),
             picker.is_some(),
             scene.gallery,
-            panel.backups.page,
+            (panel.backups.page, panel.cloud_tab),
             manual.is_some(),
         );
         if input_layer != Some(layer) {
@@ -340,7 +340,8 @@ fn control_input(
 ) -> Option<Event> {
     let controls = (!transfer_open
         && panel.section == crate::Section::Backup
-        && panel.backups.page != crate::BackupPage::Connections)
+        && matches!(panel.mode, Mode::Live(_))
+        && panel.inspection.is_none())
         || panel.section == crate::Section::Dashboard
         || panel.form.is_some()
         || scene.gallery

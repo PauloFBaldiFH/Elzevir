@@ -2,32 +2,33 @@
 source: crates/elzevir-panel/tests/live.rs
 expression: "screen(&panel, \"pt-BR\")"
 ---
-Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
-+Seções--------------------+   1 Início         2 Saúde        3 Acesso         4 Backup        5 Versões       6 Serviço       7 Ajustes
-|  d Painel de controle    |+Backup e agendamentos-----------------------------------------------------------++Instituição selecionada-----+
-|  x Diagnóstico           ||Em execução                                                                     ||Biblioteca de teste         |
-|  a Endereços e acesso    ||                                                                                ||                            |
-|> b Backup e agendamentos ||n Criar · v Verificar · e Exportar · k Chave · o Restaurar · s Agendar          ||Listener configurado        |
-|  u Atualizações          ||Cópias mantidas: Não lido                                                       ||127.0.0.1:0                 |
-|  r Serviço               ||Backup diário: Desativado                                                       ||                            |
-|  g Configurações         ||Conexões  [Planos]  Na nuvem  Histórico                                         ||Listener observado          |
-|                          ||[ ] mudar aba · < > selecionar plano                                            ||127.0.0.1:8080              |
-|                          ||Noite · Biblioteca / Acervo/noite                                               ||                            |
-|                          ||g criar/editar plano · u executar plano · h desativar agenda · G remover plano ·||Última consulta: há 0       |
-|                          ||C remover conexão                                                               ||segundos                    |
-|                          ||U enviar/conferir · + marcar/desmarcar destino · M enviar aos marcados          ||                            |
-|                          ||ID do plano: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                                   ||Observações somente de      |
-|                          ||Cópias mantidas: 7                                                              ||leitura                     |
-|                          ||Backup diário: Desativado                                                       ||                            |
-|                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-|                          |+--------------------------------------------------------------------------------++----------------------------+
-+--------------------------+    Novo backup [n]        Verificar [v]         Transferir [z]        Configurar [s]          Atualizar [f]
-Tab/setas: navegar | f: atualizar | PgUp/PgDn: rolar | Ctrl+P: paleta | q/Ctrl+C: sair
+ ELZEVIR   /   Central de administração
+             Visão geral                    Central de backups                     Histórico                            Nuvem
+
+ Nuvem
+
+
+              Conexões                            Planos                           Na nuvem                           Histórico
+
+
+
+             Novo plano                         - Anterior                         - Próximo                      Revisar execução
+
+
+  Planos
+  Noite · Biblioteca / Acervo/noite
+  g criar/editar plano · u executar plano · h desativar agenda · G remover plano · C remover conexão
+  U enviar/conferir · + marcar/desmarcar destino · M enviar aos marcados
+  ID do plano: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  Cópias mantidas: 7
+  Backup diário: Desativado
+
+
+
+
+
+
+                             Agendamentos                                                        Voltar à central
+
+
+ Clique para agir   ·   Tab para focar   ·   Esc para fechar   ·   Q para sair

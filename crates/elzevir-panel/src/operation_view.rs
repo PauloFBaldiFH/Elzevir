@@ -94,39 +94,12 @@ fn backup_rows(
     panel: &Panel,
     m: &Messages,
 ) -> Vec<Line<'static>> {
-    let mut rows = vec![Line::from(m.get("op-backup-help"))];
-    if let Some(ops) = operations {
-        rows.push(row(m, "op-retention", ops.keep.map(|n| n.to_string())));
-        rows.push(row(
-            m,
-            "op-daily",
-            Some(ops.daily.clone().unwrap_or_else(|| m.get("op-disabled"))),
-        ));
-        if ops.review.is_some() {
-            rows.push(Line::from(m.get("restore-ready")));
-        }
+    let mut rows = Vec::new();
+    if operations.is_some_and(|ops| ops.review.is_some()) {
+        rows.push(Line::from(m.get("restore-ready")));
     }
-    let tabs = [
-        "cloud-connections-tab",
-        "cloud-plans-tab",
-        "cloud-files-tab",
-        "cloud-history-tab",
-    ]
-    .iter()
-    .enumerate()
-    .map(|(i, k)| {
-        let label = m.get(k);
-        if panel.cloud_tab == i {
-            format!("[{label}]")
-        } else {
-            label
-        }
-    })
-    .collect::<Vec<_>>()
-    .join("  ");
-    rows.push(Line::from(tabs));
-    rows.push(Line::from(m.get("cloud-tab-keys")));
     let Some(view) = operations.and_then(|o| o.cloud.as_ref()) else {
+        rows.push(Line::from(m.get("schedule-cloud-unknown")));
         return rows;
     };
     let plan = view

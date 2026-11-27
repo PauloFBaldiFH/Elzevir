@@ -983,3 +983,80 @@ fn dashboard_reports_a_published_backup_even_after_an_export_failure() {
     }
     assert!(!screen(&panel, "en").contains("Verified at creation"));
 }
+
+#[test]
+fn local_schedule_cannot_be_replaced_from_an_unknown_or_stale_policy() {
+    use elzevir_panel::Section;
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut panel = connected();
+    panel.section = Section::Backup;
+    let edit = Event::Key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+    panel.handle(&edit, 80, 24);
+    assert!(panel.form.is_none());
+    if let Mode::Live(state) = &mut panel.mode {
+        state.snapshot.as_mut().unwrap().operations.keep = Some(12);
+        state.age_seconds = 6;
+    }
+    panel.handle(&edit, 80, 24);
+    assert!(panel.form.is_none());
+    if let Mode::Live(state) = &mut panel.mode {
+        state.age_seconds = 0;
+    }
+    panel.handle(&edit, 80, 24);
+    assert_eq!(panel.form.as_ref().unwrap().values[0], "12");
+}
+
+#[test]
+fn cloud_workspace_exposes_mouse_actions_in_a_compact_terminal() {
+    let mut panel = connected();
+    panel.section = elzevir_panel::Section::Backup;
+    panel.backups.page = elzevir_panel::BackupPage::Connections;
+    if let Mode::Live(state) = &mut panel.mode {
+        state.snapshot.as_mut().unwrap().operations.cloud =
+            Some(elzevir_panel::CloudView::default());
+    }
+    let compact = sized_screen(&panel, "pt-BR", 80, 24);
+    for label in [
+        "Consultar provedores",
+        "Nova conexão",
+        "Agendamentos",
+        "Voltar à central",
+    ] {
+        assert!(compact.contains(label), "{compact}");
+    }
+}
+
+#[test]
+fn provider_selection_filters_the_verified_catalogue_without_requesting_a_job() {
+    use elzevir_panel::{BackupPage, CloudView, Section};
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut panel = connected();
+    panel.section = Section::Backup;
+    panel.backups.page = BackupPage::Providers;
+    if let Mode::Live(state) = &mut panel.mode {
+        state.snapshot.as_mut().unwrap().operations.cloud = Some(CloudView {
+            providers: vec![
+                ("drive".into(), "Google Drive".into()),
+                ("sftp".into(), "SFTP".into()),
+            ],
+            ..CloudView::default()
+        });
+    }
+    for c in "GOOGLE".chars() {
+        panel.handle(
+            &Event::Key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)),
+            80,
+            24,
+        );
+    }
+    let content = sized_screen(&panel, "pt-BR", 80, 24);
+    assert!(content.contains("Google Drive"));
+    assert!(!content.contains("SFTP"));
+    assert!(panel.diagnostics.requested.is_none());
+    panel.handle(
+        &Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+        80,
+        24,
+    );
+    assert_eq!(panel.backups.page, BackupPage::Connections);
+}
