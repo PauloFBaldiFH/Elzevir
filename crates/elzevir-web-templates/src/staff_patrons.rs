@@ -209,6 +209,19 @@ pub struct HoldRow {
     pub day: String,
     /// Its place in the queue, or that it waits or is in transit.
     pub status: String,
+    /// What the desk may do with its suspension.
+    pub suspension: HoldSuspensionAction,
+}
+
+/// The suspension button a hold shows (docs/specs/circulacao/reservas.md, item 19).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HoldSuspensionAction {
+    /// Set aside: it cannot be suspended.
+    None,
+    /// Queued: it may be suspended, until a day or not.
+    Suspend,
+    /// Suspended: it may be resumed.
+    Resume,
 }
 
 /// The button that sets a checked-in Item aside for the hold it answers.

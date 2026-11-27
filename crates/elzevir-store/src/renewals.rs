@@ -127,6 +127,8 @@ fn balance(connection: &Connection, patron: PatronId) -> rusqlite::Result<Money>
 
 /// Whether someone waits for the Item: a hold on this Item, or a hold it would fill.
 ///
+/// A suspended hold does not count (Koha: `current_holds` asks for `suspend = 0`).
+///
 /// Koha: `Koha::Item::current_holds` and `C4::Reserves::CheckReserves` in
 /// `CanBookBeRenewed`; `AllowRenewalIfOtherItemsAvailable` and `FutureHoldsBlockRenewals`
 /// are off.
@@ -136,7 +138,8 @@ fn on_hold(
     loan: &Loan,
 ) -> rusqlite::Result<bool> {
     let on_item: bool = connection.query_row(
-        "SELECT EXISTS (SELECT 1 FROM holds WHERE item_id = ?1 AND found IS NULL)",
+        "SELECT EXISTS (SELECT 1 FROM holds
+                 WHERE item_id = ?1 AND found IS NULL AND suspended = 0)",
         [loan.item.0],
         |row| row.get(0),
     )?;

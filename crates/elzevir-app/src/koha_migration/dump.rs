@@ -24,6 +24,7 @@ const RESERVES: &[&str] = &[
     "waitingdate",
     "expirationdate",
     "suspend",
+    "suspend_until",
     "item_level_hold",
     "timestamp",
 ];

@@ -5,14 +5,14 @@ use elzevir_app::circulation_rules::{CirculationOutput, CirculationRefusal};
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
 use elzevir_app::holds::{
     CheckinHold, HoldAside, HoldCancellation, HoldId, HoldLevel, HoldPlaced, HoldRefused,
-    HoldRequest, PatronHold, SetAside,
+    HoldRequest, PatronHold, SetAside, Suspension,
 };
 use elzevir_app::loans::checked_barcode;
 use elzevir_domain::catalog::{BranchId, InstanceId, ItemId, Money, PolicyId};
 use elzevir_domain::circulation_rules::{CirculationRule, RuleScopeKey};
 use elzevir_domain::hold::{
     CurrentHold, Found, HoldItem, HoldMatch, HoldPatron, HoldRequestFacts, HoldSettings,
-    HoldTarget, QueuedHold, check_hold, hold_for_item, pickup_days,
+    HoldTarget, QueueState, QueuedHold, check_hold, hold_for_item, pickup_days,
 };
 use elzevir_domain::patron::{PatronCategoryId, PatronId};
 use jiff::civil::Date;
@@ -251,7 +251,7 @@ pub(crate) fn patron_holds(
 ) -> rusqlite::Result<Vec<PatronHold>> {
     let mut statement = connection.prepare_cached(
         "SELECT h.id, n.title, i.barcode, b.name, h.placed_on, h.priority, h.found,
-                h.expires_on
+                h.expires_on, h.suspended, h.suspended_until
          FROM holds h
          JOIN instances n ON n.id = h.instance_id
          JOIN branches b ON b.id = h.pickup_id
@@ -264,6 +264,12 @@ pub(crate) fn patron_holds(
             let placed_on: String = row.get(4)?;
             let found: Option<String> = row.get(6)?;
             let expires_on: Option<String> = row.get(7)?;
+            let until: Option<String> = row.get(9)?;
+            let suspended = match (row.get::<_, bool>(8)?, until) {
+                (false, _) => None,
+                (true, None) => Some(Suspension::Indefinite),
+                (true, Some(day)) => Some(Suspension::Until(date(&day, 9)?)),
+            };
             Ok(PatronHold {
                 id: HoldId(row.get(0)?),
                 title: row.get(1)?,
@@ -273,6 +279,7 @@ pub(crate) fn patron_holds(
                 priority: row.get(5)?,
                 found: found.as_deref().and_then(Found::from_code),
                 expires_on: expires_on.map(|day| date(&day, 7)).transpose()?,
+                suspended,
             })
         })?
         .collect()
@@ -281,19 +288,24 @@ pub(crate) fn patron_holds(
 /// The Instance's holds, as `hold_for_item` reads them.
 fn instance_queue(connection: &Connection, instance: i64) -> rusqlite::Result<Vec<QueuedHold>> {
     let mut statement = connection.prepare_cached(
-        "SELECT h.id, p.branch_id, h.pickup_id, h.priority, h.found, h.item_id
+        "SELECT h.id, p.branch_id, h.pickup_id, h.priority, h.found, h.item_id, h.suspended
          FROM holds h JOIN patrons p ON p.id = h.patron_id
          WHERE h.instance_id = ?1",
     )?;
     statement
         .query_map([instance], |row| {
             let found: Option<String> = row.get(4)?;
+            let state = match found.as_deref().and_then(Found::from_code) {
+                Some(found) => QueueState::Found(found),
+                None if row.get::<_, bool>(6)? => QueueState::Suspended,
+                None => QueueState::Queued,
+            };
             Ok(QueuedHold {
                 id: HoldId(row.get(0)?),
                 patron_branch: BranchId(row.get(1)?),
                 pickup: BranchId(row.get(2)?),
                 priority: row.get(3)?,
-                found: found.as_deref().and_then(Found::from_code),
+                state,
                 item: row.get::<_, Option<i64>>(5)?.map(ItemId),
             })
         })?
@@ -447,7 +459,7 @@ pub(crate) fn set_hold_aside(connection: &Connection, request: &HoldAside) -> Ap
         connection
             .execute(
                 "UPDATE holds SET found = 'W', priority = 0, item_id = ?2, waiting_since = ?3,
-                                  expires_on = ?4
+                                  expires_on = ?4, suspended = 0, suspended_until = NULL
                  WHERE id = ?1",
                 params![request.hold.0, item, since.to_string(), expires.to_string()],
             )
@@ -493,7 +505,9 @@ fn send_in_transit(
 ) -> rusqlite::Result<SetAside> {
     let at = request.at.to_string();
     connection.execute(
-        "UPDATE holds SET found = 'T', priority = 0, item_id = ?2 WHERE id = ?1",
+        "UPDATE holds SET found = 'T', priority = 0, item_id = ?2, suspended = 0,
+                          suspended_until = NULL
+         WHERE id = ?1",
         params![request.hold.0, item],
     )?;
     // Koha: `ModItemTransfer` replaces the open transfer with this one; Elzevir keeps no

@@ -32,6 +32,7 @@ mod elzevir;
 mod error;
 mod export;
 mod history;
+mod hold_suspension;
 mod holds;
 mod import;
 mod inventory;

@@ -213,7 +213,7 @@ fn a_koha_dump_brings_its_patrons_once() {
         "  issue_id 6: a number, patron, Item or date missing",
         "  issue_id 3: patron not migrated",
         "  issue_id 1: no Item, or two, with its itemnumber or barcode",
-        "holds: 0 migrated, 6 left out, 1 suspended in Koha (active here), 1 queued with an end date (dropped)",
+        "holds: 0 migrated, 6 left out, 1 suspended, 1 queued with an end date (dropped)",
         "  reserve_id 4: no record, or two, with its biblionumber",
         "loans and holds already migrated: 0",
         "patron accounts: 2 migrated with 5 lines and 4 offsets, 0 already migrated, 1 left out",

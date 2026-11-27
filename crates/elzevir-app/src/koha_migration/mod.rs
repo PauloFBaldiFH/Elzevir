@@ -262,7 +262,7 @@ pub struct KohaPlan {
     pub loans_left: Vec<(u64, CirculationLeftover)>,
     /// Holds the dump does not describe well enough, by `reserve_id`.
     pub holds_left: Vec<(u64, CirculationLeftover)>,
-    /// Suspended holds, which come as active ones.
+    /// Suspended holds, which come suspended.
     pub suspended_holds: usize,
     /// Queued holds with an end date, which comes without it.
     pub holds_with_end: usize,

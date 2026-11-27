@@ -49,6 +49,36 @@ pub struct HoldCancellation {
     pub by_patron: bool,
 }
 
+/// How long a hold stays suspended (Koha: `suspend_until`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Suspension {
+    /// Until someone resumes it.
+    Indefinite,
+    /// Until the start of that day, when the hourly run resumes it
+    /// (Koha: `C4::Reserves::AutoUnsuspendReserves`).
+    Until(Date),
+}
+
+/// What to do with a hold's suspension.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SuspensionChange {
+    /// Suspend it, or change how long (Koha: `Koha::Hold::suspend_hold`).
+    Suspend(Suspension),
+    /// Let Items fill it again (Koha: `Koha::Hold::resume`).
+    Resume,
+}
+
+/// A hold suspended or resumed at the desk or on the OPAC.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HoldSuspensionRequest {
+    /// Whose hold: a hold of another patron is refused.
+    pub patron: PatronId,
+    /// Which hold.
+    pub hold: HoldId,
+    /// Suspend or resume.
+    pub change: SuspensionChange,
+}
+
 /// A hold placed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HoldPlaced {
@@ -116,6 +146,10 @@ pub enum HoldRefused {
     /// The hold is waiting or in transit, so only the desk cancels it.
     #[error("the hold is already set aside")]
     SetAside,
+    /// The hold is waiting or in transit, so it cannot be suspended
+    /// (Koha: `Koha::Exceptions::Hold::CannotSuspendFound`).
+    #[error("a hold already set aside cannot be suspended")]
+    SuspendSetAside,
 }
 
 impl HoldRefused {
@@ -129,6 +163,7 @@ impl HoldRefused {
             Self::UnknownHold => "hold-error-unknown-hold",
             Self::WrongItem => "hold-error-wrong-item",
             Self::SetAside => "hold-error-set-aside",
+            Self::SuspendSetAside => "hold-error-suspend-set-aside",
             Self::Rules(refusal) => match refusal {
                 HoldRefusal::PickupNotValid => "hold-error-pickup",
                 HoldRefusal::Restricted => "hold-error-restricted",
@@ -167,4 +202,6 @@ pub struct PatronHold {
     pub found: Option<Found>,
     /// The last day to pick it up, when it is waiting.
     pub expires_on: Option<Date>,
+    /// Whether it is suspended, and until when.
+    pub suspended: Option<Suspension>,
 }

@@ -57,7 +57,7 @@ const fn refusal_key(refusal: &HoldRefused) -> &'static str {
             "opac-hold-pickup"
         }
         HoldRefused::UnknownHold => "opac-hold-unknown",
-        HoldRefused::SetAside => "opac-hold-set-aside",
+        HoldRefused::SetAside | HoldRefused::SuspendSetAside => "opac-hold-set-aside",
         HoldRefused::Rules(refusal) => match refusal {
             HoldRefusal::Restricted => "opac-hold-restricted",
             HoldRefusal::DebtLimit { .. } => "opac-hold-debt",

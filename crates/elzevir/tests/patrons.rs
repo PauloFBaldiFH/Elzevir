@@ -1105,6 +1105,30 @@ fn holds_are_placed_listed_and_cancelled_on_the_record() {
         .unwrap()
         .0
         .to_owned();
+    // Suspended until a day, it keeps its place; resumed, it shows its place again.
+    assert!(
+        placed.contains(&format!("value=\"suspend:{hold}\"")),
+        "{placed}"
+    );
+    let suspended = post(&format!("until-{hold}=2026-12-20&op=suspend:{hold}"));
+    assert_status(&suspended, 200);
+    assert!(
+        suspended.contains("Hold updated.")
+            && suspended.contains("Suspended until")
+            && suspended.contains("place 1 in the queue")
+            && suspended.contains(&format!("value=\"resume:{hold}\"")),
+        "{suspended}"
+    );
+    assert_status(
+        &post(&format!("until-{hold}=20/12/2026&op=suspend:{hold}")),
+        400,
+    );
+    let resumed = post(&format!("until-{hold}=&op=resume:{hold}"));
+    assert_status(&resumed, 200);
+    assert!(
+        resumed.contains("Place 1 in the queue") && !resumed.contains("Suspended"),
+        "{resumed}"
+    );
     let cancelled = post(&format!("op=cancel:{hold}"));
     assert_status(&cancelled, 200);
     assert!(cancelled.contains("Hold cancelled.") && !cancelled.contains("cancel:"));

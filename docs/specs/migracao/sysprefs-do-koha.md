@@ -257,7 +257,7 @@ As 915 preferências do sistema do Koha e o lugar de cada uma no Elzevir. As que
 | `AutoClaimReturnStatusOnCheckin` | (vazio) | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `AutoClaimReturnStatusOnCheckout` | (vazio) | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `AutoRemoveOverduesRestrictions` | `no` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
-| `AutoResumeSuspendedHolds` | `1` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
+| `AutoResumeSuspendedHolds` | `1` | Comportamento fixo: 1: a reserva suspensa até um dia volta à fila nesse dia (docs/specs/circulacao/reservas.md, item 19). |
 | `AutoReturnCheckedOutItems` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `AutoSelfCheckAllowed` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `AutoSelfCheckID` | (vazio) | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
@@ -413,7 +413,7 @@ As 915 preferências do sistema do Koha e o lugar de cada uma no Elzevir. As que
 | `StaticHoldsQueueWeight` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `StockRotation` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `StoreLastBorrower` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
-| `SuspendHoldsIntranet` | `1` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
+| `SuspendHoldsIntranet` | `1` | Comportamento fixo: 1: a equipe suspende e retoma reservas na ficha do leitor (docs/specs/circulacao/reservas.md, item 19). |
 | `SuspendHoldsOpac` | `1` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `SuspensionsCalendar` | `noSuspensionsWhenClosed` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `SwitchOnSiteCheckouts` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |

@@ -16,7 +16,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::accounts::{Paid, PayRefusal, PaymentRequest};
 use crate::calendar::CalendarChange;
-use crate::holds::{HoldAside, HoldCancellation, HoldPlaced, HoldRefused, HoldRequest, SetAside};
+use crate::holds::{
+    HoldAside, HoldCancellation, HoldPlaced, HoldRefused, HoldRequest, HoldSuspensionRequest,
+    SetAside,
+};
 use crate::loans::{
     CheckedIn, CheckedOut, CheckinRefusal, CheckinRequest, CheckoutRefusal, CheckoutRequest,
     RenewRefusal, RenewRequest, Renewed,
@@ -48,6 +51,14 @@ pub enum CirculationCommand {
     CancelHold(HoldCancellation),
     /// Sets a checked-in Item aside for the hold it answers (docs/specs/circulacao/reservas.md).
     SetHoldAside(HoldAside),
+    /// Suspends or resumes a hold (docs/specs/circulacao/reservas.md, item 19).
+    SuspendHold(HoldSuspensionRequest),
+    /// Resumes the holds suspended until a day that has come
+    /// (docs/specs/circulacao/reservas.md, item 19).
+    ResumeSuspendedHolds {
+        /// When, in the library's time zone.
+        at: Zoned,
+    },
     /// Brings the fine of every overdue loan to what it is worth at `at`: the daily run
     /// (docs/specs/circulacao/conta.md).
     ChargeOverdues {
@@ -217,6 +228,13 @@ pub enum CirculationOutput {
     HoldsExpired {
         /// Holds cancelled.
         cancelled: usize,
+    },
+    /// A hold was suspended or resumed.
+    HoldSuspensionChanged,
+    /// How many suspended holds came back to the queue because their day came.
+    SuspendedHoldsResumed {
+        /// Holds resumed.
+        resumed: usize,
     },
     /// An overdue notice rule was stored or removed.
     OverdueNoticeRuleSet,
