@@ -2,32 +2,33 @@
 source: crates/elzevir-panel/tests/live.rs
 expression: "screen(&panel, lang)"
 ---
-Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
-+Seções--------------------+   1 Início         2 Saúde        3 Acesso         4 Backup        5 Versões       6 Serviço       7 Ajustes
-|  d Painel de controle    |+Backup e agendamentos-----------------------------------------------------------++Instituição selecionada-----+
-|  x Diagnóstico           ||Em execução                                                                     ||Biblioteca de teste         |
-|  a Endereços e acesso    ||                                                                                ||                            |
-|> b Backup e agendamentos ||n C+Operação com confirmação--------------------------------------------------+ ||Listener configurado        |
-|  u Atualizações          ||Cóp| Revisar restauração da instituição                                       | ||127.0.0.1:0                 |
-|  r Serviço               ||Bac| Biblioteca de teste                                                      | ||                            |
-|  g Configurações         ||[Co| Sessões ativas observadas da equipe: Não lido                            | ||Listener observado          |
-|                          ||[ ]| biblioteca.age                                                           | ||127.0.0.1:8080              |
-|                          ||   | 00112233445566778899aabbccddeeff   2026-11-20T22:30:00Z                  | ||                            |
-|                          ||   | Esquema do banco 1                                                       | ||Última consulta: há 0       |
-|                          ||   | Instituição de origem desconhecida                                       | ||segundos                    |
-|                          ||   | Somente banco. A configuração e as credenciais atuais serão mantidas.    | ||                            |
-|                          ||   | O serviço ficará fora do ar durante a troca e a reindexação.             | ||Observações somente de      |
-|                          ||   |                                                                          | ||leitura                     |
-|                          ||   | Escolha com as setas e confirme com Enter                                | ||                            |
-|                          ||   |              (*) Voltar                         ( ) Restaurar            | ||                            |
-|                          ||   | Clique num campo para editar · Tab: próximo · Esc: cancelar              | ||                            |
-|                          ||   |                                                                          | ||                            |
-|                          ||   |                                                                          | ||                            |
-|                          ||   |           Confirmar escolha                       Cancelar               | ||                            |
-|                          ||   |                                                                          | ||                            |
-|                          ||   +--------------------------------------------------------------------------+ ||                            |
-|                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-|                          |+--------------------------------------------------------------------------------++----------------------------+
-+--------------------------+    Novo backup [n]        Verificar [v]         Transferir [z]        Configurar [s]          Atualizar [f]
-Tab/setas: navegar | f: atualizar | PgUp/PgDn: rolar | Ctrl+P: paleta | q/Ctrl+C: sair
+ ELZEVIR   /   Central de administração
+             Visão geral                    Central de backups                     Histórico                            Nuvem
+
+ Central de backups
+
+  Cópia local                   +Operação com confirmação--------------------------------------------------+
+  Não lido                      | Revisar restauração da instituição                                       |
+                                | Biblioteca de teste                                                      |
+                                | Sessões ativas observadas da equipe: Não lido                            |
+  Cópias locais recentes        | biblioteca.age                                                           |
+  Situação do backup local indis| 00112233445566778899aabbccddeeff   2026-11-20T22:30:00Z                  | para consultar o arquivo.
+                                | Esquema do banco 1                                                       |
+                                | Instituição de origem desconhecida                                       |
+                                | Somente banco. A configuração e as credenciais atuais serão mantidas.    |
+                                | O serviço ficará fora do ar durante a troca e a reindexação.             |
+                                |                                                                          |ter: Não lido
+                                | Escolha com as setas e confirme com Enter                                | MiB
+                                |              (*) Voltar                         ( ) Restaurar            |
+                                | Clique num campo para editar · Tab: próximo · Esc: cancelar              |
+                                |                                                                          |
+                                |                                                                          |
+                                |           Confirmar escolha                       Cancelar               |
+                                |                                                                          |
+                                +--------------------------------------------------------------------------+Ver detalhes
+                    - Subir                                  - Descer
+
+           + Criar backup                     Restaurar dados                    Agendamentos                      Exportar chave
+
+
+ Clique para agir   ·   Tab para focar   ·   Esc para fechar   ·   Q para sair

@@ -57,7 +57,7 @@ pub(crate) struct Dialog {
 }
 
 impl Dialog {
-    fn new(ops: Option<&Operations>) -> Self {
+    fn new(ops: Option<&Operations>, selected: Option<u128>) -> Self {
         let folder = ops
             .and_then(|o| o.backup_folder.as_ref())
             .filter(|p| p.is_absolute())
@@ -66,10 +66,14 @@ impl Dialog {
             .filter(|o| o.local_backup == LocalBackup::Verified)
             .and_then(|o| o.managed_ids.last())
             .filter(|id| id.len() == 32 && id.bytes().all(|b| b.is_ascii_hexdigit()));
-        let archive = folder
-            .as_ref()
-            .zip(id)
-            .map(|(folder, id)| folder.join(format!("elzevir-{id}.age")));
+        let archive = if let Some(id) = selected {
+            ops.and_then(|o| crate::backup_center::path(o, id))
+        } else {
+            folder
+                .as_ref()
+                .zip(id)
+                .map(|(folder, id)| folder.join(format!("elzevir-{id}.age")))
+        };
         Self {
             folder,
             archive,
@@ -227,13 +231,16 @@ pub(crate) fn handle(
     let Mode::Live(state) = &panel.mode else {
         return false;
     };
-    *dialog = Some(Dialog::new(
-        state
-            .snapshot
-            .as_ref()
-            .filter(|_| state.age_seconds <= 5)
-            .map(|s| &s.operations),
-    ));
+    let ops = state
+        .snapshot
+        .as_ref()
+        .filter(|_| state.age_seconds <= 5)
+        .map(|s| &s.operations);
+    let selected = ops.and_then(|ops| crate::backup_center::selected(panel, ops));
+    if panel.backups.page == crate::BackupPage::Result && selected.is_none() {
+        return true;
+    }
+    *dialog = Some(Dialog::new(ops, selected));
     true
 }
 

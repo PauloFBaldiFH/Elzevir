@@ -2,32 +2,33 @@
 source: crates/elzevir-panel/tests/live.rs
 expression: "screen(&panel, language)"
 ---
-Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://127.0.0.1:8080/
-+Sections------------------+    1 Home         2 Health        3 Access         4 Backup        5 Updates       6 Service      7 Settings
-|  d Dashboard             |+Backups and schedules-----------------------------------------------------------++Selected institution--------+
-|  x Diagnostics           ||Running                                                                         ||Biblioteca de teste         |
-|  a Addresses and access  ||                                                                                ||                            |
-|> b Backups and schedules ||n Create · v Verify · e Export · k Recovery key · o Restore · s Schedule        ||Configured listener         |
-|  u Updates               ||Cop+Confirmed operation-------------------------------------------------------+ ||127.0.0.1:0                 |
-|  r Service               ||Dai| Create encrypted backup                                                  | ||                            |
-|  g Settings              ||[Co| Biblioteca de teste                                                      | ||Observed listener           |
-|                          ||[ ]| Observed active staff sessions: Not read                                 | ||127.0.0.1:8080              |
-|                          ||   | Estimated working space: 12 MiB                                          | ||                            |
-|                          ||   |                                                                          | ||Last check: 0 seconds ago   |
-|                          ||   | Scope                                                                    | ||                            |
-|                          ||   |         (*) Full institution                  ( ) Database only          | ||Read-only observations      |
-|                          ||   | Zstandard                                                                | ||                            |
-|                          ||   |        ( ) Fast               (*) Balanced             ( ) Compact       | ||                            |
-|                          ||   | Export folder (F2 browse, empty = managed)                               | ||                            |
-|                          ||   |                                                                          | ||                            |
-|                          ||   | Click a field to edit · Tab: next · Esc: cancel                          | ||                            |
-|                          ||   |                                                                          | ||                            |
-|                          ||   |                                                                          | ||                            |
-|                          ||   |            + Create backup                         Cancel                | ||                            |
-|                          ||   |                                                                          | ||                            |
-|                          ||   +--------------------------------------------------------------------------+ ||                            |
-|                          ||                                                                                ||                            |
-|                          ||                                                                                ||                            |
-|                          |+--------------------------------------------------------------------------------++----------------------------+
-+--------------------------+    New backup [n]          Verify [v]            Transfer [z]           Config [s]             Refresh [f]
-Tab/arrows: navigate | f: refresh | PgUp/PgDn: scroll | Ctrl+P: palette | q/Ctrl+C: quit
+ ELZEVIR   /   Administration center
+              Overview                         Backup center                        History                             Cloud
+
+ Backup center
+
+  Local copy                                    Cloud                                          Schedules
+  Not read                      +Confirmed operation-------------------------------------------------------+
+                                | Create encrypted backup                                                  |
+                                | Biblioteca de teste                                                      |
+  Recent local copies           | Observed active staff sessions: Not read                                 |
+  Local backup status unavailabl| Estimated working space: 12 MiB                                          |spect the archive.
+                                |                                                                          |
+                                | Scope                                                                    |
+                                |         (*) Full institution                  ( ) Database only          |
+                                | Zstandard                                                                |
+                                |        ( ) Fast               (*) Balanced             ( ) Compact       |ain: Not read
+                                | Export folder (F2 browse, empty = managed)                               |B
+                                |                                                                          |
+                                | Click a field to edit · Tab: next · Esc: cancel                          |
+                                |                                                                          |
+                                |                                                                          |
+                                |            + Create backup                         Cancel                |
+                                |                                                                          |
+                                +--------------------------------------------------------------------------+View details
+                  - Scroll up                              - Scroll down
+
+           + Create backup                     Restore data                        Schedules                         Export key
+
+
+ Click an action   ·   Tab to focus   ·   Esc to close   ·   Q to quit

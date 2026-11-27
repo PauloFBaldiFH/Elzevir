@@ -61,6 +61,38 @@ pub(crate) fn observation(directory: &Path, ids: &[String]) -> elzevir_panel::Lo
     LocalBackup::Unknown
 }
 
+/// Bound the filesystem work per observation to the policy's maximum retention.
+pub(crate) fn panel_history(
+    directory: &Path,
+    ids: &[String],
+) -> Vec<elzevir_panel::BackupArtifact> {
+    let regular_folder =
+        std::fs::symlink_metadata(directory.join("backups")).is_ok_and(|m| m.is_dir());
+    ids.iter()
+        .rev()
+        .take(365)
+        .map(|id| {
+            // A missing or unreadable file remains a visible catalogue entry.
+            let metadata = regular_folder
+                .then(|| crate::backup_cli::artifact(directory, id).ok())
+                .flatten()
+                .and_then(|p| std::fs::symlink_metadata(p).ok())
+                .filter(|m| m.is_file() && m.len() > 0);
+            elzevir_panel::BackupArtifact {
+                id: id.clone(),
+                bytes: metadata.as_ref().map(std::fs::Metadata::len),
+                modified: metadata
+                    .and_then(|m| m.modified().ok())
+                    .and_then(|at| jiff::Timestamp::try_from(at).ok())
+                    .map(|at| at.strftime("%F %R UTC").to_string()),
+                export: None,
+                export_at: None,
+                recheck: None,
+            }
+        })
+        .collect()
+}
+
 fn save(directory: &Path, catalog: &Catalog) -> Result<(), String> {
     crate::broker::publish(
         directory,
@@ -157,5 +189,24 @@ mod tests {
                 .unwrap()
                 .exists()
         );
+    }
+}
+
+#[cfg(test)]
+mod panel_history_tests {
+    #[test]
+    fn projection_keeps_a_missing_catalog_entry_distinct_from_a_verified_file() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path();
+        std::fs::create_dir(dir.join("backups")).unwrap();
+        let first = "af".repeat(16);
+        let missing = "bf".repeat(16);
+        let path = crate::backup_cli::artifact(dir, &first).unwrap();
+        std::fs::write(&path, b"fixture").unwrap();
+        let rows = super::panel_history(dir, &[first.clone(), missing.clone()]);
+        assert_eq!(rows[0].id, missing);
+        assert_eq!(rows[0].bytes, None);
+        assert_eq!(rows[1].id, first);
+        assert_eq!(rows[1].bytes, Some(7));
     }
 }

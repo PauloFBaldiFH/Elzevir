@@ -766,6 +766,7 @@ fn cloud_tabs_show_destination_quota_pending_status_and_bound_actions() {
     use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
     let mut panel = connected();
     panel.section = elzevir_panel::Section::Backup;
+    panel.backups.page = elzevir_panel::BackupPage::Connections;
     let target = CloudTarget {
         plan: "a".repeat(32),
         connection: "b".repeat(32),
