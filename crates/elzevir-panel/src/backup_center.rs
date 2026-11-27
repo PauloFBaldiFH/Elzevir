@@ -54,6 +54,7 @@ pub(crate) enum Command {
     ClearFilter,
     SelectSchedule(u128),
     RunSchedule(u128),
+    EditSchedule(u128, bool),
     Details(u128),
     Verify(u128),
     Export(u128),
@@ -163,6 +164,7 @@ pub(crate) fn apply(cmd: Command, panel: &mut Panel, access: &mut Actions, limit
                 })
                 .map(crate::CloudPlan::target);
         }
+        Command::EditSchedule(id, pause) => crate::schedule_view::edit(panel, id, pause),
         Command::RunSchedule(id) => crate::schedule_view::review(panel, id),
         Command::Scroll(down) => scroll(panel, down, 1, limit),
         Command::Select(id) | Command::Details(id) => {

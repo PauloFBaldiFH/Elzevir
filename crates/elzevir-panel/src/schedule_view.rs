@@ -36,6 +36,45 @@ fn selected<'a>(panel: &Panel, ops: &'a Operations) -> Option<&'a CloudPlan> {
     })
 }
 
+pub(super) fn edit(panel: &mut Panel, id: u128, pause: bool) {
+    if !crate::cloud_view::worker_available(panel) {
+        return;
+    }
+    let Some(plan) = sample(panel)
+        .and_then(|s| selected(panel, &s.operations))
+        .filter(|p| u128::from_str_radix(&p.id, 16) == Ok(id))
+    else {
+        return;
+    };
+    let Some(policy) = plan.policy() else { return };
+    let mut form = Form::new(Operation::Cloud(policy));
+    if pause
+        && let Some(time) = form
+            .labels
+            .iter()
+            .position(|label| *label == "op-time")
+            .and_then(|i| form.values.get_mut(i))
+    {
+        time.clear();
+    }
+    panel.form = Some(form);
+}
+
+pub(super) fn obsolete(panel: &Panel, op: &Operation) -> Option<&'static str> {
+    match op {
+        Operation::Policy { .. } if policy(panel).as_ref() != Some(op) => Some("schedule-reopen"),
+        Operation::Cloud(cloud @ CloudOperation::Plan { id, .. }) if !id.is_empty() => {
+            let current = sample(panel)
+                .filter(|s| online(s))
+                .and_then(|s| s.operations.cloud.as_ref())
+                .and_then(|c| c.plans.iter().find(|p| p.id == *id))
+                .and_then(CloudPlan::policy);
+            (current.as_ref() != Some(cloud)).then_some("schedule-plan-changed")
+        }
+        _ => None,
+    }
+}
+
 pub(super) fn review(panel: &mut Panel, id: u128) {
     if panel.diagnostics.pending || !sample(panel).is_some_and(online) {
         return;
@@ -216,6 +255,17 @@ fn cloud_plans(ui: &mut Controls<'_, '_>, area: Rect, panel: &Panel, ops: Option
         fyi(ui, d, "schedule-select");
         return;
     };
+    plan_details(ui, d, panel, view, plan);
+}
+
+fn plan_details(
+    ui: &mut Controls<'_, '_>,
+    area: Rect,
+    panel: &Panel,
+    view: &crate::CloudView,
+    plan: &CloudPlan,
+) {
+    let m = ui.m;
     let name = view
         .connections
         .iter()
@@ -223,27 +273,47 @@ fn cloud_plans(ui: &mut Controls<'_, '_>, area: Rect, panel: &Panel, ops: Option
         .map_or(&plan.connection, |c| &c.name);
     line(
         ui.f,
-        d,
+        area,
         format!("{} / {}", text(name), text(&plan.folder)),
         theme::TEXT,
         true,
     );
     line(
         ui.f,
-        row(d, 1, 1),
+        row(area, 1, 1),
         m.values("op-retention", &[("value", plan.keep.to_string())]),
         theme::TEXT,
         false,
     );
     if let Ok(id) = u128::from_str_radix(&plan.id, 16) {
+        let writable = crate::cloud_view::worker_available(panel);
+        let paused = plan.daily.is_none();
         ui.buttons(
-            row(d, 2, 1),
-            &[(
-                "schedule-review",
-                Action::Backup(Command::RunSchedule(id)),
-                Variant::Secondary,
-                sample(panel).is_some_and(online) && !panel.diagnostics.pending,
-            )],
+            row(area, 2, 1),
+            &[
+                (
+                    "schedule-review",
+                    Action::Backup(Command::RunSchedule(id)),
+                    Variant::Secondary,
+                    writable,
+                ),
+                (
+                    if paused {
+                        "schedule-enable"
+                    } else {
+                        "schedule-edit-plan"
+                    },
+                    Action::Backup(Command::EditSchedule(id, false)),
+                    Variant::Secondary,
+                    writable,
+                ),
+                (
+                    "schedule-pause",
+                    Action::Backup(Command::EditSchedule(id, true)),
+                    Variant::Quiet,
+                    writable && !paused,
+                ),
+            ],
         );
     }
 }

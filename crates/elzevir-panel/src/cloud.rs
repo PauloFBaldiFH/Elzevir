@@ -148,6 +148,7 @@ impl CloudOperation {
                 RemoteCommand::Send(_) => "cloud-send",
                 RemoteCommand::Download(_) => "cloud-download",
             },
+            Self::Plan { id, .. } if !id.is_empty() => "schedule-edit-plan",
             Self::Plan { .. } => "cloud-plan",
             Self::RunPlan { .. } => "cloud-run-plan",
             Self::DisablePlan { .. } => "cloud-disable-plan",
@@ -168,6 +169,17 @@ impl CloudOperation {
                 RemoteCommand::Browse(page) => (vec!["cloud-page"], vec![page.to_string()]),
                 RemoteCommand::Send(id) => (vec!["cloud-artifact"], vec![id.clone()]),
             },
+            Self::Plan {
+                id,
+                name,
+                keep,
+                time,
+                zone,
+                ..
+            } if !id.is_empty() => (
+                vec!["cloud-plan-name", "op-keep", "op-time", "op-zone"],
+                vec![name.clone(), keep.clone(), time.clone(), zone.clone()],
+            ),
             Self::Plan {
                 id,
                 name,
@@ -240,6 +252,20 @@ impl CloudOperation {
                     RemoteCommand::Download(id) => RemoteCommand::Download(id),
                 },
             ),
+            Self::Plan {
+                id,
+                connection,
+                folder,
+                ..
+            } if !id.is_empty() => Self::Plan {
+                id,
+                connection,
+                folder,
+                name: values.next()?,
+                keep: values.next()?,
+                time: values.next()?,
+                zone: values.next()?,
+            },
             Self::Plan { .. } => Self::Plan {
                 id: values.next()?,
                 name: values.next()?,
@@ -359,6 +385,22 @@ pub struct CloudPlan {
 }
 
 impl CloudPlan {
+    pub(crate) fn policy(&self) -> Option<CloudOperation> {
+        let (time, zone) = match self.daily.as_deref() {
+            Some(daily) => daily.split_once(' ')?,
+            None => ("", "UTC"),
+        };
+        Some(CloudOperation::Plan {
+            id: self.id.clone(),
+            name: self.name.clone(),
+            connection: self.connection.clone(),
+            folder: self.folder.clone(),
+            keep: self.keep.to_string(),
+            time: time.into(),
+            zone: zone.into(),
+        })
+    }
+
     pub(crate) fn target(&self) -> CloudTarget {
         CloudTarget {
             plan: self.id.clone(),

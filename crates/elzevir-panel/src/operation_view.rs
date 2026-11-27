@@ -368,36 +368,55 @@ fn destination_header(
     messages: &Messages,
     header: &mut Vec<Line<'static>>,
 ) {
-    let target = match &form.operation {
+    let destination = match &form.operation {
         crate::Operation::Cloud(crate::CloudOperation::SendGroup(targets, _)) => {
             header.push(row(
                 messages,
                 "cloud-target-page",
                 Some(format!("{} / {}", form.target_page + 1, targets.len())),
             ));
-            targets.get(form.target_page)
+            targets
+                .get(form.target_page)
+                .map(|t| (&t.connection, &t.folder))
         }
         crate::Operation::Cloud(crate::CloudOperation::Remote(target, cmd)) => {
             if let crate::RemoteCommand::Download(id) = cmd {
                 header.push(Line::from(format!("elzevir-{}.age", text(id))));
             }
-            Some(target)
+            Some((&target.connection, &target.folder))
         }
+        crate::Operation::Cloud(crate::CloudOperation::Plan {
+            id,
+            connection,
+            folder,
+            ..
+        }) if !id.is_empty() => Some((connection, folder)),
         _ => None,
     };
-    if let Some(target) = target {
+    if let Some((connection, folder)) = destination {
         header.push(row(
             messages,
-            "cloud-id",
-            Some(panel.cloud_view().map_or_else(
-                || text(&target.connection),
-                |v| connection_name(v, &target.connection),
-            )),
+            "cc-destination-connection",
+            Some(
+                panel
+                    .cloud_view()
+                    .map_or_else(|| text(connection), |v| connection_name(v, connection)),
+            ),
         ));
-        let folder = messages.values("cloud-folder", &[("value", text(&target.folder))]);
+        let folder = messages.values("cloud-folder", &[("value", text(folder))]);
         for line in folder.chars().collect::<Vec<_>>().chunks(60) {
             header.push(Line::from(line.iter().collect::<String>()));
         }
+    }
+    if let crate::Operation::Cloud(crate::CloudOperation::Plan { id, .. }) = &form.operation
+        && !id.is_empty()
+        && form
+            .labels
+            .iter()
+            .zip(&form.values)
+            .any(|(label, value)| *label == "op-time" && value.is_empty())
+    {
+        header.push(Line::from(messages.get("schedule-after-pause")));
     }
 }
 

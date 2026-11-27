@@ -736,12 +736,13 @@ impl Panel {
 
     /// Confirms the current form using the same validation as its primary button.
     pub fn submit_form(&mut self) {
-        if let Some(form) = &self.form
-            && matches!(form.operation, Operation::Policy { .. })
-            && schedule_view::policy(self).as_ref() != Some(&form.operation)
+        if let Some(reason) = self
+            .form
+            .as_ref()
+            .and_then(|f| schedule_view::obsolete(self, &f.operation))
         {
             self.form = None;
-            self.access_notice = Some("schedule-reopen");
+            self.access_notice = Some(reason);
             return;
         }
         if let Some(Operation::Cloud(CloudOperation::Remote(target, RemoteCommand::Download(id)))) =
