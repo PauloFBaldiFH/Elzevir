@@ -457,7 +457,7 @@ Trocar o Koha pelo Elzevir numa cópia da Biblioteca Pública Municipal Castro A
 
 ### Fases 7 a 12 (roadmap aprovado; cada fase detalhada aqui antes de começar)
 
-Ordem revista na tarefa 6.6 ([lacunas da troca](../specs/migracao/gaps.md), §3): primeiro o que impede a troca na Castro Alves, depois o que o público vê.
+Ordem revista na tarefa 6.6 e aprovada por Paulo em 2026-11-27 ([lacunas da troca](../specs/migracao/gaps.md), §3): primeiro o que impede a troca na Castro Alves, depois o que o público vê.
 
 | Fase | Assunto | Itens do inventário |
 |---|---|---|
