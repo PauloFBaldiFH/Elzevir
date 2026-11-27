@@ -44,9 +44,11 @@ pub enum CircEvent {
 }
 
 /// Where a renewal's new period starts (`ManualRenewalPeriodBase`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum RenewalBase {
-    /// From the current due date (`date_due`).
+    /// From the current due date (`date_due`), Koha's default.
+    #[default]
     DueDate,
     /// From the moment of the renewal (`now`).
     Now,

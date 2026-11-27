@@ -288,6 +288,12 @@ fn oai(values: &mut Values) -> Option<Vec<(&'static str, Setting)>> {
 pub fn prefs_config(preferences: &[KohaPreference]) -> PrefsConfig {
     let mut values = Values::new(preferences);
     let mut sections = Vec::new();
+    // `date_due` is the Elzevir's default too; only `now` is written.
+    if values.get("ManualRenewalPeriodBase").trim() == "now" {
+        values.place("ManualRenewalPeriodBase");
+        let settings = vec![("renewal_base", Setting::Text("now".to_owned()))];
+        sections.push(Section::new("circulation", settings));
+    }
     if let Some(settings) = long_overdue(&mut values) {
         sections.push(Section::new("circulation.long_overdue", settings));
     }
@@ -471,6 +477,7 @@ mod tests {
         let config = prefs_config(&preferences(&[
             ("ExpireReservesMaxPickUpDelay", "0"),
             ("SuspendHoldsOpac", "1"),
+            ("ManualRenewalPeriodBase", "date_due"),
             ("OAI-PMH", "0"),
             ("OAI-PMH:archiveID", "KOHA-OAI-TEST"),
             (
@@ -478,7 +485,7 @@ mod tests {
                 "Order number must appear on all related correspondence, shipping papers and invoices. Notify us immediately if \n you are unable to supply item(s).",
             ),
         ]));
-        assert_eq!(config.report.at_default, 5);
+        assert_eq!(config.report.at_default, 6);
         assert!(config.report.placed.is_empty());
         assert_eq!(table(&config.toml), toml::Table::new());
     }
@@ -491,6 +498,7 @@ mod tests {
             ("DefaultLongOverdueChargeValue", "2"),
             ("ExpireReservesMaxPickUpDelay", "1"),
             ("SuspendHoldsOpac", "0"),
+            ("ManualRenewalPeriodBase", "now"),
             ("PatronAnonymizeDelay", "365"),
         ]));
         let toml = table(&config.toml);
@@ -504,7 +512,8 @@ mod tests {
             false.into()
         );
         assert_eq!(toml["privacy"]["anonymize_expired_days"], 365.into());
-        assert_eq!(config.report.placed.len(), 6);
+        assert_eq!(toml["circulation"]["renewal_base"], "now".into());
+        assert_eq!(config.report.placed.len(), 7);
         assert!(!toml.contains_key("koha_legacy"));
     }
 

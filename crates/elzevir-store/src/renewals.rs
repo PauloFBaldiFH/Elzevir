@@ -6,7 +6,7 @@ use elzevir_app::commands::{WriteOutput, WriteRefusal};
 use elzevir_app::loans::{RenewRefusal, RenewRequest, Renewed, checked_barcode};
 use elzevir_domain::catalog::{BranchId, ItemId, Money, PolicyId};
 use elzevir_domain::checkout::loan_rule;
-use elzevir_domain::circulation::{RenewalBase, renewal_due};
+use elzevir_domain::circulation::renewal_due;
 use elzevir_domain::circulation_rules::{CirculationRule, RuleScopeKey};
 use elzevir_domain::due_date::{ConsiderLibraryHours, DueDateContext, LibraryHours};
 use elzevir_domain::hold::HoldItem;
@@ -208,7 +208,8 @@ pub(crate) fn staff_renewal(
 
 /// Applies `circ.renew` inside the writer's transaction. The rules and the calendar are
 /// those of the branch that holds the Item, the patron's category and the Item's policy;
-/// the new period starts at the due date (`ManualRenewalPeriodBase`, the default).
+/// the new period starts at the due date or at the renewal, as the request says
+/// (`ManualRenewalPeriodBase`).
 ///
 /// Koha: `C4::Circulation::CanBookBeRenewed` and `C4::Circulation::AddRenewal`.
 pub(crate) fn renew(connection: &Connection, request: &RenewRequest) -> Applied {
@@ -253,7 +254,7 @@ pub(crate) fn renew(connection: &Connection, request: &RenewRequest) -> Applied 
     let due = renewal_due(
         &loan.due,
         &request.at,
-        RenewalBase::DueDate,
+        request.base,
         &DueDateContext {
             rule: &rule,
             calendar: &calendar,

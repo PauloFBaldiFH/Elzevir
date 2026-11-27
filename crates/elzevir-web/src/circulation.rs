@@ -513,6 +513,7 @@ pub(crate) async fn circulate(
             override_limit: false,
             at,
             by_patron: None,
+            base: state.inner.config.renewal_base,
         }),
         Some(("return", barcode)) => CirculationCommand::Checkin(CheckinRequest {
             barcode: barcode.to_owned(),

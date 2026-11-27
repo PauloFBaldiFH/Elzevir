@@ -12,7 +12,8 @@ use std::time::{Duration, Instant};
 
 use elzevir_app::catalog::CatalogReader;
 use elzevir_domain::account::DebtSettings;
-use elzevir_sip2::{Desk, SipEvent, Terminal, Terminator, serve};
+use elzevir_domain::circulation::RenewalBase;
+use elzevir_sip2::{Desk, Encoding, SipEvent, Terminal, Terminator, serve};
 use elzevir_store::ElzevirStore;
 use jiff::tz::TimeZone;
 use serde::Deserialize;
@@ -45,6 +46,7 @@ struct TerminalSection {
     login: String,
     unit: String,
     terminator: Option<String>,
+    encoding: Option<String>,
 }
 
 /// `[sip2]`, checked.
@@ -62,6 +64,7 @@ pub(crate) struct TerminalSettings {
     pub(crate) login: String,
     pub(crate) unit: String,
     pub(crate) terminator: Terminator,
+    pub(crate) encoding: Encoding,
 }
 
 impl Sip2Section {
@@ -92,6 +95,16 @@ impl Sip2Section {
                     ));
                 }
             };
+            // Koha writes Latin-1 when the account sets no `encoding` (spec, item 16).
+            let encoding = match terminal.encoding.as_deref() {
+                None | Some("latin-1") => Encoding::Latin1,
+                Some("utf-8") => Encoding::Utf8,
+                Some(other) => {
+                    return Err(format!(
+                        "terminals[{index}]: encoding {other:?} is latin-1 or utf-8"
+                    ));
+                }
+            };
             if terminal.login.trim().is_empty() || terminal.unit.trim().is_empty() {
                 return Err(format!("terminals[{index}]: login and unit are required"));
             }
@@ -105,6 +118,7 @@ impl Sip2Section {
                 login: terminal.login.clone(),
                 unit: terminal.unit.trim().to_owned(),
                 terminator,
+                encoding,
             });
         }
         Ok(Sip2Settings {
@@ -144,12 +158,13 @@ pub(crate) fn open(
     settings: Option<&Sip2Settings>,
     store: &Arc<ElzevirStore>,
     time_zone: &TimeZone,
+    renewal_base: RenewalBase,
     instance: &str,
 ) -> Result<Option<Listener>, String> {
     let Some(settings) = settings else {
         return Ok(None);
     };
-    let (listener, address) = start(settings, store, time_zone.clone(), instance)?;
+    let (listener, address) = start(settings, store, time_zone.clone(), renewal_base, instance)?;
     println!("SIP2 on {address}");
     Ok(Some(listener))
 }
@@ -159,6 +174,7 @@ pub(crate) fn start(
     settings: &Sip2Settings,
     store: &Arc<ElzevirStore>,
     time_zone: TimeZone,
+    renewal_base: RenewalBase,
     instance: &str,
 ) -> Result<(Listener, SocketAddr), String> {
     let branches = store.codes().map_err(|e| e.to_string())?.branches;
@@ -173,6 +189,7 @@ pub(crate) fn start(
             unit: branch.id,
             institution: branch.name.clone(),
             terminator: terminal.terminator,
+            encoding: terminal.encoding,
         });
     }
     let instance = instance.to_owned();
@@ -183,6 +200,7 @@ pub(crate) fn start(
         loans: Arc::clone(store) as _,
         self_check: Arc::clone(store) as _,
         debt: DebtSettings::default(),
+        renewal_base,
         currency: settings.currency.clone(),
         terminals,
         clock: Arc::new(move || jiff::Timestamp::now().to_zoned(time_zone.clone())),
@@ -324,7 +342,8 @@ mod tests {
         let read = settings(
             "listen = \"127.0.0.1:6001\"\n\
              [[terminals]]\nlogin = \"term1\"\nunit = \" Central \"\n\
-             [[terminals]]\nlogin = \"term2\"\nunit = \"Anexo\"\nterminator = \"cr\"\n",
+             [[terminals]]\nlogin = \"term2\"\nunit = \"Anexo\"\nterminator = \"cr\"\n\
+             encoding = \"utf-8\"\n",
         )
         .unwrap();
         assert_eq!(read.timeout, DEFAULT_TIMEOUT);
@@ -336,11 +355,13 @@ mod tests {
                     login: "term1".to_owned(),
                     unit: "Central".to_owned(),
                     terminator: Terminator::CrLf,
+                    encoding: Encoding::Latin1,
                 },
                 TerminalSettings {
                     login: "term2".to_owned(),
                     unit: "Anexo".to_owned(),
                     terminator: Terminator::Cr,
+                    encoding: Encoding::Utf8,
                 },
             ]
         );
@@ -362,6 +383,10 @@ mod tests {
             (
                 "listen = \"127.0.0.1:6001\"\n[[terminals]]\nlogin = \"t\"\nunit = \"C\"\nterminator = \"lf\"",
                 "terminator",
+            ),
+            (
+                "listen = \"127.0.0.1:6001\"\n[[terminals]]\nlogin = \"t\"\nunit = \"C\"\nencoding = \"utf8\"",
+                "encoding",
             ),
             (
                 "listen = \"127.0.0.1:6001\"\n[[terminals]]\nlogin = \"t\"\nunit = \"C\"\n[[terminals]]\nlogin = \"t\"\nunit = \"D\"",

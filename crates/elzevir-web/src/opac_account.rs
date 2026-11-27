@@ -263,6 +263,7 @@ pub(crate) async fn renew(
         override_limit: false,
         at: now(&state),
         by_patron: Some(patron),
+        base: state.inner.config.renewal_base,
     };
     let done = tokio::task::spawn_blocking(move || desk.renew_own(patron, request)).await;
     match done {

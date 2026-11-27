@@ -35,6 +35,7 @@ use elzevir_domain::account::{PaymentKind, PaymentRefusal};
 use elzevir_domain::catalog::{BranchId, InstanceId, Money};
 use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome, TransferReason};
 use elzevir_domain::checkout::{Alert, Confirm, HeldFor, Impossible, TooManyReason};
+use elzevir_domain::circulation::RenewalBase;
 use elzevir_domain::circulation_rules::RuleScopeKey;
 use elzevir_domain::hold::{Found, HoldMatch, HoldRefusal};
 use elzevir_domain::long_overdue::{DEFAULT_MAX_DAYS, LongOverdueSettings};
@@ -268,6 +269,17 @@ impl Library {
         at: &str,
         override_limit: bool,
     ) -> Result<Renewed, RenewRefusal> {
+        self.renew_from(barcode, at, override_limit, RenewalBase::DueDate)
+    }
+
+    /// A renewal whose new period starts at `base` (`ManualRenewalPeriodBase`).
+    fn renew_from(
+        &self,
+        barcode: &str,
+        at: &str,
+        override_limit: bool,
+        base: RenewalBase,
+    ) -> Result<Renewed, RenewRefusal> {
         let at: Zoned = format!("{at}[America/Sao_Paulo]").parse().unwrap();
         match submit(
             &self.store,
@@ -276,6 +288,7 @@ impl Library {
                 override_limit,
                 at,
                 by_patron: None,
+                base,
             })),
         ) {
             Ok(WriteOutput::Circulation(CirculationOutput::Renewed(done))) => Ok(done),
@@ -640,6 +653,33 @@ fn checkins_follow_the_return_rule_and_the_item_status() {
         library.read::<i64>("SELECT lost FROM items WHERE barcode = '0003'"),
         0
     );
+}
+
+#[test]
+fn a_renewal_from_now_starts_its_period_at_the_renewal() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(&dir);
+    library.item("0001", ItemStatus::default());
+    library.rules(&[
+        ("maxissueqty", "5"),
+        ("issuelength", "7"),
+        ("renewalperiod", "7"),
+        ("renewalsallowed", "2"),
+    ]);
+    library
+        .lend("0001", "2026-11-19T10:00:00-03:00", false)
+        .unwrap();
+    let due = |text: &str| -> Zoned { format!("{text}[America/Sao_Paulo]").parse().unwrap() };
+    // Due on the 26th; renewed on the 24th from that moment, not from the due date.
+    let renewed = library
+        .renew_from("0001", "2026-11-24T10:00:37-03:00", false, RenewalBase::Now)
+        .unwrap();
+    assert_eq!(renewed.due, due("2026-12-01T23:59:00-03:00"));
+    // From now, a renewal on an overdue loan also starts at the renewal.
+    let late = library
+        .renew_from("0001", "2026-12-05T09:00:00-03:00", false, RenewalBase::Now)
+        .unwrap();
+    assert_eq!(late.due, due("2026-12-12T23:59:00-03:00"));
 }
 
 #[test]
@@ -1913,6 +1953,7 @@ fn fines_over_the_limit_and_holds_block_a_renewal_and_the_opac_renews_only_its_o
                 override_limit: true,
                 at: format!("{at}[America/Sao_Paulo]").parse().unwrap(),
                 by_patron: None,
+                base: RenewalBase::DueDate,
             },
         )
     };

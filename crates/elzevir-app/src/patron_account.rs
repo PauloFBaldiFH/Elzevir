@@ -22,6 +22,20 @@ fn verify_koha_password(password: &str, hash: &str) -> bool {
     bcrypt::verify(password.as_bytes(), hash).unwrap_or(false)
 }
 
+/// Whether `password` is the patron's OPAC password, with the Elzevir's Argon2id `hash`
+/// or Koha's bcrypt `hash` the migration brought. Nothing is upgraded: a check that only
+/// reads, as the SIP2 server makes, leaves the upgrade to the OPAC sign-in.
+///
+/// Koha: `C4::Auth::checkpw_hash`.
+#[must_use]
+pub fn password_matches(password: &str, hash: &str) -> bool {
+    if is_koha_hash(hash) {
+        verify_koha_password(password, hash)
+    } else {
+        verify_password(password, hash)
+    }
+}
+
 /// What signing in compares: the patron and their password hash, if any.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PatronCredentials {
@@ -238,5 +252,15 @@ mod tests {
         assert!(verify_password("Senha fictícia 1", &upgraded[0]));
         // A hash that only looks like bcrypt never matches.
         assert!(!verify_koha_password("x", "$2a$08$broken"));
+    }
+
+    #[test]
+    fn a_password_is_checked_against_either_hash_without_upgrading() {
+        assert!(password_matches("Senha fictícia 1", KOHA_HASH));
+        assert!(!password_matches("Senha fictícia 2", KOHA_HASH));
+        let argon = hash_password("Senha fictícia 1").unwrap();
+        assert!(password_matches("Senha fictícia 1", &argon));
+        assert!(!password_matches("Senha fictícia 2", &argon));
+        assert!(!password_matches("Senha fictícia 1", "not a hash"));
     }
 }

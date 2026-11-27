@@ -347,7 +347,7 @@ As 915 preferências do sistema do Koha e o lugar de cada uma no Elzevir. As que
 | `LocalHoldsPriorityItemControl` | `holdingbranch` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `LocalHoldsPriorityPatronControl` | `PickupLibrary` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `LostChargesControl` | `ItemHomeLibrary` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
-| `ManualRenewalPeriodBase` | `date_due` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
+| `ManualRenewalPeriodBase` | `date_due` | **`[circulation] renewal_base`**. Ver docs/specs/circulacao/renovacao.md, item 5. |
 | `MarkLostItemsAsReturned` | `batchmod,moredetail,cronjob,additem,pendingreserves,onpaymen…` | Comportamento fixo: Padrão do Koha para a rotina: a perda cobrada termina o empréstimo; mark_returned no elzevir.toml faz o mesmo sem cobrança (conta.md, item 22). |
 | `NoIssuesChargeGuarantees` | (vazio) | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `NoIssuesChargeGuarantorsWithGuarantees` | (vazio) | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |

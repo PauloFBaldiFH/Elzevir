@@ -13,7 +13,7 @@ mod response;
 mod server;
 mod text;
 
-pub use channel::{Channel, Received, Terminator, Version};
+pub use channel::{Channel, Encoding, Received, Terminator, Version};
 pub use checksum::{checksum, verify_checksum};
 pub use frame::{FrameTooLong, Framer, MAX_MESSAGE_BYTES, clean};
 pub use request::{

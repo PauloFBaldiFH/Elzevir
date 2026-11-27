@@ -2350,7 +2350,7 @@ pub const KOHA_SYSPREFS: &[KohaSyspref] = &[
     KohaSyspref {
         name: "ManualRenewalPeriodBase",
         default: "date_due",
-        field: None,
+        field: Some("[circulation] renewal_base"),
         secret: false,
     },
     KohaSyspref {

@@ -555,6 +555,7 @@ pub(crate) async fn renew(
             override_limit: false,
             at,
             by_patron: Some(patron),
+            base: state.inner.config.renewal_base,
         };
         desk.renew_own(patron, request).map(Some)
     })

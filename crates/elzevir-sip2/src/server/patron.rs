@@ -7,9 +7,9 @@
 
 use elzevir_app::holds::PatronHold;
 use elzevir_app::loans::PatronLoan;
+use elzevir_app::patron_account;
 use elzevir_app::patrons::Patron;
 use elzevir_app::self_check::{Standing, perl_number, two_decimals};
-use elzevir_app::staff::verify_password;
 use elzevir_domain::catalog::Money;
 use elzevir_domain::hold::Found;
 use jiff::Zoned;
@@ -47,11 +47,12 @@ impl FoundPatron {
         )
     }
 
-    /// Whether `password` is the patron's OPAC password.
+    /// Whether `password` is the patron's OPAC password, also when it is still Koha's
+    /// hash from the migration.
     pub(crate) fn password_matches(&self, password: &str) -> bool {
         self.password_hash
             .as_deref()
-            .is_some_and(|hash| verify_password(password, hash))
+            .is_some_and(|hash| patron_account::password_matches(password, hash))
     }
 
     /// The last day of the enrolment.

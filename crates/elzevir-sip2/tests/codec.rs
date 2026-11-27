@@ -9,10 +9,10 @@
 
 use elzevir_sip2::{
     AcsStatus, Channel, CheckedOut, CheckinItem, CheckinResponse, CheckoutRefused,
-    CheckoutResponse, CirculationStatus, EndSessionResponse, Fee, ItemInformationResponse,
-    KnownItem, KnownPatron, PatronCounts, PatronDetails, PatronFlag, PatronFlags,
-    PatronInformationResponse, PatronStatusResponse, Received, RenewRefused, RenewResponse,
-    Renewed, Request, Response, Summary, SummaryKind, Terminator, Version, checksum,
+    CheckoutResponse, CirculationStatus, Encoding, EndSessionResponse, Fee,
+    ItemInformationResponse, KnownItem, KnownPatron, PatronCounts, PatronDetails, PatronFlag,
+    PatronFlags, PatronInformationResponse, PatronStatusResponse, Received, RenewRefused,
+    RenewResponse, Renewed, Request, Response, Summary, SummaryKind, Terminator, Version, checksum,
 };
 use jiff::civil::{DateTime, date};
 
@@ -453,4 +453,53 @@ fn a_renewal_and_the_end_of_a_session() {
         end.encode(Version::V2),
         format!("36Y{NOW}AOCentral|AA0001|AFThank you!|")
     );
+}
+
+fn goodbye(message: &str) -> Response {
+    Response::EndPatronSession(EndSessionResponse {
+        ended: true,
+        now: now(),
+        institution: "Central".to_owned(),
+        patron_id: "0001".to_owned(),
+        screen_message: Some(message.to_owned()),
+        print_line: None,
+    })
+}
+
+#[test]
+fn a_terminal_gets_latin_1_unless_it_asks_for_utf_8() {
+    let body = format!("36Y{NOW}AOCentral|AA0001|AF");
+    // Koha without `encoding`: Latin-1, one byte for "á".
+    let mut channel = Channel::new(Terminator::Cr);
+    let mut latin = body.clone().into_bytes();
+    latin.extend_from_slice(b"Anu\xE1rio|\r");
+    assert_eq!(channel.reply(&goodbye("Anuário")), latin);
+    // A character beyond Latin-1: Perl prints the whole response as UTF-8.
+    assert_eq!(
+        text(channel.reply(&goodbye("Anuário €"))),
+        format!("{body}Anuário €|\r")
+    );
+    channel.set_encoding(Encoding::Utf8);
+    assert_eq!(
+        text(channel.reply(&goodbye("Anuário"))),
+        format!("{body}Anuário|\r")
+    );
+}
+
+#[test]
+fn the_checksum_adds_up_the_bytes_of_the_encoding() {
+    let mut channel = Channel::new(Terminator::Cr);
+    let status = with_checksum("9900802.00AY1AZ");
+    request(&mut channel, status.as_bytes());
+    // The checksum adds up the Latin-1 bytes that go out.
+    let mut latin = format!("36Y{NOW}AOCentral|AA0001|AFAnu").into_bytes();
+    latin.extend_from_slice(b"\xE1rio|AY1AZ");
+    let mut signed = latin.clone();
+    signed.extend_from_slice(format!("{:04X}\r", checksum(&latin)).as_bytes());
+    assert_eq!(channel.reply(&goodbye("Anuário")), signed);
+    channel.set_encoding(Encoding::Utf8);
+    request(&mut channel, with_checksum("9900802.00AY2AZ").as_bytes());
+    let signed = text(channel.reply(&goodbye("Anuário")));
+    let body = format!("36Y{NOW}AOCentral|AA0001|AFAnuário|AY2AZ");
+    assert_eq!(signed, format!("{}\r", with_checksum(&body)));
 }

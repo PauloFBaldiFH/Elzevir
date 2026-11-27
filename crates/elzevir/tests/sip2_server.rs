@@ -27,8 +27,9 @@ use elzevir_app::patrons::{PatronCommand, PatronFields, PatronOutput, ReadingHis
 use elzevir_app::staff::{Permission, hash_password};
 use elzevir_domain::account::DebtSettings;
 use elzevir_domain::catalog::BranchId;
+use elzevir_domain::circulation::RenewalBase;
 use elzevir_domain::patron::PatronId;
-use elzevir_sip2::{Desk, SipEvent, Terminal, Terminator, serve};
+use elzevir_sip2::{Desk, Encoding, SipEvent, Terminal, Terminator, serve};
 use elzevir_store::ElzevirStore;
 use jiff::Zoned;
 use jiff::civil::date;
@@ -166,6 +167,7 @@ fn converse(setup: &Setup, messages: &[&str]) -> (Vec<String>, Vec<SipEvent>) {
         loans: Arc::clone(store) as _,
         self_check: Arc::clone(store) as _,
         debt: DebtSettings::default(),
+        renewal_base: RenewalBase::DueDate,
         currency: Some("BRL".to_owned()),
         terminals: ["term1", "reader"]
             .into_iter()
@@ -174,6 +176,7 @@ fn converse(setup: &Setup, messages: &[&str]) -> (Vec<String>, Vec<SipEvent>) {
                 unit: setup.unit,
                 institution: "Central".to_owned(),
                 terminator: Terminator::Cr,
+                encoding: Encoding::Utf8,
             })
             .collect(),
         clock: Arc::new(|| {
@@ -249,6 +252,40 @@ fn a_terminal_signs_in_lends_renews_and_takes_back() {
             .all(|event| event.terminal.as_deref() == Some("term1"))
     );
     assert!(events.iter().all(|event| event.outcome == "answered"));
+}
+
+#[test]
+fn a_patrons_password_still_in_kohas_hash_is_accepted() {
+    let dir = tempfile::tempdir().unwrap();
+    let setup = library(&dir);
+    // Koha 26.05 on the oracle: `bcrypt('Senha fictícia 1', ...)`, as the switch brings it.
+    let koha_hash = "$2a$08$KBCwKxOzLha2MUDgW0PjXeL8PLapJrHH7Qyn8x/oWtvIYu16Gx/s2";
+    submit(
+        &setup.store,
+        WriteCommand::Patrons(PatronCommand::SetPassword {
+            patron: setup.other,
+            password_hash: Some(koha_hash.to_owned()),
+        }),
+    )
+    .unwrap();
+    let (answers, _) = converse(
+        &setup,
+        &[
+            "9300CNterm1|COterminal-secret|CPCentral|",
+            "2300120261126    143005AOCentral|AA000002|ADSenha fictícia 1|",
+            "2300120261126    143005AOCentral|AA000002|ADSenha fictícia 2|",
+        ],
+    );
+    let greeting = "BHBRL|BV0|AFGreetings from Elzevir. ";
+    assert_eq!(
+        answers[1..],
+        [
+            format!("24              001{NOW}AEBia Souza|AA000002|BLY|CQY|{greeting}|AOCentral|"),
+            format!(
+                "24              001{NOW}AEBia Souza|AA000002|BLY|CQN|{greeting} -- Invalid password|AOCentral|"
+            ),
+        ]
+    );
 }
 
 #[test]

@@ -19,6 +19,7 @@ use elzevir_app::loans::{CheckinRequest, CheckoutRequest, RenewRequest};
 use elzevir_domain::account::PaymentKind;
 use elzevir_domain::catalog::Money;
 use elzevir_domain::checkin::LoanOutcome;
+use elzevir_domain::circulation::RenewalBase;
 use elzevir_domain::hold::HoldMatch;
 use elzevir_domain::patron::PatronId;
 use elzevir_store::{CommandFailed, ElzevirStore};
@@ -51,14 +52,15 @@ pub(crate) fn run(args: &DeskDayArgs) -> Result<(), String> {
         );
     }
     let koha = read_day(&args.day)?;
-    let zone = crate::config::load(&args.data_dir)?.time_zone;
+    let loaded = crate::config::load(&args.data_dir)?;
+    let (zone, base) = (loaded.time_zone, loaded.renewal_base);
     let data = open_store(&args.data_dir)?;
     let mut answers = Vec::with_capacity(koha.steps.len());
     for step in &koha.steps {
         let at = jiff::civil::DateTime::strptime("%Y-%m-%d %H:%M", &step.at)
             .and_then(|moment| moment.to_zoned(zone.clone()))
             .map_err(|e| format!("{}: `at` is not YYYY-MM-DD HH:MM: {e}", args.day.display()))?;
-        answers.push(replay(&data.store, step, at)?);
+        answers.push(replay(&data.store, step, at, base)?);
     }
     let check = compare(&koha, &answers);
     print!("{}", report(&koha, &check));
@@ -132,7 +134,8 @@ fn owed(store: &ElzevirStore, patron: Option<PatronId>) -> Result<Option<Money>,
 }
 
 /// Does one step at `at` through the desk command (items 7 to 9).
-fn replay(store: &ElzevirStore, step: &KohaStep, at: Zoned) -> Replayed {
+/// One step at `at`; a renewal's period starts at `base`, as the library set it.
+fn replay(store: &ElzevirStore, step: &KohaStep, at: Zoned, base: RenewalBase) -> Replayed {
     match step.step {
         Step::Checkout {
             borrowernumber,
@@ -140,7 +143,7 @@ fn replay(store: &ElzevirStore, step: &KohaStep, at: Zoned) -> Replayed {
             confirm,
         } => checkout(store, (borrowernumber, itemnumber, confirm), at),
         Step::Checkin { itemnumber } => checkin(store, itemnumber, at),
-        Step::Renew { itemnumber } => renew(store, itemnumber, at),
+        Step::Renew { itemnumber } => renew(store, itemnumber, at, base),
         Step::Hold {
             borrowernumber,
             itemnumber,
@@ -223,7 +226,7 @@ fn checkin(store: &ElzevirStore, itemnumber: u64, at: Zoned) -> Replayed {
     answered(store, answer, item.borrower)
 }
 
-fn renew(store: &ElzevirStore, itemnumber: u64, at: Zoned) -> Replayed {
+fn renew(store: &ElzevirStore, itemnumber: u64, at: Zoned, base: RenewalBase) -> Replayed {
     let item = match item(store, itemnumber)? {
         Ok(item) => item,
         Err(gap) => return Ok(Err(gap)),
@@ -235,6 +238,7 @@ fn renew(store: &ElzevirStore, itemnumber: u64, at: Zoned) -> Replayed {
             override_limit: false,
             at,
             by_patron: None,
+            base,
         }),
     )?;
     let answer = match done {
