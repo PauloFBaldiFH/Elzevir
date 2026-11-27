@@ -66,7 +66,7 @@ fn the_spine_labels_of_a_selection_are_typeset() {
     let (labels, without) = spine_labels(&families);
     assert!(!labels.is_empty());
     assert_eq!(labels.len() + without, items);
-    let pdf = elzevir_print::TypstPrinter::new(None)
+    let pdf = elzevir_print::TypstPrinter::default()
         .spine_labels(&labels)
         .unwrap();
     assert!(pdf.starts_with(b"%PDF-"));

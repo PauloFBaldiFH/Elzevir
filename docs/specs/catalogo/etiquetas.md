@@ -1,6 +1,6 @@
 # Etiquetas de lombada
 
-> Status: tarefa 5.6, parte a (etiquetas de lombada). A parte b traz as carteirinhas dos leitores. Base: Koha 26.05.05, [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (tabela da Fase 5, linha 5.6) e [doc 02](../../arquitetura/02-modo-de-implementacao.md) (Typst para documentos impressos).
+> Status: tarefa 5.6, parte a (etiquetas de lombada). A parte b, as carteirinhas dos leitores, está em [carteirinhas.md](../circulacao/carteirinhas.md). Base: Koha 26.05.05, [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (tabela da Fase 5, linha 5.6) e [doc 02](../../arquitetura/02-modo-de-implementacao.md) (Typst para documentos impressos).
 
 ## 1. Comportamento
 
@@ -37,5 +37,5 @@
 ## 5. Desvios
 
 - O Koha guarda modelos, perfis de impressora e lotes de etiquetas no banco e monta o PDF por coordenadas; o Elzevir imprime direto da seleção do acervo, e folha, margens e conteúdo ficam no modelo Typst.
-- O Koha oferece outras divisões (LCC, NLM, expressão regular) e tipos de etiqueta com código de barras; aqui a divisão é a da CDD, que é a da biblioteca, e o código de barras fica para quando o modelo pedir (parte b).
+- O Koha oferece outras divisões (LCC, NLM, expressão regular) e tipos de etiqueta com código de barras; aqui a divisão é a da CDD, que é a da biblioteca; o código de barras do exemplar vai na etiqueta quando o modelo o escreve.
 - O Koha não apara o número de chamada antes de dividir; o Elzevir apara.

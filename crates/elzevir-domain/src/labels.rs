@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Printed labels (docs/specs/catalogo/etiquetas.md).
+//! Printed labels and cards (docs/specs/catalogo/etiquetas.md, docs/specs/circulacao/carteirinhas.md).
 
 /// The lines a Dewey call number takes on a spine label: the class, with any letters before
 /// it on a line of their own, then each word of the rest.
@@ -85,6 +85,96 @@ fn prefixed_class(class: &str) -> Option<(&str, &str)> {
     (dewey_number(number) == Some(number.len())).then_some((prefix, number))
 }
 
+/// The Code 39 pattern of each character it encodes: nine elements, bar first, `w` wide and
+/// `n` narrow; `*` is the start and stop character.
+const CODE39: [(char, [u8; 9]); 44] = [
+    ('0', *b"nnnwwnwnn"),
+    ('1', *b"wnnwnnnnw"),
+    ('2', *b"nnwwnnnnw"),
+    ('3', *b"wnwwnnnnn"),
+    ('4', *b"nnnwwnnnw"),
+    ('5', *b"wnnwwnnnn"),
+    ('6', *b"nnwwwnnnn"),
+    ('7', *b"nnnwnnwnw"),
+    ('8', *b"wnnwnnwnn"),
+    ('9', *b"nnwwnnwnn"),
+    ('A', *b"wnnnnwnnw"),
+    ('B', *b"nnwnnwnnw"),
+    ('C', *b"wnwnnwnnn"),
+    ('D', *b"nnnnwwnnw"),
+    ('E', *b"wnnnwwnnn"),
+    ('F', *b"nnwnwwnnn"),
+    ('G', *b"nnnnnwwnw"),
+    ('H', *b"wnnnnwwnn"),
+    ('I', *b"nnwnnwwnn"),
+    ('J', *b"nnnnwwwnn"),
+    ('K', *b"wnnnnnnww"),
+    ('L', *b"nnwnnnnww"),
+    ('M', *b"wnwnnnnwn"),
+    ('N', *b"nnnnwnnww"),
+    ('O', *b"wnnnwnnwn"),
+    ('P', *b"nnwnwnnwn"),
+    ('Q', *b"nnnnnnwww"),
+    ('R', *b"wnnnnnwwn"),
+    ('S', *b"nnwnnnwwn"),
+    ('T', *b"nnnnwnwwn"),
+    ('U', *b"wwnnnnnnw"),
+    ('V', *b"nwwnnnnnw"),
+    ('W', *b"wwwnnnnnn"),
+    ('X', *b"nwnnwnnnw"),
+    ('Y', *b"wwnnwnnnn"),
+    ('Z', *b"nwwnwnnnn"),
+    ('-', *b"nwnnnnwnw"),
+    ('.', *b"wwnnnnwnn"),
+    (' ', *b"nwwnnnwnn"),
+    ('$', *b"nwnwnwnnn"),
+    ('/', *b"nwnwnnnwn"),
+    ('+', *b"nwnnnwnwn"),
+    ('%', *b"nnnwnwnwn"),
+    ('*', *b"nwnnwnwnn"),
+];
+
+/// Width of a wide element of [`code39`], in narrow elements.
+pub const CODE39_WIDE: u8 = 3;
+
+/// The bars and spaces of `data` in Code 39, as widths in narrow elements (1 or
+/// [`CODE39_WIDE`]), bar first and alternating, with the start and stop characters and a
+/// narrow space between characters. `None` when `data` is empty or has a character Code 39
+/// does not encode (it has digits, capital letters, space and `-.$/+%`).
+///
+/// Koha: `C4::Patroncards::Patroncard::_draw_barcode` (type `CODE39`, the default), which
+/// wraps the card number in `*`.
+#[must_use]
+pub fn code39(data: &str) -> Option<Vec<u8>> {
+    if data.is_empty() {
+        return None;
+    }
+    let pattern = |c: char| {
+        (c != '*')
+            .then(|| CODE39.iter().find(|(key, _)| *key == c))
+            .flatten()
+            .map(|(_, pattern)| pattern)
+    };
+    let stop = CODE39.last().map(|(_, pattern)| pattern)?;
+    let mut patterns = vec![stop];
+    for c in data.chars() {
+        patterns.push(pattern(c)?);
+    }
+    patterns.push(stop);
+    let mut widths = Vec::with_capacity(patterns.len() * 10);
+    for (index, pattern) in patterns.iter().enumerate() {
+        if index > 0 {
+            widths.push(1);
+        }
+        widths.extend(
+            pattern
+                .iter()
+                .map(|element| if *element == b'w' { CODE39_WIDE } else { 1 }),
+        );
+    }
+    Some(widths)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,5 +213,36 @@ mod tests {
         assert!(split("  ").is_empty());
         // Two spaces after the letters: the first stays with them, as in Koha.
         assert_eq!(split("REF  x"), ["REF ", "x"]);
+    }
+
+    #[test]
+    fn code39_wraps_the_data_in_start_and_stop() {
+        let star = [1, 3, 1, 1, 3, 1, 3, 1, 1];
+        let one = [3, 1, 1, 3, 1, 1, 1, 1, 3];
+        let widths = code39("1").unwrap();
+        let expected: Vec<u8> = star
+            .iter()
+            .chain(&[1])
+            .chain(&one)
+            .chain(&[1])
+            .chain(&star)
+            .copied()
+            .collect();
+        assert_eq!(widths, expected);
+        // Every character is 9 elements, 3 of them wide; 16 narrow widths with its gap.
+        let widths = code39("A-Z 09$/+%.").unwrap();
+        assert_eq!(widths.len(), 13 * 10 - 1);
+        assert_eq!(
+            widths.iter().map(|w| u32::from(*w)).sum::<u32>(),
+            13 * 16 - 1
+        );
+    }
+
+    #[test]
+    fn code39_refuses_what_it_cannot_encode() {
+        assert_eq!(code39(""), None);
+        assert_eq!(code39("abc"), None);
+        assert_eq!(code39("12*3"), None);
+        assert_eq!(code39("Ç1"), None);
     }
 }

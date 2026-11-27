@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Printed documents: spine labels (docs/specs/catalogo/etiquetas.md).
+//! Printed documents: spine labels (docs/specs/catalogo/etiquetas.md) and patron cards
+//! (docs/specs/circulacao/carteirinhas.md).
 
-use elzevir_domain::labels::split_dewey_call_number;
+use elzevir_domain::labels::{code39, split_dewey_call_number};
 use serde::Serialize;
 
 use crate::listing::Family;
+use crate::patrons::Patron;
 
 /// Most labels one sheet run prints (etiquetas.md, item 3).
 pub const MAX_LABELS: usize = 5_000;
@@ -55,6 +57,61 @@ pub fn spine_labels(families: &[Family]) -> (Vec<SpineLabel>, usize) {
     (labels, without)
 }
 
+/// Most patron cards one run prints (carteirinhas.md, item 1).
+pub const MAX_CARDS: usize = 50;
+
+/// One patron card.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PatronCard {
+    /// The name as the card shows it: first name, then surname.
+    pub name: String,
+    /// Surname.
+    pub surname: String,
+    /// First name.
+    pub first_name: Option<String>,
+    /// Library card number.
+    pub cardnumber: String,
+    /// Name of the category.
+    pub category: String,
+    /// Name of the home branch.
+    pub branch: String,
+    /// The last day of the enrolment, as the language writes it.
+    pub expires: Option<String>,
+    /// The card number in Code 39, as [`code39`] gives it; `None` when it cannot be encoded.
+    pub bars: Option<Vec<u8>>,
+}
+
+impl PatronCard {
+    /// The card of `patron`, with the expiry already written out (carteirinhas.md, item 2).
+    #[must_use]
+    pub fn new(patron: &Patron, expires: Option<String>) -> Self {
+        let fields = &patron.fields;
+        let name = match &fields.first_name {
+            Some(first) => format!("{first} {}", fields.surname),
+            None => fields.surname.clone(),
+        };
+        Self {
+            name,
+            surname: fields.surname.clone(),
+            first_name: fields.first_name.clone(),
+            cardnumber: fields.cardnumber.clone(),
+            category: patron.category_name.clone(),
+            branch: patron.branch_name.clone(),
+            expires,
+            bars: code39(&fields.cardnumber),
+        }
+    }
+}
+
+/// The words a card template prints around the data, in the interface's language.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct CardTexts {
+    /// Before the card number.
+    pub cardnumber: String,
+    /// Before the last day of the enrolment.
+    pub expires: String,
+}
+
 /// Why a document was not printed.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum PrintError {
@@ -79,6 +136,13 @@ pub trait Printer: Send + Sync {
     ///
     /// When there are too many labels or the template fails.
     fn spine_labels(&self, labels: &[SpineLabel]) -> Result<Vec<u8>, PrintError>;
+
+    /// A PDF with `cards`, in order, on the sheets of the patron card template.
+    ///
+    /// # Errors
+    ///
+    /// When there are too many cards or the template fails.
+    fn patron_cards(&self, cards: &[PatronCard], texts: &CardTexts) -> Result<Vec<u8>, PrintError>;
 }
 
 #[cfg(test)]
@@ -152,5 +216,49 @@ mod tests {
                 author: Some("Assis, Machado de".to_owned()),
             })
         );
+    }
+
+    #[test]
+    fn a_card_reads_its_patron_and_encodes_the_card_number() {
+        use elzevir_domain::patron::PatronCategoryId;
+
+        use crate::patrons::{PatronFields, ReadingHistory};
+
+        let patron = Patron {
+            id: elzevir_domain::patron::PatronId(1),
+            row_version: 1,
+            fields: PatronFields {
+                cardnumber: "000123".to_owned(),
+                surname: "Silva".to_owned(),
+                first_name: Some("Ana".to_owned()),
+                cpf: None,
+                date_of_birth: None,
+                email: None,
+                phone: None,
+                address: None,
+                branch: BranchId(1),
+                category: PatronCategoryId(1),
+                enrolled: jiff::civil::date(2026, 11, 19),
+                expires: Some(jiff::civil::date(2027, 11, 19)),
+                staff_note: None,
+                reading_history: ReadingHistory::NotKept,
+            },
+            branch_name: "Central".to_owned(),
+            category_name: "Adulto".to_owned(),
+            has_password: false,
+        };
+        let card = PatronCard::new(&patron, Some("19/11/2027".to_owned()));
+        assert_eq!(card.name, "Ana Silva");
+        assert_eq!(
+            (card.category.as_str(), card.branch.as_str()),
+            ("Adulto", "Central")
+        );
+        assert_eq!(card.bars, code39("000123"));
+        assert!(card.bars.is_some());
+        let mut lower = patron;
+        lower.fields.cardnumber = "abc".to_owned();
+        lower.fields.first_name = None;
+        let card = PatronCard::new(&lower, None);
+        assert_eq!((card.name.as_str(), card.bars), ("Silva", None));
     }
 }

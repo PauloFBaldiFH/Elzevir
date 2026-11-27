@@ -43,7 +43,7 @@ pub(crate) fn open(
     Ok((session, desk))
 }
 
-fn sees_patrons(session: &ActiveSession) -> bool {
+pub(crate) fn sees_patrons(session: &ActiveSession) -> bool {
     session.identity.can(Permission::Circulation) || session.identity.can(Permission::Patrons)
 }
 

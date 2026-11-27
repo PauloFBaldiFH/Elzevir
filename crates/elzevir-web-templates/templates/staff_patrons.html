@@ -15,6 +15,7 @@
 <div class="patron-list-page" data-zoom="{{ zoom }}" data-zoom-screen="patrons">
 <div class="patron-toolbar">
   <p class="muted" role="status">{{ t.get_numbers("patrons-found", [("count", rows.len() as u64)]) }}</p>
+  <a class="patron-cards" href="/equipe/leitores/carteirinhas?{% for row in rows %}{% if !loop.first %}&amp;{% endif %}leitor={{ row.id }}{% endfor %}" download>{{ t.get("patron-cards-print") }}</a>
   {% include "zoom_toggle.html" %}
 </div>
 {# Contact, address, CPF and titles stay on the record, where opening it is audited (§24.6). #}

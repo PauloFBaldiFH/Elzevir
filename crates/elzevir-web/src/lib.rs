@@ -40,6 +40,7 @@ mod opac_account;
 mod opac_holds;
 mod patron_account;
 mod patron_card;
+mod patron_cards;
 mod patron_form;
 mod patron_holds;
 mod patron_login;
@@ -324,8 +325,8 @@ impl AppState {
         self
     }
 
-    /// Connects the printer of spine labels (docs/specs/catalogo/etiquetas.md). Without it
-    /// the labels of the selection answer 404.
+    /// Connects the printer of spine labels and patron cards (docs/specs/catalogo/etiquetas.md,
+    /// docs/specs/circulacao/carteirinhas.md). Without it both answer 404.
     #[must_use]
     pub fn with_printer(mut self, printer: Arc<dyn elzevir_app::printing::Printer>) -> Self {
         self.printer = Some(printer);
@@ -355,6 +356,7 @@ pub fn router(state: AppState) -> Router {
         .route("/equipe", get(staff::home))
         .route("/equipe/acervo", get(catalog::catalog))
         .route("/equipe/leitores", get(patrons::search))
+        .route("/equipe/leitores/carteirinhas", get(patron_cards::print))
         .route(
             "/equipe/leitores/categorias",
             get(patrons::categories).post(patrons::change_category),

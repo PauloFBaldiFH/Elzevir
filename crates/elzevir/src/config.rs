@@ -463,6 +463,8 @@ struct Printing {
     /// The spine label template, relative to the data directory; the built-in one when
     /// absent (etiquetas.md, item 5).
     spine_labels: Option<PathBuf>,
+    /// The patron card template, likewise (carteirinhas.md, item 4).
+    patron_cards: Option<PathBuf>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -507,8 +509,8 @@ pub(crate) struct Loaded {
     pub(crate) retention: elzevir_app::patrons::Retention,
     /// The mail server, when notices go out by e-mail.
     pub(crate) mail: Option<MailSettings>,
-    /// The library's spine label template, when it has one.
-    pub(crate) spine_labels: Option<String>,
+    /// The library's own print templates.
+    pub(crate) templates: elzevir_print::Templates,
     /// The enabled bibliographic draft sources, in priority order.
     pub(crate) draft_sources: Vec<DraftServer>,
     /// The enabled authority sources, in priority order.
@@ -556,7 +558,10 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         ),
         None => None,
     };
-    let spine_labels = template(data_dir, config.printing.spine_labels.as_deref())?;
+    let templates = elzevir_print::Templates {
+        spine_labels: template(data_dir, config.printing.spine_labels.as_deref())?,
+        patron_cards: template(data_dir, config.printing.patron_cards.as_deref())?,
+    };
     let (draft_sources, authority_sources) =
         draft_servers(&config.draft_sources).map_err(|e| format!("{}: {e}", path.display()))?;
     let sip2 = config
@@ -588,7 +593,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
             expire_waiting_holds,
             retention,
             mail,
-            spine_labels,
+            templates,
             draft_sources,
             authority_sources,
             sip2,
@@ -614,7 +619,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         expire_waiting_holds,
         retention,
         mail,
-        spine_labels,
+        templates,
         draft_sources,
         authority_sources,
         sip2,
@@ -625,7 +630,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
 }
 
 /// The text of a print template, relative to the data directory, when one is named
-/// (etiquetas.md, item 5).
+/// (etiquetas.md, item 5, and carteirinhas.md, item 4).
 fn template(data_dir: &Path, file: Option<&Path>) -> Result<Option<String>, String> {
     let Some(file) = file else {
         return Ok(None);
@@ -777,17 +782,24 @@ mod tests {
     }
 
     #[test]
-    fn the_spine_label_template_is_read_from_the_data_directory() {
+    fn the_print_templates_are_read_from_the_data_directory() {
         let dir = tempfile::tempdir().unwrap();
-        assert_eq!(load(dir.path()).unwrap().spine_labels, None);
+        assert_eq!(
+            load(dir.path()).unwrap().templates,
+            elzevir_print::Templates::default()
+        );
         let config = dir.path().join("elzevir.toml");
-        std::fs::write(&config, "[printing]\nspine_labels = \"etiquetas.typ\"\n").unwrap();
+        std::fs::write(
+            &config,
+            "[printing]\nspine_labels = \"etiquetas.typ\"\npatron_cards = \"cartoes.typ\"\n",
+        )
+        .unwrap();
         assert!(load(dir.path()).unwrap_err().contains("does not exist"));
         std::fs::write(dir.path().join("etiquetas.typ"), "#let x = 1").unwrap();
-        assert_eq!(
-            load(dir.path()).unwrap().spine_labels.as_deref(),
-            Some("#let x = 1")
-        );
+        std::fs::write(dir.path().join("cartoes.typ"), "#let y = 2").unwrap();
+        let templates = load(dir.path()).unwrap().templates;
+        assert_eq!(templates.spine_labels.as_deref(), Some("#let x = 1"));
+        assert_eq!(templates.patron_cards.as_deref(), Some("#let y = 2"));
     }
 
     #[test]
