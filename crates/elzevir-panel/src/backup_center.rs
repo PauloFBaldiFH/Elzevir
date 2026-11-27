@@ -360,7 +360,10 @@ pub(crate) fn draw(f: &mut Frame, panel: &Panel, m: &Messages, scene: &mut Scene
                 .access_notice
                 .or_else(|| {
                     ops.and_then(|o| o.result).filter(|key| {
-                        panel.backups.page != BackupPage::Schedules || *key != "op-submitted"
+                        !matches!(
+                            panel.backups.page,
+                            BackupPage::Schedules | BackupPage::Connections | BackupPage::Providers
+                        ) || *key != "op-submitted"
                     })
                 })
                 .unwrap_or("desk-help"),

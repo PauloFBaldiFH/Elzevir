@@ -16,8 +16,8 @@ expression: "screen(&panel, \"pt-BR\")"
 
 
   Conexões
-  Consulte os provedores instalados. Se faltar o rclone, abra Gerenciar ferramentas.
-  p provedores · c conectar · a responder ao provedor · y camada crypt · t teste com arquivo fictício
+  Consulte os provedores. Sem rclone, abra Gerenciar ferramentas.
+  Outros atalhos · t testar conexão · y adicionar camada de cifra · C remover conexão
   Biblioteca (s3) · pronta
   bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
   Último teste verificado: Não lido

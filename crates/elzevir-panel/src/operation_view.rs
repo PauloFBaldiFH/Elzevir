@@ -33,7 +33,9 @@ pub(crate) fn rows(
     if panel.diagnostics.pending {
         rows.push(Line::from(messages.get("op-pending")));
     }
-    if let Some(result) = operations.and_then(|ops| ops.result) {
+    if section != crate::Section::Backup
+        && let Some(result) = operations.and_then(|ops| ops.result)
+    {
         rows.push(Line::from(messages.get(result)));
     }
     if section == crate::Section::Updates
@@ -164,7 +166,9 @@ fn connection_rows(
     operations: Option<&crate::Operations>,
     m: &Messages,
 ) {
-    rows.push(Line::from(m.get("cloud-help")));
+    if !view.connections.is_empty() {
+        rows.push(Line::from(m.get("cc-advanced")));
+    }
     if view.connections.is_empty() {
         rows.push(Line::from(m.get("cloud-no-connections")));
     }

@@ -5,7 +5,10 @@ use crate::{
     backup_center::{Command, Controls, block, go, inner, key, pager, row, sample},
     ui::{Action, Variant},
 };
-use ratatui::{layout::Rect, widgets::Paragraph};
+use ratatui::{
+    layout::Rect,
+    widgets::{Paragraph, Wrap},
+};
 
 const TABS: [&str; 4] = [
     "cloud-connections-tab",
@@ -50,20 +53,14 @@ pub(super) fn draw(
     if tab == 0 && view.is_some_and(|v| v.providers.is_empty()) {
         rows.insert(0, ui.m.get("cc-discover-help").into());
     }
-    let capacity = usize::from(content.height.saturating_sub(3));
-    let start = panel
-        .backups
-        .offset
-        .min(rows.len().saturating_sub(capacity));
-    let count = rows.len();
+    let body = row(content, 1, content.height.saturating_sub(3));
+    let paragraph = Paragraph::new(rows).wrap(Wrap { trim: false });
+    let count = paragraph.line_count(body.width);
+    let capacity = usize::from(body.height);
+    let start = panel.backups.offset.min(count.saturating_sub(capacity));
     ui.f.render_widget(
-        Paragraph::new(
-            rows.into_iter()
-                .skip(start)
-                .take(capacity)
-                .collect::<Vec<_>>(),
-        ),
-        row(content, 1, content.height.saturating_sub(3)),
+        paragraph.scroll((u16::try_from(start).unwrap_or(u16::MAX), 0)),
+        body,
     );
     if tab == 0 && view.is_some_and(|v| v.providers.is_empty()) {
         ui.buttons(
