@@ -53,23 +53,29 @@ fn add_returned(
         Ok(id) => id,
         Err(why) => return Ok(Err(why)),
     };
-    let reader = match loan.borrowernumber {
+    // The patron's category stays for the reports even when the patron does not.
+    let (reader, category) = match loan.borrowernumber {
         Some(number) => match patron(connection, number)? {
-            Ok(id) => connection
-                .query_row(
-                    "SELECT id FROM patrons WHERE id = ?1 AND reading_history = 1",
-                    [id],
-                    |row| row.get::<_, i64>(0),
-                )
-                .optional()?,
-            Err(_) => None,
+            Ok(id) => {
+                crate::returns::note_checkout(connection, id, &loan.issued_at)?;
+                connection
+                    .query_row(
+                        "SELECT CASE WHEN reading_history = 1 THEN id END, category_id
+                     FROM patrons WHERE id = ?1",
+                        [id],
+                        |row| Ok((row.get::<_, Option<i64>>(0)?, row.get::<_, Option<i64>>(1)?)),
+                    )
+                    .optional()?
+                    .unwrap_or_default()
+            }
+            Err(_) => (None, None),
         },
-        None => None,
+        None => (None, None),
     };
     connection.execute(
         "INSERT INTO returned_loans (item_id, patron_id, branch_id, issued_at, due, on_site,
-                                     returned_at, return_branch_id, renewals)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                                     returned_at, return_branch_id, renewals, category_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             item,
             reader,
@@ -79,7 +85,8 @@ fn add_returned(
             loan.on_site,
             loan.returned_at,
             returned_at,
-            loan.renewals
+            loan.renewals,
+            category
         ],
     )?;
     Ok(Ok((connection.last_insert_rowid(), reader.is_some())))

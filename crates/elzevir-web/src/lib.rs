@@ -52,6 +52,7 @@ mod print_notices;
 mod record_fields;
 mod record_form;
 mod registries;
+mod reports;
 mod repository;
 mod repository_discovery;
 mod repository_staff;
@@ -132,6 +133,7 @@ pub struct AppState {
     oai: Option<OaiRepository>,
     sru: Option<SruServer>,
     printer: Option<Arc<dyn elzevir_app::printing::Printer>>,
+    reports: Option<Arc<dyn elzevir_app::reports::ReportReader>>,
 }
 
 struct Inner {
@@ -183,6 +185,7 @@ impl AppState {
             oai: None,
             sru: None,
             printer: None,
+            reports: None,
             inner: Arc::new(Inner {
                 staff,
                 memory,
@@ -333,6 +336,14 @@ impl AppState {
         self
     }
 
+    /// Connects the reports (docs/specs/operacao/relatorios.md). Without them the reports
+    /// page answers 404.
+    #[must_use]
+    pub fn with_reports(mut self, reader: Arc<dyn elzevir_app::reports::ReportReader>) -> Self {
+        self.reports = Some(reader);
+        self
+    }
+
     /// Opens the SRU server at `/sru` (docs/specs/opac/sru.md).
     #[must_use]
     pub fn with_sru(mut self, server: SruServer) -> Self {
@@ -355,6 +366,7 @@ pub fn router(state: AppState) -> Router {
         .route("/equipe/busca", get(staff_bar::search))
         .route("/equipe", get(staff::home))
         .route("/equipe/acervo", get(catalog::catalog))
+        .route("/equipe/relatorios", get(reports::page))
         .route("/equipe/leitores", get(patrons::search))
         .route("/equipe/leitores/carteirinhas", get(patron_cards::print))
         .route(

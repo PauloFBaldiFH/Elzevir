@@ -239,10 +239,10 @@ pub(crate) fn close_loan(
 ) -> rusqlite::Result<()> {
     connection.execute(
         "INSERT INTO returned_loans (item_id, patron_id, branch_id, issued_at, due, on_site,
-                                     returned_at, return_branch_id, renewals)
+                                     returned_at, return_branch_id, renewals, category_id)
          SELECT l.item_id,
                 CASE WHEN p.reading_history = 1 THEN l.patron_id END,
-                l.branch_id, l.issued_at, l.due, l.on_site, ?2, ?3, l.renewals
+                l.branch_id, l.issued_at, l.due, l.on_site, ?2, ?3, l.renewals, p.category_id
          FROM loans l JOIN patrons p ON p.id = l.patron_id
          WHERE l.id = ?1",
         params![loan, at, branch.0],
@@ -362,4 +362,19 @@ pub(crate) fn checkin(connection: &Connection, request: &CheckinRequest) -> Appl
             hold,
         },
     )))
+}
+
+/// Keeps the day of the patron's latest checkout, from the moment it was issued
+/// (docs/specs/operacao/relatorios.md, item 9).
+pub(crate) fn note_checkout(
+    connection: &Connection,
+    patron: i64,
+    issued_at: &str,
+) -> rusqlite::Result<()> {
+    connection.execute(
+        "UPDATE patrons SET last_issued_on = substr(?2, 1, 10)
+         WHERE id = ?1 AND (last_issued_on IS NULL OR last_issued_on < substr(?2, 1, 10))",
+        params![patron, issued_at],
+    )?;
+    Ok(())
 }

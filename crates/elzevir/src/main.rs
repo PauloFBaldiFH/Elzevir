@@ -497,7 +497,8 @@ fn web_app(
     .with_board(Arc::clone(store) as _)
     .with_pending(Arc::clone(store) as _)
     .with_patron_accounts(Arc::clone(store) as _)
-    .with_printer(Arc::new(printer));
+    .with_printer(Arc::new(printer))
+    .with_reports(Arc::clone(store) as _);
     let state = match sources.drafts {
         Some(drafts) => state.with_draft_sources(Arc::new(drafts)),
         None => state,

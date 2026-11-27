@@ -165,6 +165,13 @@ fn change_category(
             if users > 0 {
                 return Err(refused(PatronRefusal::CategoryInUse));
             }
+            // Ended loans count under no category from now on (relatorios.md, item 2).
+            connection
+                .execute(
+                    "UPDATE returned_loans SET category_id = NULL WHERE category_id = ?1",
+                    [category.0],
+                )
+                .map_err(StoreError::from)?;
             let deleted = connection
                 .execute("DELETE FROM patron_categories WHERE id = ?1", [category.0])
                 .map_err(StoreError::from)?;

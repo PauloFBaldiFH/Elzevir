@@ -61,6 +61,7 @@ mod staff_patrons;
 mod staff_record_fields;
 mod staff_record_form;
 mod staff_registries;
+mod staff_reports;
 
 pub use board::{BoardCard, KindChoice, StaffBoardNote, note_color};
 pub use opac_account::{
@@ -105,6 +106,7 @@ pub use staff_record_form::{
     FormPart, FormSection, History, HistoryLine, IdentifierChip, NewRecordForm, RecordForm,
 };
 pub use staff_registries::{BranchPart, RegistryRow, StaffRegistries};
+pub use staff_reports::{ReportTable, StaffReports};
 
 use askama::Template;
 use fluent_bundle::concurrent::FluentBundle;
@@ -547,6 +549,7 @@ mod tests {
             include_str!("../templates/staff_form_field.html"),
             include_str!("../templates/staff_registries.html"),
             include_str!("../templates/staff_inventory.html"),
+            include_str!("../templates/staff_reports.html"),
             include_str!("../templates/staff_patrons.html"),
             include_str!("../templates/staff_patron.html"),
             include_str!("../templates/staff_checkout_slip.html"),

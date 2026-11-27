@@ -298,7 +298,7 @@ fn view(t: &I18n, report: &InventoryReport, left_out: BarcodesRead) -> Inventory
 
 /// One CSV cell: quoted when it holds a separator, a quote or a line break, and with a
 /// leading `'` when a spreadsheet would read it as a formula.
-fn cell(value: &str) -> String {
+pub(crate) fn cell(value: &str) -> String {
     let value = if value.starts_with(['=', '+', '-', '@']) {
         format!("'{value}")
     } else {
