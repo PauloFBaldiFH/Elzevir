@@ -91,3 +91,18 @@ Entregar cada tarefa sem indicar menu ou tecla. Usar instituição de ensaio, ch
 | Atualizar e pedir suporte | Identifica pré-condições e resultado, gera relatório sanitizado sem incluir chave | Testes locais e CLI, homologação de serviço nativo pendente |
 
 As contagens de incidentes e cliques humanos permanecem em aberto. O diagnóstico anterior registra 87/92 testes Nexus aprovados neste host e cinco timeouts de explorador. A repetição com pasta acessível distinguiu uma limitação da fixture. As capturas A/B, o PTY e a suíte do Elzevir dão evidência operacional mais forte que uma maquete e cobrem partes diferentes da experiência. Um aceite de OAuth, Windows, restauração de produção ou DNS externo exige exercício correspondente.
+
+## Resultado do primeiro incremento de C
+
+O PR #275 integrou o Marco B em `0b509cd9`, com `1045e117` como segundo pai. A branch de C incorporou essa base. As verificações deste incremento estão no registro de continuidade. [PR do Marco B](https://github.com/PauloFBaldiFH/Elzevir/pull/275) · [Capturas, ensaios e limites do Marco C](evidencias/marco-c/README.md)
+
+A oportunidade 04 já tem consulta antes da edição, observação de alteração por outro cliente e revisão de execução ligada ao plano, à conexão e à pasta. A 05 ganhou catálogo pesquisável e acesso por mouse às perguntas do provedor. A revisão da instalação de ensaio encontrou dois problemas distintos. A ferramenta gerenciada estava indisponível no host e o catálogo retornado pelo rclone de distribuição continha nomes compostos que o Elzevir recusava. O segundo foi corrigido e reproduzido com o executável real, desde a descoberta até o teste de uma conexão privada de disco. A autorização de contas externas, a validação do navegador remoto e a recuperação de sessão ainda precisam de ensaio próprio.
+
+| Tarefa reproduzida | Medida no executável | O que o percurso permite concluir |
+| --- | --- | --- |
+| Consultar a agenda partindo da visão geral | 2 cliques, em Central de backups e Agendamentos | Nenhuma escrita. O operador lê horário, fuso, retenção e pasta antes de escolher editar. |
+| Alterar hora e fuso a partir da consulta | 4 cliques, para editar, focar a hora, focar o fuso e confirmar. Digitação dos novos valores | O valor observado por outro cliente corresponde ao preenchimento. Esc ou Cancelar preservam a política. |
+| Pesquisar e abrir configuração de provedor a partir das conexões | 2 cliques, em Nova conexão e na linha do resultado, com digitação opcional para filtrar | O formulário abre com o tipo escolhido. O teste usou catálogo público real em cache e cancelou antes da autorização. |
+| Investigar falha de descoberta sem rclone gerenciado | Da página de conexões, 3 cliques, em Consultar provedores, Confirmar e Histórico da nuvem | O registro do worker distingue falha de conclusão. O teste comprovou o resultado pela CLI. |
+
+O estudo externo complementar consultou a ajuda distribuída com o rclone. `rclone authorize --help` descreve o uso de uma máquina com navegador para instalações sem ambiente gráfico. `rclone check --help` descreve verificação de origem e destino sem alteração dos arquivos. A comparação determina dois critérios para o próximo incremento: indicar em qual máquina concluir a autorização e mostrar separadamente autenticação, teste de escrita e verificação da cópia. As páginas oficiais de Cockpit, restic, GNOME Files e rclone retornaram HTTP 403 neste ambiente. As conclusões sobre interfaces visuais se apoiam na referência Nexus, no estudo de usabilidade, nas 36 imagens entregues e nas execuções do Elzevir.
