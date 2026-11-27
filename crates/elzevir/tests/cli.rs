@@ -466,6 +466,7 @@ fn a_koha_dump_switches_to_elzevir_in_one_command() {
     drop(index);
 
     verify_after_the_switch(dir.path(), &data, &sql);
+    parity_after_the_switch(dir.path(), &data);
 
     // A second run finds a catalog and writes nothing.
     let again = elzevir(&["switch-from-koha", "--data-dir", &data, &sql]);
@@ -506,6 +507,65 @@ fn a_koha_dump_switches_to_elzevir_in_one_command() {
 
 /// docs/specs/migracao/verificacao-do-koha.md: the switched folder has no difference
 /// without a cause; a folder without the switch has nothing else.
+/// Koha's answers for the switched dump, worked out by hand from its rules and calendar
+/// (docs/specs/migracao/koha-parity.md).
+fn parity_after_the_switch(dir: &Path, data: &str) {
+    // Issue 1: patron ADU at CTR, Item 100 of type LIV, issued Thursday 2026-11-05 14:30.
+    // Rule 2 lends for 14 days, counted in open days (`useDaysMode` Calendar,
+    // `Koha::Calendar::addDays`): CTR closes on Sundays, so 2026-11-08 and 2026-11-15 are
+    // skipped and the loan is due on Saturday 2026-11-21. No rule has a fine.
+    let answers = |due: &str, fine: i64| {
+        format!(
+            r#"{{"koha_version":"26.05.05.000","now":"2026-12-15 10:00",
+                "due_dates":[{{"issue_id":1,"itemnumber":100,"due":"{due}"}}],
+                "fines":[{{"issue_id":1,"itemnumber":100,"amount_cents":{fine}}}]}}"#
+        )
+    };
+    let same = path(dir, "answers.json");
+    std::fs::write(&same, answers("2026-11-21 23:59", 0)).unwrap();
+    let parity = elzevir(&["parity-koha", "--data-dir", data, &same]);
+    assert!(
+        parity.status.success(),
+        "{}{}",
+        text(&parity.stdout),
+        text(&parity.stderr)
+    );
+    let report = text(&parity.stdout);
+    for line in [
+        "due dates: 1 answers from Koha, 1 the same, 0 without a counterpart, 0 different",
+        "fines: 1 answers from Koha, 1 the same, 0 without a counterpart, 0 different",
+    ] {
+        assert!(
+            report.lines().any(|found| found == line),
+            "{line} not in\n{report}"
+        );
+    }
+
+    let other = path(dir, "other.json");
+    std::fs::write(
+        &other,
+        answers("2026-11-20 23:59", 150).replace(
+            r#"{"issue_id":1,"itemnumber":100,"due""#,
+            r#"{"issue_id":9,"itemnumber":4242,"due":"2026-11-19 23:59"},{"issue_id":1,"itemnumber":100,"due""#,
+        ),
+    )
+    .unwrap();
+    let parity = elzevir(&["parity-koha", "--data-dir", data, &other]);
+    assert!(!parity.status.success());
+    let report = text(&parity.stdout);
+    for line in [
+        "due dates: 2 answers from Koha, 0 the same, 1 without a counterpart, 1 different",
+        "  the Item did not come: 1 (issue_id 9)",
+        "  DIFFERENT issue_id 1: Koha 2026-11-20 23:59, Elzevir 2026-11-21 23:59",
+        "  DIFFERENT issue_id 1: Koha 1.50, Elzevir 0.00",
+    ] {
+        assert!(
+            report.lines().any(|found| found == line),
+            "{line} not in\n{report}"
+        );
+    }
+}
+
 fn verify_after_the_switch(dir: &Path, data: &str, sql: &str) {
     let verify = elzevir(&["verify-koha", "--data-dir", data, sql]);
     assert!(verify.status.success(), "{}", text(&verify.stderr));

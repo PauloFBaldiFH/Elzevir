@@ -63,6 +63,44 @@ pub(crate) fn update_overdue_fine(
     moment: FineMoment,
 ) -> rusqlite::Result<Option<Money>> {
     let settings = FineSettings::default();
+    if moment == FineMoment::DailyRun
+        && !settings.charge_on_closed_days
+        && read_calendar(connection, late.holding.0)?.is_closed(at.date())
+    {
+        return Ok(None);
+    }
+    let Some(amount) = overdue_fine(connection, rules, late, at)? else {
+        return Ok(None);
+    };
+    if amount.0 <= 0 {
+        return Ok(None);
+    }
+    let overdue = OverdueLoan {
+        loan: late.loan,
+        patron: late.patron,
+        item: late.item,
+        branch: late.holding,
+    };
+    charge_overdue(
+        connection,
+        &overdue,
+        amount,
+        DebtSettings::default().max_fine,
+        &at.to_string(),
+    )
+}
+
+/// The loan's fine at `at`, before `MaxFine`, by the rules and the calendar of the branch
+/// the Item is held at; `None` when the patron is gone.
+///
+/// Koha: `C4::Overdues::CalcFine`
+pub(crate) fn overdue_fine(
+    connection: &Connection,
+    rules: &[CirculationRule],
+    late: &LateLoan,
+    at: &Zoned,
+) -> rusqlite::Result<Option<Money>> {
+    let settings = FineSettings::default();
     let Some((category, _)) = find_patron(connection, late.patron)? else {
         return Ok(None);
     };
@@ -72,12 +110,6 @@ pub(crate) fn update_overdue_fine(
         policy: Some(late.policy),
     };
     let calendar = read_calendar(connection, late.holding.0)?;
-    if moment == FineMoment::DailyRun
-        && !settings.charge_on_closed_days
-        && calendar.is_closed(at.date())
-    {
-        return Ok(None);
-    }
     let rule = fine_rule(rules, &scope, loan_rule(rules, &scope, USE_DAYS_MODE).unit);
     let computed = calc_fine(
         &late.due,
@@ -92,22 +124,7 @@ pub(crate) fn update_overdue_fine(
             overdue_recall: false,
         },
     );
-    if computed.amount.0 <= 0 {
-        return Ok(None);
-    }
-    let overdue = OverdueLoan {
-        loan: late.loan,
-        patron: late.patron,
-        item: late.item,
-        branch: late.holding,
-    };
-    charge_overdue(
-        connection,
-        &overdue,
-        computed.amount,
-        DebtSettings::default().max_fine,
-        &at.to_string(),
-    )
+    Ok(Some(computed.amount))
 }
 
 /// The loans out whose Item is not lost, by patron and then in the order they were made.
