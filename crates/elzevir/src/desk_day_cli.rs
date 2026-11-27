@@ -266,6 +266,7 @@ fn hold(
             },
             pickup: branch,
             at,
+            by_patron: false,
         }),
     )?;
     let answer = match done {

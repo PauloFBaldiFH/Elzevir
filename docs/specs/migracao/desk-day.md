@@ -79,7 +79,9 @@ Afterwards the database was restored and the files were deleted.
 - Step 13: a hold for the patron owing 150.00. Koha answers `ok priority 1`, and the Elzevir refuses it with `debt_limit`.
 - Step 15: a checkin of an Item that patron's hold would take. Koha answers `not_on_loan; Reserved borrowernumber 5303`, and the Elzevir answers `not_on_loan; none`, because the hold of step 13 does not exist there.
 
-The cause is the entry point. Koha's staff desk (`reserve/placerequest.pl`) only asks `CanItemBeReserved` and `CanBookBeReserved`, which do not look at the debt. The Elzevir's desk follows the order of Koha's `POST /api/v1/holds` ([holds](../circulacao/reservas.md), item 3), which asks `Koha::Patron::can_place_holds` first: expired card, `maxoutstanding`, address. On Koha only the OPAC (`opac-reserve.pl`) and the REST API refuse a hold for debt. Whether the Elzevir's desk follows the staff screen is Paulo's decision. Until then it is this listed difference.
+The cause is the entry point. Koha's staff desk (`reserve/placerequest.pl`) only asks `CanItemBeReserved` and `CanBookBeReserved`, which do not look at the debt. The Elzevir's desk follows the order of Koha's `POST /api/v1/holds` ([holds](../circulacao/reservas.md), item 3), which asks `Koha::Patron::can_place_holds` first: expired card, `maxoutstanding`, address. On Koha only the OPAC (`opac-reserve.pl`) and the REST API refuse a hold for debt. Paulo decided on 2026-11-27 that the desk follows Koha's staff screen. Since then the debt refuses a hold only on the OPAC and the API ([holds](../circulacao/reservas.md), item 3.3), which removes both differences.
+
+The same day was run again on the oracle after that change, with the same setup, backup and restore. `desk-day` found 17 of 17 steps the same.
 
 ## 5. Out of this version
 

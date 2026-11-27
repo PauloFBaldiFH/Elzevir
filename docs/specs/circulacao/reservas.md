@@ -9,7 +9,7 @@
 3. **Pedir.** Na ficha do leitor, com a permissão de circulação, a equipe digita o código de barras de um exemplar, escolhe "este exemplar" ou "qualquer exemplar do registro" e a unidade de retirada. A reserva é recusada, nesta ordem (a ordem do `POST /api/v1/holds` do Koha):
    1. a unidade de retirada não serve para o exemplar (reserva de exemplar) ou para nenhum exemplar da Instância (reserva de registro), pelo item 5;
    2. o leitor está suspenso (`restricted`);
-   3. o leitor deve mais que `maxoutstanding` (padrão 5,00), contando débitos e créditos (`debt_limit`);
+   3. o leitor deve mais que `maxoutstanding` (padrão 5,00), contando débitos e créditos (`debt_limit`), só quando o próprio leitor pede pelo OPAC ou pela API ([conta do leitor](../opac/conta-do-leitor.md), item 23; [API](../opac/api.md), item 16). No balcão, a dívida não recusa, como na tela da equipe do Koha (`reserve/placerequest.pl`, que só pergunta `CanItemBeReserved` e `CanBookBeReserved`). Paulo decidiu assim em 2026-11-27, depois do dia de balcão encenado ([desk-day.md](../migracao/desk-day.md));
    4. o leitor já tem `maxreserves` reservas (padrão 50; `hold_limit`);
    5. as regras de circulação não permitem a reserva (item 4); na reserva de registro, basta um exemplar da Instância permitir, e a recusa mostrada é a do último exemplar.
 4. **Regras de um exemplar** (Koha: `CanItemBeReserved`), olhadas com a unidade do leitor (`ReservesControlBranch` = `PatronLibrary`), a categoria do leitor e a política do exemplar, nesta ordem:

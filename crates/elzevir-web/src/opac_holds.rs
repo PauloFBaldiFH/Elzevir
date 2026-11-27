@@ -220,6 +220,7 @@ pub(crate) async fn place_hold(
         level: HoldLevel::Record,
         pickup: BranchId(form.pickup),
         at: now(&state),
+        by_patron: true,
     });
     match tokio::task::spawn_blocking(move || desk.patron_hold(command)).await {
         Ok(Ok(_)) => Redirect::to("/conta?aviso=reserva#holds-title").into_response(),
