@@ -491,9 +491,15 @@ fn verify_after_the_switch(dir: &Path, data: &str, sql: &str) {
         "patrons: 6 in the dump, 3 in the Elzevir, 3 left out with a cause, 0 differences without a cause",
         "  branchcode not in branches: 1 (borrowernumber 4)",
         "records: 3 in the dump, 2 in the Elzevir, 1 left out with a cause, 0 differences without a cause",
-        "  an Item of a branch the Elzevir lacks (LUA): 1 (biblionumber 12)",
+        "  a branch the Elzevir lacks (LUA): 1 (biblionumber 12)",
         "Items: 5 in the dump, 4 in the Elzevir, 1 left out with a cause, 0 differences without a cause",
         "  its record did not come: 1 (itemnumber 130)",
+        "loans: 6 in the dump, 2 in the Elzevir, 4 left out with a cause, 0 differences without a cause",
+        "  its Item came lent by another loan of the dump: 1 (issue_id 5)",
+        "holds: 6 in the dump, 4 in the Elzevir, 2 left out with a cause, 0 differences without a cause",
+        "  a branch the Elzevir lacks (ZZZ): 1 (reserve_id 6)",
+        "patron accounts: 3 in the dump, 2 in the Elzevir, 1 left out with a cause, 0 differences without a cause",
+        "returned loans: 6 in the dump, 4 in the Elzevir, 2 left out with a cause, 0 differences without a cause",
     ] {
         assert!(
             report.lines().any(|found| found == line),

@@ -10,7 +10,7 @@ use elzevir_app::import::koha_sql::read_database_catalog;
 use elzevir_app::koha_migration::plan;
 use elzevir_app::koha_verify::{Cause, Table, TableCheck, Unexplained, verify};
 
-use crate::koha_migration_cli::{leftover, open};
+use crate::koha_migration_cli::{circulation_leftover, leftover, open};
 use crate::open_store;
 
 /// `elzevir verify-koha`.
@@ -52,16 +52,25 @@ const fn names(table: Table) -> (&'static str, &'static str) {
         Table::Patrons => ("patrons", "borrowernumber"),
         Table::Records => ("records", "biblionumber"),
         Table::Items => ("Items", "itemnumber"),
+        Table::Loans => ("loans", "issue_id"),
+        Table::Holds => ("holds", "reserve_id"),
+        Table::Accounts => ("patron accounts", "borrowernumber"),
+        Table::Returned => ("returned loans", "issue_id"),
     }
 }
 
 fn cause(cause: &Cause) -> String {
     match cause {
         Cause::Patron(why) => leftover(*why).to_owned(),
-        Cause::UnknownBranch(code) => format!("an Item of a branch the Elzevir lacks ({code})"),
+        Cause::UnknownBranch(code) => format!("a branch the Elzevir lacks ({code})"),
         Cause::RecordLeftOut => "its record did not come".to_owned(),
         Cause::RepeatedBarcode => "barcode repeated in the dump".to_owned(),
         Cause::Anonymized => "anonymized after the migration (counted as arrived)".to_owned(),
+        Cause::Circulation(why) => circulation_leftover(*why).to_owned(),
+        Cause::PatronLeftOut => "its patron did not come".to_owned(),
+        Cause::ItemLeftOut => "its Item did not come".to_owned(),
+        Cause::ItemOnLoan => "its Item came lent by another loan of the dump".to_owned(),
+        Cause::AlreadyHeld => "the patron already holds the record in the dump".to_owned(),
     }
 }
 
@@ -69,7 +78,9 @@ fn difference(what: &Unexplained) -> String {
     match what {
         Unexplained::Missing => "not in the Elzevir".to_owned(),
         Unexplained::Repeated => "more than once".to_owned(),
-        Unexplained::Extra => "in the Elzevir, not among what the dump brings".to_owned(),
+        Unexplained::Extra | Unexplained::ExtraBy(_) => {
+            "in the Elzevir, not among what the dump brings".to_owned()
+        }
         Unexplained::Field(column) => format!("{column} differs"),
         Unexplained::NoNumber => "no 999 $c".to_owned(),
     }
@@ -99,6 +110,10 @@ fn report(checks: &[TableCheck]) -> String {
             );
         }
         for (number, what) in &check.unexplained {
+            let key = match what {
+                Unexplained::ExtraBy(other) => other,
+                _ => key,
+            };
             let _written = writeln!(
                 text,
                 "  WITHOUT A CAUSE {key} {number}: {}",

@@ -6,7 +6,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::import::koha_sql::KohaCatalogRecord;
-use crate::koha_migration::{KohaPlan, Leftover};
+use crate::koha_migration::{CirculationLeftover, KohaPlan, Leftover};
+
+mod circulation;
+
+pub use circulation::{FoundHold, FoundLoan, HoldState};
 
 /// What the Elzevir holds under Koha's numbers, read from the edge tables (item 2).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -21,6 +25,14 @@ pub struct Footprint {
     pub records: BTreeMap<String, usize>,
     /// Items, by `itemnumber`; more than one is a difference.
     pub items: BTreeMap<String, Vec<FoundItem>>,
+    /// Current loans, by the `itemnumber` of the Item lent.
+    pub loans: BTreeMap<String, Vec<FoundLoan>>,
+    /// Current holds, by the `biblionumber` of the Instance, in priority order.
+    pub holds: BTreeMap<String, Vec<FoundHold>>,
+    /// Patron accounts, by `borrowernumber`: the balance in cents and the number of lines.
+    pub accounts: BTreeMap<String, (i64, usize)>,
+    /// Returned loans, by `issue_id`: whether the patron is kept with it.
+    pub returned: BTreeMap<String, bool>,
 }
 
 /// A patron as the Elzevir holds it, with its branch and category as Koha codes.
@@ -64,6 +76,14 @@ pub enum Table {
     Records,
     /// `items`, by `itemnumber`.
     Items,
+    /// `issues`, by `issue_id`.
+    Loans,
+    /// `reserves`, by `reserve_id`.
+    Holds,
+    /// The accounts of `accountlines`, by `borrowernumber`.
+    Accounts,
+    /// `old_issues`, by `issue_id`.
+    Returned,
 }
 
 /// Why a number of the dump is not in the Elzevir, found in the dump or the database
@@ -80,6 +100,16 @@ pub enum Cause {
     RepeatedBarcode,
     /// The patron came and was anonymized afterwards.
     Anonymized,
+    /// The migration of loans and holds left the line out for what the dump lacks.
+    Circulation(CirculationLeftover),
+    /// The patron did not come.
+    PatronLeftOut,
+    /// The Item did not come.
+    ItemLeftOut,
+    /// Another loan of the dump has the same Item and came.
+    ItemOnLoan,
+    /// An earlier hold of the dump has the same patron and record.
+    AlreadyHeld,
 }
 
 /// A difference without a cause.
@@ -91,6 +121,9 @@ pub enum Unexplained {
     Repeated,
     /// In the Elzevir, not among what the dump brings.
     Extra,
+    /// In the Elzevir and not in the dump, named by this other number (a loan by its
+    /// Item, a hold by its record), since the Elzevir does not keep Koha's own.
+    ExtraBy(&'static str),
     /// In both, with this column different.
     Field(&'static str),
     /// A record of the dump without `999 $c`.
@@ -113,7 +146,7 @@ pub struct TableCheck {
 }
 
 impl TableCheck {
-    fn new(table: Table) -> Self {
+    pub(super) fn new(table: Table) -> Self {
         Self {
             table,
             in_dump: 0,
@@ -123,14 +156,14 @@ impl TableCheck {
         }
     }
 
-    fn explain(&mut self, cause: Cause, number: &str) {
+    pub(super) fn explain(&mut self, cause: Cause, number: &str) {
         self.explained
             .entry(cause)
             .or_default()
             .push(number.to_owned());
     }
 
-    fn differ(&mut self, number: &str, what: Unexplained) {
+    pub(super) fn differ(&mut self, number: &str, what: Unexplained) {
         self.unexplained.push((number.to_owned(), what));
     }
 
@@ -158,11 +191,15 @@ pub fn verify(
         patrons(plan, found),
         records(catalog, found),
         items(catalog, found),
+        circulation::loans(plan, found),
+        circulation::holds(plan, found),
+        circulation::accounts(plan, found),
+        circulation::returned(plan, found),
     ]
 }
 
 /// The numbers `found` holds that the dump does not bring (item 9).
-fn extras<'a, V>(
+pub(super) fn extras<'a, V>(
     check: &mut TableCheck,
     found: impl Iterator<Item = (&'a String, V)>,
     seen: &BTreeSet<&str>,
@@ -174,7 +211,7 @@ fn extras<'a, V>(
     }
 }
 
-fn sorted(mut check: TableCheck) -> TableCheck {
+pub(super) fn sorted(mut check: TableCheck) -> TableCheck {
     check.unexplained.sort_by(|a, b| by_number(&a.0, &b.0));
     for numbers in check.explained.values_mut() {
         numbers.sort_by(|a, b| by_number(a, b));
@@ -392,7 +429,7 @@ mod tests {
     use crate::import::koha_sql::KohaCatalogItem;
 
     fn plan() -> KohaPlan {
-        let dump = include_str!("../tests/data/koha-patrons.sql");
+        let dump = include_str!("../../tests/data/koha-patrons.sql");
         let zone = jiff::tz::TimeZone::get("America/Sao_Paulo").unwrap();
         crate::koha_migration::plan(dump.as_bytes(), jiff::civil::date(2026, 11, 27), &zone)
             .unwrap()
@@ -438,7 +475,85 @@ mod tests {
                     .insert(item.itemnumber.clone().unwrap(), vec![stored]);
             }
         }
+        circulate(plan, &mut found);
         found
+    }
+
+    /// The loans, holds, accounts and returned loans a faithful migration writes, given
+    /// the patrons, records and Items in `found`.
+    fn circulate(plan: &KohaPlan, found: &mut Footprint) {
+        let patron_in =
+            |found: &Footprint, number: u64| found.patrons.contains_key(&number.to_string());
+        let item_in =
+            |found: &Footprint, number: u64| found.items.contains_key(&number.to_string());
+        for loan in &plan.loans {
+            let item = loan.item.itemnumber.to_string();
+            if patron_in(found, loan.borrowernumber)
+                && item_in(found, loan.item.itemnumber)
+                && found.branches.contains_key(&loan.branch)
+                && !found.loans.contains_key(&item)
+            {
+                let stored = FoundLoan {
+                    borrowernumber: Some(loan.borrowernumber.to_string()),
+                    due: loan.due.clone(),
+                };
+                found.loans.insert(item, vec![stored]);
+            }
+        }
+        for hold in &plan.holds {
+            let record = hold.biblionumber.to_string();
+            let borrower = Some(hold.borrowernumber.to_string());
+            let needs_item = hold.item_level
+                || !matches!(hold.state, crate::koha_migration::KohaHoldState::Queued(_));
+            let queue = found.holds.get(&record).map_or(0, Vec::len);
+            if !patron_in(found, hold.borrowernumber)
+                || !found.records.contains_key(&record)
+                || (needs_item
+                    && hold
+                        .item
+                        .as_ref()
+                        .is_some_and(|i| !item_in(found, i.itemnumber)))
+                || !found.branches.contains_key(&hold.pickup)
+                || found
+                    .holds
+                    .get(&record)
+                    .is_some_and(|holds| holds.iter().any(|h| h.borrowernumber == borrower))
+            {
+                continue;
+            }
+            let state = HoldState::from(hold.state);
+            let priority = if state == HoldState::Queued {
+                i64::try_from(queue).unwrap() + 1
+            } else {
+                0
+            };
+            found.holds.entry(record).or_default().push(FoundHold {
+                borrowernumber: borrower,
+                state,
+                priority,
+            });
+        }
+        for account in &plan.accounts {
+            if patron_in(found, account.borrowernumber) && !account.lines.is_empty() {
+                let balance = account.lines.iter().map(|line| line.outstanding.0).sum();
+                found.accounts.insert(
+                    account.borrowernumber.to_string(),
+                    (balance, account.lines.len()),
+                );
+            }
+        }
+        for loan in &plan.returned {
+            if item_in(found, loan.item.itemnumber) {
+                let kept = loan.borrowernumber.is_some_and(|number| {
+                    patron_in(found, number)
+                        && plan.patrons.iter().any(|p| {
+                            p.borrowernumber == number
+                                && p.reading_history == crate::patrons::ReadingHistory::Kept
+                        })
+                });
+                found.returned.insert(loan.issue_id.to_string(), kept);
+            }
+        }
     }
 
     fn item(number: &str, barcode: &str, branch: &str) -> KohaCatalogItem {
@@ -488,6 +603,73 @@ mod tests {
             Some(&vec!["4".to_owned()])
         );
         assert_eq!(check(&checks, Table::Items).arrived, 3);
+        let loans = check(&checks, Table::Loans);
+        assert!(loans.arrived > 0, "{loans:?}");
+        // Issues 2 and 4 lend Items 120 and 999, which this catalog lacks; issue 5 lends
+        // Item 100 again.
+        assert_eq!(
+            loans.explained.get(&Cause::ItemLeftOut),
+            Some(&vec!["2".to_owned(), "4".to_owned()])
+        );
+        assert_eq!(
+            loans.explained.get(&Cause::ItemOnLoan),
+            Some(&vec!["5".to_owned()])
+        );
+        assert!(check(&checks, Table::Holds).arrived > 0);
+        assert!(check(&checks, Table::Accounts).arrived > 0);
+        assert!(check(&checks, Table::Returned).arrived > 0);
+    }
+
+    #[test]
+    fn each_circulation_difference_is_named_by_its_koha_number() {
+        let plan = plan();
+        let catalog = catalog();
+        let mut found = faithful(&plan, &catalog);
+        // A loan of the dump lost, another with a different due date, one the dump lacks.
+        let (item, mut lost) = found.loans.pop_first().unwrap();
+        let loan = plan
+            .loans
+            .iter()
+            .find(|loan| loan.item.itemnumber.to_string() == item)
+            .unwrap();
+        lost[0].due = "2000-01-01 00:00:00".to_owned();
+        found.loans.insert(item.clone(), lost);
+        found
+            .loans
+            .insert("555".to_owned(), vec![FoundLoan::default()]);
+        // A balance off by a cent, a returned loan that kept a patron it should not.
+        let (patron, (balance, lines)) = found.accounts.pop_first().unwrap();
+        found.accounts.insert(patron.clone(), (balance + 1, lines));
+        let (issue, kept) = found.returned.pop_first().unwrap();
+        found.returned.insert(issue.clone(), !kept);
+        // The queue of record 10 (reserves 1 and 2) in the other order.
+        for hold in found.holds.get_mut("10").unwrap() {
+            hold.priority = -hold.priority;
+        }
+        let checks = verify(&plan, &catalog, &found);
+        let loans = check(&checks, Table::Loans);
+        assert_eq!(
+            loans.unexplained,
+            vec![
+                (loan.issue_id.to_string(), Unexplained::Field("date_due")),
+                ("555".to_owned(), Unexplained::ExtraBy("itemnumber")),
+            ]
+        );
+        assert_eq!(
+            check(&checks, Table::Accounts).unexplained,
+            vec![(patron, Unexplained::Field("amountoutstanding"))]
+        );
+        assert_eq!(
+            check(&checks, Table::Returned).unexplained,
+            vec![(issue, Unexplained::Field("borrowernumber"))]
+        );
+        assert_eq!(
+            check(&checks, Table::Holds).unexplained,
+            vec![
+                ("1".to_owned(), Unexplained::Field("priority")),
+                ("2".to_owned(), Unexplained::Field("priority")),
+            ]
+        );
     }
 
     #[test]
