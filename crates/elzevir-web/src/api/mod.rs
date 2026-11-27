@@ -10,7 +10,7 @@ use axum::extract::DefaultBodyLimit;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Json, Response};
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, post, put};
 use elzevir_app::catalog::{CodeLists, ItemView, Movement};
 use elzevir_app::material::{CarrierKind, ContentKind, Material};
 use elzevir_app::opac::{self, RecordPage, ResultsPage};
@@ -48,6 +48,8 @@ const DEBTS_PATH: &str = "/api/v1/patron/debts";
 const HOLDS_PATH: &str = "/api/v1/patron/holds";
 /// Path of one hold.
 const HOLD_PATH: &str = "/api/v1/patron/holds/{id}";
+/// Path of a hold's suspension.
+const SUSPENSION_PATH: &str = "/api/v1/patron/holds/{id}/suspension";
 
 /// Largest body of a request, in bytes (an explicit input limit, spec item 8).
 const MAX_BODY: usize = 4 * 1024;
@@ -55,7 +57,7 @@ const MAX_BODY: usize = 4 * 1024;
 /// Every operation the router answers under `/api/v1`, as path and method, each of which
 /// the document describes (spec, item 2).
 #[cfg(test)]
-const OPERATIONS: [(&str, &str); 12] = [
+const OPERATIONS: [(&str, &str); 14] = [
     (OPENAPI_PATH, "get"),
     (SEARCH_PATH, "get"),
     (INSTANCE_PATH, "get"),
@@ -68,6 +70,8 @@ const OPERATIONS: [(&str, &str); 12] = [
     (HOLDS_PATH, "get"),
     (HOLDS_PATH, "post"),
     (HOLD_PATH, "delete"),
+    (SUSPENSION_PATH, "put"),
+    (SUSPENSION_PATH, "delete"),
 ];
 
 /// The API routes, with JSON answers for an unknown path or method (spec, item 3).
@@ -84,6 +88,10 @@ pub(crate) fn routes() -> Router<AppState> {
         .route(DEBTS_PATH, get(patron::debts))
         .route(HOLDS_PATH, get(patron::holds).post(patron::place_hold))
         .route(HOLD_PATH, delete(patron::cancel_hold))
+        .route(
+            SUSPENSION_PATH,
+            put(patron::suspend_hold).delete(patron::resume_hold),
+        )
         .layer(DefaultBodyLimit::max(MAX_BODY))
         .method_not_allowed_fallback(|| async {
             error(StatusCode::METHOD_NOT_ALLOWED, "method_not_allowed")

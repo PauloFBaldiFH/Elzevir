@@ -291,10 +291,18 @@ pub fn prefs_config(preferences: &[KohaPreference]) -> PrefsConfig {
     if let Some(settings) = long_overdue(&mut values) {
         sections.push(Section::new("circulation.long_overdue", settings));
     }
+    let mut holds = Vec::new();
     if is_on(values.get("ExpireReservesMaxPickUpDelay")) {
         values.place("ExpireReservesMaxPickUpDelay");
-        let settings = vec![("expire_waiting", Setting::Boolean(true))];
-        sections.push(Section::new("circulation.holds", settings));
+        holds.push(("expire_waiting", Setting::Boolean(true)));
+    }
+    // On is the Elzevir's default too; only Koha's 0 is written.
+    if values.get("SuspendHoldsOpac").trim() == "0" {
+        values.place("SuspendHoldsOpac");
+        holds.push(("patrons_suspend", Setting::Boolean(false)));
+    }
+    if !holds.is_empty() {
+        sections.push(Section::new("circulation.holds", holds));
     }
     if let Ok(days) = values.get("PatronAnonymizeDelay").trim().parse::<u32>() {
         values.place("PatronAnonymizeDelay");
@@ -462,6 +470,7 @@ mod tests {
     fn defaults_are_left_out() {
         let config = prefs_config(&preferences(&[
             ("ExpireReservesMaxPickUpDelay", "0"),
+            ("SuspendHoldsOpac", "1"),
             ("OAI-PMH", "0"),
             ("OAI-PMH:archiveID", "KOHA-OAI-TEST"),
             (
@@ -469,7 +478,7 @@ mod tests {
                 "Order number must appear on all related correspondence, shipping papers and invoices. Notify us immediately if \n you are unable to supply item(s).",
             ),
         ]));
-        assert_eq!(config.report.at_default, 4);
+        assert_eq!(config.report.at_default, 5);
         assert!(config.report.placed.is_empty());
         assert_eq!(table(&config.toml), toml::Table::new());
     }
@@ -481,6 +490,7 @@ mod tests {
             ("DefaultLongOverdueLostValue", "2"),
             ("DefaultLongOverdueChargeValue", "2"),
             ("ExpireReservesMaxPickUpDelay", "1"),
+            ("SuspendHoldsOpac", "0"),
             ("PatronAnonymizeDelay", "365"),
         ]));
         let toml = table(&config.toml);
@@ -489,8 +499,12 @@ mod tests {
             table("days = 30\nlost_status = 2\ncharge = true").into()
         );
         assert_eq!(toml["circulation"]["holds"]["expire_waiting"], true.into());
+        assert_eq!(
+            toml["circulation"]["holds"]["patrons_suspend"],
+            false.into()
+        );
         assert_eq!(toml["privacy"]["anonymize_expired_days"], 365.into());
-        assert_eq!(config.report.placed.len(), 5);
+        assert_eq!(config.report.placed.len(), 6);
         assert!(!toml.contains_key("koha_legacy"));
     }
 

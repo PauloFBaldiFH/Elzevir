@@ -174,9 +174,9 @@ impl LoanDesk for ElzevirStore {
     ) -> Result<CirculationOutput, CirculationDeskError> {
         // Only what a patron may ask for passes without a staff member behind it.
         match command {
-            CirculationCommand::PlaceHold(_) | CirculationCommand::CancelHold(_) => {
-                self.patron_command(command)
-            }
+            CirculationCommand::PlaceHold(_)
+            | CirculationCommand::CancelHold(_)
+            | CirculationCommand::SuspendHold(_) => self.patron_command(command),
             _ => Err(unavailable(&"not a hold command")),
         }
     }

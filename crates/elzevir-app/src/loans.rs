@@ -365,7 +365,8 @@ pub trait LoanDesk: Send + Sync {
         request: RenewRequest,
     ) -> Result<Renewed, CirculationDeskError>;
 
-    /// Places or cancels a hold the signed-in patron asks for on the OPAC; no staff member
+    /// Places, cancels, suspends or resumes a hold the signed-in patron asks for on the OPAC
+    /// or the API; no staff member
     /// acts. The caller puts that patron in the command, and only hold commands pass.
     ///
     /// # Errors

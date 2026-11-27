@@ -1619,6 +1619,16 @@ fn the_patron_places_and_cancels_a_hold_from_the_opac_record() {
         .unwrap()
         .0
         .to_owned();
+    suspend_and_resume_on_the_opac(
+        &post,
+        &|path| request(address, "GET", path, &patron, ""),
+        &page,
+        &cancel,
+        &token,
+    );
+    // Another patron's hold, or one that does not exist, changes nothing.
+    let unknown = post("/conta/reservas/9999/suspender", &format!("csrf={token}"));
+    assert!(unknown.contains("location: /conta\r\n"), "{unknown}");
     let cancelled = post(
         &format!("/conta/reservas/{cancel}"),
         &format!("csrf={token}"),
@@ -1633,6 +1643,46 @@ fn the_patron_places_and_cancels_a_hold_from_the_opac_record() {
     );
     assert!(
         page.contains("Hold cancelled.") && page.contains("You have no holds."),
+        "{page}"
+    );
+}
+
+/// Suspends the hold of `cancel` (its cancel path) until a day, then resumes it, on the
+/// OPAC (item 25a).
+fn suspend_and_resume_on_the_opac(
+    post: &dyn Fn(&str, &str) -> String,
+    get: &dyn Fn(&str) -> String,
+    page: &str,
+    cancel: &str,
+    token: &str,
+) {
+    let id = cancel.split_once('/').unwrap().0;
+    let suspend = format!("/conta/reservas/{id}/suspender");
+    assert!(page.contains(&suspend), "{page}");
+    assert_status(&post(&suspend, "csrf=forged&until="), 403);
+    assert_status(
+        &post(&suspend, &format!("csrf={token}&until=20/12/2026")),
+        400,
+    );
+    let suspended = post(&suspend, &format!("csrf={token}&until=2026-12-20"));
+    assert!(
+        suspended.contains("location: /conta?aviso=reserva_suspensa#holds-title"),
+        "{suspended}"
+    );
+    let page = get("/conta?aviso=reserva_suspensa");
+    let resume = format!("/conta/reservas/{id}/retomar");
+    assert!(
+        page.contains("Hold suspended.")
+            && page.contains("Suspended until")
+            && page.contains(&resume)
+            && !page.contains(&suspend),
+        "{page}"
+    );
+    let resumed = post(&resume, &format!("csrf={token}"));
+    assert!(resumed.contains("aviso=reserva_retomada"), "{resumed}");
+    let page = get("/conta?aviso=reserva_retomada");
+    assert!(
+        page.contains("Hold resumed.") && page.contains("Place 1") && page.contains(&suspend),
         "{page}"
     );
 }
@@ -1845,6 +1895,7 @@ fn the_patron_holds_and_cancels_through_the_api_and_refusals_lock_the_card() {
     let (_, _, list) = api(address, "GET", holds, holds, me, "");
     assert_eq!(list[0]["status"], "pending");
     assert_eq!(list[0]["title"], "Dom Casmurro");
+    suspend_and_resume_through_the_api(address, me, &placed["hold"].to_string());
     let hold = "/api/v1/patron/holds/{id}";
     let cancel = |id: &str| {
         api(
@@ -1878,6 +1929,99 @@ fn the_patron_holds_and_cancels_through_the_api_and_refusals_lock_the_card() {
         &format!("csrf={}&card=000123&password=leitura-segura", csrf(&form)),
     );
     assert_status(&locked, 429);
+}
+
+/// Suspends the hold `id` until a day, then without one, then resumes it (item 16a).
+fn suspend_and_resume_through_the_api(address: SocketAddr, me: Option<&str>, id: &str) {
+    let holds = "/api/v1/patron/holds";
+    let suspension = "/api/v1/patron/holds/{id}/suspension";
+    let suspend = |id: &str, method: &str, body: &str| {
+        api(
+            address,
+            method,
+            &format!("/api/v1/patron/holds/{id}/suspension"),
+            suspension,
+            me,
+            body,
+        )
+    };
+    assert_eq!(suspend(id, "PUT", r#"{"until": "20/12/2026"}"#).0, 400);
+    assert_eq!(suspend("9999", "PUT", "{}").0, 404);
+    assert_eq!(suspend(id, "PUT", r#"{"until": "2026-12-20"}"#).0, 204);
+    let (_, _, list) = api(address, "GET", holds, holds, me, "");
+    assert_eq!(list.pointer("/0/suspended"), Some(&true.into()));
+    assert_eq!(
+        list.pointer("/0/suspended_until"),
+        Some(&"2026-12-20".into())
+    );
+    assert_eq!(suspend(id, "PUT", "{}").0, 204);
+    let (_, _, list) = api(address, "GET", holds, holds, me, "");
+    assert_eq!(
+        list.pointer("/0/suspended_until"),
+        Some(&serde_json::Value::Null)
+    );
+    assert_eq!(suspend(id, "DELETE", "").0, 204);
+    let (_, _, list) = api(address, "GET", holds, holds, me, "");
+    assert_eq!(list.pointer("/0/suspended"), Some(&false.into()));
+}
+
+#[test]
+fn patrons_do_not_suspend_holds_when_the_library_turns_it_off() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    stock(data.path());
+    let store = open(data.path());
+    submit(
+        &store,
+        WriteCommand::Circulation(CirculationCommand::SetRules(RuleChange {
+            scope: RuleScopeKey::default(),
+            values: vec![("reservesallowed".to_owned(), Some("3".to_owned()))],
+        })),
+    );
+    store.shutdown().unwrap();
+    std::fs::write(
+        data.path().join("elzevir.toml"),
+        "[circulation.holds]\npatrons_suspend = false\n",
+    )
+    .unwrap();
+    let (_server, address) = start_with_password(data.path(), ana);
+    let token = api_token(address);
+    let me = Some(token.as_str());
+    let holds = "/api/v1/patron/holds";
+    let (status, _, placed) = api(
+        address,
+        "POST",
+        holds,
+        holds,
+        me,
+        r#"{"instance": 1, "pickup": 1}"#,
+    );
+    assert_eq!(status, 201, "{placed}");
+    let id = placed["hold"].to_string();
+    let (status, _, refused) = api(
+        address,
+        "PUT",
+        &format!("/api/v1/patron/holds/{id}/suspension"),
+        "/api/v1/patron/holds/{id}/suspension",
+        me,
+        "{}",
+    );
+    assert_eq!(status, 404, "{refused}");
+    let patron = patron_sign_in(address);
+    let page = request(address, "GET", "/conta", &patron, "");
+    assert!(
+        page.contains("Place 1") && !page.contains("/suspender"),
+        "{page}"
+    );
+    let headers = format!("{patron}Content-Type: application/x-www-form-urlencoded\r\n");
+    let post = request(
+        address,
+        "POST",
+        &format!("/conta/reservas/{id}/suspender"),
+        &headers,
+        &format!("csrf={}", csrf(&page)),
+    );
+    assert_status(&post, 404);
 }
 
 /// The response as bytes, for a PDF.
