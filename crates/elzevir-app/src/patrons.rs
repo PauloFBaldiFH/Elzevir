@@ -27,6 +27,9 @@ pub const MAX_NOTE: usize = 1000;
 pub enum PatronCommand {
     /// Creates, changes or deletes a category.
     ChangeCategory(CategoryChange),
+    /// Creates, changes or deletes an additional patron field
+    /// (docs/specs/circulacao/patron-attributes.md, items 1 to 7).
+    ChangeField(Box<crate::patron_fields::FieldChange>),
     /// Enrols a new patron.
     Add(Box<PatronFields>),
     /// Replaces every field of a patron.
@@ -194,6 +197,8 @@ pub struct RetentionApplied {
 pub enum PatronOutput {
     /// The category created or changed; `None` after a delete.
     CategoryChanged(Option<PatronCategoryId>),
+    /// The field created or changed; `None` after a delete.
+    FieldChanged(Option<elzevir_domain::patron::PatronFieldId>),
     /// The new patron.
     Added(PatronId),
     /// The patron changed.
@@ -288,6 +293,33 @@ pub enum PatronRefusal {
     /// The patron still has holds.
     #[error("the patron still has holds")]
     HasHolds,
+    /// The field's name is empty or too long.
+    #[error("the field name is not valid")]
+    BadFieldName,
+    /// Another field has this name.
+    #[error("another field has this name")]
+    FieldNameTaken,
+    /// The list has no option, too many, or an empty, long or repeated label.
+    #[error("the field options are not valid")]
+    BadFieldOptions,
+    /// Patrons hold values, so the field keeps its kind.
+    #[error("patrons hold values, so the kind stays")]
+    FieldKindInUse,
+    /// A patron holds two values, so the field stays repeatable.
+    #[error("a patron holds two values of this field")]
+    FieldHasRepeats,
+    /// Two patrons share a value, so the field cannot become unique.
+    #[error("two patrons share a value of this field")]
+    FieldHasShared,
+    /// A patron holds an option that the change removes.
+    #[error("a patron holds an option that would be removed")]
+    FieldOptionInUse,
+    /// Patrons hold values for the field, so it stays.
+    #[error("patrons hold values for this field")]
+    FieldInUse,
+    /// No such field, or an option of another field.
+    #[error("no such patron field")]
+    UnknownField,
 }
 
 impl PatronRefusal {
@@ -316,6 +348,15 @@ impl PatronRefusal {
             Self::Stale => "patron-error-stale",
             Self::HasLoans => "patron-error-has-loans",
             Self::HasHolds => "patron-error-has-holds",
+            Self::BadFieldName => "patron-field-error-name",
+            Self::FieldNameTaken => "patron-field-error-name-taken",
+            Self::BadFieldOptions => "patron-field-error-options",
+            Self::FieldKindInUse => "patron-field-error-kind-in-use",
+            Self::FieldHasRepeats => "patron-field-error-repeats",
+            Self::FieldHasShared => "patron-field-error-shared",
+            Self::FieldOptionInUse => "patron-field-error-option-in-use",
+            Self::FieldInUse => "patron-field-error-in-use",
+            Self::UnknownField => "patron-field-error-unknown",
         }
     }
 }
@@ -595,6 +636,13 @@ pub trait PatronDesk: Send + Sync {
     ///
     /// When storage fails.
     fn categories(&self) -> Result<Vec<PatronCategory>, PatronDeskError>;
+
+    /// Every additional field, by name, with its options in order.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn fields(&self) -> Result<Vec<crate::patron_fields::PatronFieldLine>, PatronDeskError>;
 }
 
 /// `text` trimmed, when it is not empty and fits in `max` characters.

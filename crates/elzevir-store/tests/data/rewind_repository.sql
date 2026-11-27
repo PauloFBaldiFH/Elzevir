@@ -1,4 +1,7 @@
--- Undo migrations 69, 68, 67, 66, 65 and 64, then 63 and 62, for fixtures that reconstruct an older catalog schema.
+-- Undo migrations 70, 69, 68, 67, 66, 65 and 64, then 63 and 62, for fixtures that reconstruct an older catalog schema.
+DROP TABLE patron_field_values;
+DROP TABLE patron_field_options;
+DROP TABLE patron_fields;
 ALTER TABLE holds DROP COLUMN suspended_until;
 ALTER TABLE holds DROP COLUMN suspended;
 ALTER TABLE patrons DROP COLUMN last_issued_on;

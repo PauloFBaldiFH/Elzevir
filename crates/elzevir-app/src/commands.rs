@@ -165,6 +165,11 @@ impl WriteCommand {
             Self::Patrons(PatronCommand::ChangeCategory(CategoryChange::Delete(_))) => {
                 "patrons.delete_category"
             }
+            Self::Patrons(PatronCommand::ChangeField(change)) => match **change {
+                crate::patron_fields::FieldChange::Create(_) => "patrons.create_field",
+                crate::patron_fields::FieldChange::Update { .. } => "patrons.update_field",
+                crate::patron_fields::FieldChange::Delete(_) => "patrons.delete_field",
+            },
             Self::Patrons(PatronCommand::Add(_)) => "patrons.add",
             Self::Patrons(PatronCommand::Update(_)) => "patrons.update",
             Self::Patrons(PatronCommand::View(_)) => "patrons.view",

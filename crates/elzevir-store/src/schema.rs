@@ -225,8 +225,7 @@ const MIGRATIONS: &[&str] = &[
      ALTER TABLE hubs ADD COLUMN sort_key TEXT NOT NULL DEFAULT '';
      CREATE INDEX works_in_listing ON works (sort_key, id) WHERE hub_id IS NULL;
      CREATE INDEX hubs_in_listing ON hubs (sort_key, id);",
-    // 9: the staff account a command comes from (docs/specs/catalogo/edicao.md, item 18).
-    // No foreign key: the log keeps who did what after the account is gone.
+    // 9: the staff account a command comes from (catalogo/edicao.md, item 18); no foreign key.
     "ALTER TABLE audit_log ADD COLUMN actor INTEGER;",
     // 10: name lookups for the cataloguing suggestions (docs/specs/catalogo/edicao.md, item 37).
     "CREATE INDEX agents_by_heading ON agents (heading COLLATE NOCASE);
@@ -843,6 +842,7 @@ const MIGRATIONS: &[&str] = &[
     "ALTER TABLE items ADD COLUMN last_seen TEXT;",       // 67: inventory (catalogo/inventario.md)
     include_str!("returned_categories.sql"),
     include_str!("hold_suspension.sql"),
+    include_str!("patron_fields.sql"),
 ];
 
 /// The migration that creates `match_keys`.

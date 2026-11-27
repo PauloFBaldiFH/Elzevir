@@ -229,6 +229,12 @@ impl PatronDesk for ElzevirStore {
             })
             .map_err(unavailable)
     }
+
+    fn fields(&self) -> Result<Vec<elzevir_app::patron_fields::PatronFieldLine>, PatronDeskError> {
+        self.readers()
+            .read(crate::patron_fields::fields)
+            .map_err(unavailable)
+    }
 }
 
 impl PatronAccounts for ElzevirStore {

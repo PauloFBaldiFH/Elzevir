@@ -14,6 +14,14 @@ pub struct PatronId(pub i64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct PatronCategoryId(pub i64);
 
+/// An additional patron field the library defined (docs/specs/circulacao/patron-attributes.md).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct PatronFieldId(pub i64);
+
+/// One option of an additional patron field chosen from a list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct PatronFieldOptionId(pub i64);
+
 /// Most months an enrolment period may last.
 pub const MAX_ENROLMENT_MONTHS: u16 = 999;
 

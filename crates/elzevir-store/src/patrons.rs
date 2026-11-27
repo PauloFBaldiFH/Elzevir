@@ -22,6 +22,9 @@ pub(crate) const fn refused(refusal: PatronRefusal) -> CommandFailed<WriteRefusa
 pub(crate) fn apply(tx: &WriteTx<'_>, command: &PatronCommand) -> Applied {
     let output = match command {
         PatronCommand::ChangeCategory(change) => change_category(tx.connection(), change)?,
+        PatronCommand::ChangeField(change) => {
+            crate::patron_fields::change(tx.connection(), change)?
+        }
         PatronCommand::Add(fields) => add(tx.connection(), fields)?,
         PatronCommand::Update(update) => update_patron(tx.connection(), update)?,
         PatronCommand::View(patron)
@@ -161,7 +164,8 @@ fn change_category(
                     "SELECT (SELECT count(*) FROM patrons WHERE category_id = ?1)
                           + (SELECT count(*) FROM circulation_rules WHERE category_id = ?1)
                           + (SELECT count(*) FROM overdue_notice_rules WHERE category_id = ?1)
-                          + (SELECT count(*) FROM hold_notice_preferences WHERE category_id = ?1)",
+                          + (SELECT count(*) FROM hold_notice_preferences WHERE category_id = ?1)
+                          + (SELECT count(*) FROM patron_fields WHERE category_id = ?1)",
                     [category.0],
                     |row| row.get(0),
                 )

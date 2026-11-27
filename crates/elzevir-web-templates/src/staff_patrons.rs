@@ -304,6 +304,55 @@ pub struct CategoryLine {
     pub patrons: String,
 }
 
+/// The additional patron fields (docs/specs/circulacao/patron-attributes.md, item 3).
+#[derive(Template)]
+#[template(path = "staff_patron_fields.html")]
+pub struct StaffPatronFields<'a> {
+    /// Interface texts.
+    pub t: &'a I18n,
+    /// Anti-forgery token of the session.
+    pub csrf: &'a str,
+    /// Every field, by name.
+    pub fields: Vec<PatronFieldForm>,
+    /// Every category, id and name, by name.
+    pub categories: Vec<(i64, String)>,
+    /// Whether the last change was stored.
+    pub saved: bool,
+    /// Message key of why the last change was refused.
+    pub refused: Option<&'static str>,
+}
+
+/// One field as its form shows it.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate setting of the field (Koha keeps them as separate columns too)"
+)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PatronFieldForm {
+    /// Field id.
+    pub id: i64,
+    /// Its name.
+    pub name: String,
+    /// `text`, `date` or `list`.
+    pub kind: &'static str,
+    /// Its options, id and label, in order.
+    pub options: Vec<(i64, String)>,
+    /// Whether a patron can hold more than one value.
+    pub repeatable: bool,
+    /// Whether two patrons can share a value.
+    pub unique: bool,
+    /// Whether the staff form asks for a value.
+    pub required: bool,
+    /// The category it applies to, `0` for every patron.
+    pub category: i64,
+    /// Whether the patron sees it on the OPAC.
+    pub opac_shown: bool,
+    /// Whether the patron search finds patrons by it.
+    pub searchable: bool,
+    /// How many patrons hold a value, as a sentence.
+    pub patrons: String,
+}
+
 /// The form that enrols or edits a patron.
 #[derive(Template)]
 #[template(path = "staff_patron_form.html")]

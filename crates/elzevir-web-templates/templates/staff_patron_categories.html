@@ -10,6 +10,7 @@
 <p><a href="/equipe/leitores">{{ t.get("patrons-back") }}</a></p>
 <h1>{{ t.get("patron-categories-title") }}</h1>
 <p class="form-hint">{{ t.get("patron-categories-intro") }}</p>
+<p><a href="/equipe/leitores/campos">{{ t.get("patron-fields-title") }}</a></p>
 {% if saved %}<p class="codes-alert codes-saved" role="status">{{ t.get("registries-saved") }}</p>{% endif %}
 {% if let Some(key) = refused %}<p class="codes-alert codes-refused" role="alert">{{ t.get(key) }}</p>{% endif %}
 <ul class="code-rows">

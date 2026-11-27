@@ -43,6 +43,7 @@
 11. Uma busca que acha **um só leitor, pela carteirinha**, vai direto à ficha (o bipe da carteirinha).
 12. **Ficha** em `/equipe/leitores/{id}`, do outro lado do muro (interface §18.1): só com a permissão de circulação. Cada abertura vai para o `audit_log` (`patrons.view`, com quem abriu e quando) **antes** de os dados saírem do servidor. A ficha mostra os campos preenchidos, o CPF mascarado e um aviso quando a inscrição venceu.
 13. **Categorias** em `/equipe/leitores/categorias`, para quem tem a permissão de leitores: nome e período (meses **ou** data fixa; os dois, ou nenhum, são recusados), quantos leitores cada uma tem, criar, salvar e apagar. As recusas aparecem na própria página.
+13a. **Campos adicionais** em `/equipe/leitores/campos`, com a permissão de leitores e um link na página de categorias: campos que a própria biblioteca define (texto, data ou lista), com as regras de [patron-attributes.md](patron-attributes.md).
 14. A página inicial da equipe só mostra o link "Leitores" para quem tem a permissão de circulação ou a de leitores. Nenhuma página do acervo traz dado de leitor.
 
 ### Cadastro e edição (parte c)
