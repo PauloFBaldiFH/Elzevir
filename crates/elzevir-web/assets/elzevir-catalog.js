@@ -1981,6 +1981,8 @@ function showSelection() {
   for (const link of bar.querySelectorAll("a.selection-export")) {
     link.href = `/equipe/acervo/lote/marc?format=${link.dataset.format}&${heads}`;
   }
+  const labels = bar.querySelector("a.selection-labels");
+  if (labels) labels.href = `/equipe/acervo/lote/etiquetas?${heads}`;
 }
 
 document.addEventListener("click", (event) => {

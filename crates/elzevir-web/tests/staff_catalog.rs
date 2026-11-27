@@ -613,6 +613,52 @@ async fn the_selected_families_are_exported_as_one_file() {
     }
 }
 
+/// Prints each label as its call number lines, one label to a line.
+struct Labels;
+
+impl elzevir_app::printing::Printer for Labels {
+    fn spine_labels(
+        &self,
+        labels: &[elzevir_app::printing::SpineLabel],
+    ) -> Result<Vec<u8>, elzevir_app::printing::PrintError> {
+        let lines: Vec<String> = labels.iter().map(|label| label.lines.join("|")).collect();
+        Ok(format!("%PDF-\n{}", lines.join("\n")).into_bytes())
+    }
+}
+
+#[tokio::test]
+async fn the_selection_prints_the_spine_labels_of_its_items() {
+    let uri = "/equipe/acervo/lote/etiquetas?head=w1&head=w2&head=w1";
+    let without = app();
+    let session = signed_in(&without).await;
+    let page = body(send(&without, get("/equipe/acervo", Some(&session), None)).await).await;
+    assert!(page.contains(r#"<a class="selection-labels" href="/equipe/acervo/lote/etiquetas" download>Spine labels (PDF)</a>"#));
+    let missing = send(&without, get(uri, Some(&session), None)).await;
+    assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+    let app = router(state(Arc::new(common::Editor::default())).with_printer(Arc::new(Labels)));
+    assert_eq!(
+        send(&app, get(uri, None, None)).await.status(),
+        StatusCode::SEE_OTHER
+    );
+    let session = signed_in(&app).await;
+    let pdf = send(&app, get(uri, Some(&session), None)).await;
+    assert_eq!(pdf.status(), StatusCode::OK);
+    assert_eq!(pdf.headers()[header::CONTENT_TYPE], "application/pdf");
+    assert_eq!(
+        pdf.headers()[header::CONTENT_DISPOSITION],
+        r#"attachment; filename="etiquetas.pdf""#
+    );
+    assert_eq!(pdf.headers()["x-elzevir-without-call-number"], "0");
+    // One label per Item, family by family, each family once.
+    assert_eq!(body(pdf).await, "%PDF-\n869.3|A848d\n869.3|A848d");
+    let none = send(
+        &app,
+        get("/equipe/acervo/lote/etiquetas", Some(&session), None),
+    )
+    .await;
+    assert_eq!(none.status(), StatusCode::BAD_REQUEST);
+}
+
 #[tokio::test]
 async fn the_items_of_the_selection_change_at_once_or_come_back_refused() {
     let app = app();
