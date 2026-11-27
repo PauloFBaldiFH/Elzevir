@@ -453,7 +453,7 @@ Trocar o Koha pelo Elzevir numa cópia da Biblioteca Pública Municipal Castro A
 | 6.3 | Paridade sobre os dados migrados: vencimento, multa, renovação e fila de uma amostra real contra o Koha de homologação com a mesma cópia. Em três partes: 6.3a, as regras de circulação na troca e no verificador; 6.3b, o calendário; 6.3c, o gravador sobre a cópia (`tools/koha-parity/record.pl` e `elzevir parity-koha`: vencimento e multa na parte 1, renovação e reserva na parte 2) | Gravadores em `tools/`; [troca-do-koha.md](../specs/migracao/troca-do-koha.md), itens 7a e 7b; [koha-parity.md](../specs/migracao/koha-parity.md) | Toda divergência é bug corrigido ou desvio aprovado |
 | 6.4 | Um dia de balcão encenado nos dois sistemas (empréstimo, devolução, renovação, reserva, pagamento, SIP2, OPAC, Z39.50, SRU). Em duas partes: 6.4a, o balcão de circulação (`tools/koha-parity/desk_day.pl` e `elzevir desk-day`); 6.4b, os protocolos e o OPAC | Cenários existentes; [desk-day.md](../specs/migracao/desk-day.md) | Mesmos resultados, ou diferença listada com causa |
 | 6.5 | Desempenho com o acervo real: importação, migração, busca, índice, backup e restauração | doc 02; [performance.md](../specs/migracao/performance.md) | Números medidos e registrados, com meta para o que ficar lento |
-| 6.6 | Lista de lacunas que impediriam a troca, cruzada com o inventário | Inventário de paridade | A ordem das Fases 7 a 12 é revista antes da Fase 7 |
+| 6.6 | Lista de lacunas que impediriam a troca, cruzada com o inventário | Inventário de paridade; [gaps.md](../specs/migracao/gaps.md) | A ordem das Fases 7 a 12 é revista antes da Fase 7 |
 
 ### Fases 7 a 12 (roadmap aprovado; cada fase detalhada aqui antes de começar)
 
