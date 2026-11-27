@@ -44,6 +44,18 @@ impl Found {
     }
 }
 
+/// Where a hold stands in its queue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueueState {
+    /// Waiting for an Item.
+    Queued,
+    /// Keeping its place, but no Item fills it (Koha: `suspend`). A hold set aside is never
+    /// suspended.
+    Suspended,
+    /// Set aside for its patron.
+    Found(Found),
+}
+
 /// A hold in an Instance's queue, as `hold_for_item` sees it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct QueuedHold {
@@ -55,8 +67,8 @@ pub struct QueuedHold {
     pub pickup: BranchId,
     /// Its place in the queue; 0 when set aside.
     pub priority: u32,
-    /// Set aside, or not yet.
-    pub found: Option<Found>,
+    /// Queued, suspended or set aside.
+    pub state: QueueState,
     /// The Item it asks for or was set aside with.
     pub item: Option<ItemId>,
 }
@@ -83,10 +95,11 @@ impl HoldMatch {
 }
 
 /// The hold the Item answers, if any: a hold already set aside with it, or else the first
-/// hold in the queue the rules let it fill. `queue` holds the Instance's holds.
+/// hold in the queue the rules let it fill, passing over suspended holds. `queue` holds the
+/// Instance's holds.
 ///
-/// Koha: `C4::Reserves::CheckReserves` and `_Findgroupreserve` (without the holds queue,
-/// `LocalHoldsPriority`, item groups and hold groups; `TrapHoldsOnOrder` on).
+/// Koha: `C4::Reserves::CheckReserves` and `_Findgroupreserve` (`suspend = 0`; without the
+/// holds queue, `LocalHoldsPriority`, item groups and hold groups; `TrapHoldsOnOrder` on).
 #[must_use]
 pub fn hold_for_item(
     rules: &[CirculationRule],
@@ -103,15 +116,15 @@ pub fn hold_for_item(
         .collect();
     candidates.sort_by_key(|hold| (hold.priority, hold.id));
     for hold in &candidates {
-        match hold.found {
-            Some(Found::Waiting) => return Some(HoldMatch::Waiting(hold.id)),
-            Some(Found::InTransit) => return Some(HoldMatch::InTransit(hold.id)),
-            None => {}
+        match hold.state {
+            QueueState::Found(Found::Waiting) => return Some(HoldMatch::Waiting(hold.id)),
+            QueueState::Found(Found::InTransit) => return Some(HoldMatch::InTransit(hold.id)),
+            QueueState::Queued | QueueState::Suspended => {}
         }
     }
     candidates
         .into_iter()
-        .filter(|hold| hold.found.is_none() && hold.priority > 0)
+        .filter(|hold| hold.state == QueueState::Queued && hold.priority > 0)
         .find(|hold| may_fill(rules, hold, item))
         .map(|hold| HoldMatch::Reserved(hold.id))
 }
@@ -606,9 +619,30 @@ mod tests {
             patron_branch: CENTRAL,
             pickup: CENTRAL,
             priority,
-            found,
+            state: found.map_or(QueueState::Queued, QueueState::Found),
             item: item.map(ItemId),
         }
+    }
+
+    #[test]
+    fn a_suspended_hold_keeps_its_place_but_no_item_fills_it() {
+        let book = item(1, CENTRAL, BOOK);
+        let suspended = |hold: QueuedHold| QueuedHold {
+            state: QueueState::Suspended,
+            ..hold
+        };
+        let queue = [
+            suspended(queued(1, 1, None, None)),
+            queued(2, 2, None, None),
+        ];
+        assert_eq!(
+            hold_for_item(&[], &queue, &book, 0),
+            Some(HoldMatch::Reserved(HoldId(2)))
+        );
+        // Only suspended holds: the Item answers none, as Koha's `CheckReserves`.
+        assert_eq!(hold_for_item(&[], &queue[..1], &book, 0), None);
+        let item_level = [suspended(queued(3, 1, None, Some(1)))];
+        assert_eq!(hold_for_item(&[], &item_level, &book, 0), None);
     }
 
     #[test]

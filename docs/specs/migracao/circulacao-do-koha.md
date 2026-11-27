@@ -27,7 +27,7 @@ O mesmo `elzevir migrate-koha` da parte 1, depois de gravar os leitores, grava o
 
    `reservedate` é o dia da reserva (meia-noite no fuso da biblioteca como hora de criação), `branchcode` a unidade de retirada, `item_level_hold` se o leitor pediu aquele exemplar, `itemnumber` o exemplar pedido ou separado. Reserva separada sem exemplar fica de fora como incompleta.
 5. As reservas são gravadas na ordem do Koha: por registro, primeiro as separadas, depois pela posição na fila, depois pelo número da reserva; cada uma da fila entra no fim da fila da Instância, e a fila é renumerada como numa reserva nova. A reserva em trânsito abre a transferência do exemplar, de onde ele está para a unidade de retirada, como ao separar no balcão. Leitor que já tem reserva da Instância não recebe outra: a linha conta como já migrada.
-6. Desvios conscientes, contados no relatório: a reserva suspensa no Koha (`suspend`) chega ativa, porque o Elzevir ainda não suspende reservas; a data final de uma reserva na fila (`expirationdate` sem `found`) é descartada, porque a reserva do Elzevir na fila não expira. Transferências que não são de reserva não são migradas.
+6. A reserva da fila suspensa no Koha (`suspend`) chega suspensa, até o dia de `suspend_until` (a hora é descartada, como o Koha a corta) ou sem data ([reservas.md](../circulacao/reservas.md), item 19), e o relatório a conta. Desvios conscientes, contados no relatório: a data final de uma reserva na fila (`expirationdate` sem `found`) é descartada, porque a reserva do Elzevir na fila não expira. Transferências que não são de reserva não são migradas.
 
 ### Escrita e relatório
 

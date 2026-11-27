@@ -21,7 +21,7 @@ use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::holds::{
     CheckinHold, HoldAside, HoldCancellation, HoldId, HoldLevel, HoldPlaced, HoldRefused,
-    HoldRequest, SetAside,
+    HoldRequest, HoldSuspensionRequest, SetAside, Suspension, SuspensionChange,
 };
 use elzevir_app::loans::{
     CheckedIn, CheckedOut, CheckinRefusal, CheckinRequest, CheckoutRefusal, CheckoutRequest,
@@ -1437,6 +1437,216 @@ fn a_hold_waiting_past_its_last_day_is_cancelled() {
         "CANCELLED 1"
     );
     assert_eq!(expire("2026-11-25T00:30:00-03:00"), 0);
+}
+
+/// Suspends or resumes a hold of `patron`.
+fn suspend(
+    library: &Library,
+    patron: PatronId,
+    hold: HoldId,
+    change: SuspensionChange,
+) -> Result<WriteOutput, CommandFailed<WriteRefusal>> {
+    submit(
+        &library.store,
+        WriteCommand::Circulation(CirculationCommand::SuspendHold(HoldSuspensionRequest {
+            patron,
+            hold,
+            change,
+        })),
+    )
+}
+
+/// Each hold as suspended (`S`, with its day) or not (`-`).
+fn suspensions(library: &Library) -> String {
+    library.read::<String>(
+        "SELECT group_concat(CASE suspended WHEN 1 THEN 'S' || coalesce(suspended_until, '')
+                                            ELSE '-' END, ' ')
+         FROM (SELECT * FROM holds ORDER BY id)",
+    )
+}
+
+#[test]
+fn a_suspended_hold_keeps_its_place_and_the_returned_item_goes_to_the_next() {
+    let dir = tempfile::tempdir().unwrap();
+    let (library, bia, first, second) = two_holds(&dir);
+    suspend(
+        &library,
+        bia,
+        first.hold,
+        SuspensionChange::Suspend(Suspension::Indefinite),
+    )
+    .unwrap();
+    assert_eq!(suspensions(&library), "S -");
+    assert_eq!(queue(&library), "1-- 2--", "the places stay");
+    // Back at the central branch, the Item answers Caio, behind Bia (`CheckReserves`).
+    let back = library
+        .give_back("0001", library.central, "2026-11-20T10:00:00-03:00")
+        .unwrap();
+    assert_eq!(
+        back.hold,
+        Some(CheckinHold {
+            found: HoldMatch::Reserved(second.hold),
+            pickup: library.central
+        })
+    );
+    // Only Bia's hold left, still suspended: the Item answers no one.
+    let caio = library.read::<i64>(&format!(
+        "SELECT patron_id FROM holds WHERE id = {}",
+        second.hold.0
+    ));
+    submit(
+        &library.store,
+        WriteCommand::Circulation(CirculationCommand::CancelHold(HoldCancellation {
+            patron: PatronId(caio),
+            hold: second.hold,
+            at: "2026-11-20T10:05:00-03:00[America/Sao_Paulo]"
+                .parse()
+                .unwrap(),
+            by_patron: false,
+        })),
+    )
+    .unwrap();
+    let back = library
+        .give_back("0002", library.central, "2026-11-20T10:10:00-03:00")
+        .unwrap();
+    assert_eq!(back.hold, None);
+    // Resumed, it is the first in the queue again.
+    suspend(&library, bia, first.hold, SuspensionChange::Resume).unwrap();
+    assert_eq!(suspensions(&library), "-");
+    let back = library
+        .give_back("0002", library.central, "2026-11-20T10:20:00-03:00")
+        .unwrap();
+    assert_eq!(
+        back.hold.map(|hold| hold.found),
+        Some(HoldMatch::Reserved(first.hold))
+    );
+}
+
+#[test]
+fn a_hold_set_aside_or_of_another_patron_is_not_suspended() {
+    let dir = tempfile::tempdir().unwrap();
+    let (library, bia, first, second) = two_holds(&dir);
+    let refusal = |result: Result<WriteOutput, CommandFailed<WriteRefusal>>| match result {
+        Err(CommandFailed::Rejected(WriteRefusal::Circulation(CirculationRefusal::Hold(
+            refusal,
+        )))) => refusal,
+        other => panic!("{other:?}"),
+    };
+    let indefinite = SuspensionChange::Suspend(Suspension::Indefinite);
+    // Caio's hold, asked as Bia's.
+    assert_eq!(
+        refusal(suspend(&library, bia, second.hold, indefinite)),
+        HoldRefused::UnknownHold
+    );
+    library
+        .set_aside(
+            first.hold,
+            "0001",
+            (library.annex, "2026-11-20T11:00:00-03:00"),
+        )
+        .unwrap();
+    // Koha: `CannotSuspendFound`.
+    assert_eq!(
+        refusal(suspend(&library, bia, first.hold, indefinite)),
+        HoldRefused::SuspendSetAside
+    );
+    assert_eq!(suspensions(&library), "- -");
+    // Resuming a hold that is not suspended changes nothing.
+    suspend(&library, bia, first.hold, SuspensionChange::Resume).unwrap();
+    assert_eq!(queue(&library), "0W1 1--");
+}
+
+#[test]
+fn a_hold_suspended_until_a_day_comes_back_on_that_day() {
+    let dir = tempfile::tempdir().unwrap();
+    let (library, bia, first, _) = two_holds(&dir);
+    suspend(
+        &library,
+        bia,
+        first.hold,
+        SuspensionChange::Suspend(Suspension::Until(date(2026, 11, 25))),
+    )
+    .unwrap();
+    assert_eq!(suspensions(&library), "S2026-11-25 -");
+    assert_eq!(
+        LoanDesk::holds(&library.store, bia).unwrap()[0].suspended,
+        Some(Suspension::Until(date(2026, 11, 25)))
+    );
+    let resume = |at: &str| match submit(
+        &library.store,
+        WriteCommand::Circulation(CirculationCommand::ResumeSuspendedHolds {
+            at: format!("{at}[America/Sao_Paulo]").parse().unwrap(),
+        }),
+    ) {
+        Ok(WriteOutput::Circulation(CirculationOutput::SuspendedHoldsResumed { resumed })) => {
+            resumed
+        }
+        other => panic!("{other:?}"),
+    };
+    // The day before, late in the evening, it stays suspended (Koha: `AutoUnsuspendReserves`
+    // resumes on `suspend_until <= today`).
+    assert_eq!(resume("2026-11-24T23:30:00-03:00"), 0);
+    assert_eq!(suspensions(&library), "S2026-11-25 -");
+    assert_eq!(resume("2026-11-25T00:10:00-03:00"), 1);
+    assert_eq!(suspensions(&library), "- -");
+    assert_eq!(queue(&library), "1-- 2--");
+    // An indefinite suspension waits for the desk.
+    suspend(
+        &library,
+        bia,
+        first.hold,
+        SuspensionChange::Suspend(Suspension::Indefinite),
+    )
+    .unwrap();
+    assert_eq!(resume("2027-01-01T10:00:00-03:00"), 0);
+    assert_eq!(suspensions(&library), "S -");
+}
+
+#[test]
+fn a_suspended_item_hold_does_not_block_a_renewal_but_is_filled_by_its_own_checkout() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(&dir);
+    library.item("0001", ItemStatus::default());
+    library.rules(&[
+        ("maxissueqty", "5"),
+        ("issuelength", "7"),
+        ("renewalsallowed", "3"),
+        ("reservesallowed", "5"),
+    ]);
+    library
+        .lend("0001", "2026-11-19T10:00:00-03:00", false)
+        .unwrap();
+    let bruno = library.another_patron("000200", library.central);
+    let held = library
+        .hold(bruno, "0001", HoldLevel::Item, library.central)
+        .unwrap();
+    let at = "2026-11-20T10:00:00-03:00";
+    assert_eq!(
+        library.renew("0001", at, false),
+        Err(RenewRefusal::Refused(RenewalRefusal::OnHold))
+    );
+    suspend(
+        &library,
+        bruno,
+        held.hold,
+        SuspensionChange::Suspend(Suspension::Indefinite),
+    )
+    .unwrap();
+    // Koha: `current_holds` and `CheckReserves` skip a suspended hold.
+    assert_eq!(library.renew("0001", at, false).unwrap().renewals, 1);
+    // Bruno takes the Item himself: his own hold is filled, suspended or not
+    // (Koha: `MoveReserve` looks at the patron's holds without `suspend`).
+    library
+        .give_back("0001", library.central, "2026-11-21T10:00:00-03:00")
+        .unwrap();
+    assert_eq!(suspensions(&library), "S");
+    library
+        .lend_to(bruno, "0001", "2026-11-21T11:00:00-03:00", false)
+        .unwrap();
+    assert_eq!(
+        library.read::<String>("SELECT outcome FROM ended_holds"),
+        "FILLED"
+    );
 }
 
 #[test]

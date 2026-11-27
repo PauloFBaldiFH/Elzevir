@@ -832,17 +832,17 @@ const MIGRATIONS: &[&str] = &[
          day         TEXT NOT NULL,
          row_version INTEGER NOT NULL DEFAULT 1
      ) STRICT;",
-    // 60: the OPAC password, Argon2id (opac/conta-do-leitor.md); 66: anonymization.
-    "ALTER TABLE patrons ADD COLUMN password_hash TEXT;",
-    // 61-65: source identifiers, offline repository, OAI datestamps, Koha patron keys.
+    // 60: OPAC password (Argon2id); 61-65: source identifiers, offline repository, OAI
+    "ALTER TABLE patrons ADD COLUMN password_hash TEXT;", // datestamps, Koha keys
     include_str!("import_provenance.sql"),
     include_str!("repository/schema.sql"),
     include_str!("oai_datestamps.sql"),
     include_str!("koha_keys.sql"),
     include_str!("koha_history.sql"),
-    "ALTER TABLE patrons ADD COLUMN anonymized_at TEXT;",
-    "ALTER TABLE items ADD COLUMN last_seen TEXT;", // 67: inventory (catalogo/inventario.md)
+    "ALTER TABLE patrons ADD COLUMN anonymized_at TEXT;", // 66: anonymization (lgpd.md)
+    "ALTER TABLE items ADD COLUMN last_seen TEXT;",       // 67: inventory (catalogo/inventario.md)
     include_str!("returned_categories.sql"),
+    include_str!("hold_suspension.sql"),
 ];
 
 /// The migration that creates `match_keys`.

@@ -774,6 +774,7 @@ mod tests {
                 borrowernumber: borrower,
                 state,
                 priority,
+                suspended: hold.suspended,
             });
         }
         for account in &plan.accounts {
@@ -914,6 +915,33 @@ mod tests {
                 ("1".to_owned(), Unexplained::Field("priority")),
                 ("2".to_owned(), Unexplained::Field("priority")),
             ]
+        );
+    }
+
+    #[test]
+    fn a_hold_that_lost_its_suspension_is_a_difference() {
+        let plan = plan();
+        assert_eq!(
+            plan.holds
+                .iter()
+                .find(|hold| hold.reserve_id == 2)
+                .map(|hold| hold.suspended),
+            Some(Some(crate::holds::Suspension::Indefinite)),
+            "reserve 2 of the dump is suspended"
+        );
+        let catalog = catalog();
+        let mut found = faithful(&plan, &catalog);
+        assert!(
+            check(&verify(&plan, &catalog, &found), Table::Holds)
+                .unexplained
+                .is_empty()
+        );
+        for hold in found.holds.get_mut("10").unwrap() {
+            hold.suspended = None;
+        }
+        assert_eq!(
+            check(&verify(&plan, &catalog, &found), Table::Holds).unexplained,
+            vec![("2".to_owned(), Unexplained::Field("suspend"))]
         );
     }
 

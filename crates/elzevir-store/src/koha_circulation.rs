@@ -4,6 +4,7 @@
 //! Koha's numbers in the edge tables the earlier migrations and the import filled.
 
 use elzevir_app::commands::WriteRefusal;
+use elzevir_app::holds::Suspension;
 use elzevir_app::koha_migration::{
     CirculationLeftover, KohaCirculationBatch, KohaCirculationMigrated, KohaHold, KohaHoldState,
     KohaItem, KohaLoan,
@@ -220,8 +221,9 @@ fn add_hold(connection: &Connection, hold: &KohaHold) -> Result<Found<bool>, Sto
     };
     connection.execute(
         "INSERT INTO holds (patron_id, instance_id, item_id, pickup_id, priority, placed_on,
-                            created_at, item_level, found, waiting_since, expires_on)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                            created_at, item_level, found, waiting_since, expires_on,
+                            suspended, suspended_until)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         params![
             patron,
             instance,
@@ -233,7 +235,12 @@ fn add_hold(connection: &Connection, hold: &KohaHold) -> Result<Found<bool>, Sto
             hold.item_level,
             found,
             since,
-            until
+            until,
+            hold.suspended.is_some(),
+            match hold.suspended {
+                Some(Suspension::Until(day)) => Some(day.to_string()),
+                Some(Suspension::Indefinite) | None => None,
+            }
         ],
     )?;
     if let (KohaHoldState::InTransit, Some(item)) = (hold.state, item) {

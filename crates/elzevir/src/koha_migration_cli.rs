@@ -233,7 +233,7 @@ pub(crate) fn circulation_report(plan: &KohaPlan, done: &KohaCirculationMigrated
         ));
     }
     lines.push(format!(
-        "holds: {} migrated, {} left out, {} suspended in Koha (active here), {} queued with an end date (dropped)",
+        "holds: {} migrated, {} left out, {} suspended, {} queued with an end date (dropped)",
         done.holds,
         holds_left.len(),
         plan.suspended_holds,

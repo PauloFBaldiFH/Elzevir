@@ -91,6 +91,15 @@
       <span class="hold-title">{{ hold.title }}</span>
       <span class="hold-meta">{{ hold.status }}{% if let Some(barcode) = hold.barcode %} · <code>{{ barcode }}</code>{% endif %} · {{ t.get_with("holds-pickup", "branch", hold.pickup) }} · {{ hold.day }}</span>
       <button type="submit" name="op" value="cancel:{{ hold.id }}">{{ t.get("holds-cancel") }}</button>
+      {% match hold.suspension %}
+      {% when HoldSuspensionAction::Suspend %}
+      <label for="until-{{ hold.id }}">{{ t.get("holds-suspend-until") }}</label>
+      <input type="date" id="until-{{ hold.id }}" name="until-{{ hold.id }}">
+      <button type="submit" name="op" value="suspend:{{ hold.id }}">{{ t.get("holds-suspend") }}</button>
+      {% when HoldSuspensionAction::Resume %}
+      <button type="submit" name="op" value="resume:{{ hold.id }}">{{ t.get("holds-resume") }}</button>
+      {% when HoldSuspensionAction::None %}
+      {% endmatch %}
     </li>
   {% endfor %}
   </ol>

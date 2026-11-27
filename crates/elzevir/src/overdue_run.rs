@@ -70,9 +70,9 @@ fn count(value: usize) -> u64 {
     u64::try_from(value).unwrap_or(u64::MAX)
 }
 
-/// Runs the overdue fines and queues the overdue notices, and then the expired holds, the
-/// retention periods and the long overdue Items when they are configured, now and then every
-/// hour, until `shutdown` turns true.
+/// Runs the overdue fines, resumes the suspended holds whose day came and queues the overdue
+/// notices, and then the expired holds, the retention periods and the long overdue Items
+/// when they are configured, now and then every hour, until `shutdown` turns true.
 pub(crate) async fn run(
     store: Arc<ElzevirStore>,
     time_zone: TimeZone,
@@ -105,6 +105,21 @@ pub(crate) async fn run(
                 };
             logging::emit(&instance, event);
         }
+        // Always on, as Koha's cron job: only a hold suspended until a day has a day to come.
+        let event = match submit(
+            &store,
+            CirculationCommand::ResumeSuspendedHolds { at: at.clone() },
+        )
+        .await
+        {
+            Some(CirculationOutput::SuspendedHoldsResumed { resumed }) => {
+                Event::SuspendedHoldsResumed {
+                    resumed: count(resumed),
+                }
+            }
+            _ => Event::SuspendedHoldsFailed,
+        };
+        logging::emit(&instance, event);
         let event = match submit(
             &store,
             CirculationCommand::QueueOverdueNotices { at: at.clone() },

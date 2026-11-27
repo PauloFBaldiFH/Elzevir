@@ -406,7 +406,7 @@ const fn hold_reason(refusal: &HoldRefused) -> &'static str {
         }
         HoldRefused::UnknownBranch | HoldRefused::Rules(HoldRefusal::PickupNotValid) => "pickup",
         HoldRefused::UnknownHold => "unknown_hold",
-        HoldRefused::SetAside => "set_aside",
+        HoldRefused::SetAside | HoldRefused::SuspendSetAside => "set_aside",
         HoldRefused::Rules(refusal) => match refusal {
             HoldRefusal::Restricted => "restricted",
             HoldRefusal::DebtLimit { .. } => "debt",

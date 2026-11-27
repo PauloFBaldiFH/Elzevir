@@ -45,6 +45,12 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CirculationCommand) -> Applied {
             crate::overdue_fines::charge_overdues(tx.connection(), at)
         }
         CirculationCommand::ExpireHolds { at } => crate::holds::expire_holds(tx.connection(), at),
+        CirculationCommand::SuspendHold(request) => {
+            crate::hold_suspension::suspend_hold(tx.connection(), request)
+        }
+        CirculationCommand::ResumeSuspendedHolds { at } => {
+            crate::hold_suspension::resume_suspended_holds(tx.connection(), at)
+        }
         CirculationCommand::MarkLongOverdue { at, settings } => {
             crate::long_overdue::mark_long_overdue(tx.connection(), at, settings)
         }

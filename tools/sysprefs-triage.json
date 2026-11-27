@@ -454,8 +454,8 @@
       "nota": "Decidir na spec de leitores (Fase 2)."
     },
     "AutoResumeSuspendedHolds": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "1: a reserva suspensa até um dia volta à fila nesse dia (docs/specs/circulacao/reservas.md, item 19)."
     },
     "AutoReturnCheckedOutItems": {
       "destino": "revisar",
@@ -3261,8 +3261,8 @@
       "nota": "O audit_log registra toda escrita; não há o que ligar ou desligar."
     },
     "SuspendHoldsIntranet": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "1: a equipe suspende e retoma reservas na ficha do leitor (docs/specs/circulacao/reservas.md, item 19)."
     },
     "SuspendHoldsOpac": {
       "destino": "revisar",

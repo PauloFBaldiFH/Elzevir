@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use super::dump::{Row, Table};
 use super::{KohaPlan, date, number, text};
+use crate::holds::Suspension;
 
 /// Most loans or holds in one write command.
 pub const CIRCULATION_PER_COMMAND: usize = 500;
@@ -84,6 +85,10 @@ pub struct KohaHold {
     pub created_at: String,
     /// Where it stands.
     pub state: KohaHoldState,
+    /// Whether it is suspended (`suspend`), and until when (`suspend_until`, its day). Only
+    /// a queued hold is: Koha refuses to suspend one set aside.
+    #[serde(default)]
+    pub suspended: Option<Suspension>,
 }
 
 /// One write of loans and holds.
@@ -184,7 +189,6 @@ pub(super) fn read(tables: &BTreeMap<Table, Vec<Row>>, zone: &TimeZone, plan: &m
     let mut holds = Vec::new();
     for row in rows(Table::Reserves) {
         let reserve_id = number(text(row, "reserve_id").as_deref()).unwrap_or(0);
-        plan.suspended_holds += usize::from(text(row, "suspend").as_deref() == Some("1"));
         match hold(row, reserve_id, item(row), zone, plan) {
             Some(hold) => holds.push(hold),
             None => plan
@@ -249,6 +253,16 @@ fn hold(
     if !matches!(state, KohaHoldState::Queued(_)) && item.is_none() {
         return None;
     }
+    let suspended = (matches!(state, KohaHoldState::Queued(_))
+        && text(row, "suspend").as_deref() == Some("1"))
+    .then(|| {
+        // `suspend_until` is a datetime whose time Koha cuts to the start of the day.
+        match date(text(row, "suspend_until").as_deref()) {
+            Some(day) => Suspension::Until(day),
+            None => Suspension::Indefinite,
+        }
+    });
+    plan.suspended_holds += usize::from(suspended.is_some());
     Some(KohaHold {
         reserve_id: (reserve_id > 0).then_some(reserve_id)?,
         borrowernumber: number(text(row, "borrowernumber").as_deref())?,
@@ -263,6 +277,7 @@ fn hold(
             .to_string(),
         placed_on,
         state,
+        suspended,
     })
 }
 

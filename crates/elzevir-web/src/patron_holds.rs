@@ -10,12 +10,16 @@ use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use elzevir_app::circulation_rules::{CirculationCommand, CirculationDeskError, CirculationOutput};
-use elzevir_app::holds::{HoldAside, HoldCancellation, HoldId, HoldLevel, HoldRequest, PatronHold};
+use elzevir_app::holds::{
+    HoldAside, HoldCancellation, HoldId, HoldLevel, HoldRequest, HoldSuspensionRequest, PatronHold,
+    Suspension, SuspensionChange,
+};
 use elzevir_domain::catalog::BranchId;
 use elzevir_domain::hold::Found;
 use elzevir_domain::patron::PatronId;
 use elzevir_domain::suspension::RestrictionKind;
-use elzevir_web_templates::{HoldRow, I18n};
+use elzevir_web_templates::{HoldRow, HoldSuspensionAction, I18n};
+use jiff::civil::Date;
 use serde::Deserialize;
 
 use crate::AppState;
@@ -33,15 +37,33 @@ pub(crate) fn hold_rows(t: &I18n, holds: &[PatronHold]) -> Vec<HoldRow> {
             barcode: hold.barcode.clone(),
             pickup: hold.pickup.clone(),
             day: shown(t, hold.placed_on),
-            status: match (hold.found, hold.expires_on) {
-                (Some(Found::Waiting), Some(until)) => {
-                    t.get_with("holds-waiting", "date", &shown(t, until))
-                }
-                (Some(_), _) => t.get("holds-in-transit"),
-                (None, _) => t.get_with("holds-position", "position", &hold.priority.to_string()),
+            status: status(t, hold),
+            suspension: match (hold.found, hold.suspended) {
+                (Some(_), _) => HoldSuspensionAction::None,
+                (None, Some(_)) => HoldSuspensionAction::Resume,
+                (None, None) => HoldSuspensionAction::Suspend,
             },
         })
         .collect()
+}
+
+/// Where the hold stands, as shown.
+fn status(t: &I18n, hold: &PatronHold) -> String {
+    let position = hold.priority.to_string();
+    match (hold.found, hold.expires_on, hold.suspended) {
+        (Some(Found::Waiting), Some(until), _) => {
+            t.get_with("holds-waiting", "date", &shown(t, until))
+        }
+        (Some(_), _, _) => t.get("holds-in-transit"),
+        (None, _, Some(Suspension::Until(day))) => t.get_texts(
+            "holds-suspended-until",
+            &[("date", &shown(t, day)), ("position", &position)],
+        ),
+        (None, _, Some(Suspension::Indefinite)) => {
+            t.get_with("holds-suspended", "position", &position)
+        }
+        (None, _, None) => t.get_with("holds-position", "position", &position),
+    }
 }
 
 /// The checkin desk's button for a hold.
@@ -130,6 +152,7 @@ enum Asked {
         pickup: BranchId,
     },
     Cancel(HoldId),
+    Suspension(HoldId, SuspensionChange),
 }
 
 /// Reads the form: the token, the desk, and what to do; `None` when a field is unknown or
@@ -137,7 +160,12 @@ enum Asked {
 fn read_form(fields: Vec<(String, String)>) -> Option<(String, Option<BranchId>, Asked)> {
     let (mut csrf, mut desk, mut op) = (String::new(), None, None);
     let (mut barcode, mut level, mut pickup) = (String::new(), None, None);
+    let mut until: Vec<(i64, String)> = Vec::new();
     for (name, value) in fields {
+        if let Some(hold) = name.strip_prefix("until-") {
+            until.push((hold.parse().ok()?, value));
+            continue;
+        }
         match name.as_str() {
             "csrf" => csrf = value,
             "desk" => desk = value.parse().ok().map(BranchId),
@@ -155,7 +183,27 @@ fn read_form(fields: Vec<(String, String)>) -> Option<(String, Option<BranchId>,
             level: level?,
             pickup: pickup?,
         },
-        other => Asked::Cancel(HoldId(other.strip_prefix("cancel:")?.parse().ok()?)),
+        other => match other.split_once(':')? {
+            ("cancel", hold) => Asked::Cancel(HoldId(hold.parse().ok()?)),
+            ("resume", hold) => {
+                Asked::Suspension(HoldId(hold.parse().ok()?), SuspensionChange::Resume)
+            }
+            ("suspend", hold) => {
+                let hold: i64 = hold.parse().ok()?;
+                // The browser sends an empty date when none was chosen.
+                let day = until
+                    .iter()
+                    .find(|(id, _)| *id == hold)
+                    .map(|(_, day)| day.trim())
+                    .filter(|day| !day.is_empty());
+                let suspension = match day {
+                    None => Suspension::Indefinite,
+                    Some(day) => Suspension::Until(day.parse::<Date>().ok()?),
+                };
+                Asked::Suspension(HoldId(hold), SuspensionChange::Suspend(suspension))
+            }
+            _ => return None,
+        },
     };
     Some((csrf, desk, asked))
 }
@@ -199,6 +247,11 @@ pub(crate) async fn change(
             at,
             by_patron: false,
         }),
+        Asked::Suspension(hold, change) => CirculationCommand::SuspendHold(HoldSuspensionRequest {
+            patron,
+            hold,
+            change,
+        }),
     };
     let mut outcome = Outcome {
         desk,
@@ -214,6 +267,9 @@ pub(crate) async fn change(
         }
         Ok(Ok(CirculationOutput::HoldCancelled)) => {
             outcome.notices.push(ok(t.get("hold-cancelled")));
+        }
+        Ok(Ok(CirculationOutput::HoldSuspensionChanged)) => {
+            outcome.notices.push(ok(t.get("hold-suspension-changed")));
         }
         Ok(Ok(_)) => {}
         Ok(Err(CirculationDeskError::Refused(refusal))) => {
@@ -328,6 +384,34 @@ mod tests {
         ));
         assert!(read_form(fields(&[("op", "place"), ("barcode", "1")])).is_none());
         assert!(read_form(fields(&[("op", "cancel:x")])).is_none());
+        assert!(matches!(
+            read_form(fields(&[
+                ("until-7", ""),
+                ("until-8", "2026-12-20"),
+                ("op", "suspend:7")
+            ])),
+            Some((
+                _,
+                None,
+                Asked::Suspension(HoldId(7), SuspensionChange::Suspend(Suspension::Indefinite))
+            ))
+        ));
+        let until = "2026-12-20".parse().unwrap();
+        assert!(matches!(
+            read_form(fields(&[("until-7", ""), ("until-8", "2026-12-20"), ("op", "suspend:8")])),
+            Some((_, None, Asked::Suspension(HoldId(8), SuspensionChange::Suspend(Suspension::Until(day))))) if day == until
+        ));
+        assert!(matches!(
+            read_form(fields(&[("op", "resume:8")])),
+            Some((
+                _,
+                None,
+                Asked::Suspension(HoldId(8), SuspensionChange::Resume)
+            ))
+        ));
+        assert!(read_form(fields(&[("until-8", "20/12/2026"), ("op", "suspend:8")])).is_none());
+        assert!(read_form(fields(&[("until-x", ""), ("op", "resume:8")])).is_none());
+        assert!(read_form(fields(&[("op", "pause:8")])).is_none());
         assert!(read_form(fields(&[("what", "1")])).is_none());
     }
 }

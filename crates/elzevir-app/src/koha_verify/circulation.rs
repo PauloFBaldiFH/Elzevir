@@ -2,6 +2,7 @@
 //! Loans, holds, accounts and returned loans of the dump against the Elzevir
 //! (docs/specs/migracao/verificacao-do-koha.md, items 13 to 16).
 
+use crate::holds::Suspension;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::koha_migration::{KohaHoldState, KohaPlan};
@@ -38,6 +39,8 @@ pub struct FoundHold {
     pub state: HoldState,
     /// Place in the queue; 0 when set aside.
     pub priority: i64,
+    /// Whether it is suspended, and until when.
+    pub suspended: Option<Suspension>,
 }
 
 impl From<KohaHoldState> for HoldState {
@@ -184,6 +187,8 @@ pub(super) fn holds(plan: &KohaPlan, found: &Footprint) -> TableCheck {
         check.arrived += 1;
         if stored.state != HoldState::from(hold.state) {
             check.differ(&number, Unexplained::Field("found"));
+        } else if stored.suspended != hold.suspended {
+            check.differ(&number, Unexplained::Field("suspend"));
         } else if let KohaHoldState::Queued(priority) = hold.state {
             queues
                 .entry(record)

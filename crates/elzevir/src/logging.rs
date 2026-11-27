@@ -33,6 +33,11 @@ pub(crate) enum Event {
         cancelled: u64,
     },
     HoldsExpiryFailed,
+    /// Suspended holds came back to the queue (docs/specs/circulacao/reservas.md, item 19).
+    SuspendedHoldsResumed {
+        resumed: u64,
+    },
+    SuspendedHoldsFailed,
     OverdueNoticesQueued {
         queued: u64,
     },
@@ -122,6 +127,12 @@ pub(crate) fn emit(instance: &str, event: Event) {
         }
         Event::HoldsExpiryFailed => {
             tracing::warn!(target: TARGET, institution = "local", instance, event = "holds.expiry_failed", "expired holds run failed; retried next hour");
+        }
+        Event::SuspendedHoldsResumed { resumed } => {
+            tracing::info!(target: TARGET, institution = "local", instance, event = "holds.resumed", resumed, "suspended holds whose day came resumed");
+        }
+        Event::SuspendedHoldsFailed => {
+            tracing::warn!(target: TARGET, institution = "local", instance, event = "holds.resume_failed", "suspended holds run failed; retried next hour");
         }
         Event::OverdueNoticesQueued { queued } => {
             tracing::info!(target: TARGET, institution = "local", instance, event = "notices.overdue_queued", queued, "overdue notices queued");

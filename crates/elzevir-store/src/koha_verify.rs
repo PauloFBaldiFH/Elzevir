@@ -2,6 +2,7 @@
 //! What the Elzevir holds under Koha's numbers, read from the edge tables for
 //! `elzevir verify-koha` (docs/specs/migracao/verificacao-do-koha.md, item 2).
 
+use elzevir_app::holds::Suspension;
 use elzevir_app::koha_verify::{
     Footprint, FoundHold, FoundItem, FoundLoan, FoundPatron, HoldState,
 };
@@ -176,7 +177,7 @@ fn holds(
                  WHERE instance_id = h.instance_id AND entity = 'instance'
                    AND system = 'koha.biblionumber' ORDER BY external_id LIMIT 1) AS record,
                 (SELECT koha_key FROM koha_keys WHERE kind = ?1 AND local_id = h.patron_id),
-                h.found, h.priority
+                h.found, h.priority, h.suspended, h.suspended_until
          FROM holds h ORDER BY record, h.priority, h.id",
     )?;
     let mut found: std::collections::BTreeMap<String, Vec<FoundHold>> =
@@ -196,6 +197,19 @@ fn holds(
             borrowernumber: row.get(1)?,
             state,
             priority: row.get(3)?,
+            suspended: match (row.get::<_, bool>(4)?, row.get::<_, Option<String>>(5)?) {
+                (false, _) => None,
+                (true, None) => Some(Suspension::Indefinite),
+                (true, Some(day)) => Some(Suspension::Until(day.parse().map_err(
+                    |error: jiff::Error| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            5,
+                            rusqlite::types::Type::Text,
+                            error.into(),
+                        )
+                    },
+                )?)),
+            },
         });
     }
     Ok(found)
