@@ -58,6 +58,7 @@ pub(super) fn edit(panel: &mut Panel, id: u128, pause: bool) {
         time.clear();
     }
     panel.form = Some(form);
+    panel.access_notice = None;
 }
 
 pub(super) fn obsolete(panel: &Panel, op: &Operation) -> Option<&'static str> {
@@ -70,6 +71,11 @@ pub(super) fn obsolete(panel: &Panel, op: &Operation) -> Option<&'static str> {
                 .and_then(|c| c.plans.iter().find(|p| p.id == *id))
                 .and_then(CloudPlan::policy);
             (current.as_ref() != Some(cloud)).then_some("schedule-plan-changed")
+        }
+        Operation::Cloud(CloudOperation::Plan { connection, .. }) if !connection.is_empty() => {
+            crate::cloud_view::ready_connection(panel, connection)
+                .is_none()
+                .then_some("cc-connection-changed")
         }
         _ => None,
     }
@@ -86,6 +92,7 @@ pub(super) fn review(panel: &mut Panel, id: u128) {
             plan.target(),
             RemoteCommand::Create,
         ))));
+        panel.access_notice = None;
     }
 }
 
@@ -214,7 +221,7 @@ fn cloud_plans(ui: &mut Controls<'_, '_>, area: Rect, panel: &Panel, ops: Option
     }
     let plan = ops.and_then(|o| selected(panel, o));
     // Keep the selection, pager and review in the viewport at the minimum size.
-    let slots = usize::from(r.height.saturating_sub(6).max(1));
+    let slots = usize::from(r.height.saturating_sub(7).max(1));
     let start = panel
         .backups
         .offset
@@ -250,7 +257,7 @@ fn cloud_plans(ui: &mut Controls<'_, '_>, area: Rect, panel: &Panel, ops: Option
     if view.plans.len() > slots {
         pager(ui, row(r, y, 1), start, view.plans.len(), slots);
     }
-    let d = row(r, y + u16::from(view.plans.len() > slots), 4);
+    let d = row(r, y + u16::from(view.plans.len() > slots), 5);
     let Some(plan) = plan else {
         fyi(ui, d, "schedule-select");
         return;
@@ -285,11 +292,16 @@ fn plan_details(
         theme::TEXT,
         false,
     );
+    let (attempt, requested) = attempt_details(sample(panel).map(|s| &s.operations), plan, m);
+    line(ui.f, row(area, 2, 1), attempt, theme::TEXT, false);
+    if let Some(requested) = requested {
+        line(ui.f, row(area, 3, 1), requested, theme::MUTED, false);
+    }
     if let Ok(id) = u128::from_str_radix(&plan.id, 16) {
         let writable = crate::cloud_view::worker_available(panel);
         let paused = plan.daily.is_none();
         ui.buttons(
-            row(area, 2, 1),
+            row(area, 4, 1),
             &[
                 (
                     "schedule-review",
@@ -316,6 +328,33 @@ fn plan_details(
             ],
         );
     }
+}
+
+pub(super) fn attempt_details(
+    ops: Option<&Operations>,
+    plan: &CloudPlan,
+    m: &crate::Messages,
+) -> (String, Option<String>) {
+    let Some(attempts) = ops.and_then(|o| o.plan_attempts.as_ref()) else {
+        return (m.get("schedule-activity-unknown"), None);
+    };
+    let Some(attempt) = attempts.get(&plan.id) else {
+        return (m.get("schedule-no-attempt"), None);
+    };
+    let status = m.values("schedule-attempt", &[("value", m.get(attempt.state))]);
+    let scope = match &attempt.target {
+        None => "schedule-request-unspecified",
+        Some(t)
+            if t.plan != plan.id || t.connection != plan.connection || t.folder != plan.folder =>
+        {
+            "schedule-request-moved"
+        }
+        Some(_) => "schedule-request-current",
+    };
+    (
+        status,
+        Some(m.values(scope, &[("value", text(&attempt.at))])),
+    )
 }
 
 #[cfg(test)]
@@ -345,28 +384,9 @@ mod tests {
             .plans
     }
 
-    #[test]
-    fn selected_run_survives_reordering_and_requires_reselection_after_a_move() {
+    fn observed(cloud: CloudView) -> Panel {
         let mut panel = Panel::live(Institution::default());
         panel.section = crate::Section::Backup;
-        panel.backups.page = crate::BackupPage::Schedules;
-        let plan = CloudPlan {
-            id: format!("{:032x}", 1),
-            connection: "b".repeat(32),
-            folder: "daily".into(),
-            name: "Library".into(),
-            keep: 7,
-            daily: None,
-            retention_pending: false,
-        };
-        let target = plan.target();
-        let catalogue = vec![
-            plan.clone(),
-            CloudPlan {
-                id: format!("{:032x}", 2),
-                ..plan
-            },
-        ];
         let state = live(&mut panel).unwrap();
         state.snapshot = Some(Snapshot {
             status: ServerStatus::Running(Details {
@@ -378,14 +398,124 @@ mod tests {
                 listen: None,
             }),
             operations: Operations {
-                cloud: Some(CloudView {
-                    plans: catalogue,
-                    ..Default::default()
-                }),
+                cloud: Some(cloud),
                 ..Default::default()
             },
             ..Default::default()
         });
+        panel
+    }
+
+    fn cloud_plan() -> CloudPlan {
+        CloudPlan {
+            id: format!("{:032x}", 1),
+            connection: "b".repeat(32),
+            folder: "daily".into(),
+            name: "Library".into(),
+            keep: 7,
+            daily: None,
+            retention_pending: false,
+        }
+    }
+
+    #[test]
+    fn a_connection_that_disappears_cannot_be_replaced_by_the_next_row() {
+        let connection = |id: u128| crate::CloudConnection {
+            id: format!("{id:032x}"),
+            name: format!("Destination {id}"),
+            provider: "alias".into(),
+            ready: true,
+            tested_at: None,
+            test_failed: false,
+        };
+        let mut panel = observed(CloudView {
+            connections: vec![connection(2), connection(1)],
+            ..Default::default()
+        });
+        panel.backups.page = crate::BackupPage::PlanConnection;
+        crate::cloud_view::choose_connection(&mut panel, 1);
+        let op = CloudOperation::new_plan(format!("{:032x}", 1));
+        assert_eq!(panel.form.as_ref().unwrap().operation, Operation::Cloud(op));
+        let cloud = live(&mut panel)
+            .unwrap()
+            .snapshot
+            .as_mut()
+            .unwrap()
+            .operations
+            .cloud
+            .as_mut()
+            .unwrap();
+        cloud.connections.retain(|c| c.id == format!("{:032x}", 2));
+        panel.submit_form();
+        assert_eq!(panel.access_notice, Some("cc-connection-changed"));
+        assert!(panel.form.is_none() && panel.diagnostics.requested.is_none());
+        crate::cloud_view::choose_connection(&mut panel, 1);
+        assert!(panel.form.is_none());
+    }
+
+    #[test]
+    fn a_plan_receipt_distinguishes_unknown_empty_unrecorded_and_previous_destinations() {
+        let m = crate::Messages::new("en").unwrap();
+        let mut plan = cloud_plan();
+        let mut ops = Operations::default();
+        assert_eq!(
+            attempt_details(Some(&ops), &plan, &m).0,
+            m.get("schedule-activity-unknown")
+        );
+        ops.plan_attempts = Some(std::collections::BTreeMap::new());
+        assert_eq!(
+            attempt_details(Some(&ops), &plan, &m).0,
+            m.get("schedule-no-attempt")
+        );
+        let attempt = crate::PlanAttempt {
+            at: "2026-01-01 12:01 UTC".into(),
+            state: "op-running",
+            target: None,
+        };
+        ops.plan_attempts
+            .as_mut()
+            .unwrap()
+            .insert(plan.id.clone(), attempt);
+        let (state, time) = attempt_details(Some(&ops), &plan, &m);
+        assert!(state.contains(&m.get("op-running")));
+        assert!(time.unwrap().contains("Destination unrecorded"));
+        ops.plan_attempts
+            .as_mut()
+            .unwrap()
+            .get_mut(&plan.id)
+            .unwrap()
+            .target = Some(plan.target());
+        assert!(
+            attempt_details(Some(&ops), &plan, &m)
+                .1
+                .unwrap()
+                .contains("Requested at")
+        );
+        plan.folder = "moved".into();
+        assert!(
+            attempt_details(Some(&ops), &plan, &m)
+                .1
+                .unwrap()
+                .contains("Previous destination")
+        );
+    }
+
+    #[test]
+    fn selected_run_survives_reordering_and_requires_reselection_after_a_move() {
+        let plan = cloud_plan();
+        let target = plan.target();
+        let catalogue = vec![
+            plan.clone(),
+            CloudPlan {
+                id: format!("{:032x}", 2),
+                ..plan
+            },
+        ];
+        let mut panel = observed(CloudView {
+            plans: catalogue,
+            ..Default::default()
+        });
+        panel.backups.page = crate::BackupPage::Schedules;
         crate::backup_center::apply(
             Command::SelectSchedule(1),
             &mut panel,

@@ -149,6 +149,7 @@ impl CloudOperation {
                 RemoteCommand::Download(_) => "cloud-download",
             },
             Self::Plan { id, .. } if !id.is_empty() => "schedule-edit-plan",
+            Self::Plan { connection, .. } if !connection.is_empty() => "cc-new-plan",
             Self::Plan { .. } => "cloud-plan",
             Self::RunPlan { .. } => "cloud-run-plan",
             Self::DisablePlan { .. } => "cloud-disable-plan",
@@ -161,6 +162,18 @@ impl CloudOperation {
             Self::Test { .. } => "cloud-test",
         }
     }
+    pub(crate) fn new_plan(connection: String) -> Self {
+        Self::Plan {
+            id: String::new(),
+            name: String::new(),
+            connection,
+            folder: "Elzevir/backups".to_owned(),
+            keep: "7".to_owned(),
+            time: String::new(),
+            zone: "UTC".to_owned(),
+        }
+    }
+
     pub(crate) fn fields(&self) -> (Vec<&'static str>, Vec<String>) {
         match self {
             Self::SendGroup(_, id) => (vec!["cloud-artifact"], vec![id.clone()]),
@@ -172,14 +185,22 @@ impl CloudOperation {
             Self::Plan {
                 id,
                 name,
+                connection,
+                folder,
                 keep,
                 time,
                 zone,
-                ..
-            } if !id.is_empty() => (
-                vec!["cloud-plan-name", "op-keep", "op-time", "op-zone"],
-                vec![name.clone(), keep.clone(), time.clone(), zone.clone()],
-            ),
+            } if !connection.is_empty() || !id.is_empty() => {
+                let mut labels = vec!["cloud-plan-name"];
+                let mut values = vec![name.clone()];
+                if id.is_empty() {
+                    labels.push("cloud-folder");
+                    values.push(folder.clone());
+                }
+                labels.extend(["op-keep", "op-time", "op-zone"]);
+                values.extend([keep.clone(), time.clone(), zone.clone()]);
+                (labels, values)
+            }
             Self::Plan {
                 id,
                 name,
@@ -257,11 +278,15 @@ impl CloudOperation {
                 connection,
                 folder,
                 ..
-            } if !id.is_empty() => Self::Plan {
+            } if !id.is_empty() || !connection.is_empty() => Self::Plan {
+                name: values.next()?,
+                folder: if id.is_empty() {
+                    values.next()?
+                } else {
+                    folder
+                },
                 id,
                 connection,
-                folder,
-                name: values.next()?,
                 keep: values.next()?,
                 time: values.next()?,
                 zone: values.next()?,
@@ -412,15 +437,7 @@ impl CloudPlan {
 
 pub(crate) fn shortcut(key: char, view: Option<&CloudView>) -> Option<CloudOperation> {
     Some(match key {
-        'g' => CloudOperation::Plan {
-            id: String::new(),
-            name: String::new(),
-            connection: String::new(),
-            folder: "Elzevir/backups".to_owned(),
-            keep: "7".to_owned(),
-            time: String::new(),
-            zone: "UTC".to_owned(),
-        },
+        'g' => CloudOperation::new_plan(String::new()),
         'u' => CloudOperation::RunPlan { id: String::new() },
         'h' => CloudOperation::DisablePlan { id: String::new() },
         'G' => CloudOperation::RemovePlan { id: String::new() },
@@ -450,4 +467,44 @@ pub(crate) fn shortcut(key: char, view: Option<&CloudView>) -> Option<CloudOpera
         }
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod guided_creation_tests {
+    use super::*;
+
+    #[test]
+    fn new_plan_with_selected_connection_pins_its_identity() {
+        let mut op = shortcut('g', None).unwrap();
+        let CloudOperation::Plan { connection, .. } = &mut op else {
+            panic!("expected a plan")
+        };
+        *connection = "a".repeat(32);
+        let (labels, mut values) = op.fields();
+        assert_eq!(
+            labels,
+            [
+                "cloud-plan-name",
+                "cloud-folder",
+                "op-keep",
+                "op-time",
+                "op-zone"
+            ]
+        );
+        values[0] = "Archive".into();
+        values[1] = "Daily".into();
+        let Some(CloudOperation::Plan {
+            id,
+            name,
+            connection,
+            folder,
+            ..
+        }) = op.finish(values)
+        else {
+            panic!("incomplete form")
+        };
+        assert!(id.is_empty());
+        assert_eq!(connection, "a".repeat(32));
+        assert_eq!((name.as_str(), folder.as_str()), ("Archive", "Daily"));
+    }
 }

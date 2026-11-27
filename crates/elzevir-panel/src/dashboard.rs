@@ -14,7 +14,7 @@ pub(crate) fn text(value: &str) -> String {
     safe_text(value, 512)
 }
 
-fn safe_text(value: &str, limit: usize) -> String {
+pub(crate) fn safe_text(value: &str, limit: usize) -> String {
     value
         .chars()
         .filter(|c| {

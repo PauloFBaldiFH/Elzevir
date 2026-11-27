@@ -58,7 +58,8 @@ pub use live::{
 };
 pub use messages::Messages;
 pub use operations::{
-    BackupArtifact, Form, Job, LocalBackup, Operation, Operations, RestoreReview, ServerAction,
+    BackupArtifact, Form, Job, LocalBackup, Operation, Operations, PlanAttempt, RestoreReview,
+    ServerAction,
 };
 pub use runtime::{inspect_installation, run, run_live, run_live_until};
 pub use view::draw;
@@ -362,10 +363,14 @@ impl Panel {
             && self.section == Section::Backup
             && matches!(
                 self.backups.page,
-                BackupPage::Schedules | BackupPage::Connections
+                BackupPage::Schedules | BackupPage::Connections | BackupPage::PlanConnection
             )
         {
-            self.backups.page = BackupPage::Overview;
+            self.backups.page = if self.backups.page == BackupPage::PlanConnection {
+                BackupPage::Connections
+            } else {
+                BackupPage::Overview
+            };
             self.backups.offset = 0;
         }
         self.palette = false;
@@ -639,6 +644,9 @@ impl Panel {
             return self.inspection_shortcut(key);
         }
         if !matches!(&self.mode, Mode::Live(_)) || self.palette || self.diagnostics.pending {
+            return false;
+        }
+        if self.section == Section::Backup && self.backups.page == BackupPage::PlanConnection {
             return false;
         }
         if (self.section == Section::Addresses && self.address_navigation(key))

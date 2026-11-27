@@ -1060,3 +1060,39 @@ fn provider_selection_filters_the_verified_catalogue_without_requesting_a_job() 
     );
     assert_eq!(panel.backups.page, BackupPage::Connections);
 }
+
+#[test]
+fn cloud_connections_route_browser_guidance_to_the_active_worker_sign_in() {
+    let mut panel = connected();
+    panel.section = elzevir_panel::Section::Backup;
+    panel.backups.page = elzevir_panel::BackupPage::Connections;
+    let public_login = "https://dash.cloudflare.com/argotunnel?callback=fictional";
+    let worker_login = "http://127.0.0.1:53682/auth?state=fictional";
+    if let Mode::Live(state) = &mut panel.mode {
+        let ops = &mut state.snapshot.as_mut().unwrap().operations;
+        ops.cloud = Some(elzevir_panel::CloudView::default());
+        ops.authorization_uris.push(public_login.into());
+        ops.cloud_authorization_uri = Some(worker_login.into());
+    }
+    panel.access_help = Some("address-terminal");
+    let terminal = sized_screen(&panel, "pt-BR", 160, 45);
+    assert!(terminal.contains(worker_login) && terminal.contains("encaminhamento local"));
+    assert!(!terminal.contains(public_login));
+    panel.access_help = Some("address-desktop");
+    let desktop = sized_screen(&panel, "en", 160, 45);
+    assert!(desktop.contains(worker_login) && desktop.contains("browser on this computer"));
+    panel.section = elzevir_panel::Section::Addresses;
+    let addresses = screen(&panel, "en");
+    assert!(addresses.contains(public_login) && !addresses.contains(worker_login));
+    if let Mode::Live(state) = &mut panel.mode {
+        state
+            .snapshot
+            .as_mut()
+            .unwrap()
+            .operations
+            .cloud_authorization_uri = None;
+    }
+    panel.section = elzevir_panel::Section::Backup;
+    let ended = sized_screen(&panel, "en", 160, 45);
+    assert!(!ended.contains(worker_login) && !ended.contains("browser on this computer"));
+}

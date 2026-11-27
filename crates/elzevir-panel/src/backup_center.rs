@@ -29,6 +29,8 @@ pub enum BackupPage {
     Schedules,
     /// Searchable catalogue of installed rclone providers.
     Providers,
+    /// Ready connections for creating a new plan.
+    PlanConnection,
     /// Cloud management workspace.
     Connections,
 }
@@ -52,6 +54,7 @@ pub(crate) enum Command {
     CloudTab(usize),
     Provider(crate::provider_picker::Name),
     ClearFilter,
+    NewPlan(u128),
     SelectSchedule(u128),
     RunSchedule(u128),
     EditSchedule(u128, bool),
@@ -131,6 +134,7 @@ pub(crate) fn scrollable(panel: &Panel) -> bool {
             panel.backups.page,
             BackupPage::Overview
                 | BackupPage::History
+                | BackupPage::PlanConnection
                 | BackupPage::Providers
                 | BackupPage::Schedules
                 | BackupPage::Connections
@@ -154,6 +158,7 @@ pub(crate) fn apply(cmd: Command, panel: &mut Panel, access: &mut Actions, limit
             panel.backups.offset = 0;
             panel.access_notice = None;
         }
+        Command::NewPlan(id) => crate::cloud_view::choose_connection(panel, id),
         Command::SelectSchedule(id) => {
             panel.backups.schedule = ops
                 .and_then(|o| o.cloud.as_ref())
@@ -163,6 +168,7 @@ pub(crate) fn apply(cmd: Command, panel: &mut Panel, access: &mut Actions, limit
                         .find(|p| u128::from_str_radix(&p.id, 16) == Ok(id))
                 })
                 .map(crate::CloudPlan::target);
+            panel.access_notice = None;
         }
         Command::EditSchedule(id, pause) => crate::schedule_view::edit(panel, id, pause),
         Command::RunSchedule(id) => crate::schedule_view::review(panel, id),
@@ -337,6 +343,7 @@ pub(crate) fn draw(f: &mut Frame, panel: &Panel, m: &Messages, scene: &mut Scene
             BackupPage::Connections => "bc-cloud",
             BackupPage::Overview => "bc-center",
             BackupPage::Providers => "cc-choose",
+            BackupPage::PlanConnection => "cc-plan-choose",
         }),
         theme::TEXT,
         true,
@@ -350,6 +357,7 @@ pub(crate) fn draw(f: &mut Frame, panel: &Panel, m: &Messages, scene: &mut Scene
         BackupPage::History => history(&mut ui, work, panel, ops),
         BackupPage::Result => result(&mut ui, work, panel, ops),
         BackupPage::Schedules => crate::schedule_view::draw(&mut ui, work, panel, ops),
+        BackupPage::PlanConnection => crate::cloud_view::connections_for_plan(&mut ui, work, panel),
         BackupPage::Providers => crate::provider_picker::draw(&mut ui, work, panel, ops),
         BackupPage::Connections => crate::cloud_view::draw(&mut ui, work, panel, obs),
     }
@@ -364,7 +372,10 @@ pub(crate) fn draw(f: &mut Frame, panel: &Panel, m: &Messages, scene: &mut Scene
                     ops.and_then(|o| o.result).filter(|key| {
                         !matches!(
                             panel.backups.page,
-                            BackupPage::Schedules | BackupPage::Connections | BackupPage::Providers
+                            BackupPage::Schedules
+                                | BackupPage::Connections
+                                | BackupPage::Providers
+                                | BackupPage::PlanConnection
                         ) || *key != "op-submitted"
                     })
                 })
@@ -387,15 +398,15 @@ fn footer(
         Variant::Secondary,
         true,
     );
-    if panel.backups.page == BackupPage::Providers {
+    let picker_back = match panel.backups.page {
+        BackupPage::Providers => Some("cc-back"),
+        BackupPage::PlanConnection => Some("cc-back-plans"),
+        _ => None,
+    };
+    if let Some(label) = picker_back {
         ui.buttons(
             area,
-            &[(
-                "cc-back",
-                go(BackupPage::Connections),
-                Variant::Secondary,
-                true,
-            )],
+            &[(label, go(BackupPage::Connections), Variant::Secondary, true)],
         );
     } else if panel.backups.page == BackupPage::Connections {
         ui.buttons(

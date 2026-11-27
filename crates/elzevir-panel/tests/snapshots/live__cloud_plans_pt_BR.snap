@@ -17,12 +17,12 @@ expression: "screen(&panel, \"pt-BR\")"
 
   Planos
   Noite · Biblioteca / Acervo/noite
-  g criar/editar plano · u executar plano · h desativar agenda · G remover plano · C remover conexão
+  g novo plano · u executar plano · h desativar agenda · G remover plano · C remover conexão
   U enviar/conferir · + marcar/desmarcar destino · M enviar aos marcados
+  Histórico de execuções indisponível.
   ID do plano: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   Cópias mantidas: 7
   Backup diário: Desativado
-
 
 
 

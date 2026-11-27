@@ -2,8 +2,8 @@
 //! Mouse and keyboard access to the existing cloud forms and observations.
 use crate::{
     BackupPage, CloudView, Panel, Section, ServerStatus, Snapshot,
-    backup_center::{Command, Controls, block, go, inner, key, pager, row, sample},
-    ui::{Action, Variant},
+    backup_center::{Command, Controls, block, go, inner, key, line, pager, row, sample},
+    ui::{Action, Button, Variant, theme},
 };
 use ratatui::{
     layout::Rect,
@@ -188,6 +188,88 @@ pub(super) fn worker_available(panel: &Panel) -> bool {
     }) && !panel.diagnostics.pending
 }
 
+pub(super) fn ready_connection<'a>(
+    panel: &'a Panel,
+    id: &str,
+) -> Option<&'a crate::CloudConnection> {
+    if !worker_available(panel) {
+        return None;
+    }
+    sample(panel)?
+        .operations
+        .cloud
+        .as_ref()?
+        .connections
+        .iter()
+        .find(|c| c.ready && c.id == id)
+}
+
+pub(super) fn choose_connection(panel: &mut Panel, id: u128) {
+    let Some(connection) = ready_connection(panel, &format!("{id:032x}")) else {
+        panel.access_notice = Some("cc-connection-changed");
+        return;
+    };
+    let op = crate::CloudOperation::new_plan(connection.id.clone());
+    panel.form = Some(crate::Form::new(crate::Operation::Cloud(op)));
+    panel.backups.page = BackupPage::Connections;
+    panel.backups.offset = 0;
+    panel.access_notice = None;
+}
+
+pub(super) fn connections_for_plan(ui: &mut Controls<'_, '_>, area: Rect, panel: &Panel) {
+    block(ui.f, area, ui.m.get("cc-plan-ready"));
+    let r = inner(area);
+    if !worker_available(panel) {
+        line(
+            ui.f,
+            row(r, 1, 1),
+            ui.m.get("cc-offline"),
+            theme::WARNING,
+            false,
+        );
+        return;
+    }
+    let Some(view) = panel.cloud_view() else {
+        return;
+    };
+    let ready: Vec<_> = view.connections.iter().filter(|c| c.ready).collect();
+    if ready.is_empty() {
+        line(
+            ui.f,
+            row(r, 1, 1),
+            ui.m.get("cc-no-ready"),
+            theme::MUTED,
+            false,
+        );
+        return;
+    }
+    let slots = usize::from(r.height.saturating_sub(2));
+    let start = panel.backups.offset.min(ready.len().saturating_sub(slots));
+    for (connection, y) in ready.iter().skip(start).take(slots).zip(1u16..) {
+        if let Ok(id) = u128::from_str_radix(&connection.id, 16) {
+            Button::new(
+                format!(
+                    "{}  ·  {}",
+                    crate::dashboard::text(&connection.name),
+                    crate::dashboard::text(&connection.provider)
+                ),
+                Action::Backup(Command::NewPlan(id)),
+                Variant::Secondary,
+            )
+            .draw(ui.f, row(r, y, 1), ui.scene);
+        }
+    }
+    if ready.len() > slots {
+        pager(
+            ui,
+            row(r, r.height.saturating_sub(1), 1),
+            start,
+            ready.len(),
+            slots,
+        );
+    }
+}
+
 pub(super) fn handle_guard(panel: &mut Panel, key: char) -> bool {
     if panel.backups.page == BackupPage::Schedules && key == 'u' {
         if let Some(id) = panel
@@ -202,6 +284,13 @@ pub(super) fn handle_guard(panel: &mut Panel, key: char) -> bool {
     }
     if unavailable(panel, key) {
         panel.access_notice = Some("cc-offline");
+        return true;
+    }
+    if key == 'g' && panel.backups.page == BackupPage::Connections {
+        panel.cloud_tab = 1;
+        panel.backups.page = BackupPage::PlanConnection;
+        panel.backups.offset = 0;
+        panel.access_notice = None;
         return true;
     }
     false

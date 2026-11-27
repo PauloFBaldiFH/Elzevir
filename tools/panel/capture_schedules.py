@@ -31,14 +31,56 @@ def exercise_existing_connection(program, root, data, config, cli, term, output)
               "provider": "alias", "ready": True, "parent": None}
     with (data / "cloud.json").open("x") as handle:
         json.dump({"connections": [record]}, handle)
-    cli("cloud", "--config", config, "plan", "--name", "Arquivo externo", "--connection", identity,
-        "--folder", "Horizonte", "--time", "23:58", "--zone", "Pacific/Honolulu")
 
     def plans():
         return json.loads(cli("cloud", "--config", config, "status"))["plans"]
 
+    def jobs():
+        return json.loads(cli("operations", "--data-dir", data, "list"))["jobs"]
+
+    term.click("Nuvem", last=True)
+    term.click("Planos")
+    term.wait_for("Novo plano")
+    wait_for(lambda: (term.read(0.2) or not term.contains("- Novo plano")), "ready connection observed")
+    previous = [j["id"] for j in jobs()]
+    term.size(80, 24)
+    term.click("Novo plano")
+    term.wait_for("Escolher conexão para o novo plano")
+    capture(term, output, "plano-escolher-conexao-80x24")
+    term.send(b"\x1b")
+    term.wait_for("Novo plano")
+    term.send(b"g")
+    term.wait_for("Conexões prontas")
+    term.mouse(35, (1, 1))
+    for _ in range(8):
+        term.send(b"\t")
+        if term.contains("> Disco de arquivo"):
+            break
+    term.wait_for("> Disco de arquivo")
+    term.send(b"\r")
+    term.wait_for("Nome do plano")
+    term.send(b"\x1b")
+    assert not plans() and [j["id"] for j in jobs()] == previous
+    term.click("Novo plano")
+    term.click("Disco de arquivo")
+    term.click("Nome do plano")
+    term.send(b"Arquivo externo")
+    term.click("Subpasta remota")
+    term.send(b"\x7f" * len("Elzevir/backups") + b"Horizonte")
+    term.click("Horário diário")
+    term.send(b"23:58")
+    term.click("Fuso IANA")
+    term.send(b"\x7f" * 3 + b"Pacific/Honolulu")
+    term.wait_for("Pacific/Honolulu")
+    capture(term, output, "plano-novo-80x24")
+    term.click("Confirmar", last=True)
     wait_for(lambda: bool(plans()), "first plan saved by the service")
-    plan_id = plans()[0]["id"]
+    plan = plans()[0]
+    plan_id = plan["id"]
+    assert (plan["name"], plan["connection"], plan["folder"], plan["keep"], plan["daily"]) == (
+        "Arquivo externo", identity, "Horizonte", 7, "23:58 Pacific/Honolulu")
+    term.size(160, 45)
+    term.click("Agendamentos", last=True)
     term.wait_for("Arquivo externo")
     term.click("Arquivo externo")
     term.wait_for("Disco de arquivo / Horizonte")
@@ -78,6 +120,44 @@ def exercise_existing_connection(program, root, data, config, cli, term, output)
     term.click("Confirmar", last=True)
     term.wait_for("O plano mudou")
     assert plans()[0]["keep"] == 12
+    def reviewed_runs():
+        return [j for j in jobs() if j["task"]["type"] == "cloud_backup"
+                and j["task"].get("target", {}).get("plan") == plan_id]
+
+    previous_runs = [j["id"] for j in reviewed_runs()]
+    term.click("Revisar execução")
+    term.wait_for("Executar agora o plano")
+    term.click("Cancelar", last=True)
+    assert [j["id"] for j in reviewed_runs()] == previous_runs
+    term.click("Revisar execução")
+    term.click("Confirmar", last=True)
+
+    def finished_attempt():
+        return next((j for j in reversed(reviewed_runs()) if j["id"] not in previous_runs
+                     and j["state"] in ("completed", "failed")), None)
+
+    wait_for(finished_attempt, "worker finished cloud backup")
+    attempt = finished_attempt()
+    assert attempt["task"]["target"] == {"plan": plan_id, "connection": identity, "folder": "Horizonte"}
+    label = {"failed": "Falhou", "completed": "Concluído"}[attempt["state"]]
+    term.wait_for("Última tentativa · " + label)
+    term.wait_for("Solicitada em")
+    assert not term.contains("O plano mudou")
+    capture(term, output, "plano-ultima-tentativa")
+    term.size(80, 24)
+    term.wait_for("Solicitada em")
+    term.wait_for("Revisar execução")
+    capture(term, output, "plano-ultima-tentativa-80x24")
+    term.size(80, 18)
+    term.wait_for("Última tentativa · " + label)
+    term.wait_for("Solicitada em")
+    term.click("Revisar")
+    term.wait_for("Executar agora o plano")
+    term.send(b"\x1b")
+    term.size(80, 24)
+    archive = data / "backups" / f"elzevir-{attempt['id']}.age"
+    cli("backup", "verify", "--input", archive, "--recovery-key", data / "backup.key")
+    print("Worker receipt for selected plan:", attempt["state"], "— retained archive verified")
     assert (remote / "preservar.txt").read_bytes() == b"existing file"
     print("Cloud plan OK: cancel, pause, resume, destination preserved and stale edit refused.")
 
