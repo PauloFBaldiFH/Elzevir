@@ -461,6 +461,7 @@ pub(crate) async fn place_hold(
             level: HoldLevel::Record,
             pickup: BranchId(body.pickup),
             at,
+            by_patron: true,
         });
         Ok::<_, ()>(Some(match desk.patron_hold(command) {
             Ok(CirculationOutput::HoldPlaced(placed)) => Ok(placed),

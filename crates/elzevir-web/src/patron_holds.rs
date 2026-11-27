@@ -240,6 +240,7 @@ pub(crate) async fn change(
             level,
             pickup,
             at,
+            by_patron: false,
         }),
         Asked::Cancel(hold) => CirculationCommand::CancelHold(HoldCancellation {
             patron,

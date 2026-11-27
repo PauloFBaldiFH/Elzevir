@@ -121,6 +121,7 @@ fn place(
             level,
             pickup: library.branches[pickup],
             at: at(),
+            by_patron: false,
         })),
     ) {
         Ok(WriteOutput::Circulation(CirculationOutput::HoldPlaced(placed))) => {

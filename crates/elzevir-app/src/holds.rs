@@ -32,6 +32,11 @@ pub struct HoldRequest {
     pub pickup: BranchId,
     /// When, in the library's time zone.
     pub at: Zoned,
+    /// The patron asks on the OPAC or the API, where a debt over `maxoutstanding` refuses
+    /// the hold; the staff desk places it anyway (docs/specs/circulacao/reservas.md,
+    /// item 3).
+    #[serde(default)]
+    pub by_patron: bool,
 }
 
 /// A hold cancelled at the desk.

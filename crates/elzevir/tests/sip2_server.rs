@@ -298,6 +298,7 @@ fn a_checkin_with_a_hold_waiting_sets_it_aside_and_names_who_asked() {
             at: "2026-11-26T14:00:00-03:00[America/Sao_Paulo]"
                 .parse()
                 .unwrap(),
+            by_patron: false,
         })),
     )
     .unwrap();

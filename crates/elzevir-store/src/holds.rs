@@ -177,7 +177,17 @@ pub(crate) fn place_hold(connection: &Connection, request: &HoldRequest) -> Appl
         branches: &branches,
         today,
     };
-    check_hold(&facts, target, request.pickup, &HoldSettings::default())
+    // Koha's staff desk (`reserve/placerequest.pl`) does not look at the debt; the OPAC and
+    // the REST API do (`Koha::Patron::can_place_holds`).
+    let settings = if request.by_patron {
+        HoldSettings::default()
+    } else {
+        HoldSettings {
+            max_outstanding: None,
+            ..HoldSettings::default()
+        }
+    };
+    check_hold(&facts, target, request.pickup, &settings)
         .map_err(|refusal| refused(HoldRefused::Rules(refusal)))?;
     let queued: i64 = connection
         .query_row(

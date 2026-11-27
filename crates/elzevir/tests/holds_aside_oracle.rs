@@ -170,6 +170,7 @@ fn a_returned_item_is_set_aside_as_the_oracle_did() {
                 level: HoldLevel::Record,
                 pickup,
                 at: at.clone(),
+                by_patron: false,
             })),
         ) else {
             panic!("step {number}: no hold");

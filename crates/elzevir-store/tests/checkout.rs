@@ -320,6 +320,17 @@ impl Library {
         level: HoldLevel,
         pickup: BranchId,
     ) -> Result<HoldPlaced, HoldRefused> {
+        self.hold_asked(patron, barcode, (level, pickup), false)
+    }
+
+    /// A hold the staff place, or the patron asks for on the OPAC (`by_patron`).
+    fn hold_asked(
+        &self,
+        patron: PatronId,
+        barcode: &str,
+        (level, pickup): (HoldLevel, BranchId),
+        by_patron: bool,
+    ) -> Result<HoldPlaced, HoldRefused> {
         let at: Zoned = "2026-11-20T10:00:00-03:00[America/Sao_Paulo]"
             .parse()
             .unwrap();
@@ -331,6 +342,7 @@ impl Library {
                 level,
                 pickup,
                 at,
+                by_patron,
             })),
         ) {
             Ok(WriteOutput::Circulation(CirculationOutput::HoldPlaced(placed))) => Ok(placed),
@@ -1740,7 +1752,7 @@ fn the_public_catalog_sees_loans_transfers_and_the_hold_shelf() {
 }
 
 #[test]
-fn a_patron_who_owes_too_much_places_no_hold() {
+fn a_patron_who_owes_too_much_places_no_hold_but_the_desk_places_it() {
     let dir = tempfile::tempdir().unwrap();
     let library = library(&dir);
     library.item("0001", ItemStatus::default());
@@ -1759,13 +1771,17 @@ fn a_patron_who_owes_too_much_places_no_hold() {
     library
         .give_back("0002", library.central, "2026-11-10T10:00:00-03:00")
         .unwrap();
+    let asked = (HoldLevel::Record, library.central);
     assert_eq!(
-        library.hold(library.patron, "0001", HoldLevel::Record, library.central),
+        library.hold_asked(library.patron, "0001", asked, true),
         Err(HoldRefused::Rules(HoldRefusal::DebtLimit {
             owed: Money(600),
             limit: Money(500)
         }))
     );
+    // Koha's staff desk does not look at the debt (`reserve/placerequest.pl`).
+    let placed = library.hold_asked(library.patron, "0001", asked, false);
+    assert_eq!(placed.map(|placed| placed.priority), Ok(1));
 }
 
 /// Each notice as kind, transport, address, last day and the barcodes it lists.
