@@ -41,6 +41,7 @@ mod koha_circulation;
 mod koha_history;
 mod koha_migration;
 mod koha_types;
+mod koha_verify;
 mod listing;
 mod loan_desk;
 mod loans;

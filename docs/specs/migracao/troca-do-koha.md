@@ -51,7 +51,7 @@ Até a Fase 5, trocar o Koha pedia quatro comandos e dois arquivos. O acervo vin
 O ensaio roda na máquina de Paulo ou na VM do oráculo, nunca na nuvem, porque o dump tem leitores reais (LGPD):
 
 1. Gerar o dump na produção com `koha-dump`, copiar para a máquina do ensaio e não guardar em mais nenhum lugar.
-2. Rodar `elzevir init` numa pasta nova, `elzevir switch-from-koha` com o dump e guardar o relatório, que não tem dado pessoal.
+2. Rodar `elzevir init` numa pasta nova, `elzevir switch-from-koha` com o dump e depois `elzevir verify-koha` com o mesmo dump ([verificação](verificacao-do-koha.md)), e guardar os dois relatórios, que não têm dado pessoal.
 3. Subir o `elzevir serve` e conferir o balcão e o OPAC (tarefas 6.3 e 6.4).
 4. Apagar a pasta e o dump no fim do ensaio.
 

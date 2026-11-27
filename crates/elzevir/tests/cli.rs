@@ -441,6 +441,8 @@ fn a_koha_dump_switches_to_elzevir_in_one_command() {
     assert_eq!(found.hits.len(), 1);
     drop(index);
 
+    verify_after_the_switch(dir.path(), &data, &sql);
+
     // A second run finds a catalog and writes nothing.
     let again = elzevir(&["switch-from-koha", "--data-dir", &data, &sql]);
     assert!(!again.status.success());
@@ -476,4 +478,33 @@ fn a_koha_dump_switches_to_elzevir_in_one_command() {
     let refused = elzevir(&["switch-from-koha", "--data-dir", &fresh, &without]);
     assert!(!refused.status.success());
     assert!(!dir.path().join("fresh/elzevir.toml").exists());
+}
+
+/// docs/specs/migracao/verificacao-do-koha.md: the switched folder has no difference
+/// without a cause; a folder without the switch has nothing else.
+fn verify_after_the_switch(dir: &Path, data: &str, sql: &str) {
+    let verify = elzevir(&["verify-koha", "--data-dir", data, sql]);
+    assert!(verify.status.success(), "{}", text(&verify.stderr));
+    let report = text(&verify.stdout);
+    for line in [
+        "branches: 2 in the dump, 2 in the Elzevir, 0 left out with a cause, 0 differences without a cause",
+        "patrons: 6 in the dump, 3 in the Elzevir, 3 left out with a cause, 0 differences without a cause",
+        "  branchcode not in branches: 1 (borrowernumber 4)",
+        "records: 3 in the dump, 2 in the Elzevir, 1 left out with a cause, 0 differences without a cause",
+        "  an Item of a branch the Elzevir lacks (LUA): 1 (biblionumber 12)",
+        "Items: 5 in the dump, 4 in the Elzevir, 1 left out with a cause, 0 differences without a cause",
+        "  its record did not come: 1 (itemnumber 130)",
+    ] {
+        assert!(
+            report.lines().any(|found| found == line),
+            "{line} not in\n{report}"
+        );
+    }
+    for private in ["Silva", "A0001", "B100", "ana@example.org"] {
+        assert!(!report.contains(private), "{private} in the report");
+    }
+    let empty = elzevir(&["verify-koha", "--data-dir", &path(dir, "empty"), sql]);
+    assert!(!empty.status.success());
+    assert!(text(&empty.stdout).contains("WITHOUT A CAUSE borrowernumber 1: not in the Elzevir"));
+    assert!(text(&empty.stderr).contains("differences without a cause"));
 }
