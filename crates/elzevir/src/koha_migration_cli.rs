@@ -103,7 +103,7 @@ pub(crate) fn run(args: &MigrateKohaArgs) -> Result<(), String> {
 }
 
 /// The dump, decompressed when its first two bytes are gzip's (item 1).
-fn open(path: &PathBuf) -> Result<Box<dyn BufRead>, String> {
+pub(crate) fn open(path: &PathBuf) -> Result<Box<dyn BufRead>, String> {
     let file = File::open(path).map_err(|e| format!("cannot open {}: {e}", path.display()))?;
     let mut input = BufReader::new(file);
     let head = input

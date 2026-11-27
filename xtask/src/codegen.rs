@@ -52,6 +52,8 @@ fn all_files(root: &Path) -> Result<Vec<Generated>, String> {
     let framework = data("marc21_framework.json")?;
     let iso5426 = data("iso5426.json")?;
     let search_fields = data("search_fields.json")?;
+    let sysprefs = data("sysprefs.json")?;
+    let triage = read_json(&root.join(crate::sysprefs::TRIAGE))?;
     let marc8 = read_json(&root.join(MARC8_JSON))?;
     let bibframe = read_json(&root.join(BIBFRAME_JSON))?;
     let vocabularies = read_json(&root.join(VOCABULARIES_JSON))?;
@@ -83,6 +85,18 @@ fn all_files(root: &Path) -> Result<Vec<Generated>, String> {
                 &search_fields,
                 &data_path(series, "search_fields.json"),
                 &header(&data_path(series, "search_fields.json")),
+            )?,
+        },
+        Generated {
+            name: "koha_sysprefs.rs".to_owned(),
+            source: crate::sysprefs::generate(
+                &sysprefs,
+                &triage,
+                &header(&format!(
+                    "{} and {}",
+                    data_path(series, "sysprefs.json"),
+                    crate::sysprefs::TRIAGE
+                )),
             )?,
         },
         Generated {
@@ -118,37 +132,53 @@ fn all_files(root: &Path) -> Result<Vec<Generated>, String> {
     Ok(files)
 }
 
+/// The Markdown pages generated with the code, relative to the workspace root.
+fn pages(root: &Path) -> Result<Vec<(PathBuf, String)>, String> {
+    let lock = read_json(&root.join("koha-lock.json"))?;
+    let series = str_field(&lock, "series")?;
+    let inventory = read_json(&root.join(data_path(series, "sysprefs.json")))?;
+    let triage = read_json(&root.join(crate::sysprefs::TRIAGE))?;
+    Ok(vec![(
+        root.join(crate::sysprefs::PAGE),
+        crate::sysprefs::page(&inventory, &triage)?,
+    )])
+}
+
 pub(crate) fn run(root: &Path, mode: Mode) -> Result<(), String> {
     let files = all_files(root)?;
     let out_dir = root.join(OUT_DIR);
-    let mut stale = Vec::new();
+    let mut outputs = Vec::with_capacity(files.len() + 1);
     for file in &files {
-        let path = out_dir.join(&file.name);
-        let text = rustfmt(&file.source)?;
+        outputs.push((out_dir.join(&file.name), rustfmt(&file.source)?));
+    }
+    outputs.extend(pages(root)?);
+    let mut stale = Vec::new();
+    for (path, text) in &outputs {
         match mode {
             Mode::Write => {
                 std::fs::create_dir_all(&out_dir)
                     .map_err(|e| format!("cannot create {}: {e}", out_dir.display()))?;
-                std::fs::write(&path, text)
+                std::fs::write(path, text)
                     .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
             }
             Mode::Check => {
-                let current = std::fs::read_to_string(&path).unwrap_or_default();
-                if current != text {
-                    stale.push(display(root, &path));
+                let current = std::fs::read_to_string(path).unwrap_or_default();
+                if current != *text {
+                    stale.push(display(root, path));
                 }
             }
         }
     }
     if stale.is_empty() {
         println!(
-            "codegen: {} files {} in {OUT_DIR}",
+            "codegen: {} files {} in {OUT_DIR}, and {}",
             files.len(),
             if mode == Mode::Write {
                 "written"
             } else {
                 "up to date"
-            }
+            },
+            crate::sysprefs::PAGE
         );
         Ok(())
     } else {
@@ -175,6 +205,7 @@ fn module_index() -> String {
          #[expect(clippy::too_many_lines, reason = \"one match arm per Koha rule kind\")]\n\
          pub(crate) mod circulation_rule_kinds;\n\
          pub(crate) mod iso5426;\n\
+         pub(crate) mod koha_sysprefs;\n\
          pub(crate) mod koha_version;\n\
          pub(crate) mod marc21_framework_0xx;\n\
          pub(crate) mod marc21_framework_1xx;\n\

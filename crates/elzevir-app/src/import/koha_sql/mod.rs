@@ -55,6 +55,9 @@ pub enum DumpProblem {
     /// A whole-database dump without the patrons table.
     #[error("no Koha patrons in this dump")]
     MissingPatrons,
+    /// A dump without the system preferences table.
+    #[error("no Koha system preferences in this dump")]
+    MissingPreferences,
     /// The stream has statements but declares no supported catalog tables.
     #[error("no Koha catalog tables in this dump")]
     MissingCatalog,

@@ -252,3 +252,70 @@ fn a_koha_dump_brings_its_patrons_once() {
     assert!(!refused.status.success());
     assert!(text(&refused.stderr).contains("no Koha patrons in this dump"));
 }
+
+#[test]
+fn koha_preferences_become_an_elzevir_toml() {
+    // docs/specs/migracao/preferencias-do-koha.md: a whole-database dump, with a table the
+    // importer skips.
+    let dump = "CREATE DATABASE /*!32312 IF NOT EXISTS*/ `koha_library`;\nUSE `koha_library`;\n\
+        CREATE TABLE `borrowers` (`borrowernumber` int(11) NOT NULL, `surname` mediumtext);\n\
+        INSERT INTO `borrowers` VALUES (1,'Fictícia');\n\
+        CREATE TABLE `systempreferences` (`variable` varchar(50) NOT NULL DEFAULT '', \
+        `value` mediumtext DEFAULT NULL, `options` mediumtext DEFAULT NULL, \
+        `explanation` mediumtext DEFAULT NULL, `type` varchar(20) DEFAULT NULL, \
+        PRIMARY KEY (`variable`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\
+        INSERT INTO `systempreferences` VALUES \
+        ('ExpireReservesMaxPickUpDelay','1',NULL,NULL,'YesNo'),\
+        ('PatronAnonymizeDelay','1095','','','Integer'),\
+        ('OAI-PMH','1',NULL,NULL,'YesNo'),\
+        ('OAI-PMH:archiveID','biblioteca',NULL,NULL,'Free'),\
+        ('LibraryName','Biblioteca Pública de Exemplo',NULL,NULL,'Free'),\
+        ('OPACUserCSS','#logo { display: none; }\\n',NULL,NULL,'free'),\
+        ('SMSSendPassword','fictícia',NULL,NULL,'free'),\
+        ('dateformat','us','metric|us|iso|dmydot','','Choice'),\
+        ('LocalPreference','x',NULL,NULL,NULL),\
+        ('maxoutstanding','5','','','Integer');\n";
+    let dir = tempfile::tempdir().unwrap();
+    let sql = path(dir.path(), "koha.sql");
+    std::fs::write(&sql, dump).unwrap();
+    let output = elzevir(&["import-koha-prefs", &sql]);
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    let toml = text(&output.stdout);
+    for line in [
+        "[circulation.holds]",
+        "expire_waiting = true",
+        "[privacy]",
+        "anonymize_expired_days = 1095",
+        "[oai]",
+        "enabled = false",
+        "repository_identifier = \"biblioteca\"",
+        "repository_name = \"Biblioteca Pública de Exemplo\"",
+        "[koha_legacy]",
+        "OPACUserCSS = \"#logo { display: none; }\\n\"",
+        "LocalPreference = \"x\"",
+        "# SMSSendPassword: a password or a key, not copied",
+    ] {
+        assert!(
+            toml.lines().any(|found| found == line),
+            "{line} not in\n{toml}"
+        );
+    }
+    // At Koha's default: left out.
+    assert!(!toml.contains("dateformat") && !toml.contains("maxoutstanding"));
+    assert!(!toml.contains("fictícia"));
+    let report = text(&output.stderr);
+    for line in [
+        "system preferences: 10 read, 2 at Koha's default left out, 5 in fields, 2 in [koha_legacy] (1 not from Koha 26.05), 1 passwords or keys not copied",
+        "  ExpireReservesMaxPickUpDelay -> [circulation.holds] expire_waiting",
+        "not from Koha 26.05: LocalPreference",
+        "not copied: SMSSendPassword",
+        "OAI-PMH was on in Koha: [oai] is written turned off; check it and set enabled = true",
+    ] {
+        assert!(
+            report.lines().any(|found| found == line),
+            "{line} not in\n{report}"
+        );
+    }
+    let refused = elzevir(&["import-koha-prefs", &path(dir.path(), "missing.sql")]);
+    assert!(!refused.status.success());
+}
