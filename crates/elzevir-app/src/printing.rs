@@ -242,10 +242,12 @@ mod tests {
                 expires: Some(jiff::civil::date(2027, 11, 19)),
                 staff_note: None,
                 reading_history: ReadingHistory::NotKept,
+                extra: Vec::new(),
             },
             branch_name: "Central".to_owned(),
             category_name: "Adulto".to_owned(),
             has_password: false,
+            extra_lines: Vec::new(),
         };
         let card = PatronCard::new(&patron, Some("19/11/2027".to_owned()));
         assert_eq!(card.name, "Ana Silva");

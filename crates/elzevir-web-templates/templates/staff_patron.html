@@ -56,6 +56,12 @@
     <h2 class="column-head" id="patron-group-identity">{{ t.get("patron-group-identity") }}</h2>
     {% if header.identity.is_empty() %}<p class="patron-fields-empty">{{ t.get("patron-group-empty") }}</p>{% else %}<dl class="patron-fields">{% for (label, value) in header.identity %}<dt>{{ t.get(label) }}</dt><dd>{{ value }}{% if *label == "patron-cpf" && header.cpf_hidden %} <button type="submit" class="cpf-show" formaction="/equipe/leitores/{{ id }}/cpf" formnovalidate>{{ t.get("patron-cpf-show") }}</button>{% endif %}</dd>{% endfor %}</dl>{% endif %}
   </section>
+  {% if !header.extra.is_empty() %}
+  <section aria-labelledby="patron-group-extra">
+    <h2 class="column-head" id="patron-group-extra">{{ t.get("patron-group-extra") }}</h2>
+    <dl class="patron-fields">{% for (name, value) in header.extra %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>
+  </section>
+  {% endif %}
 </div>
 </article>
 {# After the record, so Enter in the barcode box lends; the stylesheet puts it on the left. #}

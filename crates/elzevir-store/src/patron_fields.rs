@@ -4,9 +4,10 @@
 
 use elzevir_app::commands::WriteRefusal;
 use elzevir_app::patron_fields::{
-    FieldChange, FieldKind, FieldOption, PatronFieldLine, PatronFieldSpec, checked_field,
+    ExtraLine, ExtraProblem, ExtraValue, FieldChange, FieldKind, FieldOption, MAX_VALUES_PER_FIELD,
+    PatronExtra, PatronFieldLine, PatronFieldSpec, checked_field, checked_value,
 };
-use elzevir_app::patrons::{PatronOutput, PatronRefusal};
+use elzevir_app::patrons::{PatronFields, PatronOutput, PatronRefusal};
 use elzevir_domain::patron::{PatronCategoryId, PatronFieldId, PatronFieldOptionId};
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -140,7 +141,7 @@ fn update(
         && count(
             connection,
             "SELECT count(*) FROM (SELECT 1 FROM patron_field_values WHERE field_id = ?1
-             GROUP BY option_id, lower(text) HAVING count(DISTINCT patron_id) > 1)",
+             GROUP BY option_id, text HAVING count(DISTINCT patron_id) > 1)",
             field.0,
         )? > 0
     {
@@ -323,4 +324,190 @@ pub(crate) fn fields(connection: &Connection) -> Result<Vec<PatronFieldLine>, St
         });
     }
     Ok(lines)
+}
+
+/// A field that applies to a patron: id, kind, repeatable, unique, required.
+type Applying = (i64, i64, bool, bool, bool);
+
+/// The fields that apply to a patron of `category`.
+fn applying(
+    connection: &Connection,
+    category: PatronCategoryId,
+) -> Result<Vec<Applying>, StoreError> {
+    let mut statement = connection.prepare_cached(
+        "SELECT id, kind, repeatable, is_unique, required FROM patron_fields
+         WHERE category_id IS NULL OR category_id = ?1",
+    )?;
+    let rows = statement.query_map([category.0], |row| {
+        Ok((
+            row.get(0)?,
+            row.get(1)?,
+            row.get(2)?,
+            row.get(3)?,
+            row.get(4)?,
+        ))
+    })?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+fn bad(field: i64, problem: ExtraProblem) -> CommandFailed<WriteRefusal> {
+    refused(PatronRefusal::BadExtra(PatronFieldId(field), problem))
+}
+
+/// Refuses a patron without a value for a required field of their category (spec,
+/// items 5 and 10); only the staff form asks, so the Koha migration does not.
+pub(crate) fn check_required(
+    connection: &Connection,
+    fields: &PatronFields,
+) -> Result<(), CommandFailed<WriteRefusal>> {
+    for (field, _, _, _, required) in applying(connection, fields.category)? {
+        let held = fields.extra.iter().any(|extra| {
+            extra.field.0 == field && matches!(checked_value(extra.value.clone()), Ok(Some(_)))
+        });
+        if required && !held {
+            return Err(bad(field, ExtraProblem::Missing));
+        }
+    }
+    Ok(())
+}
+
+/// Replaces the values of `patron` with those of `fields` (spec, items 9 to 11): values of
+/// fields that do not apply to the category are dropped, the rest checked against their
+/// field and, for a unique field, against the other patrons.
+pub(crate) fn write_values(
+    connection: &Connection,
+    patron: i64,
+    fields: &PatronFields,
+) -> Result<(), CommandFailed<WriteRefusal>> {
+    let applying = applying(connection, fields.category)?;
+    let mut rows: Vec<(i64, Option<i64>, Option<String>)> = Vec::new();
+    for extra in &fields.extra {
+        let field = extra.field.0;
+        let Some(&(_, kind, repeatable, unique, _)) = applying.iter().find(|(id, ..)| *id == field)
+        else {
+            continue;
+        };
+        let Some(value) =
+            checked_value(extra.value.clone()).map_err(|problem| bad(field, problem))?
+        else {
+            continue;
+        };
+        let row = match (kind, value) {
+            (TEXT, ExtraValue::Text(text)) => (field, None, Some(text)),
+            (DATE, ExtraValue::Date(day)) => (field, None, Some(day.to_string())),
+            (LIST, ExtraValue::Option(option)) => {
+                let owned: i64 = connection
+                    .query_row(
+                        "SELECT count(*) FROM patron_field_options WHERE id = ?1 AND field_id = ?2",
+                        params![option.0, field],
+                        |row| row.get(0),
+                    )
+                    .map_err(StoreError::from)?;
+                if owned == 0 {
+                    return Err(bad(field, ExtraProblem::Invalid));
+                }
+                (field, Some(option.0), None)
+            }
+            _ => return Err(bad(field, ExtraProblem::Invalid)),
+        };
+        if rows.contains(&row) {
+            continue;
+        }
+        let held = rows.iter().filter(|(id, ..)| *id == field).count();
+        if (!repeatable && held >= 1) || held >= MAX_VALUES_PER_FIELD {
+            return Err(bad(field, ExtraProblem::Repeated));
+        }
+        // Koha: Koha::Patron::Attribute::unique_ok.
+        if unique {
+            let taken = connection
+                .query_row(
+                    "SELECT 1 FROM patron_field_values
+                     WHERE field_id = ?1 AND patron_id <> ?2
+                       AND option_id IS ?3 AND text IS ?4",
+                    params![field, patron, row.1, row.2],
+                    |_| Ok(()),
+                )
+                .optional()
+                .map_err(StoreError::from)?
+                .is_some();
+            if taken {
+                return Err(bad(field, ExtraProblem::Taken));
+            }
+        }
+        rows.push(row);
+    }
+    connection
+        .execute(
+            "DELETE FROM patron_field_values WHERE patron_id = ?1",
+            [patron],
+        )
+        .map_err(StoreError::from)?;
+    for (field, option, text) in rows {
+        connection
+            .execute(
+                "INSERT INTO patron_field_values (patron_id, field_id, option_id, text)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![patron, field, option, text],
+            )
+            .map_err(StoreError::from)?;
+    }
+    Ok(())
+}
+
+/// The values `patron` holds, by field name and in the order they were saved.
+pub(crate) fn values_of(
+    connection: &Connection,
+    patron: i64,
+) -> rusqlite::Result<Vec<PatronExtra>> {
+    let mut statement = connection.prepare_cached(
+        "SELECT v.field_id, f.kind, v.option_id, v.text FROM patron_field_values v
+         JOIN patron_fields f ON f.id = v.field_id
+         WHERE v.patron_id = ?1 ORDER BY f.name, v.id",
+    )?;
+    let rows = statement.query_map([patron], |row| {
+        let value = match (
+            row.get::<_, Option<i64>>(2)?,
+            row.get::<_, Option<String>>(3)?,
+        ) {
+            (Some(option), _) => ExtraValue::Option(PatronFieldOptionId(option)),
+            (None, Some(text)) if row.get::<_, i64>(1)? == DATE => {
+                ExtraValue::Date(text.parse().map_err(|error: jiff::Error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        3,
+                        rusqlite::types::Type::Text,
+                        error.into(),
+                    )
+                })?)
+            }
+            (None, text) => ExtraValue::Text(text.unwrap_or_default()),
+        };
+        Ok(PatronExtra {
+            field: PatronFieldId(row.get(0)?),
+            value,
+        })
+    })?;
+    rows.collect()
+}
+
+/// The values `patron` holds as the record shows them; with `opac`, only the fields shown
+/// on the OPAC (spec, items 12 and 13).
+pub(crate) fn lines_of(
+    connection: &Connection,
+    patron: i64,
+    opac: bool,
+) -> rusqlite::Result<Vec<ExtraLine>> {
+    let mut statement = connection.prepare_cached(
+        "SELECT f.name, coalesce(o.label, v.text) FROM patron_field_values v
+         JOIN patron_fields f ON f.id = v.field_id
+         LEFT JOIN patron_field_options o ON o.id = v.option_id
+         WHERE v.patron_id = ?1 AND (?2 = 0 OR f.opac_shown = 1)
+         ORDER BY f.name, v.id",
+    )?;
+    let rows = statement.query_map(params![patron, opac], |row| {
+        Ok(ExtraLine {
+            name: row.get(0)?,
+            value: row.get(1)?,
+        })
+    })?;
+    rows.collect()
 }

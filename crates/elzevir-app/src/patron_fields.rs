@@ -3,6 +3,7 @@
 //! (docs/specs/circulacao/patron-attributes.md).
 
 use elzevir_domain::patron::{PatronCategoryId, PatronFieldId, PatronFieldOptionId};
+use jiff::civil::Date;
 use serde::{Deserialize, Serialize};
 
 use crate::patrons::{MAX_NAME, PatronRefusal};
@@ -95,6 +96,78 @@ pub struct PatronFieldLine {
     pub spec: PatronFieldSpec,
     /// How many patrons hold a value for it.
     pub patrons: u64,
+}
+
+/// One value a patron holds for an additional field (spec, items 8 to 11).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PatronExtra {
+    /// The field.
+    pub field: PatronFieldId,
+    /// The value, of the field's kind.
+    pub value: ExtraValue,
+}
+
+/// A value of an additional field.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ExtraValue {
+    /// The value of a text field.
+    Text(String),
+    /// The value of a date field.
+    Date(Date),
+    /// The option of a list field.
+    Option(PatronFieldOptionId),
+}
+
+/// What is wrong with the values of one field (spec, item 10).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ExtraProblem {
+    /// The field is required and has no value.
+    Missing,
+    /// The value is not of the field's kind, too long, or an option of another field.
+    Invalid,
+    /// More values than the field takes.
+    Repeated,
+    /// Another patron holds this value of a unique field.
+    Taken,
+}
+
+impl ExtraProblem {
+    /// Fluent key of the message.
+    #[must_use]
+    pub const fn message_key(self) -> &'static str {
+        match self {
+            Self::Missing => "patron-extra-error-missing",
+            Self::Invalid => "patron-extra-error-invalid",
+            Self::Repeated => "patron-extra-error-repeated",
+            Self::Taken => "patron-extra-error-taken",
+        }
+    }
+}
+
+/// A value as the patron record shows it: the field's name and the value, a list value
+/// by its label.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtraLine {
+    /// The field's name.
+    pub name: String,
+    /// The value, as shown.
+    pub value: String,
+}
+
+/// The value as stored: a text trimmed; `None` for an empty text.
+///
+/// # Errors
+///
+/// [`ExtraProblem::Invalid`] for a text longer than [`MAX_TEXT_VALUE`].
+pub fn checked_value(value: ExtraValue) -> Result<Option<ExtraValue>, ExtraProblem> {
+    match value {
+        ExtraValue::Text(text) => match text.trim() {
+            "" => Ok(None),
+            text if text.chars().count() > MAX_TEXT_VALUE => Err(ExtraProblem::Invalid),
+            text => Ok(Some(ExtraValue::Text(text.to_owned()))),
+        },
+        other => Ok(Some(other)),
+    }
 }
 
 /// The field as stored: name and labels trimmed.
@@ -193,6 +266,19 @@ mod tests {
         );
         let many = (0..=MAX_OPTIONS).map(|n| option(&n.to_string())).collect();
         assert_eq!(checked_field(spec(FieldKind::List(many))), refused);
+    }
+
+    #[test]
+    fn a_text_value_is_trimmed_bounded_and_empty_is_none() {
+        assert_eq!(
+            checked_value(ExtraValue::Text(" 12 ".into())),
+            Ok(Some(ExtraValue::Text("12".into())))
+        );
+        assert_eq!(checked_value(ExtraValue::Text("  ".into())), Ok(None));
+        assert_eq!(
+            checked_value(ExtraValue::Text("x".repeat(MAX_TEXT_VALUE + 1))),
+            Err(ExtraProblem::Invalid)
+        );
     }
 
     #[test]

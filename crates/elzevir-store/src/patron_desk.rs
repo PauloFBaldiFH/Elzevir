@@ -69,15 +69,18 @@ fn patron_of(row: &Row<'_>) -> rusqlite::Result<Patron> {
             } else {
                 ReadingHistory::NotKept
             },
+            extra: Vec::new(),
         },
         branch_name: row.get(16)?,
         category_name: row.get(17)?,
         has_password: row.get(18)?,
+        extra_lines: Vec::new(),
     })
 }
 
 /// `?1` the card number, `?2` the CPF digits, `?3` a `LIKE` pattern for names (or
-/// `NULL`), `?4` the most rows.
+/// `NULL`), `?4` the most rows. `?1` and `?3` also find the values of searchable additional
+/// fields (docs/specs/circulacao/patron-attributes.md, item 14).
 // Unit separator between due moments: a zoned date-time never holds it.
 const SEARCH: &str = "SELECT p.id, p.cardnumber, p.surname, p.first_name, c.name, p.expires,
                              b.name,
@@ -97,7 +100,14 @@ const SEARCH: &str = "SELECT p.id, p.cardnumber, p.surname, p.first_name, c.name
                          OR p.cpf = ?2
                          OR (?3 IS NOT NULL
                              AND (p.surname || ' ' || coalesce(p.first_name, '') LIKE ?3 ESCAPE '\\'
-                                  OR coalesce(p.first_name, '') || ' ' || p.surname LIKE ?3 ESCAPE '\\')))
+                                  OR coalesce(p.first_name, '') || ' ' || p.surname LIKE ?3 ESCAPE '\\'))
+                         OR EXISTS (SELECT 1 FROM patron_field_values v
+                                    JOIN patron_fields f ON f.id = v.field_id AND f.searchable = 1
+                                    LEFT JOIN patron_field_options o ON o.id = v.option_id
+                                    WHERE v.patron_id = p.id
+                                      AND (coalesce(o.label, v.text) = ?1 COLLATE NOCASE
+                                           OR (?3 IS NOT NULL
+                                               AND coalesce(o.label, v.text) LIKE ?3 ESCAPE '\\'))))
                       ORDER BY p.surname, p.first_name, p.id
                       LIMIT ?4";
 
@@ -156,7 +166,14 @@ impl PatronDesk for ElzevirStore {
 
     fn patron(&self, id: PatronId) -> Result<Option<Patron>, PatronDeskError> {
         self.readers()
-            .read(|c| c.query_row(PATRON, [id.0], patron_of).optional())
+            .read(|c| {
+                let Some(mut patron) = c.query_row(PATRON, [id.0], patron_of).optional()? else {
+                    return Ok::<_, rusqlite::Error>(None);
+                };
+                patron.fields.extra = crate::patron_fields::values_of(c, id.0)?;
+                patron.extra_lines = crate::patron_fields::lines_of(c, id.0, false)?;
+                Ok(Some(patron))
+            })
             .map_err(unavailable)
     }
 
@@ -263,7 +280,14 @@ impl PatronAccounts for ElzevirStore {
 
     fn account(&self, id: PatronId) -> Result<Option<PatronAccount>, PatronAccountError> {
         self.readers()
-            .read(|c| c.query_row(PATRON, params![id.0], patron_of).optional())
+            .read(|c| {
+                let Some(mut patron) = c.query_row(PATRON, params![id.0], patron_of).optional()?
+                else {
+                    return Ok(None);
+                };
+                patron.extra_lines = crate::patron_fields::lines_of(c, id.0, true)?;
+                Ok(Some(patron))
+            })
             .map_err(|error: rusqlite::Error| PatronAccountError(error.to_string()))
             .map(|patron| {
                 patron.map(|patron| PatronAccount {
@@ -277,6 +301,7 @@ impl PatronAccounts for ElzevirStore {
                     // A stored patron always has its expiry (`patrons.expires` is NOT NULL).
                     expires: patron.fields.expires.unwrap_or(patron.fields.enrolled),
                     reading_history: patron.fields.reading_history,
+                    extra_lines: patron.extra_lines,
                 })
             })
     }

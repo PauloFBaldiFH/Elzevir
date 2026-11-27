@@ -112,6 +112,11 @@ pub(crate) async fn account(
         branch_name: account.branch_name,
         category_name: account.category_name,
         expires: account.expires.strftime("%d/%m/%Y").to_string(),
+        extra: account
+            .extra_lines
+            .iter()
+            .map(|line| (line.name.clone(), line.value.clone()))
+            .collect(),
         restrictions: circulation
             .restrictions
             .iter()

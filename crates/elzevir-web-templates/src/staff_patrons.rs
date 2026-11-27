@@ -130,6 +130,9 @@ pub struct PatronHeader {
     pub identity: Vec<(&'static str, String)>,
     /// The CPF is masked, so "Show CPF" is offered (interface §18.4).
     pub cpf_hidden: bool,
+    /// The additional fields: name and value, a list value by its label
+    /// (docs/specs/circulacao/patron-attributes.md, item 12).
+    pub extra: Vec<(String, String)>,
 }
 
 /// One mark of how the patron stands, never colour alone.
@@ -357,6 +360,8 @@ pub struct PatronFieldForm {
 #[derive(Template)]
 #[template(path = "staff_patron_form.html")]
 pub struct StaffPatronForm<'a> {
+    /// The additional fields, by name.
+    pub extra_fields: Vec<ExtraInput>,
     /// Interface texts.
     pub t: &'a I18n,
     /// Anti-forgery token of the session.
@@ -437,6 +442,36 @@ pub struct PatronFormValues {
     pub staff_note: String,
     /// Whether the reading history is kept.
     pub history_kept: bool,
+    /// The additional values: field id and value, as typed or stored (an option id for a
+    /// list).
+    pub extra: Vec<(i64, String)>,
+    /// The additional field a refusal names, `0` for none.
+    pub refused_field: i64,
+}
+
+/// One additional field on the patron form (docs/specs/circulacao/patron-attributes.md,
+/// item 8).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtraInput {
+    /// Field id.
+    pub id: i64,
+    /// Its name.
+    pub name: String,
+    /// `text`, `date` or `list`.
+    pub kind: &'static str,
+    /// Whether it asks for a value.
+    pub required: bool,
+    /// The name of the only category it applies to, if it is limited to one.
+    pub only_for: Option<String>,
+    /// Options of a list: id, label and whether it is chosen.
+    pub options: Vec<(i64, String, bool)>,
+    /// Whether a list takes several options (shown as boxes to tick).
+    pub several: bool,
+    /// Boxes of a text or date field, filled with the values; one more, empty, when it
+    /// repeats or has none.
+    pub boxes: Vec<String>,
+    /// Whether the last refusal names it.
+    pub invalid: bool,
 }
 
 /// The checkout slip of a patron, to print (docs/specs/circulacao/avisos.md, items 38 to

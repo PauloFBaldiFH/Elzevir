@@ -154,6 +154,10 @@ pub struct PatronFields {
     pub staff_note: Option<String>,
     /// Whether the reading history is kept.
     pub reading_history: ReadingHistory,
+    /// The values of the additional fields; saving replaces them all
+    /// (docs/specs/circulacao/patron-attributes.md, item 9).
+    #[serde(default)]
+    pub extra: Vec<crate::patron_fields::PatronExtra>,
 }
 
 /// New fields for a patron read at `row_version`.
@@ -320,6 +324,12 @@ pub enum PatronRefusal {
     /// No such field, or an option of another field.
     #[error("no such patron field")]
     UnknownField,
+    /// The values of an additional field break its rule.
+    #[error("the values of a patron field are not valid: {1:?}")]
+    BadExtra(
+        elzevir_domain::patron::PatronFieldId,
+        crate::patron_fields::ExtraProblem,
+    ),
 }
 
 impl PatronRefusal {
@@ -357,6 +367,7 @@ impl PatronRefusal {
             Self::FieldOptionInUse => "patron-field-error-option-in-use",
             Self::FieldInUse => "patron-field-error-in-use",
             Self::UnknownField => "patron-field-error-unknown",
+            Self::BadExtra(_, problem) => problem.message_key(),
         }
     }
 }
@@ -463,6 +474,8 @@ pub struct Patron {
     pub category_name: String,
     /// Whether the patron has an OPAC password.
     pub has_password: bool,
+    /// The values of the additional fields, by field name, as the record shows them.
+    pub extra_lines: Vec<crate::patron_fields::ExtraLine>,
 }
 
 /// Shortest OPAC password (docs/specs/opac/conta-do-leitor.md, item 3).
@@ -681,6 +694,7 @@ mod tests {
             expires: None,
             staff_note: None,
             reading_history: ReadingHistory::default(),
+            extra: Vec::new(),
         }
     }
 

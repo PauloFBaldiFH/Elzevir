@@ -153,6 +153,7 @@ fn library(data: &Path) -> i64 {
             expires: None,
             staff_note: None,
             reading_history: ReadingHistory::NotKept,
+            extra: Vec::new(),
         }))),
     ) else {
         panic!("no patron");
@@ -387,6 +388,66 @@ fn additional_fields_are_defined_by_who_manages_patrons() {
         "csrf=wrong&action=create&name=Other&kind=text&category=0",
     );
     assert_status(&forged, 403);
+}
+
+#[test]
+fn additional_values_are_typed_on_the_form_shown_on_the_record_and_searched() {
+    let data = tempfile::tempdir().unwrap();
+    library(data.path());
+    let (_server, address) = start(data.path());
+    let lei = sign_in(address, "lei");
+    let page = request(address, "GET", "/equipe/leitores/campos", &lei, "");
+    let token = csrf(&page).to_owned();
+    let form = format!("{lei}Content-Type: application/x-www-form-urlencoded\r\n");
+    let post = |path: &str, body: &str| {
+        request(
+            address,
+            "POST",
+            path,
+            &form,
+            &format!("csrf={token}&{body}"),
+        )
+    };
+    let fields = "/equipe/leitores/campos";
+    assert_status(
+        &post(
+            fields,
+            "action=create&name=Shift&kind=list&category=0&searchable=1&new_options=Morning%0D%0AEvening",
+        ),
+        303,
+    );
+    assert_status(
+        &post(
+            fields,
+            "action=create&name=School&kind=text&category=0&required=1",
+        ),
+        303,
+    );
+    // Field 1 is Shift, with options 1 and 2; field 2 is School.
+    let patron = "cardnumber=000300&surname=Souza&branch=1&category=1&expires=";
+    let missing = post("/equipe/leitores/novo", &format!("{patron}&extra.1.0=2"));
+    assert_status(&missing, 422);
+    assert!(missing.contains("A required field (marked below) has no value."));
+    assert!(missing.contains("aria-invalid=\"true\""));
+    // What was chosen comes back chosen.
+    assert!(missing.contains("<option value=\"2\" selected>Evening</option>"));
+    let added = post(
+        "/equipe/leitores/novo",
+        &format!("{patron}&extra.1.0=2&extra.2.0=Escola+Fict%C3%ADcia"),
+    );
+    assert_status(&added, 303);
+    let found = request(address, "GET", "/equipe/leitores?q=evening", &lei, "");
+    assert!(found.contains("Souza"));
+    let cir = sign_in(address, "cir");
+    let id = added
+        .lines()
+        .find_map(|line| line.strip_prefix("location: /equipe/leitores/"))
+        .and_then(|rest| rest.split('/').next())
+        .unwrap()
+        .to_owned();
+    let record = request(address, "GET", &format!("/equipe/leitores/{id}"), &cir, "");
+    assert!(record.contains("<dt>Shift</dt><dd>Evening</dd>"));
+    assert!(record.contains("<dt>School</dt><dd>Escola Fictícia</dd>"));
 }
 
 #[test]

@@ -141,6 +141,7 @@ fn library(data: &Path) -> i64 {
             expires: None,
             staff_note: None,
             reading_history: ReadingHistory::NotKept,
+            extra: Vec::new(),
         }))),
     ) else {
         panic!("no patron");

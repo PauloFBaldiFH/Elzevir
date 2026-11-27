@@ -145,6 +145,7 @@ fn library(dir: &tempfile::TempDir) -> Setup {
             expires: None,
             staff_note: None,
             reading_history: ReadingHistory::NotKept,
+            extra: Vec::new(),
         }))),
     ) else {
         panic!("no second patron");

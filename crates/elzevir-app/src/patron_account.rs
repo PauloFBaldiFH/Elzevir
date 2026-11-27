@@ -72,6 +72,9 @@ pub struct PatronAccount {
     pub expires: Date,
     /// Whether the returned loans are kept, as the patron agreed.
     pub reading_history: ReadingHistory,
+    /// The additional fields shown on the OPAC, read only
+    /// (docs/specs/circulacao/patron-attributes.md, item 13).
+    pub extra_lines: Vec<crate::patron_fields::ExtraLine>,
 }
 
 /// Reading patron accounts failed.

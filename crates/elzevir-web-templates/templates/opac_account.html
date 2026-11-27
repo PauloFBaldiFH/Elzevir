@@ -10,6 +10,7 @@
     <dt>{{ t.get("opac-account-branch") }}</dt><dd>{{ branch_name }}</dd>
     <dt>{{ t.get("opac-account-category") }}</dt><dd>{{ category_name }}</dd>
     <dt>{{ t.get("opac-account-expires") }}</dt><dd>{{ expires }}</dd>
+    {% for (name, value) in extra %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}
   </dl>
   <form method="post" action="/conta/sair"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="quiet">{{ t.get("opac-sign-out") }}</button></form>
 </section>
