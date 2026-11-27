@@ -22,6 +22,7 @@
     {% if let Some(url) = edit_url %}<a class="icon-button" href="{{ url }}" title="{{ t.get("patron-edit") }}" aria-label="{{ t.get("patron-edit") }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-edit"></use></svg></a>{% endif %}
     <a class="icon-button" href="#hold-barcode" data-zoom-to="full" title="{{ t.get("holds-place") }}" aria-label="{{ t.get("holds-place") }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#circ-hold"></use></svg></a>
     <a class="icon-button" href="/equipe/leitores/{{ id }}/recibo" target="_blank" rel="noopener" title="{{ t.get("slip-title") }}" aria-label="{{ t.get("slip-title") }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#circ-slip"></use></svg></a>
+    <a class="icon-button" href="/equipe/leitores/carteirinhas?leitor={{ id }}" download title="{{ t.get("patron-card-print") }}" aria-label="{{ t.get("patron-card-print") }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#bar-patrons"></use></svg></a>
     <a class="icon-button" href="/equipe/leitores/{{ id }}/recibo?rapido=1" target="_blank" rel="noopener" title="{{ t.get("slip-quick-title") }}" aria-label="{{ t.get("slip-quick-title") }}"><svg aria-hidden="true" focusable="false"><use href="/static/elzevir-icons.svg#circ-quick-slip"></use></svg></a>
   </div>
 </div>

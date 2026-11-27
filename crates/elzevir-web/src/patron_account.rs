@@ -12,7 +12,7 @@ use elzevir_app::accounts::{
     AccountLine, AccountLineId, LineKind, MAX_LINES_PER_PAYMENT, PaymentRequest,
 };
 use elzevir_app::circulation_rules::{CirculationCommand, CirculationDeskError, CirculationOutput};
-use elzevir_domain::account::{CreditType, DebitType};
+use elzevir_domain::account::PaymentKind;
 use elzevir_domain::catalog::{BranchId, Money};
 use elzevir_domain::patron::PatronId;
 use elzevir_web_templates::{AccountRow, I18n};
@@ -25,18 +25,22 @@ use crate::security::tokens_match;
 /// Most characters of an amount typed at the desk.
 const MAX_AMOUNT_LENGTH: usize = 12;
 
+/// The message that names a type of line: `account-` and Koha's code, in lowercase with
+/// hyphens (`RENT_DAILY` is `account-rent-daily`).
+pub(crate) fn label_key(kind: LineKind) -> String {
+    let code = match kind {
+        LineKind::Debit(debit) => debit.code(),
+        LineKind::Credit(credit) => credit.code(),
+    };
+    format!("account-{}", code.to_ascii_lowercase().replace('_', "-"))
+}
+
 /// The lines of the account as shown.
 pub(crate) fn account_rows(t: &I18n, lines: &[AccountLine]) -> Vec<AccountRow> {
     lines
         .iter()
         .map(|line| {
-            let what = match line.kind {
-                LineKind::Debit(DebitType::Overdue) => t.get("account-overdue"),
-                LineKind::Debit(DebitType::Lost) => t.get("account-lost"),
-                LineKind::Debit(DebitType::Processing) => t.get("account-processing"),
-                LineKind::Credit(CreditType::Payment) => t.get("account-payment"),
-                LineKind::Credit(CreditType::Writeoff) => t.get("account-writeoff"),
-            };
+            let what = t.get(&label_key(line.kind));
             AccountRow {
                 id: line.id.0,
                 day: shown(t, line.day),
@@ -75,7 +79,7 @@ pub(crate) fn typed_amount(text: &str) -> Option<Money> {
 /// What the account form asked for.
 struct PayForm {
     csrf: String,
-    kind: Option<CreditType>,
+    kind: Option<PaymentKind>,
     amount: String,
     desk: Option<i64>,
     lines: Vec<AccountLineId>,
@@ -92,8 +96,8 @@ fn read_form(fields: Vec<(String, String)>) -> Option<PayForm> {
     for (name, value) in fields {
         match name.as_str() {
             "csrf" => form.csrf = value,
-            "op" if value == "pay" => form.kind = Some(CreditType::Payment),
-            "op" if value == "writeoff" => form.kind = Some(CreditType::Writeoff),
+            "op" if value == "pay" => form.kind = Some(PaymentKind::Payment),
+            "op" if value == "writeoff" => form.kind = Some(PaymentKind::Writeoff),
             "amount" => form.amount = value,
             "desk" => form.desk = value.parse().ok(),
             "line" if form.lines.len() < MAX_LINES_PER_PAYMENT => {
@@ -157,8 +161,8 @@ pub(crate) async fn pay(
     match tokio::task::spawn_blocking(move || writer.circulate(actor, command)).await {
         Ok(Ok(CirculationOutput::Paid(paid))) => {
             let key = match kind {
-                CreditType::Payment => "account-paid",
-                CreditType::Writeoff => "account-written-off",
+                PaymentKind::Payment => "account-paid",
+                PaymentKind::Writeoff => "account-written-off",
             };
             outcome.notices.push(ok(t.get_texts(
                 key,
@@ -193,6 +197,24 @@ pub(crate) async fn pay(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use elzevir_domain::account::{CreditType, DebitType};
+
+    #[test]
+    fn every_type_of_line_has_a_name_in_both_languages() {
+        let kinds = DebitType::ALL
+            .into_iter()
+            .map(LineKind::Debit)
+            .chain(CreditType::ALL.into_iter().map(LineKind::Credit));
+        for kind in kinds {
+            for t in [I18n::english().unwrap(), I18n::portuguese().unwrap()] {
+                assert!(t.has(&label_key(kind)), "{kind:?}");
+            }
+        }
+        assert_eq!(
+            label_key(LineKind::Debit(DebitType::RentDaily)),
+            "account-rent-daily"
+        );
+    }
 
     #[test]
     fn amounts_are_typed_with_a_comma_or_a_point() {

@@ -42,7 +42,7 @@ const PATRON: &str = "SELECT p.id, p.row_version, p.cardnumber, p.surname, p.fir
                       FROM patrons p
                       JOIN branches b ON b.id = p.branch_id
                       JOIN patron_categories c ON c.id = p.category_id
-                      WHERE p.id = ?1";
+                      WHERE p.id = ?1 AND p.anonymized_at IS NULL";
 
 fn patron_of(row: &Row<'_>) -> rusqlite::Result<Patron> {
     let cpf: Option<String> = row.get(5)?;
@@ -92,11 +92,12 @@ const SEARCH: &str = "SELECT p.id, p.cardnumber, p.surname, p.first_name, c.name
                       FROM patrons p
                       JOIN patron_categories c ON c.id = p.category_id
                       JOIN branches b ON b.id = p.branch_id
-                      WHERE p.cardnumber = ?1
+                      WHERE p.anonymized_at IS NULL
+                        AND (p.cardnumber = ?1
                          OR p.cpf = ?2
                          OR (?3 IS NOT NULL
                              AND (p.surname || ' ' || coalesce(p.first_name, '') LIKE ?3 ESCAPE '\\'
-                                  OR coalesce(p.first_name, '') || ' ' || p.surname LIKE ?3 ESCAPE '\\'))
+                                  OR coalesce(p.first_name, '') || ' ' || p.surname LIKE ?3 ESCAPE '\\')))
                       ORDER BY p.surname, p.first_name, p.id
                       LIMIT ?4";
 
@@ -156,6 +157,12 @@ impl PatronDesk for ElzevirStore {
     fn patron(&self, id: PatronId) -> Result<Option<Patron>, PatronDeskError> {
         self.readers()
             .read(|c| c.query_row(PATRON, [id.0], patron_of).optional())
+            .map_err(unavailable)
+    }
+
+    fn export(&self, id: PatronId) -> Result<Option<serde_json::Value>, PatronDeskError> {
+        self.readers()
+            .read(|c| crate::patron_export::export(c, id))
             .map_err(unavailable)
     }
 
@@ -233,7 +240,7 @@ impl PatronAccounts for ElzevirStore {
             .read(|c| {
                 c.query_row(
                     "SELECT id, coalesce(nullif(first_name, ''), surname), password_hash
-                     FROM patrons WHERE cardnumber = ?1",
+                     FROM patrons WHERE cardnumber = ?1 AND anonymized_at IS NULL",
                     params![cardnumber],
                     |row| {
                         Ok(PatronCredentials {
@@ -278,6 +285,25 @@ impl PatronAccounts for ElzevirStore {
             reading_history: choice,
         });
         // No staff member acts: the audit log keeps the patron inside the command.
+        let pending = self
+            .submit(command)
+            .map_err(|error| PatronAccountError(error.to_string()))?;
+        match pending.wait() {
+            Ok(_) => Ok(()),
+            Err(failure) => Err(PatronAccountError(failure.to_string())),
+        }
+    }
+
+    fn upgrade_password(
+        &self,
+        id: PatronId,
+        password_hash: String,
+    ) -> Result<(), PatronAccountError> {
+        let command = WriteCommand::Patrons(PatronCommand::SetPassword {
+            patron: id,
+            password_hash: Some(password_hash),
+        });
+        // As for the reading history, the patron acts, not a staff member.
         let pending = self
             .submit(command)
             .map_err(|error| PatronAccountError(error.to_string()))?;

@@ -54,12 +54,14 @@ mod staff_calendar;
 mod staff_catalog;
 mod staff_circulation_rules;
 mod staff_import;
+mod staff_inventory;
 mod staff_item_grid;
 mod staff_notice_rules;
 mod staff_patrons;
 mod staff_record_fields;
 mod staff_record_form;
 mod staff_registries;
+mod staff_reports;
 
 pub use board::{BoardCard, KindChoice, StaffBoardNote, note_color};
 pub use opac_account::{
@@ -81,6 +83,9 @@ pub use staff_import::{
     ImportDraft, ImportMatching, ImportPage, ImportPreview, ImportReceipt, ImportRule,
     ImportSample, ImportUpload, ImportView, RecordBlocks,
 };
+pub use staff_inventory::{
+    InventoryChoice, InventoryForm, InventoryRow, InventoryView, StaffInventory,
+};
 pub use staff_item_grid::{
     GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid, SuggestedCallNumber,
 };
@@ -89,10 +94,10 @@ pub use staff_notice_rules::{
     StaffPrintNotices,
 };
 pub use staff_patrons::{
-    AccountRow, AsideForm, CategoryLine, DeskOption, HoldRow, LoanLine, Notice, PasswordSection,
-    PatronFormValues, PatronHeader, PatronLine, RestrictionRow, SlipLine, SlipSection,
-    StaffCheckin, StaffCheckoutSlip, StaffPatron, StaffPatronCategories, StaffPatronForm,
-    StaffPatrons, StatusChip,
+    AccountRow, AnonymizeSection, AsideForm, CategoryLine, DeskOption, HoldRow, LoanLine, Notice,
+    PasswordSection, PatronFormValues, PatronHeader, PatronLine, RestrictionRow, SlipLine,
+    SlipSection, StaffCheckin, StaffCheckoutSlip, StaffPatron, StaffPatronCategories,
+    StaffPatronForm, StaffPatrons, StatusChip,
 };
 pub use staff_record_fields::{FieldEntry, FieldGroup, FieldValue, ItemFields, RecordFields};
 pub use staff_record_form::{
@@ -101,6 +106,7 @@ pub use staff_record_form::{
     FormPart, FormSection, History, HistoryLine, IdentifierChip, NewRecordForm, RecordForm,
 };
 pub use staff_registries::{BranchPart, RegistryRow, StaffRegistries};
+pub use staff_reports::{ReportTable, StaffReports};
 
 use askama::Template;
 use fluent_bundle::concurrent::FluentBundle;
@@ -542,6 +548,8 @@ mod tests {
             include_str!("../templates/staff_item_grid.html"),
             include_str!("../templates/staff_form_field.html"),
             include_str!("../templates/staff_registries.html"),
+            include_str!("../templates/staff_inventory.html"),
+            include_str!("../templates/staff_reports.html"),
             include_str!("../templates/staff_patrons.html"),
             include_str!("../templates/staff_patron.html"),
             include_str!("../templates/staff_checkout_slip.html"),

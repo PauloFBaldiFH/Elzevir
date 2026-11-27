@@ -279,7 +279,11 @@ fn due_today(
 ///
 /// Koha runs `overdue_notices.pl` once a day from cron; the server runs every hour, so a
 /// restriction the staff lift during the day is not put back by the next run.
-fn first_run_today(connection: &Connection, name: &str, today: Date) -> rusqlite::Result<bool> {
+pub(crate) fn first_run_today(
+    connection: &Connection,
+    name: &str,
+    today: Date,
+) -> rusqlite::Result<bool> {
     let changed = connection.execute(
         "INSERT INTO daily_runs (name, day) VALUES (?1, ?2)
          ON CONFLICT (name) DO UPDATE SET day = excluded.day WHERE day <> excluded.day",

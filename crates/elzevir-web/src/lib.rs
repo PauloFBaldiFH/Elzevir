@@ -30,6 +30,7 @@ mod import_cells;
 mod import_rules;
 mod import_sheets;
 mod importing;
+mod inventory;
 mod items;
 mod new_record;
 mod notice_rules;
@@ -39,16 +40,19 @@ mod opac_account;
 mod opac_holds;
 mod patron_account;
 mod patron_card;
+mod patron_cards;
 mod patron_form;
 mod patron_holds;
 mod patron_login;
 mod patron_password;
+mod patron_privacy;
 mod patrons;
 mod pill_loans;
 mod print_notices;
 mod record_fields;
 mod record_form;
 mod registries;
+mod reports;
 mod repository;
 mod repository_discovery;
 mod repository_staff;
@@ -128,6 +132,8 @@ pub struct AppState {
     authority_sources: Option<Arc<dyn elzevir_app::authority_sources::AuthoritySource>>,
     oai: Option<OaiRepository>,
     sru: Option<SruServer>,
+    printer: Option<Arc<dyn elzevir_app::printing::Printer>>,
+    reports: Option<Arc<dyn elzevir_app::reports::ReportReader>>,
 }
 
 struct Inner {
@@ -178,6 +184,8 @@ impl AppState {
             authority_sources: None,
             oai: None,
             sru: None,
+            printer: None,
+            reports: None,
             inner: Arc::new(Inner {
                 staff,
                 memory,
@@ -320,6 +328,22 @@ impl AppState {
         self
     }
 
+    /// Connects the printer of spine labels and patron cards (docs/specs/catalogo/etiquetas.md,
+    /// docs/specs/circulacao/carteirinhas.md). Without it both answer 404.
+    #[must_use]
+    pub fn with_printer(mut self, printer: Arc<dyn elzevir_app::printing::Printer>) -> Self {
+        self.printer = Some(printer);
+        self
+    }
+
+    /// Connects the reports (docs/specs/operacao/relatorios.md). Without them the reports
+    /// page answers 404.
+    #[must_use]
+    pub fn with_reports(mut self, reader: Arc<dyn elzevir_app::reports::ReportReader>) -> Self {
+        self.reports = Some(reader);
+        self
+    }
+
     /// Opens the SRU server at `/sru` (docs/specs/opac/sru.md).
     #[must_use]
     pub fn with_sru(mut self, server: SruServer) -> Self {
@@ -342,7 +366,9 @@ pub fn router(state: AppState) -> Router {
         .route("/equipe/busca", get(staff_bar::search))
         .route("/equipe", get(staff::home))
         .route("/equipe/acervo", get(catalog::catalog))
+        .route("/equipe/relatorios", get(reports::page))
         .route("/equipe/leitores", get(patrons::search))
+        .route("/equipe/leitores/carteirinhas", get(patron_cards::print))
         .route(
             "/equipe/leitores/categorias",
             get(patrons::categories).post(patrons::change_category),
@@ -366,6 +392,10 @@ pub fn router(state: AppState) -> Router {
             get(editing::suggest_subjects),
         )
         .route("/equipe/acervo/isbn", get(editing::check_isbn_field))
+        .route(
+            "/equipe/acervo/inventario",
+            get(inventory::form).post(inventory::read),
+        )
         .route("/equipe/acervo/fontes/{n}", get(draft_station::answer))
         .route(
             "/equipe/acervo/nova",
@@ -449,6 +479,14 @@ fn patron_routes() -> Router<AppState> {
             "/equipe/leitores/{id}/senha",
             post(patron_password::set_password),
         )
+        .route(
+            "/equipe/leitores/{id}/anonimizar",
+            post(patron_privacy::anonymize),
+        )
+        .route(
+            "/equipe/leitores/{id}/exportar",
+            post(patron_privacy::export),
+        )
 }
 
 /// The notice board's form (docs/specs/interface/mural.md, item 7).
@@ -469,6 +507,7 @@ fn export_routes() -> Router<AppState> {
     Router::new()
         .route("/record/{id}/export", get(citation::opac))
         .route("/equipe/acervo/lote/marc", get(batch::export_marc))
+        .route("/equipe/acervo/lote/etiquetas", get(batch::spine_labels))
         .route(
             "/equipe/acervo/instancia/{id}/marc",
             get(catalog::export_marc),

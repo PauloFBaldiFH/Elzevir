@@ -12,7 +12,7 @@ use elzevir_app::commands::{WriteCommand, WriteOutput, WriteRefusal};
 use elzevir_app::patron_account::PatronAccounts;
 use elzevir_app::patrons::{
     CategoryChange, PatronCommand, PatronField, PatronFields, PatronOutput, PatronRefusal,
-    PatronUpdate, ReadingHistory,
+    PatronUpdate, ReadingHistory, Retention, RetentionApplied,
 };
 use elzevir_app::registries::{RegistryChange, RegistryEntry};
 use elzevir_app::staff::hash_password;
@@ -420,5 +420,145 @@ fn a_search_finds_card_numbers_cpfs_and_parts_of_names_and_views_are_logged() {
             "SELECT count(*) FROM audit_log WHERE kind = 'patrons.view' AND actor = 3"
         ),
         1
+    );
+}
+
+#[test]
+fn anonymizing_follows_a_changed_card_number_and_spares_a_namesake() {
+    // docs/specs/circulacao/lgpd.md, item 5.
+    let dir = tempfile::tempdir().unwrap();
+    let (store, branch, category) = library(&dir);
+    let PatronOutput::Added(ana) = add(&store, fields(branch, category)).unwrap() else {
+        panic!("not added");
+    };
+    let mut namesake = fields(branch, category);
+    namesake.cardnumber = "000200".to_owned();
+    namesake.cpf = None;
+    namesake.first_name = Some("Bruno".to_owned());
+    add(&store, namesake).unwrap();
+    // A new card number: the first enrolment is found through the CPF both share.
+    let mut changed = fields(branch, category);
+    changed.cardnumber = "000124".to_owned();
+    changed.email = Some("ana@example.org".to_owned());
+    run(
+        &store,
+        PatronCommand::Update(Box::new(PatronUpdate {
+            patron: ana,
+            row_version: 1,
+            fields: changed,
+        })),
+    )
+    .unwrap();
+    assert_eq!(
+        run(&store, PatronCommand::Anonymize(ana)).unwrap(),
+        PatronOutput::Anonymized(ana)
+    );
+    let log: String = read(
+        &store,
+        "SELECT group_concat(command, char(10)) FROM audit_log",
+    );
+    for private in ["000123", "000124", "52998224725", "Ana", "ana@example.org"] {
+        assert!(!log.contains(private), "{private} still in the audit log");
+    }
+    assert!(log.contains("000200") && log.contains("Bruno") && log.contains("Silva"));
+    assert!(log.contains("patrons.anonymize") || log.contains("Anonymize"));
+    assert_eq!(
+        refusal(run(&store, PatronCommand::Anonymize(ana))),
+        PatronRefusal::UnknownPatron
+    );
+}
+
+#[test]
+fn retention_drops_old_history_and_anonymizes_long_expired_patrons_once_a_day() {
+    // docs/specs/circulacao/lgpd.md, items 12 to 16.
+    let dir = tempfile::tempdir().unwrap();
+    let (store, branch, category) = library(&dir);
+    let patron = |card: &str, expires: Option<jiff::civil::Date>| {
+        let mut fields = fields(branch, category);
+        fields.cardnumber = card.to_owned();
+        fields.cpf = None;
+        fields.enrolled = date(2023, 1, 31);
+        fields.expires = expires;
+        fields.reading_history = ReadingHistory::Kept;
+        let PatronOutput::Added(id) = add(&store, fields).unwrap() else {
+            panic!("not added");
+        };
+        id.0
+    };
+    let ana = patron("000301", Some(date(2027, 12, 31)));
+    let long_ago = Some(date(2024, 1, 31));
+    let bruno = patron("000302", long_ago);
+    let carla = patron("000303", long_ago);
+    let elisa = patron("000304", long_ago);
+    // Expired, but not long enough.
+    patron("000305", Some(date(2026, 6, 30)));
+    // Rows put straight in, without their Items: only the patron and the dates matter here.
+    rusqlite::Connection::open(dir.path().join("elzevir.db"))
+        .unwrap()
+        .execute_batch(&format!(
+            "PRAGMA foreign_keys = OFF;
+             INSERT INTO returned_loans (item_id, patron_id, branch_id, issued_at, due, on_site,
+                                         returned_at, return_branch_id)
+             VALUES (1, {ana}, {b}, '2024-01-02', '2024-01-16', 0,
+                     '2024-01-10T10:00:00-03:00[America/Sao_Paulo]', {b}),
+                    (2, {ana}, {b}, '2026-11-02', '2026-11-16', 0,
+                     '2026-11-20T10:00:00-03:00[America/Sao_Paulo]', {b});
+             INSERT INTO ended_holds (patron_id, instance_id, pickup_id, placed_on, ended_at,
+                                      outcome)
+             VALUES ({ana}, 1, {b}, '2024-01-01', '2024-02-01T09:00:00-03:00[America/Sao_Paulo]',
+                     'CANCELLED');
+             INSERT INTO account_lines (patron_id, debit_type, amount, outstanding, branch_id,
+                                        created_at, updated_at)
+             VALUES ({carla}, 'OVERDUE', 500, 500, {b}, '2024-01-01', '2024-01-01');
+             INSERT INTO loans (item_id, patron_id, branch_id, issued_at, due, on_site)
+             VALUES (3, {elisa}, {b}, '2024-01-02', '2024-01-16', 0);",
+            b = branch.0
+        ))
+        .unwrap();
+    let retention = |today| {
+        run(
+            &store,
+            PatronCommand::ApplyRetention {
+                today,
+                retention: Retention {
+                    reading_history_days: Some(365),
+                    anonymize_expired_days: Some(365),
+                },
+            },
+        )
+        .unwrap()
+    };
+    assert_eq!(
+        retention(date(2026, 11, 26)),
+        PatronOutput::RetentionApplied(RetentionApplied {
+            ran: true,
+            history: 2,
+            anonymized: 1,
+            kept: 2,
+        })
+    );
+    let kept: String = read(
+        &store,
+        "SELECT group_concat(returned_at, '|') FROM returned_loans WHERE patron_id IS NOT NULL",
+    );
+    assert!(kept.starts_with("2026-11-20"));
+    let anonymized: String = read(
+        &store,
+        "SELECT group_concat(id, ',') FROM patrons WHERE anonymized_at IS NOT NULL",
+    );
+    assert_eq!(anonymized, bruno.to_string());
+    // The same day again does nothing; the next day runs again.
+    assert_eq!(
+        retention(date(2026, 11, 26)),
+        PatronOutput::RetentionApplied(RetentionApplied::default())
+    );
+    assert_eq!(
+        retention(date(2026, 11, 27)),
+        PatronOutput::RetentionApplied(RetentionApplied {
+            ran: true,
+            history: 0,
+            anonymized: 0,
+            kept: 2,
+        })
     );
 }

@@ -86,4 +86,4 @@
 
 ## 6. LGPD
 
-Os comandos de leitor vão inteiros para o `audit_log`, como todo comando (o log pode ser reaplicado). A anonimização de um leitor, que vem com as ferramentas de LGPD, apaga também os dados dele nesses registros.
+Os comandos de leitor vão inteiros para o `audit_log`, como todo comando (o log pode ser reaplicado). A anonimização de um leitor apaga também os dados dele nesses registros ([lgpd.md](lgpd.md), item 5).

@@ -224,7 +224,13 @@ const MODULES: [LinkEntry; 10] = [
         None,
         any_staff,
     ),
-    link("module-reports", "mod-reports", "admin", None, any_staff),
+    link(
+        "module-reports",
+        "mod-reports",
+        "admin",
+        Some("/equipe/relatorios"),
+        has_reports,
+    ),
     link("module-tools", "mod-tools", "admin", None, any_staff),
     link(
         "module-administration",
@@ -237,13 +243,20 @@ const MODULES: [LinkEntry; 10] = [
 
 /// Screens that exist today, listed in the drawer under the modules until each module page
 /// gathers its own.
-const TOOLS: [LinkEntry; 6] = [
+const TOOLS: [LinkEntry; 7] = [
     link(
         "tool-import",
         "mod-import",
         "catalog",
         Some("/equipe/acervo/importar"),
         imports,
+    ),
+    link(
+        "tool-inventory",
+        "mod-tools",
+        "catalog",
+        Some("/equipe/acervo/inventario"),
+        catalogues,
     ),
     link(
         "tool-printed-notices",
@@ -284,6 +297,10 @@ const TOOLS: [LinkEntry; 6] = [
 
 fn any_staff(_: &AppState, _: &ActiveSession) -> bool {
     true
+}
+
+fn has_reports(state: &AppState, _: &ActiveSession) -> bool {
+    state.reports.is_some()
 }
 
 fn sees_patrons(state: &AppState, session: &ActiveSession) -> bool {

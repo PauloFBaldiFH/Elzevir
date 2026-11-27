@@ -420,11 +420,11 @@ Plano registrado em 2026-11-21, depois da Fase 3. Ficam pendentes da Fase 3 o mo
 
 Ordem: 4.1 a 4.3 em sequência, 4.4 depois da 4.2; 4.5 a 4.9 em seguida, na ordem que Paulo escolher.
 
-### Fase 5: migração do Koha e operação da biblioteca (proposta)
+### Fase 5: migração do Koha e operação da biblioteca
 
-> **Proposta de 2026-11-26, aguardando a aprovação de Paulo.** As Fases 0 a 4 estão concluídas, com as pendências da Fase 3 (PRs #258 e #259). Nada desta fase começa antes da aprovação.
+> Status: **aprovado** por Paulo em 2026-11-26, começando pela migração (5.1 e 5.2). As Fases 0 a 4 estão concluídas, com as pendências da Fase 3 (PRs #258 e #259).
 
-Com o catálogo, a circulação e a interoperabilidade prontos, o que falta para uma biblioteca trocar o Koha pelo Elzevir é **trazer os dados vivos** (leitores, empréstimos, reservas, débitos) e as ferramentas do dia a dia que o Koha tem e o Elzevir ainda não tem. Periódicos e aquisições ficam fora desta proposta, para Paulo decidir se entram numa Fase 6 (seção abaixo da tabela).
+Com o catálogo, a circulação e a interoperabilidade prontos, o que falta para uma biblioteca trocar o Koha pelo Elzevir é **trazer os dados vivos** (leitores, empréstimos, reservas, débitos) e as ferramentas do dia a dia que o Koha tem e o Elzevir ainda não tem. Periódicos e aquisições ficam fora desta fase, para Paulo decidir se entram numa Fase 6 (seção abaixo da tabela).
 
 | # | Tarefa | Referência | Pronto quando |
 |---|---|---|---|
@@ -436,7 +436,7 @@ Com o catálogo, a circulação e a interoperabilidade prontos, o que falta para
 | 5.6 | Etiquetas de lombada e carteirinhas em Typst (já previstas no doc 03 §3.4), a partir da seleção do acervo e da lista de leitores | Koha: `labels/`, `patroncards/` | A seleção imprime etiquetas com o número de chamada PHA e carteirinhas com código de barras, em modelos editáveis |
 | 5.7 | Relatórios e estatísticas fixos: circulação por período, unidade e categoria; acervo por classe e material; leitores ativos; exportação em CSV | Koha: `reports/` (relatórios prontos, não SQL livre) | Cada relatório bate com a contagem direta no banco de teste e sai em CSV |
 
-Ordem proposta: 5.1 e 5.2 primeiro, porque destravam a troca do Koha na biblioteca de Paulo; depois 5.4 (LGPD, antes de dados reais entrarem), 5.5, 5.6, 5.7 e 5.3.
+Ordem: 5.1 e 5.2 primeiro, porque destravam a troca do Koha na biblioteca de Paulo; depois 5.4 (LGPD, antes de dados reais entrarem), 5.5, 5.6, 5.7 e 5.3.
 
 **Para Paulo decidir (Fase 6 ou não):**
 - **Periódicos** (assinaturas, previsão de fascículos, recebimento e cobrança): já sugerido para a v1 em 2026-11-15, ainda pendente.

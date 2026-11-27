@@ -445,6 +445,68 @@ fn a_patron_is_enrolled_and_edited_on_the_form() {
     assert_eq!(views, 1);
 }
 
+#[test]
+fn a_patron_is_exported_then_anonymized_from_the_edit_form() {
+    // docs/specs/circulacao/lgpd.md, items 6 and 11.
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    let (server, address) = start(data.path());
+    let lei = sign_in(address, "lei");
+    let cir = sign_in(address, "cir");
+    let edit = format!("/equipe/leitores/{ana}/editar");
+    let action = format!("/equipe/leitores/{ana}/anonimizar");
+    let page = request(address, "GET", &edit, &lei, "");
+    assert!(page.contains(&format!("action=\"{action}\"")));
+    let token = csrf(&page).to_owned();
+    let post = |who: &str, body: &str| {
+        request(
+            address,
+            "POST",
+            &action,
+            &format!("{who}Content-Type: application/x-www-form-urlencoded\r\n"),
+            &format!("csrf={token}{body}"),
+        )
+    };
+    assert_status(&post(&cir, "&confirm=1"), 403);
+    // Item 11: the copy of the data comes first, as a download.
+    let export = format!("/equipe/leitores/{ana}/exportar");
+    assert!(page.contains(&format!("action=\"{export}\"")));
+    let download = |who: &str| {
+        request(
+            address,
+            "POST",
+            &export,
+            &format!("{who}Content-Type: application/x-www-form-urlencoded\r\n"),
+            &format!("csrf={token}"),
+        )
+    };
+    assert_status(&download(&cir), 403);
+    let copy = download(&lei);
+    assert_status(&copy, 200);
+    assert!(copy.contains(&format!(
+        "content-disposition: attachment; filename=\"leitor-{ana}.json\""
+    )));
+    assert!(copy.contains("\"cardnumber\": \"000123\"") && copy.contains("\"patrons.export\""));
+    let unconfirmed = post(&lei, "");
+    assert_status(&unconfirmed, 422);
+    assert!(unconfirmed.contains("Tick the box to confirm."));
+    let done = post(&lei, "&confirm=1");
+    assert_status(&done, 303);
+    assert!(done.contains("location: /equipe/leitores?anonimizado=1"));
+    assert!(
+        request(address, "GET", "/equipe/leitores?anonimizado=1", &lei, "")
+            .contains("The patron was anonymized.")
+    );
+    assert_status(
+        &request(address, "GET", &format!("/equipe/leitores/{ana}"), &cir, ""),
+        404,
+    );
+    assert!(!request(address, "GET", "/equipe/leitores?q=silva", &cir, "").contains("Silva, Ana"));
+    assert_status(&post(&lei, "&confirm=1"), 404);
+    assert_status(&download(&lei), 404);
+    drop(server);
+}
+
 /// An Item "0001" of "Dom Casmurro" at the Anexo branch, and rules that lend for a week.
 fn stock(data: &Path) {
     let store = open(data);
@@ -1147,6 +1209,66 @@ fn a_returned_item_is_set_aside_for_its_hold_at_the_checkin_desk() {
     drop(server);
 }
 
+/// docs/specs/catalogo/inventario.md, items 10 to 13: the shelf is read on the inventory
+/// screen, by who catalogues, and the report comes on the page or as CSV.
+#[test]
+fn the_shelf_is_read_on_the_inventory_screen() {
+    let data = tempfile::tempdir().unwrap();
+    library(data.path());
+    stock(data.path());
+    let (server, address) = start(data.path());
+    let cat = sign_in(address, "cat");
+    let cir = sign_in(address, "cir");
+    let path = "/equipe/acervo/inventario";
+    assert_status(&request(address, "GET", path, &cir, ""), 403);
+    let page = request(address, "GET", path, &cat, "");
+    assert_status(&page, 200);
+    assert!(page.contains("action=\"/equipe/acervo/inventario\"") && page.contains("Anexo"));
+    assert!(
+        request(address, "GET", "/equipe/barra", &cat, "").contains(&format!("href=\"{path}\""))
+    );
+    let token = csrf(&page).to_owned();
+    let form = format!("{cat}Content-Type: application/x-www-form-urlencoded\r\n");
+    let post = |body: &str| {
+        request(
+            address,
+            "POST",
+            path,
+            &form,
+            &format!("csrf={token}&{body}"),
+        )
+    };
+    let nothing = post("seen_on=2026-11-26&barcodes=");
+    assert_status(&nothing, 422);
+    assert!(nothing.contains("Read at least one barcode"));
+    let read = post("seen_on=2026-11-26&compare=1&barcodes=0001%0AZZZ%0A0001");
+    assert_status(&read, 200);
+    assert!(read.contains("2 read, 1 marked as seen, 1 expected on the shelf."));
+    assert!(
+        read.contains("Left out: 1 repeated, 0 too long, 0 with characters that do not print.")
+    );
+    assert!(read.contains("<td>ZZZ</td><td></td><td></td><td>no Item has this barcode</td>"));
+    let csv = post("seen_on=2026-11-26&barcodes=ZZZ&as=csv");
+    assert_status(&csv, 200);
+    assert!(csv.contains("content-type: text/csv; charset=utf-8"));
+    assert!(
+        csv.contains("Barcode,Title,Call number,Problems\r\nZZZ,,,no Item has this barcode\r\n")
+    );
+    drop(server);
+    let store = open(data.path());
+    let seen: String = store
+        .readers()
+        .read(|c| {
+            c.query_row(
+                "SELECT last_seen FROM items WHERE barcode = '0001'",
+                [],
+                |row| row.get(0),
+            )
+        })
+        .unwrap();
+    assert_eq!(seen, "2026-11-26");
+}
+
 #[test]
 fn the_staff_header_offers_only_permitted_scopes_and_dispatches_the_search() {
     let data = tempfile::tempdir().unwrap();
@@ -1732,4 +1854,99 @@ fn the_patron_holds_and_cancels_through_the_api_and_refusals_lock_the_card() {
         &format!("csrf={}&card=000123&password=leitura-segura", csrf(&form)),
     );
     assert_status(&locked, 429);
+}
+
+/// The response as bytes, for a PDF.
+fn request_bytes(address: SocketAddr, path: &str, headers: &str) -> Vec<u8> {
+    let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(5)).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(30)))
+        .unwrap();
+    write!(
+        stream,
+        "GET {path} HTTP/1.0\r\nHost: localhost\r\n{headers}Content-Length: 0\r\n\r\n"
+    )
+    .unwrap();
+    let mut response = Vec::new();
+    stream.read_to_end(&mut response).unwrap();
+    response
+}
+
+#[test]
+fn patron_cards_are_printed_from_the_search_and_the_record() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    let (server, address) = start(data.path());
+    let cir = sign_in(address, "cir");
+    let cat = sign_in(address, "cat");
+    let path = format!("/equipe/leitores/carteirinhas?leitor={ana}");
+    let found = request(address, "GET", "/equipe/leitores?q=Silva", &cir, "");
+    assert!(found.contains(&format!(
+        "<a class=\"patron-cards\" href=\"{path}\" download>"
+    )));
+    let record = request(address, "GET", &format!("/equipe/leitores/{ana}"), &cir, "");
+    assert!(record.contains(&format!(
+        "href=\"{path}\" download title=\"Print card (PDF)\""
+    )));
+    assert_status(&request(address, "GET", &path, &cat, ""), 403);
+    let pdf = request_bytes(address, &format!("{path}&leitor={ana}"), &cir);
+    let split = pdf.windows(4).position(|w| w == b"\r\n\r\n").unwrap();
+    let (head, body) = pdf.split_at(split + 4);
+    let head = String::from_utf8_lossy(head);
+    assert!(head.starts_with("HTTP/1.0 200"), "{head}");
+    assert!(head.contains("content-type: application/pdf"));
+    assert!(head.contains("filename=\"carteirinhas.pdf\""));
+    assert!(body.starts_with(b"%PDF-"));
+    for (query, status) in [("leitor=x", 400), ("", 400), ("leitor=999999", 404)] {
+        let path = format!("/equipe/leitores/carteirinhas?{query}");
+        assert_status(&request(address, "GET", &path, &cir, ""), status);
+    }
+    drop(server);
+}
+
+#[test]
+fn the_reports_are_shown_and_downloaded_as_csv() {
+    let data = tempfile::tempdir().unwrap();
+    library(data.path());
+    stock(data.path());
+    let (server, address) = start(data.path());
+    let cat = sign_in(address, "cat");
+    let page = request(address, "GET", "/equipe/relatorios", &cat, "");
+    assert_status(&page, 200);
+    assert!(page.contains("name=\"relatorio\" value=\"circulacao\""));
+    assert!(
+        request(address, "GET", "/equipe/barra", &cat, "").contains("href=\"/equipe/relatorios\"")
+    );
+    let patrons = request(
+        address,
+        "GET",
+        "/equipe/relatorios?relatorio=leitores&desde=2026-01-01",
+        &cat,
+        "",
+    );
+    assert_status(&patrons, 200);
+    assert!(patrons.contains("<td>Biblioteca Central</td><td>Estudante</td><td>1</td><td>0</td>"));
+    let csv = request(
+        address,
+        "GET",
+        "/equipe/relatorios?relatorio=acervo&formato=csv",
+        &cat,
+        "",
+    );
+    assert_status(&csv, 200);
+    assert!(csv.contains("filename=\"relatorio-acervo.csv\""));
+    assert!(csv.ends_with("Class,Content,Items\r\nNo class,Not described,1\r\nTotal,,1\r\n"));
+    let circulation = request(
+        address,
+        "GET",
+        "/equipe/relatorios?relatorio=circulacao&de=2026-03-01&ate=2026-03-31",
+        &cat,
+        "",
+    );
+    assert!(circulation.contains("<td>Total</td><td></td><td>0</td><td>0</td>"));
+    let backwards = "/equipe/relatorios?relatorio=circulacao&de=2026-03-31&ate=2026-03-01";
+    let refused = request(address, "GET", backwards, &cat, "");
+    assert_status(&refused, 422);
+    assert!(refused.contains("The period ends before it starts."));
+    drop(server);
 }

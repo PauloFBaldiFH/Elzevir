@@ -11,6 +11,7 @@ use elzevir_app::batch::{ItemSet, ItemsChange, instances_of, selection};
 use elzevir_app::catalog::{CodeLists, Place};
 use elzevir_app::editing::Edit;
 use elzevir_app::export::{ExportOptions, RecordFormat, export_selection};
+use elzevir_app::printing::{self, PrintError};
 use elzevir_app::worklist::{SavedList, SavedListChange, SavedListId, WorkList};
 use elzevir_domain::catalog::{BranchId, CollectionId, PolicyId, SublocationId};
 use elzevir_web_templates::{BatchChoices, GridOption};
@@ -91,6 +92,70 @@ pub(crate) async fn export_marc(
         response.headers_mut().insert(NOT_EXPORTED, value);
     }
     response
+}
+
+/// Response header with how many Items of the selection have no call number
+/// (etiquetas.md, item 2).
+const WITHOUT_CALL_NUMBER: &str = "x-elzevir-without-call-number";
+
+/// `GET /equipe/acervo/lote/etiquetas?head=…`: the spine labels of the Items of the
+/// selected families, as one PDF (docs/specs/catalogo/etiquetas.md, items 1 to 4).
+pub(crate) async fn spine_labels(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(pairs): Query<Vec<(String, String)>>,
+) -> Response {
+    if current_session(&state, &headers).is_none() {
+        return Redirect::to("/equipe/login").into_response();
+    }
+    let Some(printer) = state.printer.clone() else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let heads = selection(
+        pairs
+            .iter()
+            .filter(|(name, _)| name == "head")
+            .map(|(_, value)| value.as_str()),
+    );
+    if heads.is_empty() {
+        return (StatusCode::BAD_REQUEST, "no family selected").into_response();
+    }
+    let listing = Arc::clone(&state.inner.staff_ports.listing);
+    let typeset = tokio::task::spawn_blocking(move || {
+        let families = listing.families(&heads).ok()?;
+        let (labels, without) = printing::spine_labels(&families);
+        Some((printer.spine_labels(&labels), labels.is_empty(), without))
+    })
+    .await;
+    let Ok(Some((document, empty, without))) = typeset else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "catalog unavailable").into_response();
+    };
+    if empty {
+        return (StatusCode::BAD_REQUEST, "no Item with a call number").into_response();
+    }
+    match document {
+        Ok(pdf) => (
+            [
+                (header::CONTENT_TYPE, "application/pdf".to_owned()),
+                (
+                    header::CONTENT_DISPOSITION,
+                    "attachment; filename=\"etiquetas.pdf\"".to_owned(),
+                ),
+                (
+                    header::HeaderName::from_static(WITHOUT_CALL_NUMBER),
+                    without.to_string(),
+                ),
+            ],
+            pdf,
+        )
+            .into_response(),
+        Err(error @ PrintError::TooMany { .. }) => {
+            (StatusCode::PAYLOAD_TOO_LARGE, error.to_string()).into_response()
+        }
+        Err(error @ PrintError::Template(_)) => {
+            (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()).into_response()
+        }
+    }
 }
 
 /// The body of a batch change: the selected families and, per column, `""` to leave it,

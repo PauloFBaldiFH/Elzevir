@@ -26,6 +26,7 @@
   <a class="selection-export" data-format="marc21" href="/equipe/acervo/lote/marc" download>{{ t.get("selection-export-marc21") }}</a>
   <a class="selection-export" data-format="marcxml" href="/equipe/acervo/lote/marc" download>{{ t.get("selection-export-marcxml") }}</a>
   <a class="selection-export" data-format="unimarc" href="/equipe/acervo/lote/marc" download>{{ t.get("selection-export-unimarc") }}</a>
+  <a class="selection-labels" href="/equipe/acervo/lote/etiquetas" download>{{ t.get("selection-spine-labels") }}</a>
   {% if let Some(batch) = batch %}
   <button type="button" class="selection-items">{{ t.get("batch-items-open") }}</button>
   <span class="selection-list">

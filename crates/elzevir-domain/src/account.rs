@@ -10,52 +10,151 @@ use crate::circulation_rules::{CirculationRule, RuleScopeKey, effective_rule};
 use crate::due_date::LengthUnit;
 use crate::fine::FineRule;
 
-/// Why a patron owes something.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// Why a patron owes something: the types Koha installs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum DebitType {
-    /// An overdue fine (`OVERDUE`).
-    Overdue,
+    /// A fee for creating the patron's account (`ACCOUNT`).
+    Account,
+    /// A fee for renewing the patron's account (`ACCOUNT_RENEW`).
+    AccountRenew,
+    /// A fee for an article request (`ARTICLE_REQUEST`).
+    ArticleRequest,
     /// The replacement price of an Item lost while on loan (`LOST`).
     Lost,
+    /// A charge the staff made by hand (`MANUAL`).
+    Manual,
+    /// A fee for a new card (`NEW_CARD`).
+    NewCard,
+    /// An overdue fine (`OVERDUE`).
+    Overdue,
+    /// Money the library paid out to the patron (`PAYOUT`).
+    Payout,
     /// The fee for processing a lost Item (`PROCESSING`).
     Processing,
+    /// A rental fee (`RENT`).
+    Rent,
+    /// A daily rental fee (`RENT_DAILY`).
+    RentDaily,
+    /// A daily rental fee on renewal (`RENT_DAILY_RENEW`).
+    RentDailyRenew,
+    /// A rental fee on renewal (`RENT_RENEW`).
+    RentRenew,
+    /// A hold fee (`RESERVE`).
+    Reserve,
+    /// A fee for a hold left waiting too long (`RESERVE_EXPIRED`).
+    ReserveExpired,
+    /// A credit that was voided (`VOID`).
+    Void,
 }
 
 impl DebitType {
+    /// Every type, in the order of the codes.
+    pub const ALL: [Self; 16] = [
+        Self::Account,
+        Self::AccountRenew,
+        Self::ArticleRequest,
+        Self::Lost,
+        Self::Manual,
+        Self::NewCard,
+        Self::Overdue,
+        Self::Payout,
+        Self::Processing,
+        Self::Rent,
+        Self::RentDaily,
+        Self::RentDailyRenew,
+        Self::RentRenew,
+        Self::Reserve,
+        Self::ReserveExpired,
+        Self::Void,
+    ];
+
     /// The code stored in the account, Koha's.
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
-            Self::Overdue => "OVERDUE",
+            Self::Account => "ACCOUNT",
+            Self::AccountRenew => "ACCOUNT_RENEW",
+            Self::ArticleRequest => "ARTICLE_REQUEST",
             Self::Lost => "LOST",
+            Self::Manual => "MANUAL",
+            Self::NewCard => "NEW_CARD",
+            Self::Overdue => "OVERDUE",
+            Self::Payout => "PAYOUT",
             Self::Processing => "PROCESSING",
+            Self::Rent => "RENT",
+            Self::RentDaily => "RENT_DAILY",
+            Self::RentDailyRenew => "RENT_DAILY_RENEW",
+            Self::RentRenew => "RENT_RENEW",
+            Self::Reserve => "RESERVE",
+            Self::ReserveExpired => "RESERVE_EXPIRED",
+            Self::Void => "VOID",
         }
     }
 
     /// The type of a stored code.
     #[must_use]
     pub fn from_code(code: &str) -> Option<Self> {
-        [Self::Overdue, Self::Lost, Self::Processing]
-            .into_iter()
-            .find(|kind| kind.code() == code)
+        Self::ALL.into_iter().find(|kind| kind.code() == code)
     }
 }
 
-/// Why a patron owes less.
+/// Why a patron owes less: the types Koha installs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum CreditType {
+    /// A charge cancelled (`CANCELLATION`).
+    Cancellation,
+    /// A credit the staff gave by hand (`CREDIT`).
+    Credit,
+    /// A discount on a charge (`DISCOUNT`).
+    Discount,
+    /// A charge forgiven (`FORGIVEN`).
+    Forgiven,
+    /// The refund of a lost Item found again (`LOST_FOUND`).
+    LostFound,
+    /// The refund of an overpayment (`OVERPAYMENT`).
+    Overpayment,
     /// The patron paid (`PAYMENT`).
     Payment,
+    /// The refund of the processing fee of a lost Item found again (`PROCESSING_FOUND`).
+    ProcessingFound,
+    /// A purchase (`PURCHASE`).
+    Purchase,
+    /// A refund (`REFUND`).
+    Refund,
     /// The library let the debt go (`WRITEOFF`).
     Writeoff,
 }
 
 impl CreditType {
+    /// Every type, in the order of the codes.
+    pub const ALL: [Self; 11] = [
+        Self::Cancellation,
+        Self::Credit,
+        Self::Discount,
+        Self::Forgiven,
+        Self::LostFound,
+        Self::Overpayment,
+        Self::Payment,
+        Self::ProcessingFound,
+        Self::Purchase,
+        Self::Refund,
+        Self::Writeoff,
+    ];
+
     /// The code stored in the account, Koha's.
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
+            Self::Cancellation => "CANCELLATION",
+            Self::Credit => "CREDIT",
+            Self::Discount => "DISCOUNT",
+            Self::Forgiven => "FORGIVEN",
+            Self::LostFound => "LOST_FOUND",
+            Self::Overpayment => "OVERPAYMENT",
             Self::Payment => "PAYMENT",
+            Self::ProcessingFound => "PROCESSING_FOUND",
+            Self::Purchase => "PURCHASE",
+            Self::Refund => "REFUND",
             Self::Writeoff => "WRITEOFF",
         }
     }
@@ -63,10 +162,26 @@ impl CreditType {
     /// The type of a stored code.
     #[must_use]
     pub fn from_code(code: &str) -> Option<Self> {
-        match code {
-            "PAYMENT" => Some(Self::Payment),
-            "WRITEOFF" => Some(Self::Writeoff),
-            _ => None,
+        Self::ALL.into_iter().find(|kind| kind.code() == code)
+    }
+}
+
+/// What the staff does at the desk with money owed (conta.md, item 10).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum PaymentKind {
+    /// The patron pays.
+    Payment,
+    /// The library lets the debt go.
+    Writeoff,
+}
+
+impl PaymentKind {
+    /// The credit it leaves in the account.
+    #[must_use]
+    pub const fn credit(self) -> CreditType {
+        match self {
+            Self::Payment => CreditType::Payment,
+            Self::Writeoff => CreditType::Writeoff,
         }
     }
 }

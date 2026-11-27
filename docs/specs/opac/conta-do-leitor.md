@@ -10,6 +10,7 @@
 2. **Quem define.** A senha é definida na edição do leitor, por quem tem a permissão de leitores, pelo comando `patrons.set_password`. Uma senha nova substitui a anterior. Também dá para tirar a senha, e aí o leitor não entra mais.
 3. **Regra da senha.** A senha tem de 8 a 128 caracteres. Não pode ser igual à carteirinha nem ao CPF.
 4. **Guarda.** O servidor guarda só o hash Argon2id, nunca a senha. O comando que vai para o `audit_log` leva só o hash.
+4a. **Senha vinda do Koha.** O leitor migrado do Koha traz o hash bcrypt de lá ([migração](../migracao/leitores-do-koha.md), item 12a). A entrada confere esse hash como o Koha (`C4::Auth::checkpw_hash`, sobre os bytes UTF-8 da senha) e, quando bate, troca pelo hash Argon2id da mesma senha, pelo comando `patrons.set_password` sem pessoa da equipe. Se a troca falhar, o leitor entra assim mesmo, e a troca é tentada no próximo login. Vale também para os tokens da API ([API](api.md), item 8).
 
 ### Entrada (parte a)
 

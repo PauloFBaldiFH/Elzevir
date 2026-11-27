@@ -39,9 +39,15 @@ pub(crate) struct Config {
     /// Circulation settings that are not rules.
     #[serde(default)]
     circulation: Circulation,
+    /// How long patrons' data is kept (docs/specs/circulacao/lgpd.md).
+    #[serde(default)]
+    privacy: Privacy,
     /// How notices go out (docs/specs/circulacao/avisos.md).
     #[serde(default)]
     notices: Notices,
+    /// The templates of printed documents (docs/specs/catalogo/etiquetas.md).
+    #[serde(default)]
+    printing: Printing,
     /// Other catalogues to copy records from (docs/specs/catalogo/fontes-de-rascunho.md).
     #[serde(default)]
     draft_sources: Vec<DraftSourceEntry>,
@@ -55,6 +61,10 @@ pub(crate) struct Config {
     /// The SRU server of the public catalog (docs/specs/opac/sru.md).
     #[serde(default)]
     sru: crate::sru_config::SruSection,
+    /// Koha preferences left for review by `import-koha-prefs`; accepted and never read
+    /// (docs/specs/migracao/preferencias-do-koha.md, item 6).
+    #[serde(rename = "koha_legacy")]
+    _koha_legacy: Option<std::collections::BTreeMap<String, String>>,
 }
 
 /// One `[[draft_sources]]` entry (fontes-de-rascunho.md, items 16 and 17, and
@@ -453,6 +463,26 @@ impl LongOverdue {
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct Printing {
+    /// The spine label template, relative to the data directory; the built-in one when
+    /// absent (etiquetas.md, item 5).
+    spine_labels: Option<PathBuf>,
+    /// The patron card template, likewise (carteirinhas.md, item 4).
+    patron_cards: Option<PathBuf>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Privacy {
+    /// Days a returned loan or an ended hold keeps its patron; forever when absent
+    /// (docs/specs/circulacao/lgpd.md, item 12).
+    reading_history_days: Option<u32>,
+    /// Days after the enrolment expired before the patron is anonymized; never when absent.
+    anonymize_expired_days: Option<u32>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Library {
     /// The IANA name of its time zone, such as `America/Sao_Paulo`; the system's when
     /// absent (docs/specs/catalogo/facetas.md, item 16).
@@ -479,8 +509,12 @@ pub(crate) struct Loaded {
     pub(crate) long_overdue: Option<LongOverdueSettings>,
     /// Whether holds waiting past their last day are cancelled.
     pub(crate) expire_waiting_holds: bool,
+    /// How long history and expired patrons are kept.
+    pub(crate) retention: elzevir_app::patrons::Retention,
     /// The mail server, when notices go out by e-mail.
     pub(crate) mail: Option<MailSettings>,
+    /// The library's own print templates.
+    pub(crate) templates: elzevir_print::Templates,
     /// The enabled bibliographic draft sources, in priority order.
     pub(crate) draft_sources: Vec<DraftServer>,
     /// The enabled authority sources, in priority order.
@@ -498,9 +532,21 @@ pub(crate) struct Loaded {
 /// Reads `data_dir/elzevir.toml` and what it points to; no file is no configuration.
 pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
     let path = data_dir.join("elzevir.toml");
-    let config: Config = match read_limited(&path, MAX_CONFIG)? {
+    let text = read_limited(&path, MAX_CONFIG)?;
+    from_text(data_dir, &path, text.as_deref())
+}
+
+/// Checks `text` as the server would read it from `elzevir.toml`, for a configuration that
+/// names no file (docs/specs/migracao/preferencias-do-koha.md, item 3).
+pub(crate) fn check(text: &str) -> Result<(), String> {
+    from_text(Path::new("."), Path::new("elzevir.toml"), Some(text)).map(drop)
+}
+
+/// The configuration `text` says, with the files it names read from `data_dir`.
+fn from_text(data_dir: &Path, path: &Path, text: Option<&str>) -> Result<Loaded, String> {
+    let config: Config = match text {
         None => Config::default(),
-        Some(text) => toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?,
+        Some(text) => toml::from_str(text).map_err(|e| format!("{}: {e}", path.display()))?,
     };
     let time_zone = match &config.library.time_zone {
         Some(name) => TimeZone::get(name)
@@ -516,6 +562,10 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         None => None,
     };
     let expire_waiting_holds = config.circulation.holds.expire_waiting.unwrap_or(false);
+    let retention = elzevir_app::patrons::Retention {
+        reading_history_days: config.privacy.reading_history_days,
+        anonymize_expired_days: config.privacy.anonymize_expired_days,
+    };
     let mail = match &config.notices.email {
         Some(section) => Some(
             section
@@ -523,6 +573,10 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
                 .map_err(|e| format!("{}: notices.email: {e}", path.display()))?,
         ),
         None => None,
+    };
+    let templates = elzevir_print::Templates {
+        spine_labels: template(data_dir, config.printing.spine_labels.as_deref())?,
+        patron_cards: template(data_dir, config.printing.patron_cards.as_deref())?,
     };
     let (draft_sources, authority_sources) =
         draft_servers(&config.draft_sources).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -553,7 +607,9 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
             time_zone,
             long_overdue,
             expire_waiting_holds,
+            retention,
             mail,
+            templates,
             draft_sources,
             authority_sources,
             sip2,
@@ -577,7 +633,9 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         time_zone,
         long_overdue,
         expire_waiting_holds,
+        retention,
         mail,
+        templates,
         draft_sources,
         authority_sources,
         sip2,
@@ -585,6 +643,18 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         sru,
         z3950,
     })
+}
+
+/// The text of a print template, relative to the data directory, when one is named
+/// (etiquetas.md, item 5, and carteirinhas.md, item 4).
+fn template(data_dir: &Path, file: Option<&Path>) -> Result<Option<String>, String> {
+    let Some(file) = file else {
+        return Ok(None);
+    };
+    let path = data_dir.join(file);
+    read_limited(&path, MAX_CONFIG)?
+        .map(Some)
+        .ok_or_else(|| format!("{}: the template does not exist", path.display()))
 }
 
 /// The file as text, `None` when it does not exist.
@@ -708,6 +778,47 @@ mod tests {
     }
 
     #[test]
+    fn retention_periods_are_off_unless_given() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(
+            load(dir.path()).unwrap().retention,
+            elzevir_app::patrons::Retention::default()
+        );
+        let config = dir.path().join("elzevir.toml");
+        std::fs::write(
+            &config,
+            "[privacy]\nreading_history_days = 730\nanonymize_expired_days = 1095\n",
+        )
+        .unwrap();
+        let retention = load(dir.path()).unwrap().retention;
+        assert_eq!(retention.reading_history_days, Some(730));
+        assert_eq!(retention.anonymize_expired_days, Some(1095));
+        std::fs::write(&config, "[privacy]\nkeep_forever = true\n").unwrap();
+        assert!(load(dir.path()).unwrap_err().contains("keep_forever"));
+    }
+
+    #[test]
+    fn the_print_templates_are_read_from_the_data_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(
+            load(dir.path()).unwrap().templates,
+            elzevir_print::Templates::default()
+        );
+        let config = dir.path().join("elzevir.toml");
+        std::fs::write(
+            &config,
+            "[printing]\nspine_labels = \"etiquetas.typ\"\npatron_cards = \"cartoes.typ\"\n",
+        )
+        .unwrap();
+        assert!(load(dir.path()).unwrap_err().contains("does not exist"));
+        std::fs::write(dir.path().join("etiquetas.typ"), "#let x = 1").unwrap();
+        std::fs::write(dir.path().join("cartoes.typ"), "#let y = 2").unwrap();
+        let templates = load(dir.path()).unwrap().templates;
+        assert_eq!(templates.spine_labels.as_deref(), Some("#let x = 1"));
+        assert_eq!(templates.patron_cards.as_deref(), Some("#let y = 2"));
+    }
+
+    #[test]
     fn waiting_holds_expire_only_when_asked() {
         let dir = tempfile::tempdir().unwrap();
         assert!(!load(dir.path()).unwrap().expire_waiting_holds);
@@ -717,6 +828,14 @@ mod tests {
         )
         .unwrap();
         assert!(load(dir.path()).unwrap().expire_waiting_holds);
+    }
+
+    #[test]
+    fn koha_preferences_for_review_are_accepted_as_text() {
+        // docs/specs/migracao/preferencias-do-koha.md, item 6.
+        check("[koha_legacy]\nOPACUserCSS = \"a\"\n\"OAI-PMH:ConfFile\" = \"\"\n").unwrap();
+        assert!(check("[koha_legacy]\nmaxoutstanding = 5\n").is_err());
+        assert!(check("[koha_legado]\nx = \"1\"\n").is_err());
     }
 
     #[test]

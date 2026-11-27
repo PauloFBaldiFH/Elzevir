@@ -31,7 +31,7 @@ use elzevir_app::patrons::{
     CategoryChange, PatronCommand, PatronFields, PatronOutput, ReadingHistory,
 };
 use elzevir_app::pending::PendingReader;
-use elzevir_domain::account::{CreditType, PaymentRefusal};
+use elzevir_domain::account::{PaymentKind, PaymentRefusal};
 use elzevir_domain::catalog::{BranchId, InstanceId, Money};
 use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome, TransferReason};
 use elzevir_domain::checkout::{Alert, Confirm, HeldFor, Impossible, TooManyReason};
@@ -807,7 +807,7 @@ fn a_late_return_charges_its_fine_and_debts_hold_back_checkouts() {
 
 fn pay(
     library: &Library,
-    kind: CreditType,
+    kind: PaymentKind,
     amount: i64,
     lines: &[i64],
 ) -> Result<Paid, PayRefusal> {
@@ -866,31 +866,31 @@ fn payments_settle_the_oldest_debits_first_and_write_offs_the_chosen_ones() {
         )
     };
     assert_eq!(
-        pay(&library, CreditType::Payment, 0, &[]),
+        pay(&library, PaymentKind::Payment, 0, &[]),
         Err(PayRefusal::Amount(PaymentRefusal::NotPositive))
     );
     assert_eq!(
-        pay(&library, CreditType::Payment, 801, &[]),
+        pay(&library, PaymentKind::Payment, 801, &[]),
         Err(PayRefusal::Amount(PaymentRefusal::OverDue {
             due: Money(800)
         }))
     );
     // 3.00 with nothing chosen: the older fine first.
-    let paid = pay(&library, CreditType::Payment, 300, &[]).unwrap();
+    let paid = pay(&library, PaymentKind::Payment, 300, &[]).unwrap();
     assert_eq!(paid.owed, Money(500));
     assert_eq!(outstanding(), "0 500");
     // Line 1 owes nothing now, so it cannot be chosen.
     assert_eq!(
-        pay(&library, CreditType::Payment, 100, &[1]),
+        pay(&library, PaymentKind::Payment, 100, &[1]),
         Err(PayRefusal::UnknownLine)
     );
     assert_eq!(
-        pay(&library, CreditType::Writeoff, 600, &[2]),
+        pay(&library, PaymentKind::Writeoff, 600, &[2]),
         Err(PayRefusal::Amount(PaymentRefusal::OverDue {
             due: Money(500)
         }))
     );
-    let written = pay(&library, CreditType::Writeoff, 500, &[2]).unwrap();
+    let written = pay(&library, PaymentKind::Writeoff, 500, &[2]).unwrap();
     assert_eq!(written.owed, Money(0));
     assert_eq!(outstanding(), "0 0");
     assert_eq!(
@@ -1744,4 +1744,98 @@ fn the_patron_search_counts_open_loans_and_holds() {
         panic!("{rows:?}");
     };
     assert_eq!((caio.loans_due.len(), caio.holds), (0, 1));
+}
+
+#[test]
+fn the_reports_match_the_counts_read_from_the_tables() {
+    use elzevir_app::reports::{CirculationLine, CollectionLine, Period, ReportReader};
+
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(&dir);
+    library.rules(&[("maxissueqty", "5"), ("issuelength", "7")]);
+    for (barcode, call_number) in [
+        ("A1", Some("869.3 A848d")),
+        ("A2", Some("J 028.5 L732m")),
+        ("A3", None),
+    ] {
+        submit(
+            &library.store,
+            WriteCommand::Catalog(CatalogCommand::AddItem(Box::new(NewItem {
+                instance: library.instance,
+                item: ItemData {
+                    issue_statement: None,
+                    enumeration: None,
+                    chronology: None,
+                    barcode: Some(barcode.to_owned()),
+                    inventory_number: None,
+                    home_branch: "B1".to_owned(),
+                    holding_branch: "B1".to_owned(),
+                    item_type: "P1".to_owned(),
+                    call_number: call_number.map(str::to_owned),
+                    location: None,
+                    collection: None,
+                    price: None,
+                    replacement_price: None,
+                    copy_number: None,
+                    status: ItemStatus::default(),
+                    acquired_on: None,
+                },
+            }))),
+        )
+        .unwrap();
+    }
+    let bia = library.another_patron("000456", library.central);
+    library
+        .lend("A1", "2026-03-02T10:00:00-03:00", false)
+        .unwrap();
+    library
+        .lend_to(bia, "A2", "2026-03-05T10:00:00-03:00", false)
+        .unwrap();
+    library
+        .give_back("A1", library.central, "2026-03-10T10:00:00-03:00")
+        .unwrap();
+    library
+        .lend("A3", "2026-04-01T10:00:00-03:00", false)
+        .unwrap();
+    let march = Period::new(date(2026, 3, 1), date(2026, 3, 31)).unwrap();
+    let circulation = library.store.circulation(march).unwrap();
+    let line = |branch: &str, checkouts, returns| CirculationLine {
+        branch: branch.to_owned(),
+        category: Some("Adulto".to_owned()),
+        checkouts,
+        returns,
+    };
+    assert_eq!(circulation, [line("Anexo", 2, 0), line("Central", 0, 1)]);
+    // The same counts straight from the tables.
+    let issued: i64 = library.read(
+        "SELECT (SELECT count(*) FROM loans WHERE issued_at LIKE '2026-03-%')
+              + (SELECT count(*) FROM returned_loans WHERE issued_at LIKE '2026-03-%')",
+    );
+    let returned: i64 =
+        library.read("SELECT count(*) FROM returned_loans WHERE returned_at LIKE '2026-03-%'");
+    let total = |pick: fn(&CirculationLine) -> u64| circulation.iter().map(pick).sum::<u64>();
+    assert_eq!(total(|line| line.checkouts), u64::try_from(issued).unwrap());
+    assert_eq!(total(|line| line.returns), u64::try_from(returned).unwrap());
+    // Ana keeps no history, yet her return still counts under her category.
+    let kept: Option<i64> = library.read("SELECT patron_id FROM returned_loans");
+    assert_eq!(kept, None);
+    // Ana borrowed in April, Bia only in March.
+    let patrons = library.store.patrons(date(2026, 4, 1)).unwrap();
+    let [only] = patrons.as_slice() else {
+        panic!("{patrons:?}");
+    };
+    assert_eq!((only.patrons, only.active), (2, 1));
+    let since_march = library.store.patrons(date(2026, 3, 1)).unwrap();
+    assert_eq!(since_march.first().map(|line| line.active), Some(2));
+    let collection = library.store.collection().unwrap();
+    let items: i64 = library.read("SELECT count(*) FROM items WHERE withdrawn = 0");
+    assert_eq!(
+        collection.iter().map(|line| line.items).sum::<u64>(),
+        u64::try_from(items).unwrap()
+    );
+    let classes: Vec<(Option<u16>, u64)> = collection
+        .iter()
+        .map(|line: &CollectionLine| (line.class, line.items))
+        .collect();
+    assert_eq!(classes, [(Some(0), 1), (Some(800), 1), (None, 1)]);
 }

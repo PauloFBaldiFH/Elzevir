@@ -59,9 +59,8 @@ const MIGRATIONS: &[&str] = &[
          permission TEXT NOT NULL,
          PRIMARY KEY (staff_id, permission)
      ) STRICT, WITHOUT ROWID;",
-    // 3: the bibliographic model (docs/specs/catalogo/modelo-bibliografico.md). Small
-    // integer columns named `kind`, `vocabulary` or `format` hold the stable numbers of
-    // the enums in `elzevir_domain::catalog`.
+    // 3: the bibliographic model (docs/specs/catalogo/modelo-bibliografico.md). Columns
+    // `kind`, `vocabulary` and `format` hold the stable numbers of `elzevir_domain::catalog`.
     "CREATE TABLE branches (
          id          INTEGER PRIMARY KEY,
          code        TEXT NOT NULL UNIQUE,
@@ -815,8 +814,7 @@ const MIGRATIONS: &[&str] = &[
          ON notices (patron_id, kind, coalesce(level, 0), branch_id, transport, day)
          WHERE kind = 'OVERDUE';
      CREATE INDEX notices_pending ON notices (id) WHERE status = 'pending';",
-    // 58: the texts of the notices the library wrote in place of the built-in ones
-    // (docs/specs/circulacao/avisos.md, part g).
+    // 58: the library's own notice texts (docs/specs/circulacao/avisos.md, part g).
     "CREATE TABLE notice_texts (
          kind    TEXT PRIMARY KEY
                  CHECK (kind IN ('OVERDUE1', 'OVERDUE2', 'OVERDUE3', 'HOLD')),
@@ -834,15 +832,17 @@ const MIGRATIONS: &[&str] = &[
          day         TEXT NOT NULL,
          row_version INTEGER NOT NULL DEFAULT 1
      ) STRICT;",
-    // 60: the patron's OPAC password, as an Argon2id hash (docs/specs/opac/
-    // conta-do-leitor.md, items 1 to 4); NULL is no OPAC access.
+    // 60: the OPAC password, Argon2id (opac/conta-do-leitor.md); 66: anonymization.
     "ALTER TABLE patrons ADD COLUMN password_hash TEXT;",
-    // 61: keep installation-local identifiers separate across source catalogs.
+    // 61-65: source identifiers, offline repository, OAI datestamps, Koha patron keys.
     include_str!("import_provenance.sql"),
-    // 62: offline institutional repository.
     include_str!("repository/schema.sql"),
-    // 63: the OAI-PMH datestamp of each Instance.
     include_str!("oai_datestamps.sql"),
+    include_str!("koha_keys.sql"),
+    include_str!("koha_history.sql"),
+    "ALTER TABLE patrons ADD COLUMN anonymized_at TEXT;",
+    "ALTER TABLE items ADD COLUMN last_seen TEXT;", // 67: inventory (catalogo/inventario.md)
+    include_str!("returned_categories.sql"),
 ];
 
 /// The migration that creates `match_keys`.

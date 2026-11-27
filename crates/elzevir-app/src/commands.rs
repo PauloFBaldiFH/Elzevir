@@ -155,6 +155,7 @@ impl WriteCommand {
             Self::Catalog(CatalogCommand::UpdateAgent(_)) => "catalog.update_agent",
             Self::Catalog(CatalogCommand::LinkAuthority(_)) => "catalog.link_authority",
             Self::Catalog(CatalogCommand::UpdateSubject(_)) => "catalog.update_subject",
+            Self::Catalog(CatalogCommand::Inventory(_)) => "catalog.inventory",
             Self::Patrons(PatronCommand::ChangeCategory(CategoryChange::Create { .. })) => {
                 "patrons.create_category"
             }
@@ -170,6 +171,15 @@ impl WriteCommand {
             Self::Patrons(PatronCommand::RevealCpf(_)) => "patrons.reveal_cpf",
             Self::Patrons(PatronCommand::SetPassword { .. }) => "patrons.set_password",
             Self::Patrons(PatronCommand::SetReadingHistory { .. }) => "patrons.set_reading_history",
+            Self::Patrons(PatronCommand::Anonymize(_)) => "patrons.anonymize",
+            Self::Patrons(PatronCommand::Export(_)) => "patrons.export",
+            Self::Patrons(PatronCommand::ApplyRetention { .. }) => "patrons.apply_retention",
+            Self::Patrons(PatronCommand::MigrateKoha(_)) => "patrons.migrate_koha",
+            Self::Patrons(PatronCommand::MigrateKohaCirculation(_)) => {
+                "patrons.migrate_koha_circulation"
+            }
+            Self::Patrons(PatronCommand::MigrateKohaAccounts(_)) => "patrons.migrate_koha_accounts",
+            Self::Patrons(PatronCommand::MigrateKohaHistory(_)) => "patrons.migrate_koha_history",
             Self::Circulation(CirculationCommand::SetRules(_)) => "circ.set_rules",
             Self::Circulation(CirculationCommand::ChangeCalendar(_)) => "circ.change_calendar",
             Self::Circulation(CirculationCommand::Checkout(_)) => "circ.checkout",

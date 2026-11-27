@@ -17,6 +17,7 @@ elzevir-domain.workspace = true
 elzevir-data.workspace = true
 elzevir-marc.workspace = true
 argon2.workspace = true
+bcrypt.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true

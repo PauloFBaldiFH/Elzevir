@@ -53,6 +53,33 @@ pub enum PatronCommand {
         /// The choice.
         reading_history: ReadingHistory,
     },
+    /// Anonymizes the patron for good: personal data leaves the record, the reading
+    /// history and the audit log; what was lent and owed stays, without a name
+    /// (docs/specs/circulacao/lgpd.md, items 1 to 7).
+    Anonymize(PatronId),
+    /// Records that a staff member took a copy of everything kept about the patron; changes
+    /// nothing else (docs/specs/circulacao/lgpd.md, items 8 to 11).
+    Export(PatronId),
+    /// Applies the library's retention periods, once a day (docs/specs/circulacao/lgpd.md,
+    /// items 12 to 16).
+    ApplyRetention {
+        /// The library's day.
+        today: Date,
+        /// The periods, from `elzevir.toml`.
+        retention: Retention,
+    },
+    /// Brings branches, categories and patrons from a Koha dump
+    /// (docs/specs/migracao/leitores-do-koha.md, item 16).
+    MigrateKoha(Box<crate::koha_migration::KohaBatch>),
+    /// Brings Koha's current loans and holds, after the patrons
+    /// (docs/specs/migracao/circulacao-do-koha.md).
+    MigrateKohaCirculation(Box<crate::koha_migration::KohaCirculationBatch>),
+    /// Brings Koha's patron accounts, after the loans
+    /// (docs/specs/migracao/circulacao-do-koha.md).
+    MigrateKohaAccounts(Box<crate::koha_migration::KohaAccountBatch>),
+    /// Brings Koha's returned loans, after the accounts
+    /// (docs/specs/migracao/circulacao-do-koha.md).
+    MigrateKohaHistory(Box<crate::koha_migration::KohaHistoryBatch>),
 }
 
 /// One change to the patron categories.
@@ -132,8 +159,33 @@ pub struct PatronUpdate {
     pub fields: PatronFields,
 }
 
+/// How long the library keeps a patron's history and an expired patron
+/// (docs/specs/circulacao/lgpd.md, item 12); each period is off when `None`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Retention {
+    /// Days after which a returned loan or an ended hold loses its patron, even one who
+    /// keeps a reading history (Koha: `batch_anonymise.pl --days`).
+    pub reading_history_days: Option<u32>,
+    /// Days after the enrolment expired after which the patron is anonymized (Koha:
+    /// `PatronAnonymizeDelay`).
+    pub anonymize_expired_days: Option<u32>,
+}
+
+/// What a run of the retention periods did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RetentionApplied {
+    /// Whether it ran: it runs once a day, and a later run on the same day does nothing.
+    pub ran: bool,
+    /// Returned loans and ended holds that lost their patron.
+    pub history: usize,
+    /// Patrons anonymized.
+    pub anonymized: usize,
+    /// Expired patrons left as they are, for a loan, a hold or a debt.
+    pub kept: usize,
+}
+
 /// What a patron command returns.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PatronOutput {
     /// The category created or changed; `None` after a delete.
     CategoryChanged(Option<PatronCategoryId>),
@@ -147,6 +199,20 @@ pub enum PatronOutput {
     PasswordSet(PatronId),
     /// The patron's choice about the reading history was recorded.
     ReadingHistorySet(PatronId),
+    /// The patron was anonymized.
+    Anonymized(PatronId),
+    /// The export of the patron's data was logged.
+    Exported(PatronId),
+    /// What a run of the retention periods did.
+    RetentionApplied(RetentionApplied),
+    /// What a write of the Koha migration did.
+    KohaMigrated(crate::koha_migration::KohaMigrated),
+    /// What a write of Koha's loans and holds did.
+    KohaCirculationMigrated(crate::koha_migration::KohaCirculationMigrated),
+    /// What a write of Koha's accounts did.
+    KohaAccountsMigrated(crate::koha_migration::KohaAccountsMigrated),
+    /// What a write of Koha's returned loans did.
+    KohaHistoryMigrated(crate::koha_migration::KohaHistoryMigrated),
 }
 
 /// A field of the patron form, to name the one refused.
@@ -207,6 +273,12 @@ pub enum PatronRefusal {
     /// The patron changed since the form was read.
     #[error("the patron changed since it was read")]
     Stale,
+    /// The patron still has Items on loan (Koha: `anonymize` refuses with issues).
+    #[error("the patron still has Items on loan")]
+    HasLoans,
+    /// The patron still has holds.
+    #[error("the patron still has holds")]
+    HasHolds,
 }
 
 impl PatronRefusal {
@@ -233,6 +305,8 @@ impl PatronRefusal {
             Self::UnknownBranch => "patron-error-unknown-branch",
             Self::UnknownPatron => "patron-error-unknown",
             Self::Stale => "patron-error-stale",
+            Self::HasLoans => "patron-error-has-loans",
+            Self::HasHolds => "patron-error-has-holds",
         }
     }
 }
@@ -497,6 +571,14 @@ pub trait PatronDesk: Send + Sync {
     ///
     /// When storage fails.
     fn search(&self, query: &PatronQuery) -> Result<Vec<PatronRow>, PatronDeskError>;
+
+    /// Everything kept about the patron, as one JSON document
+    /// (docs/specs/circulacao/lgpd.md, item 9); `None` when there is no such patron.
+    ///
+    /// # Errors
+    ///
+    /// When storage fails.
+    fn export(&self, id: PatronId) -> Result<Option<serde_json::Value>, PatronDeskError>;
 
     /// Every category, by name.
     ///

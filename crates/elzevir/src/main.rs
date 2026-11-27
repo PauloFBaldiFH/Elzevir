@@ -38,6 +38,8 @@ mod init;
 mod installation;
 mod institution_repository;
 mod koha_codes;
+mod koha_migration_cli;
+mod koha_prefs_cli;
 mod listen_port;
 mod local_artifacts;
 mod local_disk;
@@ -179,6 +181,10 @@ enum Command {
     AuthoritySearch(draft_search::AuthoritySearchArgs),
     /// Sets how this library's Koha item types translate into BIBFRAME on import.
     KohaTypes(catalog_cli::KohaTypesArgs),
+    /// Brings branches, patron categories and patrons from a whole Koha database dump.
+    MigrateKoha(koha_migration_cli::MigrateKohaArgs),
+    /// Writes an `elzevir.toml` from the system preferences of a Koha database dump.
+    ImportKohaPrefs(koha_prefs_cli::ImportKohaPrefsArgs),
 }
 
 #[derive(Subcommand)]
@@ -263,6 +269,8 @@ fn main() -> ExitCode {
         Command::DraftSearch(args) => draft_search::run(&args),
         Command::AuthoritySearch(args) => draft_search::run_authorities(&args),
         Command::KohaTypes(args) => catalog_cli::koha_types(&args),
+        Command::MigrateKoha(args) => koha_migration_cli::run(&args),
+        Command::ImportKohaPrefs(args) => koha_prefs_cli::run(&args),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -432,10 +440,11 @@ fn web_app(
     data_dir: &Path,
     config: WebConfig,
     language: &str,
-    (sources, oai, sru): (
+    (sources, oai, sru, printer): (
         draft_search::ScreenSources,
         Option<elzevir_web::OaiRepository>,
         Option<elzevir_web::SruServer>,
+        elzevir_print::TypstPrinter,
     ),
 ) -> Result<WebRuntime, String> {
     let i18n = language_bundle(language)?;
@@ -491,7 +500,9 @@ fn web_app(
     .with_notices(Arc::clone(store) as _)
     .with_board(Arc::clone(store) as _)
     .with_pending(Arc::clone(store) as _)
-    .with_patron_accounts(Arc::clone(store) as _);
+    .with_patron_accounts(Arc::clone(store) as _)
+    .with_printer(Arc::new(printer))
+    .with_reports(Arc::clone(store) as _);
     let state = match sources.drafts {
         Some(drafts) => state.with_draft_sources(Arc::new(drafts)),
         None => state,
@@ -562,6 +573,7 @@ struct Background {
     time_zone: jiff::tz::TimeZone,
     long_overdue: Option<elzevir_domain::long_overdue::LongOverdueSettings>,
     expire_holds: bool,
+    retention: elzevir_app::patrons::Retention,
     mail: Option<notice_mail::MailSettings>,
 }
 
@@ -577,7 +589,7 @@ impl Background {
         let mut runs = vec![runtime.spawn(overdue_run::run(
             Arc::clone(store),
             self.time_zone.clone(),
-            (self.long_overdue, self.expire_holds),
+            (self.long_overdue, self.expire_holds, self.retention),
             instance.to_owned(),
             control.receiver(),
         ))];
@@ -655,6 +667,7 @@ fn serve_controlled(
             time_zone: loaded.time_zone.clone(),
             long_overdue: loaded.long_overdue,
             expire_holds: loaded.expire_waiting_holds,
+            retention: loaded.retention,
             mail: loaded.mail.clone(),
         };
         let (oai, sru) = public_services(&loaded, &store, &index, &instance);
@@ -676,6 +689,7 @@ fn serve_controlled(
                 draft_search::ScreenSources::new(drafts, authorities, &instance)?,
                 oai,
                 sru,
+                elzevir_print::TypstPrinter::new(loaded.templates),
             ),
         )?;
         let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;

@@ -45,6 +45,8 @@ pub enum Edit {
     Link(Box<WorkAuthority>),
     /// A subject, and so every record that names it (docs/specs/catalogo/autoridades.md).
     Subject(Box<SubjectUpdate>),
+    /// A reading of the shelf (docs/specs/catalogo/inventario.md).
+    Inventory(Box<crate::inventory::InventoryScan>),
 }
 
 /// Why an edit was not stored.

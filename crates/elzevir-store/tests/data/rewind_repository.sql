@@ -1,4 +1,9 @@
--- Undo migration 63, then 62, for fixtures that reconstruct an older catalog schema.
+-- Undo migrations 68, 67, 66, 65 and 64, then 63 and 62, for fixtures that reconstruct an older catalog schema.
+ALTER TABLE patrons DROP COLUMN last_issued_on;
+ALTER TABLE returned_loans DROP COLUMN category_id;
+ALTER TABLE items DROP COLUMN last_seen;
+ALTER TABLE patrons DROP COLUMN anonymized_at;
+DROP TABLE koha_keys;
 DROP TRIGGER instance_datestamp_added;
 DROP TRIGGER instance_datestamp_changed;
 DROP TABLE instance_datestamps;

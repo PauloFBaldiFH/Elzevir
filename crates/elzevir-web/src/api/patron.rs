@@ -314,7 +314,7 @@ pub(crate) async fn loans(State(state): State<AppState>, headers: HeaderMap) -> 
 #[derive(Serialize)]
 struct DebtJson {
     date: String,
-    kind: &'static str,
+    kind: String,
     amount: i64,
     outstanding: i64,
 }
@@ -324,16 +324,13 @@ struct DebtJson {
     reason = "read_own maps the rows it owns"
 )]
 fn debt_json(line: AccountLine) -> DebtJson {
-    use elzevir_domain::account::{CreditType, DebitType};
     DebtJson {
         date: line.day.to_string(),
         kind: match line.kind {
-            LineKind::Debit(DebitType::Overdue) => "overdue",
-            LineKind::Debit(DebitType::Lost) => "lost",
-            LineKind::Debit(DebitType::Processing) => "processing",
-            LineKind::Credit(CreditType::Payment) => "payment",
-            LineKind::Credit(CreditType::Writeoff) => "writeoff",
-        },
+            LineKind::Debit(debit) => debit.code(),
+            LineKind::Credit(credit) => credit.code(),
+        }
+        .to_ascii_lowercase(),
         amount: line.amount.0,
         outstanding: line.outstanding.0,
     }

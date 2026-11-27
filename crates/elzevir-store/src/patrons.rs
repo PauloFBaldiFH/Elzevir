@@ -14,7 +14,7 @@ use crate::{CommandFailed, StoreError, WriteTx};
 
 type Applied = Result<WriteOutput, CommandFailed<WriteRefusal>>;
 
-const fn refused(refusal: PatronRefusal) -> CommandFailed<WriteRefusal> {
+pub(crate) const fn refused(refusal: PatronRefusal) -> CommandFailed<WriteRefusal> {
     CommandFailed::Rejected(WriteRefusal::Patrons(refusal))
 }
 
@@ -24,15 +24,21 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &PatronCommand) -> Applied {
         PatronCommand::ChangeCategory(change) => change_category(tx.connection(), change)?,
         PatronCommand::Add(fields) => add(tx.connection(), fields)?,
         PatronCommand::Update(update) => update_patron(tx.connection(), update)?,
-        PatronCommand::View(patron) | PatronCommand::RevealCpf(patron) => {
+        PatronCommand::View(patron)
+        | PatronCommand::RevealCpf(patron)
+        | PatronCommand::Export(patron) => {
             if !crate::catalog::exists(
                 tx.connection(),
-                "SELECT 1 FROM patrons WHERE id = ?1",
+                "SELECT 1 FROM patrons WHERE id = ?1 AND anonymized_at IS NULL",
                 patron.0,
             )? {
                 return Err(refused(PatronRefusal::UnknownPatron));
             }
-            PatronOutput::Viewed(*patron)
+            if matches!(command, PatronCommand::Export(_)) {
+                PatronOutput::Exported(*patron)
+            } else {
+                PatronOutput::Viewed(*patron)
+            }
         }
         PatronCommand::SetPassword {
             patron,
@@ -49,6 +55,12 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &PatronCommand) -> Applied {
                 return Err(refused(PatronRefusal::UnknownPatron));
             }
             PatronOutput::PasswordSet(*patron)
+        }
+        PatronCommand::ApplyRetention { today, retention } => {
+            crate::patron_retention::apply(tx.connection(), *today, *retention)?
+        }
+        PatronCommand::Anonymize(patron) => {
+            crate::patron_privacy::anonymize(tx.connection(), *patron)?
         }
         PatronCommand::SetReadingHistory {
             patron,
@@ -70,6 +82,16 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &PatronCommand) -> Applied {
                 return Err(refused(PatronRefusal::UnknownPatron));
             }
             PatronOutput::ReadingHistorySet(*patron)
+        }
+        PatronCommand::MigrateKoha(batch) => crate::koha_migration::apply(tx.connection(), batch)?,
+        PatronCommand::MigrateKohaCirculation(batch) => {
+            crate::koha_circulation::apply(tx.connection(), batch)?
+        }
+        PatronCommand::MigrateKohaAccounts(batch) => {
+            crate::koha_accounts::apply(tx.connection(), batch)?
+        }
+        PatronCommand::MigrateKohaHistory(batch) => {
+            crate::koha_history::apply(tx.connection(), batch)?
         }
     };
     Ok(WriteOutput::Patrons(output))
@@ -143,6 +165,13 @@ fn change_category(
             if users > 0 {
                 return Err(refused(PatronRefusal::CategoryInUse));
             }
+            // Ended loans count under no category from now on (relatorios.md, item 2).
+            connection
+                .execute(
+                    "UPDATE returned_loans SET category_id = NULL WHERE category_id = ?1",
+                    [category.0],
+                )
+                .map_err(StoreError::from)?;
             let deleted = connection
                 .execute("DELETE FROM patron_categories WHERE id = ?1", [category.0])
                 .map_err(StoreError::from)?;
@@ -154,7 +183,7 @@ fn change_category(
     }
 }
 
-fn enrolment_columns(enrolment: Enrolment) -> (Option<u16>, Option<String>) {
+pub(crate) fn enrolment_columns(enrolment: Enrolment) -> (Option<u16>, Option<String>) {
     match enrolment {
         Enrolment::Months(months) => (Some(months), None),
         Enrolment::Until(day) => (None, Some(day.to_string())),
@@ -256,7 +285,8 @@ fn values(fields: &PatronFields, expires: Date) -> [Box<dyn rusqlite::ToSql + '_
     ]
 }
 
-fn add(
+/// Adds a patron whose fields pass every check.
+pub(crate) fn add(
     connection: &Connection,
     fields: &PatronFields,
 ) -> Result<PatronOutput, CommandFailed<WriteRefusal>> {

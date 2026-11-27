@@ -1128,9 +1128,9 @@ button.quiet { border: 1px solid var(--elzevir-color-border-strong); background:
 .account-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 18px; margin: 0 0 16px; }
 .account-facts dt { color: var(--elzevir-color-muted); }
 .account-facts dd { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
-.patron-password { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--elzevir-color-border); }
-.patron-password h2 { margin: 0 0 6px; font-size: 18px; }
-.patron-password form { margin-top: 10px; }
+.patron-password, .patron-export, .patron-anonymize { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--elzevir-color-border); }
+.patron-password h2, .patron-export h2, .patron-anonymize h2 { margin: 0 0 6px; font-size: 18px; }
+.patron-password form, .patron-export form, .patron-anonymize form { margin-top: 10px; }
 @media (max-width: 64rem) { .opac-home { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .opac-home .recent { grid-column: 1 / -1; grid-row: 1; } }
 @media (max-width: 46rem) { .opac-home { grid-template-columns: minmax(0, 1fr); } }
 @media (prefers-reduced-motion: reduce) { .recent-card a { transition: none; } .recent-card a:hover { transform: none; } }
@@ -1152,6 +1152,6 @@ button.quiet { border: 1px solid var(--elzevir-color-border-strong); background:
 .board-form .form-actions { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
 .board-form button { padding: 8px 16px; border: 0; border-radius: 9px; background: var(--elzevir-color-primary); color: var(--elzevir-color-primary-text); font: inherit; font-weight: 700; cursor: pointer; }
 .board-remove { margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--elzevir-color-border); }
-.board-form button.danger { background: transparent; border: 1px solid var(--elzevir-color-error); color: var(--elzevir-color-error); }
+.board-form button.danger, .patron-anonymize button.danger { background: transparent; border: 1px solid var(--elzevir-color-error); color: var(--elzevir-color-error); }
 /* Pending work on a module card (interface spec, §22 item 14). */
 .module-name .pending-chip { justify-self: start; margin-top: 4px; padding: 1px 8px; border-radius: 999px; background: var(--tone-soft); color: var(--tone); font-size: 11px; font-weight: 700; }

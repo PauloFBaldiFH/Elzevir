@@ -1,5 +1,5 @@
 {
-  "_comment": "Destino de cada preferência do Koha 26.05.05 no Elzevir (tarefa 0.11). Gerado a partir de data/koha-26.05/sysprefs.json e revisado à mão; cargo xtask check-sysprefs garante que toda preferência tem destino. Destinos: config, regra, fixo, interface, plataforma, fora-v1, revisar.",
+  "_comment": "Destino de cada preferência do Koha 26.05.05 no Elzevir (tarefa 0.11). Gerado a partir de data/koha-26.05/sysprefs.json e revisado à mão; cargo xtask check-sysprefs garante que toda preferência tem destino. Destinos: config, regra, fixo, interface, plataforma, fora-v1, revisar. \"campo\" é o campo do elzevir.toml que import-koha-prefs preenche; \"segredo\" marca senhas e chaves, que ele não copia.",
   "preferencias": {
     "1PageOrderPDFText": {
       "destino": "fora-v1",
@@ -79,7 +79,7 @@
     },
     "AddressFormat": {
       "destino": "config",
-      "nota": "Idiomas e formatos de data vão para elzevir.toml [interface]."
+      "nota": "Prevista para o elzevir.toml ([interface], com idiomas e formatos de data), ainda sem campo: fora do padrão, vai para [koha_legacy]."
     },
     "advancedMARCeditor": {
       "destino": "revisar",
@@ -235,7 +235,7 @@
     },
     "alphabet": {
       "destino": "config",
-      "nota": "Idiomas e formatos de data vão para elzevir.toml [interface]."
+      "nota": "Prevista para o elzevir.toml ([interface], com idiomas e formatos de data), ainda sem campo: fora do padrão, vai para [koha_legacy]."
     },
     "AlternateHoldingsField": {
       "destino": "revisar",
@@ -471,6 +471,7 @@
     },
     "AutoSelfCheckPass": {
       "destino": "revisar",
+      "segredo": true,
       "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
     },
     "AutoShareWithMana": {
@@ -587,7 +588,7 @@
     },
     "CalendarFirstDayOfWeek": {
       "destino": "config",
-      "nota": "elzevir.toml [interface] primeiro_dia_semana."
+      "nota": "Prevista para o elzevir.toml ([interface] primeiro_dia_semana), ainda sem campo: fora do padrão, vai para [koha_legacy]."
     },
     "CancelOrdersInClosedBaskets": {
       "destino": "fora-v1",
@@ -779,7 +780,7 @@
     },
     "CurrencyFormat": {
       "destino": "config",
-      "nota": "elzevir.toml [instituicao] formato_moeda."
+      "nota": "Prevista para o elzevir.toml ([instituicao] formato_moeda), ainda sem campo: fora do padrão, vai para [koha_legacy]."
     },
     "CustomCoverImages": {
       "destino": "fora-v1",
@@ -791,7 +792,7 @@
     },
     "dateformat": {
       "destino": "config",
-      "nota": "elzevir.toml [interface] formato_data."
+      "nota": "Prevista para o elzevir.toml ([interface] formato_data), ainda sem campo: fora do padrão, vai para [koha_legacy]."
     },
     "DebugLevel": {
       "destino": "plataforma",
@@ -851,15 +852,18 @@
     },
     "DefaultLongOverdueChargeValue": {
       "destino": "config",
-      "nota": "charge em elzevir.toml [circulation.long_overdue] (docs/specs/circulacao/conta.md, itens 20 a 26)."
+      "campo": "[circulation.long_overdue] charge",
+      "nota": "Ligado quando é igual a DefaultLongOverdueLostValue; docs/specs/circulacao/conta.md, item 22."
     },
     "DefaultLongOverdueDays": {
       "destino": "config",
-      "nota": "days em elzevir.toml [circulation.long_overdue] (docs/specs/circulacao/conta.md, itens 20 a 26)."
+      "campo": "[circulation.long_overdue] days",
+      "nota": "Ver docs/specs/circulacao/conta.md, item 20."
     },
     "DefaultLongOverdueLostValue": {
       "destino": "config",
-      "nota": "lost_status em elzevir.toml [circulation.long_overdue] (docs/specs/circulacao/conta.md, itens 20 a 26)."
+      "campo": "[circulation.long_overdue] lost_status",
+      "nota": "Ver docs/specs/circulacao/conta.md, item 20."
     },
     "DefaultLongOverduePatronCategories": {
       "destino": "fixo",
@@ -1119,6 +1123,7 @@
     },
     "ERMProviderEbscoApiKey": {
       "destino": "fora-v1",
+      "segredo": true,
       "nota": "ERM não entra na v1."
     },
     "ERMProviderEbscoCustomerID": {
@@ -1147,7 +1152,8 @@
     },
     "ExpireReservesMaxPickUpDelay": {
       "destino": "config",
-      "nota": "expire_waiting em elzevir.toml [circulation.holds] (docs/specs/circulacao/reservas.md, item 18)."
+      "campo": "[circulation.holds] expire_waiting",
+      "nota": "Ver docs/specs/circulacao/reservas.md, item 18."
     },
     "ExpireReservesMaxPickUpDelayCharge": {
       "destino": "fixo",
@@ -1183,7 +1189,7 @@
     },
     "FacetSortingLocale": {
       "destino": "config",
-      "nota": "Idiomas e formatos de data vão para elzevir.toml [interface]."
+      "nota": "Prevista para o elzevir.toml ([interface], com idiomas e formatos de data), ainda sem campo: fora do padrão, vai para [koha_legacy]."
     },
     "FailedLoginAttempts": {
       "destino": "revisar",
@@ -1279,6 +1285,7 @@
     },
     "GoogleOAuth2ClientSecret": {
       "destino": "plataforma",
+      "segredo": true,
       "nota": "Coberto pela plataforma do Elzevir (painel, elzevir.toml de servidor, sessões, SMTP)."
     },
     "GoogleOpenIDConnect": {
@@ -1587,7 +1594,8 @@
     },
     "KohaAdminEmailAddress": {
       "destino": "config",
-      "nota": "elzevir.toml [instituicao] email."
+      "campo": "[oai] admin_email",
+      "nota": "O endereço que o Identify do OAI-PMH informa; docs/specs/opac/oai-pmh.md, item 2."
     },
     "KohaManualBaseURL": {
       "destino": "fora-v1",
@@ -1607,7 +1615,8 @@
     },
     "LibraryName": {
       "destino": "config",
-      "nota": "elzevir.toml [instituicao] nome."
+      "campo": "[oai] repository_name",
+      "nota": "O nome que o Identify do OAI-PMH informa; docs/specs/opac/oai-pmh.md, item 2."
     },
     "LibraryThingForLibrariesEnabled": {
       "destino": "fora-v1",
@@ -1678,8 +1687,8 @@
       "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
     },
     "LockExpiredDelay": {
-      "destino": "revisar",
-      "nota": "Decidir na spec de leitores (Fase 2)."
+      "destino": "fixo",
+      "nota": "Sem bloqueio de conta: o leitor vencido não entra no OPAC pela validade, e a anonimização segue [privacy] (docs/specs/circulacao/lgpd.md, item 14)."
     },
     "LostChargesControl": {
       "destino": "revisar",
@@ -1695,6 +1704,7 @@
     },
     "ManaToken": {
       "destino": "revisar",
+      "segredo": true,
       "nota": "Decidir na spec de cada serviço (OAI-PMH, SRU, REST)."
     },
     "ManualRenewalPeriodBase": {
@@ -1875,6 +1885,7 @@
     },
     "NovelistSelectPassword": {
       "destino": "fora-v1",
+      "segredo": true,
       "nota": "Serviços externos de enriquecimento (capas, resenhas) ficam para depois da v1."
     },
     "NovelistSelectProfile": {
@@ -1918,12 +1929,14 @@
       "nota": "Decidir na spec do OPAC: aparência vai para tokens de design, comportamento para elzevir.toml ou fixo."
     },
     "OAI-PMH": {
-      "destino": "revisar",
-      "nota": "Decidir na spec de cada serviço (OAI-PMH, SRU, REST)."
+      "destino": "config",
+      "campo": "[oai] enabled",
+      "nota": "Ver docs/specs/opac/oai-pmh.md, item 2."
     },
     "OAI-PMH:archiveID": {
-      "destino": "plataforma",
-      "nota": "Preferência oculta no Koha (estado interno, OAI-PMH, estatísticas de uso)."
+      "destino": "config",
+      "campo": "[oai] repository_identifier",
+      "nota": "Ver docs/specs/opac/oai-pmh.md, item 2."
     },
     "OAI-PMH:AutoUpdateSets": {
       "destino": "plataforma",
@@ -1946,8 +1959,9 @@
       "nota": "Preferência oculta no Koha (estado interno, OAI-PMH, estatísticas de uso)."
     },
     "OAI-PMH:MaxCount": {
-      "destino": "plataforma",
-      "nota": "Preferência oculta no Koha (estado interno, OAI-PMH, estatísticas de uso)."
+      "destino": "config",
+      "campo": "[oai] max_count",
+      "nota": "Ver docs/specs/opac/oai-pmh.md, item 2."
     },
     "OnSiteCheckoutAutoCheck": {
       "destino": "revisar",
@@ -2018,8 +2032,9 @@
       "nota": "Decidir na spec do OPAC: aparência vai para tokens de design, comportamento para elzevir.toml ou fixo."
     },
     "OPACBaseURL": {
-      "destino": "revisar",
-      "nota": "Decidir na spec do OPAC: aparência vai para tokens de design, comportamento para elzevir.toml ou fixo."
+      "destino": "config",
+      "campo": "[oai] base_url",
+      "nota": "Com /oai no fim, o endereço que o Identify do OAI-PMH informa; docs/specs/opac/oai-pmh.md, item 2."
     },
     "opacbookbag": {
       "destino": "revisar",
@@ -2159,11 +2174,11 @@
     },
     "OPACLanguages": {
       "destino": "config",
-      "nota": "elzevir.toml [interface] idiomas_opac."
+      "nota": "Prevista para o elzevir.toml ([interface] idiomas_opac), ainda sem campo: fora do padrão, vai para [koha_legacy]."
     },
     "opaclanguagesdisplay": {
       "destino": "config",
-      "nota": "Idiomas e formatos de data vão para elzevir.toml [interface]."
+      "nota": "Prevista para o elzevir.toml ([interface], com idiomas e formatos de data), ainda sem campo: fora do padrão, vai para [koha_legacy]."
     },
     "opaclayoutstylesheet": {
       "destino": "revisar",
@@ -2495,10 +2510,12 @@
     },
     "OverDriveClientKey": {
       "destino": "fora-v1",
+      "segredo": true,
       "nota": "Serviços externos de enriquecimento (capas, resenhas) ficam para depois da v1."
     },
     "OverDriveClientSecret": {
       "destino": "fora-v1",
+      "segredo": true,
       "nota": "Serviços externos de enriquecimento (capas, resenhas) ficam para depois da v1."
     },
     "OverDriveLibraryID": {
@@ -2542,8 +2559,9 @@
       "nota": "Decidir na spec de leitores (Fase 2)."
     },
     "PatronAnonymizeDelay": {
-      "destino": "revisar",
-      "nota": "Decidir na spec de leitores (Fase 2)."
+      "destino": "config",
+      "campo": "[privacy] anonymize_expired_days",
+      "nota": "Sem exigir conta bloqueada; docs/specs/circulacao/lgpd.md, item 14."
     },
     "PatronAutoComplete": {
       "destino": "revisar",
@@ -2562,8 +2580,8 @@
       "nota": "Decidir na spec de leitores (Fase 2)."
     },
     "PatronRemovalDelay": {
-      "destino": "revisar",
-      "nota": "Decidir na spec de leitores (Fase 2)."
+      "destino": "fixo",
+      "nota": "O leitor anonimizado nunca é apagado: fica para as estatísticas e para a conta (docs/specs/circulacao/lgpd.md, item 16)."
     },
     "PatronRestrictionTypes": {
       "destino": "revisar",
@@ -3123,6 +3141,7 @@
     },
     "SMSSendPassword": {
       "destino": "revisar",
+      "segredo": true,
       "nota": "Decidir na spec de leitores (Fase 2)."
     },
     "SMSSendUsername": {
@@ -3159,7 +3178,7 @@
     },
     "StaffInterfaceLanguages": {
       "destino": "config",
-      "nota": "Idiomas e formatos de data vão para elzevir.toml [interface]."
+      "nota": "Prevista para o elzevir.toml ([interface], com idiomas e formatos de data), ainda sem campo: fora do padrão, vai para [koha_legacy]."
     },
     "StaffLangSelectorMode": {
       "destino": "interface",
@@ -3355,11 +3374,11 @@
     },
     "TimeFormat": {
       "destino": "config",
-      "nota": "elzevir.toml [interface] formato_hora."
+      "nota": "Prevista para o elzevir.toml ([interface] formato_hora), ainda sem campo: fora do padrão, vai para [koha_legacy]."
     },
     "timeout": {
       "destino": "config",
-      "nota": "elzevir.toml [equipe] sessao_ociosa."
+      "nota": "Prevista para o elzevir.toml ([equipe] sessao_ociosa), ainda sem campo: fora do padrão, vai para [koha_legacy]."
     },
     "TitleHoldFeeStrategy": {
       "destino": "revisar",
@@ -3403,7 +3422,7 @@
     },
     "TranslateNotices": {
       "destino": "config",
-      "nota": "Idiomas e formatos de data vão para elzevir.toml [interface]."
+      "nota": "Prevista para o elzevir.toml ([interface], com idiomas e formatos de data), ainda sem campo: fora do padrão, vai para [koha_legacy]."
     },
     "TrapHoldsOnOrder": {
       "destino": "revisar",

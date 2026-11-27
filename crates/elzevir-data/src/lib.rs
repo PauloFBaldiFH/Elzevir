@@ -11,6 +11,7 @@ mod generated;
 pub mod vocabulary;
 
 pub use generated::circulation_rule_kinds::RuleKind;
+pub use generated::koha_sysprefs::KOHA_SYSPREFS;
 pub use generated::koha_version::KOHA_REFERENCE;
 
 /// The Koha release whose behaviour Elzevir reproduces, as pinned in `koha-lock.json`.
@@ -22,6 +23,31 @@ pub struct KohaReference {
     pub tag: &'static str,
     /// Full commit hash the tag points to.
     pub commit: &'static str,
+}
+
+/// One Koha system preference: its default and the `elzevir.toml` field it becomes.
+///
+/// Koha: `installer/data/mysql/mandatory/sysprefs.sql`; the field comes from
+/// `tools/sysprefs-triage.json` (docs/specs/migracao/preferencias-do-koha.md).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KohaSyspref {
+    /// The name, as in `systempreferences.variable`.
+    pub name: &'static str,
+    /// The value a new Koha installation has, with the SQL escapes decoded.
+    pub default: &'static str,
+    /// The `elzevir.toml` field, such as `[oai] enabled`, when the preference has one.
+    pub field: Option<&'static str>,
+    /// Whether the value is a password or a key, which the import does not copy.
+    pub secret: bool,
+}
+
+/// The Koha system preference `name`, exactly as written.
+#[must_use]
+pub fn koha_syspref(name: &str) -> Option<&'static KohaSyspref> {
+    KOHA_SYSPREFS
+        .binary_search_by(|syspref| syspref.name.cmp(name))
+        .ok()
+        .and_then(|index| KOHA_SYSPREFS.get(index))
 }
 
 /// One dimension a circulation rule can be scoped by.
@@ -72,6 +98,26 @@ impl RuleKind {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn koha_sysprefs_are_sorted_and_found_by_name() {
+        assert!(
+            KOHA_SYSPREFS
+                .windows(2)
+                .all(|pair| matches!(pair, [a, b] if a.name < b.name))
+        );
+        let delay = koha_syspref("ExpireReservesMaxPickUpDelay").unwrap();
+        assert_eq!(delay.default, "0");
+        assert_eq!(delay.field, Some("[circulation.holds] expire_waiting"));
+        assert_eq!(koha_syspref("expirereservesmaxpickupdelay"), None);
+        // The SQL escape `\n` of sysprefs.sql is a line break in the database.
+        assert!(
+            koha_syspref("1PageOrderPDFText")
+                .unwrap()
+                .default
+                .contains("if \n you")
+        );
+    }
 
     #[test]
     fn every_kind_round_trips_through_its_koha_name() {
