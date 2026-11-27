@@ -227,3 +227,23 @@ fn set_password(
         params![hash, id],
     )?)
 }
+
+impl crate::ElzevirStore {
+    /// Whether the catalog has an Instance or the store holds a patron migrated from Koha,
+    /// which makes the folder unfit for `switch-from-koha` (troca-do-koha.md, item 3).
+    ///
+    /// # Errors
+    /// The database could not be read.
+    pub fn holds_catalog_or_koha_patrons(&self) -> Result<bool, StoreError> {
+        self.readers()
+            .read(|connection| {
+                connection.query_row(
+                    "SELECT EXISTS (SELECT 1 FROM instances)
+                         OR EXISTS (SELECT 1 FROM koha_keys WHERE kind = ?1)",
+                    params![Keyed::Patron as i64],
+                    |row| row.get(0),
+                )
+            })
+            .map_err(StoreError::from)
+    }
+}

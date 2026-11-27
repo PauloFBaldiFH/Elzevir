@@ -8,6 +8,7 @@ use elzevir_marc::Record;
 use super::preview::MAX_IMPORT_RECORDS;
 
 mod assemble;
+mod database;
 mod lexer;
 mod parser;
 
@@ -92,6 +93,8 @@ pub fn prepare(input: impl BufRead) -> Result<Vec<(Record, u64)>, DumpError> {
         .map(|r| (r.record, r.offset))
         .collect())
 }
+
+pub use database::{DatabaseCatalog, read_database_catalog};
 
 pub(super) struct MetadataRecord {
     pub declares_utf8: bool,
@@ -211,6 +214,8 @@ impl Target for CatalogTarget {
 enum Table {
     Metadata,
     Items,
+    /// `itemtypes`, read only from a whole database (troca-do-koha.md, item 7).
+    ItemTypes,
     Ignored,
 }
 
@@ -219,20 +224,24 @@ impl Table {
         match name {
             "biblio_metadata" => Self::Metadata,
             "items" => Self::Items,
+            "itemtypes" => Self::ItemTypes,
             _ => Self::Ignored,
         }
     }
 
     fn is_catalog(self) -> bool {
-        self != Self::Ignored
+        matches!(self, Self::Metadata | Self::Items)
     }
 
     fn has_keys(self, layout: &[Column]) -> bool {
+        if self == Self::ItemTypes {
+            return layout.contains(&Column::ItemType);
+        }
         layout.contains(&Column::Biblio)
             && layout.contains(&match self {
                 Self::Metadata => Column::Metadata,
                 Self::Items => Column::Item(b'9'),
-                Self::Ignored => return false,
+                Self::ItemTypes | Self::Ignored => return false,
             })
     }
 
@@ -244,6 +253,8 @@ impl Table {
             (Self::Metadata, "format") => Column::Format,
             (Self::Metadata, "schema") => Column::Schema,
             (Self::Items, name) => item_column(name),
+            (Self::ItemTypes, "itemtype") => Column::ItemType,
+            (Self::ItemTypes, "description") => Column::Description,
             _ => Column::Ignored,
         }
     }
@@ -292,6 +303,8 @@ enum Column {
     Format,
     Schema,
     Item(u8),
+    ItemType,
+    Description,
     Ignored,
 }
 

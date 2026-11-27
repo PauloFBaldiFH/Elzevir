@@ -438,9 +438,35 @@ Com o catálogo, a circulação e a interoperabilidade prontos, o que falta para
 
 Ordem: 5.1 e 5.2 primeiro, porque destravam a troca do Koha na biblioteca de Paulo; depois 5.4 (LGPD, antes de dados reais entrarem), 5.5, 5.6, 5.7 e 5.3.
 
-**Para Paulo decidir (Fase 6 ou não):**
-- **Periódicos** (assinaturas, previsão de fascículos, recebimento e cobrança): já sugerido para a v1 em 2026-11-15, ainda pendente.
-- **Aquisições** (sugestões dos leitores, orçamento e pedidos): o Koha tem um módulo grande; uma versão mínima seria sugestões do leitor e registro de pedidos.
+Periódicos e aquisições entraram no roadmap das Fases 10 e 11 (abaixo).
+
+### Fase 6: ensaio da troca real
+
+> Status: **aprovado** por Paulo em 2026-11-27, com o inventário de paridade (Blocos A, B e C), a meta de 70% a 80% da base funcional útil do Koha e as sete regras de método que estão no `CLAUDE.md`.
+
+Trocar o Koha pelo Elzevir numa cópia da Biblioteca Pública Municipal Castro Alves e provar que nada se perde e que o balcão funciona. O Koha de produção não é tocado, e o Elzevir nunca escreve de volta no Koha. **LGPD:** o dump da produção fica só na máquina de Paulo e na VM isolada do oráculo, nunca na nuvem nem no repositório; quem trabalha no projeto recebe só relatórios agregados, sem dados pessoais, e a cópia é apagada ao fim do ensaio.
+
+| # | Tarefa | Referência | Pronto quando |
+|---|---|---|---|
+| 6.1 | Roteiro da troca: do dump do `koha-dump` ao servidor no ar (acervo, leitores, circulação, preferências e índice), num comando cronometrado e documentado | [troca-do-koha.md](../specs/migracao/troca-do-koha.md) | O roteiro roda do dump até o servidor no ar sem passo manual fora dele |
+| 6.2 | Verificador da migração (`elzevir verify-koha`): compara o dump com o banco do Elzevir e lista cada diferença pelo número do Koha | Tabelas do Koha migradas nas 5.1 a 5.3 | Zero diferença sem explicação, sem dado pessoal no relatório |
+| 6.3 | Paridade sobre os dados migrados: vencimento, multa, renovação e fila de uma amostra real contra o Koha de homologação com a mesma cópia | Gravadores em `tools/` | Toda divergência é bug corrigido ou desvio aprovado |
+| 6.4 | Um dia de balcão encenado nos dois sistemas (empréstimo, devolução, renovação, reserva, pagamento, SIP2, OPAC, Z39.50, SRU) | Cenários existentes | Mesmos resultados, ou diferença listada com causa |
+| 6.5 | Desempenho com o acervo real: importação, migração, busca, índice, backup e restauração | doc 02 | Números medidos e registrados, com meta para o que ficar lento |
+| 6.6 | Lista de lacunas que impediriam a troca, cruzada com o inventário | Inventário de paridade | A ordem das Fases 7 a 12 é revista antes da Fase 7 |
+
+### Fases 7 a 12 (roadmap aprovado; cada fase detalhada aqui antes de começar)
+
+| Fase | Assunto | Itens do inventário |
+|---|---|---|
+| 7 | Circulação do dia a dia | Transferências entre unidades; reservas a separar; perdido, danificado e retirado com reembolso; renovação automática; empréstimo no local e uso em sala; lembrete antes do vencimento; suspensão de reservas pelo leitor; estorno, quitação por reposição do material ou por compensação, e recibo |
+| 8 | Leitores e equipe | Usuários da equipe e permissões por perfil; responsável pelo menor; campos extras do leitor; importação de leitores por planilha; autocadastro e recuperação de senha; renovação da matrícula, troca do cartão e mescla; preferências de mensagem |
+| 9 | Catálogo | Listas; capas; autoridades (mesclar, duplicatas, ligações); partes e hospedeiro; lote de exemplares; ficha catalográfica ABNT |
+| 10 | Periódicos | Assinaturas, numeração e previsão; recebimento, atraso, reclamação e coleção |
+| 11 | Aquisições | Sugestões de compra; fornecedores, verbas e pedidos |
+| 12 | OPAC, relatórios e personalização | Notícias, páginas e aparência sem código; relatórios por blocos, atrasos, perdidos e censo |
+
+Depois da Fase 12: assistente de IA, designer avançado de etiquetas, WhatsApp e Telegram. Ficam fora (Bloco B do inventário): frameworks MARC editáveis e tipos de item, Zebra e Elasticsearch, preferências soltas, resumos diários repetidos, empréstimo entre bibliotecas, reservas de curso, rotação de acervo e convocações, pedidos de artigo, retirada na calçada e atendimento domiciliar, caixa registradora, EDIFACT, Mana KB, tags e comentários do OPAC, plugins e CSS ou JS soltos, SQL livre nos relatórios, circulação offline, ERM, preservação e grupos de exemplares.
 
 ### Ordem e trilha crítica
 

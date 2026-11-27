@@ -360,6 +360,30 @@ pub fn import_koha_sql<R: BufRead, S: RecordSink>(
     import_converted(|| Ok(records.next()), sink, options)
 }
 
+/// Imports the catalog read from a whole Koha database through the same path as
+/// [`import_koha_sql`] (docs/specs/migracao/troca-do-koha.md, item 8).
+///
+/// # Errors
+/// A stopped writer; committed records stay.
+pub fn import_koha_database<S: RecordSink>(
+    catalog: koha_sql::DatabaseCatalog,
+    sink: &S,
+    options: &ImportOptions,
+) -> Result<ImportReport, ImportError> {
+    let mut records = catalog.records.into_iter().map(|r| {
+        (
+            r.record,
+            r.offset,
+            TextOriginal {
+                bytes: r.xml,
+                declared: r.declares_utf8,
+                serialization: "MARCXML",
+            },
+        )
+    });
+    import_converted(|| Ok(records.next()), sink, options)
+}
+
 fn import_converted<S: RecordSink>(
     mut next: impl FnMut() -> Result<Option<(Record, u64, TextOriginal)>, ImportError>,
     sink: &S,

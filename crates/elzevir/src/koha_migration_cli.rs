@@ -15,6 +15,8 @@ use elzevir_app::koha_migration::{
 };
 use elzevir_app::patrons::{PatronCommand, PatronOutput};
 
+use elzevir_store::ElzevirStore;
+
 use crate::open_store;
 
 /// `elzevir migrate-koha`.
@@ -35,10 +37,24 @@ pub(crate) fn run(args: &MigrateKohaArgs) -> Result<(), String> {
     let today = jiff::Timestamp::now().to_zoned(zone.clone()).date();
     let input = open(&args.dump)?;
     let plan = plan(input, today, &zone).map_err(|e| format!("{}: {e}", args.dump.display()))?;
+    let done = migrate_patrons(&data.store, &plan)?;
+    let (circulation, accounts, history) = migrate_circulation(&data.store, &plan)?;
+    print!("{}", report(&plan, &done));
+    print!("{}", circulation_report(&plan, &circulation));
+    print!("{}", accounts_report(&plan, &accounts));
+    print!("{}", history_report(&plan, &history));
+    Ok(())
+}
+
+/// The branches, patron categories, patrons and their restrictions, in batches
+/// (leitores-do-koha.md, items 4 to 16).
+pub(crate) fn migrate_patrons(
+    store: &ElzevirStore,
+    plan: &KohaPlan,
+) -> Result<KohaMigrated, String> {
     let mut done = KohaMigrated::default();
     for batch in plan.batches() {
-        let answer = data
-            .store
+        let answer = store
             .submit(WriteCommand::Patrons(PatronCommand::MigrateKoha(Box::new(
                 batch,
             ))))
@@ -50,10 +66,25 @@ pub(crate) fn run(args: &MigrateKohaArgs) -> Result<(), String> {
         };
         done.add(write);
     }
+    Ok(done)
+}
+
+/// The loans, holds, accounts and returned loans, in batches, once the catalog is in
+/// (circulacao-do-koha.md).
+pub(crate) fn migrate_circulation(
+    store: &ElzevirStore,
+    plan: &KohaPlan,
+) -> Result<
+    (
+        KohaCirculationMigrated,
+        KohaAccountsMigrated,
+        KohaHistoryMigrated,
+    ),
+    String,
+> {
     let mut circulation = KohaCirculationMigrated::default();
     for batch in plan.circulation_batches() {
-        let answer = data
-            .store
+        let answer = store
             .submit(WriteCommand::Patrons(
                 PatronCommand::MigrateKohaCirculation(Box::new(batch)),
             ))
@@ -67,8 +98,7 @@ pub(crate) fn run(args: &MigrateKohaArgs) -> Result<(), String> {
     }
     let mut accounts = KohaAccountsMigrated::default();
     for batch in plan.account_batches() {
-        let answer = data
-            .store
+        let answer = store
             .submit(WriteCommand::Patrons(PatronCommand::MigrateKohaAccounts(
                 Box::new(batch),
             )))
@@ -82,8 +112,7 @@ pub(crate) fn run(args: &MigrateKohaArgs) -> Result<(), String> {
     }
     let mut history = KohaHistoryMigrated::default();
     for batch in plan.history_batches() {
-        let answer = data
-            .store
+        let answer = store
             .submit(WriteCommand::Patrons(PatronCommand::MigrateKohaHistory(
                 Box::new(batch),
             )))
@@ -95,11 +124,7 @@ pub(crate) fn run(args: &MigrateKohaArgs) -> Result<(), String> {
         };
         history.add(write);
     }
-    print!("{}", report(&plan, &done));
-    print!("{}", circulation_report(&plan, &circulation));
-    print!("{}", accounts_report(&plan, &accounts));
-    print!("{}", history_report(&plan, &history));
-    Ok(())
+    Ok((circulation, accounts, history))
 }
 
 /// The dump, decompressed when its first two bytes are gzip's (item 1).
@@ -127,7 +152,7 @@ const fn leftover(why: Leftover) -> &'static str {
 }
 
 /// The report, without personal data: counts and Koha's patron numbers (item 17).
-fn report(plan: &KohaPlan, done: &KohaMigrated) -> String {
+pub(crate) fn report(plan: &KohaPlan, done: &KohaMigrated) -> String {
     let mut lines = vec![
         format!(
             "branches: {} created, {} updated",
@@ -191,7 +216,7 @@ const fn circulation_leftover(why: CirculationLeftover) -> &'static str {
 }
 
 /// The report of loans and holds, by Koha's numbers only (circulacao-do-koha.md, item 8).
-fn circulation_report(plan: &KohaPlan, done: &KohaCirculationMigrated) -> String {
+pub(crate) fn circulation_report(plan: &KohaPlan, done: &KohaCirculationMigrated) -> String {
     let mut loans_left = plan.loans_left.clone();
     loans_left.extend(done.loans_left.iter().copied());
     let mut holds_left = plan.holds_left.clone();
@@ -230,7 +255,7 @@ fn circulation_report(plan: &KohaPlan, done: &KohaCirculationMigrated) -> String
 }
 
 /// The report of the accounts, by Koha's numbers only (circulacao-do-koha.md, item 13).
-fn accounts_report(plan: &KohaPlan, done: &KohaAccountsMigrated) -> String {
+pub(crate) fn accounts_report(plan: &KohaPlan, done: &KohaAccountsMigrated) -> String {
     let read = &plan.accounts_read;
     let mut lines = vec![format!(
         "patron accounts: {} migrated with {} lines and {} offsets, {} already migrated, {} left out",
@@ -267,7 +292,7 @@ fn accounts_report(plan: &KohaPlan, done: &KohaAccountsMigrated) -> String {
 
 /// The report of the returned loans, by Koha's numbers only (circulacao-do-koha.md,
 /// item 17).
-fn history_report(plan: &KohaPlan, done: &KohaHistoryMigrated) -> String {
+pub(crate) fn history_report(plan: &KohaPlan, done: &KohaHistoryMigrated) -> String {
     let mut left = plan.returned_left.clone();
     left.extend(done.left.iter().copied());
     let mut lines = vec![format!(
