@@ -94,7 +94,7 @@ pub use staff_notice_rules::{
     StaffPrintNotices,
 };
 pub use staff_patrons::{
-    AccountRow, AnonymizeSection, AsideForm, CategoryLine, DeskOption, HoldRow,
+    AccountRow, AnonymizeSection, AsideForm, CategoryLine, DeskOption, ExtraInput, HoldRow,
     HoldSuspensionAction, LoanLine, Notice, PasswordSection, PatronFieldForm, PatronFormValues,
     PatronHeader, PatronLine, RestrictionRow, SlipLine, SlipSection, StaffCheckin,
     StaffCheckoutSlip, StaffPatron, StaffPatronCategories, StaffPatronFields, StaffPatronForm,

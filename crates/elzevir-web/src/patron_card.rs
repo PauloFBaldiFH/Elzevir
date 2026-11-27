@@ -170,6 +170,11 @@ pub(crate) fn header(
             ),
             ("patron-staff-note", fields.staff_note.clone()),
         ]),
+        extra: patron
+            .extra_lines
+            .iter()
+            .map(|line| (line.name.clone(), line.value.clone()))
+            .collect(),
     }
 }
 

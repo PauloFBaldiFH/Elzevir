@@ -61,6 +61,14 @@ const LISTS: &[(&str, &str)] = &[
             OR o.debit_id IN (SELECT id FROM account_lines WHERE patron_id = ?1)
          ORDER BY o.id",
     ),
+    // The values of the additional fields, by field name (patron-attributes.md, item 15).
+    (
+        "additional_fields",
+        "SELECT f.name AS field, coalesce(o.label, v.text) AS value FROM patron_field_values v
+         JOIN patron_fields f ON f.id = v.field_id
+         LEFT JOIN patron_field_options o ON o.id = v.option_id
+         WHERE v.patron_id = ?1 ORDER BY f.name, v.id",
+    ),
     (
         "restrictions",
         "SELECT * FROM patron_restrictions WHERE patron_id = ?1 ORDER BY id",

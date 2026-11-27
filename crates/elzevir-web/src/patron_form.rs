@@ -7,14 +7,19 @@ use axum::Form;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
+use elzevir_app::patron_fields::{
+    ExtraProblem, ExtraValue, FieldKind, PatronExtra, PatronFieldLine,
+};
 use elzevir_app::patrons::{
     Patron, PatronCommand, PatronDesk, PatronDeskError, PatronField, PatronFields, PatronOutput,
     PatronRefusal, PatronUpdate, ReadingHistory,
 };
 use elzevir_app::staff::Permission;
 use elzevir_domain::catalog::BranchId;
-use elzevir_domain::patron::{Cpf, PatronCategoryId, PatronId};
-use elzevir_web_templates::{AnonymizeSection, PasswordSection, PatronFormValues, StaffPatronForm};
+use elzevir_domain::patron::{Cpf, PatronCategoryId, PatronFieldOptionId, PatronId};
+use elzevir_web_templates::{
+    AnonymizeSection, ExtraInput, PasswordSection, PatronFormValues, StaffPatronForm,
+};
 use jiff::civil::Date;
 use serde::Deserialize;
 
@@ -28,38 +33,63 @@ pub(crate) fn manages(session: &ActiveSession) -> bool {
 }
 
 /// The posted form, every field as text.
-#[derive(Deserialize, Default)]
+#[derive(Default)]
 pub(crate) struct PatronForm {
-    #[serde(default)]
     csrf: String,
-    #[serde(default)]
     row_version: i64,
-    #[serde(default)]
     cardnumber: String,
-    #[serde(default)]
     surname: String,
-    #[serde(default)]
     first_name: String,
-    #[serde(default)]
     cpf: String,
-    #[serde(default)]
     date_of_birth: String,
-    #[serde(default)]
     email: String,
-    #[serde(default)]
     phone: String,
-    #[serde(default)]
     address: String,
-    #[serde(default)]
     branch: i64,
-    #[serde(default)]
     category: i64,
-    #[serde(default)]
     expires: String,
-    #[serde(default)]
     staff_note: String,
-    #[serde(default)]
     history_kept: Option<String>,
+    /// The additional fields, as typed: field id and value (an option id for a list), from
+    /// the inputs named `extra.FIELD.N` (docs/specs/circulacao/patron-attributes.md, item 8).
+    extra: Vec<(i64, String)>,
+}
+
+impl PatronForm {
+    /// Reads the posted pairs; an additional field may come more than once.
+    pub(crate) fn from_pairs(pairs: Vec<(String, String)>) -> Self {
+        let mut form = Self::default();
+        for (name, value) in pairs {
+            let number = || value.trim().parse().unwrap_or_default();
+            match name.as_str() {
+                "csrf" => form.csrf = value,
+                "row_version" => form.row_version = number(),
+                "cardnumber" => form.cardnumber = value,
+                "surname" => form.surname = value,
+                "first_name" => form.first_name = value,
+                "cpf" => form.cpf = value,
+                "date_of_birth" => form.date_of_birth = value,
+                "email" => form.email = value,
+                "phone" => form.phone = value,
+                "address" => form.address = value,
+                "branch" => form.branch = number(),
+                "category" => form.category = number(),
+                "expires" => form.expires = value,
+                "staff_note" => form.staff_note = value,
+                "history_kept" => form.history_kept = Some(value),
+                other => {
+                    if let Some(field) = other
+                        .strip_prefix("extra.")
+                        .and_then(|rest| rest.split('.').next())
+                        .and_then(|field| field.parse().ok())
+                    {
+                        form.extra.push((field, value));
+                    }
+                }
+            }
+        }
+        form
+    }
 }
 
 fn text(value: &str) -> Option<String> {
@@ -77,8 +107,13 @@ fn date(value: &str, field: PatronField) -> Result<Option<Date>, PatronRefusal> 
 }
 
 impl PatronForm {
-    /// The fields the form asks for, enrolled on `enrolled`.
-    fn fields(&self, enrolled: Date) -> Result<PatronFields, PatronRefusal> {
+    /// The fields the form asks for, enrolled on `enrolled`; `kinds` reads the additional
+    /// fields by the kind of each.
+    fn fields(
+        &self,
+        enrolled: Date,
+        kinds: &[PatronFieldLine],
+    ) -> Result<PatronFields, PatronRefusal> {
         let cpf = match self.cpf.trim() {
             "" => None,
             typed => {
@@ -104,6 +139,7 @@ impl PatronForm {
             } else {
                 ReadingHistory::NotKept
             },
+            extra: extra_values(&self.extra, kinds)?,
         })
     }
 
@@ -123,8 +159,41 @@ impl PatronForm {
             expires: self.expires.clone(),
             staff_note: self.staff_note.clone(),
             history_kept: self.history_kept.is_some(),
+            extra: self.extra.clone(),
+            refused_field: 0,
         }
     }
+}
+
+/// The typed additional values as the command takes them; a field that no longer exists
+/// is left out, and a date that is not one is refused (spec, item 10).
+fn extra_values(
+    typed: &[(i64, String)],
+    kinds: &[PatronFieldLine],
+) -> Result<Vec<PatronExtra>, PatronRefusal> {
+    let mut extra = Vec::new();
+    for (field, text) in typed {
+        let Some(line) = kinds.iter().find(|line| line.id.0 == *field) else {
+            continue;
+        };
+        let text = text.trim();
+        if text.is_empty() {
+            continue;
+        }
+        let invalid = || PatronRefusal::BadExtra(line.id, ExtraProblem::Invalid);
+        let value = match line.spec.kind {
+            FieldKind::Text => ExtraValue::Text(text.to_owned()),
+            FieldKind::Date => ExtraValue::Date(text.parse().map_err(|_| invalid())?),
+            FieldKind::List(_) => {
+                ExtraValue::Option(PatronFieldOptionId(text.parse().map_err(|_| invalid())?))
+            }
+        };
+        extra.push(PatronExtra {
+            field: line.id,
+            value,
+        });
+    }
+    Ok(extra)
 }
 
 /// The stored patron in the form; the CPF whole, only here (spec, item 8).
@@ -149,6 +218,19 @@ pub(crate) fn stored_values(patron: &Patron) -> PatronFormValues {
         expires: day(fields.expires),
         staff_note: fields.staff_note.clone().unwrap_or_default(),
         history_kept: fields.reading_history == ReadingHistory::Kept,
+        extra: fields
+            .extra
+            .iter()
+            .map(|extra| {
+                let value = match &extra.value {
+                    ExtraValue::Text(text) => text.clone(),
+                    ExtraValue::Date(day) => day.to_string(),
+                    ExtraValue::Option(option) => option.0.to_string(),
+                };
+                (extra.field.0, value)
+            })
+            .collect(),
+        refused_field: 0,
     }
 }
 
@@ -176,10 +258,10 @@ pub(crate) async fn form_page(
         let codes = catalog
             .codes()
             .map_err(|error| PatronDeskError::Unavailable(error.to_string()))?;
-        Ok::<_, PatronDeskError>((codes.branches, desk.categories()?))
+        Ok::<_, PatronDeskError>((codes.branches, desk.categories()?, desk.fields()?))
     })
     .await;
-    let (branches, categories) = match lists {
+    let (branches, categories, fields) = match lists {
         Ok(Ok(lists)) => lists,
         Ok(Err(error)) => return failed(&error),
         Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
@@ -188,7 +270,9 @@ pub(crate) async fn form_page(
         (None, true) => Some("patron-error-no-category"),
         (refused, _) => refused,
     };
+    let extra_fields = extra_inputs(fields, &categories, &page.values);
     let mut response = render(&StaffPatronForm {
+        extra_fields,
         t: &state.inner.i18n,
         csrf: &session.csrf,
         action: page.action,
@@ -212,11 +296,89 @@ pub(crate) async fn form_page(
     response
 }
 
+/// The additional fields as the form shows them, filled with `values`.
+fn extra_inputs(
+    fields: Vec<PatronFieldLine>,
+    categories: &[elzevir_app::patrons::PatronCategory],
+    values: &PatronFormValues,
+) -> Vec<ExtraInput> {
+    fields
+        .into_iter()
+        .map(|line| {
+            let id = line.id.0;
+            let held: Vec<&str> = values
+                .extra
+                .iter()
+                .filter(|(field, _)| *field == id)
+                .map(|(_, value)| value.as_str())
+                .collect();
+            let (kind, options) = match &line.spec.kind {
+                FieldKind::Text => ("text", Vec::new()),
+                FieldKind::Date => ("date", Vec::new()),
+                FieldKind::List(options) => (
+                    "list",
+                    options
+                        .iter()
+                        .filter_map(|option| {
+                            let option_id = option.id?.0;
+                            let chosen = held.contains(&option_id.to_string().as_str());
+                            Some((option_id, option.label.clone(), chosen))
+                        })
+                        .collect(),
+                ),
+            };
+            let mut boxes: Vec<String> = held
+                .iter()
+                .filter(|value| !value.trim().is_empty())
+                .map(|value| (*value).to_owned())
+                .collect();
+            if kind != "list" && (boxes.is_empty() || line.spec.repeatable) {
+                boxes.push(String::new());
+            }
+            ExtraInput {
+                id,
+                name: line.spec.name,
+                kind,
+                required: line.spec.required,
+                only_for: line.spec.category.and_then(|category| {
+                    categories
+                        .iter()
+                        .find(|known| known.id == category)
+                        .map(|known| known.name.clone())
+                }),
+                options,
+                several: line.spec.repeatable,
+                boxes,
+                invalid: values.refused_field == id,
+            }
+        })
+        .collect()
+}
+
+/// The field a refusal of the additional values names, `0` for none.
+const fn refused_field(refusal: PatronRefusal) -> i64 {
+    match refusal {
+        PatronRefusal::BadExtra(field, _) => field.0,
+        _ => 0,
+    }
+}
+
+/// Every additional field, to read the typed values by their kind.
+async fn field_kinds(desk: &Arc<dyn PatronDesk>) -> Result<Vec<PatronFieldLine>, Response> {
+    let desk = Arc::clone(desk);
+    match tokio::task::spawn_blocking(move || desk.fields()).await {
+        Ok(Ok(kinds)) => Ok(kinds),
+        Ok(Err(error)) => Err(failed(&error)),
+        Err(_) => Err(StatusCode::SERVICE_UNAVAILABLE.into_response()),
+    }
+}
+
 const fn status_of(refusal: PatronRefusal) -> StatusCode {
     match refusal {
-        PatronRefusal::CardnumberTaken | PatronRefusal::CpfTaken | PatronRefusal::Stale => {
-            StatusCode::CONFLICT
-        }
+        PatronRefusal::CardnumberTaken
+        | PatronRefusal::CpfTaken
+        | PatronRefusal::Stale
+        | PatronRefusal::BadExtra(_, ExtraProblem::Taken) => StatusCode::CONFLICT,
         _ => StatusCode::UNPROCESSABLE_ENTITY,
     }
 }
@@ -247,12 +409,13 @@ pub(crate) async fn new_patron(State(state): State<AppState>, headers: HeaderMap
 pub(crate) async fn add_patron(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Form(form): Form<PatronForm>,
+    Form(pairs): Form<Vec<(String, String)>>,
 ) -> Response {
     let (session, desk) = match open(&state, &headers, manages) {
         Ok(opened) => opened,
         Err(response) => return *response,
     };
+    let form = PatronForm::from_pairs(pairs);
     if !tokens_match(&session.csrf, &form.csrf) {
         return StatusCode::FORBIDDEN.into_response();
     }
@@ -260,14 +423,21 @@ pub(crate) async fn add_patron(
         action: NEW.to_owned(),
         title: "patron-new",
         row_version: 0,
-        values: form.values(),
+        values: PatronFormValues {
+            refused_field: refused_field(refusal),
+            ..form.values()
+        },
         saved: false,
         refused: Some(refusal.message_key()),
         status: status_of(refusal),
         password: None,
         anonymize: None,
     };
-    let fields = match form.fields(today(&state)) {
+    let kinds = match field_kinds(&desk).await {
+        Ok(kinds) => kinds,
+        Err(response) => return response,
+    };
+    let fields = match form.fields(today(&state), &kinds) {
         Ok(fields) => fields,
         Err(refusal) => return form_page(&state, &session, desk, refused(refusal)).await,
     };
@@ -358,12 +528,13 @@ pub(crate) async fn update_patron(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<i64>,
-    Form(form): Form<PatronForm>,
+    Form(pairs): Form<Vec<(String, String)>>,
 ) -> Response {
     let (session, desk) = match open(&state, &headers, manages) {
         Ok(opened) => opened,
         Err(response) => return *response,
     };
+    let form = PatronForm::from_pairs(pairs);
     if !tokens_match(&session.csrf, &form.csrf) {
         return StatusCode::FORBIDDEN.into_response();
     }
@@ -379,7 +550,10 @@ pub(crate) async fn update_patron(
         action: action.clone(),
         title: "patron-edit",
         row_version: form.row_version,
-        values: form.values(),
+        values: PatronFormValues {
+            refused_field: refused_field(refusal),
+            ..form.values()
+        },
         saved: false,
         refused: Some(refusal.message_key()),
         status: status_of(refusal),
@@ -391,7 +565,11 @@ pub(crate) async fn update_patron(
         )),
         anonymize: Some(crate::patron_privacy::section(id, None)),
     };
-    let fields = match form.fields(stored.fields.enrolled) {
+    let kinds = match field_kinds(&desk).await {
+        Ok(kinds) => kinds,
+        Err(response) => return response,
+    };
+    let fields = match form.fields(stored.fields.enrolled, &kinds) {
         Ok(fields) => fields,
         Err(refusal) => return form_page(&state, &session, desk, refused(refusal)).await,
     };

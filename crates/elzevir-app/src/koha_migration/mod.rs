@@ -149,6 +149,7 @@ impl KohaPatron {
             expires: self.expires,
             staff_note: self.staff_note.clone(),
             reading_history: self.reading_history,
+            extra: Vec::new(),
         }
     }
 

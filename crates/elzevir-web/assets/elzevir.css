@@ -800,6 +800,8 @@ a.chip-identifier:hover { text-decoration: underline; }
 .registry-new form { border-bottom: 0; }
 .codes-alert { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--elzevir-color-border); }
 .codes-refused { border-color: var(--elzevir-color-signal-out); background: var(--elzevir-color-out-bg); color: var(--elzevir-color-out-text); }
+.patron-extra { border: 1px solid var(--elzevir-color-border); border-radius: 6px; padding: .5rem .75rem; }
+.patron-extra[aria-invalid="true"] { border-color: var(--elzevir-color-signal-out); background: var(--elzevir-color-out-bg); }
 
 /* Prepared imports use the same spacing and colour tokens as the staff catalog. */
 main:has(.import-workspace) { max-width: 90rem; }

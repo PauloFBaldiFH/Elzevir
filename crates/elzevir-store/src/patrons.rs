@@ -25,8 +25,14 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &PatronCommand) -> Applied {
         PatronCommand::ChangeField(change) => {
             crate::patron_fields::change(tx.connection(), change)?
         }
-        PatronCommand::Add(fields) => add(tx.connection(), fields)?,
-        PatronCommand::Update(update) => update_patron(tx.connection(), update)?,
+        PatronCommand::Add(fields) => {
+            crate::patron_fields::check_required(tx.connection(), fields)?;
+            add(tx.connection(), fields)?
+        }
+        PatronCommand::Update(update) => {
+            crate::patron_fields::check_required(tx.connection(), &update.fields)?;
+            update_patron(tx.connection(), update)?
+        }
         PatronCommand::View(patron)
         | PatronCommand::RevealCpf(patron)
         | PatronCommand::Export(patron) => {
@@ -309,9 +315,9 @@ pub(crate) fn add(
             rusqlite::params_from_iter(values.iter()),
         )
         .map_err(StoreError::from)?;
-    Ok(PatronOutput::Added(PatronId(
-        connection.last_insert_rowid(),
-    )))
+    let patron = connection.last_insert_rowid();
+    crate::patron_fields::write_values(connection, patron, &fields)?;
+    Ok(PatronOutput::Added(PatronId(patron)))
 }
 
 fn update_patron(
@@ -353,5 +359,6 @@ fn update_patron(
             rusqlite::params_from_iter(values.iter()),
         )
         .map_err(StoreError::from)?;
+    crate::patron_fields::write_values(connection, update.patron.0, &fields)?;
     Ok(PatronOutput::Updated(update.patron))
 }

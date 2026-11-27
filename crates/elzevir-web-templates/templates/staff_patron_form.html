@@ -27,6 +27,23 @@
   <label>{{ t.get("patron-expires") }} <input type="date" name="expires" value="{{ values.expires }}"></label>
   <p class="form-hint">{{ t.get("patron-expires-hint") }}</p>
   <label>{{ t.get("patron-staff-note") }} <textarea name="staff_note" maxlength="1000" rows="2">{{ values.staff_note }}</textarea></label>
+  {% for field in extra_fields %}
+  <fieldset class="patron-extra"{% if field.invalid %} aria-invalid="true"{% endif %}>
+    <legend>{{ field.name }}{% if field.required %} *{% endif %}{% if let Some(category) = field.only_for %} <span class="form-hint">({{ t.get("patron-extra-only-for") }} {{ category }})</span>{% endif %}</legend>
+    {% if field.kind == "list" %}
+      {% if field.several %}
+        {% for (id, label, chosen) in field.options %}<label><input type="checkbox" name="extra.{{ field.id }}.{{ id }}" value="{{ id }}"{% if *chosen %} checked{% endif %}> {{ label }}</label>{% endfor %}
+      {% else %}
+        <select name="extra.{{ field.id }}.0" aria-label="{{ field.name }}">
+          <option value=""></option>
+          {% for (id, label, chosen) in field.options %}<option value="{{ id }}"{% if *chosen %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      {% endif %}
+    {% else %}
+      {% for value in field.boxes %}<input type="{{ field.kind }}" name="extra.{{ field.id }}.{{ loop.index0 }}" value="{{ value }}"{% if field.kind == "text" %} maxlength="255"{% endif %} aria-label="{{ field.name }}">{% endfor %}
+    {% endif %}
+  </fieldset>
+  {% endfor %}
   <label><input type="checkbox" name="history_kept" value="1"{% if values.history_kept %} checked{% endif %}> {{ t.get("patron-history-consent") }}</label>
   <button type="submit">{{ t.get("registries-save") }}</button>
 </form>

@@ -25,6 +25,7 @@ const PERSONAL_KEYS: &[&str] = &[
     "phone",
     "address",
     "staff_note",
+    "extra",
     "password_hash",
 ];
 
@@ -67,6 +68,9 @@ pub(crate) fn anonymize(
         "UPDATE ended_holds SET patron_id = NULL WHERE patron_id = ?1",
         // Item 4: a notice keeps what it was about, not where it went.
         "UPDATE notices SET to_address = NULL WHERE patron_id = ?1",
+        // The values of the additional fields go with the rest of the record
+        // (docs/specs/circulacao/patron-attributes.md, item 15).
+        "DELETE FROM patron_field_values WHERE patron_id = ?1",
         "UPDATE patrons SET cardnumber = 'anon-' || id, surname = '', first_name = NULL,
                 cpf = NULL, date_of_birth = NULL, email = NULL, phone = NULL, address = NULL,
                 staff_note = NULL, password_hash = NULL, reading_history = 0,

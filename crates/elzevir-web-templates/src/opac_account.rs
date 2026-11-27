@@ -57,6 +57,9 @@ pub struct OpacAccount<'a> {
     pub category_name: String,
     /// Last day of the enrolment, as shown.
     pub expires: String,
+    /// The additional fields shown on the OPAC: name and value
+    /// (docs/specs/circulacao/patron-attributes.md, item 13).
+    pub extra: Vec<(String, String)>,
     /// The restrictions that hold today, as told to the patron.
     pub restrictions: Vec<String>,
     /// What the patron owes, when something.
