@@ -61,6 +61,10 @@ pub(crate) struct Config {
     /// The SRU server of the public catalog (docs/specs/opac/sru.md).
     #[serde(default)]
     sru: crate::sru_config::SruSection,
+    /// Koha preferences left for review by `import-koha-prefs`; accepted and never read
+    /// (docs/specs/migracao/preferencias-do-koha.md, item 6).
+    #[serde(rename = "koha_legacy")]
+    _koha_legacy: Option<std::collections::BTreeMap<String, String>>,
 }
 
 /// One `[[draft_sources]]` entry (fontes-de-rascunho.md, items 16 and 17, and
@@ -528,9 +532,21 @@ pub(crate) struct Loaded {
 /// Reads `data_dir/elzevir.toml` and what it points to; no file is no configuration.
 pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
     let path = data_dir.join("elzevir.toml");
-    let config: Config = match read_limited(&path, MAX_CONFIG)? {
+    let text = read_limited(&path, MAX_CONFIG)?;
+    from_text(data_dir, &path, text.as_deref())
+}
+
+/// Checks `text` as the server would read it from `elzevir.toml`, for a configuration that
+/// names no file (docs/specs/migracao/preferencias-do-koha.md, item 3).
+pub(crate) fn check(text: &str) -> Result<(), String> {
+    from_text(Path::new("."), Path::new("elzevir.toml"), Some(text)).map(drop)
+}
+
+/// The configuration `text` says, with the files it names read from `data_dir`.
+fn from_text(data_dir: &Path, path: &Path, text: Option<&str>) -> Result<Loaded, String> {
+    let config: Config = match text {
         None => Config::default(),
-        Some(text) => toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?,
+        Some(text) => toml::from_str(text).map_err(|e| format!("{}: {e}", path.display()))?,
     };
     let time_zone = match &config.library.time_zone {
         Some(name) => TimeZone::get(name)
@@ -812,6 +828,14 @@ mod tests {
         )
         .unwrap();
         assert!(load(dir.path()).unwrap().expire_waiting_holds);
+    }
+
+    #[test]
+    fn koha_preferences_for_review_are_accepted_as_text() {
+        // docs/specs/migracao/preferencias-do-koha.md, item 6.
+        check("[koha_legacy]\nOPACUserCSS = \"a\"\n\"OAI-PMH:ConfFile\" = \"\"\n").unwrap();
+        assert!(check("[koha_legacy]\nmaxoutstanding = 5\n").is_err());
+        assert!(check("[koha_legado]\nx = \"1\"\n").is_err());
     }
 
     #[test]

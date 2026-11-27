@@ -39,6 +39,7 @@ mod installation;
 mod institution_repository;
 mod koha_codes;
 mod koha_migration_cli;
+mod koha_prefs_cli;
 mod listen_port;
 mod local_artifacts;
 mod local_disk;
@@ -182,6 +183,8 @@ enum Command {
     KohaTypes(catalog_cli::KohaTypesArgs),
     /// Brings branches, patron categories and patrons from a whole Koha database dump.
     MigrateKoha(koha_migration_cli::MigrateKohaArgs),
+    /// Writes an `elzevir.toml` from the system preferences of a Koha database dump.
+    ImportKohaPrefs(koha_prefs_cli::ImportKohaPrefsArgs),
 }
 
 #[derive(Subcommand)]
@@ -267,6 +270,7 @@ fn main() -> ExitCode {
         Command::AuthoritySearch(args) => draft_search::run_authorities(&args),
         Command::KohaTypes(args) => catalog_cli::koha_types(&args),
         Command::MigrateKoha(args) => koha_migration_cli::run(&args),
+        Command::ImportKohaPrefs(args) => koha_prefs_cli::run(&args),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
