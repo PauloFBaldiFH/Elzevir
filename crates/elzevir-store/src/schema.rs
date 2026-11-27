@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Connection setup and migrations.
-//!
-//! Migrations are plain SQL, applied in order by the writer connection at open time and
-//! tracked in `PRAGMA user_version`. A migration is never edited after it ships; changes
-//! are new migrations. Every table with rows that users edit carries a `row_version`
-//! column (docs/arquitetura/05-definicoes-de-implementacao.md, §3).
+//! Connection setup and migrations. Migrations are plain SQL, applied in order by the
+//! writer connection at open time and tracked in `PRAGMA user_version`. A migration is
+//! never edited after it ships; changes are new migrations. Every table with rows that
+//! users edit carries a `row_version` column
+//! (docs/arquitetura/05-definicoes-de-implementacao.md, §3).
 
 use std::path::Path;
 use std::time::Duration;
@@ -843,6 +842,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("hold_suspension.sql"),
     include_str!("patron_fields.sql"),
     include_str!("koha_attribute_keys.sql"),
+    include_str!("item_status.sql"),
 ];
 
 /// The migration that creates `match_keys`.

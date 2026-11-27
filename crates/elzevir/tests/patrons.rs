@@ -2225,3 +2225,108 @@ fn the_reports_are_shown_and_downloaded_as_csv() {
     assert!(refused.contains("The period ends before it starts."));
     drop(server);
 }
+
+#[test]
+fn the_desk_marks_an_item_lost_and_names_the_statuses() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    stock(data.path());
+    let (server, address) = start(data.path());
+    let cir = sign_in(address, "cir");
+    let lei = sign_in(address, "lei");
+    let record = format!("/equipe/leitores/{ana}");
+    let page = request(address, "GET", &record, &cir, "");
+    let (token, desk) = (csrf(&page).to_owned(), selected_desk(&page).to_owned());
+    let form = format!("{cir}Content-Type: application/x-www-form-urlencoded\r\n");
+    request(
+        address,
+        "POST",
+        &format!("{record}/circulacao"),
+        &form,
+        &format!("csrf={token}&op=lend&barcode=0001&desk={desk}"),
+    );
+    // The Item, its loan and its statuses, and nothing about the patron.
+    let item = request(
+        address,
+        "GET",
+        "/equipe/circulacao/exemplar?codigo=0001",
+        &cir,
+        "",
+    );
+    assert_status(&item, 200);
+    assert!(
+        item.contains("Dom Casmurro") && item.contains("On loan, due"),
+        "{item}"
+    );
+    assert!(!item.contains("Silva") && !item.contains("000123"));
+    assert!(
+        item.contains(r#"<option value="1">Lost (1)</option>"#),
+        "{item}"
+    );
+    let lost = request(
+        address,
+        "POST",
+        "/equipe/circulacao/exemplar",
+        &form,
+        &format!("csrf={token}&codigo=0001&kind=lost&from=0&to=1"),
+    );
+    assert_status(&lost, 200);
+    assert!(
+        lost.contains("Saved.") && lost.contains("The loan ended."),
+        "{lost}"
+    );
+    assert!(!lost.contains("On loan, due"));
+    // The same change again is stale.
+    let stale = request(
+        address,
+        "POST",
+        "/equipe/circulacao/exemplar",
+        &form,
+        &format!("csrf={token}&codigo=0001&kind=lost&from=0&to=1"),
+    );
+    assert_status(&stale, 422);
+    assert!(stale.contains("Someone changed this status meanwhile"));
+    // A name for the number shows on the Item.
+    let named = request(
+        address,
+        "POST",
+        "/equipe/circulacao/situacoes",
+        &form,
+        &format!("csrf={token}&kind=lost&number=1&label=Extraviado"),
+    );
+    assert_status(&named, 200);
+    assert!(named.contains("<td>Extraviado</td>"), "{named}");
+    let item = request(
+        address,
+        "GET",
+        "/equipe/circulacao/exemplar?codigo=0001",
+        &cir,
+        "",
+    );
+    assert!(
+        item.contains(r#"<option value="1" selected>Extraviado</option>"#),
+        "{item}"
+    );
+    let unknown = request(
+        address,
+        "GET",
+        "/equipe/circulacao/exemplar?codigo=9999",
+        &cir,
+        "",
+    );
+    assert_status(&unknown, 404);
+    // The circulation permission and the session's token are both needed.
+    assert_status(
+        &request(address, "GET", "/equipe/circulacao/exemplar", &lei, ""),
+        403,
+    );
+    let forged = request(
+        address,
+        "POST",
+        "/equipe/circulacao/situacoes",
+        &form,
+        "csrf=forged&kind=lost&number=2&label=X",
+    );
+    assert_status(&forged, 403);
+    drop(server);
+}

@@ -196,6 +196,8 @@ impl WriteCommand {
             Self::Circulation(CirculationCommand::Checkin(_)) => "circ.checkin",
             Self::Circulation(CirculationCommand::Renew(_)) => "circ.renew",
             Self::Circulation(CirculationCommand::Pay(_)) => "circ.pay",
+            Self::Circulation(CirculationCommand::SetItemStatus(_)) => "circ.set_item_status",
+            Self::Circulation(CirculationCommand::ChangeStatusName(_)) => "circ.change_status_name",
             Self::Circulation(CirculationCommand::PlaceHold(_)) => "circ.place_hold",
             Self::Circulation(CirculationCommand::CancelHold(_)) => "circ.cancel_hold",
             Self::Circulation(CirculationCommand::SetHoldAside(_)) => "circ.set_hold_aside",

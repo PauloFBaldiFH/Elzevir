@@ -31,6 +31,7 @@ mod import_rules;
 mod import_sheets;
 mod importing;
 mod inventory;
+mod item_status;
 mod items;
 mod new_record;
 mod notice_rules;
@@ -131,6 +132,7 @@ pub struct AppState {
     imports: Option<Arc<importing::Imports>>,
     patrons: Option<Arc<dyn elzevir_app::patrons::PatronDesk>>,
     loans: Option<Arc<dyn elzevir_app::loans::LoanDesk>>,
+    item_statuses: Option<Arc<dyn elzevir_app::item_status::ItemStatusDesk>>,
     rules: Option<Arc<dyn elzevir_app::circulation_rules::RuleBook>>,
     calendar: Option<Arc<dyn elzevir_app::calendar::CalendarBook>>,
     notices: Option<Arc<dyn elzevir_app::notices::NoticeQueue>>,
@@ -183,6 +185,7 @@ impl AppState {
             desk: None,
             patrons: None,
             loans: None,
+            item_statuses: None,
             rules: None,
             calendar: None,
             notices: None,
@@ -254,6 +257,17 @@ impl AppState {
     #[must_use]
     pub fn with_loans(mut self, desk: Arc<dyn elzevir_app::loans::LoanDesk>) -> Self {
         self.loans = Some(desk);
+        self
+    }
+
+    /// Connects the status of Items at the desk (docs/specs/circulacao/lost-items.md).
+    /// Without it, or without the circulation desk, the status pages answer 404.
+    #[must_use]
+    pub fn with_item_statuses(
+        mut self,
+        desk: Arc<dyn elzevir_app::item_status::ItemStatusDesk>,
+    ) -> Self {
+        self.item_statuses = Some(desk);
         self
     }
 

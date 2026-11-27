@@ -45,6 +45,11 @@ pub enum CirculationCommand {
     Renew(RenewRequest),
     /// Pays or writes off what a patron owes (docs/specs/circulacao/conta.md).
     Pay(PaymentRequest),
+    /// Changes the lost, damaged or withdrawn status of an Item
+    /// (docs/specs/circulacao/lost-items.md).
+    SetItemStatus(crate::item_status::ItemStatusChange),
+    /// Names a status number, or removes its name (docs/specs/circulacao/lost-items.md).
+    ChangeStatusName(crate::item_status::StatusNameChange),
     /// Places a hold (docs/specs/circulacao/reservas.md).
     PlaceHold(HoldRequest),
     /// Cancels a hold (docs/specs/circulacao/reservas.md).
@@ -229,6 +234,10 @@ pub enum CirculationOutput {
         /// Holds cancelled.
         cancelled: usize,
     },
+    /// An Item's status changed.
+    ItemStatusChanged(crate::item_status::ItemStatusChanged),
+    /// A status name was set or removed.
+    StatusNameChanged,
     /// A hold was suspended or resumed.
     HoldSuspensionChanged,
     /// How many suspended holds came back to the queue because their day came.
@@ -324,6 +333,9 @@ pub enum CirculationRefusal {
     /// The patron has no restriction of that kind.
     #[error("the patron has no such restriction")]
     NoRestriction,
+    /// An Item's status or a status name was refused.
+    #[error(transparent)]
+    ItemStatus(#[from] crate::item_status::ItemStatusRefusal),
     /// The levels of an overdue notice rule do not fit together.
     #[error(transparent)]
     NoticeLevels(#[from] LevelsError),
@@ -369,6 +381,7 @@ impl CirculationRefusal {
                 "notices-error-text-placeholder"
             }
             Self::NoRestriction => "restriction-error-none",
+            Self::ItemStatus(refusal) => refusal.message_key(),
         }
     }
 }

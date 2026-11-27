@@ -1,0 +1,39 @@
+{% extends "staff_base.html" %}
+{% block scope %}devolucao{% endblock %}
+{% block title %}{{ t.get("item-status-title") }}{% endblock %}
+{% block content %}
+<div class="patrons item-status">
+<h1>{{ t.get("item-status-title") }}</h1>
+<form method="get" action="/equipe/circulacao/exemplar" class="checkout-box">
+  <label for="status-barcode">{{ t.get("checkout-barcode") }}</label>
+  <input type="text" id="status-barcode" name="codigo" maxlength="64" autocomplete="off" value="{{ barcode }}"{% if item.is_none() %} autofocus{% endif %}>
+  <button type="submit">{{ t.get("item-status-find") }}</button>
+</form>
+<p class="form-hint">{{ t.get("item-status-hint") }} <a href="/equipe/circulacao/situacoes">{{ t.get("status-names-title") }}</a></p>
+{% for notice in notices %}<p class="codes-alert{% if notice.refused %} codes-refused{% endif %}" role="{% if notice.refused %}alert{% else %}status{% endif %}">{{ notice.text }}</p>{% endfor %}
+{% if let Some(item) = item %}
+<section aria-labelledby="item-status-item">
+  <h2 id="item-status-item">{{ item.title }}</h2>
+  <dl class="item-status-facts">
+    <dt>{{ t.get("checkout-barcode") }}</dt><dd>{{ item.barcode }}</dd>
+    {% if !item.call_number.is_empty() %}<dt>{{ t.get("item-status-call-number") }}</dt><dd>{{ item.call_number }}</dd>{% endif %}
+    <dt>{{ t.get("item-status-where") }}</dt><dd>{{ item.holding }}</dd>
+    {% if !item.loan.is_empty() %}<dt>{{ t.get("item-status-loan") }}</dt><dd>{{ item.loan }}</dd>{% endif %}
+  </dl>
+  {% for status in item.statuses %}
+  <form method="post" action="/equipe/circulacao/exemplar" class="registry-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="codigo" value="{{ item.barcode }}">
+    <input type="hidden" name="kind" value="{{ status.kind }}">
+    <input type="hidden" name="from" value="{{ status.current }}">
+    <label>{{ status.name }} <select name="to">
+      {% for (number, label) in status.options %}<option value="{{ number }}"{% if *number == status.current %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select></label>
+    <span class="form-hint">{{ status.shown }}</span>
+    <button type="submit">{{ t.get("registries-save") }}</button>
+  </form>
+  {% endfor %}
+</section>
+{% endif %}
+</div>
+{% endblock %}

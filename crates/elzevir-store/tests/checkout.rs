@@ -23,6 +23,10 @@ use elzevir_app::holds::{
     CheckinHold, HoldAside, HoldCancellation, HoldId, HoldLevel, HoldPlaced, HoldRefused,
     HoldRequest, HoldSuspensionRequest, SetAside, Suspension, SuspensionChange,
 };
+use elzevir_app::item_status::{
+    ItemStatusChange, ItemStatusChanged, ItemStatusDesk, ItemStatusRefusal, StatusKind, StatusName,
+    StatusNameChange,
+};
 use elzevir_app::loans::{
     CheckedIn, CheckedOut, CheckinRefusal, CheckinRequest, CheckoutRefusal, CheckoutRequest,
     LoanDesk, RenewRefusal, RenewRequest, Renewed,
@@ -31,8 +35,8 @@ use elzevir_app::patrons::{
     CategoryChange, PatronCommand, PatronFields, PatronOutput, ReadingHistory,
 };
 use elzevir_app::pending::PendingReader;
-use elzevir_domain::account::{PaymentKind, PaymentRefusal};
-use elzevir_domain::catalog::{BranchId, InstanceId, Money};
+use elzevir_domain::account::{DebitType, PaymentKind, PaymentRefusal};
+use elzevir_domain::catalog::{BranchId, InstanceId, ItemId, Money};
 use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome, TransferReason};
 use elzevir_domain::checkout::{Alert, Confirm, HeldFor, Impossible, TooManyReason};
 use elzevir_domain::circulation::RenewalBase;
@@ -2107,4 +2111,229 @@ fn the_reports_match_the_counts_read_from_the_tables() {
         .map(|line: &CollectionLine| (line.class, line.items))
         .collect();
     assert_eq!(classes, [(Some(0), 1), (Some(800), 1), (None, 1)]);
+}
+
+fn set_status(
+    library: &Library,
+    barcode: &str,
+    (kind, from, to): (StatusKind, i64, i64),
+    at: &str,
+) -> Result<ItemStatusChanged, ItemStatusRefusal> {
+    let item: i64 = library.read(&format!("SELECT id FROM items WHERE barcode = '{barcode}'"));
+    match submit(
+        &library.store,
+        WriteCommand::Circulation(CirculationCommand::SetItemStatus(ItemStatusChange {
+            item: ItemId(item),
+            kind,
+            from,
+            to,
+            at: format!("{at}[America/Sao_Paulo]").parse().unwrap(),
+        })),
+    ) {
+        Ok(WriteOutput::Circulation(CirculationOutput::ItemStatusChanged(done))) => Ok(done),
+        Err(CommandFailed::Rejected(WriteRefusal::Circulation(
+            CirculationRefusal::ItemStatus(refusal),
+        ))) => Err(refusal),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn an_item_lost_on_loan_is_charged_once_its_loan_ends_and_its_transfer_is_cancelled() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(&dir);
+    library.priced_item("0001", ItemStatus::default(), Some(Money(4500)));
+    library.item("0002", ItemStatus::default());
+    library.rules(&[
+        ("maxissueqty", "5"),
+        ("issuelength", "7"),
+        ("fine", "0.50"),
+        ("chargeperiod", "1"),
+        ("lost_item_processing_fee", "3.00"),
+    ]);
+    library
+        .lend("0001", "2026-11-19T10:00:00-03:00", false)
+        .unwrap();
+    charge_overdues(&library, "2026-11-28T10:00:00-03:00");
+    let lost = (StatusKind::Lost, 0, 1);
+    assert_eq!(
+        set_status(
+            &library,
+            "0001",
+            (StatusKind::Lost, 1, 2),
+            "2026-11-30T10:00:00-03:00"
+        ),
+        Err(ItemStatusRefusal::Stale)
+    );
+    assert_eq!(
+        set_status(&library, "0001", lost, "2026-11-30T10:00:00-03:00"),
+        Ok(ItemStatusChanged {
+            charged: vec![
+                (DebitType::Processing, Money(300)),
+                (DebitType::Lost, Money(4500)),
+            ],
+            loan_ended: true,
+            transfer_cancelled: false,
+        })
+    );
+    let state = || {
+        library.read::<String>(
+            "SELECT (SELECT lost || ' ' || coalesce(lost_on, '-') FROM items WHERE id = 1)
+                    || ' | ' || (SELECT count(*) FROM loans) || ' out | ' ||
+                    (SELECT group_concat(debit_type || ' ' || coalesce(status, '-') || ' '
+                                         || amount, ', ')
+                     FROM account_lines ORDER BY id)",
+        )
+    };
+    // The fine stops as LOST, the fee and the replacement price are charged, the loan ends
+    // where the Item is, and the moment of the loss is kept.
+    assert_eq!(
+        state(),
+        "1 2026-11-30T10:00:00-03:00[America/Sao_Paulo] | 0 out | OVERDUE LOST 100, \
+         PROCESSING - 300, LOST - 4500"
+    );
+    assert_eq!(
+        library.read::<i64>("SELECT return_branch_id FROM returned_loans"),
+        library.annex.0
+    );
+    // Another lost number charges nothing and keeps the moment; 0 clears it.
+    assert_eq!(
+        set_status(
+            &library,
+            "0001",
+            (StatusKind::Lost, 1, 2),
+            "2026-12-01T10:00:00-03:00"
+        ),
+        Ok(ItemStatusChanged::default())
+    );
+    assert!(state().starts_with("2 2026-11-30T10:00:00-03:00"));
+    set_status(
+        &library,
+        "0001",
+        (StatusKind::Lost, 2, 0),
+        "2026-12-02T10:00:00-03:00",
+    )
+    .unwrap();
+    assert!(state().starts_with("0 - | 0 out"));
+    // Lost on the shelf, on its way home: nobody is charged and the transfer is cancelled.
+    library
+        .give_back("0002", library.annex, "2026-11-20T10:00:00-03:00")
+        .unwrap();
+    assert_eq!(
+        library.read::<i64>("SELECT count(*) FROM transfers WHERE arrived_at IS NULL"),
+        1
+    );
+    assert_eq!(
+        set_status(&library, "0002", lost, "2026-11-30T10:00:00-03:00"),
+        Ok(ItemStatusChanged {
+            transfer_cancelled: true,
+            ..ItemStatusChanged::default()
+        })
+    );
+    assert_eq!(library.read::<i64>("SELECT count(*) FROM transfers"), 0);
+    assert_eq!(library.read::<i64>("SELECT count(*) FROM account_lines"), 3);
+}
+
+#[test]
+fn damaged_and_withdrawn_change_what_the_desk_accepts_and_status_names_are_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = library(&dir);
+    library.item("0001", ItemStatus::default());
+    library.rules(&[("maxissueqty", "5"), ("issuelength", "7")]);
+    let at = "2026-11-20T10:00:00-03:00";
+    set_status(&library, "0001", (StatusKind::Withdrawn, 0, 2), at).unwrap();
+    set_status(&library, "0001", (StatusKind::Damaged, 0, 1), at).unwrap();
+    assert!(matches!(
+        library.lend("0001", at, true),
+        Err(CheckoutRefusal::Impossible(reasons)) if reasons.contains(&Impossible::Withdrawn)
+    ));
+    // Damaged alone does not stop a checkout, as in Koha.
+    set_status(&library, "0001", (StatusKind::Withdrawn, 2, 0), at).unwrap();
+    library.lend("0001", at, false).unwrap();
+    for (change, refusal) in [
+        ((StatusKind::NotForLoan, 0, 1), ItemStatusRefusal::BadNumber),
+        ((StatusKind::Damaged, 1, 100), ItemStatusRefusal::BadNumber),
+        ((StatusKind::Damaged, 0, 1), ItemStatusRefusal::Stale),
+    ] {
+        assert_eq!(set_status(&library, "0001", change, at), Err(refusal));
+    }
+    let unknown = submit(
+        &library.store,
+        WriteCommand::Circulation(CirculationCommand::SetItemStatus(ItemStatusChange {
+            item: ItemId(999),
+            kind: StatusKind::Lost,
+            from: 0,
+            to: 1,
+            at: format!("{at}[America/Sao_Paulo]").parse().unwrap(),
+        })),
+    );
+    assert!(matches!(
+        unknown,
+        Err(CommandFailed::Rejected(WriteRefusal::Circulation(
+            CirculationRefusal::ItemStatus(ItemStatusRefusal::UnknownItem)
+        )))
+    ));
+    let desk = library.store.item_at_the_desk("0001").unwrap().unwrap();
+    let numbers: Vec<(StatusKind, i64, bool)> = desk
+        .statuses
+        .iter()
+        .map(|line| (line.kind, line.number, line.since.is_some()))
+        .collect();
+    assert_eq!(
+        numbers,
+        [
+            (StatusKind::Lost, 0, false),
+            (StatusKind::Damaged, 1, true),
+            (StatusKind::Withdrawn, 0, false),
+        ]
+    );
+    assert!(desk.due.is_some());
+    assert_eq!(library.store.item_at_the_desk("9999").unwrap(), None);
+
+    let name = |kind, number, label: &str| {
+        submit(
+            &library.store,
+            WriteCommand::Circulation(CirculationCommand::ChangeStatusName(StatusNameChange::Set(
+                StatusName {
+                    kind,
+                    number,
+                    label: label.to_owned(),
+                },
+            ))),
+        )
+    };
+    name(StatusKind::Lost, 1, "Perdido").unwrap();
+    name(StatusKind::Withdrawn, 1, "Perdido").unwrap();
+    assert!(matches!(
+        name(StatusKind::Lost, 2, " Perdido "),
+        Err(CommandFailed::Rejected(WriteRefusal::Circulation(
+            CirculationRefusal::ItemStatus(ItemStatusRefusal::LabelTaken)
+        )))
+    ));
+    name(StatusKind::Lost, 1, "Extraviado").unwrap();
+    name(StatusKind::Lost, 2, "Perdido").unwrap();
+    submit(
+        &library.store,
+        WriteCommand::Circulation(CirculationCommand::ChangeStatusName(
+            StatusNameChange::Remove {
+                kind: StatusKind::Withdrawn,
+                number: 1,
+            },
+        )),
+    )
+    .unwrap();
+    let names: Vec<(StatusKind, i64, String)> = library
+        .store
+        .status_names()
+        .unwrap()
+        .into_iter()
+        .map(|name| (name.kind, name.number, name.label))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            (StatusKind::Lost, 1, "Extraviado".to_owned()),
+            (StatusKind::Lost, 2, "Perdido".to_owned()),
+        ]
+    );
 }

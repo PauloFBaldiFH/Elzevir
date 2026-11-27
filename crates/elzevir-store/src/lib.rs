@@ -37,6 +37,7 @@ mod hold_suspension;
 mod holds;
 mod import;
 mod inventory;
+mod item_status;
 mod items;
 mod koha_accounts;
 mod koha_attributes;

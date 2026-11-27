@@ -176,7 +176,7 @@ pub(crate) fn scan(
         // Item 5: seen that day, and found if it was lost.
         tx.connection()
             .execute(
-                "UPDATE items SET last_seen = ?2, lost = 0,
+                "UPDATE items SET last_seen = ?2, lost = 0, lost_on = NULL,
                         row_version = row_version + CASE WHEN lost <> 0 THEN 1 ELSE 0 END
                  WHERE id = ?1",
                 params![item.item.0, seen_on],

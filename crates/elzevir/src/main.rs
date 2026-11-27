@@ -515,6 +515,7 @@ fn web_app(
     )?))
     .with_patrons(Arc::clone(store) as _)
     .with_loans(Arc::clone(store) as _)
+    .with_item_statuses(Arc::clone(store) as _)
     .with_rules(Arc::clone(store) as _)
     .with_calendar(Arc::clone(store) as _)
     .with_notices(Arc::clone(store) as _)

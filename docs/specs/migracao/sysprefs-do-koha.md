@@ -233,7 +233,7 @@ As 915 preferências do sistema do Koha e o lugar de cada uma no Elzevir. As que
 | `AllowHoldDateInFuture` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `AllowHoldItemTypeSelection` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `AllowHoldPolicyOverride` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
-| `AllowHoldsOnDamagedItems` | `1` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
+| `AllowHoldsOnDamagedItems` | `1` | Comportamento fixo: Padrão do Koha (ligado): exemplar danificado pode ser reservado e atende reservas (lost-items.md, item 7). |
 | `AllowHoldsOnPatronsPossessions` | `1` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `AllowItemsOnHoldCheckoutSCO` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `AllowItemsOnHoldCheckoutSIP` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
@@ -346,7 +346,7 @@ As 915 preferências do sistema do Koha e o lugar de cada uma no Elzevir. As que
 | `LocalHoldsPriority` | `None` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `LocalHoldsPriorityItemControl` | `holdingbranch` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `LocalHoldsPriorityPatronControl` | `PickupLibrary` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
-| `LostChargesControl` | `ItemHomeLibrary` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
+| `LostChargesControl` | `ItemHomeLibrary` | Comportamento fixo: Padrão do Koha (ItemHomeLibrary com holdingbranch): a cobrança da perda é da unidade onde o exemplar está (lost-items.md, item 4). |
 | `ManualRenewalPeriodBase` | `date_due` | **`[circulation] renewal_base`**. Ver docs/specs/circulacao/renovacao.md, item 5. |
 | `MarkLostItemsAsReturned` | `batchmod,moredetail,cronjob,additem,pendingreserves,onpaymen…` | Comportamento fixo: Padrão do Koha para a rotina: a perda cobrada termina o empréstimo; mark_returned no elzevir.toml faz o mesmo sem cobrança (conta.md, item 22). |
 | `NoIssuesChargeGuarantees` | (vazio) | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
@@ -371,7 +371,7 @@ As 915 preferências do sistema do Koha e o lugar de cada uma no Elzevir. As que
 | `PatronAutoComplete` | `1` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `PatronRestrictionTypes` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `PlaceHoldsOnOrdersFromSuggestions` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
-| `PreventWithdrawingItemsStatus` | (vazio) | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
+| `PreventWithdrawingItemsStatus` | (vazio) | Comportamento fixo: Padrão do Koha (vazio): retirar é sempre permitido (lost-items.md, item 6). |
 | `PrintNoticesMaxLines` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `ProcessingFeeNote` | (vazio) | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `RandomizeHoldsQueueWeight` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
@@ -442,8 +442,8 @@ As 915 preferências do sistema do Koha e o lugar de cada uma no Elzevir. As que
 | `WaitingNotifyAtCheckin` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `WaitingNotifyAtCheckout` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `WebBasedSelfCheck` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
-| `WhenLostChargeReplacementFee` | `1` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
-| `WhenLostForgiveFine` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
+| `WhenLostChargeReplacementFee` | `1` | Comportamento fixo: Padrão do Koha (ligado): marcar como perdido um exemplar emprestado cobra a reposição (lost-items.md, item 4). |
+| `WhenLostForgiveFine` | `0` | Comportamento fixo: Padrão do Koha (desligado): a multa do exemplar perdido fica LOST, sem perdão (lost-items.md, item 4). |
 | `canreservefromotherbranches` | `1` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `decreaseLoanHighHolds` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `decreaseLoanHighHoldsControl` | `static` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
@@ -462,7 +462,7 @@ As 915 preferências do sistema do Koha e o lugar de cada uma no Elzevir. As que
 | `previousIssuesDefaultSortOrder` | `asc` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `todaysIssuesDefaultSortOrder` | `desc` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `useDaysMode` | `Calendar` | Regra de circulação: Já existe como regra de circulação `daysmode` em $RULE_KINDS; a preferência vira o valor padrão. |
-| `useDefaultReplacementCost` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
+| `useDefaultReplacementCost` | `0` | Comportamento fixo: Padrão do Koha (desligado); fora desta versão (lost-items.md, §6). |
 
 ## E-resource management
 
