@@ -130,6 +130,7 @@ pub struct AppState {
     authority_sources: Option<Arc<dyn elzevir_app::authority_sources::AuthoritySource>>,
     oai: Option<OaiRepository>,
     sru: Option<SruServer>,
+    printer: Option<Arc<dyn elzevir_app::printing::Printer>>,
 }
 
 struct Inner {
@@ -180,6 +181,7 @@ impl AppState {
             authority_sources: None,
             oai: None,
             sru: None,
+            printer: None,
             inner: Arc::new(Inner {
                 staff,
                 memory,
@@ -319,6 +321,14 @@ impl AppState {
     #[must_use]
     pub fn with_oai(mut self, repository: OaiRepository) -> Self {
         self.oai = Some(repository);
+        self
+    }
+
+    /// Connects the printer of spine labels (docs/specs/catalogo/etiquetas.md). Without it
+    /// the labels of the selection answer 404.
+    #[must_use]
+    pub fn with_printer(mut self, printer: Arc<dyn elzevir_app::printing::Printer>) -> Self {
+        self.printer = Some(printer);
         self
     }
 
@@ -483,6 +493,7 @@ fn export_routes() -> Router<AppState> {
     Router::new()
         .route("/record/{id}/export", get(citation::opac))
         .route("/equipe/acervo/lote/marc", get(batch::export_marc))
+        .route("/equipe/acervo/lote/etiquetas", get(batch::spine_labels))
         .route(
             "/equipe/acervo/instancia/{id}/marc",
             get(catalog::export_marc),

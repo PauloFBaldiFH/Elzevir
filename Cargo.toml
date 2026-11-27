@@ -18,6 +18,7 @@ elzevir-data = { path = "crates/elzevir-data" }
 elzevir-domain = { path = "crates/elzevir-domain" }
 elzevir-marc = { path = "crates/elzevir-marc" }
 elzevir-panel = { path = "crates/elzevir-panel" }
+elzevir-print = { path = "crates/elzevir-print" }
 elzevir-scenarios = { path = "crates/elzevir-scenarios" }
 elzevir-search = { path = "crates/elzevir-search" }
 elzevir-sip2 = { path = "crates/elzevir-sip2" }
@@ -61,6 +62,12 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 rustls-native-certs = "0.8"
 serde_norway = "0.9"
 tempfile = "3"
+# Typesets the printed documents (spine labels) from editable templates, embedded as
+# doc 02 (§3, item 2) planned; Apache-2.0. Advisories it brings in: deny.toml.
+typst = "0.15.1"
+typst-assets = { version = "0.15.1", features = ["fonts"] }
+typst-layout = "0.15.1"
+typst-pdf = "0.15.1"
 thiserror = "2"
 # Reader of `elzevir.toml`, the typed configuration of a data directory (doc 04).
 toml = { version = "0.9", default-features = false, features = ["parse", "serde", "std"] }

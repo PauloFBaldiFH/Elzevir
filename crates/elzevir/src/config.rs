@@ -45,6 +45,9 @@ pub(crate) struct Config {
     /// How notices go out (docs/specs/circulacao/avisos.md).
     #[serde(default)]
     notices: Notices,
+    /// The templates of printed documents (docs/specs/catalogo/etiquetas.md).
+    #[serde(default)]
+    printing: Printing,
     /// Other catalogues to copy records from (docs/specs/catalogo/fontes-de-rascunho.md).
     #[serde(default)]
     draft_sources: Vec<DraftSourceEntry>,
@@ -456,6 +459,14 @@ impl LongOverdue {
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct Printing {
+    /// The spine label template, relative to the data directory; the built-in one when
+    /// absent (etiquetas.md, item 5).
+    spine_labels: Option<PathBuf>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Privacy {
     /// Days a returned loan or an ended hold keeps its patron; forever when absent
     /// (docs/specs/circulacao/lgpd.md, item 12).
@@ -496,6 +507,8 @@ pub(crate) struct Loaded {
     pub(crate) retention: elzevir_app::patrons::Retention,
     /// The mail server, when notices go out by e-mail.
     pub(crate) mail: Option<MailSettings>,
+    /// The library's spine label template, when it has one.
+    pub(crate) spine_labels: Option<String>,
     /// The enabled bibliographic draft sources, in priority order.
     pub(crate) draft_sources: Vec<DraftServer>,
     /// The enabled authority sources, in priority order.
@@ -543,6 +556,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         ),
         None => None,
     };
+    let spine_labels = template(data_dir, config.printing.spine_labels.as_deref())?;
     let (draft_sources, authority_sources) =
         draft_servers(&config.draft_sources).map_err(|e| format!("{}: {e}", path.display()))?;
     let sip2 = config
@@ -574,6 +588,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
             expire_waiting_holds,
             retention,
             mail,
+            spine_labels,
             draft_sources,
             authority_sources,
             sip2,
@@ -599,6 +614,7 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         expire_waiting_holds,
         retention,
         mail,
+        spine_labels,
         draft_sources,
         authority_sources,
         sip2,
@@ -606,6 +622,18 @@ pub(crate) fn load(data_dir: &Path) -> Result<Loaded, String> {
         sru,
         z3950,
     })
+}
+
+/// The text of a print template, relative to the data directory, when one is named
+/// (etiquetas.md, item 5).
+fn template(data_dir: &Path, file: Option<&Path>) -> Result<Option<String>, String> {
+    let Some(file) = file else {
+        return Ok(None);
+    };
+    let path = data_dir.join(file);
+    read_limited(&path, MAX_CONFIG)?
+        .map(Some)
+        .ok_or_else(|| format!("{}: the template does not exist", path.display()))
 }
 
 /// The file as text, `None` when it does not exist.
@@ -746,6 +774,20 @@ mod tests {
         assert_eq!(retention.anonymize_expired_days, Some(1095));
         std::fs::write(&config, "[privacy]\nkeep_forever = true\n").unwrap();
         assert!(load(dir.path()).unwrap_err().contains("keep_forever"));
+    }
+
+    #[test]
+    fn the_spine_label_template_is_read_from_the_data_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(load(dir.path()).unwrap().spine_labels, None);
+        let config = dir.path().join("elzevir.toml");
+        std::fs::write(&config, "[printing]\nspine_labels = \"etiquetas.typ\"\n").unwrap();
+        assert!(load(dir.path()).unwrap_err().contains("does not exist"));
+        std::fs::write(dir.path().join("etiquetas.typ"), "#let x = 1").unwrap();
+        assert_eq!(
+            load(dir.path()).unwrap().spine_labels.as_deref(),
+            Some("#let x = 1")
+        );
     }
 
     #[test]

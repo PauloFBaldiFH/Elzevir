@@ -21,6 +21,21 @@ ignore = [
     "RUSTSEC-2026-0370",
     "RUSTSEC-2026-0371",
     "RUSTSEC-2026-0372",
+    # Typst 0.15.1 (elzevir-print, docs/specs/catalogo/etiquetas.md), its latest release,
+    # accepted by Paulo on 2026-11-26. Six are maintenance notices: bincode and yaml-rust
+    # (syntect), unsafe-libyaml (serde_yaml), paste (biblatex), rustybuzz and ttf-parser
+    # (text shaping). The two quick-xml 0.38 advisories need untrusted XML; there
+    # quick-xml only reads CSL styles, which come from the styles built into hayagriva,
+    # because the print World refuses every file and the template is the library's own
+    # configuration. Revisit on the next Typst release.
+    "RUSTSEC-2024-0320",
+    "RUSTSEC-2024-0436",
+    "RUSTSEC-2024-0449",
+    "RUSTSEC-2025-0141",
+    "RUSTSEC-2026-0192",
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+    "RUSTSEC-2026-0206",
 ]
 
 [licenses]

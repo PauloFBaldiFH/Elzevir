@@ -436,10 +436,11 @@ fn web_app(
     data_dir: &Path,
     config: WebConfig,
     language: &str,
-    (sources, oai, sru): (
+    (sources, oai, sru, printer): (
         draft_search::ScreenSources,
         Option<elzevir_web::OaiRepository>,
         Option<elzevir_web::SruServer>,
+        elzevir_print::TypstPrinter,
     ),
 ) -> Result<WebRuntime, String> {
     let i18n = language_bundle(language)?;
@@ -495,7 +496,8 @@ fn web_app(
     .with_notices(Arc::clone(store) as _)
     .with_board(Arc::clone(store) as _)
     .with_pending(Arc::clone(store) as _)
-    .with_patron_accounts(Arc::clone(store) as _);
+    .with_patron_accounts(Arc::clone(store) as _)
+    .with_printer(Arc::new(printer));
     let state = match sources.drafts {
         Some(drafts) => state.with_draft_sources(Arc::new(drafts)),
         None => state,
@@ -682,6 +684,7 @@ fn serve_controlled(
                 draft_search::ScreenSources::new(drafts, authorities, &instance)?,
                 oai,
                 sru,
+                elzevir_print::TypstPrinter::new(loaded.spine_labels),
             ),
         )?;
         let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;

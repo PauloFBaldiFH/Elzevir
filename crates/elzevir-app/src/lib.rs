@@ -40,6 +40,7 @@ pub mod parallelism;
 pub mod patron_account;
 pub mod patrons;
 pub mod pending;
+pub mod printing;
 pub mod profiles;
 pub mod rdf;
 pub mod registries;

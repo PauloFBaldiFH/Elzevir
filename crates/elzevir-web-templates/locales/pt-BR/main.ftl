@@ -1049,6 +1049,7 @@ draft-query-long = Cada campo aceita no máximo 256 caracteres.
 
 ## Inventário (docs/specs/catalogo/inventario.md)
 tool-inventory = Inventário
+selection-spine-labels = Etiquetas de lombada (PDF)
 inventory-title = Inventário
 inventory-intro = Leia os códigos de barras da estante. Cada exemplar lido fica visto no dia e deixa de estar perdido; o relatório lista o que está errado. Exemplar emprestado só é apontado: devolva-o no balcão.
 inventory-area = Parte do acervo
