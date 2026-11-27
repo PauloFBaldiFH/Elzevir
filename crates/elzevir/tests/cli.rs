@@ -373,6 +373,17 @@ fn switch_dump() -> (String, String) {
                  INSERT INTO `circulation_rules` VALUES (1,NULL,NULL,NULL,'issuelength','21'),\
                  (2,'CTR','ADU','LIV','issuelength','14'),(3,NULL,NULL,'REV','renewalsallowed','0'),\
                  (4,'LUA',NULL,NULL,'issuelength','7'),(5,NULL,NULL,NULL,'no_such_rule','1');\n\
+                 CREATE TABLE `repeatable_holidays` (`id` int(11) NOT NULL, `branchcode` varchar(10) NOT NULL, \
+                 `weekday` smallint(6), `day` smallint(6), `month` smallint(6), `title` varchar(50) NOT NULL, \
+                 `description` mediumtext NOT NULL);\n\
+                 INSERT INTO `repeatable_holidays` VALUES (1,'CTR',0,NULL,NULL,'Domingo',''),\
+                 (2,'CTR',NULL,25,12,'','Fechado o dia todo'),(3,'LUA',6,NULL,NULL,'Sábado','');\n\
+                 CREATE TABLE `special_holidays` (`id` int(11) NOT NULL, `branchcode` varchar(10) NOT NULL, \
+                 `day` smallint(6) NOT NULL, `month` smallint(6) NOT NULL, `year` smallint(6) NOT NULL, \
+                 `isexception` smallint(1) NOT NULL, `title` varchar(50) NOT NULL, `description` mediumtext NOT NULL);\n\
+                 INSERT INTO `special_holidays` VALUES (1,'NRT',24,12,2026,0,'Véspera',''),\
+                 (2,'CTR',27,12,2026,1,'Aberto',''),(3,'NRT',24,12,2026,1,'Aberto',''),\
+                 (4,'CTR',31,4,2026,0,'Nunca','');\n\
                  -- Dump completed",
                 marcxml(10, "Memórias de um sargento de milícias"),
                 marcxml(11, "O cortiço"),
@@ -402,6 +413,10 @@ fn a_koha_dump_switches_to_elzevir_in_one_command() {
         "circulation rules: 3 set, 2 left out",
         "  id 4: branchcode not in the Elzevir",
         "  id 5: a rule_name Koha 26.05 does not have",
+        "calendar: 4 entries set, 3 rows left out, 1 without a title in Koha, 0 with the description cut",
+        "  repeatable_holidays id 3: branchcode not in the Elzevir",
+        "  special_holidays id 1: an earlier row of the branch names the same day",
+        "  special_holidays id 4: a day that does not exist",
         // A branch not in `branches` refuses its record, as the import does.
         "records: 3 read, 2 stored, 1 refused",
         "  biblionumber 12: unknown branch `LUA`",
@@ -511,6 +526,9 @@ fn verify_after_the_switch(dir: &Path, data: &str, sql: &str) {
         "returned loans: 6 in the dump, 4 in the Elzevir, 2 left out with a cause, 0 differences without a cause",
         "circulation rules: 5 in the dump, 3 in the Elzevir, 2 left out with a cause, 0 differences without a cause",
         "  a branch the Elzevir lacks (LUA): 1 (id 4)",
+        "weekly and annual closings: 3 in the dump, 2 in the Elzevir, 1 left out with a cause, 0 differences without a cause",
+        "  a branch the Elzevir lacks (LUA): 1 (repeatable_holidays id 3)",
+        "dated closings and exceptions: 4 in the dump, 2 in the Elzevir, 2 left out with a cause, 0 differences without a cause",
     ] {
         assert!(
             report.lines().any(|found| found == line),

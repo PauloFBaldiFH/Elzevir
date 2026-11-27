@@ -57,6 +57,8 @@ const fn names(table: Table) -> (&'static str, &'static str) {
         Table::Accounts => ("patron accounts", "borrowernumber"),
         Table::Returned => ("returned loans", "issue_id"),
         Table::Rules => ("circulation rules", "id"),
+        Table::RepeatableHolidays => ("weekly and annual closings", "repeatable_holidays id"),
+        Table::SpecialHolidays => ("dated closings and exceptions", "special_holidays id"),
     }
 }
 
@@ -74,6 +76,7 @@ fn cause(cause: &Cause) -> String {
         Cause::AlreadyHeld => "the patron already holds the record in the dump".to_owned(),
         Cause::Rule(why) => crate::switch_cli::rule_leftover(*why).to_owned(),
         Cause::UnknownCode(column) => format!("{column} not in the Elzevir"),
+        Cause::Holiday(why) => crate::switch_cli::holiday_leftover(*why).to_owned(),
     }
 }
 

@@ -31,6 +31,7 @@ impl crate::ElzevirStore {
                 returned: returned(connection)?,
                 item_types: item_types(connection)?,
                 rules: rules(connection)?,
+                holidays: holidays(connection)?,
             })
         })
     }
@@ -279,4 +280,27 @@ fn rules(
         )?
         .collect::<rusqlite::Result<_>>()?;
     Ok(rows)
+}
+
+/// The calendar of each branch that has a Koha code.
+fn holidays(
+    connection: &Connection,
+) -> Result<std::collections::BTreeMap<String, Vec<elzevir_app::calendar::Holiday>>, StoreError> {
+    let mut statement = connection.prepare(
+        "SELECT k.code, k.local_id FROM koha_codes k JOIN branches b ON b.id = k.local_id
+         WHERE k.kind = ?1",
+    )?;
+    let branches: Vec<(String, i64)> = statement
+        .query_map(params![Coded::Branch as i64], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    let mut all = std::collections::BTreeMap::new();
+    for (code, branch) in branches {
+        let entries = crate::calendar::read_holidays(connection, branch)?;
+        if !entries.is_empty() {
+            all.insert(code, entries);
+        }
+    }
+    Ok(all)
 }

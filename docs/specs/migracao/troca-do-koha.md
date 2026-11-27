@@ -23,10 +23,23 @@ Até a Fase 5, trocar o Koha pedia quatro comandos e dois arquivos. O acervo vin
 6. **Unidades, categorias e leitores.** Primeira parte do `migrate-koha` (itens 4 a 16 de [leitores-do-koha.md](leitores-do-koha.md)): as unidades entram antes do acervo, para que os exemplares as encontrem pelo código do Koha.
 7. **Tipos de item.** Os tipos de item que os exemplares usam e a borda MARC ainda não conhece são criados como no `import --create-codes`, mas com o nome que o Koha dá (`itemtypes.description`), e não com o código. Um tipo sem linha em `itemtypes` fica com o código como nome. Os tipos que só as regras de circulação usam (item 7a) também são criados.
 7a. **Regras de circulação** (tarefa 6.3a). Cada linha de `circulation_rules` vira uma regra do Elzevir com o mesmo nome (`rule_name`) e o mesmo valor (`rule_value`, que guarda o vazio e os espaços), no escopo achado pelos códigos do Koha: a unidade por `branchcode`, a categoria por `categorycode` e a política por `itemtype`; `NULL` ou vazio é "qualquer". A regra é conferida como o `circ.set_rules` confere ([regras](../circulacao/regras.md), item 5). Fica de fora, com o `id` e o motivo no relatório, a regra sem `rule_name`, de um tipo que o Koha 26.05 não tem, num escopo que o tipo não usa, com valor longo demais ou monetário que não é decimal, vazia num tipo que não pode ficar vazio (o Koha apaga essa regra) ou com um código que o Elzevir não tem. As regras entram numa escrita só (`patrons.migrate_koha_rules`), depois dos tipos de item e antes do acervo.
+7b. **Calendário** (tarefa 6.3b). Os feriados do Koha entram no calendário da mesma unidade, achada pelo `branchcode`, como o `circ.change_calendar` os grava ([calendário](../circulacao/calendario.md)). Eles são dado da biblioteca, não do sistema: nenhum vira padrão, e uma biblioteca que começa do zero tem o calendário vazio (Paulo, 2026-11-27). Para cada linha:
+    - De `repeatable_holidays`, a linha com `weekday` fecha esse dia da semana (0 é domingo), mesmo que tenha dia e mês. A linha sem `weekday` fecha o dia e o mês todo ano. Koha: `Koha::Calendar::_init`.
+    - De `special_holidays`, a linha fecha a data, ou abre a data quando `isexception` é verdadeiro para o Perl, isto é, nem `NULL`, nem vazio, nem `0`. As linhas da mesma unidade e da mesma data valem como uma só, aberta quando alguma é exceção. Koha: `Koha::Calendar::_holidays`, `MAX(isexception)`. Entra a primeira linha, por `id`, no estado que vale.
+    - O Koha aceita título vazio e o Elzevir não. O título vazio recebe a primeira linha da descrição, cortada em 50 caracteres, ou `(Koha)` quando não há descrição. A descrição acima de 2.000 caracteres é cortada. O relatório conta os dois casos.
+
+    Fica de fora, com a tabela, o `id` e o motivo no relatório:
+    - a linha sem `id`, sem `branchcode`, sem dia da semana nem data;
+    - o dia da semana acima de 6;
+    - o dia que não existe, como 31 de abril;
+    - a linha que repete o dia de outra linha anterior da mesma unidade;
+    - a unidade que o Elzevir não tem.
+
+    As datas passadas também entram, porque as multas dos atrasos em curso contam os dias fechados. O calendário vai em escritas de até 5.000 entradas (`patrons.migrate_koha_calendar`), depois das regras.
 8. **Acervo.** `biblio_metadata` e `items` do dump inteiro entram pelo mesmo caminho da importação do Koha em SQL (importação universal, §1.8): mesmo leitor de tabelas, mesma montagem do `952`, mesmo MARCXML guardado como origem e mesma escritora. A diferença está em dois pontos. As outras tabelas do banco são puladas sem guardar valor nenhum, em vez de fazerem o dump ser recusado como backup completo. E o limite é o do dump inteiro (8 GiB), não o do arquivo de importação. Origem `koha-dump`.
 9. **Circulação.** O restante do `migrate-koha`: empréstimos, reservas, contas e histórico, que agora encontram os exemplares e as Instâncias.
 10. **Índice.** O índice de busca é construído inteiro antes de o comando terminar, para que o primeiro `serve` não comece reindexando.
-11. **Relatório.** Sem dado pessoal, como os do `migrate-koha`: para cada passo, o tempo que levou e as contagens (preferências, regras de circulação, registros lidos e gravados, exemplares, recusas pelo número do Koha, leitores, empréstimos, reservas, contas, histórico, documentos no índice), seguidos dos relatórios dos passos 6 e 9 como o `migrate-koha` os escreve.
+11. **Relatório.** Sem dado pessoal, como os do `migrate-koha`: para cada passo, o tempo que levou e as contagens (preferências, regras de circulação, entradas do calendário, registros lidos e gravados, exemplares, recusas pelo número do Koha, leitores, empréstimos, reservas, contas, histórico, documentos no índice), seguidos dos relatórios dos passos 6 e 9 como o `migrate-koha` os escreve.
 12. **Falha na gravação.** Cada passo grava em lotes, como os comandos que ele reúne; uma falha da escritora (disco cheio, por exemplo) para o roteiro com o nome do passo, e o que já foi gravado fica. Como a pasta deixou de estar limpa, o ensaio recomeça numa pasta nova.
 
 ## 2. Casos de borda
@@ -37,8 +50,8 @@ Até a Fase 5, trocar o Koha pedia quatro comandos e dois arquivos. O acervo vin
 
 ## 3. Origem no Koha
 
-- `Koha::CirculationRules::set_rule` (a conferência de cada regra).
-- `debian/scripts/koha-dump` (o formato do dump) e as tabelas `biblio_metadata`, `items`, `itemtypes` e `circulation_rules` de `installer/data/mysql/kohastructure.sql`.
+- `Koha::CirculationRules::set_rule` (a conferência de cada regra); `Koha::Calendar::_init` e `_holidays` (como o Koha lê o calendário).
+- `debian/scripts/koha-dump` (o formato do dump) e as tabelas `biblio_metadata`, `items`, `itemtypes`, `circulation_rules`, `repeatable_holidays` e `special_holidays` de `installer/data/mysql/kohastructure.sql`.
 - O resto vem das specs de migração e da importação citadas no topo.
 
 ## 4. Paridade

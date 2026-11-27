@@ -1,6 +1,6 @@
 # Verificação da migração do Koha (v0)
 
-> Status: v0, tarefa 6.2 do [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (Fase 6, aprovada por Paulo em 2026-11-27). Itens 1 a 12 na 6.2a (unidades, categorias, leitores, registros e exemplares, PR #277); itens 13 a 17 na 6.2b (empréstimos, reservas, contas e histórico, PR #278); item 18 na 6.3a (regras de circulação). Base: [troca do Koha](troca-do-koha.md), [leitores](leitores-do-koha.md) e [circulação](circulacao-do-koha.md) do Koha. Critério: **zero diferença sem explicação, sem dado pessoal no relatório**.
+> Status: v0, tarefa 6.2 do [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (Fase 6, aprovada por Paulo em 2026-11-27). Itens 1 a 12 na 6.2a (unidades, categorias, leitores, registros e exemplares, PR #277); itens 13 a 17 na 6.2b (empréstimos, reservas, contas e histórico, PR #278); item 18 na 6.3a (regras de circulação); item 19 na 6.3b (calendário). Base: [troca do Koha](troca-do-koha.md), [leitores](leitores-do-koha.md) e [circulação](circulacao-do-koha.md) do Koha. Critério: **zero diferença sem explicação, sem dado pessoal no relatório**.
 
 A troca e a migração escrevem um relatório do que deixaram de fora. Esse relatório conta o que o próprio migrador decidiu. O verificador faz outra coisa: lê o dump outra vez e o banco do Elzevir por conta própria, compara os dois pelo número do Koha e explica cada diferença pelo que vê no dump e no banco, sem usar o relatório da migração. Uma diferença que ele não consegue explicar é um defeito a investigar.
 
@@ -47,6 +47,10 @@ A troca e a migração escrevem um relatório do que deixaram de fora. Esse rela
 
 18. **Regras**, por `id` de `circulation_rules`: uma regra do Elzevir com o mesmo nome, no escopo dos mesmos códigos do Koha (unidade, categoria e tipo de item, ou "qualquer"), com o mesmo valor. A regra que a troca não aceita (item 7a de [troca-do-koha.md](troca-do-koha.md)) é explicada pelo mesmo motivo, e a regra com unidade, categoria ou tipo que o Elzevir não tem é explicada pelo código. Uma regra do Elzevir que o dump não tem é nomeada pelo tipo e pelo escopo, com `*` para "qualquer" e `#` e o número para um cadastro do Elzevir sem código do Koha.
 
+### Calendário (6.3b)
+
+19. **Calendário**, por `id` de `repeatable_holidays` e de `special_holidays`: no calendário da unidade de mesmo `branchcode`, uma entrada no mesmo dia (dia da semana, dia e mês, ou data), com o mesmo título e a mesma descrição, como a troca os dá (item 7b de [troca-do-koha.md](troca-do-koha.md)), e, numa data, a mesma situação (fechada ou aberta, `isexception`). A linha que a troca deixa de fora é explicada pelo mesmo motivo, e a linha de uma unidade que o Elzevir não tem é explicada pelo código. Uma entrada do Elzevir que o dump não tem é nomeada pelo código da unidade e pelo dia (`CTR weekday 0`, `CTR annual 12-25`, `CTR 2026-12-24`).
+
 ## 2. Casos de borda
 
 1. Dump sem `borrowers` ou sem `biblio_metadata`: recusado, como na troca.
@@ -56,12 +60,12 @@ A troca e a migração escrevem um relatório do que deixaram de fora. Esse rela
 
 ## 3. Origem no Koha
 
-- As tabelas `branches`, `categories`, `borrowers`, `biblio_metadata`, `items`, `issues`, `reserves`, `accountlines` e `old_issues` de `installer/data/mysql/kohastructure.sql`, lidas pelos mesmos leitores da migração.
+- As tabelas `branches`, `categories`, `borrowers`, `biblio_metadata`, `items`, `issues`, `reserves`, `accountlines`, `old_issues`, `circulation_rules`, `repeatable_holidays` e `special_holidays` de `installer/data/mysql/kohastructure.sql`, lidas pelos mesmos leitores da migração.
 - O saldo do leitor como `Koha::Account::balance` o calcula: a soma de `amountoutstanding`.
 
 ## 4. Paridade
 
 `livre` (migração). Prova:
-- testes de unidade da comparação em `elzevir-app::koha_verify`: cada explicação, cada campo diferente (cartão, código de barras, vencimento, saldo, ordem da fila, leitor no histórico, valor da regra), número que sobra, leitor anonimizado;
+- testes de unidade da comparação em `elzevir-app::koha_verify`: cada explicação, cada campo diferente (cartão, código de barras, vencimento, saldo, ordem da fila, leitor no histórico, valor da regra, título e exceção do calendário), número que sobra, leitor anonimizado;
 - teste do binário (`crates/elzevir/tests/cli.rs`): depois da troca do dump sintético, o verificador termina sem diferença sem explicação e com o registro de unidade desconhecida explicado; numa pasta sem a troca, termina com erro;
 - o ensaio da [troca](troca-do-koha.md#5-roteiro-do-ensaio) roda o verificador depois da troca, e Paulo traz o relatório, que não tem dado pessoal.
