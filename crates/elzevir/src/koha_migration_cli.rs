@@ -204,7 +204,7 @@ pub(crate) fn report(plan: &KohaPlan, done: &KohaMigrated) -> String {
     text
 }
 
-const fn circulation_leftover(why: CirculationLeftover) -> &'static str {
+pub(crate) const fn circulation_leftover(why: CirculationLeftover) -> &'static str {
     match why {
         CirculationLeftover::Incomplete => "a number, patron, Item or date missing",
         CirculationLeftover::Patron => "patron not migrated",

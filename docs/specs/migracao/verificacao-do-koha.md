@@ -1,6 +1,6 @@
 # Verificação da migração do Koha (v0)
 
-> Status: v0, tarefa 6.2 do [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (Fase 6, aprovada por Paulo em 2026-11-27). Itens 1 a 12 na 6.2a (unidades, categorias, leitores, registros e exemplares); itens 13 a 16 na 6.2b (empréstimos, reservas, contas e histórico). Base: [troca do Koha](troca-do-koha.md), [leitores](leitores-do-koha.md) e [circulação](circulacao-do-koha.md) do Koha. Critério: **zero diferença sem explicação, sem dado pessoal no relatório**.
+> Status: v0, tarefa 6.2 do [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (Fase 6, aprovada por Paulo em 2026-11-27). Itens 1 a 12 na 6.2a (unidades, categorias, leitores, registros e exemplares, PR #277); itens 13 a 17 na 6.2b (empréstimos, reservas, contas e histórico). Base: [troca do Koha](troca-do-koha.md), [leitores](leitores-do-koha.md) e [circulação](circulacao-do-koha.md) do Koha. Critério: **zero diferença sem explicação, sem dado pessoal no relatório**.
 
 A troca e a migração escrevem um relatório do que deixaram de fora. Esse relatório conta o que o próprio migrador decidiu. O verificador faz outra coisa: lê o dump outra vez e o banco do Elzevir por conta própria, compara os dois pelo número do Koha e explica cada diferença pelo que vê no dump e no banco, sem usar o relatório da migração. Uma diferença que ele não consegue explicar é um defeito a investigar.
 
@@ -37,24 +37,27 @@ A troca e a migração escrevem um relatório do que deixaram de fora. Esse rela
 
 ### Circulação (6.2b)
 
-13. **Empréstimos:** cada linha de `issues` com o exemplar no Elzevir emprestado ao mesmo leitor, com o mesmo vencimento.
-14. **Reservas:** cada linha de `reserves` com uma reserva do mesmo leitor na mesma Instância, na mesma situação (fila, separada ou em trânsito), e a fila de cada registro na mesma ordem.
-15. **Contas:** o saldo de cada leitor em centavos, como o Koha o calcula pela soma de `amountoutstanding`.
-16. **Histórico:** cada `issue_id` de `old_issues` migrado uma vez, com o leitor quando ele consentiu.
+13. **Empréstimos**, por `issue_id`: o exemplar do empréstimo, achado pelo `itemnumber`, emprestado no Elzevir ao mesmo leitor, com o mesmo vencimento (`date_due`). Um empréstimo do Elzevir num exemplar que nenhum empréstimo do dump tem é nomeado pelo `itemnumber`, porque o Elzevir não guarda o `issue_id` de um empréstimo em curso.
+14. **Reservas**, por `reserve_id`: uma reserva do mesmo leitor na Instância do mesmo `biblionumber`, na mesma situação (`found`: fila, separada ou em trânsito); e, em cada registro, as reservas da fila que chegaram na mesma ordem do Koha (`priority`, depois `reserve_id`). Uma reserva do Elzevir que não corresponde a nenhuma do dump é nomeada pelo `biblionumber`.
+15. **Contas**, por `borrowernumber`: o saldo em centavos, como o Koha o calcula pela soma de `amountoutstanding` das linhas, e o número de linhas.
+16. **Histórico**, por `issue_id` de `old_issues`: o empréstimo devolvido no Elzevir uma vez, com o leitor só quando ele chegou e guarda o histórico de leitura (`privacy`), e sem o leitor nos outros casos. O leitor anonimizado depois da troca não é comparado.
+17. **Explicações da circulação**, além das do item 10: o motivo pelo qual a migração deixa a linha de fora pelo que falta no dump (sem número, leitor, exemplar ou data); o leitor, o exemplar ou o registro que não chegou; a unidade que o Elzevir não tem; o exemplar que chegou emprestado por outro empréstimo do dump; a reserva repetida do mesmo leitor no mesmo registro.
 
 ## 2. Casos de borda
 
 1. Dump sem `borrowers` ou sem `biblio_metadata`: recusado, como na troca.
 2. Pasta que nunca recebeu a troca: cada número do dump vira uma diferença sem explicação, e o comando termina com erro.
 3. Dois exemplares do dump com o mesmo código de barras: o que chegou é comparado; o outro fica fora com explicação.
+4. O verificador roda logo depois da troca. Um empréstimo, uma reserva ou um pagamento feito no Elzevir depois dela aparece como diferença sem explicação, porque o dump não o tem.
 
 ## 3. Origem no Koha
 
-- As tabelas `branches`, `categories`, `borrowers`, `biblio_metadata` e `items` de `installer/data/mysql/kohastructure.sql`, lidas pelos mesmos leitores da migração.
+- As tabelas `branches`, `categories`, `borrowers`, `biblio_metadata`, `items`, `issues`, `reserves`, `accountlines` e `old_issues` de `installer/data/mysql/kohastructure.sql`, lidas pelos mesmos leitores da migração.
+- O saldo do leitor como `Koha::Account::balance` o calcula: a soma de `amountoutstanding`.
 
 ## 4. Paridade
 
 `livre` (migração). Prova:
-- testes de unidade da comparação em `elzevir-app::koha_verify`: cada explicação, cada campo diferente, número que sobra, leitor anonimizado e o relatório sem valor;
+- testes de unidade da comparação em `elzevir-app::koha_verify`: cada explicação, cada campo diferente (cartão, código de barras, vencimento, saldo, ordem da fila, leitor no histórico), número que sobra, leitor anonimizado;
 - teste do binário (`crates/elzevir/tests/cli.rs`): depois da troca do dump sintético, o verificador termina sem diferença sem explicação e com o registro de unidade desconhecida explicado; numa pasta sem a troca, termina com erro;
 - o ensaio da [troca](troca-do-koha.md#5-roteiro-do-ensaio) roda o verificador depois da troca, e Paulo traz o relatório, que não tem dado pessoal.
