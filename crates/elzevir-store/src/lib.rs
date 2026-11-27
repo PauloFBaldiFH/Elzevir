@@ -37,6 +37,7 @@ mod import;
 mod inventory;
 mod items;
 mod koha_accounts;
+mod koha_calendar;
 mod koha_circulation;
 mod koha_history;
 mod koha_migration;

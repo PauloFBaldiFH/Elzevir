@@ -20,6 +20,7 @@ use crate::patrons::{
 };
 
 mod accounts;
+mod calendar;
 mod circulation;
 mod dump;
 mod history;
@@ -28,6 +29,11 @@ mod rules;
 pub use accounts::{
     ACCOUNT_LINES_PER_COMMAND, AccountsRead, KohaAccount, KohaAccountBatch, KohaAccountLine,
     KohaAccountsMigrated, KohaOffset,
+};
+
+pub use calendar::{
+    HOLIDAYS_PER_COMMAND, HolidayLeftover, HolidayTable, KohaCalendarBatch, KohaCalendarMigrated,
+    KohaHoliday, UNTITLED, holiday_name,
 };
 
 pub use circulation::{
@@ -272,6 +278,10 @@ pub struct KohaPlan {
     pub rules: Vec<KohaRule>,
     /// Circulation rules left out, by `id`.
     pub rules_left: Vec<(u64, RuleLeftover)>,
+    /// Calendar entries that come, weekly and annual first (troca-do-koha.md, item 7b).
+    pub holidays: Vec<KohaHoliday>,
+    /// Calendar rows left out, by table and `id`.
+    pub holidays_left: Vec<(HolidayTable, u64, HolidayLeftover)>,
 }
 
 /// A patron field, ordered for the report.
@@ -350,6 +360,7 @@ pub fn plan(input: impl BufRead, today: Date, zone: &TimeZone) -> Result<KohaPla
     accounts::read(&tables.rows, zone, &mut plan);
     history::read(&tables.rows, zone, &mut plan);
     rules::read(&tables.rows, &mut plan);
+    calendar::read(&tables.rows, &mut plan);
     Ok(plan)
 }
 

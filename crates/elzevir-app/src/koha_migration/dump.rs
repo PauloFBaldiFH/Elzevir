@@ -58,6 +58,29 @@ const OLD_ISSUES: &[&str] = &[
     "onsite_checkout",
 ];
 
+/// The columns kept of `repeatable_holidays`.
+const REPEATABLE_HOLIDAYS: &[&str] = &[
+    "id",
+    "branchcode",
+    "weekday",
+    "day",
+    "month",
+    "title",
+    "description",
+];
+
+/// The columns kept of `special_holidays`.
+const SPECIAL_HOLIDAYS: &[&str] = &[
+    "id",
+    "branchcode",
+    "day",
+    "month",
+    "year",
+    "isexception",
+    "title",
+    "description",
+];
+
 /// The table a kept row came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum Table {
@@ -73,6 +96,10 @@ pub(super) enum Table {
     OldIssues,
     /// `circulation_rules` (troca-do-koha.md, item 7a).
     Rules,
+    /// `repeatable_holidays` (troca-do-koha.md, item 7b).
+    RepeatableHolidays,
+    /// `special_holidays` (troca-do-koha.md, item 7b).
+    SpecialHolidays,
 }
 
 impl Table {
@@ -151,6 +178,8 @@ impl Table {
                 "rule_name",
                 "rule_value",
             ],
+            Self::RepeatableHolidays => REPEATABLE_HOLIDAYS,
+            Self::SpecialHolidays => SPECIAL_HOLIDAYS,
             Self::AccountOffsets => &[
                 "id",
                 "credit_id",
@@ -172,7 +201,10 @@ impl Table {
             Self::Issues | Self::OldIssues => "issue_id",
             Self::Reserves => "reserve_id",
             Self::AccountLines => "accountlines_id",
-            Self::AccountOffsets | Self::Rules => "id",
+            Self::AccountOffsets
+            | Self::Rules
+            | Self::RepeatableHolidays
+            | Self::SpecialHolidays => "id",
         }
     }
 }
@@ -254,6 +286,8 @@ impl Target for KohaTables {
             "account_offsets" => Some(Table::AccountOffsets),
             "old_issues" => Some(Table::OldIssues),
             "circulation_rules" => Some(Table::Rules),
+            "repeatable_holidays" => Some(Table::RepeatableHolidays),
+            "special_holidays" => Some(Table::SpecialHolidays),
             _ => None,
         })
     }
@@ -278,7 +312,10 @@ impl Target for KohaTables {
 
     fn push(&mut self, table: Table, offset: u64, cells: Row) -> Result<(), DumpError> {
         let rows = self.rows.entry(table).or_default();
-        let most = if matches!(table, Table::Branches | Table::Categories | Table::Rules) {
+        let most = if matches!(
+            table,
+            Table::Branches | Table::Categories | Table::Rules | Table::RepeatableHolidays
+        ) {
             MAX_SMALL_ROWS
         } else {
             MAX_KOHA_ROWS
@@ -291,7 +328,8 @@ impl Target for KohaTables {
         }
         let mut kept = Vec::with_capacity(cells.len());
         for (column, value) in cells {
-            if LEFT_OUT_COLUMNS.contains(&column) {
+            // Only `borrowers` has left-out columns, and `title` is kept elsewhere.
+            if table == Table::Borrowers && LEFT_OUT_COLUMNS.contains(&column) {
                 if value
                     .as_deref()
                     .is_some_and(|value| !matches!(value.trim_ascii(), b"" | b"0"))

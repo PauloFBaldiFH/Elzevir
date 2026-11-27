@@ -154,7 +154,10 @@ fn unavailable(error: impl std::fmt::Display) -> CirculationDeskError {
 }
 
 /// Every entry of `branch`, in the order [`CalendarBook::holidays`] promises.
-fn read_holidays(connection: &Connection, branch: i64) -> rusqlite::Result<Vec<Holiday>> {
+pub(crate) fn read_holidays(
+    connection: &Connection,
+    branch: i64,
+) -> rusqlite::Result<Vec<Holiday>> {
     let text = |row: &rusqlite::Row<'_>, at: usize| -> rusqlite::Result<HolidayText> {
         Ok(HolidayText {
             title: row.get(at)?,

@@ -83,6 +83,8 @@ pub enum PatronCommand {
     /// Brings Koha's circulation rules, after the branches, categories and policies
     /// (docs/specs/migracao/troca-do-koha.md, item 7a).
     MigrateKohaRules(Box<crate::koha_migration::KohaRulesBatch>),
+    /// Brings part of Koha's calendar, after the branches (troca-do-koha.md, item 7b).
+    MigrateKohaCalendar(Box<crate::koha_migration::KohaCalendarBatch>),
 }
 
 /// One change to the patron categories.
@@ -218,6 +220,8 @@ pub enum PatronOutput {
     KohaHistoryMigrated(crate::koha_migration::KohaHistoryMigrated),
     /// What a write of Koha's circulation rules did.
     KohaRulesMigrated(crate::koha_migration::KohaRulesMigrated),
+    /// What a write of Koha's calendar did.
+    KohaCalendarMigrated(crate::koha_migration::KohaCalendarMigrated),
 }
 
 /// A field of the patron form, to name the one refused.

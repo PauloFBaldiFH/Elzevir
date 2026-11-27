@@ -5,9 +5,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::calendar::Holiday;
 use crate::import::koha_sql::KohaCatalogRecord;
-use crate::koha_migration::{CirculationLeftover, KohaPlan, Leftover, RuleLeftover};
+use crate::koha_migration::{
+    CirculationLeftover, HolidayLeftover, HolidayTable, KohaPlan, Leftover, RuleLeftover,
+};
 
+mod calendar;
 mod circulation;
 mod rules;
 
@@ -42,6 +46,8 @@ pub struct Footprint {
     /// Circulation rules and their values. A dimension the Elzevir has without a Koha code
     /// is named `#` and its id, so that it never passes for "any".
     pub rules: BTreeMap<RuleKey, String>,
+    /// The calendar entries of each branch that has a Koha code, by the code.
+    pub holidays: BTreeMap<String, Vec<Holiday>>,
 }
 
 /// A patron as the Elzevir holds it, with its branch and category as Koha codes.
@@ -95,6 +101,10 @@ pub enum Table {
     Returned,
     /// `circulation_rules`, by `id`.
     Rules,
+    /// `repeatable_holidays`, by `id`.
+    RepeatableHolidays,
+    /// `special_holidays`, by `id`.
+    SpecialHolidays,
 }
 
 /// Why a number of the dump is not in the Elzevir, found in the dump or the database
@@ -125,6 +135,8 @@ pub enum Cause {
     Rule(RuleLeftover),
     /// The rule names a code of this column that the Elzevir does not have.
     UnknownCode(&'static str),
+    /// The calendar row cannot come as it is, or joins an earlier row of the same day.
+    Holiday(HolidayLeftover),
 }
 
 /// A difference without a cause.
@@ -211,6 +223,8 @@ pub fn verify(
         circulation::accounts(plan, found),
         circulation::returned(plan, found),
         rules::rules(plan, found),
+        calendar::holidays(plan, found, HolidayTable::Repeatable),
+        calendar::holidays(plan, found, HolidayTable::Special),
     ]
 }
 
@@ -502,7 +516,134 @@ mod tests {
             );
             found.rules.insert(key, rule.value.clone());
         }
+        for holiday in &plan.holidays {
+            found
+                .holidays
+                .entry(holiday.branch.clone())
+                .or_default()
+                .push(Holiday {
+                    when: holiday.when().unwrap(),
+                    text: holiday.text().unwrap().clone(),
+                });
+        }
         found
+    }
+
+    fn holiday(
+        table: HolidayTable,
+        id: u64,
+        branch: &str,
+        action: crate::calendar::CalendarAction,
+    ) -> crate::koha_migration::KohaHoliday {
+        crate::koha_migration::KohaHoliday {
+            table,
+            id,
+            branch: branch.to_owned(),
+            action,
+            untitled: false,
+            cut: false,
+        }
+    }
+
+    #[test]
+    fn each_calendar_row_is_compared_in_its_branch_by_its_day() {
+        use crate::calendar::{CalendarAction, HolidayText, HolidayWhen};
+        use elzevir_domain::calendar::{AnnualHoliday, DatedEntry};
+        let text = |title: &str| HolidayText {
+            title: title.to_owned(),
+            description: None,
+        };
+        let day = |d| jiff::civil::date(2026, 12, d);
+        let dated = |d, entry| CalendarAction::SetDates {
+            first: day(d),
+            last: day(d),
+            entry,
+            text: text("Fechado"),
+        };
+        let mut plan = plan();
+        plan.holidays = vec![
+            holiday(
+                HolidayTable::Repeatable,
+                1,
+                "CTR",
+                CalendarAction::CloseWeekday {
+                    weekday: 0,
+                    text: text("Domingo"),
+                },
+            ),
+            holiday(
+                HolidayTable::Repeatable,
+                2,
+                "CTR",
+                CalendarAction::CloseAnnually {
+                    holiday: AnnualHoliday::new(12, 25).unwrap(),
+                    text: text("Natal"),
+                },
+            ),
+            holiday(
+                HolidayTable::Repeatable,
+                3,
+                "LUA",
+                CalendarAction::CloseWeekday {
+                    weekday: 6,
+                    text: text("Sábado"),
+                },
+            ),
+            holiday(
+                HolidayTable::Special,
+                1,
+                "CTR",
+                dated(24, DatedEntry::Closed),
+            ),
+            holiday(HolidayTable::Special, 2, "CTR", dated(26, DatedEntry::Open)),
+            holiday(
+                HolidayTable::Special,
+                3,
+                "CTR",
+                dated(31, DatedEntry::Closed),
+            ),
+        ];
+        plan.holidays_left = vec![(HolidayTable::Special, 4, HolidayLeftover::SameDay)];
+        let mut found = faithful(&plan, &[]);
+        found.holidays.remove("LUA");
+        let ctr = found.holidays.get_mut("CTR").unwrap();
+        ctr[1].text.title = "Natal!".to_owned();
+        ctr[3].when = HolidayWhen::Dated(day(26), DatedEntry::Closed);
+        ctr.remove(4);
+        ctr.push(Holiday {
+            when: HolidayWhen::Weekly(3),
+            text: text("Quarta"),
+        });
+        let checks = verify(&plan, &[], &found);
+        let repeatable = check(&checks, Table::RepeatableHolidays);
+        assert_eq!((repeatable.in_dump, repeatable.arrived), (3, 2));
+        assert_eq!(
+            repeatable.explained,
+            BTreeMap::from([(Cause::UnknownBranch("LUA".to_owned()), vec!["3".to_owned()])])
+        );
+        assert_eq!(
+            repeatable.unexplained,
+            vec![
+                ("2".to_owned(), Unexplained::Field("title")),
+                ("CTR weekday 3".to_owned(), Unexplained::ExtraBy("entry")),
+            ]
+        );
+        let special = check(&checks, Table::SpecialHolidays);
+        assert_eq!((special.in_dump, special.arrived), (4, 2));
+        assert_eq!(
+            special.explained,
+            BTreeMap::from([(
+                Cause::Holiday(HolidayLeftover::SameDay),
+                vec!["4".to_owned()]
+            )])
+        );
+        assert_eq!(
+            special.unexplained,
+            vec![
+                ("2".to_owned(), Unexplained::Field("isexception")),
+                ("3".to_owned(), Unexplained::Missing),
+            ]
+        );
     }
 
     fn rule(

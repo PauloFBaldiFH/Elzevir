@@ -16,7 +16,10 @@ use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput};
 use elzevir_app::import::koha_sql::{DatabaseCatalog, read_database_catalog};
 use elzevir_app::import::{ImportOptions, ImportReport, Parallelism, import_koha_database};
-use elzevir_app::koha_migration::{KohaPlan, KohaRulesMigrated, RuleLeftover, plan};
+use elzevir_app::koha_migration::{
+    HolidayLeftover, HolidayTable, KohaCalendarMigrated, KohaPlan, KohaRulesMigrated, RuleLeftover,
+    plan,
+};
 use elzevir_app::koha_prefs::{PrefsConfig, prefs_config, read_preferences};
 use elzevir_app::koha_types::TypeTranslationSource;
 use elzevir_app::patrons::{PatronCommand, PatronOutput};
@@ -102,6 +105,11 @@ pub(crate) fn run(args: &SwitchFromKohaArgs) -> Result<(), String> {
     let rules = migrate_rules(store, &read.plan).map_err(|e| format!("circulation rules: {e}"))?;
     report.push(step("circulation rules", started.elapsed()));
     report.push(rules_report(&read.plan, &rules));
+
+    let started = Instant::now();
+    let calendar = migrate_calendar(store, &read.plan).map_err(|e| format!("calendar: {e}"))?;
+    report.push(step("calendar", started.elapsed()));
+    report.push(calendar_report(&read.plan, &calendar));
 
     let started = Instant::now();
     let biblionumbers: Vec<Option<String>> = read
@@ -263,6 +271,72 @@ fn rules_report(plan: &KohaPlan, done: &KohaRulesMigrated) -> String {
     )];
     for (id, why) in left {
         lines.push(format!("  id {id}: {}", rule_leftover(why)));
+    }
+    let mut text = lines.join("\n");
+    text.push('\n');
+    text
+}
+
+/// Each branch's calendar, in writes of at most `HOLIDAYS_PER_COMMAND` entries (item 7b).
+fn migrate_calendar(store: &ElzevirStore, plan: &KohaPlan) -> Result<KohaCalendarMigrated, String> {
+    let mut all = KohaCalendarMigrated::default();
+    for batch in plan.calendar_batches() {
+        let answer = store
+            .submit(WriteCommand::Patrons(PatronCommand::MigrateKohaCalendar(
+                Box::new(batch),
+            )))
+            .map_err(|e| e.to_string())?
+            .wait()
+            .map_err(|e| e.to_string())?;
+        let WriteOutput::Patrons(PatronOutput::KohaCalendarMigrated(done)) = answer else {
+            return Err("unexpected answer from the store".to_owned());
+        };
+        all.holidays += done.holidays;
+        all.left.extend(done.left);
+    }
+    Ok(all)
+}
+
+pub(crate) const fn holiday_table(table: HolidayTable) -> &'static str {
+    match table {
+        HolidayTable::Repeatable => "repeatable_holidays",
+        HolidayTable::Special => "special_holidays",
+    }
+}
+
+pub(crate) const fn holiday_leftover(why: HolidayLeftover) -> &'static str {
+    match why {
+        HolidayLeftover::Incomplete => "no id, branchcode, weekday or date",
+        HolidayLeftover::BadWeekday => "a weekday past 6",
+        HolidayLeftover::BadDate => "a day that does not exist",
+        HolidayLeftover::SameDay => "an earlier row of the branch names the same day",
+        HolidayLeftover::UnknownBranch => "branchcode not in the Elzevir",
+    }
+}
+
+/// The entries set and the rows left out, by Koha's table and `id` (item 11).
+fn calendar_report(plan: &KohaPlan, done: &KohaCalendarMigrated) -> String {
+    let mut left = plan.holidays_left.clone();
+    left.extend(done.left.iter().copied());
+    left.sort();
+    let untitled = plan
+        .holidays
+        .iter()
+        .filter(|holiday| holiday.untitled)
+        .count();
+    let cut = plan.holidays.iter().filter(|holiday| holiday.cut).count();
+    let mut lines = vec![format!(
+        "calendar: {} entries set, {} rows left out, {untitled} without a title in Koha, \
+         {cut} with the description cut",
+        done.holidays,
+        left.len()
+    )];
+    for (table, id, why) in left {
+        lines.push(format!(
+            "  {} id {id}: {}",
+            holiday_table(table),
+            holiday_leftover(why)
+        ));
     }
     let mut text = lines.join("\n");
     text.push('\n');
