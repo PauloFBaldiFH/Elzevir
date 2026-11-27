@@ -457,7 +457,7 @@ Trocar o Koha pelo Elzevir numa cópia da Biblioteca Pública Municipal Castro A
 
 ### Fase 7: circulação do dia a dia
 
-> Status: **proposta**, para Paulo aprovar. Base: [lacunas da troca](../specs/migracao/gaps.md) (G1 a G4 e G9) e itens A1 a A8 e A11 do inventário de paridade, na ordem aprovada em 2026-11-27.
+> Status: **aprovada** por Paulo em 2026-11-27. Base: [lacunas da troca](../specs/migracao/gaps.md) (G1 a G4 e G9) e itens A1 a A8 e A11 do inventário de paridade, na ordem aprovada em 2026-11-27.
 
 O que impede a troca na Castro Alves vem primeiro, e a troca real pode acontecer ao fim da 7.4. Cada tarefa é uma fatia vertical com as sete regras de método. A prova é um cenário gravado no oráculo, montado de propósito, com o banco restaurado depois.
 
