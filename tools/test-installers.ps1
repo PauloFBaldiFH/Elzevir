@@ -94,3 +94,6 @@ try {
 $plan = & ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $root 'install.ps1')))) -Plan -Version 'v1.2.3' | ConvertFrom-Json
 Assert-True ($plan.version -ceq 'v1.2.3') 'Installer plan did not run'
 Write-Output 'Windows bootstrap parser, checksum and extraction checks passed.'
+# The probe of an unsupported command leaves $LASTEXITCODE at 2, and the CI runner
+# exits with it after the script; every failed check above throws instead.
+exit 0
