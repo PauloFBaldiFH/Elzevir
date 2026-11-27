@@ -684,7 +684,7 @@ fn serve_controlled(
                 draft_search::ScreenSources::new(drafts, authorities, &instance)?,
                 oai,
                 sru,
-                elzevir_print::TypstPrinter::new(loaded.spine_labels),
+                elzevir_print::TypstPrinter::new(loaded.templates),
             ),
         )?;
         let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;

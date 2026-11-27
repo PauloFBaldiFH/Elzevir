@@ -9,7 +9,9 @@
 
 use std::sync::Arc;
 
-use elzevir_app::printing::{MAX_LABELS, PrintError, Printer, SpineLabel};
+use elzevir_app::printing::{
+    CardTexts, MAX_CARDS, MAX_LABELS, PatronCard, PrintError, Printer, SpineLabel,
+};
 use serde_json::json;
 use typst::diag::{FileError, FileResult};
 use typst::foundations::{Bytes, Datetime, Dict, Duration, IntoValue};
@@ -22,19 +24,36 @@ use typst_layout::PagedDocument;
 /// The spine label template built into the binary.
 pub const SPINE_LABELS: &str = include_str!("../templates/spine-labels.typ");
 
+/// The patron card template built into the binary.
+pub const PATRON_CARDS: &str = include_str!("../templates/patron-cards.typ");
+
+/// The library's own templates; each one absent is the built-in one.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Templates {
+    /// Spine labels.
+    pub spine_labels: Option<String>,
+    /// Patron cards.
+    pub patron_cards: Option<String>,
+}
+
 /// Typesets the documents with Typst.
 #[derive(Clone)]
 pub struct TypstPrinter {
     spine_labels: Arc<str>,
+    patron_cards: Arc<str>,
     fonts: Arc<Fonts>,
 }
 
 impl TypstPrinter {
-    /// A printer with the spine label template `spine_labels`, else the built-in one.
+    /// A printer with the library's templates, else the built-in ones.
     #[must_use]
-    pub fn new(spine_labels: Option<String>) -> Self {
+    pub fn new(templates: Templates) -> Self {
+        let or = |own: Option<String>, built_in: &str| {
+            own.map_or_else(|| Arc::from(built_in), Arc::from)
+        };
         Self {
-            spine_labels: spine_labels.map_or_else(|| Arc::from(SPINE_LABELS), Arc::from),
+            spine_labels: or(templates.spine_labels, SPINE_LABELS),
+            patron_cards: or(templates.patron_cards, PATRON_CARDS),
             fonts: Arc::new(Fonts::embedded()),
         }
     }
@@ -59,6 +78,26 @@ impl Printer for TypstPrinter {
             });
         }
         self.render(&self.spine_labels, &json!({ "labels": labels }))
+    }
+
+    fn patron_cards(&self, cards: &[PatronCard], texts: &CardTexts) -> Result<Vec<u8>, PrintError> {
+        if cards.len() > MAX_CARDS {
+            return Err(PrintError::TooMany {
+                count: cards.len(),
+                max: MAX_CARDS,
+            });
+        }
+        self.render(
+            &self.patron_cards,
+            &json!({ "cards": cards, "texts": texts }),
+        )
+    }
+}
+
+impl Default for TypstPrinter {
+    /// The printer with the built-in templates.
+    fn default() -> Self {
+        Self::new(Templates::default())
     }
 }
 
@@ -170,7 +209,7 @@ mod tests {
 
     #[test]
     fn spine_labels_are_typeset_as_a_pdf_a_page_per_sheet() {
-        let printer = TypstPrinter::new(None);
+        let printer = TypstPrinter::default();
         let labels: Vec<SpineLabel> = (0..70).map(|_| label("869.3 A848d ex.1")).collect();
         let pdf = printer.spine_labels(&labels).unwrap();
         assert!(pdf.starts_with(b"%PDF-"));
@@ -181,14 +220,20 @@ mod tests {
 
     #[test]
     fn a_broken_template_says_why() {
-        let printer = TypstPrinter::new(Some("#let x = (".to_owned()));
+        let printer = TypstPrinter::new(Templates {
+            spine_labels: Some("#let x = (".to_owned()),
+            ..Templates::default()
+        });
         let refused = printer.spine_labels(&[label("869.3 A848d")]);
         assert!(matches!(refused, Err(PrintError::Template(message)) if !message.is_empty()));
     }
 
     #[test]
     fn a_template_reaches_no_file() {
-        let printer = TypstPrinter::new(Some("#read(\"/etc/passwd\")".to_owned()));
+        let printer = TypstPrinter::new(Templates {
+            spine_labels: Some("#read(\"/etc/passwd\")".to_owned()),
+            ..Templates::default()
+        });
         assert!(matches!(
             printer.spine_labels(&[]),
             Err(PrintError::Template(_))
@@ -199,11 +244,44 @@ mod tests {
     fn too_many_labels_are_refused() {
         let labels = vec![label("869.3"); MAX_LABELS + 1];
         assert_eq!(
-            TypstPrinter::new(None).spine_labels(&labels),
+            TypstPrinter::default().spine_labels(&labels),
             Err(PrintError::TooMany {
                 count: MAX_LABELS + 1,
                 max: MAX_LABELS
             })
         );
+    }
+
+    fn card(cardnumber: &str) -> PatronCard {
+        PatronCard {
+            name: "Ana Silva".to_owned(),
+            surname: "Silva".to_owned(),
+            first_name: Some("Ana".to_owned()),
+            cardnumber: cardnumber.to_owned(),
+            category: "Adulto".to_owned(),
+            branch: "Biblioteca Central".to_owned(),
+            expires: Some("19/11/2027".to_owned()),
+            bars: elzevir_domain::labels::code39(cardnumber),
+        }
+    }
+
+    #[test]
+    fn patron_cards_are_typeset_ten_to_a_sheet() {
+        let texts = CardTexts {
+            cardnumber: "Cartão".to_owned(),
+            expires: "Validade".to_owned(),
+        };
+        let mut cards: Vec<PatronCard> = (0..10).map(|n| card(&format!("00012{n}"))).collect();
+        cards.push(card("sem-código"));
+        let pdf = TypstPrinter::default()
+            .patron_cards(&cards, &texts)
+            .unwrap();
+        assert!(pdf.starts_with(b"%PDF-"));
+        assert!(String::from_utf8_lossy(&pdf).contains("/Count 2"));
+        let many = vec![card("1"); MAX_CARDS + 1];
+        assert!(matches!(
+            TypstPrinter::default().patron_cards(&many, &texts),
+            Err(PrintError::TooMany { .. })
+        ));
     }
 }

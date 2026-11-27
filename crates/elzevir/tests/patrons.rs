@@ -1855,3 +1855,51 @@ fn the_patron_holds_and_cancels_through_the_api_and_refusals_lock_the_card() {
     );
     assert_status(&locked, 429);
 }
+
+/// The response as bytes, for a PDF.
+fn request_bytes(address: SocketAddr, path: &str, headers: &str) -> Vec<u8> {
+    let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(5)).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(30)))
+        .unwrap();
+    write!(
+        stream,
+        "GET {path} HTTP/1.0\r\nHost: localhost\r\n{headers}Content-Length: 0\r\n\r\n"
+    )
+    .unwrap();
+    let mut response = Vec::new();
+    stream.read_to_end(&mut response).unwrap();
+    response
+}
+
+#[test]
+fn patron_cards_are_printed_from_the_search_and_the_record() {
+    let data = tempfile::tempdir().unwrap();
+    let ana = library(data.path());
+    let (server, address) = start(data.path());
+    let cir = sign_in(address, "cir");
+    let cat = sign_in(address, "cat");
+    let path = format!("/equipe/leitores/carteirinhas?leitor={ana}");
+    let found = request(address, "GET", "/equipe/leitores?q=Silva", &cir, "");
+    assert!(found.contains(&format!(
+        "<a class=\"patron-cards\" href=\"{path}\" download>"
+    )));
+    let record = request(address, "GET", &format!("/equipe/leitores/{ana}"), &cir, "");
+    assert!(record.contains(&format!(
+        "href=\"{path}\" download title=\"Print card (PDF)\""
+    )));
+    assert_status(&request(address, "GET", &path, &cat, ""), 403);
+    let pdf = request_bytes(address, &format!("{path}&leitor={ana}"), &cir);
+    let split = pdf.windows(4).position(|w| w == b"\r\n\r\n").unwrap();
+    let (head, body) = pdf.split_at(split + 4);
+    let head = String::from_utf8_lossy(head);
+    assert!(head.starts_with("HTTP/1.0 200"), "{head}");
+    assert!(head.contains("content-type: application/pdf"));
+    assert!(head.contains("filename=\"carteirinhas.pdf\""));
+    assert!(body.starts_with(b"%PDF-"));
+    for (query, status) in [("leitor=x", 400), ("", 400), ("leitor=999999", 404)] {
+        let path = format!("/equipe/leitores/carteirinhas?{query}");
+        assert_status(&request(address, "GET", &path, &cir, ""), status);
+    }
+    drop(server);
+}

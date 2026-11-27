@@ -624,6 +624,14 @@ impl elzevir_app::printing::Printer for Labels {
         let lines: Vec<String> = labels.iter().map(|label| label.lines.join("|")).collect();
         Ok(format!("%PDF-\n{}", lines.join("\n")).into_bytes())
     }
+
+    fn patron_cards(
+        &self,
+        _: &[elzevir_app::printing::PatronCard],
+        _: &elzevir_app::printing::CardTexts,
+    ) -> Result<Vec<u8>, elzevir_app::printing::PrintError> {
+        Ok(b"%PDF-".to_vec())
+    }
 }
 
 #[tokio::test]
