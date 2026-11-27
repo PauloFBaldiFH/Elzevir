@@ -77,7 +77,9 @@ impl State {
             }
             (Some(Node::Data(..)), b"subfield") => {
                 let [code] = required(start, b"code")?;
-                if !code.is_ascii_graphic() {
+                // A blank code is not MARC 21, but Koha keeps it (`MARC::File::XML`) and
+                // records carry it, so it is read and written back, like a blank indicator.
+                if !(code.is_ascii_graphic() || code == b' ') {
                     return Err(XmlProblem::Invalid("subfield code"));
                 }
                 Node::Subfield(code)
