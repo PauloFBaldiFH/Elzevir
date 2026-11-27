@@ -95,9 +95,10 @@ pub use staff_notice_rules::{
 };
 pub use staff_patrons::{
     AccountRow, AnonymizeSection, AsideForm, CategoryLine, DeskOption, HoldRow,
-    HoldSuspensionAction, LoanLine, Notice, PasswordSection, PatronFormValues, PatronHeader,
-    PatronLine, RestrictionRow, SlipLine, SlipSection, StaffCheckin, StaffCheckoutSlip,
-    StaffPatron, StaffPatronCategories, StaffPatronForm, StaffPatrons, StatusChip,
+    HoldSuspensionAction, LoanLine, Notice, PasswordSection, PatronFieldForm, PatronFormValues,
+    PatronHeader, PatronLine, RestrictionRow, SlipLine, SlipSection, StaffCheckin,
+    StaffCheckoutSlip, StaffPatron, StaffPatronCategories, StaffPatronFields, StaffPatronForm,
+    StaffPatrons, StatusChip,
 };
 pub use staff_record_fields::{FieldEntry, FieldGroup, FieldValue, ItemFields, RecordFields};
 pub use staff_record_form::{

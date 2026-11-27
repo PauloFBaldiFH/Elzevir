@@ -344,6 +344,52 @@ fn categories_are_created_with_months_or_a_date_by_who_manages_patrons() {
 }
 
 #[test]
+fn additional_fields_are_defined_by_who_manages_patrons() {
+    let data = tempfile::tempdir().unwrap();
+    library(data.path());
+    let (_server, address) = start(data.path());
+    let cir = sign_in(address, "cir");
+    let lei = sign_in(address, "lei");
+    assert_status(
+        &request(address, "GET", "/equipe/leitores/campos", &cir, ""),
+        403,
+    );
+    let page = request(address, "GET", "/equipe/leitores/campos", &lei, "");
+    assert_status(&page, 200);
+    let token = csrf(&page).to_owned();
+    let form = format!("{lei}Content-Type: application/x-www-form-urlencoded\r\n");
+    let post = |body: &str| {
+        request(
+            address,
+            "POST",
+            "/equipe/leitores/campos",
+            &form,
+            &format!("csrf={token}&{body}"),
+        )
+    };
+    let created = post(
+        "action=create&name=Shift&kind=list&category=1&unique=1&new_options=Morning%0D%0AEvening",
+    );
+    assert_status(&created, 303);
+    let page = request(address, "GET", "/equipe/leitores/campos", &lei, "");
+    assert!(page.contains("value=\"Shift\"") && page.contains("value=\"Evening\""));
+    assert!(page.contains("name=\"unique\" value=\"1\" checked"));
+    let empty = post("action=create&name=Grade&kind=list&category=0");
+    assert_status(&empty, 422);
+    assert!(empty.contains("1 to 200 options"));
+    let same_name = post("action=create&name=Shift&kind=text&category=0");
+    assert_status(&same_name, 409);
+    let forged = request(
+        address,
+        "POST",
+        "/equipe/leitores/campos",
+        &form,
+        "csrf=wrong&action=create&name=Other&kind=text&category=0",
+    );
+    assert_status(&forged, 403);
+}
+
+#[test]
 fn a_patron_is_enrolled_and_edited_on_the_form() {
     let data = tempfile::tempdir().unwrap();
     let ana = library(data.path());

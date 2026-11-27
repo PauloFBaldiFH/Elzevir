@@ -1,0 +1,63 @@
+{% extends "staff_base.html" %}
+{% block scope %}leitores{% endblock %}
+{% block title %}{{ t.get("patron-fields-title") }}{% endblock %}
+{% macro settings(kind, repeatable, unique, required, category, opac_shown, searchable) %}
+<label>{{ t.get("patron-field-kind") }}
+  <select name="kind">
+    <option value="text"{% if kind == "text" %} selected{% endif %}>{{ t.get("patron-field-kind-text") }}</option>
+    <option value="date"{% if kind == "date" %} selected{% endif %}>{{ t.get("patron-field-kind-date") }}</option>
+    <option value="list"{% if kind == "list" %} selected{% endif %}>{{ t.get("patron-field-kind-list") }}</option>
+  </select>
+</label>
+<label>{{ t.get("patron-field-category") }}
+  <select name="category">
+    <option value="0">{{ t.get("patron-field-every-category") }}</option>
+    {% for (id, name) in categories %}<option value="{{ id }}"{% if *id == category %} selected{% endif %}>{{ name }}</option>{% endfor %}
+  </select>
+</label>
+<label><input type="checkbox" name="repeatable" value="1"{% if repeatable %} checked{% endif %}> {{ t.get("patron-field-repeatable") }}</label>
+<label><input type="checkbox" name="unique" value="1"{% if unique %} checked{% endif %}> {{ t.get("patron-field-unique") }}</label>
+<label><input type="checkbox" name="required" value="1"{% if required %} checked{% endif %}> {{ t.get("patron-field-required") }}</label>
+<label><input type="checkbox" name="opac_shown" value="1"{% if opac_shown %} checked{% endif %}> {{ t.get("patron-field-opac-shown") }}</label>
+<label><input type="checkbox" name="searchable" value="1"{% if searchable %} checked{% endif %}> {{ t.get("patron-field-searchable") }}</label>
+{% endmacro %}
+{% block content %}
+<div class="registries">
+<p><a href="/equipe/leitores/categorias">{{ t.get("patron-categories-title") }}</a></p>
+<h1>{{ t.get("patron-fields-title") }}</h1>
+<p class="form-hint">{{ t.get("patron-fields-intro") }}</p>
+{% if saved %}<p class="codes-alert codes-saved" role="status">{{ t.get("registries-saved") }}</p>{% endif %}
+{% if let Some(key) = refused %}<p class="codes-alert codes-refused" role="alert">{{ t.get(key) }}</p>{% endif %}
+<ul class="code-rows">
+{% for field in fields %}
+  <li>
+    <form method="post" action="/equipe/leitores/campos" class="registry-row">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="id" value="{{ field.id }}">
+      <input type="text" name="name" value="{{ field.name }}" maxlength="256" required aria-label="{{ t.get("registries-name") }}">
+      {% call settings(field.kind, field.repeatable, field.unique, field.required, field.category, field.opac_shown, field.searchable) %}{% endcall %}
+      {% if field.kind == "list" %}
+      <fieldset>
+        <legend>{{ t.get("patron-field-options") }}</legend>
+        {% for (id, label) in field.options %}<input type="text" name="option.{{ id }}" value="{{ label }}" maxlength="256" aria-label="{{ t.get("patron-field-option") }}">{% endfor %}
+        <textarea name="new_options" rows="2" placeholder="{{ t.get("patron-field-new-options") }}" aria-label="{{ t.get("patron-field-new-options") }}"></textarea>
+      </fieldset>
+      {% endif %}
+      <span class="form-hint">{{ field.patrons }}</span>
+      <button type="submit" name="action" value="update">{{ t.get("registries-save") }}</button>
+      <button type="submit" name="action" value="delete" formnovalidate>{{ t.get("registries-delete") }}</button>
+    </form>
+  </li>
+{% endfor %}
+  <li class="registry-new">
+    <form method="post" action="/equipe/leitores/campos">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="text" name="name" maxlength="256" required placeholder="{{ t.get("registries-new") }}" aria-label="{{ t.get("registries-new") }}">
+      {% call settings("text", false, false, false, 0, false, true) %}{% endcall %}
+      <textarea name="new_options" rows="2" placeholder="{{ t.get("patron-field-new-options") }}" aria-label="{{ t.get("patron-field-new-options") }}"></textarea>
+      <button type="submit" name="action" value="create">{{ t.get("registries-add") }}</button>
+    </form>
+  </li>
+</ul>
+</div>
+{% endblock %}

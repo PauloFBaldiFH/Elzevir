@@ -42,6 +42,7 @@ pub mod oai;
 pub mod opac;
 pub mod parallelism;
 pub mod patron_account;
+pub mod patron_fields;
 pub mod patrons;
 pub mod pending;
 pub mod printing;

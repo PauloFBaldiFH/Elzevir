@@ -455,6 +455,27 @@ Trocar o Koha pelo Elzevir numa cópia da Biblioteca Pública Municipal Castro A
 | 6.5 | Desempenho com o acervo real: importação, migração, busca, índice, backup e restauração | doc 02; [performance.md](../specs/migracao/performance.md) | Números medidos e registrados, com meta para o que ficar lento |
 | 6.6 | Lista de lacunas que impediriam a troca, cruzada com o inventário | Inventário de paridade; [gaps.md](../specs/migracao/gaps.md) | A ordem das Fases 7 a 12 é revista antes da Fase 7 |
 
+### Fase 7: circulação do dia a dia
+
+> Status: **aprovada** por Paulo em 2026-11-27. Base: [lacunas da troca](../specs/migracao/gaps.md) (G1 a G4 e G9) e itens A1 a A8 e A11 do inventário de paridade, na ordem aprovada em 2026-11-27.
+
+O que impede a troca na Castro Alves vem primeiro, e a troca real pode acontecer ao fim da 7.4. Cada tarefa é uma fatia vertical com as sete regras de método. A prova é um cenário gravado no oráculo, montado de propósito, com o banco restaurado depois.
+
+| # | Tarefa | Referência no Koha | Pronto quando |
+|---|---|---|---|
+| 7.0 | Contagem do uso na produção, feita na máquina de Paulo, só com números agregados: atributos do leitor, perdidos, reservas, avisos, equipe. Junto dela, o desempenho do balcão com o volume real (G11) | `tools/koha-parity/perf.py`; uma consulta de contagens versionada em `tools/koha-parity/` | O relatório confirma ou muda a ordem das tarefas 7.1 a 7.9, sem dado pessoal |
+| 7.1 | Campos extras do leitor: tipos definidos pela biblioteca (texto, data ou lista; repetível; obrigatório; visível no OPAC), valores na ficha e na busca de leitores, e migração. A troca também traz a moeda ativa para o `BH` do SIP2 (G9) | `borrower_attribute_types`, `borrower_attributes`, `Koha::Patron::Attribute(::Type)`; `currency`; spec [patron-attributes.md](../specs/circulacao/patron-attributes.md) | O `verify-koha` confere tipos e valores pelo número do Koha; a busca acha o leitor pelo atributo marcado como pesquisável |
+| 7.2 | Perdido, danificado e retirado no balcão. Marcar como perdido cobra a reposição e a taxa de processamento. Achar o exemplar desfaz a cobrança conforme a regra de devolução do perdido. Danificado e retirado mudam o que o empréstimo aceita | `C4::Circulation::LostItem`, `WhenLostChargeReplacementFee`, regras `lostreturn` e `processingreturn` (`Koha::CirculationRules`), `BlockReturnOfLostItems` | Cenários "perder, pagar, achar" e "perder, achar sem pagar" com os mesmos saldos do Koha |
+| 7.3 | Reservas a separar: a lista dos exemplares na estante que atendem a uma reserva, por unidade, com impressão. A lista vem de uma leitura das reservas e dos exemplares, sem tabela nova | `circ/pendingreserves.pl` | A mesma lista que o Koha mostra para o mesmo estado |
+| 7.4 | Aviso antes do vencimento e no dia, com a preferência de cada leitor e a migração dessas preferências | `misc/cronjobs/advance_notices.pl`, `borrower_message_preferences`, avisos `PREDUE` e `DUE` | O mesmo conjunto de avisos que o Koha gera para o mesmo dia |
+| 7.5 | Renovação automática pela regra de circulação, numa rodada do agendador, com o aviso do resultado | `misc/cronjobs/automatic_renewals.pl`, regras `auto_renew`, `no_auto_renewal_after` e `no_auto_renewal_after_hard_limit` | Cenários renovado, recusado por reserva, recusado por dívida e recusado por prazo, iguais ao Koha |
+| 7.6 | Estorno de pagamento, quitação por reposição do material ou por compensação (um crédito tipado, que não conta como dinheiro recebido) e recibo impresso em Typst | `Koha::Account::Line::void`, `members/printfeercpt.pl` | Saldos iguais aos do Koha depois do estorno; o recibo traz o que a conta tem |
+| 7.7 | Cancelamento de reserva com motivo, num cadastro genérico de motivos, guardado no histórico | `Koha::Hold::cancel` (`cancellation_reason`) | O motivo aparece no histórico e na migração das reservas canceladas |
+| 7.8 | Empréstimo no local (vence no mesmo dia) e uso em sala, registrado como evento sem leitor | `OnSiteCheckouts`, `issues.onsite_checkout`, `RecordLocalUseOnReturn`, `statistics` `localuse` | Cenário de vencimento no mesmo dia igual ao Koha; o uso em sala entra no relatório de circulação |
+| 7.9 | Transferências entre unidades: envio, recebimento, cancelamento, devolução em outra unidade com retorno automático, e limites entre unidades | `branchtransfers`, `AutomaticItemReturn`, `UseBranchTransferLimits`, `C4::Circulation::AddReturn` | Cenários de devolução em outra unidade, com e sem reserva, iguais ao Koha |
+
+A 7.0 depende de Paulo rodar a contagem na máquina dele. Enquanto o relatório não chega, a 7.1 começa, porque a cópia já mostra 4 tipos de atributo.
+
 ### Fases 7 a 12 (roadmap aprovado; cada fase detalhada aqui antes de começar)
 
 Ordem revista na tarefa 6.6 e aprovada por Paulo em 2026-11-27 ([lacunas da troca](../specs/migracao/gaps.md), §3): primeiro o que impede a troca na Castro Alves, depois o que o público vê.

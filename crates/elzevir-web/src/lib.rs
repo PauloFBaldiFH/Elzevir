@@ -41,6 +41,7 @@ mod opac_holds;
 mod patron_account;
 mod patron_card;
 mod patron_cards;
+mod patron_fields;
 mod patron_form;
 mod patron_holds;
 mod patron_login;
@@ -467,6 +468,10 @@ pub fn router(state: AppState) -> Router {
 /// (docs/specs/opac/conta-do-leitor.md).
 fn patron_routes() -> Router<AppState> {
     Router::new()
+        .route(
+            "/equipe/leitores/campos",
+            get(patron_fields::page).post(patron_fields::change),
+        )
         .route("/conta", get(opac_account::account))
         .route("/conta/renovar", post(opac_account::renew))
         .route(

@@ -139,6 +139,13 @@ pub(crate) struct CategoriesParams {
     saved: Option<String>,
 }
 
+impl CategoriesParams {
+    /// Whether the page follows a stored change.
+    pub(crate) const fn saved(&self) -> bool {
+        self.saved.is_some()
+    }
+}
+
 /// `GET /equipe/leitores/categorias`.
 pub(crate) async fn categories(
     State(state): State<AppState>,
