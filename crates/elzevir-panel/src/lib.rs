@@ -6,7 +6,10 @@ mod address_operations;
 mod address_view;
 pub use address_operations::AddressOperation;
 mod addresses;
+mod backup_center;
 mod backup_options;
+mod manual_backup;
+pub use backup_center::{BackupCenter, BackupPage};
 mod cloud;
 mod dashboard;
 mod domain;
@@ -51,7 +54,9 @@ pub use live::{
     Component, Details, Host, Institution, LiveState, Mode, ServerStatus, Snapshot, Storage,
 };
 pub use messages::Messages;
-pub use operations::{Form, Job, LocalBackup, Operation, Operations, RestoreReview, ServerAction};
+pub use operations::{
+    BackupArtifact, Form, Job, LocalBackup, Operation, Operations, RestoreReview, ServerAction,
+};
 pub use runtime::{inspect_installation, run, run_live, run_live_until};
 pub use view::draw;
 
@@ -158,6 +163,8 @@ pub struct Panel {
     pub diagnostics: DiagnosticAction,
     /// Bounded operation form and explicit confirmation.
     pub form: Option<Form>,
+    /// Local backup workspace and its selected artifact.
+    pub backups: BackupCenter,
     /// Cloud backup tab (connections, plans, files or history).
     pub cloud_tab: usize,
     /// Index of the plan whose connection and folder are displayed.
@@ -366,12 +373,15 @@ impl Panel {
 }
 
 impl Panel {
-    fn cloud_view(&self) -> Option<&CloudView> {
+    fn observed_operations(&self) -> Option<&Operations> {
         if let Mode::Live(state) = &self.mode {
-            state.snapshot.as_ref()?.operations.cloud.as_ref()
+            state.snapshot.as_ref().map(|s| &s.operations)
         } else {
             None
         }
+    }
+    fn cloud_view(&self) -> Option<&CloudView> {
+        self.observed_operations()?.cloud.as_ref()
     }
     /// Whether the selected institution runs under a service manager.
     #[must_use]
@@ -433,6 +443,7 @@ impl Panel {
         self.initialize_cloud_file();
         match key {
             '[' | ']' => {
+                self.backups.page = BackupPage::Connections;
                 self.cloud_tab = (self.cloud_tab + if key == ']' { 1 } else { 3 }) % 4;
             }
             ',' | '.' => {
@@ -638,13 +649,9 @@ impl Panel {
                 protocol: "auto".to_owned(),
             },
             (Section::Backup, 'R') => {
-                let Mode::Live(state) = &self.mode else {
-                    return false;
-                };
-                let Some(review) = state
-                    .snapshot
-                    .as_ref()
-                    .and_then(|s| s.operations.review.clone())
+                let Some(review) = self
+                    .observed_operations()
+                    .and_then(|ops| ops.review.clone())
                 else {
                     return false;
                 };
@@ -655,14 +662,15 @@ impl Panel {
                     cloud::shortcut(key, self.cloud_view()).unwrap_or(CloudOperation::Providers),
                 )
             }
-            (Section::Backup, 'n' | 'v' | 'e' | 'k' | 'o' | 's') => backup_operation(
-                key,
-                if let Mode::Live(state) = &self.mode {
-                    state.snapshot.as_ref().map(|snapshot| &snapshot.operations)
-                } else {
-                    None
-                },
-            ),
+            (Section::Backup, 'v' | 'e') if self.backups.page != BackupPage::Connections => {
+                let Some(operation) = backup_center::shortcut(self, key) else {
+                    return true;
+                };
+                operation
+            }
+            (Section::Backup, 'n' | 'v' | 'e' | 'k' | 'o' | 's') => {
+                backup_operation(key, self.observed_operations())
+            }
             (Section::Restart | Section::Settings, 'c') => match self.settings() {
                 Some(operation) => operation,
                 None => return false,
@@ -721,11 +729,14 @@ impl Panel {
             }
             form.field = form.labels.len();
         }
-        self.diagnostics.requested = self
-            .form
-            .take()
-            .and_then(Form::finish)
-            .map(ObservationRequest::Operate);
+        let operation = self.form.take().and_then(Form::finish);
+        if self.section == Section::Backup && matches!(operation, Some(Operation::BackupNow { .. }))
+        {
+            self.backups.page = BackupPage::Result;
+            self.backups.selected = None;
+            self.backups.waiting_ack = true;
+        }
+        self.diagnostics.requested = operation.map(ObservationRequest::Operate);
         self.diagnostics.pending = self.diagnostics.requested.is_some();
     }
 

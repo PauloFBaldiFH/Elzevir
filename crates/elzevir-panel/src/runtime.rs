@@ -182,6 +182,7 @@ fn observe(
         *observed_at = Some(at);
         if action_sequence.is_some_and(|requested| completed >= requested) {
             panel.diagnostics.pending = false;
+            panel.backups.waiting_ack = false;
             *action_sequence = None;
         }
     }
@@ -192,11 +193,32 @@ fn observe(
         *action_sequence = worker.request(request);
         if action_sequence.is_none() {
             panel.diagnostics.pending = false;
+            panel.backups.waiting_ack = false;
         }
     } else if panel.refresh_requested {
         worker.refresh();
     }
     panel.refresh_requested = false;
+}
+
+fn poll_explorers(
+    panel: &Panel,
+    picker: &mut Option<crate::folder_picker::Picker>,
+    manual: &mut Option<crate::manual_backup::Manual>,
+) {
+    if let Some(active) = picker {
+        active.poll();
+    }
+    if crate::manual_backup::Manual::active(panel) {
+        if manual.is_none() {
+            *manual = crate::manual_backup::Manual::start(panel);
+        }
+        if let Some(editor) = manual {
+            editor.poll();
+        }
+    } else {
+        *manual = None;
+    }
 }
 
 fn interact(
@@ -214,6 +236,7 @@ fn interact(
     let mut input_layer = None;
     let mut transfer: Option<crate::transfer::Dialog> = None;
     let mut picker: Option<crate::folder_picker::Picker> = None;
+    let mut manual: Option<crate::manual_backup::Manual> = None;
     let mut observed_at: Option<Instant> = None;
     let mut action_sequence = None;
     let mut path_probe = crate::restore_paths::Probe::default();
@@ -223,9 +246,7 @@ fn interact(
         if let Some(worker) = worker {
             observe(panel, worker, &mut observed_at, &mut action_sequence);
         }
-        if let Some(active) = &mut picker {
-            active.poll();
-        }
+        poll_explorers(panel, &mut picker, &mut manual);
         access.poll(panel);
         path_probe.poll(panel.form.as_mut());
         let layer = (
@@ -236,6 +257,8 @@ fn interact(
             transfer.is_some(),
             picker.is_some(),
             scene.gallery,
+            panel.backups.page,
+            manual.is_some(),
         );
         if input_layer != Some(layer) {
             scene.reset_input();
@@ -243,7 +266,11 @@ fn interact(
         }
         let drawn = terminal
             .draw(|frame| {
-                if let Some(active) = &picker {
+                if let Some(editor) = &manual
+                    && !crate::view::too_small(frame.area().width, frame.area().height)
+                {
+                    editor.draw(frame, panel, messages, &mut scene);
+                } else if let Some(active) = &picker {
                     scene.clear();
                     active.draw(frame, messages, ascii);
                 } else {
@@ -267,6 +294,10 @@ fn interact(
             }
             if picker.is_none() && panel.size_warning(size.width, size.height) {
                 panel.handle(&input, size.width, size.height);
+                continue;
+            }
+            if let Some(editor) = &mut manual {
+                editor.input(&input, &mut scene, panel, &mut access);
                 continue;
             }
             if handle_picker(&input, &mut picker, panel) {
@@ -307,7 +338,10 @@ fn control_input(
     access: &mut crate::access_actions::Actions,
     transfer_open: bool,
 ) -> Option<Event> {
-    let controls = panel.section == crate::Section::Dashboard
+    let controls = (!transfer_open
+        && panel.section == crate::Section::Backup
+        && panel.backups.page != crate::BackupPage::Connections)
+        || panel.section == crate::Section::Dashboard
         || panel.form.is_some()
         || scene.gallery
         || panel.palette;
@@ -329,6 +363,20 @@ fn control_input(
         Event::Key(key) if controls && key.kind == event::KeyEventKind::Press => {
             use event::KeyCode::{BackTab, Char, Enter, Esc, Tab};
             match key.code {
+                event::KeyCode::PageUp | event::KeyCode::PageDown
+                    if crate::backup_center::scrollable(panel)
+                        && panel.form.is_none()
+                        && !panel.palette
+                        && !scene.gallery =>
+                {
+                    crate::backup_center::scroll(
+                        panel,
+                        key.code == event::KeyCode::PageDown,
+                        usize::from(drawn.height.saturating_sub(12).max(1)),
+                        scene.scroll_limit,
+                    );
+                    return None;
+                }
                 Tab | BackTab => {
                     if let Some(crate::ui::Action::Field(i) | crate::ui::Action::Choose(i, _)) =
                         scene.focus_next(key.code == Tab)
@@ -343,6 +391,12 @@ fn control_input(
                         && !matches!(scene.focus(), Some(crate::ui::Action::Field(_))) =>
                 {
                     if let Some(action) = scene.focus() {
+                        if let crate::ui::Action::Key(code) = action {
+                            return Some(Event::Key(event::KeyEvent::new(
+                                code,
+                                event::KeyModifiers::NONE,
+                            )));
+                        }
                         action.apply(panel, drawn, scene, access);
                     }
                     return None;
@@ -374,6 +428,15 @@ fn mouse_action(
         MouseEventKind::Up(MouseButton::Left) => return scene.release(point),
         MouseEventKind::ScrollDown | MouseEventKind::ScrollUp if !modal => {
             scene.reset_input();
+            if crate::backup_center::scrollable(panel) {
+                crate::backup_center::scroll(
+                    panel,
+                    mouse.kind == MouseEventKind::ScrollDown,
+                    3,
+                    scene.scroll_limit,
+                );
+                return None;
+            }
             let limit = if panel.section == crate::Section::Dashboard {
                 scene.scroll_limit
             } else {

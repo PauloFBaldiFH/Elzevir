@@ -68,6 +68,8 @@ struct Ticket {
 pub(crate) struct Receipt {
     pub id: String,
     pub action: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifact_id: Option<String>,
     pub state: String,
     #[serde(default)]
     pub authorization_uri: Option<String>,
@@ -219,6 +221,10 @@ pub(crate) fn launch(directory: &Path, task: Task) -> Result<String, String> {
     let mut receipt = Receipt {
         id: id.clone(),
         action: action(&ticket.task).to_owned(),
+        artifact_id: match &ticket.task {
+            Task::ExportBackup { id, .. } => Some(id.clone()),
+            _ => None,
+        },
         state: "queued".to_owned(),
         authorization_uri: None,
         created: jiff::Timestamp::now().as_second(),
@@ -322,6 +328,10 @@ pub(crate) fn run(args: &Args) -> Result<(), String> {
     let mut receipt = Receipt {
         id: ticket.id,
         action: action(&ticket.task).to_owned(),
+        artifact_id: match &ticket.task {
+            Task::ExportBackup { id, .. } => Some(id.clone()),
+            _ => None,
+        },
         state: "running".to_owned(),
         authorization_uri: None,
         created: jiff::Timestamp::now().as_second(),
@@ -415,6 +425,38 @@ fn check_private_ticket(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// The catalogue is authoritative even after the daemon stops or rotates its job history.
+fn await_publication(directory: &Path, id: &str) -> Result<(), String> {
+    let mut last_observed = std::time::Instant::now();
+    loop {
+        if crate::local_artifacts::ids(directory)?
+            .iter()
+            .any(|entry| entry == id)
+        {
+            return Ok(());
+        }
+        let state = crate::runtime_info::read(&directory.join(crate::runtime_info::NAME))
+            .and_then(|info| crate::admin::operations(&info))
+            .ok()
+            .and_then(|view| view.jobs.into_iter().find(|job| job.id == id))
+            .map(|job| job.state);
+        match state {
+            Some(crate::operations::State::Failed | crate::operations::State::Interrupted) => {
+                return Err("backup did not complete".into());
+            }
+            Some(crate::operations::State::Running | crate::operations::State::Queued) => {
+                last_observed = std::time::Instant::now();
+            }
+            // A temporary disconnect can race publication. Never copy an unowned file.
+            _ if last_observed.elapsed() >= std::time::Duration::from_secs(5) => {
+                return Err("published backup unavailable".into());
+            }
+            _ => {}
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+}
+
 fn execute(
     directory: &Path,
     task: Task,
@@ -422,22 +464,7 @@ fn execute(
 ) -> Result<(), String> {
     match task {
         Task::ExportBackup { id, folder } => {
-            let info = crate::runtime_info::read(&directory.join(crate::runtime_info::NAME))?;
-            loop {
-                let view = crate::admin::operations(&info)?;
-                let job = view
-                    .jobs
-                    .iter()
-                    .find(|job| job.id == id)
-                    .ok_or("backup job unavailable")?;
-                match job.state {
-                    crate::operations::State::Completed => break,
-                    crate::operations::State::Running | crate::operations::State::Queued => {
-                        std::thread::sleep(std::time::Duration::from_millis(500));
-                    }
-                    _ => return Err("backup did not complete".into()),
-                }
-            }
+            await_publication(directory, &id)?;
             std::fs::create_dir_all(&folder).map_err(|_| "cannot create export folder")?;
             crate::backup_cli::export_managed(
                 directory,
@@ -690,6 +717,7 @@ mod tests {
             &Receipt {
                 id: id.clone(),
                 action: "restore".to_owned(),
+                artifact_id: None,
                 state: "completed".to_owned(),
                 authorization_uri: None,
                 created: jiff::Timestamp::now().as_second(),
@@ -732,6 +760,7 @@ mod tests {
                 &Receipt {
                     id: format!("{id:032x}"),
                     action: "restart".to_owned(),
+                    artifact_id: None,
                     state: "completed".to_owned(),
                     authorization_uri: None,
                     created: i64::from(id),
@@ -754,6 +783,7 @@ mod tests {
             &Receipt {
                 id: id.clone(),
                 action: "restart".to_owned(),
+                artifact_id: None,
                 state: "running".to_owned(),
                 authorization_uri: None,
                 created: 1,

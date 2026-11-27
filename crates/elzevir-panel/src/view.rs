@@ -169,6 +169,12 @@ pub(crate) fn interactive(
     }
     if panel.section == Section::Dashboard && matches!(panel.mode, Mode::Live(_)) {
         crate::overview::draw(frame, panel, messages, ascii, scene);
+    } else if panel.section == Section::Backup
+        && panel.inspection.is_none()
+        && matches!(panel.mode, Mode::Live(_))
+        && panel.backups.page != crate::BackupPage::Connections
+    {
+        crate::backup_center::draw(frame, panel, messages, scene);
     } else {
         section_body(frame, panel, messages, ascii, scene);
     }

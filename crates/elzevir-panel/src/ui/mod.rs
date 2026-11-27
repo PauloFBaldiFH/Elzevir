@@ -44,6 +44,8 @@ impl Intent {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Action {
     Section(Section),
+    Backup(crate::backup_center::Command),
+    File(crate::manual_backup::Control),
     Launch(Intent),
     Address(crate::overview::Endpoint, bool),
     Scroll(bool),
@@ -180,6 +182,11 @@ impl Action {
         access: &mut crate::access_actions::Actions,
     ) {
         match self {
+            Self::Backup(command) => {
+                crate::backup_center::apply(command, panel, access, scene.scroll_limit);
+            }
+            // The active file explorer owns these targets and consumes them before panel dispatch.
+            Self::File(_) => {}
             Self::Gallery => {
                 scene.gallery = !scene.gallery;
                 scene.reset_input();
@@ -210,7 +217,12 @@ impl Action {
                     panel.scroll = offset;
                 }
             }
-            Self::Section(section) => panel.select(section),
+            Self::Section(section) => {
+                if section == Section::Backup {
+                    panel.backups.page = crate::BackupPage::Overview;
+                }
+                panel.select(section);
+            }
             Self::Key(key) => panel.handle(
                 &Event::Key(KeyEvent::new(key, KeyModifiers::NONE)),
                 area.width,

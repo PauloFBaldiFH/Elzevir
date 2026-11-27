@@ -97,6 +97,8 @@ struct Collector {
     cpu: Option<f32>,
     process_sample: Option<(sysinfo::Pid, u64, Instant)>,
     diagnostics: crate::diagnostics::Context,
+    manual_job: Option<String>,
+    manual_export_refused: bool,
     operation_result: Option<&'static str>,
     config: Option<PathBuf>,
     latest: Option<crate::release::Latest>,
@@ -115,6 +117,8 @@ impl Collector {
             process_sample: None,
             diagnostics: crate::diagnostics::Context::default(),
             operation_result: None,
+            manual_job: None,
+            manual_export_refused: false,
             config: None,
             latest: None,
             release_check: None,
@@ -243,6 +247,8 @@ impl Collector {
         self.observe_request(request);
         let mut result = elzevir_panel::Operations {
             result: self.operation_result,
+            manual_job: self.manual_job.clone(),
+            manual_export_refused: self.manual_export_refused,
             review: self.restore.as_ref().map(|r| r.review.clone()),
             backup_folder: Some(self.directory.join("backups")),
             latest: self.latest.as_ref().map(|release| release.tag_name.clone()),
@@ -257,6 +263,7 @@ impl Collector {
         };
         if let Ok(ids) = crate::local_artifacts::ids(&self.directory) {
             result.local_backup = crate::local_artifacts::observation(&self.directory, &ids);
+            result.artifacts = crate::local_artifacts::panel_history(&self.directory, &ids);
             result.managed_ids = ids;
         }
         // Unreadable cloud or broker state is shown as unknown in the panel, not as an error.
@@ -289,6 +296,16 @@ impl Collector {
             .map(|daily| format!("{:02}:{:02} {}", daily.hour, daily.minute, daily.time_zone));
         // Unreadable sessions leave the list empty; the rest of the panel stays usable.
         result.sessions = crate::admin::sessions(&info).ok();
+        for job in view.jobs.iter().rev() {
+            if let crate::operations::Task::Verify { id } = &job.task
+                && let Some(artifact) = result
+                    .artifacts
+                    .iter_mut()
+                    .find(|a| a.id == *id && a.recheck.is_none())
+            {
+                artifact.recheck = Some(job_state(job.state));
+            }
+        }
         result.jobs.extend(
             view.jobs
                 .into_iter()
@@ -306,16 +323,11 @@ impl Collector {
                         crate::operations::Task::CloudBackup { .. } => "cloud-backup",
                         crate::operations::Task::Verify { .. } => "op-backup-verify",
                     },
-                    state: match job.state {
-                        crate::operations::State::Queued => "op-queued",
-                        crate::operations::State::Running => "op-running",
-                        crate::operations::State::Completed => "op-completed",
-                        crate::operations::State::Failed => "op-failed",
-                        crate::operations::State::Interrupted => "op-interrupted",
-                    },
+                    state: job_state(job.state),
                 })
                 .collect::<Vec<_>>(),
         );
+        result.jobs.sort_by(|a, b| b.at.cmp(&a.at));
         result
     }
 
@@ -328,12 +340,33 @@ impl Collector {
                 .max()
                 .filter(|at| *at > 0)
             {
-                let mut dated = exports.filter(|r| r.created == latest);
+                let mut dated = exports.clone().filter(|r| r.created == latest);
                 if let Some(receipt) = dated.next()
                     && dated.next().is_none()
                 {
                     result.latest_export_failed =
                         Some(matches!(receipt.state.as_str(), "failed" | "interrupted"));
+                }
+            }
+            for entry in &mut result.artifacts {
+                let matching = exports
+                    .clone()
+                    .filter(|r| r.artifact_id.as_ref() == Some(&entry.id));
+                if let Some(at) = matching.clone().map(|r| r.created).max() {
+                    let mut latest = matching.filter(|r| r.created == at);
+                    if let Some(r) = latest.next()
+                        && latest.next().is_none()
+                    {
+                        entry.export_at = receipt_time(at);
+                        entry.export = Some(match r.state.as_str() {
+                            "completed" => "op-completed",
+                            "running" => "op-running",
+                            "queued" => "op-queued",
+                            "failed" => "op-failed",
+                            "interrupted" => "op-interrupted",
+                            _ => "panel-unknown",
+                        });
+                    }
                 }
             }
             result.authorization_uris = receipts
@@ -347,7 +380,7 @@ impl Collector {
                     .map(|receipt| elzevir_panel::Job {
                         phase: None,
                         id: receipt.id,
-                        at: String::new(),
+                        at: receipt_time(receipt.created).unwrap_or_default(),
                         action: match receipt.action.as_str() {
                             "restore" => "op-restore",
                             "restart" => "op-restart",
@@ -389,20 +422,21 @@ impl Collector {
         crate::backup_cli::export_managed(&self.directory, id, &target)
     }
     fn backup_now(
-        &self,
+        &mut self,
         info: &crate::runtime_info::RuntimeInfo,
         options: elzevir_panel::BackupOptions,
         folder: &str,
     ) -> Result<(), String> {
         let job = crate::admin::start_selected_backup(info, options)?;
+        self.manual_job = Some(job.id.clone());
         if !folder.is_empty() && Path::new(folder) != self.directory.join("backups") {
-            crate::host_jobs::launch(
-                &self.directory,
-                crate::host_jobs::Task::ExportBackup {
-                    id: job.id,
-                    folder: std::path::absolute(folder).map_err(|_| "invalid export directory")?,
-                },
-            )?;
+            self.manual_export_refused = std::path::absolute(folder).ok().is_none_or(|folder| {
+                crate::host_jobs::launch(
+                    &self.directory,
+                    crate::host_jobs::Task::ExportBackup { id: job.id, folder },
+                )
+                .is_err()
+            });
         }
         Ok(())
     }
@@ -418,6 +452,10 @@ impl Collector {
             self.latest = Some(release);
         }
         if let ObservationRequest::Operate(operation) = request {
+            if matches!(operation, elzevir_panel::Operation::BackupNow { .. }) {
+                self.manual_job = None;
+                self.manual_export_refused = false;
+            }
             self.operation_result = Some(match self.operate(operation) {
                 // Starting and stopping finish here; there is no job to follow.
                 Ok(()) if matches!(operation, elzevir_panel::Operation::Server(_)) => {
@@ -546,6 +584,12 @@ impl Collector {
             Operation::BackupNow { options, folder } => {
                 self.backup_now(&info, *options, folder)?;
             }
+            Operation::VerifyArtifact(id) => {
+                if !crate::local_artifacts::ids(&self.directory)?.contains(id) {
+                    return Err("catalogued backup no longer retained".into());
+                }
+                crate::admin::verify_backup(&info, id.clone())?;
+            }
             Operation::VerifyLatest | Operation::ExportLatest { .. } => {
                 let view = crate::admin::operations(&info)?;
                 let job = view
@@ -604,7 +648,9 @@ impl Collector {
             | Operation::CloudflareSetup { .. } => {
                 return Err("invalid host operation dispatch".to_owned());
             }
-            Operation::ExportKey { .. } => return Err("invalid export dispatch".to_owned()),
+            Operation::ExportKey { .. } | Operation::ExportArtifact { .. } => {
+                return Err("invalid export dispatch".to_owned());
+            }
         }
         Ok(())
     }
@@ -670,12 +716,31 @@ impl Collector {
         })
     }
 
+    fn export_task(&self, id: &str, folder: &Path) -> Result<crate::host_jobs::Task, String> {
+        if !crate::local_artifacts::ids(&self.directory)?
+            .iter()
+            .any(|entry| entry == id)
+        {
+            return Err("catalogued backup no longer retained".into());
+        }
+        if !folder.is_absolute() || folder == self.directory.join("backups") {
+            return Err("choose an additional export directory".into());
+        }
+        Ok(crate::host_jobs::Task::ExportBackup {
+            id: id.to_owned(),
+            folder: folder.to_owned(),
+        })
+    }
+
     fn host_operation(
         &self,
         operation: &elzevir_panel::Operation,
     ) -> Result<Option<crate::host_jobs::Task>, String> {
         use elzevir_panel::Operation;
         Ok(match operation {
+            Operation::ExportArtifact { id, folder } => {
+                Some(self.export_task(id, Path::new(folder))?)
+            }
             Operation::Address(action) => Some(crate::host_jobs::Task::Broker {
                 setup: crate::broker::panel_setup(
                     self.config
@@ -765,6 +830,22 @@ impl Collector {
             _ => None,
         })
     }
+}
+
+fn job_state(state: crate::operations::State) -> &'static str {
+    match state {
+        crate::operations::State::Queued => "op-queued",
+        crate::operations::State::Running => "op-running",
+        crate::operations::State::Completed => "op-completed",
+        crate::operations::State::Failed => "op-failed",
+        crate::operations::State::Interrupted => "op-interrupted",
+    }
+}
+fn receipt_time(seconds: i64) -> Option<String> {
+    (seconds > 0)
+        .then(|| jiff::Timestamp::from_second(seconds).ok())
+        .flatten()
+        .map(|t| t.strftime("%F %R UTC").to_string())
 }
 
 #[cfg(test)]

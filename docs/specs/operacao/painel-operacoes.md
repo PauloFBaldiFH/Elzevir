@@ -90,3 +90,11 @@ O diário de atualização compara o caminho do executável anterior após resol
 seu diretório pai, mantendo o nome derivado do identificador da atualização.
 Aliases do mesmo diretório (inclusive o prefixo verbatim do Windows) são válidos;
 um arquivo em outro diretório permanece recusado antes de publicar o diário.
+
+## Central de backups, criação manual e conclusão
+
+A central lista cópias catalogadas por identidade. O tamanho e a data do arquivo só aparecem se o arquivo regular puder ser observado. Ações sobre uma linha selecionada conservam sua identidade mesmo que outra cópia termine durante a revisão. O status de exportação pertence à cópia identificada pelo recibo. Recibos antigos sem essa identidade continuam disponíveis no histórico geral.
+
+A criação manual pode usar a pasta gerenciada ou selecionar uma pasta adicional no computador do operador do painel. O explorador permite navegar, editar o caminho e criar uma subpasta explícita. A seleção por si só não solicita um backup. O servidor atribui o nome nativo e verifica a cópia no fluxo existente. A tela de conclusão acompanha a identidade devolvida pela solicitação, inclusive se a exportação separada falhar.
+
+Uma cópia retida pode ser exportada com o servidor parado. A cópia adicional exige um arquivo novo, conserva o formato cifrado e tem recibo próprio. A nova verificação autenticada usa a fila do servidor ativo. O painel informa separadamente a verificação feita na criação, a revalidação mais recente observada e o resultado da exportação. A preparação de SCP usa o caminho da cópia selecionada no servidor.

@@ -72,6 +72,15 @@ pub enum Operation {
         /// Optional export directory on the operator's host.
         folder: String,
     },
+    /// Recheck this specific catalogue entry.
+    VerifyArtifact(String),
+    /// Export the selected entry to a directory on the operator host.
+    ExportArtifact {
+        /// Stable catalogue identity.
+        id: String,
+        /// Additional destination directory.
+        folder: String,
+    },
     /// Authenticate the newest completed managed backup.
     VerifyLatest,
     /// Export a completed encrypted backup to a new file.
@@ -125,7 +134,9 @@ impl Operation {
             Self::Restart { .. } => "op-restart",
             Self::Reboot => "op-reboot",
             Self::BackupNow { .. } => "op-backup-now",
+            Self::VerifyArtifact(_) => "bc-verify-selected",
             Self::VerifyLatest => "op-backup-verify",
+            Self::ExportArtifact { .. } => "bc-copy-selected",
             Self::ExportLatest { .. } => "op-backup-export",
             Self::ExportKey { .. } => "op-key-export",
             Self::Restore { .. } => "restore-validate",
@@ -204,6 +215,22 @@ pub enum LocalBackup {
     Verified,
 }
 
+/// A retained catalogue entry, newest entries first.
+#[derive(Debug, Clone, Default)]
+pub struct BackupArtifact {
+    /// Stable identifier assigned by the institution.
+    pub id: String,
+    /// Byte count of a regular published archive, absent when inaccessible.
+    pub bytes: Option<u64>,
+    /// Filesystem modification time in UTC.
+    pub modified: Option<String>,
+    /// Latest attributable export receipt, when the latest result is unambiguous.
+    pub export: Option<&'static str>,
+    /// Creation time of the most recent attributable export request.
+    pub export_at: Option<String>,
+    /// Latest explicit recheck observed for this archive in the daemon history.
+    pub recheck: Option<&'static str>,
+}
 /// Operational state from the selected institution.
 #[derive(Debug, Clone, Default)]
 pub struct Operations {
@@ -217,6 +244,12 @@ pub struct Operations {
     pub managed_ids: Vec<String>,
     /// Operator-visible default managed backup directory.
     pub backup_folder: Option<std::path::PathBuf>,
+    /// Up to 365 recently retained entries, including missing files.
+    pub artifacts: Vec<BackupArtifact>,
+    /// Identity returned by this session's last manual creation request.
+    pub manual_job: Option<String>,
+    /// Export helper could not start after the server accepted the manual backup.
+    pub manual_export_refused: bool,
     /// Retention, when the policy could be read.
     pub keep: Option<u16>,
     /// Daily wall-clock time and IANA time zone, when enabled.
@@ -352,6 +385,7 @@ impl Form {
             | Operation::InstallRclone
             | Operation::CheckUpdates
             | Operation::Reboot
+            | Operation::VerifyArtifact(_)
             | Operation::VerifyLatest => (vec![], vec![]),
             Operation::ExportLatest { output } => {
                 (vec!["backup-export-target"], vec![output.clone()])
@@ -374,6 +408,9 @@ impl Form {
                     folder.clone(),
                 ],
             ),
+            Operation::ExportArtifact { folder, .. } => {
+                (vec!["backup-folder"], vec![folder.clone()])
+            }
             Operation::ApplyRestore(_) => (vec!["restore-decision"], vec!["back".into()]),
             Operation::Restore { input, key } => {
                 (vec!["op-input", "op-key"], vec![input.clone(), key.clone()])
@@ -479,6 +516,11 @@ impl Form {
                         _ => return None,
                     },
                 },
+                folder: values.next()?,
+            },
+            Operation::VerifyArtifact(id) => Operation::VerifyArtifact(id),
+            Operation::ExportArtifact { id, .. } => Operation::ExportArtifact {
+                id,
                 folder: values.next()?,
             },
             Operation::VerifyLatest => Operation::VerifyLatest,
