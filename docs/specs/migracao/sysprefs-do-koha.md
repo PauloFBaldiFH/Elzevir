@@ -892,7 +892,7 @@ As 915 preferências do sistema do Koha e o lugar de cada uma no Elzevir. As que
 | `OPACnumSearchResultsDropdown` | `0` | A decidir: A busca do Elzevir é Tantivy; decidir na spec de busca (Fase 1) o que vira opção. |
 | `OpacElasticsearchEscapeCharacters` | (vazio) | A decidir: A busca do Elzevir é Tantivy; decidir na spec de busca (Fase 1) o que vira opção. |
 | `PassItemMarcToXSLT` | `0` | A decidir: A busca do Elzevir é Tantivy; decidir na spec de busca (Fase 1) o que vira opção. |
-| `QueryAutoTruncate` | `1` | A decidir: A busca do Elzevir é Tantivy; decidir na spec de busca (Fase 1) o que vira opção. |
+| `QueryAutoTruncate` | `1` | **`[search] complete_words`**. Ver docs/specs/catalogo/busca.md, item 5a. |
 | `QueryFuzzy` | `1` | A decidir: A busca do Elzevir é Tantivy; decidir na spec de busca (Fase 1) o que vira opção. |
 | `QueryRegexEscapeOptions` | `escape` | A decidir: A busca do Elzevir é Tantivy; decidir na spec de busca (Fase 1) o que vira opção. |
 | `QueryStemming` | `1` | A decidir: A busca do Elzevir é Tantivy; decidir na spec de busca (Fase 1) o que vira opção. |

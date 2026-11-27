@@ -16,6 +16,7 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::sync::{Arc, Mutex, PoisonError};
 
+use elzevir_app::field_search::{Truncation, WordMatch};
 use elzevir_app::material::{CarrierKind, ContentKind, Material};
 use elzevir_app::parallelism::Parallelism;
 use elzevir_app::search::{
@@ -55,6 +56,9 @@ pub struct TantivyIndex {
     whole: Mutex<Option<(u64, FacetCounts)>>,
     /// The families with more than one Instance, by searcher generation, for counting.
     shared: Mutex<Option<(u64, Arc<HashSet<u64>>)>>,
+    /// Whether the search box completes each word, as Koha's `QueryAutoTruncate`
+    /// (docs/specs/catalogo/busca.md, item 5a).
+    complete_words: bool,
 }
 
 impl TantivyIndex {
@@ -139,7 +143,15 @@ impl TantivyIndex {
             reader,
             whole: Mutex::new(None),
             shared: Mutex::new(None),
+            complete_words: false,
         })
+    }
+
+    /// Makes the search box complete each word it is given, or not: `histor` then finds
+    /// "história" and "historiografia" (docs/specs/catalogo/busca.md, item 5a; Koha:
+    /// `QueryAutoTruncate`). Off until set; a search by field never completes on its own.
+    pub fn complete_words(&mut self, on: bool) {
+        self.complete_words = on;
     }
 
     /// Every stored document as JSON, sorted, to compare two indexes built from the same
@@ -215,6 +227,7 @@ impl TantivyIndex {
         }
         let optional = [
             (f.publisher, &source.publisher),
+            (f.place, &source.place),
             (f.summary, &source.summary),
             (f.date, &source.date),
             (f.classification, &source.classification),
@@ -238,7 +251,7 @@ impl TantivyIndex {
     /// The query for what a person typed: words over the descriptive fields, plus exact
     /// matches on codes (ISBN, barcode, tombo, call number) and a classification prefix
     /// (`82*`).
-    fn query(&self, text: &str, scope: SearchScope) -> Box<dyn Query> {
+    fn query(&self, text: &str, scope: SearchScope, complete: bool) -> Box<dyn Query> {
         let f = &self.fields;
         let mut fields = vec![
             f.title,
@@ -247,6 +260,7 @@ impl TantivyIndex {
             f.contributor,
             f.subject,
             f.publisher,
+            f.place,
             f.summary,
             f.note,
         ];
@@ -256,13 +270,27 @@ impl TantivyIndex {
         } else {
             self.catalog_query_schema.clone()
         };
-        let mut parser = QueryParser::new(schema, fields, self.index.tokenizers().clone());
+        let mut parser = QueryParser::new(schema, fields.clone(), self.index.tokenizers().clone());
         parser.set_conjunction_by_default();
         parser.set_field_boost(f.title, 2.0);
         parser.set_field_boost(f.work_title, 2.0);
         parser.set_field_boost(f.other_title, 2.0);
         // User input is never an error: whatever the grammar cannot read is dropped.
-        let (words, _ignored) = parser.parse_query_lenient(text);
+        let (mut words, _ignored) = parser.parse_query_lenient(text);
+        // Koha completes every word but those of a phrase in quotes. The completed words
+        // must all be there; the words as typed still weigh in the ranking.
+        if complete && !text.contains('"') && !matches!(scope, SearchScope::Repository(_)) {
+            let completed = self.truncated_words(
+                &fields,
+                WordMatch::All,
+                &fields::plain(text),
+                Truncation::Right,
+            );
+            words = Box::new(BooleanQuery::new(vec![
+                (Occur::Must, completed),
+                (Occur::Should, words),
+            ]));
+        }
         let typed = text.trim();
         let mut clauses: Vec<(Occur, Box<dyn Query>)> = vec![(Occur::Should, words)];
         let exact = [
@@ -302,7 +330,7 @@ impl TantivyIndex {
         let words = if asked.text.trim().is_empty() {
             Box::new(AllQuery)
         } else {
-            self.query(asked.text, scope)
+            self.query(asked.text, scope, self.complete_words)
         };
         if asked.filters.is_empty() {
             return words;
@@ -584,6 +612,7 @@ mod tests {
             contributors: Vec::new(),
             subjects: vec!["Estatística".to_owned()],
             publisher: None,
+            place: None,
             summary: None,
             notes: Vec::new(),
             date: Some("c1998".to_owned()),

@@ -295,7 +295,18 @@ fn fields_relations_and_booleans_find_the_records() {
         "(dc.barcode=1511 or dc.isbn=\"9788560342013\") not dc.barcode=1511",
         &[],
     );
-    assert_eq!(numbers(&either), [isbn]);
+    assert_eq!(numbers(&either), std::slice::from_ref(&isbn));
+    // A star at the end truncates the words: "estatis" alone is no word of the title.
+    assert_eq!(total(&search(&app, "dc.title=estatis", &[])), 0);
+    assert!(numbers(&search(&app, "dc.title=estatis*", &[])).contains(&perfil));
+    assert!(numbers(&search(&app, "dc.creator=\"*guacu\"", &[])).contains(&perfil));
+    assert!(numbers(&search(&app, "anuar*", &[])).contains(&perfil));
+    // A term of every field with a final star is the OPAC box with every word completed.
+    assert!(numbers(&search(&app, "\"anuar estatis*\"", &[])).contains(&perfil));
+    assert_eq!(
+        numbers(&search(&app, "\"9788560342013*\"", &[])),
+        std::slice::from_ref(&isbn)
+    );
     // A word anywhere, as the OPAC box: the barcode alone finds its record too.
     assert!(numbers(&search(&app, "1511", &[])).contains(&perfil));
     assert!(
@@ -427,7 +438,7 @@ fn bad_requests_get_their_diagnostics() {
         (&[("query", "dc.shelf=a")], 16),
         (&[("query", "dc.date>1990")], 19),
         (&[("query", "dc.title=\"\"")], 27),
-        (&[("query", "dc.title=rio*")], 28),
+        (&[("query", "dc.title=r*o")], 28),
         (&[("query", "a"), ("recordSchema", "mods")], 66),
         (&[("query", "a"), ("recordPacking", "json")], 71),
     ];

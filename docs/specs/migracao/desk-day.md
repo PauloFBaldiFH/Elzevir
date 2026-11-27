@@ -50,6 +50,14 @@ Task 6.3 asked both systems questions about the loans of a copy, without changin
 13. `tools/sip2-recorder/compare.py KOHA.json ELZEVIR.json --unit NAME=CODE --category NAME=CODE` compares the two recordings exchange by exchange. It leaves out what changes by the second (the times of day, and the checksum that covers them) and applies the approved deviations to Koha's side: the greeting and `BX` (DEV-0003, DEV-0004), and the unit and category written by name (DEV-0004). It prints how many exchanges are the same and each one that differs with both responses, and ends with an error when any differs.
 14. The patron is fictitious and created on the copy for the run; its password is generated on the VM and never leaves it, nor does the SIP account's. The recordings mask the card, the barcode, the logins, the passwords and the patron's personal fields.
 
+### Part b: OPAC search, SRU and Z39.50 on the same copy
+
+15. `tools/koha-parity/search_compare.py QUERIES.json` asks both systems the same searches on the oracle VM, through Koha's OPAC and the Elzevir's, through SRU (CQL) and through Z39.50 (PQF). Koha's SRU and Z39.50 are its `koha-z3950-responder`, turned on for the run and off afterwards. The Elzevir's are its `[sru]` and `[z3950]` servers on the folder switched from the same copy.
+16. A record is named only by Koha's `biblionumber`: Koha's OPAC gives it in the RSS feed, and both systems write it in `999$c`. No record text leaves the VM except the titles of the records that differ, and the copy's catalog has no patron data.
+17. The Elzevir's OPAC total is the API's (`/api/v1/search`), the same search as the OPAC box. Its records are read through SRU with each word completed (`"word*"`), which is the same search ([search](../catalogo/busca.md), item 5a). The report checks that both totals agree.
+18. For each search the tool prints both totals and the records only one side found, with up to ten numbers. When every record was read on both sides, it also prints, for the records both found through SRU and Z39.50, those whose title (`245$a`, without the final ISBD mark) or number of Items (`952`) differ. It ends with an error when any search differs.
+19. Search is a "free" area (CLAUDE.md): a difference is a bug when the Elzevir misses what the library expects to find, and is otherwise recorded here with its cause.
+
 ## 2. Edge cases
 
 1. A step that fails on both systems for the same reason agrees: two `impossible DEBT` are the same answer.
@@ -103,8 +111,24 @@ The run also showed that the SIP2 server refused a patron password still in Koha
 
 After these changes the same conversation was recorded again on the same copy, and `compare.py` found 26 of 26 exchanges the same. The database was then restored and the files were deleted.
 
+### Search on the oracle (2026-11-27)
+
+Koha's `koha-z3950-responder` was turned on for the run (SRU and Z39.50 on port 2100). The Elzevir served the folder switched from a dump of the same copy, with `[sru]` and `[z3950]`. Nothing in Koha's database was changed. 21 searches: 8 through the OPAC, 7 through SRU and 6 through Z39.50.
+
+The first run found four causes, each fixed before the next run:
+- Koha completes every word of the OPAC box (`QueryAutoTruncate`, on): `brasil` found 4,636 records on Koha and 1,401 on the Elzevir. Paulo decided on 2026-11-27 to do the same: `[search] complete_words`, on by default, and the switch brings Koha's value ([search](../catalogo/busca.md), item 5a).
+- Series (490, 830, 440) and the place of publication (260 `$a`) were not indexed. `devorando shakespeare` found nothing on the Elzevir. Both are now words of the index ([search](../catalogo/busca.md), item 2).
+- The Z39.50 server ignored truncation on word fields: `@attr 5=1 brasi` found 813 records on Koha and 16 on the Elzevir ([Z39.50](../opac/z3950.md), item 10).
+- The SRU server refused `*` with diagnostic 28 ([SRU](../opac/sru.md), item 10a).
+
+The last run: 8 of 21 searches the same, all of them exact (ISBN through the three doors, `devorando shakespeare`, `machado de assis`, `Shakespeare` as a word and as an author, title with year). `brasil` found 4,589 records on the Elzevir and 4,636 on Koha. The differences left are of the index, in an area free to improve, and are recorded here:
+- **Only on Koha.** Koha's keyword index takes every field. Some are notes of the Item (`952 $z`) or of the extent (`300 $a`), and some are local fields that are no part of the description (`270`, `290`, `901`). Koha's title index also takes the statement of responsibility (`245 $c`): "Brasil" as an author's surname is a title word on Koha. On the Elzevir it is found as a contributor.
+- **Only on Koha, to bring later.** Local subjects (`690`) and uncontrolled index terms (`653`) do not become subjects of the Work. A subject search for "educação" misses 6 of Koha's 490 records because of them. This goes on the list of gaps (6.6), since mapping them changes the MARC export.
+- **Only on the Elzevir.** The Portuguese stemmer gives one stem to related words ("Brasília", "brasilidade" and "brasileiro" all find "brasil"), and the words of a name are matched in any order: `dc.creator="Assis, Machado de"` also finds "Machado de Assis", written in natural order in `100 $a`.
+
+Koha's responder was then stopped and turned off, the Elzevir was stopped, and the files were deleted.
+
 ## 5. Out of this version
 
-- OPAC search, Z39.50 and SRU on the same copy (the rest of part b).
 - Writing off, lost Items, transfers between branches and setting a found hold aside at the desk.
 - Choosing the steps from the copy automatically: the plan is written by hand.

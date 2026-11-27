@@ -675,7 +675,8 @@ fn serve_controlled(
     )?;
     let instance = probe.instance().to_owned();
     let result = (|| {
-        let (index, parallelism) = open_index(data_dir)?;
+        let (mut index, parallelism) = open_index(data_dir)?;
+        index.complete_words(loaded.complete_words);
         let index = Arc::new(index);
         let indexer = spawn_indexer(
             Arc::clone(&store),

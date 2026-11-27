@@ -2745,8 +2745,9 @@
       "nota": "Aquisições não entram na v1."
     },
     "QueryAutoTruncate": {
-      "destino": "revisar",
-      "nota": "A busca do Elzevir é Tantivy; decidir na spec de busca (Fase 1) o que vira opção."
+      "destino": "config",
+      "campo": "[search] complete_words",
+      "nota": "Ver docs/specs/catalogo/busca.md, item 5a."
     },
     "QueryFuzzy": {
       "destino": "revisar",

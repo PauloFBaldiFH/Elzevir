@@ -310,6 +310,12 @@ pub fn prefs_config(preferences: &[KohaPreference]) -> PrefsConfig {
     if !holds.is_empty() {
         sections.push(Section::new("circulation.holds", holds));
     }
+    // Completing words is the Elzevir's default too; only Koha's 0 is written.
+    if values.get("QueryAutoTruncate").trim() == "0" {
+        values.place("QueryAutoTruncate");
+        let settings = vec![("complete_words", Setting::Boolean(false))];
+        sections.push(Section::new("search", settings));
+    }
     if let Ok(days) = values.get("PatronAnonymizeDelay").trim().parse::<u32>() {
         values.place("PatronAnonymizeDelay");
         let settings = vec![("anonymize_expired_days", Setting::Integer(i64::from(days)))];
@@ -478,6 +484,7 @@ mod tests {
             ("ExpireReservesMaxPickUpDelay", "0"),
             ("SuspendHoldsOpac", "1"),
             ("ManualRenewalPeriodBase", "date_due"),
+            ("QueryAutoTruncate", "1"),
             ("OAI-PMH", "0"),
             ("OAI-PMH:archiveID", "KOHA-OAI-TEST"),
             (
@@ -485,7 +492,7 @@ mod tests {
                 "Order number must appear on all related correspondence, shipping papers and invoices. Notify us immediately if \n you are unable to supply item(s).",
             ),
         ]));
-        assert_eq!(config.report.at_default, 6);
+        assert_eq!(config.report.at_default, 7);
         assert!(config.report.placed.is_empty());
         assert_eq!(table(&config.toml), toml::Table::new());
     }
@@ -500,6 +507,7 @@ mod tests {
             ("SuspendHoldsOpac", "0"),
             ("ManualRenewalPeriodBase", "now"),
             ("PatronAnonymizeDelay", "365"),
+            ("QueryAutoTruncate", "0"),
         ]));
         let toml = table(&config.toml);
         assert_eq!(
@@ -513,7 +521,8 @@ mod tests {
         );
         assert_eq!(toml["privacy"]["anonymize_expired_days"], 365.into());
         assert_eq!(toml["circulation"]["renewal_base"], "now".into());
-        assert_eq!(config.report.placed.len(), 7);
+        assert_eq!(toml["search"]["complete_words"], false.into());
+        assert_eq!(config.report.placed.len(), 8);
         assert!(!toml.contains_key("koha_legacy"));
     }
 

@@ -27,7 +27,8 @@ enum Token {
     Word {
         text: String,
         quoted: bool,
-        masked: bool,
+        /// Where the unescaped masking characters (`*`, `?`) are, by character.
+        masks: Vec<usize>,
     },
 }
 
@@ -85,21 +86,24 @@ fn tokens(query: &str) -> Result<Vec<Token>, Diagnostic> {
             '"' => quoted(&mut chars)?,
             first => {
                 let mut text = String::from(first);
-                let mut masked = matches!(first, '*' | '?');
                 while let Some(&next) = chars.peek() {
                     if next.is_whitespace()
                         || matches!(next, '(' | ')' | '=' | '<' | '>' | '"' | '/')
                     {
                         break;
                     }
-                    masked |= matches!(next, '*' | '?');
                     text.push(next);
                     chars.next();
                 }
+                let masks = text
+                    .chars()
+                    .enumerate()
+                    .filter_map(|(at, c)| matches!(c, '*' | '?').then_some(at))
+                    .collect();
                 Token::Word {
                     text,
                     quoted: false,
-                    masked,
+                    masks,
                 }
             }
         };
@@ -111,7 +115,8 @@ fn tokens(query: &str) -> Result<Vec<Token>, Diagnostic> {
 /// A quoted term, after its opening `"`: `\` keeps the next character as text.
 fn quoted(chars: &mut impl Iterator<Item = char>) -> Result<Token, Diagnostic> {
     let mut text = String::new();
-    let mut masked = false;
+    let mut masks = Vec::new();
+    let mut length = 0;
     loop {
         match chars.next() {
             None => return Err(Diagnostic::bare(10)),
@@ -121,15 +126,18 @@ fn quoted(chars: &mut impl Iterator<Item = char>) -> Result<Token, Diagnostic> {
                 None => return Err(Diagnostic::bare(10)),
             },
             Some(c) => {
-                masked |= matches!(c, '*' | '?');
+                if matches!(c, '*' | '?') {
+                    masks.push(length);
+                }
                 text.push(c);
             }
         }
+        length += 1;
     }
     Ok(Token::Word {
         text,
         quoted: true,
-        masked,
+        masks,
     })
 }
 
@@ -199,7 +207,7 @@ impl Reader<'_> {
             Some(Token::Word {
                 text,
                 quoted,
-                masked,
+                masks,
             }) => {
                 self.clauses += 1;
                 if self.clauses > MAX_CLAUSES {
@@ -208,7 +216,7 @@ impl Reader<'_> {
                 match self.relation()? {
                     Some(relation) if !quoted => self.search_clause(&text, &relation),
                     Some(_) => Err(Diagnostic::bare(10)),
-                    None => term(SearchField::Any, WordMatch::All, text, masked),
+                    None => term(SearchField::Any, WordMatch::All, &text, &masks),
                 }
             }
             Some(Token::Slash | Token::Symbol(_)) | None => Err(Diagnostic::bare(10)),
@@ -244,31 +252,53 @@ impl Reader<'_> {
 
     fn search_clause(&mut self, index: &str, relation: &str) -> Result<FieldQuery, Diagnostic> {
         let field = field_of(index)?;
-        let Some(Token::Word { text, masked, .. }) = self.next() else {
+        let Some(Token::Word { text, masks, .. }) = self.next() else {
             return Err(Diagnostic::bare(10));
         };
         let matching = matching(field, relation).ok_or_else(|| Diagnostic::with(19, relation))?;
-        term(field, matching, text, masked)
+        term(field, matching, &text, &masks)
     }
 }
 
+/// The term of a clause. A `*` that starts or ends it truncates it (item 10a); any
+/// other masking character gives 28.
 fn term(
     field: SearchField,
     matching: WordMatch,
-    text: String,
-    masked: bool,
+    text: &str,
+    masks: &[usize],
 ) -> Result<FieldQuery, Diagnostic> {
+    let characters: Vec<char> = text.chars().collect();
+    let last = characters.len().saturating_sub(1);
+    let left = masks.contains(&0) && characters.first() == Some(&'*');
+    let right = last > 0 && masks.contains(&last) && characters.last() == Some(&'*');
+    if masks
+        .iter()
+        .any(|&at| !(at == 0 && left || at == last && right))
+    {
+        return Err(Diagnostic::bare(28));
+    }
+    let start = usize::from(left);
+    let end = characters.len() - usize::from(right);
+    let text: String = characters
+        .get(start..end)
+        .unwrap_or_default()
+        .iter()
+        .collect();
     if text.trim().is_empty() {
         return Err(Diagnostic::bare(27));
     }
-    if masked {
-        return Err(Diagnostic::bare(28));
-    }
+    let truncation = match (left, right) {
+        (false, false) => Truncation::None,
+        (false, true) => Truncation::Right,
+        (true, false) => Truncation::Left,
+        (true, true) => Truncation::Both,
+    };
     Ok(FieldQuery::Term(FieldTerm {
         field,
         matching,
         text,
-        truncation: Truncation::None,
+        truncation,
     }))
 }
 
@@ -403,8 +433,10 @@ mod tests {
             (37, Some("and".to_owned()))
         );
         assert_eq!(code("dc.title=\"\""), (27, None));
-        assert_eq!(code("dc.title=rio*"), (28, None));
+        assert_eq!(code("dc.title=r*o"), (28, None));
         assert_eq!(code("\"ri?o\""), (28, None));
+        assert_eq!(code("dc.title=?rio"), (28, None));
+        assert_eq!(code("dc.title=*"), (27, None));
         assert_eq!(code("(a and b"), (13, None));
         assert_eq!(code("a and b)"), (13, None));
         assert_eq!(code("a sortby dc.title"), (80, None));
@@ -418,6 +450,28 @@ mod tests {
         assert_eq!(code(""), (10, None));
         // An escaped mask is text.
         assert!(parse("dc.title=\"rio\\*\"").is_ok());
+    }
+
+    #[test]
+    fn a_star_at_either_end_truncates_the_term() {
+        let truncated = |query: &str| match parse(query).unwrap() {
+            FieldQuery::Term(term) => (term.text, term.truncation),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(
+            truncated("dc.title=brasi*"),
+            ("brasi".to_owned(), Truncation::Right)
+        );
+        assert_eq!(
+            truncated("dc.title=\"*ileiro\""),
+            ("ileiro".to_owned(), Truncation::Left)
+        );
+        assert_eq!(truncated("*asil*"), ("asil".to_owned(), Truncation::Both));
+        // An escaped star is text, not a mask.
+        assert_eq!(
+            truncated("dc.title=\"rio\\*\""),
+            ("rio*".to_owned(), Truncation::None)
+        );
     }
 
     #[test]

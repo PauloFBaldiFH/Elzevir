@@ -30,6 +30,7 @@ pub(crate) struct Fields {
     pub(crate) contributor: tantivy::schema::Field,
     pub(crate) subject: tantivy::schema::Field,
     pub(crate) publisher: tantivy::schema::Field,
+    pub(crate) place: tantivy::schema::Field,
     pub(crate) summary: tantivy::schema::Field,
     pub(crate) note: tantivy::schema::Field,
     pub(crate) date: tantivy::schema::Field,
@@ -95,6 +96,7 @@ pub(crate) fn build() -> (Schema, Fields) {
         contributor: builder.add_text_field("contributor", words.clone()),
         subject: builder.add_text_field("subject", words.clone()),
         publisher: builder.add_text_field("publisher", words.clone()),
+        place: builder.add_text_field("place", words.clone()),
         summary: builder.add_text_field("summary", words.clone()),
         // Opening an index that predates note visibility must discard its private terms.
         note: builder.add_text_field("public_note", words),

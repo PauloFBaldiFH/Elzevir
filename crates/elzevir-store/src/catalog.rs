@@ -1186,34 +1186,40 @@ pub(crate) enum ReadFailure {
     Store(#[from] StoreError),
 }
 
-fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>, ReadFailure> {
-    let Some(row) = c
-        .query_row(
-            "SELECT works.id, works.title, instances.title, publisher, date, works.hub_id,
+/// The Instance's own row and its Work's, if the Instance exists.
+fn instance_row(c: &Connection, id: InstanceId) -> Result<Option<InstanceRow>, rusqlite::Error> {
+    c.query_row(
+        "SELECT works.id, works.title, instances.title, publisher, date, works.hub_id,
                     works.classification, works.summary, works.audience, instances.row_version,
-                    works.row_version, instances.opac_hidden
+                    works.row_version, instances.opac_hidden, instances.series,
+                    instances.place
              FROM instances JOIN works ON works.id = instances.work_id
              WHERE instances.id = ?1",
-            params![id.0],
-            |row| {
-                Ok(InstanceRow {
-                    work: row.get(0)?,
-                    work_title: row.get(1)?,
-                    title: row.get(2)?,
-                    publisher: row.get(3)?,
-                    date: row.get(4)?,
-                    hub: row.get(5)?,
-                    classification: row.get(6)?,
-                    summary: row.get(7)?,
-                    audience: row.get(8)?,
-                    version: row.get(9)?,
-                    work_version: row.get(10)?,
-                    opac_hidden: row.get(11)?,
-                })
-            },
-        )
-        .optional()?
-    else {
+        params![id.0],
+        |row| {
+            Ok(InstanceRow {
+                work: row.get(0)?,
+                work_title: row.get(1)?,
+                title: row.get(2)?,
+                publisher: row.get(3)?,
+                date: row.get(4)?,
+                hub: row.get(5)?,
+                classification: row.get(6)?,
+                summary: row.get(7)?,
+                audience: row.get(8)?,
+                version: row.get(9)?,
+                work_version: row.get(10)?,
+                opac_hidden: row.get(11)?,
+                series: row.get(12)?,
+                place: row.get(13)?,
+            })
+        },
+    )
+    .optional()
+}
+
+fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>, ReadFailure> {
+    let Some(row) = instance_row(c, id)? else {
         return Ok(None);
     };
     let work = row.work;
@@ -1269,6 +1275,8 @@ fn read_instance(c: &Connection, id: InstanceId) -> Result<Option<InstanceView>,
         relations,
         title: row.title,
         other_titles: described.other_titles,
+        series: row.series,
+        place: row.place,
         publisher: row.publisher,
         date: row.date,
         classification: row.classification,
@@ -1334,6 +1342,8 @@ struct InstanceRow {
     version: i64,
     work_version: i64,
     opac_hidden: bool,
+    series: Option<String>,
+    place: Option<String>,
 }
 
 pub(crate) fn work_relations(
