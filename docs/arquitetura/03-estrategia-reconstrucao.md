@@ -453,18 +453,20 @@ Trocar o Koha pelo Elzevir numa cópia da Biblioteca Pública Municipal Castro A
 | 6.3 | Paridade sobre os dados migrados: vencimento, multa, renovação e fila de uma amostra real contra o Koha de homologação com a mesma cópia. Em três partes: 6.3a, as regras de circulação na troca e no verificador; 6.3b, o calendário; 6.3c, o gravador sobre a cópia (`tools/koha-parity/record.pl` e `elzevir parity-koha`: vencimento e multa na parte 1, renovação e reserva na parte 2) | Gravadores em `tools/`; [troca-do-koha.md](../specs/migracao/troca-do-koha.md), itens 7a e 7b; [koha-parity.md](../specs/migracao/koha-parity.md) | Toda divergência é bug corrigido ou desvio aprovado |
 | 6.4 | Um dia de balcão encenado nos dois sistemas (empréstimo, devolução, renovação, reserva, pagamento, SIP2, OPAC, Z39.50, SRU). Em duas partes: 6.4a, o balcão de circulação (`tools/koha-parity/desk_day.pl` e `elzevir desk-day`); 6.4b, os protocolos e o OPAC | Cenários existentes; [desk-day.md](../specs/migracao/desk-day.md) | Mesmos resultados, ou diferença listada com causa |
 | 6.5 | Desempenho com o acervo real: importação, migração, busca, índice, backup e restauração | doc 02; [performance.md](../specs/migracao/performance.md) | Números medidos e registrados, com meta para o que ficar lento |
-| 6.6 | Lista de lacunas que impediriam a troca, cruzada com o inventário | Inventário de paridade | A ordem das Fases 7 a 12 é revista antes da Fase 7 |
+| 6.6 | Lista de lacunas que impediriam a troca, cruzada com o inventário | Inventário de paridade; [gaps.md](../specs/migracao/gaps.md) | A ordem das Fases 7 a 12 é revista antes da Fase 7 |
 
 ### Fases 7 a 12 (roadmap aprovado; cada fase detalhada aqui antes de começar)
 
+Ordem revista na tarefa 6.6 e aprovada por Paulo em 2026-11-27 ([lacunas da troca](../specs/migracao/gaps.md), §3): primeiro o que impede a troca na Castro Alves, depois o que o público vê.
+
 | Fase | Assunto | Itens do inventário |
 |---|---|---|
-| 7 | Circulação do dia a dia | Transferências entre unidades; reservas a separar; perdido, danificado e retirado com reembolso; renovação automática; empréstimo no local e uso em sala; lembrete antes do vencimento; suspensão de reservas pelo leitor; estorno, quitação por reposição do material ou por compensação, e recibo |
-| 8 | Leitores e equipe | Usuários da equipe e permissões por perfil; responsável pelo menor; campos extras do leitor; importação de leitores por planilha; autocadastro e recuperação de senha; renovação da matrícula, troca do cartão e mescla; preferências de mensagem |
-| 9 | Catálogo | Listas; capas; autoridades (mesclar, duplicatas, ligações); partes e hospedeiro; lote de exemplares; ficha catalográfica ABNT |
+| 7 | Circulação do dia a dia | Campos extras do leitor, com a migração, e a moeda do SIP2 na troca; perdido, danificado e retirado com reembolso; reservas a separar; lembrete antes do vencimento; renovação automática; estorno, quitação por reposição do material ou por compensação, e recibo; cancelamento de reserva com motivo; empréstimo no local e uso em sala; transferências entre unidades |
+| 8 | Leitores e equipe | Usuários da equipe e permissões por perfil; preferências de mensagem; responsável pelo menor; importação de leitores por planilha; autocadastro e recuperação de senha; renovação da matrícula, troca do cartão e mescla |
+| 9 | Catálogo e OPAC | Notícias, páginas e aparência sem código, com a migração das notícias do Koha; capas; assuntos locais (690) e termos livres (653); autoridades (mesclar, duplicatas, ligações); partes e hospedeiro; lote de exemplares; ficha catalográfica ABNT; listas; velocidade da importação MARC |
 | 10 | Periódicos | Assinaturas, numeração e previsão; recebimento, atraso, reclamação e coleção |
 | 11 | Aquisições | Sugestões de compra; fornecedores, verbas e pedidos |
-| 12 | OPAC, relatórios e personalização | Notícias, páginas e aparência sem código; relatórios por blocos, atrasos, perdidos e censo |
+| 12 | Relatórios | Relatórios por blocos, atrasos, perdidos e censo |
 
 Depois da Fase 12: assistente de IA, designer avançado de etiquetas, WhatsApp e Telegram. Ficam fora (Bloco B do inventário): frameworks MARC editáveis e tipos de item, Zebra e Elasticsearch, preferências soltas, resumos diários repetidos, empréstimo entre bibliotecas, reservas de curso, rotação de acervo e convocações, pedidos de artigo, retirada na calçada e atendimento domiciliar, caixa registradora, EDIFACT, Mana KB, tags e comentários do OPAC, plugins e CSS ou JS soltos, SQL livre nos relatórios, circulação offline, ERM, preservação e grupos de exemplares.
 
