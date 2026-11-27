@@ -5,7 +5,7 @@
 # (docs/specs/migracao/koha-parity.md). Read only: it calls Koha's functions and writes
 # nothing to the database.
 #
-#     sudo koha-shell INSTANCE -c 'perl record.pl [--now "YYYY-MM-DD HH:MM"] [--every N]' > answers.json
+#     sudo koha-shell INSTANCE -c 'perl record.pl [--now YYYY-MM-DDTHH:MM] [--every N]' > answers.json
 #
 # The output holds Koha's numbers, dates and amounts only: no name, card number or barcode.
 
@@ -22,11 +22,18 @@ use Koha::Patrons;
 
 my $now_text;
 my $every = 1;
-GetOptions( 'now=s' => \$now_text, 'every=i' => \$every ) or die "usage: record.pl [--now 'YYYY-MM-DD HH:MM'] [--every N]\n";
+GetOptions( 'now=s' => \$now_text, 'every=i' => \$every ) or die "usage: record.pl [--now YYYY-MM-DDTHH:MM] [--every N]\n";
 die "--every must be at least 1\n" if $every < 1;
 
 my $clock = dt_from_string()->truncate( to => 'minute' );
-my $now   = defined $now_text ? dt_from_string( $now_text, 'iso' ) : $clock;
+my $now = $clock;
+if ( defined $now_text ) {
+    # A `T` is taken for the space, which is awkward to pass through `koha-shell -c`.
+    ( my $text = $now_text ) =~ s/T/ /;
+    die "--now must be YYYY-MM-DD HH:MM\n" unless $text =~ /^\d{4}-\d\d-\d\d \d\d:\d\d$/;
+    # `dt_from_string` reads a time only with its seconds.
+    $now = dt_from_string( "$text:00", 'sql' );
+}
 # Getoverdues asks the database for loans due before its own NOW(), so a later moment would
 # miss the loans due in between.
 die "--now must not be later than the current time\n" if DateTime->compare( $now, $clock ) > 0;

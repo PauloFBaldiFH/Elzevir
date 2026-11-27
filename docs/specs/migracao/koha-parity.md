@@ -9,7 +9,7 @@ The verifier (6.2) shows that the data arrived. This step shows that the Elzevir
 ### The recorder, on the Koha side
 
 1. `tools/koha-parity/record.pl` runs inside the Koha of the copy (`koha-shell <instance> -c 'perl record.pl ...'`), on Paulo's machine or on the oracle VM, never in the cloud. It **only reads**: it calls Koha's functions and writes nothing to the database.
-2. `--now 'YYYY-MM-DD HH:MM'` fixes the moment of the answers, in the library's time. The default is now, cut to the minute. `--every N` keeps one loan in N, in `issue_id` order. The default, 1, keeps them all.
+2. `--now YYYY-MM-DDTHH:MM` fixes the moment of the answers, in the library's time; a space may stand for the `T`, and anything else is refused, so a date alone never passes for midnight. The default is now, cut to the minute. `--every N` keeps one loan in N, in `issue_id` order. The default, 1, keeps them all.
 3. For each current loan (`issues`), it computes the due date the loan would get if it were made again at its `issuedate`. The call is `C4::Circulation::CalcDateDue(issuedate, effective item type, branch, patron)`, with the branch given by `CircControl` and `HomeOrHoldingBranch` (`C4::Circulation::_GetCircControlBranch`).
 4. For each overdue loan from `C4::Overdues::Getoverdues`, at `--now`, it computes the fine with `C4::Overdues::CalcFine`, with the branch chosen as `misc/cronjobs/fines.pl` chooses it. Lost Items are skipped, as `fines.pl` skips them. This is the amount before `UpdateFine` limits it to `MaxFine`.
 5. **Output:** JSON on standard output. It has the Koha version, `now`, and two lists:
@@ -39,6 +39,16 @@ The verifier (6.2) shows that the data arrived. This step shows that the Elzevir
 - unit tests of the comparison in `elzevir-app::koha_parity`: same answer, different due date, different fine, Item that did not come, Item not on loan;
 - a test of the binary (`crates/elzevir/tests/cli.rs`): after the switch of the synthetic dump, a recorder file built by hand from Koha's rules for that dump matches, and a changed date or amount is reported as a divergence;
 - the recorder run on the oracle (its own data) and on the copy of the Castro Alves library, whose report (without personal data) Paulo brings to the project.
+
+### First run on the oracle (2026-11-27)
+
+On the oracle's own copy (18,919 records, 30,034 Items, 42 rules, 30 calendar entries, `daysmode` `Datedue` in the rules), 12 loans were made for the test, backdated from 2026-08-28 to 2026-11-27, and the database was restored afterwards. After `switch-from-koha`:
+- `verify-koha` found no difference without a cause.
+- `parity-koha` found 12 of 12 due dates and 8 of 8 fines the same as Koha's, including the 40.00 cap.
+
+The run found two problems, fixed in the same PR:
+- The MARCXML reader refused a subfield coded with a space. Ten records of that catalog have one, and Koha keeps them. Because of that, the whole switch stopped.
+- `--now` with a date alone was read as midnight.
 
 ## 4. Edge cases
 
