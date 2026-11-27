@@ -13,12 +13,13 @@ use std::time::{Duration, Instant};
 use clap::Args;
 use elzevir_app::catalog::{CatalogCommand, CatalogReader};
 use elzevir_app::codes::{CodeTable, NamedCode};
-use elzevir_app::commands::WriteCommand;
+use elzevir_app::commands::{WriteCommand, WriteOutput};
 use elzevir_app::import::koha_sql::{DatabaseCatalog, read_database_catalog};
 use elzevir_app::import::{ImportOptions, ImportReport, Parallelism, import_koha_database};
-use elzevir_app::koha_migration::{KohaPlan, plan};
+use elzevir_app::koha_migration::{KohaPlan, KohaRulesMigrated, RuleLeftover, plan};
 use elzevir_app::koha_prefs::{PrefsConfig, prefs_config, read_preferences};
 use elzevir_app::koha_types::TypeTranslationSource;
+use elzevir_app::patrons::{PatronCommand, PatronOutput};
 use elzevir_store::ElzevirStore;
 
 use crate::koha_migration_cli::{
@@ -90,12 +91,17 @@ pub(crate) fn run(args: &SwitchFromKohaArgs) -> Result<(), String> {
     report.push(patrons_report(&read.plan, &patrons));
 
     let started = Instant::now();
-    let item_types =
-        create_item_types(store, &read.catalog).map_err(|e| format!("item types: {e}"))?;
+    let item_types = create_item_types(store, &read.catalog, &read.plan)
+        .map_err(|e| format!("item types: {e}"))?;
     report.push(step("item types", started.elapsed()));
     report.push(format!(
         "item types: {item_types} created with Koha's names\n"
     ));
+
+    let started = Instant::now();
+    let rules = migrate_rules(store, &read.plan).map_err(|e| format!("circulation rules: {e}"))?;
+    report.push(step("circulation rules", started.elapsed()));
+    report.push(rules_report(&read.plan, &rules));
 
     let started = Instant::now();
     let biblionumbers: Vec<Option<String>> = read
@@ -181,11 +187,19 @@ fn write_config(path: &Path, text: &str) -> Result<(), String> {
 
 /// Creates the item types the Items use and the MARC edge does not know, named as Koha
 /// names them, or by their code without a row in `itemtypes` (item 7).
-fn create_item_types(store: &ElzevirStore, catalog: &DatabaseCatalog) -> Result<usize, String> {
+fn create_item_types(
+    store: &ElzevirStore,
+    catalog: &DatabaseCatalog,
+    plan: &KohaPlan,
+) -> Result<usize, String> {
     let known = store.codes().map_err(|e| e.to_string())?.edge;
     let names: &BTreeMap<String, String> = &catalog.item_types;
     let new: Vec<NamedCode> = catalog
         .item_type_codes()
+        .into_iter()
+        // A rule's item type is a policy too, even when no Item has it (item 7a).
+        .chain(plan.rule_item_types())
+        .collect::<std::collections::BTreeSet<String>>()
         .into_iter()
         .filter(|code| {
             !known
@@ -207,6 +221,52 @@ fn create_item_types(store: &ElzevirStore, catalog: &DatabaseCatalog) -> Result<
             .map_err(|e| e.to_string())?;
     }
     Ok(created)
+}
+
+/// The circulation rules, in one write (item 7a).
+fn migrate_rules(store: &ElzevirStore, plan: &KohaPlan) -> Result<KohaRulesMigrated, String> {
+    let answer = store
+        .submit(WriteCommand::Patrons(PatronCommand::MigrateKohaRules(
+            Box::new(plan.rules_batch()),
+        )))
+        .map_err(|e| e.to_string())?
+        .wait()
+        .map_err(|e| e.to_string())?;
+    let WriteOutput::Patrons(PatronOutput::KohaRulesMigrated(done)) = answer else {
+        return Err("unexpected answer from the store".to_owned());
+    };
+    Ok(done)
+}
+
+pub(crate) const fn rule_leftover(why: RuleLeftover) -> &'static str {
+    match why {
+        RuleLeftover::Incomplete => "no id or rule_name",
+        RuleLeftover::UnknownKind => "a rule_name Koha 26.05 does not have",
+        RuleLeftover::OutOfScope => "a scope the rule is not set by",
+        RuleLeftover::BadValue => "a value too long or not a decimal",
+        RuleLeftover::Empty => "empty, which Koha deletes for this rule",
+        RuleLeftover::UnknownBranch => "branchcode not in the Elzevir",
+        RuleLeftover::UnknownCategory => "categorycode not in the Elzevir",
+        RuleLeftover::UnknownItemType => "itemtype not in the Elzevir",
+    }
+}
+
+/// The rules set and left out, by Koha's `id` (item 11).
+fn rules_report(plan: &KohaPlan, done: &KohaRulesMigrated) -> String {
+    let mut left = plan.rules_left.clone();
+    left.extend(done.left.iter().copied());
+    left.sort();
+    let mut lines = vec![format!(
+        "circulation rules: {} set, {} left out",
+        done.rules,
+        left.len()
+    )];
+    for (id, why) in left {
+        lines.push(format!("  id {id}: {}", rule_leftover(why)));
+    }
+    let mut text = lines.join("\n");
+    text.push('\n');
+    text
 }
 
 /// The catalog through the path of the Koha SQL import (item 8).

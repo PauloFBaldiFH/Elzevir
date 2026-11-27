@@ -71,6 +71,8 @@ pub(super) enum Table {
     AccountLines,
     AccountOffsets,
     OldIssues,
+    /// `circulation_rules` (troca-do-koha.md, item 7a).
+    Rules,
 }
 
 impl Table {
@@ -141,6 +143,14 @@ impl Table {
             Self::Reserves => RESERVES,
             Self::AccountLines => ACCOUNT_LINES,
             Self::OldIssues => OLD_ISSUES,
+            Self::Rules => &[
+                "id",
+                "branchcode",
+                "categorycode",
+                "itemtype",
+                "rule_name",
+                "rule_value",
+            ],
             Self::AccountOffsets => &[
                 "id",
                 "credit_id",
@@ -162,7 +172,7 @@ impl Table {
             Self::Issues | Self::OldIssues => "issue_id",
             Self::Reserves => "reserve_id",
             Self::AccountLines => "accountlines_id",
-            Self::AccountOffsets => "id",
+            Self::AccountOffsets | Self::Rules => "id",
         }
     }
 }
@@ -243,6 +253,7 @@ impl Target for KohaTables {
             "accountlines" => Some(Table::AccountLines),
             "account_offsets" => Some(Table::AccountOffsets),
             "old_issues" => Some(Table::OldIssues),
+            "circulation_rules" => Some(Table::Rules),
             _ => None,
         })
     }
@@ -267,7 +278,7 @@ impl Target for KohaTables {
 
     fn push(&mut self, table: Table, offset: u64, cells: Row) -> Result<(), DumpError> {
         let rows = self.rows.entry(table).or_default();
-        let most = if matches!(table, Table::Branches | Table::Categories) {
+        let most = if matches!(table, Table::Branches | Table::Categories | Table::Rules) {
             MAX_SMALL_ROWS
         } else {
             MAX_KOHA_ROWS
