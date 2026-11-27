@@ -357,6 +357,23 @@ pub enum Impossible {
     Restricted,
 }
 
+impl Impossible {
+    /// The keys Koha's `CanBookBeIssued` gives this reason in `issuingimpossible`.
+    #[must_use]
+    pub const fn koha_keys(&self) -> &'static [&'static str] {
+        match self {
+            Self::Suspended(SuspensionEnd::Day(_)) => &["DEBARRED", "USERBLOCKEDWITHENDDATE"],
+            Self::Suspended(SuspensionEnd::WhenLifted) => &["DEBARRED", "USERBLOCKEDNOENDDATE"],
+            Self::PatronExpired => &["EXPIRED"],
+            Self::Debt(_) => &["DEBT"],
+            Self::TooMany(_) => &["TOO_MANY"],
+            Self::NotForLoan(_) => &["NOT_FOR_LOAN"],
+            Self::Withdrawn => &["WTHDRAWN"],
+            Self::Restricted => &["RESTRICTED"],
+        }
+    }
+}
+
 /// A reason the staff must confirm before the checkout happens.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Confirm {
@@ -377,6 +394,25 @@ pub enum Confirm {
     /// The Item answers another patron's hold (`RESERVE_WAITING`, `TRANSFERRED`,
     /// `RESERVED`).
     Held(HeldFor),
+}
+
+impl Confirm {
+    /// The key Koha's `CanBookBeIssued` gives this reason in `needsconfirmation`.
+    #[must_use]
+    pub const fn koha_key(&self) -> &'static str {
+        match self {
+            Self::Renew => "RENEW_ISSUE",
+            Self::IssuedToAnother => "ISSUED_TO_ANOTHER",
+            Self::Debt(_) => "DEBT",
+            Self::PatronCannotBorrow => "PATRON_CANT",
+            Self::TooMany(_) => "TOO_MANY",
+            Self::NotForLoan(_) => "NOT_FOR_LOAN_FORCING",
+            Self::Lost(_) => "ITEM_LOST",
+            Self::Held(HeldFor::Waiting) => "RESERVE_WAITING",
+            Self::Held(HeldFor::InTransit) => "TRANSFERRED",
+            Self::Held(HeldFor::Reserved) => "RESERVED",
+        }
+    }
 }
 
 /// How the Item answers another patron's hold.
