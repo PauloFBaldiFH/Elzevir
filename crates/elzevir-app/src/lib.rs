@@ -44,6 +44,7 @@ pub mod printing;
 pub mod profiles;
 pub mod rdf;
 pub mod registries;
+pub mod reports;
 pub mod repository;
 pub mod search;
 pub mod self_check;

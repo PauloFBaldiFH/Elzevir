@@ -156,6 +156,7 @@ fn add_loan(connection: &Connection, loan: &KohaLoan) -> Result<Found<bool>, Sto
             loan.renewed_at
         ],
     )?;
+    crate::returns::note_checkout(connection, patron, &loan.issued_at)?;
     // The OPAC keeps pages by version: the Item now shows as lent.
     connection.execute(
         "UPDATE items SET row_version = row_version + 1 WHERE id = ?1",

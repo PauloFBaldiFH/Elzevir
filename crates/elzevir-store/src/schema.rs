@@ -814,8 +814,7 @@ const MIGRATIONS: &[&str] = &[
          ON notices (patron_id, kind, coalesce(level, 0), branch_id, transport, day)
          WHERE kind = 'OVERDUE';
      CREATE INDEX notices_pending ON notices (id) WHERE status = 'pending';",
-    // 58: the texts of the notices the library wrote in place of the built-in ones
-    // (docs/specs/circulacao/avisos.md, part g).
+    // 58: the library's own notice texts (docs/specs/circulacao/avisos.md, part g).
     "CREATE TABLE notice_texts (
          kind    TEXT PRIMARY KEY
                  CHECK (kind IN ('OVERDUE1', 'OVERDUE2', 'OVERDUE3', 'HOLD')),
@@ -843,6 +842,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("koha_history.sql"),
     "ALTER TABLE patrons ADD COLUMN anonymized_at TEXT;",
     "ALTER TABLE items ADD COLUMN last_seen TEXT;", // 67: inventory (catalogo/inventario.md)
+    include_str!("returned_categories.sql"),
 ];
 
 /// The migration that creates `match_keys`.

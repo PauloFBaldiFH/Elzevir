@@ -1,0 +1,46 @@
+{% extends "staff_base.html" %}
+{% block title %}{{ t.get("reports-title") }}{% endblock %}
+{% block content %}
+<div class="reports">
+<h1>{{ t.get("reports-title") }}</h1>
+<p class="form-hint">{{ t.get("reports-intro") }}</p>
+<form method="get" action="/equipe/relatorios" class="report-form">
+  <h2>{{ t.get("reports-circulation") }}</h2>
+  <p class="form-hint">{{ t.get("reports-circulation-hint") }}</p>
+  <input type="hidden" name="relatorio" value="circulacao">
+  <label for="report-from">{{ t.get("reports-from") }}</label>
+  <input type="date" id="report-from" name="de" value="{{ from }}" required>
+  <label for="report-to">{{ t.get("reports-to") }}</label>
+  <input type="date" id="report-to" name="ate" value="{{ to }}" required>
+  <button type="submit">{{ t.get("reports-show") }}</button>
+</form>
+<form method="get" action="/equipe/relatorios" class="report-form">
+  <h2>{{ t.get("reports-collection") }}</h2>
+  <p class="form-hint">{{ t.get("reports-collection-hint") }}</p>
+  <input type="hidden" name="relatorio" value="acervo">
+  <button type="submit">{{ t.get("reports-show") }}</button>
+</form>
+<form method="get" action="/equipe/relatorios" class="report-form">
+  <h2>{{ t.get("reports-patrons") }}</h2>
+  <p class="form-hint">{{ t.get("reports-patrons-hint") }}</p>
+  <input type="hidden" name="relatorio" value="leitores">
+  <label for="report-since">{{ t.get("reports-since") }}</label>
+  <input type="date" id="report-since" name="desde" value="{{ since }}" required>
+  <button type="submit">{{ t.get("reports-show") }}</button>
+</form>
+{% if let Some(key) = refused %}<p class="codes-alert codes-refused" role="alert">{{ t.get(key) }}</p>{% endif %}
+{% if let Some(table) = table %}
+<section class="report-result" aria-labelledby="report-result-title">
+  <h2 id="report-result-title">{% if report == "circulacao" %}{{ t.get("reports-circulation") }}{% else if report == "acervo" %}{{ t.get("reports-collection") }}{% else %}{{ t.get("reports-patrons") }}{% endif %}</h2>
+  {% if let Some(url) = csv_url %}<p><a href="{{ url }}" download>{{ t.get("reports-csv") }}</a></p>{% endif %}
+  <table class="report-lines">
+    <thead><tr>{% for header in table.headers %}<th scope="col">{{ header }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for row in table.rows %}<tr>{% for value in row %}<td>{{ value }}</td>{% endfor %}</tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+</div>
+{% endblock %}

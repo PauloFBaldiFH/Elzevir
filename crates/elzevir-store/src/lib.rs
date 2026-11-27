@@ -61,6 +61,7 @@ mod preview;
 mod readers;
 mod registries;
 mod renewals;
+mod reports;
 pub mod repository;
 mod restrictions;
 mod returns;

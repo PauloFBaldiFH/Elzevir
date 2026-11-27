@@ -1903,3 +1903,50 @@ fn patron_cards_are_printed_from_the_search_and_the_record() {
     }
     drop(server);
 }
+
+#[test]
+fn the_reports_are_shown_and_downloaded_as_csv() {
+    let data = tempfile::tempdir().unwrap();
+    library(data.path());
+    stock(data.path());
+    let (server, address) = start(data.path());
+    let cat = sign_in(address, "cat");
+    let page = request(address, "GET", "/equipe/relatorios", &cat, "");
+    assert_status(&page, 200);
+    assert!(page.contains("name=\"relatorio\" value=\"circulacao\""));
+    assert!(
+        request(address, "GET", "/equipe/barra", &cat, "").contains("href=\"/equipe/relatorios\"")
+    );
+    let patrons = request(
+        address,
+        "GET",
+        "/equipe/relatorios?relatorio=leitores&desde=2026-01-01",
+        &cat,
+        "",
+    );
+    assert_status(&patrons, 200);
+    assert!(patrons.contains("<td>Biblioteca Central</td><td>Estudante</td><td>1</td><td>0</td>"));
+    let csv = request(
+        address,
+        "GET",
+        "/equipe/relatorios?relatorio=acervo&formato=csv",
+        &cat,
+        "",
+    );
+    assert_status(&csv, 200);
+    assert!(csv.contains("filename=\"relatorio-acervo.csv\""));
+    assert!(csv.ends_with("Class,Content,Items\r\nNo class,Not described,1\r\nTotal,,1\r\n"));
+    let circulation = request(
+        address,
+        "GET",
+        "/equipe/relatorios?relatorio=circulacao&de=2026-03-01&ate=2026-03-31",
+        &cat,
+        "",
+    );
+    assert!(circulation.contains("<td>Total</td><td></td><td>0</td><td>0</td>"));
+    let backwards = "/equipe/relatorios?relatorio=circulacao&de=2026-03-31&ate=2026-03-01";
+    let refused = request(address, "GET", backwards, &cat, "");
+    assert_status(&refused, 422);
+    assert!(refused.contains("The period ends before it starts."));
+    drop(server);
+}

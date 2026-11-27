@@ -85,6 +85,21 @@ fn prefixed_class(class: &str) -> Option<(&str, &str)> {
     (dewey_number(number) == Some(number.len())).then_some((prefix, number))
 }
 
+/// The Dewey main class of a call number: the hundreds (0, 100, …, 900) of the first line
+/// of its spine label that starts with three digits or more, after any letters before it
+/// ([`split_dewey_call_number`]); `None` when it does not start with a class
+/// (docs/specs/operacao/relatorios.md, item 5).
+#[must_use]
+pub fn dewey_main_class(call_number: &str) -> Option<u16> {
+    let lines = split_dewey_call_number(call_number);
+    let class = lines
+        .iter()
+        .find(|line| line.bytes().next().is_some_and(|b| b.is_ascii_digit()))?;
+    dewey_number(class)?;
+    let hundreds = class.bytes().next()?;
+    Some(u16::from(hundreds - b'0') * 100)
+}
+
 /// The Code 39 pattern of each character it encodes: nine elements, bar first, `w` wide and
 /// `n` narrow; `*` is the start and stop character.
 const CODE39: [(char, [u8; 9]); 44] = [
@@ -244,5 +259,17 @@ mod tests {
         assert_eq!(code39("abc"), None);
         assert_eq!(code39("12*3"), None);
         assert_eq!(code39("Ç1"), None);
+    }
+
+    #[test]
+    fn the_main_class_is_the_hundreds_of_the_class() {
+        assert_eq!(dewey_main_class("869.3 A474d"), Some(800));
+        assert_eq!(dewey_main_class("R220.3 H2793Z"), Some(200));
+        assert_eq!(dewey_main_class("J 028.5 L732m"), Some(0));
+        assert_eq!(dewey_main_class("CD-ROM 787.87 EAS"), Some(700));
+        assert_eq!(dewey_main_class("82-31 C"), None);
+        assert_eq!(dewey_main_class("Ficção A474d"), None);
+        assert_eq!(dewey_main_class("869.3/A474d"), Some(800));
+        assert_eq!(dewey_main_class(""), None);
     }
 }
