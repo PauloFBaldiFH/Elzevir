@@ -20,6 +20,10 @@ pub(crate) enum Keyed {
     Patron = 2,
     /// A returned loan, by `issue_id` (circulacao-do-koha.md, item 16).
     ReturnedLoan = 3,
+    /// A patron attribute type, by `code` (patron-attributes.md, item 16).
+    AttributeType = 4,
+    /// An option of an attribute type, by `code` and `authorised_value`.
+    AttributeOption = 5,
 }
 
 pub(crate) fn key(

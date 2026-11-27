@@ -78,20 +78,25 @@ pub(crate) fn run(args: &SwitchFromKohaArgs) -> Result<(), String> {
     report.push(step("reading the dump", started.elapsed()));
 
     let started = Instant::now();
-    write_config(&read.config_path, &read.config.toml)?;
+    let mut config = read.config.toml.clone();
+    config.push_str(&crate::koha_attributes_cli::sip2_block(&read.plan).unwrap_or_default());
+    write_config(&read.config_path, &config)?;
     report.push(step("preferences", started.elapsed()));
-    report.push(format!(
-        "written to {}\n",
-        read.config_path
-            .file_name()
-            .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
-    ));
+    let file = read
+        .config_path
+        .file_name()
+        .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+    report.push(format!("written to {file}\n"));
     report.push(crate::koha_prefs_cli::report(&read.config.report));
+    report.push(crate::koha_attributes_cli::sip2_report(&read.plan, &file));
 
     let started = Instant::now();
     let patrons = migrate_patrons(store, &read.plan).map_err(|e| format!("patrons: {e}"))?;
     report.push(step("branches, categories and patrons", started.elapsed()));
     report.push(patrons_report(&read.plan, &patrons));
+    let attributes = crate::koha_attributes_cli::migrate(store, &read.plan)
+        .map_err(|e| format!("patron attributes: {e}"))?;
+    report.push(crate::koha_attributes_cli::report(&read.plan, &attributes));
 
     let started = Instant::now();
     let item_types = create_item_types(store, &read.catalog, &read.plan)

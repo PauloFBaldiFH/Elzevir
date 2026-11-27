@@ -33,7 +33,7 @@ These are gaps where moving to the Elzevir as it is today would lose something t
 
 | # | Gap | Evidence | Block A |
 |---|---|---|---|
-| G1 | **Patron attributes are not migrated.** The 4 attribute types, and the values patrons hold, stay behind in the switch. | 4 types on the copy; `migrate-koha` reads no `borrower_attributes` | A11 |
+| G1 | **Patron attributes are not migrated.** The 4 attribute types, and the values patrons hold, stay behind in the switch. | 4 types on the copy; `migrate-koha` reads no `borrower_attributes` | A11; closed by task 7.1 ([patron-attributes.md](../circulacao/patron-attributes.md), items 16 to 19) |
 | G2 | **Lost and damaged at the desk.** In Koha, marking an Item lost by hand charges the replacement, and finding it again refunds the charge (`lostreturn`). The Elzevir charges only when a loan is long overdue, and has no refund. | The desk day left this out (desk-day.md, §5). The copy has 0 lost Items because it is sanitized, so the use must be counted in production. | A3 |
 | G3 | **The list of holds to pull from the shelf.** Without it, a hold placed on an Item on the shelf waits until someone happens to find the Item. | Daily use in Koha (`circ/pendingreserves.pl`); not in the Elzevir | A2 |
 | G4 | **Notice before the due date.** With `EnhancedMessagingPreferences` on, patrons may be getting this notice today; after the switch it would stop. | Preference on; the patron preferences are in production | A6, A15 |
@@ -51,7 +51,7 @@ These are gaps where moving to the Elzevir as it is today would lose something t
 | # | Gap | Evidence | Block A |
 |---|---|---|---|
 | G5 | **Staff profiles.** The Elzevir gives a fixed set of permissions (administration, cataloguing, circulation, patrons) account by account. Koha has about 20 groups with sub-permissions. A desk team can start with what exists, but it has no editable profile. | `flags` and `user_permissions` in production | A9 |
-| G9 | **The switch does not bring the active currency** into the SIP2 `BH`. The 6.4b run set it by hand. | `REAL` on the copy; desk-day.md, SIP2 run | new; small, goes with G1 |
+| G9 | **The switch does not bring the active currency** into the SIP2 `BH`. The 6.4b run set it by hand. | `REAL` on the copy; desk-day.md, SIP2 run | new; small, goes with G1; closed by task 7.1 (patron-attributes.md, item 20) |
 | G10 | **MARC import below the goal:** 960 records/s, against 2,000 records/s with the index. | performance.md, §3 | new; Phase 9 |
 | G11 | **The desk was not measured at real volume** (checkout and checkin p95 < 25 ms), because the copy has one patron. | performance.md, §5 | none; a run on Paulo's machine |
 

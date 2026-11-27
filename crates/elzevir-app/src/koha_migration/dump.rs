@@ -82,6 +82,26 @@ const SPECIAL_HOLIDAYS: &[&str] = &[
     "description",
 ];
 
+/// The columns kept of `borrower_attribute_types`.
+const ATTRIBUTE_TYPES: &[&str] = &[
+    "code",
+    "description",
+    "repeatable",
+    "unique_id",
+    "is_date",
+    "opac_display",
+    "opac_editable",
+    "staff_searchable",
+    "searched_by_default",
+    "authorised_value_category",
+    "display_checkout",
+    "category_code",
+    "class",
+    "keep_for_pseudonymization",
+    "mandatory",
+    "opac_mandatory",
+];
+
 /// The table a kept row came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum Table {
@@ -101,6 +121,16 @@ pub(super) enum Table {
     RepeatableHolidays,
     /// `special_holidays` (troca-do-koha.md, item 7b).
     SpecialHolidays,
+    /// `borrower_attribute_types` (patron-attributes.md, item 16).
+    AttributeTypes,
+    /// `borrower_attribute_types_branches`, only counted.
+    AttributeTypeBranches,
+    /// `borrower_attributes`.
+    Attributes,
+    /// `authorised_values`, for the options of the attribute types.
+    AuthorisedValues,
+    /// `currency`, for the SIP2 currency (patron-attributes.md, item 20).
+    Currencies,
 }
 
 impl Table {
@@ -180,6 +210,11 @@ impl Table {
                 "rule_value",
             ],
             Self::RepeatableHolidays => REPEATABLE_HOLIDAYS,
+            Self::AttributeTypes => ATTRIBUTE_TYPES,
+            Self::AttributeTypeBranches => &["bat_code"],
+            Self::Attributes => &["id", "borrowernumber", "code", "attribute"],
+            Self::AuthorisedValues => &["id", "category", "authorised_value", "lib"],
+            Self::Currencies => &["currency", "active"],
             Self::SpecialHolidays => SPECIAL_HOLIDAYS,
             Self::AccountOffsets => &[
                 "id",
@@ -202,7 +237,12 @@ impl Table {
             Self::Issues | Self::OldIssues => "issue_id",
             Self::Reserves => "reserve_id",
             Self::AccountLines => "accountlines_id",
+            Self::AttributeTypes => "code",
+            Self::AttributeTypeBranches => "bat_code",
+            Self::Currencies => "currency",
             Self::AccountOffsets
+            | Self::Attributes
+            | Self::AuthorisedValues
             | Self::Rules
             | Self::RepeatableHolidays
             | Self::SpecialHolidays => "id",
@@ -289,6 +329,11 @@ impl Target for KohaTables {
             "circulation_rules" => Some(Table::Rules),
             "repeatable_holidays" => Some(Table::RepeatableHolidays),
             "special_holidays" => Some(Table::SpecialHolidays),
+            "borrower_attribute_types" => Some(Table::AttributeTypes),
+            "borrower_attribute_types_branches" => Some(Table::AttributeTypeBranches),
+            "borrower_attributes" => Some(Table::Attributes),
+            "authorised_values" => Some(Table::AuthorisedValues),
+            "currency" => Some(Table::Currencies),
             _ => None,
         })
     }
@@ -315,7 +360,14 @@ impl Target for KohaTables {
         let rows = self.rows.entry(table).or_default();
         let most = if matches!(
             table,
-            Table::Branches | Table::Categories | Table::Rules | Table::RepeatableHolidays
+            Table::Branches
+                | Table::Categories
+                | Table::Rules
+                | Table::RepeatableHolidays
+                | Table::AttributeTypes
+                | Table::AttributeTypeBranches
+                | Table::AuthorisedValues
+                | Table::Currencies
         ) {
             MAX_SMALL_ROWS
         } else {

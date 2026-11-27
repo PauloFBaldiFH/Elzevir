@@ -38,8 +38,10 @@ pub(crate) fn run(args: &MigrateKohaArgs) -> Result<(), String> {
     let input = open(&args.dump)?;
     let plan = plan(input, today, &zone).map_err(|e| format!("{}: {e}", args.dump.display()))?;
     let done = migrate_patrons(&data.store, &plan)?;
+    let attributes = crate::koha_attributes_cli::migrate(&data.store, &plan)?;
     let (circulation, accounts, history) = migrate_circulation(&data.store, &plan)?;
     print!("{}", report(&plan, &done));
+    print!("{}", crate::koha_attributes_cli::report(&plan, &attributes));
     print!("{}", circulation_report(&plan, &circulation));
     print!("{}", accounts_report(&plan, &accounts));
     print!("{}", history_report(&plan, &history));

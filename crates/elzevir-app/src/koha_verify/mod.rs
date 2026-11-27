@@ -11,6 +11,7 @@ use crate::koha_migration::{
     CirculationLeftover, HolidayLeftover, HolidayTable, KohaPlan, Leftover, RuleLeftover,
 };
 
+mod attributes;
 mod calendar;
 mod circulation;
 mod rules;
@@ -48,6 +49,9 @@ pub struct Footprint {
     pub rules: BTreeMap<RuleKey, String>,
     /// The calendar entries of each branch that has a Koha code, by the code.
     pub holidays: BTreeMap<String, Vec<Holiday>>,
+    /// The additional fields that came from Koha's attribute types, by `code`, and how many
+    /// values each holds.
+    pub attributes: BTreeMap<String, usize>,
 }
 
 /// A patron as the Elzevir holds it, with its branch and category as Koha codes.
@@ -105,6 +109,8 @@ pub enum Table {
     RepeatableHolidays,
     /// `special_holidays`, by `id`.
     SpecialHolidays,
+    /// `borrower_attribute_types`, by `code`, with the values of `borrower_attributes`.
+    AttributeTypes,
 }
 
 /// Why a number of the dump is not in the Elzevir, found in the dump or the database
@@ -139,6 +145,8 @@ pub enum Cause {
     UnknownCode(&'static str),
     /// The calendar row cannot come as it is, or joins an earlier row of the same day.
     Holiday(HolidayLeftover),
+    /// The attribute value breaks a rule of its field, or its patron did not come.
+    Attribute(crate::koha_migration::ValueLeftover),
 }
 
 /// A difference without a cause.
@@ -227,6 +235,7 @@ pub fn verify(
         rules::rules(plan, found),
         calendar::holidays(plan, found, HolidayTable::Repeatable),
         calendar::holidays(plan, found, HolidayTable::Special),
+        attributes::attributes(plan, found),
     ]
 }
 
