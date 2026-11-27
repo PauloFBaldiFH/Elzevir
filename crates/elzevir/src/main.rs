@@ -56,6 +56,7 @@ mod operations_config;
 mod overdue_run;
 mod panel_cli;
 mod panel_startup;
+mod parity_cli;
 mod personal_update;
 mod private_temp;
 mod process_runner;
@@ -192,6 +193,9 @@ enum Command {
     SwitchFromKoha(switch_cli::SwitchFromKohaArgs),
     /// Compares a Koha database dump with what the Elzevir holds from it, by Koha's numbers.
     VerifyKoha(verify_cli::VerifyKohaArgs),
+    /// Compares Koha's own due dates and fines on a copy of the library with the Elzevir's
+    /// on the same copy after the switch.
+    ParityKoha(parity_cli::ParityKohaArgs),
 }
 
 #[derive(Subcommand)]
@@ -280,6 +284,7 @@ fn main() -> ExitCode {
         Command::ImportKohaPrefs(args) => koha_prefs_cli::run(&args),
         Command::SwitchFromKoha(args) => switch_cli::run(&args),
         Command::VerifyKoha(args) => verify_cli::run(&args),
+        Command::ParityKoha(args) => parity_cli::run(&args),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,

@@ -41,6 +41,7 @@ mod koha_calendar;
 mod koha_circulation;
 mod koha_history;
 mod koha_migration;
+mod koha_parity;
 mod koha_rules;
 mod koha_types;
 mod koha_verify;
