@@ -36,7 +36,7 @@ pub struct DumpError {
 }
 
 /// Why preparation stopped before submitting records.
-#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum DumpProblem {
     /// Input could not be read.
     #[error("cannot read dump input")]
@@ -104,7 +104,19 @@ pub(super) struct MetadataRecord {
 }
 
 pub(super) fn with_originals(input: impl BufRead) -> Result<Vec<MetadataRecord>, DumpError> {
-    assemble::records(parser::parse(input, CatalogTarget::default())?.rows)
+    assemble::records(parser::parse(input, CatalogTarget::default())?.rows, None)
+}
+
+/// A record of a whole-database dump whose MARCXML the Elzevir cannot read, set aside by
+/// the switch with its Items (troca-do-koha.md, item 8).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnreadableRecord {
+    /// `biblionumber`.
+    pub biblionumber: u64,
+    /// Why it cannot be read, without its values.
+    pub problem: DumpProblem,
+    /// The `itemnumber` of each of its Items, in dump order.
+    pub itemnumbers: Vec<u64>,
 }
 
 /// Most bytes in a whole Koha database dump (docs/specs/migracao/leitores-do-koha.md, item 3).

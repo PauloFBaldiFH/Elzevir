@@ -14,7 +14,7 @@ use clap::Args;
 use elzevir_app::catalog::{CatalogCommand, CatalogReader};
 use elzevir_app::codes::{CodeTable, NamedCode};
 use elzevir_app::commands::{WriteCommand, WriteOutput};
-use elzevir_app::import::koha_sql::{DatabaseCatalog, read_database_catalog};
+use elzevir_app::import::koha_sql::{DatabaseCatalog, UnreadableRecord, read_database_catalog};
 use elzevir_app::import::{ImportOptions, ImportReport, Parallelism, import_koha_database};
 use elzevir_app::koha_migration::{
     HolidayLeftover, HolidayTable, KohaCalendarMigrated, KohaPlan, KohaRulesMigrated, RuleLeftover,
@@ -74,7 +74,7 @@ pub(crate) fn run(args: &SwitchFromKohaArgs) -> Result<(), String> {
     }
     let mut report = Vec::new();
     let started = Instant::now();
-    let read = read_all(args)?;
+    let mut read = read_all(args)?;
     report.push(step("reading the dump", started.elapsed()));
 
     let started = Instant::now();
@@ -118,9 +118,10 @@ pub(crate) fn run(args: &SwitchFromKohaArgs) -> Result<(), String> {
         .into_iter()
         .map(|record| record.biblionumber)
         .collect();
+    let unreadable = std::mem::take(&mut read.catalog.unreadable);
     let imported = import_catalog(store, read.catalog).map_err(|e| format!("catalog: {e}"))?;
     report.push(step("catalog", started.elapsed()));
-    report.push(catalog_report(&imported, &biblionumbers));
+    report.push(catalog_report(&imported, &biblionumbers, &unreadable));
 
     let started = Instant::now();
     let (circulation, accounts, history) =
@@ -356,8 +357,13 @@ fn import_catalog(store: &ElzevirStore, catalog: DatabaseCatalog) -> Result<Impo
     import_koha_database(catalog, store, &options).map_err(|e| e.to_string())
 }
 
-/// The catalog counts, naming refused records and Items by Koha's `biblionumber` (item 11).
-fn catalog_report(report: &ImportReport, biblionumbers: &[Option<String>]) -> String {
+/// The catalog counts, naming refused records and Items by Koha's `biblionumber` (item 11),
+/// and the records set aside because their MARCXML cannot be read (item 8).
+fn catalog_report(
+    report: &ImportReport,
+    biblionumbers: &[Option<String>],
+    unreadable: &[UnreadableRecord],
+) -> String {
     let number = |index: u64| {
         usize::try_from(index)
             .ok()
@@ -368,12 +374,30 @@ fn catalog_report(report: &ImportReport, biblionumbers: &[Option<String>]) -> St
                 |number| format!("biblionumber {number}"),
             )
     };
+    let set_aside = u64::try_from(unreadable.len()).unwrap_or(u64::MAX);
     let mut lines = vec![format!(
         "records: {} read, {} stored, {} refused",
-        report.read,
+        report.read.saturating_add(set_aside),
         report.imported,
-        report.failures.len()
+        report.failures.len().saturating_add(unreadable.len())
     )];
+    for set_aside in unreadable {
+        let items = match set_aside.itemnumbers.as_slice() {
+            [] => String::new(),
+            numbers => format!(
+                "; its Items left out: {}",
+                numbers
+                    .iter()
+                    .map(u64::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        };
+        lines.push(format!(
+            "  biblionumber {}: MARCXML the Elzevir cannot read ({}){items}",
+            set_aside.biblionumber, set_aside.problem
+        ));
+    }
     for failed in &report.failures {
         lines.push(format!("  {}: {}", number(failed.index), failed.failure));
     }

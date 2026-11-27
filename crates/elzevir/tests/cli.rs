@@ -505,6 +505,74 @@ fn a_koha_dump_switches_to_elzevir_in_one_command() {
     assert!(!dir.path().join("fresh/elzevir.toml").exists());
 }
 
+#[test]
+fn an_unreadable_record_is_set_aside_and_the_switch_goes_on() {
+    // docs/specs/migracao/troca-do-koha.md, item 8: one record whose MARCXML is broken,
+    // with an Item on loan, does not stop the switch of the others.
+    let (dump, _) = switch_dump();
+    let broken = marcxml(13, "Quincas Borba").replace("</record>", "");
+    let dump = dump
+        .replace(
+            "(3,12,'marcxml','MARC21',",
+            &format!("(4,13,'marcxml','MARC21','{broken}'),(3,12,'marcxml','MARC21',"),
+        )
+        .replace(
+            "(130,12,'B130','LUA','LUA','LIV')",
+            "(130,12,'B130','LUA','LUA','LIV'),(140,13,'B140','CTR','CTR','LIV')",
+        )
+        .replace(
+            ",(6,2,NULL,110,",
+            ",(7,1,NULL,140,'2026-12-10 23:59:00','CTR',NULL,NULL,0,0,0,NULL,\
+             '2026-11-20 10:00:00','2026-11-20 10:00:00',0,NULL,NULL,NULL),(6,2,NULL,110,",
+        );
+    assert!(
+        dump.contains("(4,13,") && dump.contains("(140,13,") && dump.contains("(7,1,NULL,140,")
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let sql = path(dir.path(), "library.sql");
+    std::fs::write(&sql, &dump).unwrap();
+    let data = path(dir.path(), "data");
+    let switch = elzevir(&["switch-from-koha", "--data-dir", &data, &sql]);
+    assert!(switch.status.success(), "{}", text(&switch.stderr));
+    let report = text(&switch.stdout);
+    for line in [
+        "records: 4 read, 2 stored, 2 refused",
+        "  biblionumber 13: MARCXML the Elzevir cannot read (expected one UTF-8 MARC21 XML \
+         record in biblio_metadata.metadata); its Items left out: 140",
+        "  biblionumber 12: unknown branch `LUA`",
+        "Items: 4 stored, 0 refused",
+        "loans: 2 migrated, 5 left out",
+        "search index: 2 documents",
+    ] {
+        assert!(
+            report.lines().any(|found| found == line),
+            "{line} not in\n{report}"
+        );
+    }
+    assert!(
+        !report.contains("Quincas"),
+        "the record's values in the report"
+    );
+
+    let verify = elzevir(&["verify-koha", "--data-dir", &data, &sql]);
+    assert!(verify.status.success(), "{}", text(&verify.stderr));
+    let report = text(&verify.stdout);
+    for line in [
+        "records: 4 in the dump, 2 in the Elzevir, 2 left out with a cause, 0 differences without a cause",
+        "  MARCXML the Elzevir cannot read: 1 (biblionumber 13)",
+        "Items: 6 in the dump, 4 in the Elzevir, 2 left out with a cause, 0 differences without a cause",
+        "  its record did not come: 2 (itemnumber 130, 140)",
+        "loans: 7 in the dump, 2 in the Elzevir, 5 left out with a cause, 0 differences without a cause",
+        "  its Item did not come: 2 (issue_id 4, 7)",
+    ] {
+        assert!(
+            report.lines().any(|found| found == line),
+            "{line} not in\n{report}"
+        );
+    }
+    assert!(!report.contains("WITHOUT A CAUSE"), "{report}");
+}
+
 /// docs/specs/migracao/verificacao-do-koha.md: the switched folder has no difference
 /// without a cause; a folder without the switch has nothing else.
 /// Koha's answers for the switched dump, worked out by hand from its rules and calendar

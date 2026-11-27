@@ -131,6 +131,8 @@ pub enum Cause {
     ItemOnLoan,
     /// An earlier hold of the dump has the same patron and record.
     AlreadyHeld,
+    /// The record's MARCXML cannot be read, so the switch set it aside.
+    UnreadableRecord,
     /// The rule cannot be set, as `circ.set_rules` checks it.
     Rule(RuleLeftover),
     /// The rule names a code of this column that the Elzevir does not have.
@@ -369,6 +371,7 @@ fn records(catalog: &[KohaCatalogRecord], found: &Footprint) -> TableCheck {
             continue;
         }
         match found.records.get(number).copied().unwrap_or(0) {
+            0 if record.unreadable => check.explain(Cause::UnreadableRecord, number),
             0 => match unknown_branch(record, found) {
                 Some(code) => check.explain(Cause::UnknownBranch(code), number),
                 None => check.differ(number, Unexplained::Missing),
@@ -810,10 +813,12 @@ mod tests {
         vec![
             KohaCatalogRecord {
                 biblionumber: Some("10".to_owned()),
+                unreadable: false,
                 items: vec![item("100", "B100", "CTR"), item("101", "B101", "CTR")],
             },
             KohaCatalogRecord {
                 biblionumber: Some("11".to_owned()),
+                unreadable: false,
                 items: vec![item("110", "B110", "NRT")],
             },
         ]
@@ -956,10 +961,12 @@ mod tests {
         let mut catalog = catalog();
         catalog.push(KohaCatalogRecord {
             biblionumber: Some("12".to_owned()),
+            unreadable: false,
             items: vec![item("120", "B120", "LUA")],
         });
         catalog.push(KohaCatalogRecord {
             biblionumber: Some("13".to_owned()),
+            unreadable: false,
             items: vec![item("130", "B100", "CTR")],
         });
         let mut found = faithful(&plan, &catalog);
@@ -987,6 +994,40 @@ mod tests {
             items.explained.get(&Cause::RepeatedBarcode),
             Some(&vec!["130".to_owned()])
         );
+    }
+
+    #[test]
+    fn a_record_set_aside_as_unreadable_is_explained_and_only_when_absent() {
+        let plan = plan();
+        let mut catalog = catalog();
+        catalog.push(KohaCatalogRecord {
+            biblionumber: Some("12".to_owned()),
+            unreadable: true,
+            items: vec![KohaCatalogItem {
+                itemnumber: Some("120".to_owned()),
+                ..KohaCatalogItem::default()
+            }],
+        });
+        let mut found = faithful(&plan, &catalog);
+        found.records.remove("12");
+        found.items.remove("120");
+        let checks = verify(&plan, &catalog, &found);
+        let records = check(&checks, Table::Records);
+        assert!(records.unexplained.is_empty(), "{records:?}");
+        assert_eq!(
+            records.explained,
+            BTreeMap::from([(Cause::UnreadableRecord, vec!["12".to_owned()])])
+        );
+        let items = check(&checks, Table::Items);
+        assert!(items.unexplained.is_empty(), "{items:?}");
+        assert_eq!(
+            items.explained.get(&Cause::RecordLeftOut),
+            Some(&vec!["120".to_owned()])
+        );
+        // A readable record that is missing is still a difference.
+        catalog[2].unreadable = false;
+        let checks = verify(&plan, &catalog, &found);
+        assert!(!check(&checks, Table::Records).unexplained.is_empty());
     }
 
     #[test]

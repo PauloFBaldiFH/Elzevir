@@ -26,6 +26,7 @@ A troca e a migração escrevem um relatório do que deixaram de fora. Esse rela
 10. Uma diferença tem explicação quando o verificador encontra a causa no dump ou no banco:
     - **Leitor fora:** o motivo da limpeza (sem número, sem cartão, sem nome, unidade ou categoria que não existe), como a migração o decide pelas mesmas regras.
     - **Registro fora:** um exemplar dele com unidade que não está em `branches` ou que não chegou ao Elzevir, porque a importação recusa o registro inteiro ([troca-do-koha.md](troca-do-koha.md), caso de borda 2).
+    - **Registro ilegível:** a troca deixou o registro de fora porque o MARCXML dele não pode ser lido ([troca-do-koha.md](troca-do-koha.md), caso de borda 4); os exemplares dele ficam fora como "registro fora".
     - **Exemplar fora:** o registro dele está fora, ou o código de barras dele se repete no dump.
 
     Qualquer outra diferença, incluindo um valor diferente num leitor ou num exemplar que chegou, fica sem explicação.
