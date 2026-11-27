@@ -467,6 +467,7 @@ fn a_koha_dump_switches_to_elzevir_in_one_command() {
 
     verify_after_the_switch(dir.path(), &data, &sql);
     parity_after_the_switch(dir.path(), &data);
+    desk_day_after_the_switch(dir.path(), &data);
 
     // A second run finds a catalog and writes nothing.
     let again = elzevir(&["switch-from-koha", "--data-dir", &data, &sql]);
@@ -644,6 +645,83 @@ fn parity_after_the_switch(dir: &Path, data: &str) {
             report.lines().any(|found| found == line),
             "{line} not in\n{report}"
         );
+    }
+}
+
+/// Koha's day on the switched dump, worked out by hand (docs/specs/migracao/desk-day.md):
+/// the renewal and the hold of Item 100 are the answers of `parity_after_the_switch`, and
+/// patron 1 owes the two overdue fines of 2.00 still outstanding. Writes to the folder,
+/// so it runs last.
+fn desk_day_after_the_switch(dir: &Path, data: &str) {
+    let day = |checkin: &str, owed_after_paying: i64| {
+        format!(
+            r#"{{"koha_version":"26.05.05.000","steps":[
+                {{"op":"renew","itemnumber":100,"at":"2026-12-15 10:00","answer":"too_many","balance_cents":400}},
+                {{"op":"checkin","itemnumber":100,"at":"2026-12-15 10:01","answer":"{checkin}","balance_cents":400}},
+                {{"op":"pay","borrowernumber":1,"amount_cents":150,"at":"2026-12-15 10:02","answer":"ok","balance_cents":{owed_after_paying}}},
+                {{"op":"checkin","itemnumber":4242,"at":"2026-12-15 10:03","answer":"unknown","balance_cents":null}}
+            ]}}"#
+        )
+    };
+    let refused = elzevir(&["desk-day", "--data-dir", data, "day.json"]);
+    assert!(!refused.status.success());
+    assert!(
+        text(&refused.stderr).contains("--on-a-copy"),
+        "{}",
+        text(&refused.stderr)
+    );
+
+    let different = path(dir, "day.json");
+    std::fs::write(&different, day("ok; Waiting borrowernumber 1", 300)).unwrap();
+    let copy = path(dir, "copy");
+    copy_dir(Path::new(data), Path::new(&copy));
+    let run = elzevir(&["desk-day", "--data-dir", &copy, "--on-a-copy", &different]);
+    assert!(!run.status.success());
+    let report = text(&run.stdout);
+    for line in [
+        "Koha 26.05.05.000: 4 steps, 1 the same, 3 different",
+        "  DIFFERENT step 2 (checkin): Koha ok; Waiting borrowernumber 1 (owes 400), \
+         Elzevir ok; Reserved borrowernumber 2 (owes 400)",
+        "  DIFFERENT step 3 (pay): Koha ok (owes 300), Elzevir ok (owes 250)",
+        "  DIFFERENT step 4 (checkin): Koha unknown, Elzevir the Item 4242 did not come",
+    ] {
+        assert!(
+            report.lines().any(|found| found == line),
+            "{line} not in\n{report}"
+        );
+    }
+
+    let same = path(dir, "same.json");
+    std::fs::write(
+        &same,
+        day("ok; Reserved borrowernumber 2", 250).replace(
+            r#",
+                {"op":"checkin","itemnumber":4242,"at":"2026-12-15 10:03","answer":"unknown","balance_cents":null}"#,
+            "",
+        ),
+    )
+    .unwrap();
+    let run = elzevir(&["desk-day", "--data-dir", data, "--on-a-copy", &same]);
+    assert!(
+        run.status.success(),
+        "{}{}",
+        text(&run.stdout),
+        text(&run.stderr)
+    );
+    assert_eq!(
+        text(&run.stdout),
+        "Koha 26.05.05.000: 3 steps, 3 the same, 0 different\n"
+    );
+}
+
+/// A copy of a data folder, files only, one level deep.
+fn copy_dir(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        if entry.file_type().unwrap().is_file() {
+            std::fs::copy(entry.path(), to.join(entry.file_name())).unwrap();
+        }
     }
 }
 

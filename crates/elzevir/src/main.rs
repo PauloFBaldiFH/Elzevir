@@ -22,6 +22,7 @@ mod cloud_cli;
 mod cloud_plans;
 mod cloudflare;
 mod config;
+mod desk_day_cli;
 mod desktop;
 mod diagnostic_logs;
 mod diagnostics;
@@ -196,6 +197,9 @@ enum Command {
     /// Compares Koha's own due dates and fines on a copy of the library with the Elzevir's
     /// on the same copy after the switch.
     ParityKoha(parity_cli::ParityKohaArgs),
+    /// Replays on the switched copy the desk day Koha did on the same copy, and compares
+    /// each step. Writes to the data directory.
+    DeskDay(desk_day_cli::DeskDayArgs),
 }
 
 #[derive(Subcommand)]
@@ -285,6 +289,7 @@ fn main() -> ExitCode {
         Command::SwitchFromKoha(args) => switch_cli::run(&args),
         Command::VerifyKoha(args) => verify_cli::run(&args),
         Command::ParityKoha(args) => parity_cli::run(&args),
+        Command::DeskDay(args) => desk_day_cli::run(&args),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,

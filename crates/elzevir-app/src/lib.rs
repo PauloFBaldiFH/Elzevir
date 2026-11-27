@@ -15,6 +15,7 @@ pub mod codes;
 pub mod commands;
 pub mod creating;
 pub mod description;
+pub mod desk_day;
 pub mod drafts;
 pub mod editing;
 pub mod export;

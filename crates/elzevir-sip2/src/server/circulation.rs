@@ -301,26 +301,10 @@ fn confirmation_refusal(confirms: &[Confirm]) -> Result<Option<String>, String> 
                 );
             }
             Confirm::Debt(_) => return Err("Outstanding Fines block issue".to_owned()),
-            other => return Err(format!("Item cannot be issued: {}", confirm_key(other))),
+            other => return Err(format!("Item cannot be issued: {}", other.koha_key())),
         }
     }
     blocked.map_or(Ok(message), Err)
-}
-
-/// The name Koha gives a confirmation.
-const fn confirm_key(confirm: &Confirm) -> &'static str {
-    match confirm {
-        Confirm::Renew => "RENEW_ISSUE",
-        Confirm::IssuedToAnother => "ISSUED_TO_ANOTHER",
-        Confirm::Debt(_) => "DEBT",
-        Confirm::PatronCannotBorrow => "PATRON_CANT",
-        Confirm::TooMany(_) => "TOO_MANY",
-        Confirm::NotForLoan(_) => "NOT_FOR_LOAN_FORCING",
-        Confirm::Lost(_) => "ITEM_LOST",
-        Confirm::Held(HeldFor::Waiting) => "RESERVE_WAITING",
-        Confirm::Held(HeldFor::InTransit) => "TRANSFERRED",
-        Confirm::Held(HeldFor::Reserved) => "RESERVED",
-    }
 }
 
 /// The screen message of a checkout the desk refused.
@@ -344,16 +328,11 @@ fn checkout_message(refusal: &CirculationRefusal) -> String {
     }
 }
 
-/// The name Koha gives a reason a checkout is impossible.
+/// The first name Koha gives a reason a checkout is impossible.
 const fn impossible_key(reason: &Impossible) -> &'static str {
-    match reason {
-        Impossible::Suspended(_) => "DEBARRED",
-        Impossible::PatronExpired => "EXPIRED",
-        Impossible::Debt(_) => "DEBT",
-        Impossible::TooMany(_) => "TOO_MANY",
-        Impossible::NotForLoan(_) => "NOT_FOR_LOAN",
-        Impossible::Withdrawn => "WTHDRAWN",
-        Impossible::Restricted => "RESTRICTED",
+    match reason.koha_keys().first() {
+        Some(key) => key,
+        None => "UNKNOWN",
     }
 }
 

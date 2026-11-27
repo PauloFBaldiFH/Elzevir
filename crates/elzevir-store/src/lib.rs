@@ -24,6 +24,7 @@ mod catalog;
 mod circulation_rules;
 mod codes;
 mod config;
+mod desk_day;
 mod digest;
 mod editing;
 mod editor;
