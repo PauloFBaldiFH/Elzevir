@@ -12,7 +12,7 @@
   <label for="checkin-desk">{{ t.get("circulation-desk") }}</label>
   <select id="checkin-desk" name="desk">{% for desk in desks %}<option value="{{ desk.id }}"{% if desk.selected %} selected{% endif %}>{{ desk.name }}</option>{% endfor %}</select>
 </form>
-<p class="form-hint">{{ t.get("checkin-hint") }}</p>
+<p class="form-hint">{{ t.get("checkin-hint") }} <a href="/equipe/circulacao/exemplar">{{ t.get("item-status-title") }}</a></p>
 {% for notice in notices %}<p class="codes-alert{% if notice.refused %} codes-refused{% endif %}" role="{% if notice.refused %}alert{% else %}status{% endif %}">{{ notice.text }}</p>{% endfor %}
 {% if let Some(aside) = aside %}<form method="post" action="/equipe/circulacao/devolucao/reserva" class="hold-aside">
   <input type="hidden" name="csrf" value="{{ csrf }}">

@@ -154,8 +154,8 @@
       "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
     },
     "AllowHoldsOnDamagedItems": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Padrão do Koha (ligado): exemplar danificado pode ser reservado e atende reservas (lost-items.md, item 7)."
     },
     "AllowHoldsOnPatronsPossessions": {
       "destino": "revisar",
@@ -1691,8 +1691,8 @@
       "nota": "Sem bloqueio de conta: o leitor vencido não entra no OPAC pela validade, e a anonimização segue [privacy] (docs/specs/circulacao/lgpd.md, item 14)."
     },
     "LostChargesControl": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Padrão do Koha (ItemHomeLibrary com holdingbranch): a cobrança da perda é da unidade onde o exemplar está (lost-items.md, item 4)."
     },
     "makePreviousSerialAvailable": {
       "destino": "fora-v1",
@@ -2681,8 +2681,8 @@
       "nota": "Seriados não entram na v1."
     },
     "PreventWithdrawingItemsStatus": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Padrão do Koha (vazio): retirar é sempre permitido (lost-items.md, item 6)."
     },
     "previousIssuesDefaultSortOrder": {
       "destino": "revisar",
@@ -3584,8 +3584,8 @@
       "nota": "Já existe como regra de circulação `daysmode` em $RULE_KINDS; a preferência vira o valor padrão."
     },
     "useDefaultReplacementCost": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Padrão do Koha (desligado); fora desta versão (lost-items.md, §6)."
     },
     "useDischarge": {
       "destino": "revisar",
@@ -3652,12 +3652,12 @@
       "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
     },
     "WhenLostChargeReplacementFee": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Padrão do Koha (ligado): marcar como perdido um exemplar emprestado cobra a reposição (lost-items.md, item 4)."
     },
     "WhenLostForgiveFine": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Padrão do Koha (desligado): a multa do exemplar perdido fica LOST, sem perdão (lost-items.md, item 4)."
     },
     "XSLTDetailsDisplay": {
       "destino": "interface",

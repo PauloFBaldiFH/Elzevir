@@ -316,6 +316,7 @@ pub(crate) fn checkin(connection: &Connection, request: &CheckinRequest) -> Appl
     connection
         .execute(
             "UPDATE items SET holding_branch = ?2, lost = CASE WHEN ?3 THEN 0 ELSE lost END,
+                              lost_on = CASE WHEN ?3 THEN NULL ELSE lost_on END,
                               row_version = row_version + 1
              WHERE id = ?1",
             params![item.id, request.desk.0, found],

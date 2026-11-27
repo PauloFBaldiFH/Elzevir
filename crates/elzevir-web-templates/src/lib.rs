@@ -56,6 +56,7 @@ mod staff_circulation_rules;
 mod staff_import;
 mod staff_inventory;
 mod staff_item_grid;
+mod staff_item_status;
 mod staff_notice_rules;
 mod staff_patrons;
 mod staff_record_fields;
@@ -88,6 +89,9 @@ pub use staff_inventory::{
 };
 pub use staff_item_grid::{
     GridCell, GridColumn, GridList, GridOption, GridRow, ItemGrid, SuggestedCallNumber,
+};
+pub use staff_item_status::{
+    ItemStatusView, StaffItemStatus, StaffStatusNames, StatusForm, StatusKindNames,
 };
 pub use staff_notice_rules::{
     HoldNoticeRow, NoticeLevelRow, NoticeRuleLine, NoticeTextForm, PrintedNotice, StaffNoticeRules,

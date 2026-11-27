@@ -61,37 +61,38 @@ fn loans_out(connection: &Connection, lost_status: i64) -> rusqlite::Result<Vec<
         .collect()
 }
 
-/// Charges the patron for the lost Item, once per loan; returns whether anything was
-/// charged.
+/// Charges the patron for the lost Item, once per loan, and returns what was charged.
 ///
 /// Koha: `C4::Accounts::chargelostitem`, with the branch of `LostChargesControl`
 /// `ItemHomeLibrary` and `HomeOrHoldingBranch` `holdingbranch`.
-fn charge_lost(
+pub(crate) fn charge_lost(
     connection: &Connection,
     rules: &[CirculationRule],
-    loan: &LoanOut,
+    about: &OverdueLoan,
+    policy: PolicyId,
+    replacement_price: Option<Money>,
     at: &str,
-) -> rusqlite::Result<bool> {
+) -> rusqlite::Result<Vec<(DebitType, Money)>> {
     let charged_before: bool = connection.query_row(
         "SELECT EXISTS (SELECT 1 FROM account_lines WHERE loan_id = ?1 AND debit_type = ?2)",
-        params![loan.about.loan, DebitType::Lost.code()],
+        params![about.loan, DebitType::Lost.code()],
         |row| row.get(0),
     )?;
     if charged_before {
-        return Ok(false);
+        return Ok(Vec::new());
     }
     let scope = RuleScopeKey {
-        branch: Some(loan.about.branch),
+        branch: Some(about.branch),
         category: None,
-        policy: Some(loan.policy),
+        policy: Some(policy),
     };
     let fee = effective_rule(rules, RuleKind::LostItemProcessingFee, &scope)
         .and_then(|rule| rule_money(&rule.value));
-    let charges = lost_charges(fee, loan.replacement_price);
+    let charges = lost_charges(fee, replacement_price);
     for (kind, amount) in &charges {
-        add_debit(connection, &loan.about, *kind, None, *amount, at)?;
+        add_debit(connection, about, *kind, None, *amount, at)?;
     }
-    Ok(!charges.is_empty())
+    Ok(charges)
 }
 
 /// Applies `circ.mark_long_overdue`: every Item on loan long past its due date at `at`
@@ -114,8 +115,10 @@ pub(crate) fn mark_long_overdue(
         }
         connection
             .execute(
-                "UPDATE items SET lost = ?2, row_version = row_version + 1 WHERE id = ?1",
-                params![loan.about.item, settings.lost_status],
+                "UPDATE items SET lost = ?2, lost_on = coalesce(lost_on, ?3),
+                                  row_version = row_version + 1
+                 WHERE id = ?1",
+                params![loan.about.item, settings.lost_status, when],
             )
             .map_err(storage)?;
         marked.lost += 1;
@@ -128,7 +131,16 @@ pub(crate) fn mark_long_overdue(
                 &when,
             )
             .map_err(storage)?;
-            if charge_lost(connection, &rules, &loan, &when).map_err(storage)? {
+            let charged = charge_lost(
+                connection,
+                &rules,
+                &loan.about,
+                loan.policy,
+                loan.replacement_price,
+                &when,
+            )
+            .map_err(storage)?;
+            if !charged.is_empty() {
                 marked.charged += 1;
             }
         }

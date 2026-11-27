@@ -32,6 +32,12 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &CirculationCommand) -> Applied {
         CirculationCommand::Checkin(request) => crate::returns::checkin(tx.connection(), request),
         CirculationCommand::Renew(request) => crate::renewals::renew(tx.connection(), request),
         CirculationCommand::Pay(request) => crate::accounts::pay(tx.connection(), request),
+        CirculationCommand::SetItemStatus(change) => {
+            crate::item_status::set_status(tx.connection(), change)
+        }
+        CirculationCommand::ChangeStatusName(change) => {
+            crate::item_status::change_name(tx.connection(), change)
+        }
         CirculationCommand::PlaceHold(request) => {
             crate::holds::place_hold(tx.connection(), request)
         }

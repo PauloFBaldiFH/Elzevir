@@ -1,0 +1,41 @@
+{% extends "staff_base.html" %}
+{% block scope %}devolucao{% endblock %}
+{% block title %}{{ t.get("status-names-title") }}{% endblock %}
+{% block content %}
+<div class="patrons status-names">
+<p><a href="/equipe/circulacao/exemplar">{{ t.get("item-status-title") }}</a></p>
+<h1>{{ t.get("status-names-title") }}</h1>
+<p class="form-hint">{{ t.get("status-names-hint") }}</p>
+{% for notice in notices %}<p class="codes-alert{% if notice.refused %} codes-refused{% endif %}" role="{% if notice.refused %}alert{% else %}status{% endif %}">{{ notice.text }}</p>{% endfor %}
+{% for kind in kinds %}
+<section aria-labelledby="names-{{ kind.kind }}">
+  <h2 id="names-{{ kind.kind }}">{{ kind.name }}</h2>
+  <table class="registry-table">
+    <thead><tr><th scope="col">{{ t.get("status-names-number") }}</th><th scope="col">{{ t.get("status-names-label") }}</th><th scope="col"></th></tr></thead>
+    <tbody>
+    {% for (number, label) in kind.names %}
+    <tr>
+      <td>{{ number }}</td>
+      <td>{{ label }}</td>
+      <td><form method="post" action="/equipe/circulacao/situacoes">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="kind" value="{{ kind.kind }}">
+        <input type="hidden" name="number" value="{{ number }}">
+        <input type="hidden" name="remove" value="1">
+        <button type="submit" class="quiet">{{ t.get("status-names-remove") }}</button>
+      </form></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <form method="post" action="/equipe/circulacao/situacoes" class="registry-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="kind" value="{{ kind.kind }}">
+    <label>{{ t.get("status-names-number") }} <input type="number" name="number" min="1" max="99" required></label>
+    <label>{{ t.get("status-names-label") }} <input type="text" name="label" maxlength="80" required></label>
+    <button type="submit">{{ t.get("registries-save") }}</button>
+  </form>
+</section>
+{% endfor %}
+</div>
+{% endblock %}

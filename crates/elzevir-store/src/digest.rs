@@ -37,10 +37,15 @@ pub(crate) fn database(connection: &Connection) -> Result<String, crate::StoreEr
         let columns: Vec<String> = column_names(connection, &table)?
             .into_iter()
             // When a command ran is not content: two runs of the same import differ in it.
-            // Nor is when an Item was last seen on the shelf (catalogo/inventario.md).
+            // Nor is when an Item was last seen on the shelf (catalogo/inventario.md), or
+            // when its statuses last changed (circulacao/lost-items.md).
             .filter(|column| {
                 !(table == "audit_log" && column == "at"
-                    || table == "items" && column == "last_seen")
+                    || table == "items"
+                        && matches!(
+                            column.as_str(),
+                            "last_seen" | "lost_on" | "damaged_on" | "withdrawn_on"
+                        ))
             })
             .collect();
         let list = columns
@@ -67,7 +72,7 @@ fn tables(connection: &Connection) -> Result<Vec<String>, rusqlite::Error> {
         // The team's saved lists and notice board, the patrons, their restrictions, accounts, holds and notices, the circulation rules,
         // the calendars, the loans and the transfers are not catalog content: a new table of theirs must not move the digest of an import.
         // The OAI-PMH datestamps follow the clock, not the records; the Koha keys are patrons'.
-        // The additional patron fields are patrons' too.
+        // The additional patron fields are patrons' too; the status names are circulation's.
         "SELECT name FROM sqlite_master
          WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT GLOB 'repo_*' AND name NOT GLOB 'patron_field*'
            AND name NOT IN ('saved_lists', 'saved_list_families', 'patrons',
@@ -78,6 +83,7 @@ fn tables(connection: &Connection) -> Result<Vec<String>, rusqlite::Error> {
                             'holds', 'ended_holds', 'overdue_notice_rules',
                             'notices', 'notice_items', 'daily_runs',
                             'hold_notice_preferences', 'notice_texts', 'board_notes',
+                            'item_status_names',
                             'instance_datestamps', 'koha_keys')
          ORDER BY name",
     )?;
