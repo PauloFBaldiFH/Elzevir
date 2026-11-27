@@ -28,6 +28,44 @@ pub enum Terminator {
     Cr,
 }
 
+/// How a response's text becomes bytes.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Encoding {
+    /// What Koha writes when the account sets no `encoding`: Perl prints the text as
+    /// Latin-1, or as UTF-8 when a character does not fit in one byte.
+    #[default]
+    Latin1,
+    /// UTF-8 (Koha: `encoding="utf8"`).
+    Utf8,
+}
+
+impl Encoding {
+    /// The bytes sent for `text`.
+    fn bytes(self, text: &str) -> Vec<u8> {
+        match self {
+            Self::Latin1 if text.chars().all(|c| u32::from(c) <= 0xFF) => {
+                text.chars().map(low_byte).collect()
+            }
+            Self::Latin1 | Self::Utf8 => text.as_bytes().to_vec(),
+        }
+    }
+
+    /// The bytes the checksum adds up. Without `encoding`, Koha sums the characters,
+    /// each cut to its low byte (`unpack('%16C*')`), even when Perl then prints UTF-8.
+    fn summed(self, text: &str) -> Vec<u8> {
+        match self {
+            Self::Latin1 => text.chars().map(low_byte).collect(),
+            Self::Utf8 => text.as_bytes().to_vec(),
+        }
+    }
+}
+
+/// The low byte of a character's code.
+fn low_byte(c: char) -> u8 {
+    let [low, ..] = u32::from(c).to_le_bytes();
+    low
+}
+
 /// What a message read asks of the server.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Received {
@@ -42,6 +80,7 @@ pub enum Received {
 #[derive(Debug)]
 pub struct Channel {
     terminator: Terminator,
+    encoding: Encoding,
     version: Version,
     error_detection: bool,
     sequence: u8,
@@ -60,6 +99,7 @@ impl Channel {
     pub const fn new(terminator: Terminator) -> Self {
         Self {
             terminator,
+            encoding: Encoding::Latin1,
             version: Version::V1,
             error_detection: false,
             sequence: b'0',
@@ -70,6 +110,11 @@ impl Channel {
     /// Ends the next responses with `terminator` (the terminal signed in).
     pub const fn set_terminator(&mut self, terminator: Terminator) {
         self.terminator = terminator;
+    }
+
+    /// How the responses of the terminal that signed in become bytes.
+    pub const fn set_encoding(&mut self, encoding: Encoding) {
+        self.encoding = encoding;
     }
 
     /// The protocol version now.
@@ -148,7 +193,11 @@ impl Channel {
                     let body = last.get(..last.len() - 9).unwrap_or_default().to_owned();
                     self.write(body)
                 }
-                _ => raw(&last),
+                _ => {
+                    let mut bytes = self.encoding.bytes(&last);
+                    bytes.push(b'\r');
+                    bytes
+                }
             },
         }
     }
@@ -160,10 +209,10 @@ impl Channel {
             text.push_str("AY");
             text.push(char::from(self.sequence));
             text.push_str("AZ");
-            let sum = checksum(text.as_bytes());
+            let sum = checksum(&self.encoding.summed(&text));
             text.push_str(&hexadecimal(sum));
         }
-        let mut bytes = text.clone().into_bytes();
+        let mut bytes = self.encoding.bytes(&text);
         self.last_response = Some(text);
         bytes.extend_from_slice(match self.terminator {
             Terminator::CrLf => b"\r\n",

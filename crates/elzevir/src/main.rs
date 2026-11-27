@@ -581,7 +581,13 @@ impl Listeners {
         instance: &str,
     ) -> Result<Self, String> {
         Ok(Self {
-            _sip2: sip2_server::open(loaded.sip2.as_ref(), store, &loaded.time_zone, instance)?,
+            _sip2: sip2_server::open(
+                loaded.sip2.as_ref(),
+                store,
+                &loaded.time_zone,
+                loaded.renewal_base,
+                instance,
+            )?,
             _z3950: z3950_server::open(loaded.z3950.as_ref(), store, index, instance)?,
         })
     }
@@ -702,6 +708,7 @@ fn serve_controlled(
                 author_table: loaded.author_table,
                 time_zone: loaded.time_zone,
                 patrons_suspend_holds: loaded.patrons_suspend_holds,
+                renewal_base: loaded.renewal_base,
                 ..WebConfig::default()
             },
             &settings.lang,

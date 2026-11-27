@@ -1,6 +1,6 @@
 # A staged desk day on both systems (v0)
 
-> Status: v0, task 6.4 of [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (Phase 6, approved by Paulo on 2026-11-27). Part a covers the circulation desk: checkout, checkin, renewal, hold and payment. Part b will cover the protocols and the OPAC (SIP2, OPAC search, Z39.50, SRU) on the same copy. Based on: [the switch](troca-do-koha.md), [parity on the switched copy](koha-parity.md), [checkout](../circulacao/emprestimo.md), [checkin](../circulacao/devolucao.md), [renewal](../circulacao/renovacao.md), [holds](../circulacao/reservas.md), [account](../circulacao/conta.md). Goal: **the same results, or each difference listed with its cause**.
+> Status: v0, task 6.4 of [doc 03](../../arquitetura/03-estrategia-reconstrucao.md) (Phase 6, approved by Paulo on 2026-11-27). Part a covers the circulation desk: checkout, checkin, renewal, hold and payment. Part b covers the protocols and the OPAC on the same copy, starting with SIP2 (item 11); OPAC search, Z39.50 and SRU follow. Based on: [the switch](troca-do-koha.md), [parity on the switched copy](koha-parity.md), [checkout](../circulacao/emprestimo.md), [checkin](../circulacao/devolucao.md), [renewal](../circulacao/renovacao.md), [holds](../circulacao/reservas.md), [account](../circulacao/conta.md). Goal: **the same results, or each difference listed with its cause**.
 
 Task 6.3 asked both systems questions about the loans of a copy, without changing anything. This step **does** the work of a day at the desk on both: the same list of actions, in the same order, on the same copy, and compares what each action gave. A rule that only shows itself after an earlier action (a fine charged at checkin that then blocks a checkout, a hold placed that then blocks a renewal) is caught here.
 
@@ -43,6 +43,13 @@ Task 6.3 asked both systems questions about the loans of a copy, without changin
    - balance: what the patron owes after the step.
 10. **Report:** how many steps, how many gave the same answer and the same balance, and each divergence by its position in the plan, with the kind of step and both answers. The values are keys, dates, priorities and amounts, never personal data. The command ends with an error when any step differs, so that a script can stop on it. A step that cannot be done on the Elzevir (the Item or the patron did not come) is a divergence, with that cause.
 
+### Part b: SIP2 on the same copy
+
+11. `tools/sip2-recorder/record.py` holds one self-check conversation (login, status, patron status and information, item information, checkout, renewal, checkin, each also with a wrong password or unknown barcode). It is recorded twice on the oracle VM: against Koha's SIP server on the copy, and against the Elzevir's `[sip2]` server on the folder switched from the same copy, with the same patron, Item and terminal login. The terminal on the Elzevir is a staff account with the circulation permission and the login of Koha's `SIPconfig.xml`; its unit is the switched branch of Koha's institution.
+12. The patron's password on the Elzevir is the one the switch brought, still Koha's bcrypt hash ([Koha patrons](leitores-do-koha.md), item 12a): the SIP2 server checks it as Koha does ([sip2](../circulacao/sip2.md), item 21).
+13. `tools/sip2-recorder/compare.py KOHA.json ELZEVIR.json --unit NAME=CODE --category NAME=CODE` compares the two recordings exchange by exchange. It leaves out what changes by the second (the times of day, and the checksum that covers them) and applies the approved deviations to Koha's side: the greeting and `BX` (DEV-0003, DEV-0004), and the unit and category written by name (DEV-0004). It prints how many exchanges are the same and each one that differs with both responses, and ends with an error when any differs.
+14. The patron is fictitious and created on the copy for the run; its password is generated on the VM and never leaves it, nor does the SIP account's. The recordings mask the card, the barcode, the logins, the passwords and the patron's personal fields.
+
 ## 2. Edge cases
 
 1. A step that fails on both systems for the same reason agrees: two `impossible DEBT` are the same answer.
@@ -62,6 +69,7 @@ Task 6.3 asked both systems questions about the loans of a copy, without changin
 `required` (circulation, fines and holds). Proof:
 - unit tests in `elzevir-app::desk_day`: reading the plan and Koha's output, the comparison of answers and balances, and the Koha keys of each refusal;
 - a test of the binary (`crates/elzevir/tests/cli.rs`): after the switch of the synthetic dump, a day built by hand from Koha's rules for that dump matches, and a changed answer or balance is a divergence;
+- `tools/tests/test_sip2_compare.py` for the SIP2 comparison, and `crates/elzevir/tests/sip2_server.rs` for a patron password still in Koha's hash;
 - the day run on the oracle: a backed-up copy, the day on Koha, the switch of the copy taken before the day, the day on the Elzevir, and the restore.
 
 ### First run on the oracle (2026-11-27)
@@ -83,8 +91,20 @@ The cause is the entry point. Koha's staff desk (`reserve/placerequest.pl`) only
 
 The same day was run again on the oracle after that change, with the same setup, backup and restore. `desk-day` found 17 of 17 steps the same.
 
+### SIP2 on the oracle (2026-11-27)
+
+The database was backed up. A fictitious patron (category B, branch MAIN) was created with a random password, and so was the SIP account of `SIPconfig.xml`, as a staff patron. Item 1 was picked as a free Item. Then the dump was taken. Koha's conversation was recorded, the dump was switched, and the Elzevir's conversation was recorded with a staff account of the same login. The Elzevir's `[sip2]` was set by hand with the currency of Koha's `BH` (`REA`, cut from `REAL`), because the switch does not bring the active currency.
+
+`compare.py`: 18 of the 26 exchanges were the same at first. The 8 differences had two causes:
+- The copy has `ManualRenewalPeriodBase` = `now`, and the Elzevir only knew how to count from the due date. The renewal answered 2026-12-28 instead of 2026-12-11, and that changed every later due date. Since then, `[circulation] renewal_base` follows the preference, and the switch brings it ([renewal](../circulacao/renovacao.md), item 5).
+- The title has accents. Koha, with no `encoding` on the login, writes Latin-1, while the Elzevir wrote UTF-8. Paulo decided on 2026-11-27 that the default follows Koha ([sip2](../circulacao/sip2.md), item 16a).
+
+The run also showed that the SIP2 server refused a patron password still in Koha's hash (item 12). That was fixed before the comparison.
+
+After these changes the same conversation was recorded again on the same copy, and `compare.py` found 26 of 26 exchanges the same. The database was then restored and the files were deleted.
+
 ## 5. Out of this version
 
-- SIP2, OPAC search, Z39.50 and SRU on the same copy (part b).
+- OPAC search, Z39.50 and SRU on the same copy (the rest of part b).
 - Writing off, lost Items, transfers between branches and setting a found hold aside at the desk.
 - Choosing the steps from the copy automatically: the plan is written by hand.

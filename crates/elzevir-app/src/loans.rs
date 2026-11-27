@@ -5,6 +5,7 @@
 use elzevir_domain::catalog::{BranchId, ItemId, Money};
 use elzevir_domain::checkin::{Destination, LoanOutcome, LostOutcome};
 use elzevir_domain::checkout::{Alert, Confirm, Impossible};
+use elzevir_domain::circulation::RenewalBase;
 use elzevir_domain::patron::PatronId;
 use elzevir_domain::renewal::RenewalRefusal;
 use elzevir_domain::suspension::{RestrictionKind, SuspensionEnd};
@@ -166,6 +167,10 @@ pub struct RenewRequest {
     /// restriction may hold (docs/specs/opac/conta-do-leitor.md). `None` at the desk.
     #[serde(default)]
     pub by_patron: Option<PatronId>,
+    /// Where the new period starts: `[circulation] renewal_base` of `elzevir.toml`
+    /// (Koha: `ManualRenewalPeriodBase`).
+    #[serde(default)]
+    pub base: RenewalBase,
 }
 
 /// A renewal that happened.

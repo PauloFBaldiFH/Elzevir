@@ -102,6 +102,9 @@ pub struct WebConfig {
     /// Whether patrons suspend and resume their own holds on the OPAC and the API
     /// (docs/specs/opac/conta-do-leitor.md, item 25a; Koha: `SuspendHoldsOpac`).
     pub patrons_suspend_holds: bool,
+    /// Where a renewal's new period starts (docs/specs/circulacao/renovacao.md, item 5;
+    /// Koha: `ManualRenewalPeriodBase`).
+    pub renewal_base: elzevir_domain::circulation::RenewalBase,
 }
 
 impl Default for WebConfig {
@@ -113,6 +116,7 @@ impl Default for WebConfig {
             author_table: None,
             time_zone: jiff::tz::TimeZone::UTC,
             patrons_suspend_holds: true,
+            renewal_base: elzevir_domain::circulation::RenewalBase::DueDate,
         }
     }
 }

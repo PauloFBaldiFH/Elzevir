@@ -218,6 +218,7 @@ fn renew(library: &Library, barcode: &str, at: &str) -> Result<(Zoned, u32), Ren
             override_limit: false,
             at: zoned(at),
             by_patron: None,
+            base: elzevir_domain::circulation::RenewalBase::DueDate,
         }),
     ) {
         Ok(WriteOutput::Circulation(CirculationOutput::Renewed(done))) => {

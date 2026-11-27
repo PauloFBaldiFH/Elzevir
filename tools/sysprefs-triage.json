@@ -1708,8 +1708,9 @@
       "nota": "Decidir na spec de cada serviço (OAI-PMH, SRU, REST)."
     },
     "ManualRenewalPeriodBase": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "config",
+      "campo": "[circulation] renewal_base",
+      "nota": "Ver docs/specs/circulacao/renovacao.md, item 5."
     },
     "MARCAuthorityControlField008": {
       "destino": "revisar",

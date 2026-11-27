@@ -30,7 +30,7 @@ use elzevir_app::commands::{StaffCommand, WriteCommand, WriteOutput};
 use elzevir_app::patrons::{PatronCommand, PatronFields, PatronOutput, ReadingHistory};
 use elzevir_app::staff::{Permission, hash_password};
 use elzevir_domain::account::DebtSettings;
-use elzevir_sip2::{Desk, Terminal, Terminator, checksum, serve, verify_checksum};
+use elzevir_sip2::{Desk, Encoding, Terminal, Terminator, checksum, serve, verify_checksum};
 use jiff::Zoned;
 use jiff::civil::date;
 use oracle::{Library, RecordedRules, submit};
@@ -238,12 +238,14 @@ fn every_recorded_message_is_answered_as_koha_answered_it() {
         loans: Arc::clone(&store) as _,
         self_check: Arc::clone(&store) as _,
         debt: DebtSettings::default(),
+        renewal_base: elzevir_domain::circulation::RenewalBase::DueDate,
         currency: Some("REA".to_owned()),
         terminals: vec![Terminal {
             login: "LOGIN".to_owned(),
             unit: library.branches[&recording.institution],
             institution: recording.institution.clone(),
             terminator: Terminator::Cr,
+            encoding: Encoding::Latin1,
         }],
         clock: Arc::new(|| {
             "2026-11-26T07:34:40-03:00[America/Sao_Paulo]"

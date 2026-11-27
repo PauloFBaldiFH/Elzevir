@@ -17,7 +17,7 @@ use elzevir_domain::account::DebtSettings;
 use elzevir_domain::catalog::BranchId;
 use jiff::Zoned;
 
-use crate::channel::{Channel, Received, Terminator};
+use crate::channel::{Channel, Encoding, Received, Terminator};
 use crate::frame::Framer;
 use crate::request::{Login, Request};
 use crate::response::{AcsStatus, EndSessionResponse, Response};
@@ -36,6 +36,8 @@ pub struct Terminal {
     pub institution: String,
     /// How its responses end.
     pub terminator: Terminator,
+    /// How its responses become bytes.
+    pub encoding: Encoding,
 }
 
 /// One message a terminal sent, for the log: no passwords, cards or barcodes.
@@ -64,6 +66,8 @@ pub struct Desk {
     pub self_check: Arc<dyn SelfCheck>,
     /// The library's debt settings.
     pub debt: DebtSettings,
+    /// Where a renewal's new period starts (Koha: `ManualRenewalPeriodBase`).
+    pub renewal_base: elzevir_domain::circulation::RenewalBase,
     /// The currency of `BH`.
     pub currency: Option<String>,
     /// The terminals allowed to sign in.
@@ -178,6 +182,7 @@ fn sign_in<'desk>(
     let ok = signed.is_some();
     if let Some(terminal) = signed.as_ref().map(|session| session.terminal) {
         channel.set_terminator(terminal.terminator);
+        channel.set_encoding(terminal.encoding);
     }
     (desk.log)(SipEvent {
         terminal: signed

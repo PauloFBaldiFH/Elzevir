@@ -239,6 +239,7 @@ fn renew_as_checkout(
         override_limit: false,
         at: now.clone(),
         by_patron: None,
+        base: session.desk.renewal_base,
     });
     Ok(match circulate(session, command)? {
         Ok(CirculationOutput::Renewed(renewed)) => Ok(CheckedOut {
@@ -541,6 +542,7 @@ pub(crate) fn renew(
         override_limit: false,
         at: now.clone(),
         by_patron: None,
+        base: session.desk.renewal_base,
     });
     Ok(match circulate(session, command)? {
         Ok(CirculationOutput::Renewed(renewed)) => respond(

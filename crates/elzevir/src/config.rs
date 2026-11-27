@@ -418,6 +418,9 @@ struct Circulation {
     /// Holds (docs/specs/circulacao/reservas.md).
     #[serde(default)]
     holds: Holds,
+    /// Where a renewal's new period starts, `due_date` or `now`; `due_date` when absent
+    /// (docs/specs/circulacao/renovacao.md, item 5; Koha: `ManualRenewalPeriodBase`).
+    renewal_base: Option<elzevir_domain::circulation::RenewalBase>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -514,6 +517,8 @@ pub(crate) struct Loaded {
     pub(crate) expire_waiting_holds: bool,
     /// Whether patrons suspend and resume their own holds.
     pub(crate) patrons_suspend_holds: bool,
+    /// Where a renewal's new period starts.
+    pub(crate) renewal_base: elzevir_domain::circulation::RenewalBase,
     /// How long history and expired patrons are kept.
     pub(crate) retention: elzevir_app::patrons::Retention,
     /// The mail server, when notices go out by e-mail.
@@ -622,6 +627,7 @@ pub(crate) fn from_text(
         long_overdue,
         expire_waiting_holds: config.circulation.holds.expire_waiting.unwrap_or(false),
         patrons_suspend_holds: config.circulation.holds.patrons_suspend.unwrap_or(true),
+        renewal_base: config.circulation.renewal_base.unwrap_or_default(),
         retention,
         mail,
         templates,
@@ -830,6 +836,18 @@ mod tests {
         )
         .unwrap();
         assert!(load(dir.path()).unwrap().expire_waiting_holds);
+    }
+
+    #[test]
+    fn a_renewal_starts_at_the_due_date_unless_set_to_now() {
+        use elzevir_domain::circulation::RenewalBase;
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(load(dir.path()).unwrap().renewal_base, RenewalBase::DueDate);
+        let path = dir.path().join("elzevir.toml");
+        std::fs::write(&path, "[circulation]\nrenewal_base = \"now\"\n").unwrap();
+        assert_eq!(load(dir.path()).unwrap().renewal_base, RenewalBase::Now);
+        std::fs::write(&path, "[circulation]\nrenewal_base = \"today\"\n").unwrap();
+        assert!(load(dir.path()).is_err());
     }
 
     #[test]
