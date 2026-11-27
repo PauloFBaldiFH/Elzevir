@@ -371,8 +371,7 @@ const MIGRATIONS: &[&str] = &[
     // source records.
     "SELECT 1;",
     // 23: the extent keeps `300 $a $f $g`; physical details, dimensions and accompanying
-    // material become statements (item 29, part 5e). The migration fills them from the
-    // stored source records.
+    // material become statements (item 29, part 5e), filled from the stored source records.
     "SELECT 1;",
     // 24: the administrative metadata (Leader/05, `001`, `003`, `005`, `008/00-05`, `040`)
     // becomes a statement of the Instance (item 29, part 5e); the migration only fills it
@@ -843,6 +842,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("returned_categories.sql"),
     include_str!("hold_suspension.sql"),
     include_str!("patron_fields.sql"),
+    include_str!("koha_attribute_keys.sql"),
 ];
 
 /// The migration that creates `match_keys`.

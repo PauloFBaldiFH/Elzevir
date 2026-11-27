@@ -59,6 +59,7 @@ const fn names(table: Table) -> (&'static str, &'static str) {
         Table::Rules => ("circulation rules", "id"),
         Table::RepeatableHolidays => ("weekly and annual closings", "repeatable_holidays id"),
         Table::SpecialHolidays => ("dated closings and exceptions", "special_holidays id"),
+        Table::AttributeTypes => ("patron attribute types", "code"),
     }
 }
 
@@ -78,6 +79,10 @@ fn cause(cause: &Cause) -> String {
         Cause::Rule(why) => crate::switch_cli::rule_leftover(*why).to_owned(),
         Cause::UnknownCode(column) => format!("{column} not in the Elzevir"),
         Cause::Holiday(why) => crate::switch_cli::holiday_leftover(*why).to_owned(),
+        Cause::Attribute(why) => format!(
+            "a value left out: {}",
+            crate::koha_attributes_cli::leftover(*why)
+        ),
     }
 }
 

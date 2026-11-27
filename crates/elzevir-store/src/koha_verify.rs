@@ -6,6 +6,8 @@ use elzevir_app::holds::Suspension;
 use elzevir_app::koha_verify::{
     Footprint, FoundHold, FoundItem, FoundLoan, FoundPatron, HoldState,
 };
+use std::collections::BTreeMap;
+
 use rusqlite::{Connection, params};
 
 use crate::StoreError;
@@ -33,14 +35,13 @@ impl crate::ElzevirStore {
                 item_types: item_types(connection)?,
                 rules: rules(connection)?,
                 holidays: holidays(connection)?,
+                attributes: attributes(connection)?,
             })
         })
     }
 }
 
-fn branches(
-    connection: &Connection,
-) -> Result<std::collections::BTreeMap<String, String>, StoreError> {
+fn branches(connection: &Connection) -> Result<BTreeMap<String, String>, StoreError> {
     let mut statement = connection.prepare(
         "SELECT k.code, b.name FROM koha_codes k JOIN branches b ON b.id = k.local_id
          WHERE k.kind = ?1",
@@ -64,9 +65,7 @@ fn categories(connection: &Connection) -> Result<std::collections::BTreeSet<Stri
     Ok(rows)
 }
 
-fn patrons(
-    connection: &Connection,
-) -> Result<std::collections::BTreeMap<String, FoundPatron>, StoreError> {
+fn patrons(connection: &Connection) -> Result<BTreeMap<String, FoundPatron>, StoreError> {
     let mut statement = connection.prepare(
         "SELECT k.koha_key, p.cardnumber,
                 (SELECT code FROM koha_codes WHERE kind = ?2 AND local_id = p.branch_id),
@@ -98,9 +97,7 @@ fn patrons(
     Ok(rows)
 }
 
-fn records(
-    connection: &Connection,
-) -> Result<std::collections::BTreeMap<String, usize>, StoreError> {
+fn records(connection: &Connection) -> Result<BTreeMap<String, usize>, StoreError> {
     let mut statement = connection.prepare(
         "SELECT external_id, count(DISTINCT instance_id) FROM import_identities
          WHERE entity = 'instance' AND system = 'koha.biblionumber' GROUP BY external_id",
@@ -114,9 +111,7 @@ fn records(
     Ok(rows)
 }
 
-fn items(
-    connection: &Connection,
-) -> Result<std::collections::BTreeMap<String, Vec<FoundItem>>, StoreError> {
+fn items(connection: &Connection) -> Result<BTreeMap<String, Vec<FoundItem>>, StoreError> {
     let mut statement = connection.prepare(
         "SELECT DISTINCT o.external_id,
                 (SELECT external_id FROM import_identities
@@ -131,8 +126,7 @@ fn items(
          WHERE o.system = 'koha.itemnumber'
          ORDER BY 1",
     )?;
-    let mut found: std::collections::BTreeMap<String, Vec<FoundItem>> =
-        std::collections::BTreeMap::new();
+    let mut found: BTreeMap<String, Vec<FoundItem>> = BTreeMap::new();
     let mut rows = statement.query(params![Coded::Branch as i64, Coded::Policy as i64])?;
     while let Some(row) = rows.next()? {
         found.entry(row.get(0)?).or_default().push(FoundItem {
@@ -146,9 +140,7 @@ fn items(
     Ok(found)
 }
 
-fn loans(
-    connection: &Connection,
-) -> Result<std::collections::BTreeMap<String, Vec<FoundLoan>>, StoreError> {
+fn loans(connection: &Connection) -> Result<BTreeMap<String, Vec<FoundLoan>>, StoreError> {
     let mut statement = connection.prepare(
         "SELECT DISTINCT o.external_id,
                 (SELECT koha_key FROM koha_keys WHERE kind = ?1 AND local_id = l.patron_id),
@@ -157,8 +149,7 @@ fn loans(
          WHERE o.system = 'koha.itemnumber'
          ORDER BY 1",
     )?;
-    let mut found: std::collections::BTreeMap<String, Vec<FoundLoan>> =
-        std::collections::BTreeMap::new();
+    let mut found: BTreeMap<String, Vec<FoundLoan>> = BTreeMap::new();
     let mut rows = statement.query(params![Keyed::Patron as i64])?;
     while let Some(row) = rows.next()? {
         found.entry(row.get(0)?).or_default().push(FoundLoan {
@@ -169,9 +160,7 @@ fn loans(
     Ok(found)
 }
 
-fn holds(
-    connection: &Connection,
-) -> Result<std::collections::BTreeMap<String, Vec<FoundHold>>, StoreError> {
+fn holds(connection: &Connection) -> Result<BTreeMap<String, Vec<FoundHold>>, StoreError> {
     let mut statement = connection.prepare(
         "SELECT (SELECT external_id FROM import_identities
                  WHERE instance_id = h.instance_id AND entity = 'instance'
@@ -180,8 +169,7 @@ fn holds(
                 h.found, h.priority, h.suspended, h.suspended_until
          FROM holds h ORDER BY record, h.priority, h.id",
     )?;
-    let mut found: std::collections::BTreeMap<String, Vec<FoundHold>> =
-        std::collections::BTreeMap::new();
+    let mut found: BTreeMap<String, Vec<FoundHold>> = BTreeMap::new();
     let mut rows = statement.query(params![Keyed::Patron as i64])?;
     while let Some(row) = rows.next()? {
         // A hold of a record that did not come from Koha has nothing to compare with.
@@ -215,9 +203,7 @@ fn holds(
     Ok(found)
 }
 
-fn accounts(
-    connection: &Connection,
-) -> Result<std::collections::BTreeMap<String, (i64, usize)>, StoreError> {
+fn accounts(connection: &Connection) -> Result<BTreeMap<String, (i64, usize)>, StoreError> {
     let mut statement = connection.prepare(
         "SELECT k.koha_key, sum(a.outstanding), count(*)
          FROM account_lines a JOIN koha_keys k ON k.kind = ?1 AND k.local_id = a.patron_id
@@ -235,9 +221,7 @@ fn accounts(
     Ok(rows)
 }
 
-fn returned(
-    connection: &Connection,
-) -> Result<std::collections::BTreeMap<String, bool>, StoreError> {
+fn returned(connection: &Connection) -> Result<BTreeMap<String, bool>, StoreError> {
     let mut statement = connection.prepare(
         "SELECT k.koha_key, r.patron_id IS NOT NULL
          FROM koha_keys k JOIN returned_loans r ON r.id = k.local_id WHERE k.kind = ?1",
@@ -263,7 +247,7 @@ fn item_types(connection: &Connection) -> Result<std::collections::BTreeSet<Stri
 
 fn rules(
     connection: &Connection,
-) -> Result<std::collections::BTreeMap<elzevir_app::koha_verify::RuleKey, String>, StoreError> {
+) -> Result<BTreeMap<elzevir_app::koha_verify::RuleKey, String>, StoreError> {
     let mut statement = connection.prepare(
         "SELECT CASE WHEN r.branch_id IS NULL THEN NULL ELSE coalesce(
                     (SELECT code FROM koha_codes WHERE kind = ?1 AND local_id = r.branch_id),
@@ -299,7 +283,7 @@ fn rules(
 /// The calendar of each branch that has a Koha code.
 fn holidays(
     connection: &Connection,
-) -> Result<std::collections::BTreeMap<String, Vec<elzevir_app::calendar::Holiday>>, StoreError> {
+) -> Result<BTreeMap<String, Vec<elzevir_app::calendar::Holiday>>, StoreError> {
     let mut statement = connection.prepare(
         "SELECT k.code, k.local_id FROM koha_codes k JOIN branches b ON b.id = k.local_id
          WHERE k.kind = ?1",
@@ -309,7 +293,7 @@ fn holidays(
             Ok((row.get(0)?, row.get(1)?))
         })?
         .collect::<rusqlite::Result<_>>()?;
-    let mut all = std::collections::BTreeMap::new();
+    let mut all = BTreeMap::new();
     for (code, branch) in branches {
         let entries = crate::calendar::read_holidays(connection, branch)?;
         if !entries.is_empty() {
@@ -317,4 +301,21 @@ fn holidays(
         }
     }
     Ok(all)
+}
+
+/// The fields that came from Koha's attribute types, by `code`, and how many values each
+/// holds (docs/specs/circulacao/patron-attributes.md, item 19).
+fn attributes(connection: &Connection) -> rusqlite::Result<BTreeMap<String, usize>> {
+    let mut statement = connection.prepare(
+        "SELECT k.koha_key,
+                (SELECT count(*) FROM patron_field_values v WHERE v.field_id = k.local_id)
+         FROM koha_keys k WHERE k.kind = 4",
+    )?;
+    let rows = statement.query_map([], |row| {
+        Ok((
+            row.get(0)?,
+            usize::try_from(row.get::<_, i64>(1)?).unwrap_or(0),
+        ))
+    })?;
+    rows.collect()
 }

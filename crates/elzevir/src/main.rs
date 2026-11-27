@@ -38,6 +38,7 @@ mod import_service;
 mod init;
 mod installation;
 mod institution_repository;
+mod koha_attributes_cli;
 mod koha_codes;
 mod koha_migration_cli;
 mod koha_prefs_cli;

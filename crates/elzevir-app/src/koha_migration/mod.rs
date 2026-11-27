@@ -20,6 +20,7 @@ use crate::patrons::{
 };
 
 mod accounts;
+mod attributes;
 mod calendar;
 mod circulation;
 mod dump;
@@ -29,6 +30,11 @@ mod rules;
 pub use accounts::{
     ACCOUNT_LINES_PER_COMMAND, AccountsRead, KohaAccount, KohaAccountBatch, KohaAccountLine,
     KohaAccountsMigrated, KohaOffset,
+};
+
+pub use attributes::{
+    AttributesRead, KohaAttributeValue, KohaAttributesBatch, KohaAttributesMigrated, KohaFieldType,
+    SETTINGS_NOT_KEPT, VALUES_PER_COMMAND, ValueLeftover,
 };
 
 pub use calendar::{
@@ -283,6 +289,15 @@ pub struct KohaPlan {
     pub holidays: Vec<KohaHoliday>,
     /// Calendar rows left out, by table and `id`.
     pub holidays_left: Vec<(HolidayTable, u64, HolidayLeftover)>,
+    /// The patron attribute types (patron-attributes.md, item 16).
+    pub attribute_types: Vec<KohaFieldType>,
+    /// The values the patrons hold.
+    pub attribute_values: Vec<KohaAttributeValue>,
+    /// What reading the attributes left out or changed.
+    pub attributes_read: AttributesRead,
+    /// The active currency, cut to the three letters SIP2 sends in `BH`
+    /// (patron-attributes.md, item 20).
+    pub sip2_currency: Option<String>,
 }
 
 /// A patron field, ordered for the report.
@@ -362,6 +377,8 @@ pub fn plan(input: impl BufRead, today: Date, zone: &TimeZone) -> Result<KohaPla
     history::read(&tables.rows, zone, &mut plan);
     rules::read(&tables.rows, &mut plan);
     calendar::read(&tables.rows, &mut plan);
+    attributes::read(&tables.rows, &mut plan);
+    plan.sip2_currency = attributes::active_currency(&tables.rows);
     Ok(plan)
 }
 

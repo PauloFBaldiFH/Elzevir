@@ -225,9 +225,14 @@ fn write_options(
     Ok(())
 }
 
-fn option_ids(connection: &Connection, field: PatronFieldId) -> Result<Vec<i64>, StoreError> {
-    let mut statement =
-        connection.prepare_cached("SELECT id FROM patron_field_options WHERE field_id = ?1")?;
+/// The options of `field`, in the library's order.
+pub(crate) fn option_ids(
+    connection: &Connection,
+    field: PatronFieldId,
+) -> Result<Vec<i64>, StoreError> {
+    let mut statement = connection.prepare_cached(
+        "SELECT id FROM patron_field_options WHERE field_id = ?1 ORDER BY position, id",
+    )?;
     let ids = statement.query_map([field.0], |row| row.get(0))?;
     Ok(ids.collect::<rusqlite::Result<Vec<i64>>>()?)
 }
