@@ -7,11 +7,11 @@ use elzevir_app::loans::{RenewRefusal, RenewRequest, Renewed, checked_barcode};
 use elzevir_domain::catalog::{BranchId, ItemId, Money, PolicyId};
 use elzevir_domain::checkout::loan_rule;
 use elzevir_domain::circulation::{RenewalBase, renewal_due};
-use elzevir_domain::circulation_rules::RuleScopeKey;
+use elzevir_domain::circulation_rules::{CirculationRule, RuleScopeKey};
 use elzevir_domain::due_date::{ConsiderLibraryHours, DueDateContext, LibraryHours};
 use elzevir_domain::hold::HoldItem;
 use elzevir_domain::patron::PatronId;
-use elzevir_domain::renewal::{RenewalFacts, RenewalSettings, can_renew};
+use elzevir_domain::renewal::{RenewalFacts, RenewalRefusal, RenewalSettings, can_renew};
 use jiff::Zoned;
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -69,6 +69,11 @@ fn find_loan(
     else {
         return Ok(Err(RenewRefusal::UnknownBarcode));
     };
+    Ok(loan_of_item(connection, item)?.ok_or(RenewRefusal::NotOnLoan))
+}
+
+/// The loan of the Item, if it is on loan.
+fn loan_of_item(connection: &Connection, item: i64) -> rusqlite::Result<Option<Loan>> {
     connection
         .query_row(
             "SELECT l.id, l.patron_id, l.due, l.renewals, l.on_site, i.holding_branch, i.policy_id,
@@ -92,7 +97,6 @@ fn find_loan(
             },
         )
         .optional()
-        .map(|loan| loan.ok_or(RenewRefusal::NotOnLoan))
 }
 
 /// Whether another loan of the patron was due before `now`.
@@ -128,7 +132,7 @@ fn balance(connection: &Connection, patron: PatronId) -> rusqlite::Result<Money>
 /// are off.
 fn on_hold(
     connection: &Connection,
-    rules: &[elzevir_domain::circulation_rules::CirculationRule],
+    rules: &[CirculationRule],
     loan: &Loan,
 ) -> rusqlite::Result<bool> {
     let on_item: bool = connection.query_row(
@@ -146,6 +150,57 @@ fn on_hold(
         policy: loan.policy,
     };
     Ok(hold_for_checkout(connection, rules, &item, loan.instance, loan.item_status)?.is_some())
+}
+
+/// Whether the loan may be renewed at `now`, by the rules at `at`.
+fn check(
+    connection: &Connection,
+    rules: &[CirculationRule],
+    loan: &Loan,
+    at: RuleScopeKey,
+    now: &Zoned,
+    override_limit: bool,
+) -> rusqlite::Result<Result<(), RenewalRefusal>> {
+    Ok(can_renew(
+        &RenewalFacts {
+            rules,
+            at,
+            due: loan.due.clone(),
+            renewals: loan.renewals,
+            on_site: loan.on_site,
+            other_overdue: other_overdue(connection, loan, now)?,
+            balance: balance(connection, loan.patron)?,
+            on_hold: on_hold(connection, rules, loan)?,
+            now: now.clone(),
+        },
+        &RenewalSettings::default(),
+        override_limit,
+    ))
+}
+
+/// Whether the loan of the Item may be renewed at `now`, as the staff desk asks it
+/// (without overriding the limit), writing nothing; `None` when the Item is not on loan
+/// or its patron is gone (koha-parity.md, item 7).
+///
+/// Koha: `C4::Circulation::CanBookBeRenewed`.
+pub(crate) fn staff_renewal(
+    connection: &Connection,
+    rules: &[CirculationRule],
+    item: i64,
+    now: &Zoned,
+) -> rusqlite::Result<Option<Result<(), RenewalRefusal>>> {
+    let Some(loan) = loan_of_item(connection, item)? else {
+        return Ok(None);
+    };
+    let Some((category, _)) = find_patron(connection, loan.patron)? else {
+        return Ok(None);
+    };
+    let at = RuleScopeKey {
+        branch: Some(loan.branch),
+        category: Some(category),
+        policy: Some(loan.policy),
+    };
+    check(connection, rules, &loan, at, now, false).map(Some)
 }
 
 /// Applies `circ.renew` inside the writer's transaction. The rules and the calendar are
@@ -180,21 +235,15 @@ pub(crate) fn renew(connection: &Connection, request: &RenewRequest) -> Applied 
         category: Some(category),
         policy: Some(loan.policy),
     };
-    can_renew(
-        &RenewalFacts {
-            rules: &rules,
-            at,
-            due: loan.due.clone(),
-            renewals: loan.renewals,
-            on_site: loan.on_site,
-            other_overdue: other_overdue(connection, &loan, &request.at).map_err(storage)?,
-            balance: balance(connection, loan.patron).map_err(storage)?,
-            on_hold: on_hold(connection, &rules, &loan).map_err(storage)?,
-            now: request.at.clone(),
-        },
-        &RenewalSettings::default(),
+    check(
+        connection,
+        &rules,
+        &loan,
+        at,
+        &request.at,
         request.override_limit,
     )
+    .map_err(storage)?
     .map_err(|refusal| refused(RenewRefusal::Refused(refusal)))?;
     let calendar = read_calendar(connection, loan.branch.0).map_err(storage)?;
     let rule = loan_rule(&rules, &at, USE_DAYS_MODE);

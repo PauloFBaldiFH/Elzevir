@@ -30,23 +30,32 @@ pub(crate) fn run(args: &ParityKohaArgs) -> Result<(), String> {
     let koha = read_answers(&args.answers)?;
     let data = open_store(&args.data_dir)?;
     let zone = crate::config::load(&args.data_dir)?.time_zone;
-    let now = jiff::civil::DateTime::strptime("%Y-%m-%d %H:%M", &koha.now)
-        .and_then(|now| now.to_zoned(zone))
-        .map_err(|e| {
-            format!(
-                "{}: `now` is not YYYY-MM-DD HH:MM: {e}",
-                args.answers.display()
-            )
-        })?;
+    let moment = |name: &str, text: &str| {
+        jiff::civil::DateTime::strptime("%Y-%m-%d %H:%M", text)
+            .and_then(|moment| moment.to_zoned(zone.clone()))
+            .map_err(|e| {
+                format!(
+                    "{}: `{name}` is not YYYY-MM-DD HH:MM: {e}",
+                    args.answers.display()
+                )
+            })
+    };
+    let now = moment("now", &koha.now)?;
+    let renewals_at = match &koha.renewals_at {
+        Some(text) => moment("renewals_at", text)?,
+        None => now.clone(),
+    };
     let itemnumbers: BTreeSet<u64> = koha
         .due_dates
         .iter()
         .map(|answer| answer.itemnumber)
         .chain(koha.fines.iter().map(|answer| answer.itemnumber))
+        .chain(koha.renewals.iter().map(|answer| answer.itemnumber))
+        .chain(koha.holds_on_return.iter().map(|answer| answer.itemnumber))
         .collect();
     let elzevir = data
         .store
-        .koha_parity_answers(&itemnumbers, &now)
+        .koha_parity_answers(&itemnumbers, &now, &renewals_at)
         .map_err(|e| e.to_string())?;
     let checks = compare(&koha, &elzevir);
     print!("{}", report(&koha, &checks));
@@ -75,6 +84,8 @@ const fn question(question: Question) -> &'static str {
     match question {
         Question::DueDate => "due dates",
         Question::Fine => "fines",
+        Question::Renewal => "renewals",
+        Question::HoldOnReturn => "holds of returned Items",
     }
 }
 

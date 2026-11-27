@@ -14,7 +14,8 @@ use Getopt::Long qw( GetOptions );
 use JSON         qw( to_json );
 
 use C4::Context;
-use C4::Circulation qw( CalcDateDue );
+use C4::Circulation qw( CalcDateDue CanBookBeRenewed );
+use C4::Reserves    qw( CheckReserves );
 use C4::Overdues    qw( Getoverdues CalcFine );
 use Koha::Checkouts;
 use Koha::DateUtils qw( dt_from_string );
@@ -82,12 +83,40 @@ for my $overdue ( sort { $a->{issue_id} <=> $b->{issue_id} } @{ Getoverdues() } 
     };
 }
 
+# Whether each current loan may be renewed, asked as the staff desk asks it, and which hold
+# its Item fills when it comes back at its holding branch.
+my @renewals;
+my @holds_on_return;
+$position  = 0;
+$checkouts = Koha::Checkouts->search( {}, { order_by => 'issue_id' } );
+while ( my $checkout = $checkouts->next ) {
+    next if $position++ % $every;
+    my $item   = $checkout->item;
+    my $patron = $checkout->patron;
+    next unless $item && $patron;
+    my ( $renewable, $reason ) = CanBookBeRenewed( $patron, $checkout );
+    push @renewals, {
+        issue_id   => $checkout->issue_id + 0,
+        itemnumber => $item->itemnumber + 0,
+        answer     => $renewable ? 'ok' : ( $reason // 'unknown' ),
+    };
+    my ( $status, $hold ) = CheckReserves($item);
+    push @holds_on_return, {
+        issue_id   => $checkout->issue_id + 0,
+        itemnumber => $item->itemnumber + 0,
+        answer     => $status && $hold ? "$status borrowernumber $hold->{borrowernumber}" : 'none',
+    };
+}
+
 print to_json(
     {
-        koha_version => C4::Context->preference('Version'),
-        now          => $format->($now),
-        due_dates    => \@due_dates,
-        fines        => \@fines,
+        koha_version    => C4::Context->preference('Version'),
+        now             => $format->($now),
+        renewals_at     => $format->($clock),
+        due_dates       => \@due_dates,
+        fines           => \@fines,
+        renewals        => \@renewals,
+        holds_on_return => \@holds_on_return,
     },
     { canonical => 1, pretty => 1 }
 );

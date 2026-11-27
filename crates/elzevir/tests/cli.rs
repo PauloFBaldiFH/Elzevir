@@ -582,11 +582,17 @@ fn parity_after_the_switch(dir: &Path, data: &str) {
     // Rule 2 lends for 14 days, counted in open days (`useDaysMode` Calendar,
     // `Koha::Calendar::addDays`): CTR closes on Sundays, so 2026-11-08 and 2026-11-15 are
     // skipped and the loan is due on Saturday 2026-11-21. No rule has a fine.
+    // No rule allows a renewal (`renewalsallowed` missing), so Koha answers `too_many`
+    // before it looks at holds. Back at CTR, the Item fills reserve 1 of patron 2, the
+    // first in the queue of record 10: reserve 2 is suspended and reserve 4 is in transit
+    // with Item 101 (`CheckReserves`).
     let answers = |due: &str, fine: i64| {
         format!(
             r#"{{"koha_version":"26.05.05.000","now":"2026-12-15 10:00",
                 "due_dates":[{{"issue_id":1,"itemnumber":100,"due":"{due}"}}],
-                "fines":[{{"issue_id":1,"itemnumber":100,"amount_cents":{fine}}}]}}"#
+                "fines":[{{"issue_id":1,"itemnumber":100,"amount_cents":{fine}}}],
+                "renewals":[{{"issue_id":1,"itemnumber":100,"answer":"too_many"}}],
+                "holds_on_return":[{{"issue_id":1,"itemnumber":100,"answer":"Reserved borrowernumber 2"}}]}}"#
         )
     };
     let same = path(dir, "answers.json");
@@ -602,6 +608,8 @@ fn parity_after_the_switch(dir: &Path, data: &str) {
     for line in [
         "due dates: 1 answers from Koha, 1 the same, 0 without a counterpart, 0 different",
         "fines: 1 answers from Koha, 1 the same, 0 without a counterpart, 0 different",
+        "renewals: 1 answers from Koha, 1 the same, 0 without a counterpart, 0 different",
+        "holds of returned Items: 1 answers from Koha, 1 the same, 0 without a counterpart, 0 different",
     ] {
         assert!(
             report.lines().any(|found| found == line),
@@ -612,10 +620,13 @@ fn parity_after_the_switch(dir: &Path, data: &str) {
     let other = path(dir, "other.json");
     std::fs::write(
         &other,
-        answers("2026-11-20 23:59", 150).replace(
-            r#"{"issue_id":1,"itemnumber":100,"due""#,
-            r#"{"issue_id":9,"itemnumber":4242,"due":"2026-11-19 23:59"},{"issue_id":1,"itemnumber":100,"due""#,
-        ),
+        answers("2026-11-20 23:59", 150)
+            .replace(
+                r#"{"issue_id":1,"itemnumber":100,"due""#,
+                r#"{"issue_id":9,"itemnumber":4242,"due":"2026-11-19 23:59"},{"issue_id":1,"itemnumber":100,"due""#,
+            )
+            .replace("\"too_many\"", "\"on_reserve\"")
+            .replace("Reserved borrowernumber 2", "Waiting borrowernumber 1"),
     )
     .unwrap();
     let parity = elzevir(&["parity-koha", "--data-dir", data, &other]);
@@ -626,6 +637,8 @@ fn parity_after_the_switch(dir: &Path, data: &str) {
         "  the Item did not come: 1 (issue_id 9)",
         "  DIFFERENT issue_id 1: Koha 2026-11-20 23:59, Elzevir 2026-11-21 23:59",
         "  DIFFERENT issue_id 1: Koha 1.50, Elzevir 0.00",
+        "  DIFFERENT issue_id 1: Koha on_reserve, Elzevir too_many",
+        "  DIFFERENT issue_id 1: Koha Waiting borrowernumber 1, Elzevir Reserved borrowernumber 2",
     ] {
         assert!(
             report.lines().any(|found| found == line),
