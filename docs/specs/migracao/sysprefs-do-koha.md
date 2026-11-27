@@ -414,7 +414,7 @@ As 915 preferências do sistema do Koha e o lugar de cada uma no Elzevir. As que
 | `StockRotation` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `StoreLastBorrower` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `SuspendHoldsIntranet` | `1` | Comportamento fixo: 1: a equipe suspende e retoma reservas na ficha do leitor (docs/specs/circulacao/reservas.md, item 19). |
-| `SuspendHoldsOpac` | `1` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
+| `SuspendHoldsOpac` | `1` | **`[circulation.holds] patrons_suspend`**. Ver docs/specs/opac/conta-do-leitor.md, item 25a. |
 | `SuspensionsCalendar` | `noSuspensionsWhenClosed` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `SwitchOnSiteCheckouts` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `TitleHoldFeeStrategy` | `highest` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |

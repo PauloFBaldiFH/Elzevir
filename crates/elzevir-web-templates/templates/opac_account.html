@@ -57,6 +57,13 @@
       <span class="loan-title">{{ hold.title }}</span>
       <span class="loan-meta">{{ hold.status }} · {{ t.get_with("holds-pickup", "branch", hold.pickup) }}</span>
       {% if hold.cancelable %}<form method="post" action="/conta/reservas/{{ hold.id }}/cancelar" class="loan-renew"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="quiet">{{ t.get("holds-cancel") }}</button></form>{% endif %}
+      {% match hold.suspension %}
+      {% when HoldSuspensionAction::Suspend %}
+      <form method="post" action="/conta/reservas/{{ hold.id }}/suspender" class="loan-renew"><input type="hidden" name="csrf" value="{{ csrf }}"><label for="until-{{ hold.id }}">{{ t.get("holds-suspend-until") }}</label> <input type="date" id="until-{{ hold.id }}" name="until"> <button type="submit" class="quiet">{{ t.get("holds-suspend") }}</button></form>
+      {% when HoldSuspensionAction::Resume %}
+      <form method="post" action="/conta/reservas/{{ hold.id }}/retomar" class="loan-renew"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="quiet">{{ t.get("holds-resume") }}</button></form>
+      {% when HoldSuspensionAction::None %}
+      {% endmatch %}
     </li>
   {% endfor %}
   </ul>

@@ -4498,7 +4498,7 @@ pub const KOHA_SYSPREFS: &[KohaSyspref] = &[
     KohaSyspref {
         name: "SuspendHoldsOpac",
         default: "1",
-        field: None,
+        field: Some("[circulation.holds] patrons_suspend"),
         secret: false,
     },
     KohaSyspref {

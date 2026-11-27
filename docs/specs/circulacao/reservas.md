@@ -77,7 +77,7 @@
 ## 6. Fora desta parte
 
 - Reserva com data futura (`AllowHoldDateInFuture`), data de expiração pedida pelo leitor, observações, prioridade mínima e mudança manual de posição.
-- Suspender todas as reservas do leitor de uma vez (`SuspendAll`); suspender e retomar pelo OPAC e pela API (`SuspendHoldsOpac`) vêm na parte seguinte.
+- Suspender todas as reservas do leitor de uma vez (`SuspendAll`). O leitor suspende e retoma uma a uma pelo OPAC e pela API ([conta do leitor](../opac/conta-do-leitor.md), item 25a; [API](../opac/api.md), item 16a).
 - Reserva por tipo de material e por grupo de exemplares; grupos de unidades; limites de transferência entre unidades.
 - Taxa de reserva (`HoldFeeMode`); restrição de idade; reservas de leitores pela internet.
 - Passar por cima das regras (`AllowHoldPolicyOverride`).

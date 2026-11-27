@@ -127,7 +127,11 @@ pub(crate) async fn account(
             .map(|loan| loan_line(t, loan, &moment))
             .collect(),
         account: account_rows(t, &circulation.lines),
-        holds: crate::opac_holds::hold_rows(t, &circulation.holds),
+        holds: crate::opac_holds::hold_rows(
+            t,
+            &circulation.holds,
+            state.inner.config.patrons_suspend_holds,
+        ),
         keeps_history: account.reading_history == ReadingHistory::Kept,
     }))
 }
@@ -191,6 +195,9 @@ fn done_key(code: &str) -> Option<(bool, &'static str)> {
         "reserva" => (false, "opac-hold-placed"),
         "reserva_cancelada" => (false, "opac-hold-cancelled"),
         "reserva_separada" => (true, "opac-hold-set-aside"),
+        "reserva_suspensa" => (false, "opac-hold-suspended"),
+        "reserva_retomada" => (false, "opac-hold-resumed"),
+        "suspensao_separada" => (true, "opac-hold-suspend-set-aside"),
         "historico_sim" => (false, "opac-history-started"),
         "historico_nao" => (false, "opac-history-stopped"),
         _ => return None,

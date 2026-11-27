@@ -99,6 +99,9 @@ pub struct WebConfig {
     /// The library's time zone, where "today" of a work list begins
     /// (docs/specs/catalogo/facetas.md, item 16).
     pub time_zone: jiff::tz::TimeZone,
+    /// Whether patrons suspend and resume their own holds on the OPAC and the API
+    /// (docs/specs/opac/conta-do-leitor.md, item 25a; Koha: `SuspendHoldsOpac`).
+    pub patrons_suspend_holds: bool,
 }
 
 impl Default for WebConfig {
@@ -109,6 +112,7 @@ impl Default for WebConfig {
             iri_base: None,
             author_table: None,
             time_zone: jiff::tz::TimeZone::UTC,
+            patrons_suspend_holds: true,
         }
     }
 }
@@ -468,6 +472,14 @@ fn patron_routes() -> Router<AppState> {
         .route(
             "/conta/reservas/{hold}/cancelar",
             post(opac_holds::cancel_hold),
+        )
+        .route(
+            "/conta/reservas/{hold}/suspender",
+            post(opac_holds::suspend_hold),
+        )
+        .route(
+            "/conta/reservas/{hold}/retomar",
+            post(opac_holds::resume_hold),
         )
         .route("/conta/historico", post(opac_holds::set_history))
         .route(

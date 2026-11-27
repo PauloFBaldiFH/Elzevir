@@ -10,14 +10,15 @@ use elzevir_app::circulation_rules::{
     CirculationCommand, CirculationDeskError, CirculationRefusal,
 };
 use elzevir_app::holds::{
-    HoldCancellation, HoldId, HoldLevel, HoldRefused, HoldRequest, PatronHold,
+    HoldCancellation, HoldId, HoldLevel, HoldRefused, HoldRequest, HoldSuspensionRequest,
+    PatronHold, Suspension, SuspensionChange,
 };
 use elzevir_app::opac;
 use elzevir_app::patron_account::PatronIdentity;
 use elzevir_app::patrons::ReadingHistory;
 use elzevir_domain::catalog::{BranchId, InstanceId};
 use elzevir_domain::hold::{Found, HoldRefusal};
-use elzevir_web_templates::{I18n, OpacHoldForm, OpacHoldRow, PickupChoice};
+use elzevir_web_templates::{HoldSuspensionAction, I18n, OpacHoldForm, OpacHoldRow, PickupChoice};
 use serde::Deserialize;
 
 use crate::circulation::now;
@@ -27,24 +28,43 @@ use crate::security::tokens_match;
 use crate::session::Live;
 use crate::{AppState, render};
 
-/// The patron's holds as their account page shows them.
-pub(crate) fn hold_rows(t: &I18n, holds: &[PatronHold]) -> Vec<OpacHoldRow> {
+/// The patron's holds as their account page shows them, with the suspension buttons when
+/// the library lets patrons suspend (`suspend`).
+pub(crate) fn hold_rows(t: &I18n, holds: &[PatronHold], suspend: bool) -> Vec<OpacHoldRow> {
     holds
         .iter()
         .map(|hold| OpacHoldRow {
             id: hold.id.0,
             title: hold.title.clone(),
             pickup: hold.pickup.clone(),
-            status: match (hold.found, hold.expires_on) {
-                (Some(Found::Waiting), Some(until)) => {
-                    t.get_with("opac-hold-waiting", "date", &shown(t, until))
-                }
-                (Some(_), _) => t.get("holds-in-transit"),
-                (None, _) => t.get_with("holds-position", "position", &hold.priority.to_string()),
-            },
+            status: status(t, hold),
             cancelable: hold.found.is_none(),
+            suspension: match (suspend, hold.found, hold.suspended) {
+                (false, _, _) | (true, Some(_), _) => HoldSuspensionAction::None,
+                (true, None, Some(_)) => HoldSuspensionAction::Resume,
+                (true, None, None) => HoldSuspensionAction::Suspend,
+            },
         })
         .collect()
+}
+
+/// Where the hold stands, as the patron reads it.
+fn status(t: &I18n, hold: &PatronHold) -> String {
+    let position = hold.priority.to_string();
+    match (hold.found, hold.expires_on, hold.suspended) {
+        (Some(Found::Waiting), Some(until), _) => {
+            t.get_with("opac-hold-waiting", "date", &shown(t, until))
+        }
+        (Some(_), _, _) => t.get("holds-in-transit"),
+        (None, _, Some(Suspension::Until(day))) => t.get_texts(
+            "holds-suspended-until",
+            &[("date", &shown(t, day)), ("position", &position)],
+        ),
+        (None, _, Some(Suspension::Indefinite)) => {
+            t.get_with("holds-suspended", "position", &position)
+        }
+        (None, _, None) => t.get_with("holds-position", "position", &position),
+    }
 }
 
 /// A hold refusal told to the patron.
@@ -256,6 +276,93 @@ pub(crate) async fn cancel_hold(
         Ok(Err(CirculationDeskError::Refused(CirculationRefusal::Hold(HoldRefused::SetAside)))) => {
             "reserva_separada"
         }
+        // Someone else's hold, or one already gone: nothing to tell.
+        Ok(Err(CirculationDeskError::Refused(_))) => return Redirect::to("/conta").into_response(),
+        Ok(Err(_)) | Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+    };
+    Redirect::to(&format!("/conta?aviso={code}#holds-title")).into_response()
+}
+
+/// Fields of the suspend button.
+#[derive(Deserialize)]
+pub(crate) struct SuspendFields {
+    csrf: String,
+    /// The day it ends, `YYYY-MM-DD`; empty for no end.
+    #[serde(default)]
+    until: String,
+}
+
+/// `POST /conta/reservas/{hold}/suspender`: the patron suspends a hold not yet set aside,
+/// until a day or not (spec, item 25a).
+pub(crate) async fn suspend_hold(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(hold): Path<i64>,
+    Form(form): Form<SuspendFields>,
+) -> Response {
+    let suspension = match form.until.trim() {
+        "" => Suspension::Indefinite,
+        day => match day.parse() {
+            Ok(day) => Suspension::Until(day),
+            Err(_) => return (StatusCode::BAD_REQUEST, "invalid date").into_response(),
+        },
+    };
+    change_suspension(
+        &state,
+        &headers,
+        hold,
+        &form.csrf,
+        SuspensionChange::Suspend(suspension),
+    )
+    .await
+}
+
+/// `POST /conta/reservas/{hold}/retomar`: the patron resumes a suspended hold (spec, item
+/// 25a).
+pub(crate) async fn resume_hold(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(hold): Path<i64>,
+    Form(form): Form<TokenFields>,
+) -> Response {
+    change_suspension(&state, &headers, hold, &form.csrf, SuspensionChange::Resume).await
+}
+
+/// Runs `circ.suspend_hold` for the signed-in patron's own hold, and goes back to the
+/// account with the notice.
+async fn change_suspension(
+    state: &AppState,
+    headers: &HeaderMap,
+    hold: i64,
+    csrf: &str,
+    change: SuspensionChange,
+) -> Response {
+    let Some(desk) = state.loans.clone() else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    if !state.inner.config.patrons_suspend_holds {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let Some(session) = current_patron(state, headers) else {
+        return Redirect::to("/conta/entrar").into_response();
+    };
+    if !tokens_match(&session.csrf, csrf) {
+        return (StatusCode::FORBIDDEN, "invalid form token").into_response();
+    }
+    let code = match change {
+        SuspensionChange::Suspend(_) => "reserva_suspensa",
+        SuspensionChange::Resume => "reserva_retomada",
+    };
+    let command = CirculationCommand::SuspendHold(HoldSuspensionRequest {
+        patron: session.identity.id,
+        hold: HoldId(hold),
+        change,
+    });
+    let code = match tokio::task::spawn_blocking(move || desk.patron_hold(command)).await {
+        Ok(Ok(_)) => code,
+        Ok(Err(CirculationDeskError::Refused(CirculationRefusal::Hold(
+            HoldRefused::SuspendSetAside,
+        )))) => "suspensao_separada",
         // Someone else's hold, or one already gone: nothing to tell.
         Ok(Err(CirculationDeskError::Refused(_))) => return Redirect::to("/conta").into_response(),
         Ok(Err(_)) | Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),

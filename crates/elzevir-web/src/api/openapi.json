@@ -717,6 +717,154 @@
           }
         ]
       }
+    },
+    "/api/v1/patron/holds/{id}/suspension": {
+      "put": {
+        "operationId": "suspendHold",
+        "summary": "Suspend a hold not yet set aside, until a day or not.",
+        "tags": [
+          "patron"
+        ],
+        "security": [
+          {
+            "patronToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Suspension"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "The hold is suspended."
+          },
+          "400": {
+            "description": "The body is not a suspension.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The server has no patron accounts or circulation, the library does not let patrons suspend holds, or the hold is not the patron's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The hold is already set aside.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or an unknown or expired one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The patron accounts or circulation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The hold.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "resumeHold",
+        "summary": "Resume a suspended hold.",
+        "tags": [
+          "patron"
+        ],
+        "security": [
+          {
+            "patronToken": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The hold is back in the queue."
+          },
+          "404": {
+            "description": "The server has no patron accounts or circulation, the library does not let patrons suspend holds, or the hold is not the patron's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or an unknown or expired one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The patron accounts or circulation failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The hold.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1434,7 +1582,9 @@
           "placed_on",
           "status",
           "position",
-          "expires_on"
+          "expires_on",
+          "suspended",
+          "suspended_until"
         ],
         "properties": {
           "hold": {
@@ -1466,6 +1616,16 @@
             "type": "string",
             "format": "date",
             "nullable": true
+          },
+          "suspended": {
+            "type": "boolean",
+            "description": "Whether the hold is suspended: it keeps its place in the queue, but no Item fills it."
+          },
+          "suspended_until": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "The day a suspended hold comes back to the queue; null when it has no end."
           }
         },
         "additionalProperties": false
@@ -1500,6 +1660,18 @@
           "position": {
             "type": "integer",
             "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "Suspension": {
+        "type": "object",
+        "properties": {
+          "until": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "The day the hold comes back to the queue; absent or null for no end."
           }
         },
         "additionalProperties": false

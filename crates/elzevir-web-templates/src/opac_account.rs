@@ -4,7 +4,7 @@
 
 use askama::Template;
 
-use crate::{AccountRow, I18n};
+use crate::{AccountRow, HoldSuspensionAction, I18n};
 
 /// What the "Patron account" panel shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -114,6 +114,8 @@ pub struct OpacHoldRow {
     pub status: String,
     /// Whether the patron may cancel it here: it is not set aside yet.
     pub cancelable: bool,
+    /// What the patron may do with its suspension; nothing when the library turned it off.
+    pub suspension: HoldSuspensionAction,
 }
 
 /// A pickup branch to choose.

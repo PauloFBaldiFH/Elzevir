@@ -696,6 +696,7 @@ fn serve_controlled(
                 iri_base: settings.iri_base.clone(),
                 author_table: loaded.author_table,
                 time_zone: loaded.time_zone,
+                patrons_suspend_holds: loaded.patrons_suspend_holds,
                 ..WebConfig::default()
             },
             &settings.lang,

@@ -426,6 +426,9 @@ struct Holds {
     /// Cancel the holds waiting past their last day to pick up; off when absent (Koha:
     /// `ExpireReservesMaxPickUpDelay`).
     expire_waiting: Option<bool>,
+    /// Let patrons suspend and resume their own holds on the OPAC and the API; on when
+    /// absent (Koha: `SuspendHoldsOpac`).
+    patrons_suspend: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -509,6 +512,8 @@ pub(crate) struct Loaded {
     pub(crate) long_overdue: Option<LongOverdueSettings>,
     /// Whether holds waiting past their last day are cancelled.
     pub(crate) expire_waiting_holds: bool,
+    /// Whether patrons suspend and resume their own holds.
+    pub(crate) patrons_suspend_holds: bool,
     /// How long history and expired patrons are kept.
     pub(crate) retention: elzevir_app::patrons::Retention,
     /// The mail server, when notices go out by e-mail.
@@ -565,7 +570,6 @@ pub(crate) fn from_text(
         ),
         None => None,
     };
-    let expire_waiting_holds = config.circulation.holds.expire_waiting.unwrap_or(false);
     let retention = elzevir_app::patrons::Retention {
         reading_history_days: config.privacy.reading_history_days,
         anonymize_expired_days: config.privacy.anonymize_expired_days,
@@ -604,39 +608,20 @@ pub(crate) fn from_text(
         .map(crate::z3950_server::Z3950Section::settings)
         .transpose()
         .map_err(|e| format!("{}: z3950: {e}", path.display()))?;
-    let Some(table) = config.call_number.author_table else {
-        return Ok(Loaded {
-            author_table: None,
-            table_report: None,
-            time_zone,
-            long_overdue,
-            expire_waiting_holds,
-            retention,
-            mail,
-            templates,
-            draft_sources,
-            authority_sources,
-            sip2,
-            oai,
-            sru,
-            z3950,
-        });
+    let (author_table, table_report) = match config.call_number.author_table {
+        Some(table) => {
+            let (table, report) = author_table(&data_dir.join(table))?;
+            (Some(table), Some(report))
+        }
+        None => (None, None),
     };
-    let table_path = data_dir.join(table);
-    let text = read_limited(&table_path, MAX_TABLE)?
-        .ok_or_else(|| format!("{}: the author table does not exist", table_path.display()))?;
-    let (table, report) = AuthorTable::parse(&text).map_err(|e| {
-        format!(
-            "{}: {e} (at most {MAX_TABLE_LINES} lines)",
-            table_path.display()
-        )
-    })?;
     Ok(Loaded {
-        author_table: Some(Arc::new(table)),
-        table_report: Some((table_path, report)),
+        author_table,
+        table_report,
         time_zone,
         long_overdue,
-        expire_waiting_holds,
+        expire_waiting_holds: config.circulation.holds.expire_waiting.unwrap_or(false),
+        patrons_suspend_holds: config.circulation.holds.patrons_suspend.unwrap_or(true),
         retention,
         mail,
         templates,
@@ -647,6 +632,19 @@ pub(crate) fn from_text(
         sru,
         z3950,
     })
+}
+
+/// The library's author table at `table_path`, and what reading it found.
+fn author_table(table_path: &Path) -> Result<(Arc<AuthorTable>, (PathBuf, TableReport)), String> {
+    let text = read_limited(table_path, MAX_TABLE)?
+        .ok_or_else(|| format!("{}: the author table does not exist", table_path.display()))?;
+    let (table, report) = AuthorTable::parse(&text).map_err(|e| {
+        format!(
+            "{}: {e} (at most {MAX_TABLE_LINES} lines)",
+            table_path.display()
+        )
+    })?;
+    Ok((Arc::new(table), (table_path.to_owned(), report)))
 }
 
 /// The text of a print template, relative to the data directory, when one is named
@@ -832,6 +830,18 @@ mod tests {
         )
         .unwrap();
         assert!(load(dir.path()).unwrap().expire_waiting_holds);
+    }
+
+    #[test]
+    fn patrons_suspend_their_holds_unless_turned_off() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(load(dir.path()).unwrap().patrons_suspend_holds);
+        std::fs::write(
+            dir.path().join("elzevir.toml"),
+            "[circulation.holds]\npatrons_suspend = false\n",
+        )
+        .unwrap();
+        assert!(!load(dir.path()).unwrap().patrons_suspend_holds);
     }
 
     #[test]

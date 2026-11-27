@@ -3265,8 +3265,9 @@
       "nota": "1: a equipe suspende e retoma reservas na ficha do leitor (docs/specs/circulacao/reservas.md, item 19)."
     },
     "SuspendHoldsOpac": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "config",
+      "campo": "[circulation.holds] patrons_suspend",
+      "nota": "Ver docs/specs/opac/conta-do-leitor.md, item 25a."
     },
     "SuspensionsCalendar": {
       "destino": "revisar",

@@ -17,7 +17,8 @@ use elzevir_app::circulation_rules::{
     CirculationCommand, CirculationDeskError, CirculationOutput, CirculationRefusal,
 };
 use elzevir_app::holds::{
-    HoldCancellation, HoldId, HoldLevel, HoldRefused, HoldRequest, PatronHold,
+    HoldCancellation, HoldId, HoldLevel, HoldRefused, HoldRequest, HoldSuspensionRequest,
+    PatronHold, Suspension, SuspensionChange,
 };
 use elzevir_app::loans::{LoanDesk, PatronLoan, RenewRequest};
 use elzevir_app::opac;
@@ -356,6 +357,8 @@ struct HoldJson {
     status: &'static str,
     position: u32,
     expires_on: Option<String>,
+    suspended: bool,
+    suspended_until: Option<String>,
 }
 
 fn hold_json(hold: PatronHold) -> HoldJson {
@@ -371,6 +374,11 @@ fn hold_json(hold: PatronHold) -> HoldJson {
         },
         position: hold.priority,
         expires_on: hold.expires_on.map(|day| day.to_string()),
+        suspended: hold.suspended.is_some(),
+        suspended_until: match hold.suspended {
+            Some(Suspension::Until(day)) => Some(day.to_string()),
+            Some(Suspension::Indefinite) | None => None,
+        },
     }
 }
 
@@ -564,6 +572,100 @@ pub(crate) async fn renew(
         Ok(Err(CirculationDeskError::Refused(CirculationRefusal::Renew(refusal)))) => {
             refused(refusal_code(&refusal))
         }
+        Ok(Err(_)) | Err(_) => unavailable(),
+    }
+}
+
+/// Body of a suspension: the day it ends, or none.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct SuspensionBody {
+    /// `YYYY-MM-DD`.
+    #[serde(default)]
+    until: Option<String>,
+}
+
+/// `PUT /api/v1/patron/holds/{id}/suspension` (item 16a): suspends a hold of the patron's
+/// own not yet set aside, until a day or not.
+pub(crate) async fn suspend_hold(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(hold): Path<String>,
+    body: Result<Json<SuspensionBody>, JsonRejection>,
+) -> Response {
+    let Some((patron, hold)) = suspension_target(&state, &headers, &hold) else {
+        return suspension_denied(&state, &headers);
+    };
+    let Ok(Json(body)) = body else {
+        return bad_request();
+    };
+    let suspension = match body.until.as_deref().map(str::parse) {
+        None => Suspension::Indefinite,
+        Some(Ok(day)) => Suspension::Until(day),
+        Some(Err(_)) => return bad_request(),
+    };
+    change_suspension(&state, patron, hold, SuspensionChange::Suspend(suspension)).await
+}
+
+/// `DELETE /api/v1/patron/holds/{id}/suspension` (item 16a): resumes a hold of the
+/// patron's own.
+pub(crate) async fn resume_hold(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(hold): Path<String>,
+) -> Response {
+    let Some((patron, hold)) = suspension_target(&state, &headers, &hold) else {
+        return suspension_denied(&state, &headers);
+    };
+    change_suspension(&state, patron, hold, SuspensionChange::Resume).await
+}
+
+/// The patron and the hold of a suspension request, when the token is good, the library
+/// lets patrons suspend and the id is a number.
+fn suspension_target(
+    state: &AppState,
+    headers: &HeaderMap,
+    hold: &str,
+) -> Option<(PatronId, HoldId)> {
+    state.loans.as_ref()?;
+    if !state.inner.config.patrons_suspend_holds {
+        return None;
+    }
+    let (_, patron) = bearer(state, headers)?;
+    Some((patron.id, HoldId(hold.parse().ok()?)))
+}
+
+/// Why `suspension_target` found nothing: no token, or nothing to act on.
+fn suspension_denied(state: &AppState, headers: &HeaderMap) -> Response {
+    if state.loans.is_some() && bearer(state, headers).is_none() {
+        unauthorized()
+    } else {
+        not_found()
+    }
+}
+
+/// Runs `circ.suspend_hold`: 204 when done, `set_aside` for a hold set aside, and
+/// `not_found` for another patron's hold or one already gone.
+async fn change_suspension(
+    state: &AppState,
+    patron: PatronId,
+    hold: HoldId,
+    change: SuspensionChange,
+) -> Response {
+    let Some(desk) = state.loans.clone() else {
+        return not_found();
+    };
+    let command = CirculationCommand::SuspendHold(HoldSuspensionRequest {
+        patron,
+        hold,
+        change,
+    });
+    match tokio::task::spawn_blocking(move || desk.patron_hold(command)).await {
+        Ok(Ok(_)) => no_content(),
+        Ok(Err(CirculationDeskError::Refused(CirculationRefusal::Hold(
+            HoldRefused::SuspendSetAside,
+        )))) => refused("set_aside"),
+        Ok(Err(CirculationDeskError::Refused(_))) => error(StatusCode::NOT_FOUND, "not_found"),
         Ok(Err(_)) | Err(_) => unavailable(),
     }
 }
