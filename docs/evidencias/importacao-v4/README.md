@@ -301,3 +301,56 @@ com a suíte rodando na mesma máquina.
 
 Esta medição abrange inspeção de estrutura. Carga no writer, indexação e
 projeção das classes continuam com seus próprios critérios de aceite.
+
+## Entrega 1b sobre a main 280ad9f5 e a fase 1a em 80bf1422
+
+A prova desta etapa é o **inventário privado dos membros selecionados**
+(nível 2 para a estrutura do conjunto). Cada linha da prévia representa um
+arquivo, inclusive quando seu conteúdo inclui muitos registros. As contagens
+de entidades no estudo de referência continuam sendo oráculos para os leitores
+das próximas etapas.
+
+| Seleção | Evidência conferida com o produto | Oráculo |
+|---|---|---|
+| FOLIO Cornell, `instances.tsv`, `recordholdings.tsv`, `items.tsv` | Três membros, respectivamente 115.610, 28.462 e 460.749 bytes. O mesmo trio em duas origens gerou lotes distintos. Os três SHA-256 se conservaram na reabertura pela CLI. | [Por arquivo](corpus.tsv) |
+| Evergreen, posições 3 e 1 do ZIP | O conjunto selecionado conservou `auth-1066.mrc` (293.410 bytes) seguido de `oss.marc` (58.820 bytes), com os caminhos e SHA-256 da origem. A verificação funcionou depois de remover o lote do ZIP. | [Contêiner](corpus.tsv) e [membros](evergreen.tsv) |
+| Arquivos sintéticos | Uma cópia idêntica permaneceu como terceiro membro com referência ao primeiro. Alteração de bytes, truncamento, bytes extras ou troca da origem do manifesto invalidam a verificação. | Testes `source_set_*` em `elzevir/tests/import_batch.rs` |
+| Staff | Acesso autenticado, permissões atuais, dono do lote, CSRF e revisão. Um envio interrompido ou um campo inesperado depois de dois arquivos deixa a contagem de lotes inalterada. A tentativa de confirmar o conjunto é recusada. | Testes `staff_source_sets_*` e `staff_groups_archive_members_*` em `elzevir/tests/staff_import.rs` |
+
+Em Chromium, um operador enviou os três TSV, verificou a integridade e cancelou
+o conjunto. No mesmo fluxo, selecionou dois membros do ZIP e conferiu seus
+nomes na tabela. O teste de integração da CLI confere o digest e a ordem pedida
+para os mesmos membros. O arquivo MARC de autoridades é preservado como
+original privado. A projeção futura depende dos contratos do módulo nativo.
+
+Uma execução exploratória por comando, em Linux x86-64, com a build de teste,
+cache ativo e outras verificações em andamento, produziu as medidas abaixo.
+O tempo inclui a inicialização da CLI e o pico de RSS é o do processo inteiro,
+medido por `wait4`. A seleção no ZIP valida seus 96 membros antes de publicar
+o lote com as duas folhas. Essa leitura usa buffers de expansão limitados.
+Os valores medem estas amostras e este ambiente.
+
+| Operação | Tempo de parede | Pico de RSS |
+|---|---:|---:|
+| Preparar três TSV Cornell | 0,076 s | 51.428 KiB |
+| Conferir o conjunto Cornell | 0,043 s | 50.196 KiB |
+| Preparar o ZIP Evergreen | 0,324 s | 71.708 KiB |
+| Criar o conjunto com as posições 3 e 1 | 0,345 s | 79.288 KiB |
+| Conferir o conjunto Evergreen | 0,024 s | 51.132 KiB |
+
+A validação local da 1b passou em `cargo fmt --all --check`,
+`cargo clippy --workspace --all-targets --locked -- -D warnings` e
+`cargo xtask ci`. O runner disponível foi
+`cargo test --workspace --all-targets --locked --no-fail-fast`, com
+1.402 testes aprovados. Os dois testes de rclone marcados como ignorados
+também passaram quando executados com `--ignored`, usando o binário instalado.
+A execução separada de doctests passou em um exemplo. A suíte inclui as
+regressões de matching, reimportação Biblivre, leitura e exportação MARC e
+BIBFRAME, privacidade e confirmação transacional do fluxo de catálogo.
+
+O verificador de oráculos da fase 0 passou. O cargo-deny 0.22.2 aprovou
+advisories, dependências, licenças e fontes, com 45 avisos de versões duplicadas
+e 11 exceções sem advisory aplicável. O Cargo também reportou incompatibilidade
+futura em `proc-macro-error2` 2.0.1. A prova 1b mede preservação por membro.
+Junções FOLIO, reconhecimento de classes e generalização em bases desconhecidas
+exigem evidência própria nas próximas etapas.
