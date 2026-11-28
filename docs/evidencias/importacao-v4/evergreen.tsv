@@ -1,0 +1,97 @@
+membro	bytes	sha256	medida
+01-evergreen/marc/oss.marc	58820	b52133c1498e6041f5e0d31dbefd1716d4c96811328b500f4117a6be28ee368e	42 registros; LDR/06 {'a': 33, 'm': 9}; bytes residuais 0
+01-evergreen/marc/jazz_1k.mrc	939407	dfe22377208ef29d0ed2f84c2c131982a00dbd6355d7646b11e6c7e0e0ee7a47	1000 registros; LDR/06 {'a': 173, 'c': 229, 'd': 1, 'g': 13, 'j': 584}; bytes residuais 0
+01-evergreen/marc/auth-1066.mrc	293410	88f7c89842e444e8680e185cc27ab1236eb531fa9b5a501f9af1b65768a6daea	1066 registros; LDR/06 {'z': 1066}; bytes residuais 0
+01-evergreen/marc/lul_fre_500.mrc	404602	3b4a1fd388d18f4cbc17f798b196581d53cf9015caeec528315343719cd66314	500 registros; LDR/06 {'a': 500}; bytes residuais 0
+01-evergreen/marc/badisbns.xml	22338	bad777d6e61077350877e6a4c3aafcc78497dd2748f1bef99a5f3a467e6ac6f3	record 10; LDR/06 {'a': 7, 'c': 1, 'g': 2}
+01-evergreen/marc/sample_acq_order.mrc	9842	5b7baedd296486bd3dc7cd88cb6ab3c8acc8c8ece9a2e347b1de309221810cc4	10 registros; LDR/06 {'a': 10}; bytes residuais 0
+01-evergreen/marc/nepali.marc	119749	c39e2647023491a0e349f94f4c5269f312cc295f9aea29cbe9db09f841146e57	96 registros; LDR/06 {'a': 96}; bytes residuais 0
+01-evergreen/marc/serials_mfhd.xml	8463	06bf158c33b7ecf13c1243c6417911a1e5852d6a1594705e1c05f66b65af97da	record 7; LDR/06 {'y': 7}
+01-evergreen/marc/FSL.marc	38528	7a1e4568d373094e0e1cfc8837bf48295f694b62e6a047dd9a2fdb8282cbe17a	52 registros; LDR/06 {'a': 52}; bytes residuais 0
+01-evergreen/marc/auth-subset100.mrc	3612	83332b4f8bba9827f921d14ee96b1339b00642b8b1403d928f8b05eb3c1c0bfa	17 registros; LDR/06 {'z': 17}; bytes residuais 0
+01-evergreen/marc/lul_fre_100.mrc	76196	22b1aaa87bb60cf0aa3fddbd03e420fc94e2efc41db06cfb11d163e6dbc4efca	100 registros; LDR/06 {'a': 100}; bytes residuais 0
+01-evergreen/marc/RDA/RDA_record_CD_Claudia.mrc	1534	cd00dcb7dd97d8ed1e43a3691e49c47b094340b78f6de75f22616e0037cce043	1 registros; LDR/06 {'j': 1}; bytes residuais 0
+01-evergreen/marc/RDA/RDA_record_MAP_2012_Enchanted_Circle.mrc	1228	b3f79117054141ee65ccbfb9cae3a0631a33900f59e283d8536451f214a7190a	1 registros; LDR/06 {'e': 1}; bytes residuais 0
+01-evergreen/marc/RDA/RDA_record_SCORE_Wiegenlied.mrc	1995	30a213cd1ebe33239a186357f97aa86c782ed7744a50230f84037d385fada774	1 registros; LDR/06 {'c': 1}; bytes residuais 0
+01-evergreen/marc/RDA/RDA_record_SCORE_Intermediate_studies.mrc	1182	b1d99081ac2fe0babcd354c3e0446b8ea9ed99f9f5aead001b9b9ad2e9aad319	1 registros; LDR/06 {'c': 1}; bytes residuais 0
+01-evergreen/marc/RDA/RDA_record_PHOTO_Srid_pa_ho.mrc	1295	5b4610e9e15477dc7c61c63fa61e67869cb1ba3647a932db28c639b976d6048a	1 registros; LDR/06 {'k': 1}; bytes residuais 0
+01-evergreen/marc/RDA/RDA_record_DVD_Jorge_Mautner.mrc	2185	a5b9953a78840f05f483fe1b420696f70706ca639ed7b478aa202c00a7e54775	1 registros; LDR/06 {'g': 1}; bytes residuais 0
+01-evergreen/marc/RDA/RDA_record_SCORE_Arias_for_bass.mrc	7649	21629cf1fbaf67ba7a4721720316b950fdc6cb2b0c79884682bb5a5c797f31ed	1 registros; LDR/06 {'c': 1}; bytes residuais 0
+01-evergreen/marc/RDA/RDA_record_DVD-BLUE-RAY-MOVIE_Pineapple_express.mrc	4927	af4e586c9d8c7c5d33cbb78a24e598d70020510e33f9257e76760e1bc10f4bc6	1 registros; LDR/06 {'g': 1}; bytes residuais 0
+01-evergreen/marc/RDA/RDA_record_SERIAL_IEEE_International_conference.mrc	854	393640b2bc18f3e753df35dad79c3e46a955c2ee90f1215be8aacaf438103842	1 registros; LDR/06 {'a': 1}; bytes residuais 0
+01-evergreen/marc/RDA/RDA_record_SCORE-CD_Arias_for_soprano.mrc	7199	9da0f1d72408abd8288cf9b4996e50d51f133629644c382bc3f23fc00c0ab418	1 registros; LDR/06 {'c': 1}; bytes residuais 0
+01-evergreen/marc/hebrew.marc	26659	305f2368a0f71f0a8d237b73e45a11d116125bdc9b6e706d7be9d9a497bc649a	20 registros; LDR/06 {'a': 20}; bytes residuais 0
+01-evergreen/marc/map_data.mrc	8604	1e0968b3a237e769a0878f389b60d8bf99a901791e83703f2a6d0f4a2bacf5a4	3 registros; LDR/06 {'e': 3}; bytes residuais 0
+01-evergreen/marc/serials_marc21.xml	25616	ca4fbc4cac8c1b25183c76aadf532358a0df83c2b31cc785b12644518add1589	XML fora da gramática XML única
+01-evergreen/marc/music_5k.mrc	4913614	aa908544ebc593b36d692922af53bb2dee6c37152841e14c54785af975a1db97	5000 registros; LDR/06 {'a': 1518, 'c': 1600, 'd': 4, 'g': 47, 'i': 10, 'j': 1813, 'm': 8}; bytes residuais 0
+01-evergreen/README-origem.txt	2538	907ffccd2e8e32d86d0cab66f741c834d9f3b4404f225a0969a937571408a81c	auxiliar
+01-evergreen/concerto_enhanced/actor.usr_address.sql	30156	c2c89a47bf1883e9c652791988c55c824a5f65872c6ecdf4093c09ed207bc4a9	30156 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/serial.unit.sql	2022	ce0d1bac8a2d199ddf0792f72785800d9ffbd426e54518efe5c17b9375ca0841	2022 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/authority.bib_linking.sql	2964	f274f89ee739e95b77ff6e6a9b12c44933f6ef8c11ef3f4a905e285fa7616c20	2964 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/permission.grp_tree.sql	617	0ca0602f6721b2aa5feb22e892e723f83cb5892c9d32c1cce76aade61df71025	617 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/asset.call_number_suffix.sql	282	1408898c0a763219f8ddf0de69e51510a775fc9b8df2c27e556ef69a55dcc6ae	282 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/serial.subscription.sql	1397	4a33afcb02e5e0b710181cc9bd5abf88e6c67f05d55e1f7cc98b21c34becd793	1397 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/asset.copy_location.sql	3898	904c6a2caaae91a1aab780a0f2e33102472576e203c01c1967d475bdf31372d5	3898 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/serial.item.sql	88769	32595b46d26a7758c5d373e2b1028c646ebff8253dfd5cdfe939a732a5c5cd9b	88769 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/asset.copy_location_group.sql	288	cd906e71656008e6490916579a0130fcaf7c150e2d225cd7d17c5074203b4448	288 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/action.circulation.sql	109700	16b789789dd5f735d77690f7d5d9c657617974b7c326597b3c556e19d3421181	109700 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/actor.stat_cat.sql	445	83cee484eaed2d88c5bafed0f5c7e0b602495aa43e9ec8ada82126619b7336d5	445 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/actor.card.sql	8698	e168ff6dabdd6c8e315f32eb8effa0995f137aa9f474e2a9ce7764dad2260976	8698 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/biblio.peer_bib_copy_map.sql	276	c94b04933cd43adb9330ba6f34e4988198313ec2e3fb212daae6f3983325d7ae	276 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/asset.uri_call_number_map.sql	245	c452e4d57298dc465ad2413e180bb11bedfea7fb3f6ab0b15b3e10b0b36f9202	245 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/serial.pattern_template.sql	1707	9fd871533d1885a9dec693b55e3dd259080af41190550f1427b4da5c4e66e6d7	1707 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/actor.usr.sql	120393	3d0fcb0e3c845f5e4a3ce9797469aa1c00d929c5d47ac152e09e91e2bff9fc55	120393 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/serial.caption_and_pattern.sql	5994	edd639c64c75dad8ef4f1b16e07c63856f3ac5cf5efc9bbfde23a04e8e35720a	5994 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/asset.stat_cat.sql	291	3338f94f601f996258d308e2e64723436de6958b182f639bb2dc24c0eb90e9fe	291 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/serial.stream.sql	752	6818e9800ed5a513d5b15ddd742ee4a896fc2a8f0daf311dccd1bd93465c3498	752 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/actor.stat_cat_entry_default.sql	247	c3a6da6123a35b6fa1040ddeba62e71e9bb327f97220222dae87462a3fd529bf	247 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/actor.org_unit.sql	2298	bb4076130ca0d64d68596742101bea80983951eb97a110193e773bc2272732ea	2298 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/actor.org_address.sql	5648	4b8da5f5bf22fdae5b7d8f1a6962f1ad67a172bd88a7f88e98516e37ffd0462d	5648 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/asset.call_number.sql	182900	19f18dab94219596da53b81d0914cc350898b77bd2e44c3a54d44541e5e05def	182900 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/biblio.record_entry.sql	1491575	317823c823ab02cbbc83b1d754908b2afd3c281e3c36051656f25d6085fa3f28	1491575 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/serial.basic_summary.sql	442	b794094a4e66fd4029f299fb6b8fa7c64c3f77143e635125e146d96278b8f362	442 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/actor.stat_cat_entry_usr_map.sql	321	14c5bcf4ef917f647d30300718b02e0b739280ce9486369aa91fbabcc75f2348	321 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/actor.stat_cat_entry.sql	480	5ccd31e7f883dbdb84fcbf13b7417ca80bba8ec7d05c3400ee50a38ae5f25f4c	480 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/action.hold_request.sql	44174	dddc494015eef164699615bd9da0c502849047c7d9ee67ae3d37916e65917f12	44174 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/asset.copy_part_map.sql	313	72c30e7d7c5ac51ce4ef2dcf4a526275ecb9a02844bf311f0ced8497deb207da	313 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/actor.usr_standing_penalty.sql	5087	54be2ab2a54c78f65845df7d779423552d03a1ff2c0c4ce6220382daccda5457	5087 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/biblio.monograph_part.sql	997	20194aa800811eed4c9592bfd3547e65669cefa4a0a5577ded23bac12fcb10f1	997 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/asset.call_number_prefix.sql	308	df8a1fe2c77b939c8e0c503cb5d29fdb2eea486c90c652753399ab6fb5729162	308 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/action.hold_copy_map.sql	64328	74781a368e379c9873a48b3c694ba2b9e21cf10fdc1981726850f96cfb431343	64328 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/biblio.peer_type.sql	181	1763a055bf5a9b39abd5d35359b2d463a3c7ecb36307ef121f69729ced117bcb	181 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/serial.issuance.sql	149054	dd72652384cec6fe734925ce076fa0bf9e0f8529a6c2f372eabef0f63930e9e5	149054 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/asset.stat_cat_entry.sql	349	a6c5cd66d9b990135246dc81a37fd577e3c623633a68f579ba612c80a1a6708e	349 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/asset.uri.sql	1606	f88b090edb44a7a0fe17fa7607a2db4b19fd59c8d044aa7b6a9d17bce2716558	1606 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/serial.distribution.sql	1514	2d1e86873899487ee5e248302362b306eebe929c22ed9696510f3361b052ae72	1514 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/config.circ_modifier.sql	1667	00aa8a0d911a88313c3f8ea43f55b05817ef42dee866f8a2eaf9704ff8bf32fa	1667 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/asset.copy.sql	1032080	166d38daf655674c2aaff4f6dd8e7997b73ce2728e8de2cbdf1f6673bdda6bb9	1032080 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/authority.record_entry.sql	558578	f37704ee855a4e507ae7ccc2973885d70b19d5a475f36529124c2c67c59e729b	558578 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/asset.copy_location_group_map.sql	305	2df522281ce01c051eff5eda3cc2e06363461ff10732a6d3e0114b6577864706	305 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto_enhanced/asset.copy_note.sql	353	71713c528cd0db945037f7e5b9aa6953a39e16f3b4d8029c6c6b216ef039a4dc	353 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/commit-origem.txt	41	b5a9aaa5aaeeed3f1a2e0396dcb8d4f4312d8b4b257ba3f4c9576466e57a79c2	auxiliar
+01-evergreen/concerto/bibs_etextbooks.sql	41851	35e6c33b1664aba1441321ca5a393edf1d94baf749aa65a9087b661ccb2160f7	41851 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto/bibs_rda.sql	75277	2beb199bdde64a7d34360fc28b31db39db4e250399962471aea150d57e281e01	75277 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto/auth_mesh.sql	12559	74b14c0c11bab091bf8dec24565adf4bcb0ef6a1924f670cee19ee1fd1f9f560	12559 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto/assets_booking.sql	618	5683e5d473703386ad9af4c9a542af5ce84f88ef87fc1fdfbe30551600db7a82	618 bytes; DDL 0; tabelas com VALUES/COPY 0; outros INSERT 0
+01-evergreen/concerto/auth_lc.sql	78822	c5b349b1aac600342881cddf35792a745bd7a8e91da3f17db89d1ec0a0e2e226	78822 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 2
+01-evergreen/concerto/bibs_ebook_api.sql	7911	7eec64423a9c7856c349ec053ad1dc158b770106ac49008d35015f1aaf689eb0	7911 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto/assets_graphic_880.sql	1097	4ef94ceb514bc496defec6806af81c87c7e1a5e0f8cab16ee9b8b40244b05b91	1097 bytes; DDL 0; tabelas com VALUES/COPY 0; outros INSERT 0
+01-evergreen/concerto/bibs_graphic_880.sql	40726	6b2de357596ba6a0b5e504ad847736259665a1d60e8a679c8a14bdcab59e1812	40726 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto/bibs_mr.sql	23145	ba3ccc31c1f3f3b1878d897ce66381b3583efa02351abc82cecc0fdbbe4eed71	23145 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto/bibs_booking.sql	2303	c34bf4551c32ede8b50e4437476b46fe588010592d77467e3f85476e7f36582e	2303 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto/bibs_cze.sql	30705	06569fdbb5b360d26bc1a662526ba58397252d9f62beedc944ad7b2584e74d16	30705 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto/transactions.sql	5378	0283a722a6aa790c41c60ec4fac3846ba8fe0b59089fc7491f6eb6debc343f44	5378 bytes; DDL 0; tabelas com VALUES/COPY 0; outros INSERT 0
+01-evergreen/concerto/assets_concerto.sql	6318	78ddd368c706f0fbb690d5882d689847d6eef52e81c49a7e3605898ebfc05720	6318 bytes; DDL 0; tabelas com VALUES/COPY 3; outros INSERT 6
+01-evergreen/concerto/bibs_maps.sql	20351	7f6bfd6347ad8ebbee283d5c763d17712838d8e8eac693e9287741a4f94fdc9a	20351 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto/bibs_concerto.sql	278502	9b3261e21b50ebf373587a55d14915599f740b88710ca44ca0aabde0a337225b	278502 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto/auth_concerto.sql	169114	54fe6e1424c0ce023c48199b96664a02d5e3901be8dd9c45849426422e3205e3	169114 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto/assets_fic.sql	1580	9ed76549a25d873c50e1ef5d0953610c80e0a0b179195d921f71bad41de3a6df	1580 bytes; DDL 0; tabelas com VALUES/COPY 0; outros INSERT 0
+01-evergreen/concerto/assets_extras.sql	5078	e393a932f62fc6a2e8ce7734fafc53993f5fec399df54b3dfa55326342c69280	5078 bytes; DDL 0; tabelas com VALUES/COPY 2; outros INSERT 2
+01-evergreen/concerto/bibs_fic.sql	69571	21e02f4128315cf5a35107195255166f5949ade63014e329d83b0674763f90c3	69571 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto/assets_rda.sql	1580	a2dc1a91af80a7e015be3a2748060c8d48f88f129ce5fbb3674566165e3734b4	1580 bytes; DDL 0; tabelas com VALUES/COPY 0; outros INSERT 0
+01-evergreen/concerto/users_patrons_100.sql	98221	cfb2638e76a184e1d3ba42fff36ba8c8682822dbbc233d04ccf7ed2359a38470	98221 bytes; DDL 0; tabelas com VALUES/COPY 3; outros INSERT 0
+01-evergreen/concerto/bibs_fre.sql	242852	8cef2dd6488532a7fa145e6f503c55fff4b54a33e1ed05b20a3d579ae9f292b1	242852 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0
+01-evergreen/concerto/assets_fre.sql	1236	55047b9c0f1b4ac956fb2baeb87183673c301f5400443102c166eb8303f065d1	1236 bytes; DDL 0; tabelas com VALUES/COPY 0; outros INSERT 0
+01-evergreen/concerto/assets_mr.sql	1534	a1b4e9594b6f988b140dccfa1bb50f84011ea8405493087aff366fdc2286ace1	1534 bytes; DDL 0; tabelas com VALUES/COPY 0; outros INSERT 0
+01-evergreen/concerto/assets_cze.sql	533	91dd8fa8833d32657bfee70e0c386ab95128661bc664dfb3adb8250764f93605	533 bytes; DDL 0; tabelas com VALUES/COPY 0; outros INSERT 0
+01-evergreen/concerto/libraries.sql	5344	7041e0e8f09f9ce16aa67a9e5c96bd737d5b367c270aee080a3af6103b52cfd0	5344 bytes; DDL 0; tabelas com VALUES/COPY 4; outros INSERT 1

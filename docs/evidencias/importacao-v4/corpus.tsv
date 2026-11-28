@@ -1,0 +1,33 @@
+arquivo	bytes	sha256	formato_observado	medida	perfil
+02-folio/datasets/5kItems/instances.tsv	23769446	5801fb56644f20454f9be2f862ba88885d9b436d7db4567d4531623137e82926	TSV com JSON	47745 linhas; IDs distintos 47745; ID divergente 0	folio-5k
+02-folio/datasets/5kItems/recordholdings.tsv	13984872	f6e67bfc153686f63b1a83450a7b26ed94b8bb5f1b7df1d5f07954d5d975504f	TSV com JSON	49580 linhas; IDs distintos 49580; ID divergente 0; 49580 referências, 0 órfãs	folio-5k
+02-folio/datasets/cornell/instances.tsv	115610	f97d733e2c18e04c8c68d1d043c03effb7d5ec2379f18ff98f8753873eeda791	TSV com JSON	62 linhas; IDs distintos 62; ID divergente 0	folio-cornell
+02-folio/datasets/cornell/items.tsv	460749	27d1df0651f81e596723f9ba932b4571ba653093b3e958564ada1971fa9e7eae	TSV com JSON	536 linhas; IDs distintos 536; ID divergente 0; 536 referências, 0 órfãs	folio-cornell
+02-folio/datasets/cornell/recordholdings.tsv	28462	08721fd45911e9c8de5292dee2cb81fb02fc0523be35510d458472bfa197d030	TSV com JSON	107 linhas; IDs distintos 107; ID divergente 0; 107 referências, 0 órfãs	folio-cornell
+02-folio/source_data/cornell/FolioExemplars_bibs.mrc	207104	004800b84c17ec957e7557e017981b7b806d55406e867a28c23a8757f2b69be2	ISO 2709	62 registros; LDR/06 {'a': 35, 'c': 5, 'e': 1, 'g': 2, 'j': 11, 'k': 1, 'p': 4, 'r': 2, 't': 1}; bytes residuais 0	folio-marc
+02-folio/source_data/cornell/FolioExemplars_mfhds.mrc	52790	389b354fc073ba2d2d22c7e01070eba266d1ad4ceef416ba1ddcd97aee4edccf	ISO 2709	107 registros; LDR/06 {'v': 32, 'x': 69, 'y': 6}; bytes residuais 0	folio-marc
+03-slims/install/sampledata.sql	14691	2c8058db221961a8f1a4359bc028b0451b881ba2589b126d8f92f8cd46586370	SQL textual	14691 bytes; DDL 0; tabelas com VALUES/COPY 8; outros INSERT 0	slims-data
+03-slims/install/senayan.sql	112273	d066ad83a8e2f5e489aa260d6754179ba588e6420746f6d61063a7e287b61abf	SQL textual	112273 bytes; DDL 61; tabelas com VALUES/COPY 19; outros INSERT 0	slims-ddl
+04-openbiblio/biblio.sql	2836	c7dfee6f547e53817bfebfcf4e23877e1983598c3ef216a00ea9a0b756b8f234	SQL textual	2836 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0	openbiblio
+04-openbiblio/biblio_copy.sql	10602	bafcc0a7dfecc9521c41b211eadc7b049a457e415030cb6013f396dd52449998	SQL textual	10602 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0	openbiblio
+04-openbiblio/biblio_field.sql	67536	7b9f81b90bf542c466d4756769172ad9ee3ab7f75f764ff5b73d28e304badcec	SQL textual	67536 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0	openbiblio
+04-openbiblio/biblio_subfield.sql	197086	0e6147917d7be6ce8d89e85160acc32e4b70629c478c964c6869ba7c0651fddb	SQL textual	197086 bytes; DDL 0; tabelas com VALUES/COPY 1; outros INSERT 0	openbiblio
+05-biblivre/sql/biblivre4.sql	2942816	06112846b472ccf540c3a1a2fefaaeda5bed2cbf2dab389cbd4ce5218ca7576f	SQL textual	2942816 bytes; DDL 61; tabelas com VALUES/COPY 25; outros INSERT 0	biblivre-seed
+06-pmb/tables/en/minimum.sql	302361	804414b270d13efd1977c2e7cb130882fcb6abe25a0a8cd41a243b7091bb5adb	SQL textual	302361 bytes; DDL 0; tabelas com VALUES/COPY 23; outros INSERT 0	pmb
+09-sintetica/sqlite-1k.sql.gz	46141	f7f43f63268e0b2968e107f3baa1aeba7f158d56021d0c83abc24f30f8e91fbf	gzip/SQL	169970 bytes; DDL 30; tabelas com VALUES/COPY 30; outros INSERT 0	sqlite-sim
+Authorities(different varieties)-Sample.txt	6657	8431cce0f52d3f98ce7f23518aa26bc5799528fceb94a3c0f2bd22414465454a	MARC em texto etiquetado	000=12, 001=12, 035=12, 100=1, 110=1, 130=3, 150=3, 151=2, 155=1, 180=1, 199=1, 400=2, 450=8, 451=7, 550=3, 555=7, 670=22	autoridades-txt
+BKP_BIBLIOTECA (2).backup	2182920	564de16f118c177818c39df6dd860d3c739610d770e2468d292804138efc1a58	SQL textual	2182920 bytes; DDL 2; tabelas com VALUES/COPY 2; outros INSERT 0	pg10
+MARCXML-sample.sql	100771	709323b49c456d40359fed6d39c8a79a7c575a9f1b3b8c30dd48b1d5087e75e1	relatório híbrido	30 linhas; {'record': 30, '952': 0, 'suffix': 30}	relatorio-xml
+PROMPT-MESTRE-IMPORTACAO-UNIVERSAL-ELZEVIR-v4.md	104588	76eb9e8f5f3cfda7faaec64bdc2da3828a104acc52f81a171050645a9d968076	mandato	fora das entidades	auxiliar
+Spreadsheet-sample.xlsx	11575	2af580f4256061a9cd6cd1fd9d23630f846d11850a93eedf453d1de031d6d27d	XLSX	56 linhas; 672 células serializadas; tipos {'s': 627, 'n': 45}; intervalo ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']	xlsx
+biblioteca fácil backup.bkp	15517	b82c22ffee01e5ede45609a238e106ef9360c452f5e9a255a39344babebe4c34	binário legado	30 nomes DAT/IDX (30 distintos); 33 fluxos zlib com final comprovado até 4 MiB	facil
+biblivre-lab/biblivre4.sql	2942816	06112846b472ccf540c3a1a2fefaaeda5bed2cbf2dab389cbd4ce5218ca7576f	SQL textual	2942816 bytes; DDL 61; tabelas com VALUES/COPY 25; outros INSERT 0	biblivre-seed
+biblivre-lab/biblivre4_pg17.sql	2942754	4192949e00f2f0ade6f3c12125ae3006bd3e050e63524a8a71e9436e509913b1	SQL textual	2942754 bytes; DDL 61; tabelas com VALUES/COPY 25; outros INSERT 0	biblivre-seed
+biblivre-lab/biblivre_teste.dump	328209	90bf69788175ac4d8ec7ea2d25546a039b739aaf0847ec33403f7ee075a130e5	PGDMP	1.16.0; 61 TABLE DATA; pg_restore 17.12 em fluxo; 10 registros, 20 exemplares, 10 users, 0 autoridades, 0 empréstimos	pg-biblivre
+biblivre_simulacao_10_registros_com_exemplares_sinteticos.mrk	7372	7ba05450e9272421908b3f1127242c3d68d5490bfea274dc46265be8b0e48a96	MRK	001=10, 035=7, 245=10, 949=18, LDR=10	biblivre-mrk
+evergreen-sample.zip	2565441	6e46784648da4b231d5ccfcb59a2590747d2241606ead3082f2830c3b917249e	ZIP	101 entradas; 96 arquivos; 12127992 bytes expandidos	evergreen
+interface-importacao-referencia.png	428761	aec60152a7fe813bf046160bbd4e2c129d64c3da6bd9c4338b8a42866d1b9480	referência visual	fora das entidades	auxiliar
+koha sql sample.gz	21666484	32d5d22d9ca58bc6754eb6920e3c24152ee100cef15b6426f48c7cd469838ea3	gzip/SQL	149654596 bytes; DDL 297; tabelas com VALUES/COPY 98; outros INSERT 0	koha-sql
+koha-marc21-sample.mrk	9958	da582b6a0203d2379018a59c4b4d39fb032cf9d1b07d0d22f1862e3319049c8c	MRK	001=10, 035=7, 245=10, 952=18, LDR=10	koha-mrk
+patrons-ficticios-malucos-v3.csv	104964	fb7273733b4289970f4eb5b55d94b9682f8a36ea486bbc9327b51c79bc8bf07b	CSV	100 linhas × 84; borrowernumber distintos=100, cardnumber distintos=100, branchcode distintos=4, categorycode distintos=5; flags=1: 1	leitores-csv
+pergamum_simulacao_10_registros.mrk	6650	fd75bdeda90c5afcfbfff10339fea1fa918f2da281a39ed0f4fa205800c67a2f	MRK	001=10, 035=7, 245=10, LDR=10	pergamum

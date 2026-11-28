@@ -1,0 +1,23 @@
+perfil	origem_versao	natureza	acervo	leitores	autoridades	movimentos	condicao_de_uso	prova_ou_oraculo
+folio-marc	Cornell, versão pelo digest	exportações MARC bibliográficas e holdings	3E	—	—	—	estudo local	62 bibliográficos e 107 holdings por LDR/06
+folio-cornell	Cornell, versão pelo digest	TSV JSON	3E	—	—	—	estudo local	verificar.py e hierarquia 62/107/536
+folio-5k	FOLIO 5kItems, versão pelo digest	TSV JSON	3E	—	—	—	estudo local	47.745 pais e 49.580 holdings
+slims-data	SLiMS, release a confirmar	seed bibliográfico	3E	—	2E	—	estudo local	15 descrições e 10 itens, estatuto dos cabeçalhos a confirmar
+slims-ddl	SLiMS, release a confirmar	estrutura e configuração	2E	2E	2E	2E	estudo local	comparar esquema declarado com o seed
+openbiblio	OpenBiblio, release a confirmar	quatro fragmentos complementares	3E	—	—	—	estudo local	22/93 e 604/1.299 com ligação por chave
+biblivre-seed	Biblivre, variantes pelo digest	DDL e carga inicial	2E	2E	2E	2E	estudo local	schemas e tabelas de registros sem população demonstrada
+pmb	PMB, release a confirmar	seed	1E	?	?	?	estudo local	parametrização e papel de users por verificar
+sqlite-sim	sintético, versão pelo digest	SQL SQLite textual gzip	3E	3E	?	3E	sintético para avaliação local	matrículas versus perfis de equipe e 1.000 movimentos
+autoridades-txt	produtor por confirmar, versão pelo digest	MARC etiquetado	—	—	3E	—	estudo local	doze autoridades, 4XX/5XX/670
+pg10	pg_dump 10.20	dump textual COPY	3E	—	—	?	estudo local	verificar.py, identificador de ocorrência ausente em três
+relatorio-xml	relatório, versão pelo digest	MARCXML com partes externas	3E	—	—	—	estudo local	30 XML e 30 sufixos, sem 952 interno
+auxiliar	mantenedor	referência	—	—	—	—	referência interna	fora da entrada de migração
+xlsx	planilha, versão pelo digest	planilha sem cabeçalho	3E	—	—	—	estudo local	56 × 12, data e chave a confirmar
+facil	Biblioteca Fácil, release a identificar	arquivo binário	1E	1E	?	1E	armazenamento restrito	layout e relatório do sistema indispensáveis
+pg-biblivre	Biblivre, arquivo PGDMP 1.16.0	backup de laboratório	3E	3E	2E	2E	armazenamento restrito	pg_restore 17.12, significado de users a confirmar
+biblivre-mrk	Biblivre, perfil 949 do PR 229	MRK sintético	5P	—	—	—	sintético para avaliação local	import_batch.rs e import_preview.rs, 10/18 e reapresentação
+evergreen	Evergreen 2187620a6329, múltiplas origens	arquivo com conjuntos independentes	3E	3E	3E	?	condições por membro, estudo local	evergreen.tsv e tabelas.tsv, qualificação por membro
+koha-sql	Koha/MariaDB, release SIGB a confirmar	dump misto comprimido	1P/3E	1P/3E	1P/3E	1P/3E	armazenamento restrito	verificar.py, fluxo Koha dedicado avaliado à parte
+koha-mrk	Koha, perfil 952	MRK	4P	—	—	—	estudo local	import_preview.rs, 10/18 e identidades qualificadas
+leitores-csv	Koha, CSV v3 declarado fictício	planilha de leitores	—	3E	—	—	fictício para avaliação local	100 identidades e cartões sem concessão de flags
+pergamum	Pergamum, versão pelo digest	MRK sintético	3E	—	—	—	sintético para avaliação local	import_preview.rs, nenhum 949 ou 952, comprovar zero itens
