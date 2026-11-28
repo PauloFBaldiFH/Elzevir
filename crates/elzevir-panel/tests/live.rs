@@ -667,6 +667,9 @@ fn assisted_restore_review_defaults_to_back_and_requires_a_choice() {
     use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
     let mut panel = connected();
     panel.section = elzevir_panel::Section::Backup;
+    if let Mode::Live(state) = &mut panel.mode {
+        state.institution.managed = true;
+    }
     let review = RestoreReview {
         token: "local-review".into(),
         id: "00112233445566778899aabbccddeeff".into(),
@@ -1095,4 +1098,95 @@ fn cloud_connections_route_browser_guidance_to_the_active_worker_sign_in() {
     panel.section = elzevir_panel::Section::Backup;
     let ended = sized_screen(&panel, "en", 160, 45);
     assert!(!ended.contains(worker_login) && !ended.contains("browser on this computer"));
+}
+
+#[test]
+fn restore_source_offers_both_pickers_and_personal_review_cannot_launch_a_swap() {
+    use elzevir_panel::{BackupScope, Form, Operation, RestoreReview};
+    let mut panel = connected();
+    panel.section = elzevir_panel::Section::Backup;
+    panel.form = Some(Form::new(Operation::Restore {
+        input: String::new(),
+        key: String::new(),
+    }));
+    let view = sized_screen(&panel, "en", 80, 24);
+    assert!(view.contains("Browse archive") && view.contains("Browse key"));
+    let review = RestoreReview {
+        token: "a".repeat(32),
+        id: "b".repeat(32),
+        file: "chosen.age".into(),
+        created: "2026-01-01".into(),
+        scope: BackupScope::Database,
+        schema: 1,
+        managed: true,
+    };
+    panel.form = Some(Form::new(Operation::ApplyRestore(review)));
+    assert!(sized_screen(&panel, "en", 80, 24).contains("elzevir backup restore"));
+    panel.form.as_mut().unwrap().values[0] = "apply".into();
+    panel.submit_form();
+    assert!(panel.diagnostics.requested.is_none());
+}
+
+#[test]
+fn restore_from_a_download_is_only_offered_for_the_observed_destination() {
+    use elzevir_panel::{BackupPage, CloudPlan, CloudTarget, CloudView, Operation, Section};
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut panel = connected();
+    panel.section = Section::Backup;
+    panel.backups.page = BackupPage::Connections;
+    let target = CloudTarget {
+        plan: "a".repeat(32),
+        connection: "b".repeat(32),
+        folder: "export".into(),
+    };
+    let name = format!("/archive/elzevir-{}.age", "c".repeat(32));
+    let plan = CloudPlan {
+        id: target.plan.clone(),
+        name: "Archive".into(),
+        connection: target.connection.clone(),
+        folder: target.folder.clone(),
+        keep: 5,
+        daily: None,
+        retention_pending: false,
+    };
+    if let Mode::Live(state) = &mut panel.mode {
+        state.snapshot.as_mut().unwrap().operations.cloud = Some(CloudView {
+            plans: vec![plan],
+            download: Some((target, name.clone().into())),
+            ..CloudView::default()
+        });
+    }
+    let key = |p: &mut Panel, c| {
+        p.handle(
+            &Event::Key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)),
+            140,
+            30,
+        );
+    };
+    key(&mut panel, ']');
+    key(&mut panel, ']');
+    assert!(screen(&panel, "en").contains("Validate downloaded copy"));
+    key(&mut panel, 'O');
+    assert_eq!(
+        panel.form.take().unwrap().operation,
+        Operation::Restore {
+            input: name,
+            key: String::new()
+        }
+    );
+    if let Mode::Live(state) = &mut panel.mode {
+        state
+            .snapshot
+            .as_mut()
+            .unwrap()
+            .operations
+            .cloud
+            .as_mut()
+            .unwrap()
+            .plans[0]
+            .folder = "another".into();
+    }
+    assert!(!screen(&panel, "en").contains("Validate downloaded copy"));
+    key(&mut panel, 'O');
+    assert!(panel.form.is_none() && panel.diagnostics.requested.is_none());
 }

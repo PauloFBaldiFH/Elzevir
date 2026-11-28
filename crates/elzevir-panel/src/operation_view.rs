@@ -308,7 +308,12 @@ pub(crate) fn form(
         height,
     );
     frame.render_widget(Clear, popup);
-    let block = crate::view::block(messages.get("op-dialog"), ascii)
+    let title = if matches!(form.operation, crate::Operation::ApplyRestore(_)) && !panel.managed() {
+        "restore-review"
+    } else {
+        "op-dialog"
+    };
+    let block = crate::view::block(messages.get(title), ascii)
         .title_style(Style::new().fg(theme::TEXT).add_modifier(Modifier::BOLD));
     let inner = block.inner(popup).inner(ratatui::layout::Margin::new(1, 0));
     frame.render_widget(block, popup);
@@ -323,6 +328,24 @@ pub(crate) fn form(
         summary,
         Rect::new(inner.x, inner.y, inner.width, header_rows),
     );
+    if matches!(form.operation, crate::Operation::ApplyRestore(_)) && !panel.managed() {
+        Button::new(
+            messages.get("restore-back"),
+            Action::Key(KeyCode::Esc),
+            Variant::Secondary,
+        )
+        .draw(
+            frame,
+            Rect::new(
+                inner.x,
+                inner.bottom().saturating_sub(button_height),
+                inner.width,
+                button_height,
+            ),
+            scene,
+        );
+        return;
+    }
     fields(
         frame,
         form,
@@ -356,6 +379,16 @@ pub(crate) fn form(
         inner.width,
         button_height,
     );
+    form_buttons(frame, form, messages, scene, buttons);
+}
+
+fn form_buttons(
+    frame: &mut Frame,
+    form: &crate::Form,
+    messages: &Messages,
+    scene: &mut crate::ui::Scene,
+    buttons: Rect,
+) {
     let [confirm, cancel] =
         ratatui::layout::Layout::horizontal([ratatui::layout::Constraint::Fill(1); 2])
             .spacing(1)
@@ -477,26 +510,71 @@ fn address_header(
     }
 }
 
-fn form_header(panel: &Panel, form: &crate::Form, messages: &Messages) -> Vec<Line<'static>> {
-    let mut header = vec![Line::from(messages.get(form.operation.key()))];
-    if let crate::Mode::Live(state) = &panel.mode {
+fn institution_header(
+    panel: &Panel,
+    form: &crate::Form,
+    messages: &Messages,
+    header: &mut Vec<Line<'static>>,
+) {
+    let crate::Mode::Live(state) = &panel.mode else {
+        return;
+    };
+    let name = state
+        .institution
+        .name
+        .as_deref()
+        .map_or_else(|| messages.get("panel-no-name"), text);
+    if matches!(
+        form.operation,
+        crate::Operation::Restore { .. } | crate::Operation::ApplyRestore(_)
+    ) {
+        let snapshot = crate::backup_center::sample(panel);
+        let value = |v: Option<String>| v.unwrap_or_else(|| messages.get("panel-unknown"));
+        header.push(row(messages, "restore-target", Some(name)));
         header.push(Line::from(
-            state
-                .institution
-                .name
-                .as_deref()
-                .map_or_else(|| messages.get("panel-no-name"), text),
+            messages.values(
+                "restore-conditions",
+                &[
+                    (
+                        "service",
+                        messages.get(crate::restore_view::service_state(snapshot)),
+                    ),
+                    (
+                        "sessions",
+                        value(
+                            snapshot
+                                .and_then(|s| s.operations.sessions)
+                                .map(|n| n.to_string()),
+                        ),
+                    ),
+                    (
+                        "space",
+                        value(
+                            snapshot
+                                .and_then(|s| s.storage.available_bytes)
+                                .map(crate::backup_center::bytes),
+                        ),
+                    ),
+                ],
+            ),
         ));
+    } else {
+        header.push(Line::from(name));
         header.push(row(
             messages,
             "op-sessions",
             state
                 .snapshot
                 .as_ref()
-                .and_then(|snapshot| snapshot.operations.sessions)
-                .map(|count| count.to_string()),
+                .and_then(|s| s.operations.sessions)
+                .map(|n| n.to_string()),
         ));
     }
+}
+
+fn form_header(panel: &Panel, form: &crate::Form, messages: &Messages) -> Vec<Line<'static>> {
+    let mut header = vec![Line::from(messages.get(form.operation.key()))];
+    institution_header(panel, form, messages, &mut header);
     address_header(panel, form, messages, &mut header);
     destination_header(panel, form, messages, &mut header);
     if matches!(form.operation, crate::Operation::Restore { .. }) {
@@ -535,7 +613,12 @@ fn form_header(panel: &Panel, form: &crate::Form, messages: &Messages) -> Vec<Li
             crate::BackupScope::Database => "restore-db-impact",
             crate::BackupScope::Full => "restore-full-impact",
         })));
-        header.push(Line::from(messages.get("restore-outage")));
+        if panel.managed() {
+            header.push(Line::from(messages.get("restore-outage")));
+        } else {
+            header.push(Line::from(messages.get("restore-personal")));
+            header.push(Line::from("elzevir backup restore --help"));
+        }
     }
     if matches!(form.operation, crate::Operation::BackupNow { .. })
         && let crate::Mode::Live(state) = &panel.mode
@@ -597,11 +680,25 @@ fn fields(
             }),
             Rect::new(area.x, y, area.width, 1),
         );
-        let input = Rect::new(area.x, y + 1, area.width, 1);
+        let mut input = Rect::new(area.x, y + 1, area.width, 1);
+        if matches!(form.operation, crate::Operation::Restore { .. }) {
+            let width = 19.min(input.width);
+            input.width -= width;
+            Button::new(
+                messages.get(if index == 0 {
+                    "restore-browse-archive"
+                } else {
+                    "restore-browse-key"
+                }),
+                Action::Key(KeyCode::F(if index == 0 { 3 } else { 4 })),
+                Variant::Secondary,
+            )
+            .draw(frame, Rect::new(input.right(), y + 1, width, 1), scene);
+        }
         if let Some(choices) = crate::operations::choices(key) {
             choice_buttons(frame, input, (index, value, choices), messages, scene);
         } else {
-            let hover = scene.add(Rect::new(area.x, y, area.width, 2), Action::Field(index));
+            let hover = scene.add(Rect::new(area.x, y, input.width, 2), Action::Field(index));
             let shown = field_value(key, value);
             let cursor = if focused { "▏" } else { "" };
             frame.render_widget(

@@ -9,8 +9,8 @@ expression: "screen(&panel, lang)"
 
   Local copy                    +Confirmed operation-------------------------------------------------------+
   Not read                      | Review institution restore                                               |
-                                | Biblioteca de teste                                                      |
-                                | Observed active staff sessions: Not read                                 |
+                                | Target institution · Biblioteca de teste                                 |
+                                | Service · Running   Sessions · Not read   Free disk · 100.0 MiB          |
   Recent local copies           | biblioteca.age                                                           |
   Local backup status unavailabl| 00112233445566778899aabbccddeeff   2026-11-20T22:30:00Z                  |spect the archive.
                                 | Database schema 1                                                        |

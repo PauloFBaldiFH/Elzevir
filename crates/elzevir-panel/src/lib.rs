@@ -34,6 +34,7 @@ pub use port::{MIN_PORT, PortForm, PortStep, Refusal, choose_port};
 mod folder_picker;
 mod inspection;
 mod restore_paths;
+mod restore_view;
 mod runtime;
 mod service_view;
 mod setup;
@@ -363,7 +364,10 @@ impl Panel {
             && self.section == Section::Backup
             && matches!(
                 self.backups.page,
-                BackupPage::Schedules | BackupPage::Connections | BackupPage::PlanConnection
+                BackupPage::Schedules
+                    | BackupPage::Connections
+                    | BackupPage::PlanConnection
+                    | BackupPage::Restore
             )
         {
             self.backups.page = if self.backups.page == BackupPage::PlanConnection {
@@ -485,7 +489,12 @@ impl Panel {
             '<' | '>' => {
                 self.step_cloud_plan(key == '>');
             }
-            'l' | 'D' | 'U' | 'O' | 'u' | '+' | 'M' => {
+            'O' => {
+                if let Some((plan, file, _)) = restore_view::downloaded(self) {
+                    restore_view::open_download(self, plan, file);
+                }
+            }
+            'l' | 'D' | 'U' | 'u' | '+' | 'M' => {
                 let Mode::Live(state) = &self.mode else {
                     return false;
                 };
@@ -503,17 +512,6 @@ impl Panel {
                     return true;
                 };
                 let target = plan.target();
-                if key == 'O' {
-                    if let Some((download, path)) = &view.download
-                        && download == &target
-                    {
-                        self.form = Some(Form::new(Operation::Restore {
-                            input: path.to_string_lossy().into_owned(),
-                            key: String::new(),
-                        }));
-                    }
-                    return true;
-                }
                 if key == '+' {
                     if self.cloud_targets.contains(&target) {
                         self.cloud_targets.retain(|t| t != &target);
@@ -683,9 +681,8 @@ impl Panel {
                 protocol: "auto".to_owned(),
             },
             (Section::Backup, 'R') => {
-                let Some(review) = self
-                    .observed_operations()
-                    .and_then(|ops| ops.review.clone())
+                let Some(review) =
+                    backup_center::sample(self).and_then(|s| s.operations.review.clone())
                 else {
                     return false;
                 };
@@ -777,7 +774,24 @@ impl Panel {
             }
             form.field = form.labels.len();
         }
+        if self
+            .form
+            .as_ref()
+            .is_some_and(|f| matches!(f.operation, Operation::ApplyRestore(_)))
+            && !self.managed()
+        {
+            self.form = None;
+            return;
+        }
         let operation = self.form.take().and_then(Form::finish);
+        if matches!(
+            operation,
+            Some(Operation::Restore { .. } | Operation::ApplyRestore(_))
+        ) {
+            self.backups.page = BackupPage::Restore;
+            self.backups.offset = 0;
+            self.access_notice = None;
+        }
         if self.section == Section::Backup && matches!(operation, Some(Operation::BackupNow { .. }))
         {
             self.backups.page = BackupPage::Result;

@@ -73,6 +73,19 @@ pub(super) fn draw(
             )],
         );
     }
+    if tab == 2
+        && let Some((plan, file, _)) = crate::restore_view::downloaded(panel)
+    {
+        ui.buttons(
+            row(content, content.height.saturating_sub(2), 1),
+            &[(
+                "restore-download",
+                Action::Backup(Command::RestoreDownload(plan, file)),
+                Variant::Secondary,
+                !panel.diagnostics.pending,
+            )],
+        );
+    }
     if count > capacity {
         pager(
             ui,

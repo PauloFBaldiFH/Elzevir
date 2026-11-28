@@ -175,6 +175,7 @@ fn observe(
         if let Some(review) = review
             && panel.form.is_none()
             && panel.section == crate::Section::Backup
+            && panel.backups.page == crate::BackupPage::Restore
         {
             panel.form = Some(crate::Form::new(crate::Operation::ApplyRestore(review)));
         }
@@ -272,7 +273,7 @@ fn interact(
                     editor.draw(frame, panel, messages, &mut scene);
                 } else if let Some(active) = &picker {
                     scene.clear();
-                    active.draw(frame, messages, ascii);
+                    active.draw(frame, messages, ascii, &mut scene);
                 } else {
                     crate::view::interactive(frame, panel, messages, ascii, &mut scene);
                     if let Some(dialog) = &transfer
@@ -300,7 +301,7 @@ fn interact(
                 editor.input(&input, &mut scene, panel, &mut access);
                 continue;
             }
-            if handle_picker(&input, &mut picker, panel) {
+            if picker.is_some() && handle_picker(&input, &mut picker, panel, &mut scene) {
                 continue;
             }
             let Some(input) = control_input(
@@ -313,7 +314,8 @@ fn interact(
             ) else {
                 continue;
             };
-            if !crate::transfer::handle(&mut transfer, &input, panel, &mut access)
+            if !open_picker(&input, &mut picker, panel)
+                && !crate::transfer::handle(&mut transfer, &input, panel, &mut access)
                 && !access.handle(&input, panel)
             {
                 panel.handle(&input, drawn.width, drawn.height);
@@ -458,27 +460,56 @@ fn handle_picker(
     input: &Event,
     picker: &mut Option<crate::folder_picker::Picker>,
     panel: &mut Panel,
+    scene: &mut crate::ui::Scene,
 ) -> bool {
     if let Some(active) = picker {
         if let Event::Paste(path) = input {
+            scene.reset_input();
             active.paste(path);
             return true;
         }
-        if let Event::Key(key) = input
-            && key.kind == event::KeyEventKind::Press
-        {
-            if key.code == event::KeyCode::F(6)
+        let code = match input {
+            Event::Key(k) if k.kind == event::KeyEventKind::Press => {
+                scene.reset_input();
+                Some(k.code)
+            }
+            Event::Mouse(m) => {
+                let action = match m.kind {
+                    MouseEventKind::ScrollDown | MouseEventKind::ScrollUp => {
+                        scene.reset_input();
+                        Some(crate::ui::Action::Key(
+                            if m.kind == MouseEventKind::ScrollDown {
+                                event::KeyCode::Down
+                            } else {
+                                event::KeyCode::Up
+                            },
+                        ))
+                    }
+                    _ => mouse_action(*m, scene, panel, true),
+                };
+                action.and_then(|a| active.activate(a))
+            }
+            Event::Resize(..) | Event::FocusLost => {
+                scene.reset_input();
+                None
+            }
+            _ => None,
+        };
+        if let Some(code) = code {
+            if code == event::KeyCode::F(6)
                 && panel.form.as_ref().is_some_and(|f| {
                     matches!(f.operation, crate::Operation::Restore { .. }) && f.field == 0
                 })
             {
                 *picker = None;
                 panel.form = None;
+                panel.backups.page = crate::BackupPage::Connections;
+                panel.backups.offset = 0;
                 panel.cloud_tab = 2;
                 panel.scroll = 0;
-            } else if key.code == event::KeyCode::Esc {
+            } else if code == event::KeyCode::Esc {
                 *picker = None;
-            } else if let Some(mut path) = active.key(key.code) {
+            } else if let Some(mut path) = active.key(code) {
                 if let Some(form) = &mut panel.form {
                     if matches!(form.operation, crate::Operation::ExportLatest { .. }) {
                         path.push(std::path::MAIN_SEPARATOR);
@@ -493,8 +524,16 @@ fn handle_picker(
         }
         return true;
     }
+    false
+}
+
+fn open_picker(
+    input: &Event,
+    picker: &mut Option<crate::folder_picker::Picker>,
+    panel: &mut Panel,
+) -> bool {
     if let Event::Key(key) = input
-        && key.code == event::KeyCode::F(2)
+        && matches!(key.code, event::KeyCode::F(2..=4))
         && key.kind == event::KeyEventKind::Press
         && let Some(form) = &mut panel.form
         && matches!(
@@ -510,6 +549,11 @@ fn handle_picker(
             .and_then(|s| s.operations.backup_folder.clone())
     {
         if matches!(form.operation, crate::Operation::Restore { .. }) {
+            match key.code {
+                event::KeyCode::F(3) => form.field = 0,
+                event::KeyCode::F(4) => form.field = 1,
+                _ => {}
+            }
             if form.field < 2
                 && let Some(s) = &state.snapshot
             {
@@ -520,6 +564,9 @@ fn handle_picker(
                 ));
             }
             return true;
+        }
+        if key.code != event::KeyCode::F(2) {
+            return false;
         }
         form.field = form.values.len().saturating_sub(1);
         *picker = Some(crate::folder_picker::Picker::new(folder));
