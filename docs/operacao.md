@@ -89,7 +89,7 @@ as cópias selecionadas. Se o contêiner também foi preparado, cancele seu
 rascunho separadamente quando terminar. O conjunto serve para conferência
 antes da migração. [Comandos da CLI e limites](specs/catalogo/importacao-universal-v4.md#conjunto-privado-de-fontes-1b)
 
-No conjunto privado, **Conferir relações** permite examinar chaves, referências pendentes e a hierarquia de registros antes da migração. A CLI oferece `elzevir import relations` para a mesma revisão. [Exemplo de receita e leitura do relatório](specs/catalogo/relacoes-entre-fontes.md)
+No conjunto privado, **Conferir relações** permite examinar chaves, referências pendentes e a hierarquia de registros antes da migração. A CLI oferece `elzevir import relations` para a mesma revisão. Salve `report.plan` para repetir as relações após renomear ou reordenar os arquivos. Para conteúdo novo, confira os papéis e atualize os digests pelo inventário. [Exemplo de receita e leitura do relatório](specs/catalogo/relacoes-entre-fontes.md)
 
 ## Backups e recuperação
 

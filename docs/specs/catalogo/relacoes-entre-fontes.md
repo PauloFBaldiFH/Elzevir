@@ -6,12 +6,21 @@ lote, à revisão, ao digest do manifesto e aos digests dos membros. Uma posiç�
 de registro indica membro, linha a partir de 1 e deslocamento em bytes no
 membro. As referências são reproduzíveis a partir do original.
 
-Uma receita v1 nomeia os conjuntos, membros, leitores, componentes ordenados
+Uma receita v2 nomeia os conjuntos, leitores, componentes ordenados
 da identidade e relações direcionadas. Cada relação declara conjunto filho,
 chave estrangeira, conjunto pai e cardinalidade esperada (vários para um ou
 um para um). Uma tabela de associação pode ter chave composta e duas relações.
 As relações item → holding e holding → instância preservam o nível intermediário.
-Um membro ausente representa uma classe ausente na exportação.
+Cada conjunto declara `source_sha256` com o digest do membro no inventário
+ou `null` quando o papel está ausente. O avaliador exige uma única ocorrência
+do digest no lote. Renomear ou reordenar os arquivos conserva a receita e os
+vínculos. Conteúdo alterado exige revisar o novo inventário e atualizar o
+digest do papel correspondente. As chaves e relações são reutilizadas.
+A posição efetiva aparece em `report.identities[].member`, na ordem dos
+conjuntos. Uma receita v1 da prévia experimental usa posições relativas:
+para migrar, conferir cada membro no inventário original, trocar `member`
+por `source_sha256` e usar a versão 2. Atribuições apenas posicionais são
+recusadas, inclusive quando os arquivos têm a mesma estrutura.
 
 A leitura aceita um objeto JSON por linha ou um envelope TSV com ID textual
 na primeira coluna e objeto JSON na segunda. Campos adicionais ficam no
@@ -52,14 +61,22 @@ elzevir import relations --data-dir DIR --operator 2 LOTE 1 --plan receita.json
 
 Exemplo de receita para uma exportação independente. A ordem dos componentes
 faz parte da chave. O JSON do relatório inclui a receita efetivamente usada
-em `report.plan`, que pode ser salva e revista pela opção `--plan`.
+em `report.plan`, que pode ser salva e revista pela opção `--plan`. Os dois originais abaixo têm um objeto por linha em UTF-8, com LF final.
+
+```jsonl
+{"filial":"S","codigo":"01"}
+```
+
+```jsonl
+{"id":"C1","local":{"filial":"S","setor":"01"}}
+```
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "datasets": [
-    {"name":"setores","member":1,"encoding":"json_lines","key":["/filial","/codigo"]},
-    {"name":"caixas","member":2,"encoding":"json_lines","key":["/id"]}
+    {"name":"setores","source_sha256":"d29ae0a1d0d77655f0bfd8839ad17fc9c08c86fc7ee12104022c24c8511ac647","encoding":"json_lines","key":["/filial","/codigo"]},
+    {"name":"caixas","source_sha256":"57dcf52b60698a7f60c28b99044854c697171a563a2a688ba2e32c5b018ae7ef","encoding":"json_lines","key":["/id"]}
   ],
   "relations": [
     {"child":"caixas","parent":"setores","foreign":["/local/filial","/local/setor"],"cardinality":"many_to_one"}

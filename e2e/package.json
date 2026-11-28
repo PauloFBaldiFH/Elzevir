@@ -4,7 +4,8 @@
   "type": "module",
   "license": "GPL-3.0-or-later",
   "scripts": {
-    "staff-login": "node staff-login.mjs"
+    "staff-login": "node staff-login.mjs",
+    "import-relations": "node import-relations.mjs"
   },
   "devDependencies": {
     "playwright": "1.63.0"

@@ -68,15 +68,17 @@ jobs:
         env:
           ELZEVIR_STAFF_PASSWORD: e2e-password-123
         run: |
-          ./target/debug/elzevir staff add --data-dir "$RUNNER_TEMP/elzevir" --login admin --admin
+          ./target/debug/elzevir staff add --data-dir "$RUNNER_TEMP/elzevir" --login admin --admin --cataloguing --patrons --circulation
           ./target/debug/elzevir serve --data-dir "$RUNNER_TEMP/elzevir" --listen 127.0.0.1:8080 --insecure-cookies &
           for _ in $(seq 50); do curl -sf -o /dev/null http://127.0.0.1:8080/ && break; sleep 0.2; done
-      - name: Sign in and out in Chromium
+      - name: Check staff sign-in and relation recipe replay in Chromium
         working-directory: e2e
         env:
           ELZEVIR_URL: http://127.0.0.1:8080
           ELZEVIR_PASSWORD: e2e-password-123
-        run: npm run staff-login
+        run: |
+          npm run staff-login
+          npm run import-relations
 
   test:
     name: test (${{ matrix.name }})

@@ -249,7 +249,10 @@ pub(super) fn evaluate<R: BufRead>(
     let mut reports: Vec<_> = bindings.iter().map(|_| EdgeReport::default()).collect();
     let mut degrees = vec![BTreeMap::<Position, u32>::new(); bindings.len()];
     for (i, d) in plan.datasets.iter().enumerate() {
-        let mut dataset = Identities::default();
+        let mut dataset = Identities {
+            member: d.member,
+            ..Identities::default()
+        };
         let index = bound(&indices.identities, i)?;
         let outgoing = bound(&indices.outgoing, i)?;
         if let Some(member) = d.member {

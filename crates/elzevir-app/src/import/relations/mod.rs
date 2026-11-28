@@ -25,8 +25,12 @@ pub enum Encoding {
 pub struct Dataset {
     /// Name scoped to this plan.
     pub name: String,
-    /// Inventory position, or absent when this role was not supplied.
-    pub member: Option<usize>,
+    /// Verified content of this role, or explicitly null when the role is absent.
+    #[serde(deserialize_with = "Option::deserialize")]
+    pub source_sha256: Option<String>,
+    /// Position resolved against the current inventory, never taken from a recipe.
+    #[serde(skip)]
+    member: Option<usize>,
     /// Source record reader.
     pub encoding: Encoding,
     /// Ordered identity components.
@@ -64,7 +68,7 @@ pub struct Relation {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Plan {
-    /// Contract version, currently 1.
+    /// Contract version, currently 2.
     pub version: u8,
     /// Dataset bindings for one source set.
     pub datasets: Vec<Dataset>,
@@ -93,7 +97,7 @@ impl Selection {
             .map(Self::Explicit)
             .map_err(|e| {
                 format!(
-                    "invalid relation plan at line {}, column {}",
+                    "invalid relation plan at line {}, column {}: use v2 with source_sha256 for each dataset",
                     e.line(),
                     e.column()
                 )
@@ -206,6 +210,8 @@ pub struct EdgeReport {
 /// Outcomes of checking identities, including datasets with no outgoing links.
 #[derive(Default, Serialize)]
 pub struct Identities {
+    /// One-based member in the current inventory, or absent for an unsupplied role.
+    pub member: Option<usize>,
     /// Exclusive outcomes in this source.
     pub counts: BTreeMap<Outcome, u64>,
     /// First row per outcome, located in this dataset.
@@ -244,25 +250,34 @@ pub struct Report {
     pub from: u64,
 }
 
-/// Resolves exact keys in a single immutable batch. The caller supplies a fresh,
-/// digest-verifying reader per pass. Only keys, positions and counts are indexed.
+/// Resolves exact keys in a single immutable batch. The caller supplies verified
+/// member digests and a fresh digest-verifying reader for each pass. The index
+/// stores only keys, positions and counts.
 ///
 /// # Errors
 /// Refuses unknown versions, ambiguous bindings, malformed records and budget overruns.
 pub fn analyze<R: BufRead>(
-    member_count: usize,
+    member_digests: &[&str],
     selection: Selection,
     from: u64,
     mut open: impl FnMut(usize) -> Result<R, String>,
 ) -> Result<Report, String> {
-    if !(1..=super::batches::MAX_SOURCE_MEMBERS).contains(&member_count) || from == 0 {
+    let member_count = member_digests.len();
+    if !(1..=super::batches::MAX_SOURCE_MEMBERS).contains(&member_count)
+        || from == 0
+        || !member_digests.iter().all(|s| {
+            s.len() == 64
+                && s.bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        })
+    {
         return Err("invalid relation inventory or page".into());
     }
-    let (evidence, (plan, observations)) = match selection {
-        Selection::FolioV1 => ("folio-v1", folio::recognize(member_count, &mut open)?),
-        Selection::Explicit(plan) => ("explicit-v1", (plan, Vec::new())),
+    let (evidence, (mut plan, observations)) = match selection {
+        Selection::FolioV1 => ("folio-v1", folio::recognize(member_digests, &mut open)?),
+        Selection::Explicit(plan) => ("explicit-v2", (plan, Vec::new())),
     };
-    let bindings = plan.validate(member_count)?;
+    let bindings = plan.bind(member_digests)?;
     let unassigned = (1..=member_count)
         .filter(|i| !plan.datasets.iter().any(|d| d.member == Some(*i)))
         .collect();
@@ -279,8 +294,8 @@ pub fn analyze<R: BufRead>(
 }
 
 impl Plan {
-    fn validate(&self, members: usize) -> Result<Vec<(usize, usize)>, String> {
-        if self.version != 1
+    fn bind(&mut self, member_digests: &[&str]) -> Result<Vec<(usize, usize)>, String> {
+        if self.version != 2
             || self.datasets.is_empty()
             || self.datasets.len() > 64
             || self.relations.len() > 64
@@ -289,14 +304,38 @@ impl Plan {
         }
         let mut names = BTreeMap::new();
         let mut positions = BTreeSet::new();
-        for (i, dataset) in self.datasets.iter().enumerate() {
+        for (i, dataset) in self.datasets.iter_mut().enumerate() {
+            dataset.member = match &dataset.source_sha256 {
+                Some(digest) => {
+                    let mut matches = member_digests
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, sha)| **sha == digest);
+                    let (index, _) = matches.next().ok_or_else(|| {
+                        format!(
+                            "dataset {}: source digest absent; review the inventory",
+                            i + 1
+                        )
+                    })?;
+                    if let Some((second, _)) = matches.next() {
+                        return Err(format!(
+                            "dataset {}: ambiguous source digest at members {} and {}",
+                            i + 1,
+                            index + 1,
+                            second + 1
+                        ));
+                    }
+                    Some(index + 1)
+                }
+                None => None,
+            };
             if dataset.name.trim().is_empty()
                 || dataset.name.len() > 128
                 || dataset.name.chars().any(char::is_control)
-                || names.insert(&dataset.name, i).is_some()
-                || dataset
-                    .member
-                    .is_some_and(|n| !(1..=members).contains(&n) || !positions.insert(n))
+                || names
+                    .insert(&dataset.name, (i, dataset.key.len()))
+                    .is_some()
+                || dataset.member.is_some_and(|n| !positions.insert(n))
                 || !valid_key(&dataset.key)
                 || dataset.check_envelope
                     && (dataset.encoding != Encoding::TsvJson || dataset.key.len() != 1)
@@ -307,11 +346,9 @@ impl Plan {
         self.relations
             .iter()
             .map(|edge| {
-                let child = *names.get(&edge.child).ok_or("unknown child dataset")?;
-                let parent = *names.get(&edge.parent).ok_or("unknown parent dataset")?;
-                if !valid_key(&edge.foreign)
-                    || edge.foreign.len() != bound(&self.datasets, parent)?.key.len()
-                {
+                let &(child, _) = names.get(&edge.child).ok_or("unknown child dataset")?;
+                let &(parent, arity) = names.get(&edge.parent).ok_or("unknown parent dataset")?;
+                if !valid_key(&edge.foreign) || edge.foreign.len() != arity {
                     return Err("invalid relation key or arity".into());
                 }
                 Ok((child, parent))

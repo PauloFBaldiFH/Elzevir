@@ -1269,6 +1269,74 @@ fn relations_preview_handles_5k_holdings_without_creating_items() {
         serde_json::json!({"resolved":49_580})
     );
     assert_eq!(r["edges"][1]["counts"], serde_json::json!({}));
-    assert!(r["plan"]["datasets"][2]["member"].is_null());
+    assert!(r["plan"]["datasets"][2]["source_sha256"].is_null());
+    assert!(r["identities"][2]["member"].is_null());
     assert!(!dir.path().join("elzevir.db").exists());
+}
+
+#[test]
+fn explicit_recipe_replays_by_content_and_refuses_changed_or_ambiguous_sources() {
+    use serde_json::{Value, json};
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path();
+    let parents = data.join("parents");
+    let children = data.join("children");
+    fs::write(&parents, "{\"id\":\"P\",\"ref\":\"C\"}\n").unwrap();
+    fs::write(
+        &children,
+        "{\"id\":\"C\",\"ref\":\"P\"}\n{\"id\":\"D\",\"ref\":\"P\"}\n",
+    )
+    .unwrap();
+    let stage_set = |paths: &[&Path]| {
+        let output = success(
+            command(data, "1", "stage-set")
+                .args(["--origin", "library"])
+                .args(paths)
+                .output()
+                .unwrap(),
+        );
+        let batch = output.split_whitespace().nth(1).unwrap().to_owned();
+        let manifest: Value = serde_json::from_str(output.lines().nth(1).unwrap()).unwrap();
+        (batch, manifest)
+    };
+    let preview = |batch: &str, plan: &Value| {
+        let path = data.join("plan.json");
+        fs::write(&path, serde_json::to_vec(plan).unwrap()).unwrap();
+        command(data, "1", "relations")
+            .args([batch, "1", "--plan"])
+            .arg(path)
+            .output()
+            .unwrap()
+    };
+    let (batch, manifest) = stage_set(&[&parents, &children]);
+    let recipe = json!({"version":2,"datasets":[
+        {"name":"p","source_sha256":manifest["members"][0]["sha256"],"key":["/id"],"encoding":"json_lines"},
+        {"name":"c","source_sha256":manifest["members"][1]["sha256"],"key":["/id"],"encoding":"json_lines"}
+    ],"relations":[{"child":"c","parent":"p","foreign":["/ref"],"cardinality":"many_to_one"}]});
+    let first: Value = serde_json::from_str(&success(preview(&batch, &recipe))).unwrap();
+    let saved = &first["report"]["plan"];
+    assert_eq!(first["report"]["edges"][0]["counts"], json!({"resolved":2}));
+    let x = data.join("x");
+    let y = data.join("y");
+    fs::rename(&children, &x).unwrap();
+    fs::rename(&parents, &y).unwrap();
+    let (reordered, _) = stage_set(&[&x, &y]);
+    let replay: Value = serde_json::from_str(&success(preview(&reordered, saved))).unwrap();
+    assert_eq!(saved, &replay["report"]["plan"]);
+    assert_eq!(first["report"]["edges"], replay["report"]["edges"]);
+    assert_eq!(replay["report"]["identities"][0]["member"], 2);
+    assert_eq!(replay["report"]["identities"][1]["member"], 1);
+    let (duplicated, _) = stage_set(&[&x, &y, &x]);
+    refusal(&preview(&duplicated, saved), "ambiguous source digest");
+    fs::write(&x, "{\"id\":\"E\",\"ref\":\"P\"}\n").unwrap();
+    let (changed, inventory) = stage_set(&[&x, &y]);
+    refusal(&preview(&changed, saved), "source digest absent");
+    let mut revised = saved.clone();
+    revised["datasets"][1]["source_sha256"] = inventory["members"][0]["sha256"].clone();
+    let reviewed: Value = serde_json::from_str(&success(preview(&changed, &revised))).unwrap();
+    assert_eq!(
+        reviewed["report"]["edges"][0]["counts"],
+        json!({"resolved":1})
+    );
+    assert!(!data.join("elzevir.db").exists());
 }

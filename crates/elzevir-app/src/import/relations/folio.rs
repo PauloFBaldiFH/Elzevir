@@ -48,13 +48,14 @@ fn signatures(v: &Value, evidence: &mut RoleEvidence) -> [bool; 3] {
 }
 
 pub(super) fn recognize<R: BufRead>(
-    members: usize,
+    member_digests: &[&str],
     open: &mut impl FnMut(usize) -> Result<R, String>,
 ) -> Result<(Plan, Vec<RoleEvidence>), String> {
     let mut observations = Vec::new();
     let mut assignments = [None; 3];
     let mut count = 0;
-    for member in 1..=members {
+    for (index, digest) in member_digests.iter().enumerate() {
+        let member = index + 1;
         let mut role = None;
         let mut unknown = false;
         let mut evidence = RoleEvidence {
@@ -90,7 +91,8 @@ pub(super) fn recognize<R: BufRead>(
         evidence.role = role.and_then(|i| ROLES.get(i).copied());
         observations.push(evidence);
         if let Some(role) = role
-            && let Some(first) = super::bound_mut(&mut assignments, role)?.replace(member)
+            && let Some((_, first)) =
+                super::bound_mut(&mut assignments, role)?.replace((*digest, member))
         {
             return Err(format!(
                 "ambiguous {} binding at members {first} and {member}",
@@ -104,9 +106,10 @@ pub(super) fn recognize<R: BufRead>(
     let datasets = ROLES
         .iter()
         .zip(assignments)
-        .map(|(name, member)| Dataset {
+        .map(|(name, assignment)| Dataset {
             name: (*name).into(),
-            member,
+            source_sha256: assignment.map(|(digest, _)| digest.to_owned()),
+            member: None,
             encoding: Encoding::TsvJson,
             key: vec!["/id".into()],
             check_envelope: true,
@@ -126,7 +129,7 @@ pub(super) fn recognize<R: BufRead>(
     .collect();
     Ok((
         Plan {
-            version: 1,
+            version: 2,
             datasets,
             relations,
         },
