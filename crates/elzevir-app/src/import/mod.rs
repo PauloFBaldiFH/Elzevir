@@ -10,6 +10,7 @@ pub mod biblivre;
 pub mod containers;
 pub mod edits;
 pub mod koha_sql;
+pub mod postgres;
 pub mod preview;
 pub mod sheet;
 pub mod table;

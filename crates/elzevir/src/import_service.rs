@@ -22,7 +22,7 @@ use elzevir_app::import::{
 };
 use elzevir_app::import_detection::{Evidence, ImportFormat, table_delimiter};
 use elzevir_app::koha_types::TypeTranslationSource;
-use elzevir_app::staff::StaffId;
+use elzevir_app::staff::{StaffId, StaffIdentity};
 use elzevir_store::ElzevirStore;
 
 use crate::import_batches::{Batch, Batches, is_delimited};
@@ -33,10 +33,21 @@ pub(crate) struct WebImports {
 }
 
 impl BatchPort for WebImports {
-    fn execute(&self, operator: StaffId, command: BatchCommand) -> Result<BatchReply, BatchError> {
+    fn execute(
+        &self,
+        actor: &StaffIdentity,
+        command: BatchCommand,
+    ) -> Result<BatchReply, BatchError> {
+        let operator = actor.id;
         let id = u64::try_from(operator.0)
             .map_err(|_| BatchError::Missing("invalid import operator".into()))?;
-        execute(&self.data_dir, id, Some((&self.store, operator)), command)
+        execute(
+            &self.data_dir,
+            id,
+            Some((&self.store, operator)),
+            actor.can_inventory_sources(),
+            command,
+        )
     }
 }
 
@@ -46,6 +57,7 @@ pub(crate) fn execute(
     data_dir: &Path,
     operator: u64,
     live: LiveStore<'_>,
+    mixed_access: bool,
     command: BatchCommand,
 ) -> Result<BatchReply, BatchError> {
     if crate::restore_journal::pending(data_dir) {
@@ -53,13 +65,51 @@ pub(crate) fn execute(
             "interrupted restore requires recovery before managing import batches".into(),
         ));
     }
-    let create = matches!(command, BatchCommand::Stage(..) | BatchCommand::List);
+    let create = matches!(
+        command,
+        BatchCommand::Stage(..) | BatchCommand::StageSet(..) | BatchCommand::List
+    );
     let batches = Batches::open(data_dir, operator, create).map_err(BatchError::Unavailable)?;
-    let load = |id: &str| batches.load(id).map_err(BatchError::Missing);
+    let load = |id: &str| {
+        let batch = batches.load(id).map_err(BatchError::Missing)?;
+        if !mixed_access && batch.is_source_set() {
+            return Err(BatchError::Missing("inaccessible batch".into()));
+        }
+        Ok(batch)
+    };
     match command {
         BatchCommand::List => Ok(BatchReply::List(
-            batches.list().map_err(BatchError::Unavailable)?,
+            batches
+                .list()
+                .map_err(BatchError::Unavailable)?
+                .into_iter()
+                .filter(|batch| mixed_access || batch.format != "SourceSet")
+                .collect(),
         )),
+        BatchCommand::StageSet(origin, inputs) => {
+            if !mixed_access {
+                return Err(BatchError::Missing("inaccessible batch".into()));
+            }
+            Ok(view(
+                &batches,
+                batches
+                    .stage_set(origin, inputs)
+                    .map_err(BatchError::Invalid)?,
+                None,
+            ))
+        }
+        BatchCommand::ArchiveSet(parent, revision, origin, positions) => {
+            if !mixed_access {
+                return Err(BatchError::Missing("inaccessible batch".into()));
+            }
+            let batch = load(&parent)?;
+            check_revision(&batch, revision)?;
+            batch.check_review().map_err(BatchError::Conflict)?;
+            let child = batches
+                .stage_archive_set(&batch, origin, &positions)
+                .map_err(BatchError::Invalid)?;
+            Ok(view(&batches, child, None))
+        }
         BatchCommand::Stage(input, selected) => Ok(view(
             &batches,
             batches
@@ -77,48 +127,10 @@ pub(crate) fn execute(
             Ok(view(&batches, batch, preview))
         }
         BatchCommand::Edit(id, revision, recipe, format) => {
-            let mut batch = load(&id)?;
-            check_revision(&batch, revision)?;
-            batch.check_review().map_err(BatchError::Conflict)?;
-            recipe
-                .validate()
-                .map_err(|error| BatchError::Invalid(error.to_string()))?;
-            let selection = match format {
-                FormatChoice::Keep => Ok(()),
-                FormatChoice::Detect => batches.choose_format(&mut batch, None),
-                FormatChoice::Use(format) => batches.choose_format(&mut batch, Some(format)),
-            };
-            selection.map_err(BatchError::Invalid)?;
-            if batch.archive.is_none()
-                && (recipe.archive.is_some()
-                    || (batch.is_table()
-                        && (!recipe.edits.is_empty() || recipe.biblivre.is_some()))
-                    || (!batch.is_table() && recipe.table.is_some()))
-            {
-                return Err(BatchError::Refused(BatchRefusal::IncompatibleRecipe));
-            }
-            batch.recipe = recipe;
-            batch.revision = batch
-                .revision
-                .checked_add(1)
-                .ok_or_else(|| BatchError::Conflict("batch revision exhausted".into()))?;
-            batch.preview_sha256 = None;
-            batch.state = State::Review;
-            batches.save(&batch).map_err(BatchError::Unavailable)?;
-            Ok(view(&batches, batch, None))
+            edit(&batches, load(&id)?, revision, recipe, format)
         }
         BatchCommand::Preview(id, revision, from) => {
-            let mut batch = load(&id)?;
-            if let Some(revision) = revision {
-                check_revision(&batch, revision)?;
-            }
-            batch.check_review().map_err(BatchError::Conflict)?;
-            let Prepared { preview, stamp, .. } = prepare(data_dir, live, &batches, &batch, from)?;
-            let ready = preview.report.issues.is_empty();
-            batch.state = if ready { State::Ready } else { State::Review };
-            batch.preview_sha256 = ready.then_some(stamp);
-            batches.save(&batch).map_err(BatchError::Unavailable)?;
-            Ok(view(&batches, batch, Some(preview)))
+            preview(data_dir, live, &batches, load(&id)?, revision, from)
         }
         BatchCommand::Confirm(id, revision) => {
             let batch = load(&id)?;
@@ -146,10 +158,73 @@ pub(crate) fn execute(
     }
 }
 
+fn edit(
+    batches: &Batches,
+    mut batch: Batch,
+    revision: u64,
+    recipe: Recipe,
+    format: FormatChoice,
+) -> Result<BatchReply, BatchError> {
+    check_revision(&batch, revision)?;
+    batch.check_review().map_err(BatchError::Conflict)?;
+    recipe
+        .validate()
+        .map_err(|error| BatchError::Invalid(error.to_string()))?;
+    let selection = match format {
+        FormatChoice::Keep => Ok(()),
+        FormatChoice::Detect => batches.choose_format(&mut batch, None),
+        FormatChoice::Use(format) => batches.choose_format(&mut batch, Some(format)),
+    };
+    selection.map_err(BatchError::Invalid)?;
+    if batch.archive.is_none()
+        && (recipe.archive.is_some()
+            || (batch.is_table() && (!recipe.edits.is_empty() || recipe.biblivre.is_some()))
+            || (!batch.is_table() && recipe.table.is_some()))
+    {
+        return Err(BatchError::Refused(BatchRefusal::IncompatibleRecipe));
+    }
+    batch.recipe = recipe;
+    batch.revision = batch
+        .revision
+        .checked_add(1)
+        .ok_or_else(|| BatchError::Conflict("batch revision exhausted".into()))?;
+    batch.preview_sha256 = None;
+    batch.state = State::Review;
+    batches.save(&batch).map_err(BatchError::Unavailable)?;
+    Ok(view(batches, batch, None))
+}
+
+fn preview(
+    data_dir: &Path,
+    live: LiveStore<'_>,
+    batches: &Batches,
+    mut batch: Batch,
+    revision: Option<u64>,
+    from: Option<u64>,
+) -> Result<BatchReply, BatchError> {
+    if let Some(revision) = revision {
+        check_revision(&batch, revision)?;
+    }
+    if let Some(set) = &batch.sources {
+        batches
+            .verify_set(&batch, set)
+            .map_err(BatchError::Invalid)?;
+        return Ok(view(batches, batch, None));
+    }
+    batch.check_review().map_err(BatchError::Conflict)?;
+    let Prepared { preview, stamp, .. } = prepare(data_dir, live, batches, &batch, from)?;
+    let ready = preview.report.issues.is_empty();
+    batch.state = if ready { State::Ready } else { State::Review };
+    batch.preview_sha256 = ready.then_some(stamp);
+    batches.save(&batch).map_err(BatchError::Unavailable)?;
+    Ok(view(batches, batch, Some(preview)))
+}
+
 fn view(batches: &Batches, batch: Batch, preview: Option<BatchPreview>) -> BatchReply {
     let table = table_source(batches, &batch);
     BatchReply::Batch(Box::new(BatchView {
         batch: batch.summary(),
+        sources: batch.sources,
         recipe: batch.recipe,
         archive: batch.archive,
         table,
@@ -500,6 +575,11 @@ fn confirm(
     batches: &Batches,
     mut batch: Batch,
 ) -> Result<Completion, BatchError> {
+    if batch.is_source_set() {
+        return Err(BatchError::Conflict(
+            "source sets are inventory only".into(),
+        ));
+    }
     if batch.state != State::Ready {
         return Err(BatchError::Conflict(format!(
             "batch is {:?} and cannot be confirmed",

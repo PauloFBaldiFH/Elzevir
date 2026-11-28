@@ -94,7 +94,7 @@ operacional e suas permissões próprias.
   de circulação. A importação histórica não dispara avisos, multas ou reservas
   correntes por efeito colateral.
 
-## Primeiro incremento proposto
+## Inventário PostgreSQL em fluxo (1a aprovado)
 
 Para PostgreSQL textual, inventariar declarações e blocos de dados aceitos,
 contando linhas até o terminador de COPY. Reconhecer identificadores com
@@ -106,6 +106,106 @@ dentro de um valor continua sendo dado. Manter limites cumulativos por
 lote, membro, linha e valor. Reportar tabela vazia como presente e vazia.
 O teste deve provar ausência de escrita inclusive com entrada malformada e
 cancelamento, e comparar o inventário da CLI com o Staff autenticado.
+
+A CLI local oferece `elzevir import inventory ARQUIVO`, com saída JSON. No
+Staff, o formulário de inventário exige sessão com catalogação, leitores e
+circulação, porque a classe do dump é desconhecida no upload. O arquivo é
+lido uma vez. A resposta contém tabela, ordem das colunas de COPY e totais
+de linhas, valores nulos e campos vazios. Não se devolvem valores. O
+resultado é transitório, sem ID de lote nem ação de confirmação que possa
+usar uma leitura antiga. Cancelar fecha o fluxo e descarta os totais.
+Uma declaração sem COPY aparece com zero linhas e sem colunas de COPY.
+
+O leitor aceita uma fonte textual de até 512 MiB com linhas físicas de até
+4 MiB, campo de até 1 MiB, cabeçalho de até 64 KiB, 1.024 tabelas e 256
+colunas por COPY. Aceita identificadores ASCII simples, inclusive entre
+aspas e com schema. Valida contagem e ordem de colunas por bloco. Aceita
+cabeçalhos UTF-8 e declaração explícita de UTF-8,
+LF/CRLF, tabulação como delimitador e escapes textuais no conteúdo, incluindo
+barra literal e tabulação codificada como `\t`. Literais SQL multilinha,
+funções, layouts alterados, dados CSV/binários e continuações físicas exigem
+outro leitor ou exportação. As declarações DDL são evidência estrutural. O
+inventário desconsidera metadados auxiliares reconhecidos do pg_dump.
+
+## Conjunto privado de fontes (1b)
+
+A equipe seleciona de 1 a 64 arquivos locais da mesma exportação compatível
+e informa a origem institucional estável. Na CLI, usar `elzevir import
+stage-set --data-dir DIR --operator ID --origin ORIGEM ARQUIVO...`. Na tela
+de importação, usar o formulário de conjunto de fontes com as permissões de
+catalogação, leitores e circulação. Esses privilégios e a titularidade também
+se aplicam à listagem, revisão e remoção. Lotes de um único arquivo criados
+pelo fluxo anterior mantêm o contrato original.
+
+O manifesto conserva origem, posição (a partir de 1), nome lógico, tamanho,
+posição inicial em bytes, SHA-256 e hipótese de formato pelo prefixo de cada
+membro. A identidade local do membro é lote mais posição. Nomes repetidos
+continuam distintos. Conteúdo idêntico aponta para a primeira ocorrência.
+Para selecionar membros de ZIP ou gzip, preparar primeiro o contêiner com
+`elzevir import stage`. No inventário, contar as entradas a partir de 1.
+Por exemplo, `elzevir import archive-set --data-dir DIR --operator ID
+--origin ORIGEM LOTE REVISAO 3 1` cria outro lote com os membros 3 e 1,
+nessa ordem. No Staff, abrir o rascunho do contêiner, informar a origem e
+selecionar os membros desejados. A revisão, a titularidade e o SHA-256
+do original são conferidos antes da extração. O leitor valida o contêiner
+inteiro, inclusive membros fora da seleção e nomes em contêineres aninhados.
+Posições repetidas ou inexistentes invalidam a operação inteira.
+
+Para cada membro extraído, o manifesto registra também o caminho exato em
+cada nível do contêiner. O SHA-256 do contêiner vincula a seleção à fonte.
+O novo lote contém os bytes dos membros e pode ser reaberto depois do
+cancelamento do lote do contêiner. Uma planilha selecionada dentro de um ZIP
+é preservada com todas as abas. A escolha de uma única aba para o catálogo
+continua disponível no formulário de mapeamento.
+
+A captura é privada e integral, sob a trava e as cotas existentes. O nome
+informado nunca vira caminho de armazenamento. Limitar o conjunto a 512 MiB
+no total. Uma falha de leitura ou envio incompleto descarta a captura. A
+ação de verificar na prévia relê os bytes e confere os digests, os limites
+dos membros e o fim exato do original. O conjunto fica disponível para revisão e cancelamento. A etapa
+de descoberta não autoriza edição ou confirmação no catálogo. Vínculos
+entre arquivos FOLIO e demais projeções entram nos incrementos seguintes.
+
+## Integração com as autoridades nativas
+
+Em `main` a0be08ba, `elzevir-app/src/authorities.rs` fornece
+`AuthorityReader`, `AgentView`, `SubjectView` e validação de vínculo por
+papel. `elzevir-store/src/authorities.rs` aplica edição, vínculo, versão
+e alcance. O leitor Turtle em `elzevir-app/src/rdf/parse.rs` e a leitura
+de componentes MADS em `rdf/read.rs` atendem ao intercâmbio de descrições
+bibliográficas. O conversor bibliográfico UNIMARC também tem escopo próprio.
+O leitor Turtle existente reorganiza grafos em árvores, recusa nós anônimos
+compartilhados e projeta texto/idioma sem guardar o datatype no literal
+projetado. Reusar esse resultado como original apagaria informação. Para
+autoridades, qualificar Turtle e RDF/XML separadamente com oráculos de
+triplas, listas MADS ordenadas e grafos com referências compartilhadas.
+A projeção de autoridade independente precisa de um contrato de escrita no
+módulo nativo em desenvolvimento pelo Claude. Referências de integração:
+[autoridades](autoridades.md) e [modelo](bibframe-completo.md).
+
+| Entrada futura | Evidência que deve sobreviver à projeção |
+|---|---|
+| MARC21 Autoridades | Agência e controle 003/001, 1XX, 4XX, 5XX com subcampos de controle, subdivisões, qualificadores, fontes 670, notas 667/68X e identificadores com seus sistemas. |
+| BIBFRAME/RDF | IRI e tipo de Agente/Assunto, identificadores tipados, linguagem dos literais, papéis, relações dirigidas, origem e proveniência administrativa. |
+| MADS/RDF | Forma autorizada e variantes com tipo, listas ordenadas de elementos/componentes, esquema, relações hierárquicas, associativas e equivalências com a força semântica original. |
+| UNIMARC Autoridades | Selecionar por família e tipo do registro, aplicar definições próprias de 2XX/4XX/5XX e notas, conservar indicadores, subcampos, repetição e charset. |
+
+Antes da primeira escrita de autoridades, conferir a revisão corrente da
+main e as specs e comandos entregues pelo Claude. A ligação interativa por nome e papel exige uma Obra,
+enquanto o importador precisará admitir Agente ou Assunto isolado e evitar
+mescla de homônimos pela forma textual. Pactuar com o mantenedor
+quais contratos nativos oferecem identidade independente, variantes,
+qualificadores, procedência, notas com visibilidade e vínculos entre
+autoridades. Onde faltar cobertura, manter a unidade pendente com o original
+privado e durável (bytes, formato, charset/base IRI, origem, posição e
+digest). O descarte de um lote temporário não pode apagar a única evidência
+de uma projeção parcial confirmada. Registrar campos/triplas sem destino e
+versão do mapeamento para reprocessamento idempotente. Preservar escopo de
+nós anônimos por documento, etiquetas de idioma e tipos dos literais. Aceite
+exige comparar original, projeção e vínculos após evolução do módulo, com
+homônimos, variantes e relações recíprocas, sem reidentificar pelo rótulo.
+BIBFRAME continua o modelo interno. Nenhuma tabela paralela de autoridade
+MARC é necessária para inventariar fontes ou avançar os leitores independentes.
 
 ## Contabilidade e oráculos
 

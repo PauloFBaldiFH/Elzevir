@@ -264,3 +264,93 @@ O banco operacional, schema, dependências de runtime e implementação de
 produção conservam a revisão-base. Os testes locais não executaram piloto com
 dados reais, benchmark de escrita a 1 milhão ou CI remota. O próximo ponto
 de aprovação é o incremento 1a no doc 03.
+
+## Entrega 1a sobre a main a0be08ba (PR #305)
+
+A primeira implementação leva o dump textual PostgreSQL 10.20 a **nível 2
+no produto**. A CLI e o Staff conferiram as linhas e os totais de campos da
+mesma amostra identificada no manifesto. A interface não expõe valores nem
+tem ação de confirmação para este relatório.
+
+| Tabela | Linhas | Campos nulos | Campos vazios |
+|---|---:|---:|---:|
+| public.acervo | 11.561 | 196.081 | 13.319 |
+| public.ocorrencias | 5 | 0 | 6 |
+
+O teste `pg_dump_10_fixture_reconciles_both_tables` fixa os totais. O teste
+`postgres_inventory_agrees_with_cli_and_cannot_confirm_a_stale_report` compara
+a CLI com a resposta HTTP autenticada e verifica recusa de acesso, token,
+truncamento e tentativa de confirmação. O fluxo de upload também foi
+percorrido em Chromium. O inventário usa o fluxo de bytes privado sem escrita
+no catálogo. [Contrato, limites e integração futura](../../specs/catalogo/importacao-universal-v4.md)
+
+Medição exploratória de uma execução de `elzevir import inventory` por arquivo
+na build de teste local Linux x86-64, CPU EPYC 9V74, cgroup de quatro CPUs e
+32 GiB. Os arquivos sintéticos recém-escritos continham um único bloco COPY
+com três campos por linha (inteiro sequencial a partir de zero, nulo e vazio).
+Tempo de parede inclui inicialização e saída JSON. RSS obtido por
+`wait4.ru_maxrss`. Cache do sistema ativo, sem limpeza entre execuções e
+com a suíte rodando na mesma máquina.
+
+| Fonte | Linhas | Bytes | Segundos | Pico de RSS (KiB) |
+|---|---:|---:|---:|---:|
+| Sintética | 1.000 | 7.941 | 0,0804 | 52.408 |
+| Sintética | 100.000 | 988.941 | 0,0475 | 51.364 |
+| Sintética | 1.000.000 | 10.888.941 | 0,4549 | 52.248 |
+| Dump 10.20 | 11.566 | 2.182.920 | 0,0438 | 51.064 |
+
+Esta medição abrange inspeção de estrutura. Carga no writer, indexação e
+projeção das classes continuam com seus próprios critérios de aceite.
+
+## Entrega 1b sobre a main 280ad9f5 e a fase 1a em 80bf1422
+
+A prova desta etapa é o **inventário privado dos membros selecionados**
+(nível 2 para a estrutura do conjunto). Cada linha da prévia representa um
+arquivo, inclusive quando seu conteúdo inclui muitos registros. As contagens
+de entidades no estudo de referência continuam sendo oráculos para os leitores
+das próximas etapas.
+
+| Seleção | Evidência conferida com o produto | Oráculo |
+|---|---|---|
+| FOLIO Cornell, `instances.tsv`, `recordholdings.tsv`, `items.tsv` | Três membros, respectivamente 115.610, 28.462 e 460.749 bytes. O mesmo trio em duas origens gerou lotes distintos. Os três SHA-256 se conservaram na reabertura pela CLI. | [Por arquivo](corpus.tsv) |
+| Evergreen, posições 3 e 1 do ZIP | O conjunto selecionado conservou `auth-1066.mrc` (293.410 bytes) seguido de `oss.marc` (58.820 bytes), com os caminhos e SHA-256 da origem. A verificação funcionou depois de remover o lote do ZIP. | [Contêiner](corpus.tsv) e [membros](evergreen.tsv) |
+| Arquivos sintéticos | Uma cópia idêntica permaneceu como terceiro membro com referência ao primeiro. Alteração de bytes, truncamento, bytes extras ou troca da origem do manifesto invalidam a verificação. | Testes `source_set_*` em `elzevir/tests/import_batch.rs` |
+| Staff | Acesso autenticado, permissões atuais, dono do lote, CSRF e revisão. Um envio interrompido ou um campo inesperado depois de dois arquivos deixa a contagem de lotes inalterada. A tentativa de confirmar o conjunto é recusada. | Testes `staff_source_sets_*` e `staff_groups_archive_members_*` em `elzevir/tests/staff_import.rs` |
+
+Em Chromium, um operador enviou os três TSV, verificou a integridade e cancelou
+o conjunto. No mesmo fluxo, selecionou dois membros do ZIP e conferiu seus
+nomes na tabela. O teste de integração da CLI confere o digest e a ordem pedida
+para os mesmos membros. O arquivo MARC de autoridades é preservado como
+original privado. A projeção futura depende dos contratos do módulo nativo.
+
+Uma execução exploratória por comando, em Linux x86-64, com a build de teste,
+cache ativo e outras verificações em andamento, produziu as medidas abaixo.
+O tempo inclui a inicialização da CLI e o pico de RSS é o do processo inteiro,
+medido por `wait4`. A seleção no ZIP valida seus 96 membros antes de publicar
+o lote com as duas folhas. Essa leitura usa buffers de expansão limitados.
+Os valores medem estas amostras e este ambiente.
+
+| Operação | Tempo de parede | Pico de RSS |
+|---|---:|---:|
+| Preparar três TSV Cornell | 0,076 s | 51.428 KiB |
+| Conferir o conjunto Cornell | 0,043 s | 50.196 KiB |
+| Preparar o ZIP Evergreen | 0,324 s | 71.708 KiB |
+| Criar o conjunto com as posições 3 e 1 | 0,345 s | 79.288 KiB |
+| Conferir o conjunto Evergreen | 0,024 s | 51.132 KiB |
+
+A validação local da 1b passou em `cargo fmt --all --check`,
+`cargo clippy --workspace --all-targets --locked -- -D warnings` e
+`cargo xtask ci`. O runner disponível foi
+`cargo test --workspace --all-targets --locked --no-fail-fast`, com
+1.402 testes aprovados. Os dois testes de rclone marcados como ignorados
+também passaram quando executados com `--ignored`, usando o binário instalado.
+A execução separada de doctests passou em um exemplo. A suíte inclui as
+regressões de matching, reimportação Biblivre, leitura e exportação MARC e
+BIBFRAME, privacidade e confirmação transacional do fluxo de catálogo.
+
+O verificador de oráculos da fase 0 passou. O cargo-deny 0.22.2 aprovou
+advisories, dependências, licenças e fontes, com 45 avisos de versões duplicadas
+e 11 exceções sem advisory aplicável. O Cargo também reportou incompatibilidade
+futura em `proc-macro-error2` 2.0.1. A prova 1b mede preservação por membro.
+Junções FOLIO, reconhecimento de classes e generalização em bases desconhecidas
+exigem evidência própria nas próximas etapas.

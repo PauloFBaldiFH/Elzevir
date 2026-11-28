@@ -7,6 +7,7 @@ use std::path::Path;
 use cap_fs_ext::{DirExt, FollowSymlinks, OpenOptionsFollowExt};
 use cap_std::fs::{Dir, DirBuilder, OpenOptions};
 use elzevir_app::import::batches::{BatchState as State, BatchSummary, MAX_BATCH_MANIFEST_BYTES};
+use elzevir_app::import::batches::{SourceInputs, SourceSet};
 use elzevir_app::import::containers::{self, Inventory};
 use elzevir_app::import::edits::{Recipe, RenderReport, render_page};
 use elzevir_app::import::preview::MAX_IMPORT_FILE_BYTES;
@@ -18,6 +19,8 @@ use elzevir_app::import_detection::{
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+
+mod source_set;
 
 const MAX_STAGED_BATCHES: usize = 10;
 const MAX_STAGED_BATCH_BYTES: u64 = 1024 * 1024 * 1024;
@@ -44,6 +47,8 @@ pub(crate) struct Batch {
     table_separator: Option<Delimiter>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) archive: Option<Inventory>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) sources: Option<SourceSet>,
     sha256: String,
     pub(crate) revision: u64,
     pub(crate) state: State,
@@ -109,6 +114,104 @@ impl Batches {
         source: impl Read,
         selected: Option<ImportFormat>,
     ) -> Result<Batch, String> {
+        self.stage_with("", |batch, dir, available| {
+            let mut output = create_file(dir, SOURCE)?;
+            let mut source = HashInput::new(source);
+            copy_bounded(&mut source, &mut output, available)?;
+            output.sync_all().map_err(io_error)?;
+            drop(output);
+            self.choose_format(batch, selected)?;
+            batch.sha256 = source.digest();
+            Ok(())
+        })
+    }
+
+    pub(crate) fn stage_set(&self, origin: String, inputs: SourceInputs) -> Result<Batch, String> {
+        self.stage_sources(origin, inputs, None)
+    }
+
+    pub(crate) fn stage_archive_set(
+        &self,
+        batch: &Batch,
+        origin: String,
+        positions: &[usize],
+    ) -> Result<Batch, String> {
+        use elzevir_app::import::batches::{MAX_SOURCE_MEMBERS, SourceInput};
+        let entries = &batch
+            .archive
+            .as_ref()
+            .ok_or("expected an archive inventory")?
+            .entries;
+        if positions.is_empty() || positions.len() > MAX_SOURCE_MEMBERS {
+            return Err("invalid number of selected archive members".into());
+        }
+        let paths = positions
+            .iter()
+            .map(|n| {
+                n.checked_sub(1)
+                    .and_then(|i| entries.get(i))
+                    .map(|entry| entry.member.clone())
+                    .ok_or("unknown archive member")
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let files = containers::selected_files(&self.archive_source(batch)?, &paths)
+            .map_err(|err| err.to_string())?;
+        let inputs: Vec<_> = files
+            .into_iter()
+            .zip(&paths)
+            .map(|(bytes, path)| {
+                let name = path
+                    .last()
+                    .and_then(|part| part.rsplit('/').next())
+                    .ok_or("missing archive member name")?
+                    .to_owned();
+                Ok(SourceInput {
+                    name,
+                    input: Box::new(io::Cursor::new(bytes)),
+                })
+            })
+            .collect();
+        self.stage_sources(
+            origin,
+            Box::new(inputs.into_iter()),
+            Some((&batch.sha256, paths)),
+        )
+    }
+
+    fn stage_sources(
+        &self,
+        origin: String,
+        inputs: SourceInputs,
+        archive: Option<(&str, Vec<Vec<String>>)>,
+    ) -> Result<Batch, String> {
+        self.stage_with("SourceSet", |batch, dir, available| {
+            let mut file = create_file(dir, SOURCE)?;
+            let mut set = source_set::capture(origin, inputs, &mut file, available)?;
+            if let Some((digest, paths)) = archive {
+                set.archive_sha256 = Some(digest.to_owned());
+                for (member, path) in set.members.iter_mut().zip(paths) {
+                    member.archive_path = Some(path);
+                }
+            }
+            file.sync_all().map_err(io_error)?;
+            batch.sha256 = source_set::stamp(&set)?;
+            batch.sources = Some(set);
+            Ok(())
+        })
+    }
+
+    pub(crate) fn verify_set(&self, batch: &Batch, set: &SourceSet) -> Result<(), String> {
+        if source_set::stamp(set)? != batch.sha256 {
+            return Err("source set manifest changed".into());
+        }
+        source_set::verify(set, read_file(&self.batch_dir(&batch.id)?, SOURCE)?)
+    }
+
+    fn stage_with(
+        &self,
+        format: &str,
+        capture: impl FnOnce(&mut Batch, &Dir, u64) -> Result<(), String>,
+    ) -> Result<Batch, String> {
         let (count, bytes) = self.usage()?;
         if count >= MAX_STAGED_BATCHES {
             return Err("import batch count limit exceeded".into());
@@ -118,7 +221,7 @@ impl Batches {
         }
         let id = crate::backup_archive::identifier()?;
         create_dir(&self.root, &id).map_err(io_error)?;
-        match sync_dir(&self.root).and_then(|()| self.capture(&id, source, selected)) {
+        match sync_dir(&self.root).and_then(|()| self.capture(&id, format, capture)) {
             Ok(batch) => Ok(batch),
             Err(error) => {
                 self.root
@@ -132,15 +235,16 @@ impl Batches {
     fn capture(
         &self,
         id: &str,
-        source: impl Read,
-        selected: Option<ImportFormat>,
+        format: &str,
+        capture: impl FnOnce(&mut Batch, &Dir, u64) -> Result<(), String>,
     ) -> Result<Batch, String> {
         let mut batch = Batch {
             version: VERSION,
             institution: self.institution.clone(),
             operator: self.operator,
             id: id.into(),
-            format: String::new(),
+            format: format.to_owned(),
+            sources: None,
             selected: None,
             table_separator: None,
             archive: None,
@@ -154,16 +258,7 @@ impl Batches {
         self.save(&batch)?;
         let dir = self.batch_dir(id)?;
         let available = self.available(&dir)?.min(MAX_IMPORT_FILE_BYTES as u64);
-        let mut output = create_file(&dir, SOURCE)?;
-        let mut source = HashInput::new(source);
-        io::copy(&mut (&mut source).take(available), &mut output).map_err(io_error)?;
-        if source.read(&mut [0]).map_err(io_error)? != 0 {
-            return Err("source exceeds the available import quota".into());
-        }
-        output.sync_all().map_err(io_error)?;
-        drop(output);
-        self.choose_format(&mut batch, selected)?;
-        batch.sha256 = source.digest();
+        capture(&mut batch, &dir, available)?;
         batch.state = State::Review;
         self.save(&batch)?;
         Ok(batch)
@@ -437,7 +532,14 @@ impl Batch {
         }
     }
 
+    pub(crate) fn is_source_set(&self) -> bool {
+        self.sources.is_some() || self.format == "SourceSet"
+    }
+
     pub(crate) fn check_review(&self) -> Result<(), String> {
+        if self.is_source_set() {
+            return Err("source sets are inventory only".into());
+        }
         if matches!(self.state, State::Review | State::Ready) {
             return Ok(());
         }
@@ -507,6 +609,14 @@ fn read_archive(input: impl Read) -> Result<Vec<u8>, String> {
         .map_err(io_error)?;
     if bytes.len() > MAX_IMPORT_FILE_BYTES {
         return Err("archive exceeds the import file limit".into());
+    }
+    Ok(bytes)
+}
+
+fn copy_bounded(input: &mut impl Read, output: &mut impl Write, limit: u64) -> Result<u64, String> {
+    let bytes = io::copy(&mut (&mut *input).take(limit), output).map_err(io_error)?;
+    if input.read(&mut [0]).map_err(io_error)? != 0 {
+        return Err("source exceeds the available import quota".into());
     }
     Ok(bytes)
 }

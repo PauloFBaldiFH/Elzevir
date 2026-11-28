@@ -1,6 +1,6 @@
 perfil	origem_versao	natureza	acervo	leitores	autoridades	movimentos	condicao_de_uso	prova_ou_oraculo
 folio-marc	Cornell, versão pelo digest	exportações MARC bibliográficas e holdings	3E	—	—	—	estudo local	62 bibliográficos e 107 holdings por LDR/06
-folio-cornell	Cornell, versão pelo digest	TSV JSON	3E	—	—	—	estudo local	verificar.py e hierarquia 62/107/536
+folio-cornell	Cornell, versão pelo digest	TSV JSON	3E	—	—	—	estudo local	verificar.py e hierarquia 62/107/536 no estudo. Produto 1b confere os três originais por digest.
 folio-5k	FOLIO 5kItems, versão pelo digest	TSV JSON	3E	—	—	—	estudo local	47.745 pais e 49.580 holdings
 slims-data	SLiMS, release a confirmar	seed bibliográfico	3E	—	2E	—	estudo local	15 descrições e 10 itens, estatuto dos cabeçalhos a confirmar
 slims-ddl	SLiMS, release a confirmar	estrutura e configuração	2E	2E	2E	2E	estudo local	comparar esquema declarado com o seed
@@ -16,7 +16,7 @@ xlsx	planilha, versão pelo digest	planilha sem cabeçalho	3E	—	—	—	estudo
 facil	Biblioteca Fácil, release a identificar	arquivo binário	1E	1E	?	1E	armazenamento restrito	layout e relatório do sistema indispensáveis
 pg-biblivre	Biblivre, arquivo PGDMP 1.16.0	backup de laboratório	3E	3E	2E	2E	armazenamento restrito	pg_restore 17.12, significado de users a confirmar
 biblivre-mrk	Biblivre, perfil 949 do PR 229	MRK sintético	5P	—	—	—	sintético para avaliação local	import_batch.rs e import_preview.rs, 10/18 e reapresentação
-evergreen	Evergreen 2187620a6329, múltiplas origens	arquivo com conjuntos independentes	3E	3E	3E	?	condições por membro, estudo local	evergreen.tsv e tabelas.tsv, qualificação por membro
+evergreen	Evergreen 2187620a6329, múltiplas origens	arquivo com conjuntos independentes	3E	3E	3E	?	condições por membro, estudo local	evergreen.tsv e tabelas.tsv, qualificação por membro. Produto 1b confere a seleção de duas folhas MARC por digest.
 koha-sql	Koha/MariaDB, release SIGB a confirmar	dump misto comprimido	1P/3E	1P/3E	1P/3E	1P/3E	armazenamento restrito	verificar.py, fluxo Koha dedicado avaliado à parte
 koha-mrk	Koha, perfil 952	MRK	4P	—	—	—	estudo local	import_preview.rs, 10/18 e identidades qualificadas
 leitores-csv	Koha, CSV v3 declarado fictício	planilha de leitores	—	3E	—	—	fictício para avaliação local	100 identidades e cartões sem concessão de flags

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! ZIP, gzip and spreadsheet packages at the prepared import boundary.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Read};
 
 use serde::{Deserialize, Serialize};
@@ -116,7 +116,7 @@ pub enum Error {
 /// # Errors
 /// Reports invalid names, package structure, expansions and workbook limits.
 pub fn inspect(input: &[u8]) -> Result<Inventory, Error> {
-    let walker = walk(input, None)?;
+    let walker = walk(input, None, &[])?;
     Ok(Inventory {
         entries: walker.entries,
     })
@@ -127,12 +127,36 @@ pub fn inspect(input: &[u8]) -> Result<Inventory, Error> {
 /// # Errors
 /// Reports invalid archive data or an incompatible selection.
 pub fn select(input: &[u8], selection: &Selection) -> Result<Selected, Error> {
-    walk(input, Some(selection))?
+    walk(input, Some(selection), &[])?
         .selected
         .ok_or(Error::Selection)
 }
 
-fn walk<'a>(input: &[u8], choice: Option<&'a Selection>) -> Result<Walker<'a>, Error> {
+/// Copies complete originals at the requested inventory paths in submission order.
+/// The entire archive passes the same validation used for single-member preview.
+///
+/// # Errors
+/// Rejects empty, repeated or missing paths and invalid containers.
+pub fn selected_files(input: &[u8], paths: &[Vec<String>]) -> Result<Vec<Vec<u8>>, Error> {
+    if paths.is_empty()
+        || paths.len() > super::batches::MAX_SOURCE_MEMBERS
+        || paths.iter().any(Vec::is_empty)
+        || paths.iter().collect::<BTreeSet<_>>().len() != paths.len()
+    {
+        return Err(Error::Selection);
+    }
+    let mut files = walk(input, None, paths)?.files;
+    paths
+        .iter()
+        .map(|path| files.remove(path).ok_or(Error::Selection))
+        .collect()
+}
+
+fn walk<'a>(
+    input: &[u8],
+    choice: Option<&'a Selection>,
+    paths: &'a [Vec<String>],
+) -> Result<Walker<'a>, Error> {
     if input.len() > MAX_IMPORT_FILE_BYTES {
         return Err(Error::Limit("input bytes"));
     }
@@ -147,6 +171,8 @@ fn walk<'a>(input: &[u8], choice: Option<&'a Selection>) -> Result<Walker<'a>, E
         entries: Vec::new(),
         choice,
         selected: None,
+        paths,
+        files: BTreeMap::new(),
     };
     walker.visit(input, &mut Vec::new(), 1)?;
     Ok(walker)
@@ -184,6 +210,8 @@ struct Walker<'a> {
     entries: Vec<Entry>,
     choice: Option<&'a Selection>,
     selected: Option<Selected>,
+    paths: &'a [Vec<String>],
+    files: BTreeMap<Vec<String>, Vec<u8>>,
 }
 
 impl Walker<'_> {
@@ -199,6 +227,12 @@ impl Walker<'_> {
         }
     }
 
+    fn capture_path(&mut self, path: &[String], bytes: &[u8]) {
+        if self.paths.iter().any(|selected| selected == path) {
+            self.files.insert(path.to_vec(), bytes.to_vec());
+        }
+    }
+
     fn file(&mut self, bytes: &[u8], path: &[String], detection: Detection) -> Result<(), Error> {
         if let Some(choice) = self.choice.filter(|choice| choice.member == path) {
             if choice.sheet.is_some() {
@@ -206,6 +240,7 @@ impl Walker<'_> {
             }
             self.selected = Some(Selected::File(bytes.to_vec(), detection));
         }
+        self.capture_path(path, bytes);
         self.entries.push(Entry {
             member: path.to_vec(),
             kind: Kind::File(detection.format),

@@ -32,13 +32,47 @@ pub enum ImportDetail {
 /// Contents of the import workspace.
 pub enum ImportView {
     /// Upload and list of the operator's drafts.
-    Home(Vec<ImportBatchLink>, Vec<String>, ImportUpload),
+    Home(Vec<ImportBatchLink>, Vec<String>, ImportUpload, bool),
+    /// Scoped member identities in a private batch.
+    Sources(String, u64, String, Option<String>, Vec<SourceMemberRow>),
+    /// Structural counts for a private `PostgreSQL` upload.
+    Postgres(Vec<PostgresTable>),
     /// A draft or review page.
     Draft(Box<ImportDraft>),
     /// The writer's outcome.
     Result(ImportReceipt),
     /// A refusal without a batch view.
     Error,
+}
+
+/// Source identity and size shown to a permitted operator.
+pub struct SourceMemberRow {
+    /// Position within this batch.
+    pub position: usize,
+    /// Logical filename.
+    pub name: String,
+    /// Source byte length.
+    pub bytes: u64,
+    /// SHA-256 of the original.
+    pub sha256: String,
+    /// Localized format hint.
+    pub format: String,
+    /// Position of the first identical original.
+    pub duplicate_of: Option<usize>,
+}
+
+/// Displayable source metadata and aggregate counts.
+pub struct PostgresTable {
+    /// Qualified source table.
+    pub name: String,
+    /// COPY columns in source order.
+    pub columns: String,
+    /// Number of complete rows.
+    pub rows: u64,
+    /// Number of null fields.
+    pub nulls: u64,
+    /// Number of empty fields.
+    pub empty: u64,
 }
 
 /// Source initially selected in the upload form.
@@ -106,6 +140,8 @@ pub struct ImportDraft {
     pub preview: Option<ImportPreview>,
     /// Selectable archive members and worksheets, for an archive source.
     pub archive: Option<Vec<ImportChoice>>,
+    /// Whole members available for a private source set.
+    pub archive_members: Vec<(usize, String)>,
     /// Column mapping of the selected spreadsheet, when it needs one.
     pub columns: Option<ImportColumns>,
     /// Saved MARC edit rules, in application order, or `None` when the source is

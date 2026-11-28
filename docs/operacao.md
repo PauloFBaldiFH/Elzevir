@@ -74,6 +74,21 @@ por classe antes de oferecer uma migração à biblioteca.
 [Troca do Koha](specs/migracao/troca-do-koha.md) ·
 [Inventário e limites da v4](evidencias/importacao-v4/README.md)
 
+Para conferir um dump PostgreSQL textual antes da migração, execute
+`elzevir import inventory "arquivo.backup"` ou abra **Inventariar tabelas
+PostgreSQL** na área de importação da equipe. A tabela mostra linhas, nulos
+e vazios por tabela de origem. Reenvie o arquivo para atualizar o inventário.
+A conta da equipe precisa de catalogação, leitores e circulação.
+
+Para conferir um grupo de arquivos da mesma instalação, informe uma origem
+estável, selecione os arquivos e clique em **Preparar conjunto de fontes**.
+Para extrair arquivos de um ZIP ou gzip, envie o contêiner primeiro e abra
+seu inventário para escolher os membros. **Conferir integridade das fontes**
+relê os bytes privados e verifica cada SHA-256. Cancelar o conjunto remove
+as cópias selecionadas. Se o contêiner também foi preparado, cancele seu
+rascunho separadamente quando terminar. O conjunto serve para conferência
+antes da migração. [Comandos da CLI e limites](specs/catalogo/importacao-universal-v4.md#conjunto-privado-de-fontes-1b)
+
 ## Backups e recuperação
 
 ```sh

@@ -50,6 +50,7 @@ impl Walker<'_> {
             }
             let choice = self.choice.filter(|choice| choice.member == *path);
             let (sheets, rows) = book::read(kind, bytes, choice)?;
+            self.capture_path(path, bytes);
             self.entries.push(Entry {
                 member: path.clone(),
                 kind,

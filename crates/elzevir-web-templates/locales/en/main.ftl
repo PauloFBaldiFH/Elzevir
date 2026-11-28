@@ -1604,3 +1604,23 @@ checkin-lost-refunded = The replacement charge was refunded: { $amount }.
 checkin-processing-refunded = The processing fee was refunded: { $amount }.
 checkin-lost-fine-restored = The overdue fine stopped by the loss counts again.
 checkin-lost-fine-charged = The overdue fine up to today was charged: { $amount }.
+
+import-postgres-file = PostgreSQL text dump
+import-postgres-inventory = Inspect PostgreSQL tables
+import-pg-table = Source table
+import-pg-columns = COPY columns
+import-pg-rows = Rows
+import-pg-nulls = Null fields
+import-pg-empty = Empty fields
+
+import-source-set = Source set
+import-source-files = Files from the same source installation
+import-source-stage = Stage source set
+import-source-position = Member
+import-source-hint = Detected format (provisional)
+import-source-bytes = Bytes
+import-source-duplicate = Same content as member
+import-source-verify = Verify source integrity
+import-source-verified = All source files verified.
+import-source-koha-backup = Full Koha backup
+import-source-parent = SHA-256 of the original archive

@@ -998,3 +998,165 @@ fn check_biblivre_holdings(
             Ok::<_, elzevir_store::StoreError>(())
         }).unwrap();
 }
+
+#[test]
+fn source_set_reopens_with_distinct_members_and_refuses_changed_bytes() {
+    let root = tempfile::tempdir().unwrap();
+    let first = root.path().join("one.tsv");
+    let second = root.path().join("two.tsv");
+    fs::write(&first, b"001\tA\n").unwrap();
+    fs::write(&second, b"001\tB\n").unwrap();
+    let staged = success(
+        command(root.path(), "1", "stage-set")
+            .args(["--origin", "branch-a"])
+            .arg(&first)
+            .arg(&second)
+            .arg(&first)
+            .output()
+            .unwrap(),
+    );
+    let id = staged.split_whitespace().nth(1).unwrap();
+    let preview = success(run(root.path(), &["preview", id]));
+    let manifest: serde_json::Value =
+        serde_json::from_str(preview.lines().nth(1).unwrap()).unwrap();
+    assert_eq!(manifest["origin"], "branch-a");
+    let members = manifest["members"].as_array().unwrap();
+    assert_eq!(members.len(), 3);
+    assert_eq!(members[0]["name"], "one.tsv");
+    assert_eq!(members[1]["offset"], 6);
+    assert_ne!(members[0]["sha256"], members[1]["sha256"]);
+    assert_eq!(members[2]["duplicate_of"], 1);
+    assert_eq!(members[2]["position"], 3);
+    assert!(!run(root.path(), &["confirm", id, "1"]).status.success());
+    assert!(
+        !command(root.path(), "2", "preview")
+            .arg(id)
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
+    let original = root.path().join("imports").join(id).join("original");
+    assert_eq!(fs::read(&original).unwrap(), b"001\tA\n001\tB\n001\tA\n");
+    for changed in [
+        b"001\tA\n001\tX\n001\tA\n".as_slice(),
+        b"001\tA\n",
+        b"001\tA\n001\tB\n001\tA\n!",
+    ] {
+        fs::write(&original, changed).unwrap();
+        assert!(!run(root.path(), &["preview", id]).status.success());
+    }
+    fs::write(&original, b"001\tA\n001\tB\n001\tA\n").unwrap();
+    let path = original.with_file_name("manifest.json");
+    let mut changed: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    changed["sources"]["origin"] = serde_json::json!("branch-b");
+    fs::write(path, serde_json::to_vec(&changed).unwrap()).unwrap();
+    refusal(
+        &run(root.path(), &["preview", id]),
+        "source set manifest changed",
+    );
+    success(run(root.path(), &["cancel", id]));
+    assert!(!original.exists());
+    assert!(!root.path().join("elzevir.db").exists());
+}
+
+#[test]
+fn source_set_preserves_selected_evergreen_originals_after_parent_removal() {
+    let root = tempfile::tempdir().unwrap();
+    let data = root.path();
+    let samples = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples-import-tool");
+    let parent = stage(data, &samples.join("evergreen-sample.zip"));
+    let select = |revision: &str, picks: &[&str]| {
+        command(data, "1", "archive-set")
+            .args(["--origin", "evergreen-demo", &parent, revision])
+            .args(picks)
+            .output()
+            .unwrap()
+    };
+    refusal(&select("2", &["3", "1"]), "stale batch revision");
+    for picks in [&["1", "1"][..], &["0"][..], &["97"][..]] {
+        assert!(!select("1", picks).status.success());
+    }
+    let created = success(select("1", &["3", "1"]));
+    let id = created.split_whitespace().nth(1).unwrap();
+    success(run(data, &["cancel", &parent]));
+    let report = success(run(data, &["preview", id]));
+    let inventory: serde_json::Value =
+        serde_json::from_str(report.lines().nth(1).unwrap()).unwrap();
+    assert_eq!(
+        inventory["archive_sha256"],
+        "6e46784648da4b231d5ccfcb59a2590747d2241606ead3082f2830c3b917249e"
+    );
+    let members = inventory["members"].as_array().unwrap();
+    assert_eq!(members.len(), 2);
+    for (member, (path, offset, bytes, sha)) in members.iter().zip([
+        (
+            "01-evergreen/marc/auth-1066.mrc",
+            0,
+            293_410,
+            "88f7c89842e444e8680e185cc27ab1236eb531fa9b5a501f9af1b65768a6daea",
+        ),
+        (
+            "01-evergreen/marc/oss.marc",
+            293_410,
+            58_820,
+            "b52133c1498e6041f5e0d31dbefd1716d4c96811328b500f4117a6be28ee368e",
+        ),
+    ]) {
+        assert_eq!(member["archive_path"], serde_json::json!([path]));
+        assert_eq!(member["bytes"], bytes);
+        assert_eq!(member["offset"], offset);
+        assert_eq!(member["sha256"], sha);
+    }
+    refusal(&run(data, &["confirm", id, "1"]), "inventory only");
+    assert!(!data.join("elzevir.db").exists());
+}
+
+#[test]
+fn source_set_cornell_inventory_keeps_origins_separate() {
+    let root = tempfile::tempdir().unwrap();
+    let data = root.path();
+    let samples = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../samples-import-tool/02-folio/datasets/cornell");
+    let files = [
+        (
+            "instances.tsv",
+            115_610,
+            "f97d733e2c18e04c8c68d1d043c03effb7d5ec2379f18ff98f8753873eeda791",
+        ),
+        (
+            "recordholdings.tsv",
+            28_462,
+            "08721fd45911e9c8de5292dee2cb81fb02fc0523be35510d458472bfa197d030",
+        ),
+        (
+            "items.tsv",
+            460_749,
+            "27d1df0651f81e596723f9ba932b4571ba653093b3e958564ada1971fa9e7eae",
+        ),
+    ];
+    let mut ids = BTreeSet::new();
+    for origin in ["folio-a", "folio-b"] {
+        let report = success(
+            command(data, "1", "stage-set")
+                .args(["--origin", origin])
+                .args(files.iter().map(|(file, _, _)| samples.join(file)))
+                .output()
+                .unwrap(),
+        );
+        let id = report.split_whitespace().nth(1).unwrap();
+        assert!(ids.insert(id.to_owned()));
+        assert_eq!(report, success(run(data, &["preview", id])));
+        let inventory: serde_json::Value =
+            serde_json::from_str(report.lines().nth(1).unwrap()).unwrap();
+        assert_eq!(inventory["origin"], origin);
+        let members = inventory["members"].as_array().unwrap();
+        assert_eq!(members.len(), files.len());
+        for (m, (name, bytes, sha)) in members.iter().zip(files) {
+            assert_eq!(m["name"], name);
+            assert_eq!(m["bytes"], bytes);
+            assert_eq!(m["sha256"], sha);
+        }
+    }
+    assert!(!data.join("elzevir.db").exists());
+}

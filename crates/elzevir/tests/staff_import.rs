@@ -89,6 +89,9 @@ fn account(data: &Path) -> elzevir_app::staff::StaffId {
     let mut users = Vec::new();
     for (login, can_catalogue) in [("ana", true), ("bia", true), ("leo", false)] {
         let mut permissions = std::collections::BTreeSet::from([Permission::StaffInterface]);
+        if login == "bia" {
+            permissions.extend([Permission::Patrons, Permission::Circulation]);
+        }
         if can_catalogue {
             permissions.insert(Permission::Cataloguing);
         }
@@ -161,6 +164,7 @@ fn sign_in(address: SocketAddr, login: &str) -> String {
         .to_owned()
 }
 
+#[track_caller]
 fn assert_status(response: &str, expected: u16) {
     assert!(
         response.starts_with(&format!("HTTP/1.0 {expected} ")),
@@ -194,6 +198,17 @@ fn snapshot(response: &str, token: &str, id: &str, name: &str, expected: &str) {
 }
 
 fn upload(address: SocketAddr, cookie: &str, token: &str, marc: &str, duplicate: bool) -> String {
+    upload_to(address, cookie, token, marc, duplicate, IMPORT)
+}
+
+fn upload_to(
+    address: SocketAddr,
+    cookie: &str,
+    token: &str,
+    marc: &str,
+    duplicate: bool,
+    route: &str,
+) -> String {
     let headers = format!(
         "Cookie: {cookie}\r\nContent-Type: multipart/form-data; boundary=elzevir-test-boundary\r\n",
     );
@@ -203,7 +218,7 @@ fn upload(address: SocketAddr, cookie: &str, token: &str, marc: &str, duplicate:
     request(
         address,
         "POST",
-        IMPORT,
+        route,
         &headers,
         &format!(
             "--elzevir-test-boundary\r\nContent-Disposition: form-data; name=\"csrf\"\r\n\r\n{token}\r\n{part}{}--elzevir-test-boundary--\r\n",
@@ -643,4 +658,217 @@ fn staff_can_select_native_registries_and_confirm_the_biblivre_profile() {
             .join("\n")
     );
     assert_status(&post("confirmar", 2, ""), 303);
+}
+
+#[test]
+fn postgres_inventory_agrees_with_cli_and_cannot_confirm_a_stale_report() {
+    let file = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../samples-import-tool/BKP_BIBLIOTECA (2).backup");
+    let output = Command::new(env!("CARGO_BIN_EXE_elzevir"))
+        .args(["import", "inventory"])
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let tables: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(tables["public.acervo"]["rows"], 11561);
+    assert_eq!(tables["public.ocorrencias"]["rows"], 5);
+
+    let data = tempfile::tempdir().unwrap();
+    account(data.path());
+    let (server, address) = start(data.path());
+    let route = "/equipe/acervo/importar/inventario/postgresql";
+    let log_in = |login| {
+        let cookie = sign_in(address, login);
+        let page = request(address, "GET", IMPORT, &format!("Cookie: {cookie}\r\n"), "");
+        let token = csrf(&page).to_owned();
+        (cookie, token, page)
+    };
+    let (ana, ana_token, home) = log_in("ana");
+    assert!(!home.contains(route));
+    assert_status(&upload_to(address, &ana, &ana_token, "", false, route), 403);
+    let (bia, token, home) = log_in("bia");
+    assert!(home.contains(route));
+    assert_status(&upload_to(address, &bia, "stale", "", false, route), 403);
+    let page = upload_to(
+        address,
+        &bia,
+        &token,
+        &std::fs::read_to_string(file).unwrap(),
+        false,
+        route,
+    );
+    assert_status(&page, 200);
+    assert_eq!(header(&page, "cache-control"), "no-store");
+    for (name, table) in tables.as_object().unwrap() {
+        let columns = table["columns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| s.as_str().unwrap())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let (rows, nulls, empty) = (&table["rows"], &table["nulls"], &table["empty"]);
+        assert!(page.contains(&format!(
+            ">{name}</th><td>{columns}</td><td>{rows}</td><td>{nulls}</td><td>{empty}</td>"
+        )));
+    }
+    assert!(!page.contains("/confirmar"));
+    let refused = upload_to(
+        address,
+        &bia,
+        &token,
+        "COPY t (a) FROM stdin;\nprivate value\n",
+        false,
+        route,
+    );
+    assert_status(&refused, 422);
+    assert!(!refused.contains("private value"));
+    let stale = form(
+        address,
+        &format!("{IMPORT}/inventario/confirmar"),
+        &bia,
+        &format!("csrf={token}&revision=1"),
+    );
+    assert_status(&stale, 404);
+    drop(server);
+    assert!(records(data.path()).is_empty());
+}
+
+#[test]
+fn staff_source_sets_require_current_permissions_and_complete_uploads() {
+    let data = tempfile::tempdir().unwrap();
+    let ana_id = account(data.path());
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples-import-tool");
+    // A pre-existing batch owned by an operator who now only has cataloguing.
+    let staged = Command::new(env!("CARGO_BIN_EXE_elzevir"))
+        .args(["import", "stage-set", "--data-dir"])
+        .arg(data.path())
+        .args(["--operator", &ana_id.0.to_string(), "--origin", "limited"])
+        .arg(fixture.join("02-folio/datasets/cornell/instances.tsv"))
+        .output()
+        .unwrap();
+    assert!(staged.status.success(), "{staged:?}");
+    let staged = String::from_utf8(staged.stdout).unwrap();
+    let private_id = staged.split_whitespace().nth(1).unwrap();
+    let (server, address) = start(data.path());
+    let ana = sign_in(address, "ana");
+    let bia = sign_in(address, "bia");
+    let get = |cookie, url| request(address, "GET", url, &format!("Cookie: {cookie}\r\n"), "");
+    let home = get(&ana, IMPORT);
+    assert!(!home.contains("/conjuntos") && !home.contains(private_id));
+    let hidden = format!("{IMPORT}/{private_id}");
+    assert_status(&get(&ana, &hidden), 404);
+    assert_status(
+        &form(
+            address,
+            &format!("{hidden}/cancelar"),
+            &ana,
+            &format!("csrf={}&revision=1", csrf(&home)),
+        ),
+        404,
+    );
+    assert_status(&get(&bia, &hidden), 404);
+
+    let page = get(&bia, IMPORT);
+    let token = csrf(&page);
+    let upload = |cookie: &str, token: &str, tail: &str| {
+        let body = format!(
+            "--B\r\nContent-Disposition: form-data; name=\"csrf\"\r\n\r\n{token}\r\n--B\r\nContent-Disposition: form-data; name=\"origin\"\r\n\r\nlocal-A\r\n--B\r\nContent-Disposition: form-data; name=\"file\"; filename=\"instance.tsv\"\r\n\r\nprivate-first\r\n--B\r\nContent-Disposition: form-data; name=\"file\"; filename=\"item.tsv\"\r\n\r\nprivate-last\r\n{tail}"
+        );
+        request(
+            address,
+            "POST",
+            &format!("{IMPORT}/conjuntos"),
+            &format!("Cookie: {cookie}\r\nContent-Type: multipart/form-data; boundary=B\r\n"),
+            &body,
+        )
+    };
+    assert_status(&upload(&ana, csrf(&home), "--B--\r\n"), 403);
+    assert_status(&upload(&bia, "wrong", "--B--\r\n"), 403);
+    let count_batches = || {
+        std::fs::read_dir(data.path().join("imports"))
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.path().is_dir())
+            .count()
+    };
+    let count = count_batches();
+    for tail in [
+        "",
+        "--B\r\nContent-Disposition: form-data; name=\"extra\"\r\n\r\nx\r\n--B--\r\n",
+    ] {
+        assert_status(&upload(&bia, token, tail), 422);
+        assert_eq!(count_batches(), count);
+    }
+    let staged = upload(&bia, token, "--B--\r\n");
+    assert_status(&staged, 303);
+    let url = header(&staged, "location");
+    let inventory = get(&bia, url);
+    assert_status(&inventory, 200);
+    assert_eq!(header(&inventory, "cache-control"), "no-store");
+    for name in ["instance.tsv", "item.tsv", "local-A", "SHA-256"] {
+        assert!(inventory.contains(name));
+    }
+    assert!(!inventory.contains("private-first") && !inventory.contains("/confirmar"));
+    let action = |verb, rev| {
+        form(
+            address,
+            &format!("{url}/{verb}"),
+            &bia,
+            &format!("csrf={token}&revision={rev}"),
+        )
+    };
+    assert_status(&action("prever", 2), 409);
+    assert_status(&action("prever", 1), 200);
+    assert_status(&action("confirmar", 1), 409);
+    assert_status(&action("cancelar", 1), 303);
+    assert_eq!(count_batches(), count);
+    drop(server);
+    assert!(records(data.path()).is_empty());
+}
+
+#[test]
+fn staff_groups_archive_members_in_the_order_selected() {
+    let data = tempfile::tempdir().unwrap();
+    account(data.path());
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../samples-import-tool/evergreen-sample.zip");
+    let stage = Command::new(env!("CARGO_BIN_EXE_elzevir"))
+        .args(["import", "stage", "--operator", "2", "--data-dir"])
+        .arg(data.path())
+        .arg(fixture)
+        .output()
+        .unwrap();
+    assert!(stage.status.success());
+    let response = String::from_utf8(stage.stdout).unwrap();
+    let id = response.split_whitespace().nth(1).unwrap();
+    let (_server, address) = start(data.path());
+    let bia = sign_in(address, "bia");
+    let get = |url| request(address, "GET", url, &format!("Cookie: {bia}\r\n"), "");
+    let parent = format!("{IMPORT}/{id}");
+    let page = get(&parent);
+    assert_status(&page, 200);
+    let token = csrf(&page);
+    let route = format!("{parent}/conjunto");
+    assert!(page.contains(&route));
+    let select = |token, revision, picks| {
+        form(
+            address,
+            &route,
+            &bia,
+            &format!("csrf={token}&revision={revision}&origin=evergreen&{picks}"),
+        )
+    };
+    assert_status(&select("bad", 1, "member=1"), 403);
+    assert_status(&select(token, 2, "member=1"), 409);
+    assert_status(&select(token, 1, "member=1&member=1"), 422);
+    let created = select(token, 1, "member=3&member=1");
+    assert_status(&created, 303);
+    let inventory = get(header(&created, "location"));
+    assert_status(&inventory, 200);
+    let first = inventory.find("01-evergreen/marc/auth-1066.mrc").unwrap();
+    assert!(first < inventory.find("01-evergreen/marc/oss.marc").unwrap());
+    assert!(inventory.contains("88f7c89842e444e8680e185cc27ab1236eb531fa9b5a501f9af1b65768a6daea"));
+    assert!(!inventory.contains("/confirmar"));
 }
