@@ -491,6 +491,25 @@ Ordem revista na tarefa 6.6 e aprovada por Paulo em 2026-11-27 ([lacunas da troc
 
 Depois da Fase 12: assistente de IA, designer avançado de etiquetas, WhatsApp e Telegram. Ficam fora (Bloco B do inventário): frameworks MARC editáveis e tipos de item, Zebra e Elasticsearch, preferências soltas, resumos diários repetidos, empréstimo entre bibliotecas, reservas de curso, rotação de acervo e convocações, pedidos de artigo, retirada na calçada e atendimento domiciliar, caixa registradora, EDIFACT, Mana KB, tags e comentários do OPAC, plugins e CSS ou JS soltos, SQL livre nos relatórios, circulação offline, ERM, preservação e grupos de exemplares.
 
+### Trilha da importação universal v4
+
+**Plano para revisão de Paulo.** Esta trilha tem numeração própria. A aprovação da
+migração dedicada de uma instalação Koha continua registrada na fase global 5.
+A revisão de 2026-11-28 acrescenta importação independente de autoridades e
+leitores ao contrato da ferramenta universal. A fase 0 reúne evidências e testes
+de proteção do comportamento atual. [Estudo e inventário](../evidencias/importacao-v4/README.md)
+e [contrato proposto](../specs/catalogo/importacao-universal-v4.md).
+
+| Ordem | Primeira entrega verificável e limite da fase |
+|---|---|
+| 1a, para aprovação | Inventário privado de PostgreSQL textual na CLI e no Staff. Ler em fluxo `COPY ... FROM stdin`, distinguir tabela vazia, linha, nulo e texto escapado, expor contagens e diagnósticos por fonte. Provar 11.561 + 5 na amostra e recusar comandos, limites excedidos e prévia vencida. Nenhuma entidade produzida pelo inventário. |
+| 1b–1d | Reunir membros selecionados num lote com identidade e digest por membro. Adicionar TSV/JSON e junções explícitas de FOLIO, depois SQL VALUES e relatório MARCXML híbrido. Testar fontes independentes com os mesmos IDs, truncamento e cancelamento. |
+| 2 | Uma classe por entrega vertical. Leitores com permissões e referências aprovadas. Autoridades com identidade, variantes, relações e reconciliação posterior. Reusar a projeção bibliográfica. Exercitar cada classe isolada na CLI e no Staff. |
+| 3 | Seleção combinada e movimentos opcionais. Oráculo das sete combinações, retomada e reimportação, versões revalidadas na transação. |
+| 4 | Receita declarativa e inferência conservadora no mesmo executor. Avaliação por família com perfil desligado e teste cego antes de afirmar generalização. |
+| 5 | Revisão avançada e binários em entregas separadas. Exigir layout e oráculo antes de aceitar registros de Biblioteca Fácil, PGDMP ou ISIS. |
+| 6 | Medir escala, piloto autorizado, operação e retenção. IA opcional pode propor receita revisável com dados permitidos. |
+
 ### Ordem e trilha crítica
 
 ```mermaid

@@ -730,7 +730,11 @@ comportamento de `import_marc21`, matching, mapeamento ou schema, parar e
 perguntar no PR antes de fazê-la. Formato real não coberto ou dados que
 pareçam pessoais também exigem interromper a análise e pedir orientação.
 
-## 6. Fora do escopo
+## 6. Fora do escopo das entregas históricas I0–I10
+
+A proposta [v4](importacao-universal-v4.md) incorpora autoridades e leitores
+como classes independentes e circulação opcional com dependências. As exclusões
+abaixo descrevem a série original e os limites de seus leitores.
 
 - Implementação em I0 e início de outro PR antes da mesclagem do anterior.
 - Importação de autoridades (tarefa 2.9), leitores, circulação e reservas

@@ -61,6 +61,19 @@ Esc cancela o formulário antes do envio. Restaurar, atualizar e controlar o
 serviço exigem o operador elevado. Tarefas aceitas continuam fora da UI.
 O histórico mostra falhas/interrupções, sem conteúdo de senhas ou tokens.
 
+## Escolha do fluxo de importação
+
+Para preparar registros de catálogo, use o importador da equipe ou
+`elzevir import stage`, confira a prévia e confirme a revisão. O perfil
+Biblivre 949 exige a interpretação dos campos locais e a seleção dos
+cadastros da instituição. Uma migração operacional de instalação Koha
+tem comandos, pré-requisitos e verificação próprios. A seleção combinada
+de acervo, leitores e autoridades está em estudo. Consulte a compatibilidade
+por classe antes de oferecer uma migração à biblioteca.
+[Importação de catálogo](specs/catalogo/importacao-universal.md) ·
+[Troca do Koha](specs/migracao/troca-do-koha.md) ·
+[Inventário e limites da v4](evidencias/importacao-v4/README.md)
+
 ## Backups e recuperação
 
 ```sh
