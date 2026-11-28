@@ -3,31 +3,32 @@ source: crates/elzevir-panel/tests/live.rs
 expression: text
 ---
 Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://catalog.example:8080/
-+Sections------------------+    1 Home         2 Health        3 Access         4 Backup        5 Updates       6 Service      7 Settings
-|  d Dashboard             |+Addresses and access------------------------------------------------------------++Selected institution--------+
-|  x Diagnostics           ||Running                                                                         ||Biblioteca de teste         |
-|> a Addresses and access  ||                                                                                ||                            |
-|  b Backups and schedules ||[Addresses and access] | Configure and manage | Test | Log                      ||Configured listener         |
-|  u Updates               ||[ / ] tabs · Q share catalog · t test public HTTPS · T staff HTTPS              ||127.0.0.1:0                 |
-|  r Service               ||Domain & Tunnel (*.elzevir.app)                                                 ||                            |
-|  g Settings              ||Registration status unavailable                                                 ||Observed listener           |
-|                          ||Public tunnel configuration could not be observed.                              ||127.0.0.1:8080              |
-|                          ||                                                                                ||                            |
-|                          ||Mode in loaded file: Same address                                               ||Last check: 0 seconds ago   |
-|                          ||Running mode: Separate hostnames                                                ||                            |
-|                          ||Catalog hostname: catalog.example                                               ||Read-only observations      |
-|                          ||Staff hostname: staff.example                                                   ||                            |
-|                          ||Catalog (this computer): http://catalog.example:8080/                           ||                            |
-|                          ||Staff (this computer): http://staff.example:8080/equipe                         ||                            |
-|                          ||Catalog HTTP test: OK                                                           ||                            |
-|                          ||Login form HTTP test: Failed                                                    ||                            |
-|                          ||Tests started (UTC): 2026-11-16T12:00:00Z                                       ||                            |
-|                          ||v: test catalog and login form | f: refresh observations                        ||                            |
-|                          ||Tests are from this machine; DNS, TLS and remote access are not tested.         ||                            |
-|                          ||                                                                                ||                            |
-|                          ||Local interface candidates (not tested from another computer)                   ||                            |
-|                          ||No IP candidates for this binding; hostnames require client DNS/hosts.          ||                            |
-|                          ||Internet publication/tunnel: not configured in this step.                       ||                            |
-|                          |+--------------------------------------------------------------------------------++----------------------------+
-+--------------------------+         Test [t]                     Share [Q]                  Config [m]                  Refresh [f]
-Tab/arrows: navigate | f: refresh | PgUp/PgDn: scroll | Ctrl+P: palette | q/Ctrl+C: quit
+      1 Home             2 Health            3 Access             4 Backup            5 Updates           6 Service          7 Settings
+
+ Addresses and internet access
+
+               Address overview                                 Free address                                   Own domain
+
+
+  Tests                                                  Results from this computer
+       Test local access       - Test catalog HTTPS      Local tests check the catalog and staff login on this computer. Public tests
+                   - Test staff HTTPS                    request each configured HTTPS route from this host.
+                                                         Public tunnel configuration could not be observed.
+
+                                                         Mode in loaded file: Same address
+                                                         Running mode: Separate hostnames
+                                                         Catalog hostname: catalog.example
+                                                         Staff hostname: staff.example
+                                                         Catalog (this computer): http://catalog.example:8080/
+                                                         Staff (this computer): http://staff.example:8080/equipe
+                                                         Catalog HTTP test: OK
+                                                         Login form HTTP test: Failed
+                                                         Tests started (UTC): 2026-11-16T12:00:00Z
+                                                         v: test catalog and login form | f: refresh observations
+                                                         Tests are from this machine; DNS, TLS and remote access are not tested.
+
+                                                         Local interface candidates (not tested from another computer)
+                                                         No IP candidates for this binding; hostnames require client DNS/hosts.
+            Tests                      Events                   - Catalog QR                - Previous                     Next
+
+ Tab focus   Enter select   [ / ] pages   PgUp / PgDn details

@@ -113,6 +113,8 @@ pub enum TunnelTab {
     Addresses,
     /// Enrollment and connector management.
     Manage,
+    /// Cloudflare authorization and publication for operator-owned hostnames.
+    OwnDomain,
     /// Explicit public test results.
     Test,
     /// Redacted connector log projection.

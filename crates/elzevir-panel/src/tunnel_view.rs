@@ -25,7 +25,10 @@ pub(crate) fn rows(
         rows.extend(domain_rows(operations, messages));
         rows.extend(remote_rows(operations, messages));
     }
-    job_rows(operations, messages, &mut rows);
+    job_rows(operations, tab, messages, &mut rows);
+    if tab == TunnelTab::Manage {
+        return rows;
+    }
     match operations.map(|operations| &operations.tunnel) {
         Some(TunnelState::Configured(tunnel)) => {
             rows.push(row(messages, "tunnel-catalog", Some(text(&tunnel.catalog))));
@@ -103,20 +106,29 @@ pub(crate) fn rows(
     rows
 }
 
-fn job_rows(operations: Option<&Operations>, messages: &Messages, rows: &mut Vec<Line<'static>>) {
+fn job_rows(
+    operations: Option<&Operations>,
+    tab: TunnelTab,
+    messages: &Messages,
+    rows: &mut Vec<Line<'static>>,
+) {
     if let Some(operations) = operations {
         for job in operations
             .jobs
             .iter()
-            .filter(|job| {
-                matches!(
+            .filter(|job| match tab {
+                TunnelTab::Manage => job.action == "broker-operation",
+                TunnelTab::OwnDomain => {
+                    matches!(job.action, "op-cloudflare-login" | "op-cloudflare-setup")
+                }
+                _ => matches!(
                     job.action,
                     "op-cloudflare-login"
                         | "op-cloudflare-setup"
                         | "op-tunnel-test"
                         | "op-staff-test"
                         | "broker-operation"
-                )
+                ),
             })
             .take(3)
         {

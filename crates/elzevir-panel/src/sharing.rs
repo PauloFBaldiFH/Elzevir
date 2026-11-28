@@ -35,6 +35,7 @@ pub(crate) fn draw(
     messages: &Messages,
     ascii: bool,
     notice: Option<&str>,
+    scene: &mut crate::ui::Scene,
 ) {
     use ratatui::{
         layout::Rect,
@@ -93,6 +94,37 @@ pub(crate) fn draw(
             .block(crate::view::block(messages.get("broker-qr"), ascii)),
         popup,
     );
+    if area.height >= 5 && area.width >= 20 {
+        let bar = Rect::new(
+            popup.x + 1,
+            popup.bottom() - 1,
+            popup.width.saturating_sub(2),
+            1,
+        );
+        let valid = tunnel.and_then(|t| public_url(&t.catalog)).is_some();
+        crate::backup_center::Controls {
+            f: frame,
+            scene,
+            m: messages,
+        }
+        .buttons(
+            bar,
+            &[
+                (
+                    "desk-copy",
+                    crate::backup_center::key('Y'),
+                    crate::ui::Variant::Secondary,
+                    valid,
+                ),
+                (
+                    "ac-back",
+                    crate::ui::Action::AccessPage(crate::TunnelTab::Addresses),
+                    crate::ui::Variant::Primary,
+                    true,
+                ),
+            ],
+        );
+    }
 }
 #[cfg(test)]
 mod tests {

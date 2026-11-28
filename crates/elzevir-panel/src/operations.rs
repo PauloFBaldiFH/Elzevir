@@ -282,6 +282,8 @@ pub struct Operations {
     pub cloud_authorization_uri: Option<String>,
     /// Allowlisted sign-in URLs for pending host connector jobs.
     pub authorization_uris: Vec<String>,
+    /// Allowlisted approval links for pending free-address jobs.
+    pub broker_authorization_uris: Vec<String>,
     /// Public tunnel candidates and bounded evidence.
     pub tunnel: crate::TunnelState,
     /// Last safe remote address-service observation.
@@ -326,6 +328,13 @@ pub(crate) fn choices(label: &str) -> Option<&'static [(&'static str, &'static s
 }
 
 impl Form {
+    pub(crate) fn needs_distinct_hosts(&self) -> bool {
+        matches!(self.operation, Operation::CloudflareSetup { .. })
+            && !matches!(self.values.as_slice(), [catalog, staff, ..]
+                if !catalog.trim().is_empty() && !staff.trim().is_empty()
+                && !catalog.trim_end_matches('.').eq_ignore_ascii_case(staff.trim_end_matches('.')))
+    }
+
     pub(crate) fn open_broker_settings(&mut self) -> bool {
         if !matches!(
             self.operation,
