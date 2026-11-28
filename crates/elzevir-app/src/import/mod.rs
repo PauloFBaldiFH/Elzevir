@@ -12,6 +12,7 @@ pub mod edits;
 pub mod koha_sql;
 pub mod postgres;
 pub mod preview;
+pub mod relations;
 pub mod sheet;
 pub mod table;
 mod unimarc;
