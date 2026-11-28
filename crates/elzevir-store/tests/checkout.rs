@@ -2564,3 +2564,46 @@ fn damaged_and_withdrawn_change_what_the_desk_accepts_and_status_names_are_kept(
         ]
     );
 }
+
+#[test]
+fn an_item_lost_again_on_a_new_loan_is_charged_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = lost_items(&dir, &["0001"]);
+    library
+        .give_back("0001", library.central, "2026-12-01T10:00:00-03:00")
+        .unwrap();
+    // The ended loan's id is not given to the next one, whose loss is another charge.
+    let other = library.another_patron("000456", library.central);
+    library
+        .lend_to(other, "0001", "2026-12-02T10:00:00-03:00", false)
+        .unwrap();
+    let lost = set_status(
+        &library,
+        "0001",
+        (StatusKind::Lost, 0, 1),
+        "2026-12-03T10:00:00-03:00",
+    )
+    .unwrap();
+    assert_eq!(
+        lost.charged,
+        [
+            (DebitType::Processing, Money(300)),
+            (DebitType::Lost, Money(4500)),
+        ]
+    );
+    assert_eq!(
+        library.read::<i64>(
+            "SELECT count(DISTINCT loan_id) FROM account_lines WHERE debit_type = 'LOST'"
+        ),
+        2
+    );
+    // Found again, only the newest charge is given back (edge case 2).
+    let found = library
+        .give_back("0001", library.central, "2026-12-04T10:00:00-03:00")
+        .unwrap();
+    assert_eq!(found.found.lost_refunded, Some(Money(4500)));
+    assert_eq!(
+        library.read::<i64>("SELECT count(*) FROM account_lines WHERE credit_type = 'LOST_FOUND'"),
+        2
+    );
+}

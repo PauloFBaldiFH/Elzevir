@@ -2,7 +2,7 @@
 //! What `elzevir desk-day` reads between the steps of a day: Koha's numbers found through
 //! what the switch kept, and what a patron owes (docs/specs/migracao/desk-day.md, item 8).
 
-use elzevir_app::desk_day::DeskItem;
+use elzevir_app::desk_day::{DeskItem, account_line};
 use elzevir_app::holds::HoldId;
 use elzevir_domain::catalog::{BranchId, Money};
 use elzevir_domain::patron::PatronId;
@@ -21,7 +21,7 @@ impl crate::ElzevirStore {
         self.readers().read(|connection| {
             Ok(connection
                 .query_row(
-                    "SELECT i.barcode, i.holding_branch, l.patron_id
+                    "SELECT i.barcode, i.holding_branch, l.patron_id, i.lost
                      FROM item_origins o
                      JOIN items i ON i.id = o.item_id
                      LEFT JOIN loans l ON l.item_id = i.id
@@ -34,6 +34,7 @@ impl crate::ElzevirStore {
                             barcode: row.get(0)?,
                             holding: BranchId(row.get(1)?),
                             borrower: row.get::<_, Option<i64>>(2)?.map(PatronId),
+                            lost: row.get(3)?,
                         })
                     },
                 )
@@ -87,5 +88,27 @@ impl crate::ElzevirStore {
     pub fn owed_by(&self, patron: PatronId) -> Result<Money, StoreError> {
         self.readers()
             .read(|connection| Ok(crate::accounts::owed(connection, patron)?))
+    }
+
+    /// The patron's account lines, oldest first, as the day compares them.
+    ///
+    /// # Errors
+    /// The database could not be read.
+    pub fn desk_lines(&self, patron: PatronId) -> Result<Vec<String>, StoreError> {
+        self.readers().read(|connection| {
+            let mut statement = connection.prepare(
+                "SELECT coalesce(debit_type, credit_type, '-'), status, amount, outstanding
+                 FROM account_lines WHERE patron_id = ?1 ORDER BY id",
+            )?;
+            let rows = statement.query_map([patron.0], |row| {
+                Ok(account_line(
+                    &row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?.as_deref(),
+                    row.get(2)?,
+                    row.get(3)?,
+                ))
+            })?;
+            Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+        })
     }
 }

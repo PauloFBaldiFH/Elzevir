@@ -578,8 +578,7 @@ const MIGRATIONS: &[&str] = &[
          description TEXT,
          PRIMARY KEY (branch_id, day)
      );",
-    // 47: current loans (docs/specs/circulacao/emprestimo.md). One per Item; times are
-    // RFC 9557 text in the library's time zone, as the command carried them.
+    // 47: current loans (circulacao/emprestimo.md), one per Item; RFC 9557 times (zoned).
     "CREATE TABLE loans (
          id        INTEGER PRIMARY KEY,
          item_id   INTEGER NOT NULL UNIQUE REFERENCES items (id),
@@ -843,6 +842,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("koha_attribute_keys.sql"),
     include_str!("item_status.sql"),
     include_str!("returned_loan_ids.sql"),
+    include_str!("loan_ids.sql"),
 ];
 
 /// The migration that creates `match_keys`.

@@ -14,6 +14,7 @@ use elzevir_app::desk_day::{
     checkout_answer, compare, hold_placed_answer, renew_answer,
 };
 use elzevir_app::holds::{HoldLevel, HoldRequest};
+use elzevir_app::item_status::{ItemStatusChange, ItemStatusDesk, StatusKind};
 use elzevir_app::koha_parity::{ReturnHold, hold_answer};
 use elzevir_app::loans::{CheckinRequest, CheckoutRequest, RenewRequest};
 use elzevir_domain::account::PaymentKind;
@@ -142,7 +143,11 @@ fn replay(store: &ElzevirStore, step: &KohaStep, at: Zoned, base: RenewalBase) -
             itemnumber,
             confirm,
         } => checkout(store, (borrowernumber, itemnumber, confirm), at),
-        Step::Checkin { itemnumber } => checkin(store, itemnumber, at),
+        Step::Checkin {
+            itemnumber,
+            borrowernumber,
+        } => checkin(store, (itemnumber, borrowernumber), at),
+        Step::Lose { itemnumber, lost } => lose(store, (itemnumber, lost), at),
         Step::Renew { itemnumber } => renew(store, itemnumber, at, base),
         Step::Hold {
             borrowernumber,
@@ -184,10 +189,23 @@ fn checkout(
     answered(store, answer, Some(patron))
 }
 
-fn checkin(store: &ElzevirStore, itemnumber: u64, at: Zoned) -> Replayed {
+fn checkin(
+    store: &ElzevirStore,
+    (itemnumber, borrowernumber): (u64, Option<u64>),
+    at: Zoned,
+) -> Replayed {
     let item = match item(store, itemnumber)? {
         Ok(item) => item,
         Err(gap) => return Ok(Err(gap)),
+    };
+    // Not on loan, the patron named by the step is the one whose account the day reads.
+    let reader = match (item.borrower, borrowernumber) {
+        (Some(borrower), _) => Some(borrower),
+        (None, Some(number)) => match patron(store, number)? {
+            Ok((patron, _)) => Some(patron),
+            Err(gap) => return Ok(Err(gap)),
+        },
+        (None, None) => None,
     };
     let done = submit(
         store,
@@ -222,6 +240,40 @@ fn checkin(store: &ElzevirStore, itemnumber: u64, at: Zoned) -> Replayed {
         }
         Err(CirculationRefusal::Checkin(_)) => "refused".to_owned(),
         other => return Err(format!("unexpected checkin answer: {other:?}")),
+    };
+    answered(store, answer, reader)
+}
+
+/// Marks the Item lost from its page, as Koha's `updateitem.pl` does (lost-items.md,
+/// item 19); the patron is the one who had it.
+fn lose(store: &ElzevirStore, (itemnumber, lost): (u64, i64), at: Zoned) -> Replayed {
+    let item = match item(store, itemnumber)? {
+        Ok(item) => item,
+        Err(gap) => return Ok(Err(gap)),
+    };
+    if item.lost == lost {
+        return answered(store, "unchanged".to_owned(), item.borrower);
+    }
+    let Some(desk) = store
+        .item_at_the_desk(&item.barcode)
+        .map_err(|e| e.to_string())?
+    else {
+        return Ok(Err(format!("the Item {itemnumber} did not come")));
+    };
+    let done = submit(
+        store,
+        CirculationCommand::SetItemStatus(ItemStatusChange {
+            item: desk.item,
+            kind: StatusKind::Lost,
+            from: item.lost,
+            to: lost,
+            at,
+        }),
+    )?;
+    let answer = match done {
+        Ok(CirculationOutput::ItemStatusChanged(_)) => "ok".to_owned(),
+        Err(CirculationRefusal::ItemStatus(_)) => "refused".to_owned(),
+        other => return Err(format!("unexpected status answer: {other:?}")),
     };
     answered(store, answer, item.borrower)
 }
@@ -305,11 +357,15 @@ fn pay(store: &ElzevirStore, borrowernumber: u64, amount: Money, at: Zoned) -> R
     answered(store, answer, Some(patron))
 }
 
-/// The answer with what the patron owes after it.
+/// The answer with what the patron owes after it, and their account lines.
 fn answered(store: &ElzevirStore, answer: String, patron: Option<PatronId>) -> Replayed {
+    let lines = patron
+        .map(|patron| store.desk_lines(patron).map_err(|e| e.to_string()))
+        .transpose()?;
     Ok(Ok(StepAnswer {
         answer,
         balance: owed(store, patron)?,
+        lines,
     }))
 }
 
@@ -351,6 +407,7 @@ mod tests {
             &[Ok(StepAnswer {
                 answer: "ok due 2026-12-11 23:59".to_owned(),
                 balance: Some(Money(0)),
+                lines: None,
             })],
         );
         assert_eq!(
