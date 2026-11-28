@@ -45,6 +45,15 @@ def exercise(binary, root, output, baseline):
         term.wait_for("Em execução")
         term.click("Central de backups")
         term.wait_for("Restaurar dados")
+        if not baseline:
+            term.size(160, 45)
+            term.click("Ver detalhes", last=True)
+            term.wait_for("Restaurar esta cópia")
+            term.click("Restaurar esta cópia")
+            term.wait_for(archive.name)
+            term.send(b"\x1b")
+            term.click("Voltar à central", last=True)
+            term.size(80, 24)
         term.click("Restaurar dados")
         if baseline:
             term.wait_for("Validar cópia")
@@ -61,6 +70,12 @@ def exercise(binary, root, output, baseline):
             capture(term, output, "antes-revisao")
             return
         capture(term, output, "restauracao-inicial")
+        term.click("Escolher cópia e chave")
+        term.click("Escolher arquivo")
+        term.click("Na nuvem")
+        term.wait_for("Revisar download")
+        term.click("Central de backups", last=True)
+        term.click("Restaurar dados")
         term.click("Escolher cópia e chave")
         term.click("Escolher arquivo")
         term.wait_for(archive.name)
