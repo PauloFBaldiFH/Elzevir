@@ -47,6 +47,7 @@ mod koha_history;
 mod koha_migration;
 mod koha_parity;
 mod koha_rules;
+mod koha_statuses;
 mod koha_types;
 mod koha_verify;
 mod listing;

@@ -25,6 +25,7 @@ mod calendar;
 mod circulation;
 mod dump;
 mod history;
+mod item_statuses;
 mod rules;
 
 pub use accounts::{
@@ -50,6 +51,10 @@ pub use circulation::{
 use dump::{KohaTables, Row, Table};
 pub use dump::{LEFT_OUT_COLUMNS, MAX_KOHA_ROWS};
 pub use history::{KohaHistoryBatch, KohaHistoryMigrated, KohaReturnedLoan, RETURNED_PER_COMMAND};
+pub use item_statuses::{
+    KohaStatusDates, KohaStatusName, KohaStatusesBatch, KohaStatusesMigrated,
+    STATUS_DATES_PER_COMMAND, numbered_label,
+};
 pub use rules::{
     KohaRule, KohaRulesBatch, KohaRulesMigrated, RuleLeftover, checked as checked_rule,
 };
@@ -298,6 +303,12 @@ pub struct KohaPlan {
     /// The active currency, cut to the three letters SIP2 sends in `BH`
     /// (patron-attributes.md, item 20).
     pub sip2_currency: Option<String>,
+    /// The names of the status numbers (lost-items.md, item 17).
+    pub status_names: Vec<KohaStatusName>,
+    /// Authorised values of the status categories left out: outside 1 to 99, or unnamed.
+    pub status_names_left: usize,
+    /// When the Items took their statuses.
+    pub status_dates: Vec<KohaStatusDates>,
 }
 
 /// A patron field, ordered for the report.
@@ -379,6 +390,7 @@ pub fn plan(input: impl BufRead, today: Date, zone: &TimeZone) -> Result<KohaPla
     calendar::read(&tables.rows, &mut plan);
     attributes::read(&tables.rows, &mut plan);
     plan.sip2_currency = attributes::active_currency(&tables.rows);
+    item_statuses::read(&tables.rows, zone, &mut plan);
     Ok(plan)
 }
 

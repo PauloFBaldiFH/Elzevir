@@ -42,6 +42,7 @@ mod koha_attributes_cli;
 mod koha_codes;
 mod koha_migration_cli;
 mod koha_prefs_cli;
+mod koha_statuses_cli;
 mod listen_port;
 mod local_artifacts;
 mod local_disk;

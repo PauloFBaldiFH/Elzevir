@@ -3,6 +3,7 @@
 //! `elzevir verify-koha` (docs/specs/migracao/verificacao-do-koha.md, item 2).
 
 use elzevir_app::holds::Suspension;
+use elzevir_app::item_status::StatusKind;
 use elzevir_app::koha_verify::{
     Footprint, FoundHold, FoundItem, FoundLoan, FoundPatron, HoldState,
 };
@@ -36,6 +37,7 @@ impl crate::ElzevirStore {
                 rules: rules(connection)?,
                 holidays: holidays(connection)?,
                 attributes: attributes(connection)?,
+                status_names: status_names(connection)?,
             })
         })
     }
@@ -121,7 +123,7 @@ fn items(connection: &Connection) -> Result<BTreeMap<String, Vec<FoundItem>>, St
                 (SELECT code FROM koha_codes WHERE kind = ?1 AND local_id = i.home_branch),
                 (SELECT code FROM koha_codes WHERE kind = ?1 AND local_id = i.holding_branch),
                 (SELECT code FROM koha_codes WHERE kind = ?2 AND local_id = i.policy_id),
-                i.id
+                i.id, i.lost_on, i.damaged_on, i.withdrawn_on
          FROM item_origins o JOIN items i ON i.id = o.item_id
          WHERE o.system = 'koha.itemnumber'
          ORDER BY 1",
@@ -135,6 +137,9 @@ fn items(connection: &Connection) -> Result<BTreeMap<String, Vec<FoundItem>>, St
             home: row.get(3)?,
             holding: row.get(4)?,
             item_type: row.get(5)?,
+            lost_on: row.get(7)?,
+            damaged_on: row.get(8)?,
+            withdrawn_on: row.get(9)?,
         });
     }
     Ok(found)
@@ -318,4 +323,21 @@ fn attributes(connection: &Connection) -> rusqlite::Result<BTreeMap<String, usiz
         ))
     })?;
     rows.collect()
+}
+
+/// The status names, by kind and number (docs/specs/circulacao/lost-items.md, item 18).
+fn status_names(connection: &Connection) -> rusqlite::Result<BTreeMap<(StatusKind, i64), String>> {
+    let mut statement = connection.prepare("SELECT kind, number, label FROM item_status_names")?;
+    let rows = statement.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?, row.get(2)?))
+    })?;
+    let mut names = BTreeMap::new();
+    for row in rows {
+        let (kind, number, label) = row?;
+        // The table's CHECK keeps the kind to the four codes.
+        if let Some(kind) = StatusKind::from_code(&kind) {
+            names.insert((kind, number), label);
+        }
+    }
+    Ok(names)
 }

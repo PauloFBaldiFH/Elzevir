@@ -91,6 +91,9 @@ pub enum PatronCommand {
     /// Brings Koha's patron attribute types and values, after the patrons
     /// (docs/specs/circulacao/patron-attributes.md, items 16 and 17).
     MigrateKohaAttributes(Box<crate::koha_migration::KohaAttributesBatch>),
+    /// Brings the names of Koha's status numbers and the Items' status dates, after the
+    /// catalog (docs/specs/circulacao/lost-items.md, item 17).
+    MigrateKohaStatuses(Box<crate::koha_migration::KohaStatusesBatch>),
 }
 
 /// One change to the patron categories.
@@ -236,6 +239,8 @@ pub enum PatronOutput {
     KohaCalendarMigrated(crate::koha_migration::KohaCalendarMigrated),
     /// What a write of Koha's patron attributes did.
     KohaAttributesMigrated(crate::koha_migration::KohaAttributesMigrated),
+    /// What a write of Koha's status names and dates did.
+    KohaStatusesMigrated(crate::koha_migration::KohaStatusesMigrated),
 }
 
 /// A field of the patron form, to name the one refused.

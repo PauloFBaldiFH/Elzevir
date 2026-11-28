@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::calendar::Holiday;
 use crate::import::koha_sql::KohaCatalogRecord;
+use crate::item_status::StatusKind;
 use crate::koha_migration::{
     CirculationLeftover, HolidayLeftover, HolidayTable, KohaPlan, Leftover, RuleLeftover,
 };
@@ -15,6 +16,7 @@ mod attributes;
 mod calendar;
 mod circulation;
 mod rules;
+mod statuses;
 
 /// A rule by its scope as Koha's codes (`None` is "any") and its `rule_name`.
 pub type RuleKey = (Option<String>, Option<String>, Option<String>, String);
@@ -52,6 +54,8 @@ pub struct Footprint {
     /// The additional fields that came from Koha's attribute types, by `code`, and how many
     /// values each holds.
     pub attributes: BTreeMap<String, usize>,
+    /// The status names, by kind and number (lost-items.md, item 18).
+    pub status_names: BTreeMap<(StatusKind, i64), String>,
 }
 
 /// A patron as the Elzevir holds it, with its branch and category as Koha codes.
@@ -80,6 +84,12 @@ pub struct FoundItem {
     pub holding: Option<String>,
     /// Item type code.
     pub item_type: Option<String>,
+    /// When it was lost, while it is.
+    pub lost_on: Option<String>,
+    /// When it was damaged, while it is.
+    pub damaged_on: Option<String>,
+    /// When it was withdrawn, while it is.
+    pub withdrawn_on: Option<String>,
 }
 
 /// A table the verifier compares.
@@ -111,6 +121,10 @@ pub enum Table {
     SpecialHolidays,
     /// `borrower_attribute_types`, by `code`, with the values of `borrower_attributes`.
     AttributeTypes,
+    /// The `authorised_values` that name status numbers, by category and number.
+    StatusNames,
+    /// The status dates of `items`, by `itemnumber`.
+    StatusDates,
 }
 
 /// Why a number of the dump is not in the Elzevir, found in the dump or the database
@@ -147,6 +161,8 @@ pub enum Cause {
     Holiday(HolidayLeftover),
     /// The attribute value breaks a rule of its field, or its patron did not come.
     Attribute(crate::koha_migration::ValueLeftover),
+    /// Another number of the same kind has the name.
+    StatusNameTaken,
 }
 
 /// A difference without a cause.
@@ -236,6 +252,8 @@ pub fn verify(
         calendar::holidays(plan, found, HolidayTable::Repeatable),
         calendar::holidays(plan, found, HolidayTable::Special),
         attributes::attributes(plan, found),
+        statuses::names(plan, found),
+        statuses::dates(plan, found),
     ]
 }
 
@@ -511,6 +529,7 @@ mod tests {
                     home: item.home.clone(),
                     holding: item.holding.clone(),
                     item_type: item.item_type.clone(),
+                    ..FoundItem::default()
                 };
                 found
                     .items
