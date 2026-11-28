@@ -98,3 +98,22 @@ Editor/instalador TUI, aplicar mudanças sem reiniciar, TLS embutido, proxy
 confiável para recuperar IP original, DNS, firewall, abrir navegador/clipboard,
 QR e publicação/túnel (P5–P7). Nomes de host separam roteamento, não substituem
 autenticação; portas distintas no mesmo host não isolam cookies do navegador.
+
+## 7. Central de endereços do painel (Marco E)
+
+A visão geral oferece os endereços observados deste computador, da rede e
+da internet, com ações para catálogo e equipe. Duas entradas de igual destaque
+levam ao cadastro pelo serviço de endereços e à publicação com domínio próprio.
+Escolher um percurso ou consultar resultados apenas muda a tela. A autorização,
+a publicação e a revogação passam pelas operações e confirmações do host.
+
+Na tela do serviço de endereços, o operador pode solicitar, retomar ou recuperar
+o cadastro. O painel identifica fase, conector local, horário e atribuição
+quando observados. Um cadastro ausente ou desconhecido não comprova que o
+broker esteja online. No domínio próprio o operador autoriza a Cloudflare,
+revisa os nomes de catálogo e equipe e só então solicita a configuração.
+
+Testes e eventos têm entradas próprias. As sondas de loopback e as de HTTPS
+público têm escopos e resultados identificados. Em 80×24 e em tela larga,
+os mesmos percursos aceitam clique e Tab/Enter. O compartilhamento usa
+somente a URL HTTPS de catálogo validada pelo contrato existente.

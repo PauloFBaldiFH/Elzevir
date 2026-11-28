@@ -3,31 +3,32 @@ source: crates/elzevir-panel/tests/live.rs
 expression: text
 ---
 Elzevir TUI  0.0.0  |  Online  |  SQLite OK  |  Tantivy OK  |  http://catalog.example:8080/
-+Seções--------------------+   1 Início         2 Saúde        3 Acesso         4 Backup        5 Versões       6 Serviço       7 Ajustes
-|  d Painel de controle    |+Endereços e acesso--------------------------------------------------------------++Instituição selecionada-----+
-|  x Diagnóstico           ||Em execução                                                                     ||Biblioteca de teste         |
-|> a Endereços e acesso    ||                                                                                ||                            |
-|  b Backup e agendamentos ||[Endereços e acesso] | Configurar e gerenciar | Teste | Registro                ||Listener configurado        |
-|  u Atualizações          ||[ / ] abas · Q compartilhar catálogo · t testar HTTPS público · T HTTPS da      ||127.0.0.1:0                 |
-|  r Serviço               ||equipe                                                                          ||                            |
-|  g Configurações         ||Domínio & Túnel (*.elzevir.app)                                                 ||Listener observado          |
-|                          ||Estado do cadastro indisponível                                                 ||127.0.0.1:8080              |
-|                          ||Não foi possível observar a configuração do túnel público.                      ||                            |
-|                          ||                                                                                ||Última consulta: há 0       |
-|                          ||Modo no arquivo carregado: Mesmo endereço                                       ||segundos                    |
-|                          ||Modo em execução: Nomes de host separados                                       ||                            |
-|                          ||Nome de host do catálogo: catalog.example                                       ||Observações somente de      |
-|                          ||Nome de host da equipe: staff.example                                           ||leitura                     |
-|                          ||Catálogo (neste computador): http://catalog.example:8080/                       ||                            |
-|                          ||Equipe (neste computador): http://staff.example:8080/equipe                     ||                            |
-|                          ||Teste HTTP do catálogo: OK                                                      ||                            |
-|                          ||Teste HTTP do formulário de login: Falha                                        ||                            |
-|                          ||Início dos testes (UTC): 2026-11-16T12:00:00Z                                   ||                            |
-|                          ||v: testar catálogo e formulário de login | f: atualizar observações             ||                            |
-|                          ||Testes feitos nesta máquina; DNS, TLS e acesso remoto não foram testados.       ||                            |
-|                          ||                                                                                ||                            |
-|                          ||Alternativas nas interfaces locais (sem teste de outro computador)              ||                            |
-|                          ||Sem alternativas IP para este bind; nomes exigem DNS/hosts no cliente.          ||                            |
-|                          |+--------------------------------------------------------------------------------++----------------------------+
-+--------------------------+        Testar [t]                Compartilhar [Q]             Configurar [m]               Atualizar [f]
-Tab/setas: navegar | f: atualizar | PgUp/PgDn: rolar | Ctrl+P: paleta | q/Ctrl+C: sair
+     1 Início             2 Saúde            3 Acesso             4 Backup            5 Versões           6 Serviço           7 Ajustes
+
+ Endereços e acesso pela internet
+
+                Meus endereços                                Endereço gratuito                              Domínio próprio
+
+
+  Testes                                                 Resultados observados neste computador
+     Testar acessos locais   - Testar HTTPS do catálog   O teste local consulta o catálogo e o login neste computador. Os testes públicos
+                - Testar HTTPS da equipe                 consultam cada endereço HTTPS a partir deste host.
+                                                         Não foi possível observar a configuração do túnel público.
+
+                                                         Modo no arquivo carregado: Mesmo endereço
+                                                         Modo em execução: Nomes de host separados
+                                                         Nome de host do catálogo: catalog.example
+                                                         Nome de host da equipe: staff.example
+                                                         Catálogo (neste computador): http://catalog.example:8080/
+                                                         Equipe (neste computador): http://staff.example:8080/equipe
+                                                         Teste HTTP do catálogo: OK
+                                                         Teste HTTP do formulário de login: Falha
+                                                         Início dos testes (UTC): 2026-11-16T12:00:00Z
+                                                         v: testar catálogo e formulário de login | f: atualizar observações
+                                                         Testes feitos nesta máquina; DNS, TLS e acesso remoto não foram testados.
+
+                                                         Alternativas nas interfaces locais (sem teste de outro computador)
+                                                         Sem alternativas IP para este bind; nomes exigem DNS/hosts no cliente.
+           Testes                      Eventos                  - QR catálogo               - Anterior                    Próximo
+
+ Tab foco   Enter selecionar   [ / ] telas   PgUp / PgDn detalhes

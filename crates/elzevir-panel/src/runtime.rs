@@ -320,7 +320,7 @@ fn interact(
             {
                 panel.handle(&input, drawn.width, drawn.height);
             }
-            if panel.section == crate::Section::Dashboard && matches!(panel.mode, Mode::Live(_)) {
+            if panel.measured_scroll() {
                 panel.scroll = panel.scroll.min(scene.scroll_limit);
             }
         }
@@ -344,6 +344,7 @@ fn control_input(
         && panel.section == crate::Section::Backup
         && matches!(panel.mode, Mode::Live(_))
         && panel.inspection.is_none())
+        || panel.live_addresses()
         || panel.section == crate::Section::Dashboard
         || panel.form.is_some()
         || scene.gallery
@@ -366,6 +367,15 @@ fn control_input(
         Event::Key(key) if controls && key.kind == event::KeyEventKind::Press => {
             use event::KeyCode::{BackTab, Char, Enter, Esc, Tab};
             match key.code {
+                event::KeyCode::PageUp | event::KeyCode::PageDown
+                    if panel.live_addresses()
+                        && panel.form.is_none()
+                        && !panel.sharing_catalog() =>
+                {
+                    crate::ui::Action::Scroll(key.code == event::KeyCode::PageDown)
+                        .apply(panel, drawn, scene, access);
+                    return None;
+                }
                 event::KeyCode::PageUp | event::KeyCode::PageDown
                     if crate::backup_center::scrollable(panel)
                         && panel.form.is_none()
@@ -440,7 +450,7 @@ fn mouse_action(
                 );
                 return None;
             }
-            let limit = if panel.section == crate::Section::Dashboard {
+            let limit = if panel.measured_scroll() {
                 scene.scroll_limit
             } else {
                 500

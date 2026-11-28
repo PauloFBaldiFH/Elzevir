@@ -76,8 +76,6 @@ pub(crate) fn draw(
             panel.diagnostics.pending,
             messages,
         ));
-    } else if panel.section == Section::Addresses {
-        rows.extend(address_rows(panel, snapshot, state, messages));
     } else if matches!(panel.section, Section::Backup | Section::Updates) {
         rows.extend(crate::operation_view::rows(snapshot, panel, messages));
     } else if panel.section == Section::Settings {
@@ -161,76 +159,4 @@ fn draw_context(
             .block(crate::view::block(messages.get("panel-context"), ascii)),
         context,
     );
-}
-
-fn address_rows(
-    panel: &Panel,
-    snapshot: Option<&crate::Snapshot>,
-    state: &LiveState,
-    messages: &Messages,
-) -> Vec<Line<'static>> {
-    use crate::TunnelTab::{Addresses, Log, Manage, Test};
-    let tabs = [
-        (Addresses, "panel-addresses"),
-        (Manage, "address-manage"),
-        (Test, "address-test"),
-        (Log, "address-log"),
-    ];
-    let titles = tabs
-        .iter()
-        .map(|(tab, key)| {
-            let title = messages.get(key);
-            if panel.tunnel_tab == *tab {
-                format!("[{title}]")
-            } else {
-                title
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" | ");
-    let mut rows = vec![
-        Line::from(titles),
-        Line::from(messages.get("address-navigation")),
-    ];
-    for key in [panel.access_notice, panel.access_help]
-        .into_iter()
-        .flatten()
-    {
-        rows.push(Line::from(messages.get(key)));
-    }
-    if panel.tunnel_tab == Manage {
-        for key in [
-            "address-enrollment",
-            "broker-help",
-            "address-connector-controls",
-            "op-cloudflare-help",
-        ] {
-            rows.push(Line::from(messages.get(key)));
-        }
-    }
-    if let Some(sample) = snapshot {
-        for uri in &sample.operations.authorization_uris {
-            rows.push(row(
-                messages,
-                "op-authorize-uri",
-                Some(safe_text(uri, 2048)),
-            ));
-        }
-    }
-    if panel.tunnel_tab != crate::TunnelTab::Share {
-        rows.extend(crate::tunnel_view::rows(
-            snapshot.map(|sample| &sample.operations),
-            panel.tunnel_tab,
-            messages,
-        ));
-    }
-    if matches!(panel.tunnel_tab, Addresses | Test) {
-        rows.extend(crate::address_view::rows(
-            &state.institution,
-            snapshot.map(|sample| &sample.addresses),
-            panel.diagnostics.pending,
-            messages,
-        ));
-    }
-    rows
 }

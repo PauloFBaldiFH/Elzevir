@@ -868,6 +868,25 @@ fn address_tests(
     );
 }
 
+pub(crate) fn address_table(
+    frame: &mut Frame,
+    scene: &mut Scene,
+    m: &Messages,
+    viewport: Rect,
+    sample: Option<&Snapshot>,
+    ascii: bool,
+) {
+    let mut page = Page {
+        frame,
+        scene,
+        m,
+        viewport,
+        offset: 0,
+        ascii,
+    };
+    address_rows(&mut page, Rect { y: 0, ..viewport }, sample, 0);
+}
+
 fn address_rows(page: &mut Page<'_, '_>, inner: Rect, sample: Option<&Snapshot>, start: u16) {
     let m = page.m;
     for (i, endpoint) in (0u16..).zip(Endpoint::ALL) {
