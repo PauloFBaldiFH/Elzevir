@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Operator-side directory browsing. Directory enumeration runs outside the input loop.
 use crate::{Messages, dashboard::text};
-use ratatui::{
-    Frame,
-    crossterm::event::KeyCode,
-    widgets::{Clear, Paragraph, Wrap},
-};
+use ratatui::{Frame, crossterm::event::KeyCode, widgets::Clear};
 use std::{
     path::PathBuf,
     sync::mpsc::{self, Receiver},
@@ -136,6 +132,7 @@ impl Picker {
         if self.focus == 1 && !value.chars().any(char::is_control) && value.len() <= 4096 {
             value.clone_into(&mut self.path);
             self.entries.clear();
+            self.pending = None;
             self.catalog = false;
         }
     }
@@ -180,15 +177,19 @@ impl Picker {
             }
             KeyCode::Char(c) if self.focus == 1 && !c.is_control() && self.path.len() < 4096 => {
                 self.entries.clear();
+                self.pending = None;
+                self.catalog = false;
                 self.path.push(c);
                 self.notice = "";
             }
             KeyCode::Backspace if self.focus == 1 => {
                 self.entries.clear();
+                self.pending = None;
+                self.catalog = false;
                 self.path.pop();
                 self.notice = "";
             }
-            KeyCode::Enter if self.focus == 1 && self.pending.is_none() => {
+            KeyCode::Enter | KeyCode::Right if self.focus == 1 && self.pending.is_none() => {
                 self.catalog = false;
                 self.open(PathBuf::from(&self.path));
             }
@@ -205,82 +206,277 @@ impl Picker {
         None
     }
 
-    pub(super) fn draw(&self, frame: &mut Frame, m: &Messages, ascii: bool) {
-        let area = frame.area();
-        frame.render_widget(Clear, area);
-        let mut rows = vec![
-            m.get(if self.kind == Kind::Directory {
-                "folder-keys"
-            } else {
-                "restore-picker"
-            }),
-            format!(
-                "{} {}",
-                if self.focus == 1 { ">" } else { " " },
-                text(&self.path)
+    pub(super) fn activate(&mut self, action: crate::ui::Action) -> Option<KeyCode> {
+        use crate::ui::Action;
+        match action {
+            Action::PickerEntry(i) if self.entries.get(i).is_some() => {
+                self.selected = i;
+                self.focus = 0;
+                Some(KeyCode::Enter)
+            }
+            Action::Field(1) => {
+                self.focus = 1;
+                None
+            }
+            Action::Field(2) => {
+                self.focus = 2;
+                Some(KeyCode::Enter)
+            }
+            Action::Key(k) => {
+                if matches!(k, KeyCode::Backspace | KeyCode::Up | KeyCode::Down) {
+                    self.focus = 0;
+                }
+                if k == KeyCode::Right {
+                    self.focus = 1;
+                }
+                Some(k)
+            }
+            _ => None,
+        }
+    }
+
+    fn places(&self, ui: &mut crate::backup_center::Controls<'_, '_>, area: ratatui::layout::Rect) {
+        use crate::ui::{Action, Variant};
+        let key = |k| Action::Key(k);
+        let mut places = vec![
+            (
+                "restore-up",
+                key(KeyCode::Backspace),
+                Variant::Secondary,
+                true,
             ),
-            format!(
-                "{} {}",
-                if self.focus == 2 { ">" } else { " " },
-                m.get(if self.kind == Kind::Directory {
-                    "folder-use"
-                } else {
-                    "restore-file-use"
-                })
+            ("restore-home", key(KeyCode::F(3)), Variant::Secondary, true),
+            (
+                "restore-library",
+                key(KeyCode::F(4)),
+                Variant::Secondary,
+                true,
             ),
         ];
         if self.kind == Kind::Archive {
-            rows.push(m.get(if self.catalog {
-                "restore-managed"
-            } else {
-                "restore-host"
-            }));
-            rows.push(m.get(if self.all {
-                "restore-filter-all"
-            } else {
-                "restore-filter-age"
-            }));
+            places.push((
+                "restore-cloud",
+                key(KeyCode::F(6)),
+                Variant::Secondary,
+                true,
+            ));
         }
-        if !self.notice.is_empty() {
-            rows.push(m.get(self.notice));
-        }
-        let count = usize::from(area.height.saturating_sub(8)).max(1);
-        for (i, name) in self
+        ui.buttons(area, &places);
+    }
+    fn path_bar(
+        &self,
+        ui: &mut crate::backup_center::Controls<'_, '_>,
+        area: ratatui::layout::Rect,
+    ) {
+        use crate::ui::{Action, Variant, theme};
+        let [path, go] = ratatui::layout::Layout::horizontal([
+            ratatui::layout::Constraint::Fill(1),
+            ratatui::layout::Constraint::Length(12),
+        ])
+        .spacing(1)
+        .areas(area);
+        ui.buttons(
+            go,
+            &[(
+                "mb-go",
+                Action::Key(KeyCode::Right),
+                Variant::Secondary,
+                self.pending.is_none(),
+            )],
+        );
+        ui.scene.add(path, Action::Field(1));
+        let shown = format!(
+            "{} {}",
+            if self.focus == 1 { ">" } else { "" },
+            text(&self.path)
+        );
+        let width = ratatui::text::Line::from(shown.as_str()).width();
+        let offset = if self.focus == 1 {
+            width.saturating_sub(usize::from(path.width))
+        } else {
+            0
+        };
+        ui.f.render_widget(
+            ratatui::widgets::Paragraph::new(shown)
+                .style(ratatui::style::Style::new().fg(theme::TEXT))
+                .scroll((0, u16::try_from(offset).unwrap_or(u16::MAX))),
+            path,
+        );
+    }
+    fn details(
+        &self,
+        ui: &mut crate::backup_center::Controls<'_, '_>,
+        area: ratatui::layout::Rect,
+    ) {
+        use crate::backup_center::{block, inner, row};
+        use ratatui::{
+            text::Line,
+            widgets::{Paragraph, Wrap},
+        };
+        block(ui.f, area, ui.m.get("restore-details"));
+        let mut lines = vec![
+            Line::from(
+                self.entries
+                    .get(self.selected)
+                    .map_or_else(|| ui.m.get("restore-select"), |s| text(s)),
+            ),
+            Line::default(),
+        ];
+        let help = if self.kind == Kind::Key {
+            "restore-key-detail"
+        } else if self.kind == Kind::Directory {
+            "folder-use"
+        } else {
+            "restore-archive-detail"
+        };
+        lines.push(Line::from(ui.m.get(help)));
+        ui.f.render_widget(
+            Paragraph::new(lines).wrap(Wrap { trim: false }),
+            row(inner(area), 1, area.height.saturating_sub(1)),
+        );
+    }
+
+    fn rows(&self, ui: &mut crate::backup_center::Controls<'_, '_>, area: ratatui::layout::Rect) {
+        use crate::backup_center::row;
+        use crate::ui::{Action, Button, Variant};
+        let r = if area.width >= 108 {
+            let [files, details] = ratatui::layout::Layout::horizontal([
+                ratatui::layout::Constraint::Percentage(63),
+                ratatui::layout::Constraint::Fill(1),
+            ])
+            .spacing(2)
+            .areas(area);
+            self.details(ui, details);
+            files
+        } else {
+            area
+        };
+        let capacity = usize::from(r.height).max(1);
+        let first = self.selected.saturating_sub(capacity - 1);
+        for ((i, name), y) in self
             .entries
             .iter()
             .enumerate()
-            .skip(self.selected.saturating_sub(count - 1))
-            .take(count)
+            .skip(first)
+            .take(capacity)
+            .zip(0u16..)
         {
-            rows.push(format!(
-                "{} {}",
+            Button::new(
+                format!(
+                    "{}{}",
+                    if i == self.selected && self.focus == 0 {
+                        "> "
+                    } else {
+                        ""
+                    },
+                    text(name)
+                ),
+                Action::PickerEntry(i),
                 if i == self.selected && self.focus == 0 {
-                    ">"
+                    Variant::Primary
                 } else {
-                    " "
+                    Variant::Secondary
                 },
-                text(name)
+            )
+            .draw(ui.f, row(r, y, 1), ui.scene);
+        }
+    }
+    pub(super) fn draw(
+        &self,
+        frame: &mut Frame,
+        m: &Messages,
+        ascii: bool,
+        scene: &mut crate::ui::Scene,
+    ) {
+        use crate::backup_center::{Controls, inner, line, row};
+        use crate::ui::{Action, Variant, theme};
+        let area = frame.area();
+        frame.render_widget(Clear, area);
+        let title = if self.kind == Kind::Directory {
+            "folder-title"
+        } else {
+            "restore-file-title"
+        };
+        let border = crate::view::block(m.get(title), ascii)
+            .title_style(ratatui::style::Style::new().fg(theme::TEXT));
+        let r = inner(border.inner(area));
+        frame.render_widget(border, area);
+        let mut ui = Controls { f: frame, scene, m };
+        self.places(&mut ui, row(r, 0, 1));
+        self.path_bar(&mut ui, row(r, 2, 1));
+        let status = if !self.notice.is_empty() {
+            self.notice
+        } else if self.catalog {
+            "restore-managed"
+        } else if self.kind == Kind::Archive && !self.all {
+            "restore-filter-age"
+        } else {
+            "restore-host"
+        };
+        line(ui.f, row(r, 3, 1), m.get(status), theme::MUTED, false);
+        self.rows(&mut ui, row(r, 4, r.height.saturating_sub(6)));
+        line(
+            ui.f,
+            row(r, r.height.saturating_sub(2), 1),
+            m.get("restore-navigation"),
+            theme::MUTED,
+            false,
+        );
+        let mut actions = vec![
+            (
+                "restore-location",
+                Action::Field(1),
+                Variant::Secondary,
+                true,
+            ),
+            (
+                if self.kind == Kind::Directory {
+                    "folder-use"
+                } else {
+                    "restore-file-use"
+                },
+                Action::Field(2),
+                if self.focus == 2 {
+                    Variant::Primary
+                } else {
+                    Variant::Secondary
+                },
+                true,
+            ),
+        ];
+        if self.kind == Kind::Archive {
+            actions.push((
+                "restore-filter",
+                Action::Key(KeyCode::F(5)),
+                Variant::Secondary,
+                true,
             ));
         }
-        frame.render_widget(
-            Paragraph::new(rows.join("\n"))
-                .wrap(Wrap { trim: false })
-                .block(crate::view::block(
-                    m.get(if self.kind == Kind::Directory {
-                        "folder-title"
-                    } else {
-                        "restore-file-title"
-                    }),
-                    ascii,
-                )),
-            area,
-        );
+        actions.push((
+            "desk-cancel",
+            Action::Key(KeyCode::Esc),
+            Variant::Quiet,
+            true,
+        ));
+        ui.buttons(row(r, r.height.saturating_sub(1), 1), &actions);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn editing_a_path_discards_the_previous_directory_listing() {
+        let root = tempfile::tempdir().unwrap();
+        let mut picker = Picker::files(root.path().to_owned(), false, &[]);
+        picker.key(KeyCode::Tab);
+        picker.paste("/edited");
+        assert!(picker.pending.is_none());
+        picker.poll();
+        assert!(picker.entries.is_empty());
+        assert_eq!(picker.path, "/edited");
+    }
+
     #[test]
     fn registered_and_loose_files_are_separate_and_extension_filter_is_optional() {
         let dir = tempfile::tempdir().unwrap();

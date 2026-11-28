@@ -46,6 +46,7 @@ pub(crate) enum Action {
     Section(Section),
     Backup(crate::backup_center::Command),
     File(crate::manual_backup::Control),
+    PickerEntry(usize),
     Launch(Intent),
     Address(crate::overview::Endpoint, bool),
     Scroll(bool),
@@ -186,7 +187,7 @@ impl Action {
                 crate::backup_center::apply(command, panel, access, scene.scroll_limit);
             }
             // The active file explorer owns these targets and consumes them before panel dispatch.
-            Self::File(_) => {}
+            Self::File(_) | Self::PickerEntry(_) => {}
             Self::Gallery => {
                 scene.gallery = !scene.gallery;
                 scene.reset_input();

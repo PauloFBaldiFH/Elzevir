@@ -23,6 +23,8 @@ pub enum BackupPage {
     Overview,
     /// Backup, export and verification requests.
     History,
+    /// Authenticated restore review and host job history.
+    Restore,
     /// Progress and evidence for one backup.
     Result,
     /// Local and cloud backup schedules.
@@ -58,6 +60,9 @@ pub(crate) enum Command {
     SelectSchedule(u128),
     RunSchedule(u128),
     EditSchedule(u128, bool),
+    RestoreArchive(u128),
+    ReviewRestore(u128),
+    RestoreDownload(u128, u128),
     Details(u128),
     Verify(u128),
     Export(u128),
@@ -134,12 +139,22 @@ pub(crate) fn scrollable(panel: &Panel) -> bool {
             panel.backups.page,
             BackupPage::Overview
                 | BackupPage::History
+                | BackupPage::Restore
                 | BackupPage::PlanConnection
                 | BackupPage::Providers
                 | BackupPage::Schedules
                 | BackupPage::Connections
         )
 }
+fn schedule_target(ops: &Operations, id: u128) -> Option<crate::CloudTarget> {
+    ops.cloud
+        .as_ref()?
+        .plans
+        .iter()
+        .find(|p| u128::from_str_radix(&p.id, 16) == Ok(id))
+        .map(crate::CloudPlan::target)
+}
+
 pub(crate) fn apply(cmd: Command, panel: &mut Panel, access: &mut Actions, limit: u16) {
     let ops = sample(panel).map(|s| &s.operations);
     match cmd {
@@ -160,14 +175,7 @@ pub(crate) fn apply(cmd: Command, panel: &mut Panel, access: &mut Actions, limit
         }
         Command::NewPlan(id) => crate::cloud_view::choose_connection(panel, id),
         Command::SelectSchedule(id) => {
-            panel.backups.schedule = ops
-                .and_then(|o| o.cloud.as_ref())
-                .and_then(|v| {
-                    v.plans
-                        .iter()
-                        .find(|p| u128::from_str_radix(&p.id, 16) == Ok(id))
-                })
-                .map(crate::CloudPlan::target);
+            panel.backups.schedule = ops.and_then(|o| schedule_target(o, id));
             panel.access_notice = None;
         }
         Command::EditSchedule(id, pause) => crate::schedule_view::edit(panel, id, pause),
@@ -191,53 +199,69 @@ pub(crate) fn apply(cmd: Command, panel: &mut Panel, access: &mut Actions, limit
                 panel.cloud_plan = (panel.cloud_plan + if forward { 1 } else { count - 1 }) % count;
             }
         }
+        Command::RestoreDownload(plan, file) => {
+            crate::restore_view::open_download(panel, plan, file);
+        }
+        Command::ReviewRestore(token) => crate::restore_view::review(panel, token),
         Command::Verify(id)
+        | Command::RestoreArchive(id)
         | Command::Export(id)
         | Command::Cloud(id)
         | Command::Copy(id)
-        | Command::OpenFolder(id) => {
-            let Some(ops) = ops else { return };
-            let Some(file) = path(ops, id) else { return };
-            if matches!(cmd, Command::Copy(_) | Command::OpenFolder(_)) {
-                panel.access_notice = Some(if matches!(cmd, Command::Copy(_)) {
-                    if file.to_str().is_some_and(|p| access.copy(p)) {
-                        "address-copy-requested"
-                    } else {
-                        "transfer-select"
-                    }
-                } else {
-                    access.open(file.parent().map(std::path::Path::as_os_str))
-                });
-                return;
-            }
-            if panel.diagnostics.pending {
-                return;
-            }
-            let id = format!("{id:032x}");
-            let operation = match cmd {
-                Command::Verify(_) => Operation::VerifyArtifact(id),
-                Command::Cloud(_) => {
-                    let Some(plan) = ops
-                        .cloud
-                        .as_ref()
-                        .and_then(|c| c.plans.get(panel.cloud_plan))
-                    else {
-                        return;
-                    };
-                    Operation::Cloud(crate::CloudOperation::Remote(
-                        plan.target(),
-                        crate::RemoteCommand::Send(id),
-                    ))
-                }
-                _ => Operation::ExportArtifact {
-                    id,
-                    folder: String::new(),
-                },
-            };
-            panel.form = Some(Form::new(operation));
-            panel.access_notice = None;
-        }
+        | Command::OpenFolder(id) => artifact_action(cmd, id, panel, access),
     }
+}
+
+fn artifact_action(cmd: Command, id: u128, panel: &mut Panel, access: &mut Actions) {
+    let Some(ops) = sample(panel).map(|s| &s.operations) else {
+        return;
+    };
+    let Some(file) = path(ops, id) else { return };
+    if matches!(cmd, Command::Copy(_) | Command::OpenFolder(_)) {
+        panel.access_notice = Some(if matches!(cmd, Command::Copy(_)) {
+            if file.to_str().is_some_and(|p| access.copy(p)) {
+                "address-copy-requested"
+            } else {
+                "transfer-select"
+            }
+        } else {
+            access.open(file.parent().map(std::path::Path::as_os_str))
+        });
+        return;
+    }
+    if panel.diagnostics.pending {
+        return;
+    }
+    let id = format!("{id:032x}");
+    let operation = match cmd {
+        Command::Verify(_) => Operation::VerifyArtifact(id),
+        Command::RestoreArchive(_) => {
+            let Some(input) = file.to_str() else { return };
+            Operation::Restore {
+                input: input.to_owned(),
+                key: String::new(),
+            }
+        }
+        Command::Cloud(_) => {
+            let Some(plan) = ops
+                .cloud
+                .as_ref()
+                .and_then(|c| c.plans.get(panel.cloud_plan))
+            else {
+                return;
+            };
+            Operation::Cloud(crate::CloudOperation::Remote(
+                plan.target(),
+                crate::RemoteCommand::Send(id),
+            ))
+        }
+        _ => Operation::ExportArtifact {
+            id,
+            folder: String::new(),
+        },
+    };
+    panel.form = Some(Form::new(operation));
+    panel.access_notice = None;
 }
 
 pub(super) fn row(r: Rect, n: u16, height: u16) -> Rect {
@@ -338,6 +362,7 @@ pub(crate) fn draw(f: &mut Frame, panel: &Panel, m: &Messages, scene: &mut Scene
         row(r, title_y, 1),
         m.get(match panel.backups.page {
             BackupPage::History => "bc-history",
+            BackupPage::Restore => "desk-restore",
             BackupPage::Result => "bc-result",
             BackupPage::Schedules => "bc-schedule",
             BackupPage::Connections => "bc-cloud",
@@ -353,6 +378,7 @@ pub(crate) fn draw(f: &mut Frame, panel: &Panel, m: &Messages, scene: &mut Scene
     let bottom = r.height - 2 - buttons_h;
     let work = row(r, top, bottom.saturating_sub(top + 1));
     match panel.backups.page {
+        BackupPage::Restore => crate::restore_view::draw(&mut ui, work, panel, obs),
         BackupPage::Overview => overview(&mut ui, work, panel, obs),
         BackupPage::History => history(&mut ui, work, panel, ops),
         BackupPage::Result => result(&mut ui, work, panel, ops),
@@ -403,7 +429,9 @@ fn footer(
         BackupPage::PlanConnection => Some("cc-back-plans"),
         _ => None,
     };
-    if let Some(label) = picker_back {
+    if panel.backups.page == BackupPage::Restore {
+        ui.buttons(area, &[back]);
+    } else if let Some(label) = picker_back {
         ui.buttons(
             area,
             &[(label, go(BackupPage::Connections), Variant::Secondary, true)],
@@ -441,18 +469,7 @@ fn footer(
             ],
         );
     } else if panel.backups.page == BackupPage::Result {
-        ui.buttons(
-            area,
-            &[
-                (
-                    "bc-history",
-                    go(BackupPage::History),
-                    Variant::Secondary,
-                    true,
-                ),
-                back,
-            ],
-        );
+        result_footer(ui, area, panel, ops);
     } else {
         let busy = panel.diagnostics.pending
             || ops.is_some_and(|o| {
@@ -467,7 +484,7 @@ fn footer(
                 ("desk-create", key('n'), Variant::Primary, online && !busy),
                 (
                     "desk-restore",
-                    key('o'),
+                    go(BackupPage::Restore),
                     Variant::Secondary,
                     ops.is_some() && !panel.diagnostics.pending,
                 ),
@@ -486,6 +503,32 @@ fn footer(
             ],
         );
     }
+}
+fn result_footer(ui: &mut Controls<'_, '_>, area: Rect, panel: &Panel, ops: Option<&Operations>) {
+    let id = ops.and_then(|o| selected(panel, o));
+    ui.buttons(
+        area,
+        &[
+            (
+                "restore-this",
+                Action::Backup(Command::RestoreArchive(id.unwrap_or(0))),
+                Variant::Secondary,
+                !panel.diagnostics.pending && id.and_then(|id| path(ops?, id)).is_some(),
+            ),
+            (
+                "bc-history",
+                go(BackupPage::History),
+                Variant::Secondary,
+                true,
+            ),
+            (
+                "bc-return",
+                go(BackupPage::Overview),
+                Variant::Secondary,
+                true,
+            ),
+        ],
+    );
 }
 fn navigation(ui: &mut Controls<'_, '_>, area: Rect, page: BackupPage) {
     let active = |candidate| {

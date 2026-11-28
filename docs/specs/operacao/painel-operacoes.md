@@ -114,3 +114,9 @@ Na aba Planos, Novo plano permite escolher pelo nome uma conexão pronta, revisa
 A consulta de um plano apresenta o estado e o horário de aceitação da última solicitação desse plano no histórico disponível do serviço. A ordem é a de aceitação na fila. A interface distingue histórico indisponível e histórico consultado sem tentativa desse plano. Recibos de outro destino ou sem destino registrado trazem essa indicação. O recibo por si só não comprova a presença atual do arquivo remoto.
 
 O endereço temporário de autorização do rclone pertence à conexão em andamento. Na aba Conexões, o painel explica onde abrir o endereço de loopback. Em um terminal remoto orienta o encaminhamento local restrito ao loopback pelo SSH. O endereço sai da tela quando o serviço encerra a solicitação. Autorizações de conectores do host continuam na área Endereços.
+
+## Percurso assistido de restauração
+
+A central permite iniciar a validação pelo arquivo selecionado ou pelos campos de arquivo e chave. O explorador permite usar mouse ou teclado para escolher um arquivo neste host. Abrir, escolher e cancelar conservam a instituição. Depois da validação, a central apresenta a revisão retornada pelo auxiliar e os recibos de restauração disponíveis. A revisão mostra instituição alvo, arquivo, escopo e impacto. O operador precisa escolher expressamente a substituição e confirmar. Uma instalação pessoal pode validar a cópia e consultar o procedimento da CLI para restaurar com o serviço parado. A troca pelo painel utiliza o auxiliar de instalação gerenciada.
+
+Na aba de arquivos da nuvem, o recibo de um download local do plano selecionado permite abrir a validação da cópia baixada. A ação é vinculada ao plano e ao arquivo. A validação mantém a escolha explícita da chave e autentica o arquivo local.
