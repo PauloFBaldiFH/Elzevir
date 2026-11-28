@@ -127,6 +127,45 @@ funções, layouts alterados, dados CSV/binários e continuações físicas exig
 outro leitor ou exportação. As declarações DDL são evidência estrutural. O
 inventário desconsidera metadados auxiliares reconhecidos do pg_dump.
 
+## Conjunto privado de fontes (1b)
+
+A equipe seleciona de 1 a 64 arquivos locais da mesma exportação compatível
+e informa a origem institucional estável. Na CLI, usar `elzevir import
+stage-set --data-dir DIR --operator ID --origin ORIGEM ARQUIVO...`. Na tela
+de importação, usar o formulário de conjunto de fontes com as permissões de
+catalogação, leitores e circulação. Esses privilégios e a titularidade também
+se aplicam à listagem, revisão e remoção. Lotes de um único arquivo criados
+pelo fluxo anterior mantêm o contrato original.
+
+O manifesto conserva origem, posição (a partir de 1), nome lógico, tamanho,
+posição inicial em bytes, SHA-256 e hipótese de formato pelo prefixo de cada
+membro. A identidade local do membro é lote mais posição. Nomes repetidos
+continuam distintos. Conteúdo idêntico aponta para a primeira ocorrência.
+Para selecionar membros de ZIP ou gzip, preparar primeiro o contêiner com
+`elzevir import stage`. No inventário, contar as entradas a partir de 1.
+Por exemplo, `elzevir import archive-set --data-dir DIR --operator ID
+--origin ORIGEM LOTE REVISAO 3 1` cria outro lote com os membros 3 e 1,
+nessa ordem. No Staff, abrir o rascunho do contêiner, informar a origem e
+selecionar os membros desejados. A revisão, a titularidade e o SHA-256
+do original são conferidos antes da extração. O leitor valida o contêiner
+inteiro, inclusive membros fora da seleção e nomes em contêineres aninhados.
+Posições repetidas ou inexistentes invalidam a operação inteira.
+
+Para cada membro extraído, o manifesto registra também o caminho exato em
+cada nível do contêiner. O SHA-256 do contêiner vincula a seleção à fonte.
+O novo lote contém os bytes dos membros e pode ser reaberto depois do
+cancelamento do lote do contêiner. Uma planilha selecionada dentro de um ZIP
+é preservada com todas as abas. A escolha de uma única aba para o catálogo
+continua disponível no formulário de mapeamento.
+
+A captura é privada e integral, sob a trava e as cotas existentes. O nome
+informado nunca vira caminho de armazenamento. Limitar o conjunto a 512 MiB
+no total. Uma falha de leitura ou envio incompleto descarta a captura. A
+ação de verificar na prévia relê os bytes e confere os digests, os limites
+dos membros e o fim exato do original. O conjunto fica disponível para revisão e cancelamento. A etapa
+de descoberta não autoriza edição ou confirmação no catálogo. Vínculos
+entre arquivos FOLIO e demais projeções entram nos incrementos seguintes.
+
 ## Integração com as autoridades nativas
 
 Em `main` a0be08ba, `elzevir-app/src/authorities.rs` fornece
