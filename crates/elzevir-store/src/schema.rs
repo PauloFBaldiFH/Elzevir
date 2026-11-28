@@ -763,8 +763,7 @@ const MIGRATIONS: &[&str] = &[
          name TEXT PRIMARY KEY,
          day  TEXT NOT NULL
      );",
-    // 56: when the sender sent a notice, or gave up on it (docs/specs/circulacao/avisos.md,
-    // part c).
+    // 56: when the sender sent a notice, or gave up on it (circulacao/avisos.md, part c).
     "ALTER TABLE notices ADD COLUMN sent_at TEXT;
      CREATE INDEX notices_pending ON notices (id) WHERE status = 'pending';",
     // 57: the notice of a hold waiting to be picked up (docs/specs/circulacao/avisos.md,
@@ -843,6 +842,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("patron_fields.sql"),
     include_str!("koha_attribute_keys.sql"),
     include_str!("item_status.sql"),
+    include_str!("returned_loan_ids.sql"),
 ];
 
 /// The migration that creates `match_keys`.

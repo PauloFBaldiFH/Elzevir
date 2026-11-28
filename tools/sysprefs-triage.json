@@ -527,8 +527,8 @@
       "nota": "Decidir na spec do OPAC: aparência vai para tokens de design, comportamento para elzevir.toml ou fixo."
     },
     "BlockReturnOfLostItems": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Padrão do Koha (0): a devolução acha o exemplar perdido (lost-items.md, item 9)."
     },
     "BlockReturnOfWithdrawnItems": {
       "destino": "revisar",
@@ -1845,12 +1845,12 @@
       "nota": "Coberto pela plataforma do Elzevir (painel, elzevir.toml de servidor, sessões, SMTP)."
     },
     "NoRefundOnLostFinesPaidAge": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Vazio no Koha: sem limite de idade para o reembolso (lost-items.md, item 16)."
     },
     "NoRefundOnLostReturnedItemsAge": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Vazio no Koha: sem limite de idade para o reembolso (lost-items.md, item 16)."
     },
     "NoRenewalBeforePrecision": {
       "destino": "revisar",
@@ -2806,8 +2806,8 @@
       "nota": "Decidir na spec do OPAC: aparência vai para tokens de design, comportamento para elzevir.toml ou fixo."
     },
     "RefundLostOnReturnControl": {
-      "destino": "revisar",
-      "nota": "Paridade exigida: decidir uma a uma na spec de circulação (Fase 3)."
+      "destino": "fixo",
+      "nota": "Padrão do Koha (CheckinLibrary): a regra vem da unidade que acha o exemplar (lost-items.md, item 10)."
     },
     "RenewAccruingItemInOpac": {
       "destino": "revisar",

@@ -1600,3 +1600,7 @@ status-names-hint = Name the numbers your library uses for each status. A number
 status-names-number = Number
 status-names-label = Name
 status-names-remove = Remove name
+checkin-lost-refunded = The replacement charge was refunded: { $amount }.
+checkin-processing-refunded = The processing fee was refunded: { $amount }.
+checkin-lost-fine-restored = The overdue fine stopped by the loss counts again.
+checkin-lost-fine-charged = The overdue fine up to today was charged: { $amount }.

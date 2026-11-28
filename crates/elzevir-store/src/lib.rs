@@ -53,6 +53,7 @@ mod listing;
 mod loan_desk;
 mod loans;
 mod long_overdue;
+mod lost_found;
 mod matching;
 mod native_items;
 mod notices;

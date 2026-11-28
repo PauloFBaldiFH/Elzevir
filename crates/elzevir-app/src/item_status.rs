@@ -90,6 +90,19 @@ pub struct ItemStatusChange {
     pub at: Zoned,
 }
 
+/// What finding a lost Item did to the charges of its loss (items 9 to 15).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LostFound {
+    /// The replacement price given back (`LOST_FOUND`).
+    pub lost_refunded: Option<Money>,
+    /// The processing fee given back (`PROCESSING_FOUND`).
+    pub processing_refunded: Option<Money>,
+    /// The fine stopped by the loss counts again (`restore`).
+    pub restored: bool,
+    /// The fine of the last loan charged up to the return (`charge`).
+    pub charged: Option<Money>,
+}
+
 /// What changing a status did.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ItemStatusChanged {
@@ -99,6 +112,8 @@ pub struct ItemStatusChanged {
     pub loan_ended: bool,
     /// Whether an open transfer was cancelled (item 4).
     pub transfer_cancelled: bool,
+    /// What finding the Item did, when it was lost and is not any more (item 9).
+    pub found: LostFound,
 }
 
 /// Why a status change was refused.

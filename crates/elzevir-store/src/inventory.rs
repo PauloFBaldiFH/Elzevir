@@ -185,6 +185,9 @@ pub(crate) fn scan(
         report.marked += 1;
         if item.lost {
             changed.insert(item.instance);
+            let place = crate::lost_found::FoundAt::ELSEWHERE;
+            crate::lost_found::found_by_rules(tx.connection(), item.item.0, place, &scan.at)
+                .map_err(StoreError::from)?;
         }
     }
     for instance in changed {

@@ -1,4 +1,5 @@
--- Undo migrations 72, 70, 69, 68, 67, 66, 65 and 64, then 63 and 62, for fixtures that reconstruct an older catalog schema.
+-- Undo migrations 73, 72, 70, 69, 68, 67, 66, 65 and 64, then 63 and 62, for fixtures that reconstruct an older catalog schema.
+ALTER TABLE returned_loans DROP COLUMN loan_id;
 DROP TABLE item_status_names;
 ALTER TABLE items DROP COLUMN withdrawn_on;
 ALTER TABLE items DROP COLUMN damaged_on;

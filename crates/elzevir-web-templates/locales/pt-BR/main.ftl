@@ -1191,3 +1191,7 @@ status-names-hint = Dê nome aos números que a biblioteca usa em cada situaçã
 status-names-number = Número
 status-names-label = Nome
 status-names-remove = Tirar o nome
+checkin-lost-refunded = A cobrança da reposição foi devolvida: { $amount }.
+checkin-processing-refunded = A taxa de processamento foi devolvida: { $amount }.
+checkin-lost-fine-restored = A multa interrompida pela perda volta a valer.
+checkin-lost-fine-charged = A multa até hoje foi cobrada: { $amount }.

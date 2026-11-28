@@ -12,6 +12,7 @@ use axum::response::{IntoResponse, Response};
 use elzevir_app::circulation_rules::{
     CirculationCommand, CirculationDeskError, CirculationOutput, CirculationRefusal,
 };
+use elzevir_app::item_status::LostFound;
 use elzevir_app::loans::{
     CheckedIn, CheckinRequest, CheckoutRefusal, CheckoutRequest, LoanDesk, RenewRequest,
 };
@@ -161,6 +162,38 @@ pub(crate) fn refusal_notices(t: &I18n, refusal: &CirculationRefusal) -> Vec<Not
     }
 }
 
+/// What finding a lost Item did to its charges
+/// (docs/specs/circulacao/lost-items.md, item 15).
+pub(crate) fn found_notices(t: &I18n, found: &LostFound) -> Vec<Notice> {
+    let mut notices = Vec::new();
+    if let Some(amount) = found.lost_refunded {
+        notices.push(ok(t.get_with(
+            "checkin-lost-refunded",
+            "amount",
+            &money(t, amount),
+        )));
+    }
+    if let Some(amount) = found.processing_refunded {
+        notices.push(ok(t.get_with(
+            "checkin-processing-refunded",
+            "amount",
+            &money(t, amount),
+        )));
+    }
+    if found.restored {
+        notices.push(ok(t.get("checkin-lost-fine-restored")));
+    }
+    // A new debt, flagged like the fine of a late checkin; only a checkin charges it.
+    if let Some(amount) = found.charged {
+        notices.push(refused(t.get_with(
+            "checkin-lost-fine-charged",
+            "amount",
+            &money(t, amount),
+        )));
+    }
+    notices
+}
+
 /// The notices of a checkin.
 fn checkin_notices(
     t: &I18n,
@@ -203,6 +236,7 @@ fn checkin_notices(
         LostOutcome::StaysLost => notices.push(refused(t.get("checkin-kept-lost"))),
         LostOutcome::NotLost => {}
     }
+    notices.extend(found_notices(t, &done.found));
     if let Some(hold) = done.hold {
         let pickup = branch_name(hold.pickup);
         notices.push(refused(match hold.found {
@@ -744,6 +778,34 @@ mod tests {
         assert_eq!(
             english.get_with("patron-owes", "amount", &money(&english, Money(800))),
             "Owes 8.00."
+        );
+    }
+
+    #[test]
+    fn finding_a_lost_item_says_what_was_given_back_and_charged() {
+        let english = I18n::english().unwrap();
+        assert!(found_notices(&english, &LostFound::default()).is_empty());
+        let notices = found_notices(
+            &english,
+            &LostFound {
+                lost_refunded: Some(Money(4500)),
+                processing_refunded: Some(Money(300)),
+                restored: true,
+                charged: Some(Money(500)),
+            },
+        );
+        let shown: Vec<(bool, &str)> = notices
+            .iter()
+            .map(|notice| (notice.refused, notice.text.as_str()))
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                (false, "The replacement charge was refunded: 45.00."),
+                (false, "The processing fee was refunded: 3.00."),
+                (false, "The overdue fine stopped by the loss counts again."),
+                (true, "The overdue fine up to today was charged: 5.00."),
+            ]
         );
     }
 }

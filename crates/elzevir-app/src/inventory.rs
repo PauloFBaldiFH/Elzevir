@@ -57,6 +57,9 @@ pub struct InventoryScan {
     pub barcodes: Vec<String>,
     /// The day they were seen.
     pub seen_on: Date,
+    /// When the reading was sent, the moment a lost Item it finds is found
+    /// (docs/specs/circulacao/lost-items.md, item 9).
+    pub at: jiff::Zoned,
     /// The part of the collection being counted.
     pub area: InventoryArea,
     /// Which of its Items are expected.

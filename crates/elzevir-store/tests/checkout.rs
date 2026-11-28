@@ -24,8 +24,8 @@ use elzevir_app::holds::{
     HoldRequest, HoldSuspensionRequest, SetAside, Suspension, SuspensionChange,
 };
 use elzevir_app::item_status::{
-    ItemStatusChange, ItemStatusChanged, ItemStatusDesk, ItemStatusRefusal, StatusKind, StatusName,
-    StatusNameChange,
+    ItemStatusChange, ItemStatusChanged, ItemStatusDesk, ItemStatusRefusal, LostFound, StatusKind,
+    StatusName, StatusNameChange,
 };
 use elzevir_app::loans::{
     CheckedIn, CheckedOut, CheckinRefusal, CheckinRequest, CheckoutRefusal, CheckoutRequest,
@@ -579,6 +579,7 @@ fn a_returned_item_goes_home_and_its_transfer_arrives() {
             suspended_until: None,
             fine: None,
             hold: None,
+            found: LostFound::default(),
         }
     );
     assert_eq!(library.read::<i64>("SELECT count(*) FROM loans"), 0);
@@ -2173,7 +2174,7 @@ fn an_item_lost_on_loan_is_charged_once_its_loan_ends_and_its_transfer_is_cancel
                 (DebitType::Lost, Money(4500)),
             ],
             loan_ended: true,
-            transfer_cancelled: false,
+            ..ItemStatusChanged::default()
         })
     );
     let state = || {
@@ -2231,7 +2232,233 @@ fn an_item_lost_on_loan_is_charged_once_its_loan_ends_and_its_transfer_is_cancel
         })
     );
     assert_eq!(library.read::<i64>("SELECT count(*) FROM transfers"), 0);
-    assert_eq!(library.read::<i64>("SELECT count(*) FROM account_lines"), 3);
+    // Nobody is charged, and the debits stay as they were.
+    assert_eq!(
+        library.read::<i64>("SELECT count(*) FROM account_lines WHERE debit_type IS NOT NULL"),
+        3
+    );
+}
+
+/// The account lines of one Item: type, status, amount and what is still owed.
+fn item_lines(library: &Library, barcode: &str) -> String {
+    library.read(&format!(
+        "SELECT group_concat(coalesce(debit_type, credit_type) || ' ' || coalesce(status, '-')
+                             || ' ' || amount || ' ' || outstanding, ', ')
+         FROM (SELECT * FROM account_lines
+               WHERE item_id = (SELECT id FROM items WHERE barcode = '{barcode}') ORDER BY id)"
+    ))
+}
+
+/// The id of the newest debit of `kind` for the Item.
+fn debit_of(library: &Library, barcode: &str, kind: &str) -> i64 {
+    library.read(&format!(
+        "SELECT max(id) FROM account_lines WHERE debit_type = '{kind}'
+           AND item_id = (SELECT id FROM items WHERE barcode = '{barcode}')"
+    ))
+}
+
+/// A library whose patron borrowed each Item on 2026-11-19 and lost it on 2026-11-30, with
+/// a fine of 1.00 stopped by the loss and the fee and the price charged.
+fn lost_items(dir: &tempfile::TempDir, barcodes: &[&str]) -> Library {
+    let library = library(dir);
+    library.rules(&[
+        ("maxissueqty", "9"),
+        ("issuelength", "7"),
+        ("fine", "0.50"),
+        ("chargeperiod", "1"),
+        ("lost_item_processing_fee", "3.00"),
+    ]);
+    for barcode in barcodes {
+        library.priced_item(barcode, ItemStatus::default(), Some(Money(4500)));
+        library
+            .lend(barcode, "2026-11-19T10:00:00-03:00", false)
+            .unwrap();
+    }
+    charge_overdues(&library, "2026-11-28T10:00:00-03:00");
+    for barcode in barcodes {
+        set_status(
+            &library,
+            barcode,
+            (StatusKind::Lost, 0, 1),
+            "2026-11-30T10:00:00-03:00",
+        )
+        .unwrap();
+    }
+    library
+}
+
+#[test]
+fn a_lost_item_found_at_the_checkin_gives_back_what_was_owed_and_paid_but_not_written_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = lost_items(&dir, &["0001"]);
+    let lost = debit_of(&library, "0001", "LOST");
+    pay(&library, PaymentKind::Payment, 1000, &[lost]).unwrap();
+    pay(&library, PaymentKind::Writeoff, 500, &[lost]).unwrap();
+    let found = library
+        .give_back("0001", library.central, "2026-12-23T10:00:00-03:00")
+        .unwrap();
+    // Koha's default `refund`: the 30.00 still owed and the 10.00 paid, not the 5.00
+    // written off; the patron is 10.00 in credit and the fee is given back whole.
+    assert_eq!(
+        found.found,
+        LostFound {
+            lost_refunded: Some(Money(4000)),
+            processing_refunded: Some(Money(300)),
+            restored: false,
+            charged: None,
+        }
+    );
+    assert_eq!(
+        item_lines(&library, "0001"),
+        "OVERDUE LOST 100 100, PROCESSING FOUND 300 0, LOST FOUND 4500 0, \
+         LOST_FOUND - -4000 -1000, PROCESSING_FOUND - -300 0"
+    );
+    assert_eq!(
+        library.read::<i64>("SELECT lost FROM items WHERE barcode = '0001'"),
+        0
+    );
+    // The credit cancels what was owed, at the desk that found the Item.
+    assert_eq!(
+        library.read::<String>(
+            "SELECT group_concat(o.kind || ' ' || o.amount || ' ' || coalesce(o.debit_id, '-')
+                                 || ' ' || c.branch_id, ', ')
+             FROM account_offsets o JOIN account_lines c ON c.id = o.credit_id
+             WHERE c.credit_type = 'LOST_FOUND'"
+        ),
+        format!(
+            "CREATE -4000 - {0}, APPLY -3000 {lost} {0}",
+            library.central.0
+        )
+    );
+    // Found again later, nothing more is given back.
+    set_status(
+        &library,
+        "0001",
+        (StatusKind::Lost, 0, 1),
+        "2026-12-24T10:00:00-03:00",
+    )
+    .unwrap();
+    assert_eq!(
+        set_status(
+            &library,
+            "0001",
+            (StatusKind::Lost, 1, 0),
+            "2026-12-25T10:00:00-03:00"
+        ),
+        Ok(ItemStatusChanged::default())
+    );
+}
+
+#[test]
+fn the_lostreturn_rule_chooses_what_finding_the_item_gives_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = lost_items(&dir, &["0002", "0003", "0004", "0005"]);
+    let find = |barcode| {
+        set_status(
+            &library,
+            barcode,
+            (StatusKind::Lost, 1, 0),
+            "2026-12-23T10:00:00-03:00",
+        )
+        .unwrap()
+        .found
+    };
+    // `refund_unpaid`: only the 35.00 still owed; the processing fee is not given back.
+    let lost = debit_of(&library, "0002", "LOST");
+    pay(&library, PaymentKind::Payment, 1000, &[lost]).unwrap();
+    library.rules(&[("lostreturn", "refund_unpaid"), ("processingreturn", "0")]);
+    assert_eq!(
+        find("0002"),
+        LostFound {
+            lost_refunded: Some(Money(3500)),
+            ..LostFound::default()
+        }
+    );
+    assert_eq!(
+        item_lines(&library, "0002"),
+        "OVERDUE LOST 100 100, PROCESSING - 300 300, LOST FOUND 4500 0, LOST_FOUND - -3500 0"
+    );
+    // "0": nothing is given back and the charges stay as they were.
+    library.rules(&[("lostreturn", "0")]);
+    assert_eq!(find("0003"), LostFound::default());
+    assert_eq!(
+        item_lines(&library, "0003"),
+        "OVERDUE LOST 100 100, PROCESSING - 300 300, LOST - 4500 4500"
+    );
+    // `restore`: the refund, and the fine stopped by the loss counts again.
+    library.rules(&[("lostreturn", "restore"), ("processingreturn", "refund")]);
+    assert_eq!(
+        find("0004"),
+        LostFound {
+            lost_refunded: Some(Money(4500)),
+            processing_refunded: Some(Money(300)),
+            restored: true,
+            charged: None,
+        }
+    );
+    assert_eq!(
+        item_lines(&library, "0004"),
+        "OVERDUE FOUND 100 100, PROCESSING FOUND 300 0, LOST FOUND 4500 0, \
+         LOST_FOUND - -4500 0, PROCESSING_FOUND - -300 0"
+    );
+    // `charge` away from a checkin: only the refund.
+    library.rules(&[("lostreturn", "charge")]);
+    assert_eq!(
+        find("0005"),
+        LostFound {
+            lost_refunded: Some(Money(4500)),
+            processing_refunded: Some(Money(300)),
+            ..LostFound::default()
+        }
+    );
+    assert!(item_lines(&library, "0005").starts_with("OVERDUE LOST 100 100,"));
+}
+
+#[test]
+fn the_charge_rule_charges_the_fine_of_the_last_loan_up_to_the_checkin() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = lost_items(&dir, &["0001"]);
+    library.rules(&[("lostreturn", "charge")]);
+    let found = library
+        .give_back("0001", library.annex, "2026-12-06T10:00:00-03:00")
+        .unwrap();
+    // Due on 2026-11-26: ten days at 0.50, as a new fine, already returned.
+    assert_eq!(
+        found.found,
+        LostFound {
+            lost_refunded: Some(Money(4500)),
+            processing_refunded: Some(Money(300)),
+            restored: false,
+            charged: Some(Money(500)),
+        }
+    );
+    assert_eq!(
+        item_lines(&library, "0001"),
+        "OVERDUE LOST 100 100, PROCESSING FOUND 300 0, LOST FOUND 4500 0, \
+         LOST_FOUND - -4500 0, OVERDUE RETURNED 500 500, PROCESSING_FOUND - -300 0"
+    );
+}
+
+#[test]
+fn a_lost_item_lent_again_is_found_by_the_checkout() {
+    let dir = tempfile::tempdir().unwrap();
+    let library = lost_items(&dir, &["0001"]);
+    // Another patron, since the one who lost it owes too much to borrow.
+    let other = library.another_patron("000456", library.central);
+    library
+        .lend_to(other, "0001", "2026-12-23T10:00:00-03:00", true)
+        .unwrap();
+    assert_eq!(
+        item_lines(&library, "0001"),
+        "OVERDUE LOST 100 100, PROCESSING FOUND 300 0, LOST FOUND 4500 0, \
+         LOST_FOUND - -4500 0, PROCESSING_FOUND - -300 0"
+    );
+    assert_eq!(
+        library.read::<String>(
+            "SELECT lost || ' ' || coalesce(lost_on, '-') FROM items WHERE barcode = '0001'"
+        ),
+        "0 -"
+    );
 }
 
 #[test]

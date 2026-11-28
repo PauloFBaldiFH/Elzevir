@@ -112,7 +112,10 @@ fn text(value: &str) -> Option<String> {
 }
 
 /// The scan the form asks for, or the message key of why not.
-fn scan_of(fields: &InventoryFields) -> Result<(InventoryScan, BarcodesRead), &'static str> {
+fn scan_of(
+    fields: &InventoryFields,
+    at: jiff::Zoned,
+) -> Result<(InventoryScan, BarcodesRead), &'static str> {
     let bad = "inventory-error-date";
     let seen_on = day(&fields.seen_on).map_err(|()| bad)?.ok_or(bad)?;
     let not_seen_since = day(&fields.not_seen_since).map_err(|()| bad)?;
@@ -129,6 +132,7 @@ fn scan_of(fields: &InventoryFields) -> Result<(InventoryScan, BarcodesRead), &'
         InventoryScan {
             barcodes,
             seen_on,
+            at,
             area: InventoryArea {
                 branch: branch.map(BranchId),
                 side: if fields.holding.is_some() {
@@ -177,7 +181,7 @@ pub(crate) async fn read(
         )
         .await;
     }
-    let (scan, left_out) = match scan_of(&fields) {
+    let (scan, left_out) = match scan_of(&fields, now(&state)) {
         Ok(scan) => scan,
         Err(key) => {
             return page(

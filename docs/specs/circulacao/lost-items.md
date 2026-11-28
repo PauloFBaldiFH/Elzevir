@@ -30,9 +30,9 @@ An Item has three statuses that take it out of circulation: **lost**, **damaged*
     - `refund`, `restore` and `charge`: the credit is what is still owed plus what was paid on it (written off amounts are not given back), so a paid charge leaves the patron in credit;
     - a credit of 0 is not written, but the debit still becomes `FOUND`.
 12. `restore`: the newest `OVERDUE` fine of the Item with status `LOST` becomes `FOUND` again; it was never forgiven, so its amount stays as it was.
-13. `charge`: when the Item is found at a checkin and the newest `LOST` debit or lost fine belongs to the patron of its last loan, that loan's fine is calculated again up to the moment of the checkin (multa.md) and the fine becomes `RETURNED` (Koha: `AddReturn`, message `lost_charge`).
+13. `charge`: when the Item is found at a checkin and the newest `LOST` debit or lost fine belongs to the patron of its last loan, that loan's fine is calculated again up to the moment of the checkin (multa.md) and the fine becomes `RETURNED` (Koha: `AddReturn`, message `lost_charge`). The ended loan keeps the id of the loan it was (`returned_loans.loan_id`, migration 73) to tell its last loan; history migrated from Koha has no such id, so `charge` charges nothing for a loss from before the switch.
 14. With `processingreturn` other than "no refund", the newest `PROCESSING` debit of the Item not yet found is handled as in item 11, with a `PROCESSING_FOUND` credit (`refund` or `refund_unpaid`).
-15. The checkin screen says which of these happened: the replacement refunded, the processing fee refunded, the fine restored, the fine charged.
+15. The checkin screen, and the page of item 3, say which of these happened: the replacement refunded, the processing fee refunded, the fine restored, the fine charged.
 16. Koha's limits on refunds by age (`NoRefundOnLostReturnedItemsAge`, `NoRefundOnLostFinesPaidAge`) are empty by default, and so they are not kept; credits are not applied to other debits automatically (`AccountAutoReconcile` off).
 
 ### Koha migration and proof (part c)
