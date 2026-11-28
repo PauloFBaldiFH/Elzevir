@@ -60,6 +60,8 @@ const fn names(table: Table) -> (&'static str, &'static str) {
         Table::RepeatableHolidays => ("weekly and annual closings", "repeatable_holidays id"),
         Table::SpecialHolidays => ("dated closings and exceptions", "special_holidays id"),
         Table::AttributeTypes => ("patron attribute types", "code"),
+        Table::StatusNames => ("item status names", "category and number"),
+        Table::StatusDates => ("item status dates", "itemnumber"),
     }
 }
 
@@ -83,6 +85,7 @@ fn cause(cause: &Cause) -> String {
             "a value left out: {}",
             crate::koha_attributes_cli::leftover(*why)
         ),
+        Cause::StatusNameTaken => "another number of the kind has the name".to_owned(),
     }
 }
 

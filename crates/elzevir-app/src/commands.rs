@@ -190,6 +190,7 @@ impl WriteCommand {
             Self::Patrons(PatronCommand::MigrateKohaAttributes(_)) => {
                 "patrons.migrate_koha_attributes"
             }
+            Self::Patrons(PatronCommand::MigrateKohaStatuses(_)) => "patrons.migrate_koha_statuses",
             Self::Circulation(CirculationCommand::SetRules(_)) => "circ.set_rules",
             Self::Circulation(CirculationCommand::ChangeCalendar(_)) => "circ.change_calendar",
             Self::Circulation(CirculationCommand::Checkout(_)) => "circ.checkout",

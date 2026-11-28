@@ -37,8 +37,8 @@ An Item has three statuses that take it out of circulation: **lost**, **damaged*
 
 ### Koha migration and proof (part c)
 
-17. The switch brings the names of the authorised values `LOST`, `DAMAGED`, `WITHDRAWN` and `NOT_LOAN` with a number from 1 to 99 into the status names (the negative not-for-loan numbers keep their generic name), and each Item's `itemlost_on`, `damaged_on` and `withdrawn_on`. The rules `lostreturn` and `processingreturn` come with the circulation rules (troca-do-koha.md, item 7a).
-18. `verify-koha` compares the status names by kind and number, and the dates with the Items.
+17. The switch brings the names of the authorised values `LOST`, `DAMAGED`, `WITHDRAWN` and `NOT_LOAN` with a number from 1 to 99 into the status names, after the catalog (`patrons.migrate_koha_statuses`). A value outside 1 to 99 (the negative not-for-loan numbers among them), or without a name, keeps its generic name; a number already named keeps its name; a name that another number of the same kind already has comes with its number, as "Perdido (6)" (Koha shows both numbers with the same name), and is left out only when that is taken too. Each Item gets `itemlost_on`, `damaged_on` and `withdrawn_on` for the statuses it has; a date whose status is 0 in the dump is left behind by an older Koha and does not come. The report gives counts only. The rules `lostreturn` and `processingreturn` come with the circulation rules (troca-do-koha.md, item 7a).
+18. `verify-koha` compares the status names by kind and number (a name given with its number is the same name; one left out because that was taken too is a cause, not a difference), and the dates of each Item by `itemnumber` (an Item that did not come is a cause).
 19. Two scenarios are recorded on the oracle's copy and replayed on the switched copy, as in [desk-day.md](../migracao/desk-day.md): "lose, pay, find" (checkout, mark lost, pay the charges in full, check in) and "lose, find without paying" (checkout, mark lost, check in). Each step compares the patron's balance and the account lines' types, amounts, outstanding amounts and statuses.
 
 ## 2. Edge cases

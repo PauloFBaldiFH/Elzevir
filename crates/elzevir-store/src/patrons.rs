@@ -106,6 +106,9 @@ pub(crate) fn apply(tx: &WriteTx<'_>, command: &PatronCommand) -> Applied {
         PatronCommand::MigrateKohaAttributes(batch) => {
             crate::koha_attributes::apply(tx.connection(), batch)?
         }
+        PatronCommand::MigrateKohaStatuses(batch) => {
+            crate::koha_statuses::apply(tx.connection(), batch)?
+        }
         PatronCommand::MigrateKohaCalendar(batch) => {
             crate::koha_calendar::apply(tx.connection(), batch)?
         }

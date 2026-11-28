@@ -135,6 +135,9 @@ pub(crate) fn run(args: &SwitchFromKohaArgs) -> Result<(), String> {
     report.push(circulation_report(&read.plan, &circulation));
     report.push(accounts_report(&read.plan, &accounts));
     report.push(history_report(&read.plan, &history));
+    let statuses = crate::koha_statuses_cli::migrate(store, &read.plan)
+        .map_err(|e| format!("item statuses: {e}"))?;
+    report.push(crate::koha_statuses_cli::report(&read.plan, &statuses));
 
     let started = Instant::now();
     let indexed = build_index(store, &args.data_dir).map_err(|e| format!("index: {e}"))?;

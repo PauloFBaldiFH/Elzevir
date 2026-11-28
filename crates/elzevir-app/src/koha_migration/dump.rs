@@ -127,7 +127,8 @@ pub(super) enum Table {
     AttributeTypeBranches,
     /// `borrower_attributes`.
     Attributes,
-    /// `authorised_values`, for the options of the attribute types.
+    /// `authorised_values`, for the options of the attribute types and the names of the
+    /// item statuses.
     AuthorisedValues,
     /// `currency`, for the SIP2 currency (patron-attributes.md, item 20).
     Currencies,
@@ -186,7 +187,16 @@ impl Table {
                 "password",
             ],
             Self::Debarments => &["borrowernumber", "type", "expiration", "created"],
-            Self::Items => &["itemnumber", "barcode"],
+            Self::Items => &[
+                "itemnumber",
+                "barcode",
+                "itemlost",
+                "itemlost_on",
+                "damaged",
+                "damaged_on",
+                "withdrawn",
+                "withdrawn_on",
+            ],
             Self::Issues => &[
                 "issue_id",
                 "borrowernumber",
