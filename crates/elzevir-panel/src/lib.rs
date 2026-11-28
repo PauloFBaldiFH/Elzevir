@@ -5,6 +5,7 @@ mod access_actions;
 mod address_operations;
 mod address_view;
 pub use address_operations::AddressOperation;
+mod access_center;
 mod addresses;
 mod backup_center;
 mod backup_options;
@@ -391,6 +392,11 @@ impl Panel {
             && !self.palette
     }
 
+    fn measured_scroll(&self) -> bool {
+        matches!(self.mode, Mode::Live(_))
+            && (self.section == Section::Dashboard || self.live_addresses())
+    }
+
     fn live_addresses(&self) -> bool {
         self.inspection.is_none()
             && matches!(&self.mode, Mode::Live(_))
@@ -588,8 +594,7 @@ impl Panel {
     fn address_navigation(&mut self, key: char) -> bool {
         match key {
             key @ ('[' | ']') => {
-                use TunnelTab::{Addresses, Log, Manage, Test};
-                let tabs = [Addresses, Manage, Test, Log];
+                let tabs = access_center::PAGES;
                 let i = tabs
                     .iter()
                     .position(|tab| *tab == self.tunnel_tab)
@@ -597,7 +602,7 @@ impl Panel {
                 self.tunnel_tab = tabs
                     .get(cycle(i, tabs.len(), key == ']'))
                     .copied()
-                    .unwrap_or(Addresses);
+                    .unwrap_or(TunnelTab::Addresses);
             }
             'Q' => {
                 self.access_notice = None;
@@ -637,6 +642,20 @@ impl Panel {
         }
         true
     }
+    fn own_domain_operation(&mut self, key: char) -> Operation {
+        self.tunnel_tab = TunnelTab::OwnDomain;
+        if key == 'l' {
+            Operation::CloudflareLogin
+        } else {
+            Operation::CloudflareSetup {
+                catalog: String::new(),
+                staff: String::new(),
+                name: String::new(),
+                service: "elzevir".to_owned(),
+                protocol: "auto".to_owned(),
+            }
+        }
+    }
     fn begin_operation(&mut self, key: char) -> bool {
         if self.inspection.is_some() {
             return self.inspection_shortcut(key);
@@ -672,14 +691,7 @@ impl Panel {
                     address_operations::shortcut(key).unwrap_or(AddressOperation::Refresh),
                 )
             }
-            (Section::Addresses, 'l') => Operation::CloudflareLogin,
-            (Section::Addresses, 's') => Operation::CloudflareSetup {
-                catalog: String::new(),
-                staff: String::new(),
-                name: String::new(),
-                service: "elzevir".to_owned(),
-                protocol: "auto".to_owned(),
-            },
+            (Section::Addresses, 'l' | 's') => self.own_domain_operation(key),
             (Section::Backup, 'R') => {
                 let Some(review) =
                     backup_center::sample(self).and_then(|s| s.operations.review.clone())
@@ -770,6 +782,9 @@ impl Panel {
                     .any(|(v, c)| c.resolved(v).is_none())
             {
                 form.notice = Some("restore-check-paths");
+                return;
+            }
+            if form.needs_distinct_hosts() {
                 return;
             }
             form.field = form.labels.len();

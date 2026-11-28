@@ -389,18 +389,49 @@ fn form_buttons(
     scene: &mut crate::ui::Scene,
     buttons: Rect,
 ) {
-    let [confirm, cancel] =
-        ratatui::layout::Layout::horizontal([ratatui::layout::Constraint::Fill(1); 2])
-            .spacing(1)
-            .areas(buttons);
+    let enroll = matches!(
+        form.operation,
+        crate::Operation::Address(crate::AddressOperation::Enroll { .. })
+    );
+    let (confirm, cancel, settings) = if enroll {
+        let [confirm, cancel, settings] =
+            ratatui::layout::Layout::horizontal([ratatui::layout::Constraint::Fill(1); 3])
+                .spacing(1)
+                .areas(buttons);
+        (confirm, cancel, Some(settings))
+    } else {
+        let [confirm, cancel] =
+            ratatui::layout::Layout::horizontal([ratatui::layout::Constraint::Fill(1); 2])
+                .spacing(1)
+                .areas(buttons);
+        (confirm, cancel, None)
+    };
+    if let Some(settings) = settings {
+        Button::new(
+            messages.get("ac-broker-settings"),
+            Action::Key(KeyCode::F(2)),
+            Variant::Secondary,
+        )
+        .draw(frame, settings, scene);
+    }
     let (key, variant) = match form.operation {
         crate::Operation::Restore { .. } => ("restore-validate", Variant::Primary),
         crate::Operation::ApplyRestore(_) => ("restore-confirm", Variant::Danger),
         crate::Operation::Server(crate::ServerAction::Stop) => ("desk-stop", Variant::Danger),
         crate::Operation::BackupNow { .. } => ("desk-create", Variant::Primary),
+        crate::Operation::CloudflareSetup { .. } => ("ac-publish", Variant::Primary),
+        crate::Operation::Address(crate::AddressOperation::Withdraw) => {
+            ("ac-withdraw", Variant::Danger)
+        }
         _ => ("desk-confirm", Variant::Primary),
     };
-    Button::new(messages.get(key), Action::Submit, variant).draw(frame, confirm, scene);
+    Button::new(messages.get(key), Action::Submit, variant)
+        .available(if form.needs_distinct_hosts() {
+            crate::ui::Availability::Disabled
+        } else {
+            crate::ui::Availability::Enabled
+        })
+        .draw(frame, confirm, scene);
     Button::new(
         messages.get("desk-cancel"),
         Action::Key(KeyCode::Esc),
@@ -475,6 +506,13 @@ fn address_header(
     messages: &Messages,
     header: &mut Vec<Line<'static>>,
 ) {
+    if matches!(form.operation, crate::Operation::CloudflareSetup { .. }) {
+        header.push(Line::from(messages.get("ac-confirm-publish")));
+        header.push(Line::from(messages.get("ac-confirm-staff")));
+        if form.needs_distinct_hosts() {
+            header.push(Line::from(messages.get("ac-host-required")));
+        }
+    }
     if panel.access_help == Some("address-terminal")
         && matches!(
             form.operation,
@@ -491,7 +529,7 @@ fn address_header(
     ) {
         if let Some(name) = form.values.get(2).filter(|s| !s.is_empty()) {
             header.push(Line::from(messages.get("address-preview")));
-            header.push(Line::from(format!("https://{}.elzevir.app/", text(name))));
+            header.push(Line::from(text(name)));
         }
         if let crate::Mode::Live(state) = &panel.mode {
             let origin = state.institution.configured_listen.and_then(|mut addr| {

@@ -367,6 +367,12 @@ impl Collector {
             }
             result.authorization_uris = receipts
                 .iter()
+                .filter(|receipt| receipt.action == "cloudflare_login")
+                .filter_map(|receipt| receipt.authorization_uri.clone())
+                .collect();
+            result.broker_authorization_uris = receipts
+                .iter()
+                .filter(|receipt| receipt.action == "broker")
                 .filter_map(|receipt| receipt.authorization_uri.clone())
                 .collect();
             result.jobs.extend(

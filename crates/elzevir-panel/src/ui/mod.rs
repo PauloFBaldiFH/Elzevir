@@ -45,6 +45,7 @@ impl Intent {
 pub(crate) enum Action {
     Section(Section),
     Backup(crate::backup_center::Command),
+    AccessPage(crate::TunnelTab),
     File(crate::manual_backup::Control),
     PickerEntry(usize),
     Launch(Intent),
@@ -67,6 +68,7 @@ pub(crate) struct Scene {
     pressed: Option<(Rect, Action)>,
     focused: Option<(Rect, Action)>,
     pub(crate) scroll_limit: u16,
+    pub(crate) access_page_height: u16,
     pub(crate) gallery: bool,
     pub(crate) sample: Option<bool>,
     pub(crate) desktop: bool,
@@ -183,6 +185,12 @@ impl Action {
         access: &mut crate::access_actions::Actions,
     ) {
         match self {
+            Self::AccessPage(tab) => {
+                panel.tunnel_tab = tab;
+                panel.scroll = 0;
+                panel.access_notice = None;
+                scene.reset_input();
+            }
             Self::Backup(command) => {
                 crate::backup_center::apply(command, panel, access, scene.scroll_limit);
             }
@@ -194,7 +202,12 @@ impl Action {
             }
             Self::Sample(ok) => scene.sample = Some(ok),
             Self::Scroll(down) => {
-                let step = area.height.saturating_sub(11).max(1);
+                let step = if panel.live_addresses() {
+                    scene.access_page_height
+                } else {
+                    area.height.saturating_sub(11)
+                }
+                .max(1);
                 panel.scroll = if down {
                     panel.scroll.saturating_add(step).min(scene.scroll_limit)
                 } else {

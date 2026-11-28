@@ -321,6 +321,7 @@ fn addresses_separate_loaded_configuration_observation_and_local_tests() {
             };
         }
     }
+    panel.tunnel_tab = elzevir_panel::TunnelTab::Test;
     for lang in ["en", "pt-BR"] {
         let text = screen(&panel, lang);
         assert!(text.contains("http://staff.example:8080/equipe"));
@@ -359,8 +360,24 @@ fn interactive_cloudflare_sign_in_displays_only_the_projected_browser_link() {
             .authorization_uris
             .push("https://dash.cloudflare.com/argotunnel?callback=fictional".to_owned());
     }
+    if let Mode::Live(state) = &mut panel.mode {
+        state
+            .snapshot
+            .as_mut()
+            .unwrap()
+            .operations
+            .broker_authorization_uris
+            .push("https://broker.example.org/device".into());
+    }
     for language in ["en", "pt-BR"] {
+        panel.tunnel_tab = elzevir_panel::TunnelTab::Manage;
+        let free = screen(&panel, language);
+        assert!(
+            free.contains("broker.example.org/device") && !free.contains("dash.cloudflare.com")
+        );
+        panel.tunnel_tab = elzevir_panel::TunnelTab::OwnDomain;
         let rendered = screen(&panel, language);
+        assert!(!rendered.contains("broker.example.org/device"));
         assert!(rendered.contains("dash.cloudflare.com/argotunnel?callback=fictional"));
         assert!(!rendered.contains("op-authorize-uri"));
         assert!(!rendered.contains("PRIVATE KEY"));
@@ -499,6 +516,7 @@ fn domain_flow_distinguishes_registration_connector_and_public_test_results() {
             remote_status: None,
         });
     }
+    panel.tunnel_tab = elzevir_panel::TunnelTab::Manage;
     for (language, phase, connector) in [
         ("en", "Provisioning DNS and tunnel", "Stopped"),
         ("pt-BR", "Provisionando DNS e túnel", "Parado"),
@@ -1189,4 +1207,55 @@ fn restore_from_a_download_is_only_offered_for_the_observed_destination() {
     assert!(!screen(&panel, "en").contains("Validate downloaded copy"));
     key(&mut panel, 'O');
     assert!(panel.form.is_none() && panel.diagnostics.requested.is_none());
+}
+
+#[test]
+fn choosing_an_address_route_in_a_compact_terminal_starts_no_job() {
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut panel = connected();
+    panel.section = elzevir_panel::Section::Addresses;
+    let press = |panel: &mut Panel, code| {
+        panel.handle(&Event::Key(KeyEvent::new(code, KeyModifiers::NONE)), 80, 24);
+    };
+    for label in ["Endereço gratuito", "Domínio próprio"] {
+        assert!(sized_screen(&panel, "pt-BR", 80, 24).contains(label));
+    }
+    press(&mut panel, KeyCode::Char(']'));
+    assert!(sized_screen(&panel, "pt-BR", 80, 24).contains("Recuperar endereço"));
+    press(&mut panel, KeyCode::Char(']'));
+    assert!(sized_screen(&panel, "pt-BR", 80, 24).contains("Autorizar Cloudflare"));
+    assert!(panel.diagnostics.requested.is_none() && panel.form.is_none());
+    press(&mut panel, KeyCode::Char('s'));
+    assert!(matches!(
+        panel.form.as_ref().unwrap().operation,
+        elzevir_panel::Operation::CloudflareSetup { .. }
+    ));
+    press(&mut panel, KeyCode::Esc);
+    assert!(panel.diagnostics.requested.is_none() && panel.form.is_none());
+}
+
+#[test]
+fn publication_keeps_the_review_open_until_catalog_and_staff_names_differ() {
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut panel = connected();
+    panel.section = elzevir_panel::Section::Addresses;
+    panel.handle(
+        &Event::Key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE)),
+        80,
+        24,
+    );
+    for staff in ["", "Catalog.example."] {
+        let form = panel.form.as_mut().unwrap();
+        form.values[0] = "catalog.example".to_owned();
+        form.values[1] = staff.to_owned();
+        panel.submit_form();
+        assert!(panel.form.is_some() && panel.diagnostics.requested.is_none());
+    }
+    panel.form.as_mut().unwrap().values[1] = "staff.example".to_owned();
+    panel.submit_form();
+    assert!(
+        matches!(panel.diagnostics.requested, Some(elzevir_panel::ObservationRequest::Operate(
+        elzevir_panel::Operation::CloudflareSetup { ref catalog, ref staff, .. }
+    )) if catalog == "catalog.example" && staff == "staff.example")
+    );
 }

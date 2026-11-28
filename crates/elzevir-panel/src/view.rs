@@ -148,6 +148,7 @@ pub(crate) fn interactive(
             messages,
             ascii || area.width < 80,
             panel.access_notice,
+            scene,
         );
         return;
     }
@@ -169,6 +170,11 @@ pub(crate) fn interactive(
     }
     if panel.section == Section::Dashboard && matches!(panel.mode, Mode::Live(_)) {
         crate::overview::draw(frame, panel, messages, ascii, scene);
+    } else if panel.section == Section::Addresses
+        && panel.inspection.is_none()
+        && matches!(panel.mode, Mode::Live(_))
+    {
+        crate::access_center::draw(frame, panel, messages, scene, ascii);
     } else if panel.section == Section::Backup
         && panel.inspection.is_none()
         && matches!(panel.mode, Mode::Live(_))
@@ -269,7 +275,13 @@ fn section_body(
     }
 }
 
-fn draw_tabs(frame: &mut Frame, tabs: Rect, panel: &Panel, messages: &Messages, scene: &mut Scene) {
+pub(crate) fn draw_tabs(
+    frame: &mut Frame,
+    tabs: Rect,
+    panel: &Panel,
+    messages: &Messages,
+    scene: &mut Scene,
+) {
     scene.buttons(
         frame,
         tabs,
