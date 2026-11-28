@@ -264,3 +264,40 @@ O banco operacional, schema, dependências de runtime e implementação de
 produção conservam a revisão-base. Os testes locais não executaram piloto com
 dados reais, benchmark de escrita a 1 milhão ou CI remota. O próximo ponto
 de aprovação é o incremento 1a no doc 03.
+
+## Entrega 1a sobre a main a0be08ba (PR #305)
+
+A primeira implementação leva o dump textual PostgreSQL 10.20 a **nível 2
+no produto**. A CLI e o Staff conferiram as linhas e os totais de campos da
+mesma amostra identificada no manifesto. A interface não expõe valores nem
+tem ação de confirmação para este relatório.
+
+| Tabela | Linhas | Campos nulos | Campos vazios |
+|---|---:|---:|---:|
+| public.acervo | 11.561 | 196.081 | 13.319 |
+| public.ocorrencias | 5 | 0 | 6 |
+
+O teste `pg_dump_10_fixture_reconciles_both_tables` fixa os totais. O teste
+`postgres_inventory_agrees_with_cli_and_cannot_confirm_a_stale_report` compara
+a CLI com a resposta HTTP autenticada e verifica recusa de acesso, token,
+truncamento e tentativa de confirmação. O fluxo de upload também foi
+percorrido em Chromium. O inventário usa o fluxo de bytes privado sem escrita
+no catálogo. [Contrato, limites e integração futura](../../specs/catalogo/importacao-universal-v4.md)
+
+Medição exploratória de uma execução de `elzevir import inventory` por arquivo
+na build de teste local Linux x86-64, CPU EPYC 9V74, cgroup de quatro CPUs e
+32 GiB. Os arquivos sintéticos recém-escritos continham um único bloco COPY
+com três campos por linha (inteiro sequencial a partir de zero, nulo e vazio).
+Tempo de parede inclui inicialização e saída JSON. RSS obtido por
+`wait4.ru_maxrss`. Cache do sistema ativo, sem limpeza entre execuções e
+com a suíte rodando na mesma máquina.
+
+| Fonte | Linhas | Bytes | Segundos | Pico de RSS (KiB) |
+|---|---:|---:|---:|---:|
+| Sintética | 1.000 | 7.941 | 0,0804 | 52.408 |
+| Sintética | 100.000 | 988.941 | 0,0475 | 51.364 |
+| Sintética | 1.000.000 | 10.888.941 | 0,4549 | 52.248 |
+| Dump 10.20 | 11.566 | 2.182.920 | 0,0438 | 51.064 |
+
+Esta medição abrange inspeção de estrutura. Carga no writer, indexação e
+projeção das classes continuam com seus próprios critérios de aceite.
