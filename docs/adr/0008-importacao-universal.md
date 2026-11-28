@@ -52,3 +52,15 @@ inspira o fluxo, mas seus padrões de Koha não pertencem ao núcleo BIBFRAME.
 - Importador independente ou SQLite de staging: duplica gravação e casamento.
 - Prévia por outro mapeador: permite divergência com a confirmação.
 - Commit automático ao salvar edição: elimina a revisão explícita do lote.
+
+
+## Evolução proposta em 2026-11-28
+
+A v4 preserva o caminho bibliográfico da decisão 2. Leitores e autoridades
+terão projeções próprias por portas de aplicação e comandos da mesma escritora.
+A identidade institucional abrange todas as classes. O lote privado poderá
+conter membros relacionados com um único plano aprovado. O primeiro incremento
+propõe somente inventário em fluxo, com releitura controlada da fonte.
+Qualquer persistência intermediária adicional exige orçamento medido e política
+de retenção antes de sua introdução. O estudo e o roteiro registram estado e
+critérios desta proposta. [Contrato v4](../specs/catalogo/importacao-universal-v4.md)

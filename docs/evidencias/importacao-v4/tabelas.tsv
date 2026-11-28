@@ -1,0 +1,745 @@
+arquivo	tabela	create_table	linhas_values_ou_copy	insert_sem_contagem
+03-slims/install/sampledata.sql	biblio	0	15	0
+03-slims/install/sampledata.sql	biblio_author	0	24	0
+03-slims/install/sampledata.sql	biblio_topic	0	29	0
+03-slims/install/sampledata.sql	item	0	10	0
+03-slims/install/sampledata.sql	mst_author	0	24	0
+03-slims/install/sampledata.sql	mst_place	0	8	0
+03-slims/install/sampledata.sql	mst_publisher	0	11	0
+03-slims/install/sampledata.sql	mst_topic	0	17	0
+03-slims/install/senayan.sql	backup_log	1	0	0
+03-slims/install/senayan.sql	biblio	1	0	0
+03-slims/install/senayan.sql	biblio_attachment	1	0	0
+03-slims/install/senayan.sql	biblio_author	1	0	0
+03-slims/install/senayan.sql	biblio_custom	1	0	0
+03-slims/install/senayan.sql	biblio_log	1	0	0
+03-slims/install/senayan.sql	biblio_mark	1	0	0
+03-slims/install/senayan.sql	biblio_relation	1	0	0
+03-slims/install/senayan.sql	biblio_topic	1	0	0
+03-slims/install/senayan.sql	cache	1	0	0
+03-slims/install/senayan.sql	comment	1	0	0
+03-slims/install/senayan.sql	content	1	8	0
+03-slims/install/senayan.sql	files	1	0	0
+03-slims/install/senayan.sql	files_read	1	0	0
+03-slims/install/senayan.sql	fines	1	0	0
+03-slims/install/senayan.sql	group_access	1	8	0
+03-slims/install/senayan.sql	holiday	1	6	0
+03-slims/install/senayan.sql	index_documents	1	0	0
+03-slims/install/senayan.sql	index_words	1	0	0
+03-slims/install/senayan.sql	item	1	0	0
+03-slims/install/senayan.sql	item_custom	1	0	0
+03-slims/install/senayan.sql	kardex	1	0	0
+03-slims/install/senayan.sql	loan	1	0	0
+03-slims/install/senayan.sql	loan_history	1	0	0
+03-slims/install/senayan.sql	member	1	0	0
+03-slims/install/senayan.sql	member_custom	1	0	0
+03-slims/install/senayan.sql	mst_author	1	0	0
+03-slims/install/senayan.sql	mst_carrier_type	1	55	0
+03-slims/install/senayan.sql	mst_coll_type	1	3	0
+03-slims/install/senayan.sql	mst_content_type	1	25	0
+03-slims/install/senayan.sql	mst_custom_field	1	0	0
+03-slims/install/senayan.sql	mst_frequency	1	8	0
+03-slims/install/senayan.sql	mst_gmd	1	31	0
+03-slims/install/senayan.sql	mst_item_status	1	3	0
+03-slims/install/senayan.sql	mst_label	1	3	0
+03-slims/install/senayan.sql	mst_language	1	2	0
+03-slims/install/senayan.sql	mst_loan_rules	1	0	0
+03-slims/install/senayan.sql	mst_location	1	1	0
+03-slims/install/senayan.sql	mst_media_type	1	10	0
+03-slims/install/senayan.sql	mst_member_type	1	1	0
+03-slims/install/senayan.sql	mst_module	1	8	0
+03-slims/install/senayan.sql	mst_place	1	0	0
+03-slims/install/senayan.sql	mst_publisher	1	0	0
+03-slims/install/senayan.sql	mst_relation_term	1	6	0
+03-slims/install/senayan.sql	mst_servers	1	0	0
+03-slims/install/senayan.sql	mst_supplier	1	0	0
+03-slims/install/senayan.sql	mst_topic	1	0	0
+03-slims/install/senayan.sql	mst_visitor_room	1	0	0
+03-slims/install/senayan.sql	mst_voc_ctrl	1	0	0
+03-slims/install/senayan.sql	plugins	1	0	0
+03-slims/install/senayan.sql	reserve	1	0	0
+03-slims/install/senayan.sql	search_biblio	1	0	0
+03-slims/install/senayan.sql	serial	1	0	0
+03-slims/install/senayan.sql	setting	1	22	0
+03-slims/install/senayan.sql	stock_take	1	0	0
+03-slims/install/senayan.sql	stock_take_item	1	0	0
+03-slims/install/senayan.sql	system_log	1	0	0
+03-slims/install/senayan.sql	user	1	1	0
+03-slims/install/senayan.sql	user_group	1	1	0
+03-slims/install/senayan.sql	user_tokens	1	0	0
+03-slims/install/senayan.sql	visitor_count	1	0	0
+04-openbiblio/biblio.sql	biblio	0	22	0
+04-openbiblio/biblio_copy.sql	biblio_copy	0	93	0
+04-openbiblio/biblio_field.sql	biblio_field	0	604	0
+04-openbiblio/biblio_subfield.sql	biblio_subfield	0	1299	0
+05-biblivre/sql/biblivre4.sql	bib4template.access_cards	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.access_control	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.authorities_brief_formats	1	7	0
+05-biblivre/sql/biblivre4.sql	bib4template.authorities_form_datafields	1	7	0
+05-biblivre/sql/biblivre4.sql	bib4template.authorities_form_subfields	1	23	0
+05-biblivre/sql/biblivre4.sql	bib4template.authorities_idx_autocomplete	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.authorities_idx_fields	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.authorities_idx_sort	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.authorities_indexing_groups	1	5	0
+05-biblivre/sql/biblivre4.sql	bib4template.authorities_records	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.authorities_search_results	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.authorities_searches	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.backups	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.biblio_brief_formats	1	57	0
+05-biblivre/sql/biblivre4.sql	bib4template.biblio_form_datafields	1	66	0
+05-biblivre/sql/biblivre4.sql	bib4template.biblio_form_subfields	1	253	0
+05-biblivre/sql/biblivre4.sql	bib4template.biblio_holdings	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.biblio_idx_autocomplete	1	5101	0
+05-biblivre/sql/biblivre4.sql	bib4template.biblio_idx_fields	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.biblio_idx_sort	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.biblio_indexing_groups	1	7	0
+05-biblivre/sql/biblivre4.sql	bib4template.biblio_records	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.biblio_search_results	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.biblio_searches	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.configurations	1	1	0
+05-biblivre/sql/biblivre4.sql	bib4template.digital_media	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.holding_creation_counter	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.holding_form_datafields	1	5	0
+05-biblivre/sql/biblivre4.sql	bib4template.holding_form_subfields	1	28	0
+05-biblivre/sql/biblivre4.sql	bib4template.lending_fines	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.lendings	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.logins	1	1	0
+05-biblivre/sql/biblivre4.sql	bib4template.orders	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.permissions	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.quotations	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.request_quotation	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.requests	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.reservations	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.suppliers	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.translations	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.users	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.users_fields	1	16	0
+05-biblivre/sql/biblivre4.sql	bib4template.users_types	1	2	0
+05-biblivre/sql/biblivre4.sql	bib4template.users_values	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.vocabulary_brief_formats	1	10	0
+05-biblivre/sql/biblivre4.sql	bib4template.vocabulary_form_datafields	1	10	0
+05-biblivre/sql/biblivre4.sql	bib4template.vocabulary_form_subfields	1	27	0
+05-biblivre/sql/biblivre4.sql	bib4template.vocabulary_idx_autocomplete	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.vocabulary_idx_fields	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.vocabulary_idx_sort	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.vocabulary_indexing_groups	1	5	0
+05-biblivre/sql/biblivre4.sql	bib4template.vocabulary_records	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.vocabulary_search_results	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.vocabulary_searches	1	0	0
+05-biblivre/sql/biblivre4.sql	bib4template.z3950_addresses	1	12	0
+05-biblivre/sql/biblivre4.sql	global.backups	1	0	0
+05-biblivre/sql/biblivre4.sql	global.configurations	1	14	0
+05-biblivre/sql/biblivre4.sql	global.logins	1	1	0
+05-biblivre/sql/biblivre4.sql	global.schemas	1	1	0
+05-biblivre/sql/biblivre4.sql	global.translations	1	6158	0
+05-biblivre/sql/biblivre4.sql	global.versions	1	1	0
+06-pmb/tables/en/minimum.sql	abts_periodicites	0	9	0
+06-pmb/tables/en/minimum.sql	bannette_tpl	0	1	0
+06-pmb/tables/en/minimum.sql	categories	0	2	0
+06-pmb/tables/en/minimum.sql	classements	0	3	0
+06-pmb/tables/en/minimum.sql	cms_editorial_types	0	2	0
+06-pmb/tables/en/minimum.sql	empr_statut	0	2	0
+06-pmb/tables/en/minimum.sql	explnum_statut	0	1	0
+06-pmb/tables/en/minimum.sql	lenders	0	2	0
+06-pmb/tables/en/minimum.sql	lignes_actes_statuts	0	1	0
+06-pmb/tables/en/minimum.sql	noeuds	0	3	0
+06-pmb/tables/en/minimum.sql	notice_statut	0	4	0
+06-pmb/tables/en/minimum.sql	origin_authorities	0	2	0
+06-pmb/tables/en/minimum.sql	origine_notice	0	4	0
+06-pmb/tables/en/minimum.sql	parametres	0	913	0
+06-pmb/tables/en/minimum.sql	pclassement	0	1	0
+06-pmb/tables/en/minimum.sql	sauv_sauvegardes	0	1	0
+06-pmb/tables/en/minimum.sql	sauv_tables	0	1	0
+06-pmb/tables/en/minimum.sql	serialcirc_tpl	0	1	0
+06-pmb/tables/en/minimum.sql	suggestions_categ	0	1	0
+06-pmb/tables/en/minimum.sql	thesaurus	0	1	0
+06-pmb/tables/en/minimum.sql	users	0	1	0
+06-pmb/tables/en/minimum.sql	z_attr	0	47	0
+06-pmb/tables/en/minimum.sql	z_bib	0	11	0
+09-sintetica/sqlite-1k.sql.gz	addresses	1	31	0
+09-sintetica/sqlite-1k.sql.gz	audit_logs	1	20	0
+09-sintetica/sqlite-1k.sql.gz	authors	1	10	0
+09-sintetica/sqlite-1k.sql.gz	book_authors	1	16	0
+09-sintetica/sqlite-1k.sql.gz	book_tag_mappings	1	30	0
+09-sintetica/sqlite-1k.sql.gz	book_tags	1	40	0
+09-sintetica/sqlite-1k.sql.gz	books	1	12	0
+09-sintetica/sqlite-1k.sql.gz	categories	1	20	0
+09-sintetica/sqlite-1k.sql.gz	copies	1	40	0
+09-sintetica/sqlite-1k.sql.gz	event_registrations	1	40	0
+09-sintetica/sqlite-1k.sql.gz	events	1	10	0
+09-sintetica/sqlite-1k.sql.gz	fine_policies	1	4	0
+09-sintetica/sqlite-1k.sql.gz	fines	1	60	0
+09-sintetica/sqlite-1k.sql.gz	languages	1	10	0
+09-sintetica/sqlite-1k.sql.gz	libraries	1	8	0
+09-sintetica/sqlite-1k.sql.gz	library_hours	1	56	0
+09-sintetica/sqlite-1k.sql.gz	loans	1	1000	0
+09-sintetica/sqlite-1k.sql.gz	memberships	1	35	0
+09-sintetica/sqlite-1k.sql.gz	notification_templates	1	8	0
+09-sintetica/sqlite-1k.sql.gz	notifications	1	250	0
+09-sintetica/sqlite-1k.sql.gz	order_items	1	10	0
+09-sintetica/sqlite-1k.sql.gz	payments	1	50	0
+09-sintetica/sqlite-1k.sql.gz	publishers	1	60	0
+09-sintetica/sqlite-1k.sql.gz	purchase_orders	1	10	0
+09-sintetica/sqlite-1k.sql.gz	reservations	1	80	0
+09-sintetica/sqlite-1k.sql.gz	reviews	1	50	0
+09-sintetica/sqlite-1k.sql.gz	roles	1	4	0
+09-sintetica/sqlite-1k.sql.gz	staff_profiles	1	10	0
+09-sintetica/sqlite-1k.sql.gz	suppliers	1	20	0
+09-sintetica/sqlite-1k.sql.gz	users	1	30	0
+BKP_BIBLIOTECA (2).backup	public.acervo	1	11561	0
+BKP_BIBLIOTECA (2).backup	public.ocorrencias	1	5	0
+biblivre-lab/biblivre4.sql	bib4template.access_cards	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.access_control	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.authorities_brief_formats	1	7	0
+biblivre-lab/biblivre4.sql	bib4template.authorities_form_datafields	1	7	0
+biblivre-lab/biblivre4.sql	bib4template.authorities_form_subfields	1	23	0
+biblivre-lab/biblivre4.sql	bib4template.authorities_idx_autocomplete	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.authorities_idx_fields	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.authorities_idx_sort	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.authorities_indexing_groups	1	5	0
+biblivre-lab/biblivre4.sql	bib4template.authorities_records	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.authorities_search_results	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.authorities_searches	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.backups	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.biblio_brief_formats	1	57	0
+biblivre-lab/biblivre4.sql	bib4template.biblio_form_datafields	1	66	0
+biblivre-lab/biblivre4.sql	bib4template.biblio_form_subfields	1	253	0
+biblivre-lab/biblivre4.sql	bib4template.biblio_holdings	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.biblio_idx_autocomplete	1	5101	0
+biblivre-lab/biblivre4.sql	bib4template.biblio_idx_fields	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.biblio_idx_sort	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.biblio_indexing_groups	1	7	0
+biblivre-lab/biblivre4.sql	bib4template.biblio_records	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.biblio_search_results	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.biblio_searches	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.configurations	1	1	0
+biblivre-lab/biblivre4.sql	bib4template.digital_media	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.holding_creation_counter	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.holding_form_datafields	1	5	0
+biblivre-lab/biblivre4.sql	bib4template.holding_form_subfields	1	28	0
+biblivre-lab/biblivre4.sql	bib4template.lending_fines	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.lendings	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.logins	1	1	0
+biblivre-lab/biblivre4.sql	bib4template.orders	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.permissions	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.quotations	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.request_quotation	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.requests	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.reservations	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.suppliers	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.translations	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.users	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.users_fields	1	16	0
+biblivre-lab/biblivre4.sql	bib4template.users_types	1	2	0
+biblivre-lab/biblivre4.sql	bib4template.users_values	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.vocabulary_brief_formats	1	10	0
+biblivre-lab/biblivre4.sql	bib4template.vocabulary_form_datafields	1	10	0
+biblivre-lab/biblivre4.sql	bib4template.vocabulary_form_subfields	1	27	0
+biblivre-lab/biblivre4.sql	bib4template.vocabulary_idx_autocomplete	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.vocabulary_idx_fields	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.vocabulary_idx_sort	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.vocabulary_indexing_groups	1	5	0
+biblivre-lab/biblivre4.sql	bib4template.vocabulary_records	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.vocabulary_search_results	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.vocabulary_searches	1	0	0
+biblivre-lab/biblivre4.sql	bib4template.z3950_addresses	1	12	0
+biblivre-lab/biblivre4.sql	global.backups	1	0	0
+biblivre-lab/biblivre4.sql	global.configurations	1	14	0
+biblivre-lab/biblivre4.sql	global.logins	1	1	0
+biblivre-lab/biblivre4.sql	global.schemas	1	1	0
+biblivre-lab/biblivre4.sql	global.translations	1	6158	0
+biblivre-lab/biblivre4.sql	global.versions	1	1	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.access_cards	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.access_control	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.authorities_brief_formats	1	7	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.authorities_form_datafields	1	7	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.authorities_form_subfields	1	23	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.authorities_idx_autocomplete	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.authorities_idx_fields	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.authorities_idx_sort	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.authorities_indexing_groups	1	5	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.authorities_records	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.authorities_search_results	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.authorities_searches	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.backups	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.biblio_brief_formats	1	57	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.biblio_form_datafields	1	66	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.biblio_form_subfields	1	253	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.biblio_holdings	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.biblio_idx_autocomplete	1	5101	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.biblio_idx_fields	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.biblio_idx_sort	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.biblio_indexing_groups	1	7	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.biblio_records	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.biblio_search_results	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.biblio_searches	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.configurations	1	1	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.digital_media	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.holding_creation_counter	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.holding_form_datafields	1	5	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.holding_form_subfields	1	28	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.lending_fines	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.lendings	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.logins	1	1	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.orders	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.permissions	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.quotations	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.request_quotation	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.requests	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.reservations	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.suppliers	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.translations	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.users	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.users_fields	1	16	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.users_types	1	2	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.users_values	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.vocabulary_brief_formats	1	10	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.vocabulary_form_datafields	1	10	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.vocabulary_form_subfields	1	27	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.vocabulary_idx_autocomplete	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.vocabulary_idx_fields	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.vocabulary_idx_sort	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.vocabulary_indexing_groups	1	5	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.vocabulary_records	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.vocabulary_search_results	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.vocabulary_searches	1	0	0
+biblivre-lab/biblivre4_pg17.sql	bib4template.z3950_addresses	1	12	0
+biblivre-lab/biblivre4_pg17.sql	global.backups	1	0	0
+biblivre-lab/biblivre4_pg17.sql	global.configurations	1	14	0
+biblivre-lab/biblivre4_pg17.sql	global.logins	1	1	0
+biblivre-lab/biblivre4_pg17.sql	global.schemas	1	1	0
+biblivre-lab/biblivre4_pg17.sql	global.translations	1	6158	0
+biblivre-lab/biblivre4_pg17.sql	global.versions	1	1	0
+biblivre-lab/biblivre_teste.dump	global.backups	0	0	0
+biblivre-lab/biblivre_teste.dump	global.configurations	0	14	0
+biblivre-lab/biblivre_teste.dump	global.logins	0	1	0
+biblivre-lab/biblivre_teste.dump	global.schemas	0	1	0
+biblivre-lab/biblivre_teste.dump	global.translations	0	6158	0
+biblivre-lab/biblivre_teste.dump	global.versions	0	1	0
+biblivre-lab/biblivre_teste.dump	single.access_cards	0	0	0
+biblivre-lab/biblivre_teste.dump	single.access_control	0	0	0
+biblivre-lab/biblivre_teste.dump	single.authorities_brief_formats	0	7	0
+biblivre-lab/biblivre_teste.dump	single.authorities_form_datafields	0	7	0
+biblivre-lab/biblivre_teste.dump	single.authorities_form_subfields	0	23	0
+biblivre-lab/biblivre_teste.dump	single.authorities_idx_autocomplete	0	0	0
+biblivre-lab/biblivre_teste.dump	single.authorities_idx_fields	0	0	0
+biblivre-lab/biblivre_teste.dump	single.authorities_idx_sort	0	0	0
+biblivre-lab/biblivre_teste.dump	single.authorities_indexing_groups	0	5	0
+biblivre-lab/biblivre_teste.dump	single.authorities_records	0	0	0
+biblivre-lab/biblivre_teste.dump	single.authorities_search_results	0	0	0
+biblivre-lab/biblivre_teste.dump	single.authorities_searches	0	0	0
+biblivre-lab/biblivre_teste.dump	single.backups	0	0	0
+biblivre-lab/biblivre_teste.dump	single.biblio_brief_formats	0	57	0
+biblivre-lab/biblivre_teste.dump	single.biblio_form_datafields	0	66	0
+biblivre-lab/biblivre_teste.dump	single.biblio_form_subfields	0	253	0
+biblivre-lab/biblivre_teste.dump	single.biblio_holdings	0	20	0
+biblivre-lab/biblivre_teste.dump	single.biblio_idx_autocomplete	0	5101	0
+biblivre-lab/biblivre_teste.dump	single.biblio_idx_fields	0	0	0
+biblivre-lab/biblivre_teste.dump	single.biblio_idx_sort	0	0	0
+biblivre-lab/biblivre_teste.dump	single.biblio_indexing_groups	0	7	0
+biblivre-lab/biblivre_teste.dump	single.biblio_records	0	10	0
+biblivre-lab/biblivre_teste.dump	single.biblio_search_results	0	0	0
+biblivre-lab/biblivre_teste.dump	single.biblio_searches	0	0	0
+biblivre-lab/biblivre_teste.dump	single.configurations	0	1	0
+biblivre-lab/biblivre_teste.dump	single.digital_media	0	0	0
+biblivre-lab/biblivre_teste.dump	single.holding_creation_counter	0	0	0
+biblivre-lab/biblivre_teste.dump	single.holding_form_datafields	0	5	0
+biblivre-lab/biblivre_teste.dump	single.holding_form_subfields	0	28	0
+biblivre-lab/biblivre_teste.dump	single.lending_fines	0	0	0
+biblivre-lab/biblivre_teste.dump	single.lendings	0	0	0
+biblivre-lab/biblivre_teste.dump	single.logins	0	1	0
+biblivre-lab/biblivre_teste.dump	single.orders	0	0	0
+biblivre-lab/biblivre_teste.dump	single.permissions	0	0	0
+biblivre-lab/biblivre_teste.dump	single.quotations	0	0	0
+biblivre-lab/biblivre_teste.dump	single.request_quotation	0	0	0
+biblivre-lab/biblivre_teste.dump	single.requests	0	0	0
+biblivre-lab/biblivre_teste.dump	single.reservations	0	0	0
+biblivre-lab/biblivre_teste.dump	single.suppliers	0	0	0
+biblivre-lab/biblivre_teste.dump	single.translations	0	0	0
+biblivre-lab/biblivre_teste.dump	single.users	0	10	0
+biblivre-lab/biblivre_teste.dump	single.users_fields	0	16	0
+biblivre-lab/biblivre_teste.dump	single.users_types	0	2	0
+biblivre-lab/biblivre_teste.dump	single.users_values	0	10	0
+biblivre-lab/biblivre_teste.dump	single.vocabulary_brief_formats	0	10	0
+biblivre-lab/biblivre_teste.dump	single.vocabulary_form_datafields	0	10	0
+biblivre-lab/biblivre_teste.dump	single.vocabulary_form_subfields	0	27	0
+biblivre-lab/biblivre_teste.dump	single.vocabulary_idx_autocomplete	0	0	0
+biblivre-lab/biblivre_teste.dump	single.vocabulary_idx_fields	0	0	0
+biblivre-lab/biblivre_teste.dump	single.vocabulary_idx_sort	0	0	0
+biblivre-lab/biblivre_teste.dump	single.vocabulary_indexing_groups	0	5	0
+biblivre-lab/biblivre_teste.dump	single.vocabulary_records	0	0	0
+biblivre-lab/biblivre_teste.dump	single.vocabulary_search_results	0	0	0
+biblivre-lab/biblivre_teste.dump	single.vocabulary_searches	0	0	0
+biblivre-lab/biblivre_teste.dump	single.z3950_addresses	0	12	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/actor.usr_address.sql	actor.usr_address	0	379	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/serial.unit.sql	serial.unit	0	6	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/authority.bib_linking.sql	authority.bib_linking	0	245	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/permission.grp_tree.sql	permission.grp_tree	0	4	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/asset.call_number_suffix.sql	asset.call_number_suffix	0	3	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/serial.subscription.sql	serial.subscription	0	27	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/asset.copy_location.sql	asset.copy_location	0	88	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/serial.item.sql	serial.item	0	750	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/asset.copy_location_group.sql	asset.copy_location_group	0	2	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/action.circulation.sql	action.circulation	0	486	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/actor.stat_cat.sql	actor.stat_cat	0	4	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/actor.card.sql	actor.card	0	379	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/biblio.peer_bib_copy_map.sql	biblio.peer_bib_copy_map	0	4	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/asset.uri_call_number_map.sql	asset.uri_call_number_map	0	4	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/serial.pattern_template.sql	serial.pattern_template	0	12	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/actor.usr.sql	actor.usr	0	378	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/serial.caption_and_pattern.sql	serial.caption_and_pattern	0	28	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/asset.stat_cat.sql	asset.stat_cat	0	2	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/serial.stream.sql	serial.stream	0	28	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/actor.stat_cat_entry_default.sql	actor.stat_cat_entry_default	0	2	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/actor.org_unit.sql	actor.org_unit	0	22	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/actor.org_address.sql	actor.org_address	0	70	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/asset.call_number.sql	asset.call_number	0	1821	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/biblio.record_entry.sql	biblio.record_entry	0	344	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/serial.basic_summary.sql	serial.basic_summary	0	6	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/actor.stat_cat_entry_usr_map.sql	actor.stat_cat_entry_usr_map	0	6	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/actor.stat_cat_entry.sql	actor.stat_cat_entry	0	18	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/action.hold_request.sql	action.hold_request	0	265	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/asset.copy_part_map.sql	asset.copy_part_map	0	14	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/actor.usr_standing_penalty.sql	actor.usr_standing_penalty	0	98	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/biblio.monograph_part.sql	biblio.monograph_part	0	8	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/asset.call_number_prefix.sql	asset.call_number_prefix	0	3	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/action.hold_copy_map.sql	action.hold_copy_map	0	3341	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/biblio.peer_type.sql	biblio.peer_type	0	1	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/serial.issuance.sql	serial.issuance	0	743	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/asset.stat_cat_entry.sql	asset.stat_cat_entry	0	6	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/asset.uri.sql	asset.uri	0	11	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/serial.distribution.sql	serial.distribution	0	28	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/config.circ_modifier.sql	config.circ_modifier	0	21	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/asset.copy.sql	asset.copy	0	4852	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/authority.record_entry.sql	authority.record_entry	0	195	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/asset.copy_location_group_map.sql	asset.copy_location_group_map	0	11	0
+evergreen-sample.zip!01-evergreen/concerto_enhanced/asset.copy_note.sql	asset.copy_note	0	2	0
+evergreen-sample.zip!01-evergreen/concerto/bibs_etextbooks.sql	marcxml_import	0	7	0
+evergreen-sample.zip!01-evergreen/concerto/bibs_rda.sql	marcxml_import	0	10	0
+evergreen-sample.zip!01-evergreen/concerto/auth_mesh.sql	authority.record_entry	0	12	0
+evergreen-sample.zip!01-evergreen/concerto/auth_lc.sql	authority.record_entry	0	12	2
+evergreen-sample.zip!01-evergreen/concerto/bibs_ebook_api.sql	marcxml_import	0	4	0
+evergreen-sample.zip!01-evergreen/concerto/bibs_graphic_880.sql	marcxml_import	0	7	0
+evergreen-sample.zip!01-evergreen/concerto/bibs_mr.sql	marcxml_import	0	7	0
+evergreen-sample.zip!01-evergreen/concerto/bibs_booking.sql	marcxml_import	0	2	0
+evergreen-sample.zip!01-evergreen/concerto/bibs_cze.sql	marcxml_import	0	7	0
+evergreen-sample.zip!01-evergreen/concerto/assets_concerto.sql	asset.call_number_prefix	0	3	0
+evergreen-sample.zip!01-evergreen/concerto/assets_concerto.sql	asset.call_number_suffix	0	3	0
+evergreen-sample.zip!01-evergreen/concerto/assets_concerto.sql	asset.copy	0	0	3
+evergreen-sample.zip!01-evergreen/concerto/assets_concerto.sql	asset.copy_part_map	0	0	1
+evergreen-sample.zip!01-evergreen/concerto/assets_concerto.sql	biblio.monograph_part	0	0	1
+evergreen-sample.zip!01-evergreen/concerto/assets_concerto.sql	biblio.peer_bib_copy_map	0	0	1
+evergreen-sample.zip!01-evergreen/concerto/assets_concerto.sql	biblio.peer_type	0	1	0
+evergreen-sample.zip!01-evergreen/concerto/bibs_maps.sql	marcxml_import	0	3	0
+evergreen-sample.zip!01-evergreen/concerto/bibs_concerto.sql	marcxml_import	0	100	0
+evergreen-sample.zip!01-evergreen/concerto/auth_concerto.sql	authority.record_entry	0	72	0
+evergreen-sample.zip!01-evergreen/concerto/assets_extras.sql	asset.copy_location	0	53	0
+evergreen-sample.zip!01-evergreen/concerto/assets_extras.sql	asset.copy_location_group	0	2	0
+evergreen-sample.zip!01-evergreen/concerto/assets_extras.sql	asset.copy_location_group_map	0	0	2
+evergreen-sample.zip!01-evergreen/concerto/bibs_fic.sql	marcxml_import	0	17	0
+evergreen-sample.zip!01-evergreen/concerto/users_patrons_100.sql	actor.card	0	108	0
+evergreen-sample.zip!01-evergreen/concerto/users_patrons_100.sql	actor.usr	0	108	0
+evergreen-sample.zip!01-evergreen/concerto/users_patrons_100.sql	actor.usr_address	0	108	0
+evergreen-sample.zip!01-evergreen/concerto/bibs_fre.sql	marcxml_import	0	100	0
+evergreen-sample.zip!01-evergreen/concerto/libraries.sql	actor.hours_of_operation	0	0	1
+evergreen-sample.zip!01-evergreen/concerto/libraries.sql	actor.org_lasso	0	2	0
+evergreen-sample.zip!01-evergreen/concerto/libraries.sql	actor.org_lasso_map	0	4	0
+evergreen-sample.zip!01-evergreen/concerto/libraries.sql	actor.org_unit	0	10	0
+evergreen-sample.zip!01-evergreen/concerto/libraries.sql	actor.org_unit_setting	0	4	0
+koha sql sample.gz	account_credit_types	1	11	0
+koha sql sample.gz	account_credit_types_branches	1	0	0
+koha sql sample.gz	account_debit_types	1	16	0
+koha sql sample.gz	account_debit_types_branches	1	0	0
+koha sql sample.gz	account_offsets	1	8325	0
+koha sql sample.gz	accountlines	1	4	0
+koha sql sample.gz	action_logs	1	33	0
+koha sql sample.gz	additional_contents	1	16	0
+koha sql sample.gz	additional_contents_localizations	1	16	0
+koha sql sample.gz	additional_field_values	1	0	0
+koha sql sample.gz	additional_fields	1	0	0
+koha sql sample.gz	advanced_editor_macros	1	0	0
+koha sql sample.gz	alert	1	0	0
+koha sql sample.gz	api_keys	1	0	0
+koha sql sample.gz	aqbasket	1	0	0
+koha sql sample.gz	aqbasketgroups	1	0	0
+koha sql sample.gz	aqbasketusers	1	0	0
+koha sql sample.gz	aqbookseller_aliases	1	0	0
+koha sql sample.gz	aqbookseller_interfaces	1	0	0
+koha sql sample.gz	aqbookseller_issues	1	0	0
+koha sql sample.gz	aqbooksellers	1	0	0
+koha sql sample.gz	aqbudgetborrowers	1	0	0
+koha sql sample.gz	aqbudgetperiods	1	0	0
+koha sql sample.gz	aqbudgets	1	0	0
+koha sql sample.gz	aqbudgets_planning	1	0	0
+koha sql sample.gz	aqcontacts	1	0	0
+koha sql sample.gz	aqcontract	1	0	0
+koha sql sample.gz	aqinvoice_adjustments	1	0	0
+koha sql sample.gz	aqinvoices	1	0	0
+koha sql sample.gz	aqorder_users	1	0	0
+koha sql sample.gz	aqorders	1	0	0
+koha sql sample.gz	aqorders_claims	1	0	0
+koha sql sample.gz	aqorders_items	1	0	0
+koha sql sample.gz	aqorders_transfers	1	0	0
+koha sql sample.gz	article_requests	1	0	0
+koha sql sample.gz	audio_alerts	1	3	0
+koha sql sample.gz	auth_header	1	1	0
+koha sql sample.gz	auth_subfield_structure	1	4812	0
+koha sql sample.gz	auth_tag_structure	1	403	0
+koha sql sample.gz	auth_types	1	3	0
+koha sql sample.gz	authorised_value_categories	1	81	0
+koha sql sample.gz	authorised_values	1	1644	0
+koha sql sample.gz	authorised_values_branches	1	0	0
+koha sql sample.gz	background_jobs	1	0	0
+koha sql sample.gz	biblio	1	18919	0
+koha sql sample.gz	biblio_framework	1	4	0
+koha sql sample.gz	biblio_metadata	1	18919	0
+koha sql sample.gz	biblio_metadata_errors	1	0	0
+koha sql sample.gz	biblioitems	1	18919	0
+koha sql sample.gz	bookings	1	0	0
+koha sql sample.gz	borrower_attribute_types	1	4	0
+koha sql sample.gz	borrower_attribute_types_branches	1	0	0
+koha sql sample.gz	borrower_attributes	1	0	0
+koha sql sample.gz	borrower_debarments	1	0	0
+koha sql sample.gz	borrower_files	1	0	0
+koha sql sample.gz	borrower_message_preferences	1	25	0
+koha sql sample.gz	borrower_message_transport_preferences	1	35511	0
+koha sql sample.gz	borrower_modifications	1	0	0
+koha sql sample.gz	borrower_password_recovery	1	0	0
+koha sql sample.gz	borrower_relationships	1	0	0
+koha sql sample.gz	borrowers	1	1	0
+koha sql sample.gz	branch_transfer_limits	1	0	0
+koha sql sample.gz	branches	1	1	0
+koha sql sample.gz	branches_overdrive	1	0	0
+koha sql sample.gz	branchtransfers	1	0	0
+koha sql sample.gz	browser	1	0	0
+koha sql sample.gz	cash_register_actions	1	0	0
+koha sql sample.gz	cash_registers	1	0	0
+koha sql sample.gz	categories	1	2	0
+koha sql sample.gz	categories_branches	1	0	0
+koha sql sample.gz	checkout_renewals	1	1411	0
+koha sql sample.gz	circulation_rules	1	42	0
+koha sql sample.gz	cities	1	7	0
+koha sql sample.gz	class_sort_rules	1	3	0
+koha sql sample.gz	class_sources	1	6	0
+koha sql sample.gz	class_split_rules	1	3	0
+koha sql sample.gz	club_enrollment_fields	1	0	0
+koha sql sample.gz	club_enrollments	1	0	0
+koha sql sample.gz	club_fields	1	0	0
+koha sql sample.gz	club_holds	1	0	0
+koha sql sample.gz	club_holds_to_patron_holds	1	0	0
+koha sql sample.gz	club_template_enrollment_fields	1	0	0
+koha sql sample.gz	club_template_fields	1	0	0
+koha sql sample.gz	club_templates	1	0	0
+koha sql sample.gz	clubs	1	0	0
+koha sql sample.gz	collections	1	0	0
+koha sql sample.gz	collections_tracking	1	0	0
+koha sql sample.gz	columns_settings	1	51	0
+koha sql sample.gz	course_instructors	1	0	0
+koha sql sample.gz	course_items	1	0	0
+koha sql sample.gz	course_reserves	1	0	0
+koha sql sample.gz	courses	1	0	0
+koha sql sample.gz	cover_images	1	2	0
+koha sql sample.gz	creator_batches	1	18546	0
+koha sql sample.gz	creator_images	1	2	0
+koha sql sample.gz	creator_layouts	1	7	0
+koha sql sample.gz	creator_templates	1	7	0
+koha sql sample.gz	curbside_pickup_issues	1	0	0
+koha sql sample.gz	curbside_pickup_opening_slots	1	0	0
+koha sql sample.gz	curbside_pickup_policy	1	0	0
+koha sql sample.gz	curbside_pickups	1	0	0
+koha sql sample.gz	currency	1	5	0
+koha sql sample.gz	deletedauth_header	1	2	0
+koha sql sample.gz	deletedbiblio	1	3660	0
+koha sql sample.gz	deletedbiblio_metadata	1	3660	0
+koha sql sample.gz	deletedbiblioitems	1	3660	0
+koha sql sample.gz	deletedborrowers	1	0	0
+koha sql sample.gz	deleteditems	1	1925	0
+koha sql sample.gz	desks	1	0	0
+koha sql sample.gz	discharges	1	0	0
+koha sql sample.gz	edifact_ean	1	0	0
+koha sql sample.gz	edifact_errors	1	0	0
+koha sql sample.gz	edifact_messages	1	0	0
+koha sql sample.gz	erm_agreement_licenses	1	0	0
+koha sql sample.gz	erm_agreement_periods	1	0	0
+koha sql sample.gz	erm_agreement_relationships	1	0	0
+koha sql sample.gz	erm_agreements	1	0	0
+koha sql sample.gz	erm_counter_files	1	0	0
+koha sql sample.gz	erm_counter_logs	1	0	0
+koha sql sample.gz	erm_default_usage_reports	1	0	0
+koha sql sample.gz	erm_documents	1	0	0
+koha sql sample.gz	erm_eholdings_packages	1	0	0
+koha sql sample.gz	erm_eholdings_packages_agreements	1	0	0
+koha sql sample.gz	erm_eholdings_resources	1	0	0
+koha sql sample.gz	erm_eholdings_titles	1	0	0
+koha sql sample.gz	erm_licenses	1	0	0
+koha sql sample.gz	erm_usage_data_providers	1	0	0
+koha sql sample.gz	erm_usage_databases	1	0	0
+koha sql sample.gz	erm_usage_items	1	0	0
+koha sql sample.gz	erm_usage_mus	1	0	0
+koha sql sample.gz	erm_usage_platforms	1	0	0
+koha sql sample.gz	erm_usage_titles	1	0	0
+koha sql sample.gz	erm_usage_yus	1	0	0
+koha sql sample.gz	erm_user_roles	1	0	0
+koha sql sample.gz	export_format	1	2	0
+koha sql sample.gz	file_transports	1	0	0
+koha sql sample.gz	hold_cancellation_requests	1	0	0
+koha sql sample.gz	hold_fill_targets	1	0	0
+koha sql sample.gz	hold_groups	1	0	0
+koha sql sample.gz	hold_groups_target_holds	1	0	0
+koha sql sample.gz	housebound_profile	1	0	0
+koha sql sample.gz	housebound_role	1	0	0
+koha sql sample.gz	housebound_visit	1	0	0
+koha sql sample.gz	identity_provider_domains	1	0	0
+koha sql sample.gz	identity_providers	1	0	0
+koha sql sample.gz	illbatch_statuses	1	4	0
+koha sql sample.gz	illbatches	1	0	0
+koha sql sample.gz	illcomments	1	0	0
+koha sql sample.gz	illrequestattributes	1	0	0
+koha sql sample.gz	illrequests	1	0	0
+koha sql sample.gz	import_auths	1	51	0
+koha sql sample.gz	import_batch_profiles	1	0	0
+koha sql sample.gz	import_batches	1	815	0
+koha sql sample.gz	import_biblios	1	12696	0
+koha sql sample.gz	import_items	1	0	0
+koha sql sample.gz	import_oai_authorities	1	0	0
+koha sql sample.gz	import_oai_biblios	1	0	0
+koha sql sample.gz	import_record_matches	1	0	0
+koha sql sample.gz	import_records	1	12747	0
+koha sql sample.gz	iso18626_messages	1	0	0
+koha sql sample.gz	iso18626_requesting_agencies	1	0	0
+koha sql sample.gz	iso18626_requests	1	0	0
+koha sql sample.gz	issues	1	0	0
+koha sql sample.gz	item_bundles	1	0	0
+koha sql sample.gz	item_circulation_alert_preferences	1	0	0
+koha sql sample.gz	item_editor_templates	1	0	0
+koha sql sample.gz	item_group_items	1	0	0
+koha sql sample.gz	item_groups	1	0	0
+koha sql sample.gz	items	1	30034	0
+koha sql sample.gz	items_last_borrower	1	0	0
+koha sql sample.gz	items_search_fields	1	0	0
+koha sql sample.gz	itemtypes	1	8	0
+koha sql sample.gz	itemtypes_branches	1	0	0
+koha sql sample.gz	keyboard_shortcuts	1	17	0
+koha sql sample.gz	koha_nexus_legacy_z3950	1	1	0
+koha sql sample.gz	language_descriptions	1	1215	0
+koha sql sample.gz	language_rfc4646_to_iso639	1	410	0
+koha sql sample.gz	language_script_bidi	1	2	0
+koha sql sample.gz	language_script_mapping	1	3	0
+koha sql sample.gz	language_subtag_registry	1	473	0
+koha sql sample.gz	letter	1	112	0
+koha sql sample.gz	library_float_limits	1	0	0
+koha sql sample.gz	library_groups	1	0	0
+koha sql sample.gz	library_hours	1	7	0
+koha sql sample.gz	library_smtp_servers	1	1	0
+koha sql sample.gz	linktracker	1	0	0
+koha sql sample.gz	localization	1	0	0
+koha sql sample.gz	marc_matchers	1	5	0
+koha sql sample.gz	marc_modification_template_actions	1	5	0
+koha sql sample.gz	marc_modification_templates	1	4	0
+koha sql sample.gz	marc_order_accounts	1	0	0
+koha sql sample.gz	marc_overlay_rules	1	0	0
+koha sql sample.gz	marc_subfield_structure	1	13540	0
+koha sql sample.gz	marc_tag_structure	1	1097	0
+koha sql sample.gz	matchchecks	1	2	0
+koha sql sample.gz	matcher_matchpoints	1	5	0
+koha sql sample.gz	matchpoint_component_norms	1	9	0
+koha sql sample.gz	matchpoint_components	1	9	0
+koha sql sample.gz	matchpoints	1	9	0
+koha sql sample.gz	message_attributes	1	13	0
+koha sql sample.gz	message_queue	1	0	0
+koha sql sample.gz	message_transport_types	1	5	0
+koha sql sample.gz	message_transports	1	55	0
+koha sql sample.gz	messages	1	0	0
+koha sql sample.gz	misc_files	1	0	0
+koha sql sample.gz	need_merge_authorities	1	0	0
+koha sql sample.gz	oai_servers	1	0	0
+koha sql sample.gz	oai_sets	1	0	0
+koha sql sample.gz	oai_sets_biblios	1	0	0
+koha sql sample.gz	oai_sets_descriptions	1	0	0
+koha sql sample.gz	oai_sets_mappings	1	0	0
+koha sql sample.gz	oauth_access_tokens	1	0	0
+koha sql sample.gz	old_issues	1	10	0
+koha sql sample.gz	old_reserves	1	9	0
+koha sql sample.gz	overduerules	1	4	0
+koha sql sample.gz	overduerules_transport_types	1	11	0
+koha sql sample.gz	patron_consent	1	0	0
+koha sql sample.gz	patron_list_patrons	1	0	0
+koha sql sample.gz	patron_lists	1	0	0
+koha sql sample.gz	patronimage	1	0	0
+koha sql sample.gz	pending_offline_operations	1	0	0
+koha sql sample.gz	permissions	1	176	0
+koha sql sample.gz	plugin_data	1	0	0
+koha sql sample.gz	plugin_methods	1	0	0
+koha sql sample.gz	preservation_processing_attributes	1	0	0
+koha sql sample.gz	preservation_processing_attributes_items	1	0	0
+koha sql sample.gz	preservation_processings	1	0	0
+koha sql sample.gz	preservation_trains	1	0	0
+koha sql sample.gz	preservation_trains_items	1	0	0
+koha sql sample.gz	printers_profile	1	0	0
+koha sql sample.gz	problem_reports	1	0	0
+koha sql sample.gz	pseudonymized_metadata_values	1	0	0
+koha sql sample.gz	pseudonymized_transactions	1	0	0
+koha sql sample.gz	quotes	1	0	0
+koha sql sample.gz	ratings	1	0	0
+koha sql sample.gz	recalls	1	0	0
+koha sql sample.gz	record_sources	1	6	0
+koha sql sample.gz	repeatable_holidays	1	19	0
+koha sql sample.gz	reports_dictionary	1	0	0
+koha sql sample.gz	reserves	1	0	0
+koha sql sample.gz	restriction_types	1	6	0
+koha sql sample.gz	return_claims	1	0	0
+koha sql sample.gz	reviews	1	0	0
+koha sql sample.gz	saved_reports	1	0	0
+koha sql sample.gz	saved_sql	1	28	0
+koha sql sample.gz	search_field	1	178	0
+koha sql sample.gz	search_filters	1	0	0
+koha sql sample.gz	search_history	1	0	0
+koha sql sample.gz	search_marc_map	1	508	0
+koha sql sample.gz	search_marc_to_field	1	637	0
+koha sql sample.gz	serial	1	0	0
+koha sql sample.gz	serialitems	1	0	0
+koha sql sample.gz	sessions	1	1911	0
+koha sql sample.gz	sip_account_custom_item_fields	1	0	0
+koha sql sample.gz	sip_account_custom_patron_fields	1	0	0
+koha sql sample.gz	sip_account_item_fields	1	0	0
+koha sql sample.gz	sip_account_patron_attributes	1	0	0
+koha sql sample.gz	sip_account_screen_msg_regexs	1	0	0
+koha sql sample.gz	sip_account_sort_bin_mappings	1	0	0
+koha sql sample.gz	sip_account_system_preference_overrides	1	0	0
+koha sql sample.gz	sip_accounts	1	0	0
+koha sql sample.gz	sip_institutions	1	0	0
+koha sql sample.gz	sip_system_preference_overrides	1	0	0
+koha sql sample.gz	sms_providers	1	0	0
+koha sql sample.gz	smtp_servers	1	1	0
+koha sql sample.gz	social_data	1	0	0
+koha sql sample.gz	special_holidays	1	11	0
+koha sql sample.gz	statistics	1	29	0
+koha sql sample.gz	stockrotationitems	1	0	0
+koha sql sample.gz	stockrotationrotas	1	0	0
+koha sql sample.gz	stockrotationstages	1	0	0
+koha sql sample.gz	subscription	1	0	0
+koha sql sample.gz	subscription_frequencies	1	13	0
+koha sql sample.gz	subscription_numberpatterns	1	4	0
+koha sql sample.gz	subscriptionhistory	1	0	0
+koha sql sample.gz	subscriptionroutinglist	1	0	0
+koha sql sample.gz	suggestions	1	0	0
+koha sql sample.gz	systempreferences	1	918	0
+koha sql sample.gz	tables_settings	1	4	0
+koha sql sample.gz	tags	1	0	0
+koha sql sample.gz	tags_all	1	0	0
+koha sql sample.gz	tags_approval	1	0	0
+koha sql sample.gz	tags_index	1	0	0
+koha sql sample.gz	ticket_updates	1	0	0
+koha sql sample.gz	tickets	1	0	0
+koha sql sample.gz	tmp_holdsqueue	1	0	0
+koha sql sample.gz	transport_cost	1	0	0
+koha sql sample.gz	uploaded_files	1	646	0
+koha sql sample.gz	user_permissions	1	0	0
+koha sql sample.gz	userflags	1	31	0
+koha sql sample.gz	vendor_edi_accounts	1	0	0
+koha sql sample.gz	virtualshelfcontents	1	1	0
+koha sql sample.gz	virtualshelfshares	1	0	0
+koha sql sample.gz	virtualshelves	1	0	0
+koha sql sample.gz	z3950servers	1	116	0
+koha sql sample.gz	z3950servers_branches	1	0	0
+koha sql sample.gz	zebraqueue	1	780	0

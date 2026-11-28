@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<collection xmlns="http://www.loc.gov/MARC21/slim">
+  <record>
+    <leader>00000nz  a2200000n  4500</leader>
+    <controlfield tag="001">A1</controlfield><controlfield tag="003">example</controlfield>
+    <datafield tag="100" ind1="1" ind2=" "><subfield code="a">Nome de teste</subfield><subfield code="d">1900-1950</subfield></datafield>
+    <datafield tag="400" ind1="1" ind2=" "><subfield code="a">Variante de teste</subfield></datafield>
+    <datafield tag="500" ind1="1" ind2=" "><subfield code="a">Nome de teste</subfield><subfield code="0">(example)A2</subfield></datafield>
+    <datafield tag="670" ind1=" " ind2=" "><subfield code="a">Fonte sintética</subfield></datafield>
+  </record>
+  <record>
+    <leader>00000nz  a2200000n  4500</leader>
+    <controlfield tag="001">A2</controlfield><controlfield tag="003">example</controlfield>
+    <datafield tag="100" ind1="1" ind2=" "><subfield code="a">Nome de teste</subfield><subfield code="d">1960-</subfield><subfield code="1">https://example.invalid/agent/A2</subfield></datafield>
+    <datafield tag="500" ind1="1" ind2=" "><subfield code="a">Nome de teste</subfield><subfield code="0">(example)A1</subfield></datafield>
+  </record>
+</collection>

@@ -175,3 +175,23 @@ fn an_iso_conversion_refusal_is_reported_before_the_next_xml_record() {
         1
     );
 }
+
+#[test]
+fn standalone_authorities_never_create_bibliographic_records() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = open(&directory);
+    let before = store.digest().unwrap();
+    let source = include_bytes!("data/import-v4/authorities.xml");
+    let result = import_marcxml(&source[..], &store, &ImportOptions::default());
+    assert!(matches!(
+        result,
+        Err(elzevir_app::import::ImportError::Xml(
+            elzevir_marc::MarcXmlError {
+                index: 0,
+                problem: elzevir_marc::XmlProblem::Forbidden("authority record"),
+                ..
+            }
+        ))
+    ));
+    assert_eq!(store.digest().unwrap(), before);
+}
