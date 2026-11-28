@@ -1604,3 +1604,11 @@ checkin-lost-refunded = The replacement charge was refunded: { $amount }.
 checkin-processing-refunded = The processing fee was refunded: { $amount }.
 checkin-lost-fine-restored = The overdue fine stopped by the loss counts again.
 checkin-lost-fine-charged = The overdue fine up to today was charged: { $amount }.
+
+import-postgres-file = PostgreSQL text dump
+import-postgres-inventory = Inspect PostgreSQL tables
+import-pg-table = Source table
+import-pg-columns = COPY columns
+import-pg-rows = Rows
+import-pg-nulls = Null fields
+import-pg-empty = Empty fields

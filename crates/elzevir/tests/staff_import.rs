@@ -89,6 +89,9 @@ fn account(data: &Path) -> elzevir_app::staff::StaffId {
     let mut users = Vec::new();
     for (login, can_catalogue) in [("ana", true), ("bia", true), ("leo", false)] {
         let mut permissions = std::collections::BTreeSet::from([Permission::StaffInterface]);
+        if login == "bia" {
+            permissions.extend([Permission::Patrons, Permission::Circulation]);
+        }
         if can_catalogue {
             permissions.insert(Permission::Cataloguing);
         }
@@ -194,6 +197,17 @@ fn snapshot(response: &str, token: &str, id: &str, name: &str, expected: &str) {
 }
 
 fn upload(address: SocketAddr, cookie: &str, token: &str, marc: &str, duplicate: bool) -> String {
+    upload_to(address, cookie, token, marc, duplicate, IMPORT)
+}
+
+fn upload_to(
+    address: SocketAddr,
+    cookie: &str,
+    token: &str,
+    marc: &str,
+    duplicate: bool,
+    route: &str,
+) -> String {
     let headers = format!(
         "Cookie: {cookie}\r\nContent-Type: multipart/form-data; boundary=elzevir-test-boundary\r\n",
     );
@@ -203,7 +217,7 @@ fn upload(address: SocketAddr, cookie: &str, token: &str, marc: &str, duplicate:
     request(
         address,
         "POST",
-        IMPORT,
+        route,
         &headers,
         &format!(
             "--elzevir-test-boundary\r\nContent-Disposition: form-data; name=\"csrf\"\r\n\r\n{token}\r\n{part}{}--elzevir-test-boundary--\r\n",
@@ -643,4 +657,79 @@ fn staff_can_select_native_registries_and_confirm_the_biblivre_profile() {
             .join("\n")
     );
     assert_status(&post("confirmar", 2, ""), 303);
+}
+
+#[test]
+fn postgres_inventory_agrees_with_cli_and_cannot_confirm_a_stale_report() {
+    let file = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../samples-import-tool/BKP_BIBLIOTECA (2).backup");
+    let output = Command::new(env!("CARGO_BIN_EXE_elzevir"))
+        .args(["import", "inventory"])
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let tables: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(tables["public.acervo"]["rows"], 11561);
+    assert_eq!(tables["public.ocorrencias"]["rows"], 5);
+
+    let data = tempfile::tempdir().unwrap();
+    account(data.path());
+    let (server, address) = start(data.path());
+    let route = "/equipe/acervo/importar/inventario/postgresql";
+    let log_in = |login| {
+        let cookie = sign_in(address, login);
+        let page = request(address, "GET", IMPORT, &format!("Cookie: {cookie}\r\n"), "");
+        let token = csrf(&page).to_owned();
+        (cookie, token, page)
+    };
+    let (ana, ana_token, home) = log_in("ana");
+    assert!(!home.contains(route));
+    assert_status(&upload_to(address, &ana, &ana_token, "", false, route), 403);
+    let (bia, token, home) = log_in("bia");
+    assert!(home.contains(route));
+    assert_status(&upload_to(address, &bia, "stale", "", false, route), 403);
+    let page = upload_to(
+        address,
+        &bia,
+        &token,
+        &std::fs::read_to_string(file).unwrap(),
+        false,
+        route,
+    );
+    assert_status(&page, 200);
+    assert_eq!(header(&page, "cache-control"), "no-store");
+    for (name, table) in tables.as_object().unwrap() {
+        let columns = table["columns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| s.as_str().unwrap())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let (rows, nulls, empty) = (&table["rows"], &table["nulls"], &table["empty"]);
+        assert!(page.contains(&format!(
+            ">{name}</th><td>{columns}</td><td>{rows}</td><td>{nulls}</td><td>{empty}</td>"
+        )));
+    }
+    assert!(!page.contains("/confirmar"));
+    let refused = upload_to(
+        address,
+        &bia,
+        &token,
+        "COPY t (a) FROM stdin;\nprivate value\n",
+        false,
+        route,
+    );
+    assert_status(&refused, 422);
+    assert!(!refused.contains("private value"));
+    let stale = form(
+        address,
+        &format!("{IMPORT}/inventario/confirmar"),
+        &bia,
+        &format!("csrf={token}&revision=1"),
+    );
+    assert_status(&stale, 404);
+    drop(server);
+    assert!(records(data.path()).is_empty());
 }

@@ -35,6 +35,8 @@ struct Owner {
 
 #[derive(Subcommand)]
 enum Step {
+    /// Inventory a textual `PostgreSQL` COPY dump locally and print aggregate counts as JSON.
+    Inventory { file: PathBuf },
     /// Capture the original file into a new private batch.
     Stage {
         #[command(flatten)]
@@ -90,6 +92,13 @@ pub(crate) fn run(args: ImportCommand) -> Result<(), String> {
 
 fn run_step(step: Step) -> Result<(), String> {
     let (owner, command) = match step {
+        Step::Inventory { file } => {
+            let reader = std::io::BufReader::new(open_path(&file)?);
+            let tables = elzevir_app::import::postgres::inventory(reader)
+                .map_err(|error| error.to_string())?;
+            return serde_json::to_writer_pretty(std::io::stdout().lock(), &tables)
+                .map_err(|error| error.to_string());
+        }
         Step::Stage {
             owner,
             file,

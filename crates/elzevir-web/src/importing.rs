@@ -146,6 +146,11 @@ fn prefers_portuguese(headers: &HeaderMap) -> bool {
 }
 
 impl ImportSession {
+    fn can_inventory_dump(&self) -> bool {
+        self.active.identity.can(Permission::Patrons)
+            && self.active.identity.can(Permission::Circulation)
+    }
+
     fn translations<'a>(&'a self, state: &'a AppState) -> &'a I18n {
         if self.pt {
             &self.imports.portuguese
@@ -248,6 +253,10 @@ pub(crate) fn routes() -> Router<AppState> {
             ROOT,
             get(home).merge(post(upload).layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES))),
         )
+        .route(
+            "/equipe/acervo/importar/inventario/postgresql",
+            post(postgres_inventory).layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES)),
+        )
         .route("/equipe/acervo/importar/{id}", get(batch))
         .route("/equipe/acervo/importar/modelo/{format}", get(model))
         .route("/equipe/acervo/importar/{id}/resultado", get(result))
@@ -291,6 +300,7 @@ async fn home(
                     } else {
                         ImportUpload::Auto
                     },
+                    session.can_inventory_dump(),
                 ),
                 StatusCode::OK,
                 None,
@@ -351,26 +361,81 @@ async fn upload(
     if field.name() != Some("file") || field.file_name().is_none() {
         return invalid();
     }
-    let (send, receive) = mpsc::channel(2);
-    let job = session.start(BatchCommand::Stage(
-        Box::new(UploadReader {
-            receive,
-            chunk: Bytes::new(),
-            ended: false,
-        }),
-        selected,
-    ));
-    if transfer(field, &send).await.is_ok() && matches!(form.next_field().await, Ok(None)) {
-        // The reader may have rejected the batch already. Its reply is authoritative.
-        drop(send.send(None).await);
-    }
-    drop(send);
+    let (send, reader) = UploadReader::channel();
+    let job = session.start(BatchCommand::Stage(Box::new(reader), selected));
+    let transferred = transfer(field, &send).await;
+    finish_upload(transferred, &mut form, send).await;
     match join(job).await {
         Ok(BatchReply::Batch(view)) => {
             Redirect::to(&format!("{ROOT}/{}", view.batch.id)).into_response()
         }
         Err(error) => session.failure(&state, error),
         Ok(_) => session.error(
+            &state,
+            StatusCode::SERVICE_UNAVAILABLE,
+            "import-unavailable",
+            None,
+        ),
+    }
+}
+
+async fn postgres_inventory(
+    State(state): State<AppState>,
+    session: ImportSession,
+    mut form: Multipart,
+) -> Response {
+    if !session.can_inventory_dump() || !upload_token(&mut form, &session.active.csrf).await {
+        return session.error(&state, StatusCode::FORBIDDEN, "import-forbidden", None);
+    }
+    let Ok(Some(field)) = form.next_field().await else {
+        return session.error(
+            &state,
+            StatusCode::BAD_REQUEST,
+            "import-upload-invalid",
+            None,
+        );
+    };
+    if field.name() != Some("file") || field.file_name().is_none() {
+        return session.error(
+            &state,
+            StatusCode::BAD_REQUEST,
+            "import-upload-invalid",
+            None,
+        );
+    }
+    let (send, reader) = UploadReader::channel();
+    let job = tokio::task::spawn_blocking(move || {
+        elzevir_app::import::postgres::inventory(io::BufReader::new(reader))
+    });
+    let transferred = transfer(field, &send).await;
+    finish_upload(transferred, &mut form, send).await;
+    match job.await {
+        Ok(Ok(tables)) => {
+            let rows = tables
+                .into_iter()
+                .map(|(name, table)| elzevir_web_templates::PostgresTable {
+                    name,
+                    columns: table.columns.join(", "),
+                    rows: table.rows,
+                    nulls: table.nulls,
+                    empty: table.empty,
+                })
+                .collect();
+            session.page(
+                &state,
+                ImportView::Postgres(rows),
+                StatusCode::OK,
+                None,
+                None,
+            )
+        }
+        Ok(Err(error)) => session.error(
+            &state,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "import-invalid",
+            Some(ImportDetail::Technical(error.to_string())),
+        ),
+        Err(_) => session.error(
             &state,
             StatusCode::SERVICE_UNAVAILABLE,
             "import-unavailable",
@@ -414,10 +479,36 @@ async fn transfer(
     Ok(())
 }
 
+// Only a complete final file part produces a clean EOF in the blocking reader.
+async fn finish_upload(
+    transferred: Result<(), ()>,
+    form: &mut Multipart,
+    send: mpsc::Sender<Option<Bytes>>,
+) {
+    if transferred.is_ok() && matches!(form.next_field().await, Ok(None)) {
+        // A reader that already refused the file has closed its channel.
+        drop(send.send(None).await);
+    }
+}
+
 struct UploadReader {
     receive: mpsc::Receiver<Option<Bytes>>,
     chunk: Bytes,
     ended: bool,
+}
+
+impl UploadReader {
+    fn channel() -> (mpsc::Sender<Option<Bytes>>, Self) {
+        let (send, receive) = mpsc::channel(2);
+        (
+            send,
+            Self {
+                receive,
+                chunk: Bytes::new(),
+                ended: false,
+            },
+        )
+    }
 }
 
 impl Read for UploadReader {

@@ -20,7 +20,7 @@
   {% if let Some(key) = notice %}<p role="alert">{{ t.get(key) }}</p>{% endif %}
   {% match detail %}{% when Some(ImportDetail::Explained(text)) %}<p role="alert">{{ text }}</p>{% when Some(ImportDetail::Technical(text)) %}<details><summary>{{ t.get("import-details") }}</summary><pre>{{ text }}</pre></details>{% when None %}{% endmatch %}
   {% match view %}
-  {% when ImportView::Home with (batches, receipts, format) %}{% if format.value() == "table" %}
+  {% when ImportView::Home with (batches, receipts, format, can_inventory) %}{% if format.value() == "table" %}
     <p><a href="/equipe/acervo/importar/modelo/csv">{{ t.get("import-model-csv") }}</a> · <a href="/equipe/acervo/importar/modelo/tsv">{{ t.get("import-model-tsv") }}</a></p>{% endif %}
     <form action="/equipe/acervo/importar" method="post" enctype="multipart/form-data"
           hx-post="/equipe/acervo/importar" hx-encoding="multipart/form-data" hx-select="#import-workspace"
@@ -33,7 +33,12 @@
       <button type="submit">{{ t.get("import-upload") }}</button>
       <progress max="100" value="0" aria-label="{{ t.get("import-progress") }}" hidden></progress>
     </form>
-    {% if !batches.is_empty() %}
+    {% if can_inventory %}<form action="/equipe/acervo/importar/inventario/postgresql" method="post" enctype="multipart/form-data">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label for="postgres-file">{{ t.get("import-postgres-file") }}</label>
+      <input type="file" name="file" id="postgres-file" required>
+      <button type="submit">{{ t.get("import-postgres-inventory") }}</button>
+    </form>{% endif %}{% if !batches.is_empty() %}
     <h2>{{ t.get("import-drafts") }}</h2>
     <ul>{% for batch in batches %}
       <li><a href="/equipe/acervo/importar/{{ batch.id }}">{{ batch.label }} · {{ batch.id }}</a></li>
@@ -45,6 +50,11 @@
       <li><a href="/equipe/acervo/importar/{{ id }}/resultado">{{ t.get("import-result") }} · {{ id }}</a></li>
     {% endfor %}</ul>
     {% endif %}
+  {% when ImportView::Postgres with (tables) %}
+    <table><caption>{{ t.get("import-postgres-inventory") }}</caption>
+      <thead><tr><th>{{ t.get("import-pg-table") }}</th><th>{{ t.get("import-pg-columns") }}</th><th>{{ t.get("import-pg-rows") }}</th><th>{{ t.get("import-pg-nulls") }}</th><th>{{ t.get("import-pg-empty") }}</th></tr></thead>
+      <tbody>{% for table in tables %}<tr><th scope="row">{{ table.name }}</th><td>{{ table.columns }}</td><td>{{ table.rows }}</td><td>{{ table.nulls }}</td><td>{{ table.empty }}</td></tr>{% endfor %}</tbody>
+    </table><a href="/equipe/acervo/importar">{{ t.get("import-drafts-back") }}</a>
   {% when ImportView::Draft with (draft) %}
     <p><a href="/equipe/acervo/importar">{{ t.get("import-drafts-back") }}</a></p>
     <p>{{ draft.link.label }} · {{ t.get("import-revision") }} {{ draft.revision }}</p>

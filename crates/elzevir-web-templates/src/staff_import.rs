@@ -32,13 +32,29 @@ pub enum ImportDetail {
 /// Contents of the import workspace.
 pub enum ImportView {
     /// Upload and list of the operator's drafts.
-    Home(Vec<ImportBatchLink>, Vec<String>, ImportUpload),
+    Home(Vec<ImportBatchLink>, Vec<String>, ImportUpload, bool),
+    /// Structural counts for a private `PostgreSQL` upload.
+    Postgres(Vec<PostgresTable>),
     /// A draft or review page.
     Draft(Box<ImportDraft>),
     /// The writer's outcome.
     Result(ImportReceipt),
     /// A refusal without a batch view.
     Error,
+}
+
+/// Displayable source metadata and aggregate counts.
+pub struct PostgresTable {
+    /// Qualified source table.
+    pub name: String,
+    /// COPY columns in source order.
+    pub columns: String,
+    /// Number of complete rows.
+    pub rows: u64,
+    /// Number of null fields.
+    pub nulls: u64,
+    /// Number of empty fields.
+    pub empty: u64,
 }
 
 /// Source initially selected in the upload form.

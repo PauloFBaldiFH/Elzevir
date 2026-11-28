@@ -1195,3 +1195,11 @@ checkin-lost-refunded = A cobrança da reposição foi devolvida: { $amount }.
 checkin-processing-refunded = A taxa de processamento foi devolvida: { $amount }.
 checkin-lost-fine-restored = A multa interrompida pela perda volta a valer.
 checkin-lost-fine-charged = A multa até hoje foi cobrada: { $amount }.
+
+import-postgres-file = Dump textual do PostgreSQL
+import-postgres-inventory = Inventariar tabelas PostgreSQL
+import-pg-table = Tabela de origem
+import-pg-columns = Colunas do COPY
+import-pg-rows = Linhas
+import-pg-nulls = Campos nulos
+import-pg-empty = Campos vazios
