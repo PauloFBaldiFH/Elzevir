@@ -82,7 +82,8 @@ pub use staff_circulation_rules::{
 pub use staff_import::{
     BiblivreForm, ImportBatchLink, ImportChoice, ImportColumn, ImportColumns, ImportDetail,
     ImportDraft, ImportMatching, ImportPage, ImportPreview, ImportReceipt, ImportRule,
-    ImportSample, ImportUpload, ImportView, PostgresTable, RecordBlocks, SourceMemberRow,
+    ImportSample, ImportUpload, ImportView, PostgresTable, RecordBlocks, RelationView,
+    RelationsView, SourceMemberRow,
 };
 pub use staff_inventory::{
     InventoryChoice, InventoryForm, InventoryRow, InventoryView, StaffInventory,

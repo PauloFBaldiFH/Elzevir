@@ -81,7 +81,7 @@ pub(super) fn stamp(set: &SourceSet) -> Result<String, String> {
     Ok(format!("{:x}", Sha256::digest(json)))
 }
 
-pub(super) fn verify(set: &SourceSet, mut original: std::fs::File) -> Result<(), String> {
+pub(super) fn verify(set: &SourceSet, mut original: impl Read) -> Result<(), String> {
     let mut offset = 0;
     for member in &set.members {
         let mut hashed = HashInput::new((&mut original).take(member.bytes));

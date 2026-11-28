@@ -62,6 +62,21 @@ pub struct SourceMember {
     pub duplicate_of: Option<usize>,
 }
 
+/// Reproducible evidence from a specific source set and revision.
+#[derive(Serialize)]
+pub struct RelationPreview {
+    /// Private batch ID.
+    pub batch: String,
+    /// Reviewed immutable revision.
+    pub revision: u64,
+    /// Digest binding origin, original names and ordered member digests.
+    pub manifest_sha256: String,
+    /// Inventory needed to interpret every row/byte location.
+    pub sources: SourceSet,
+    /// Results of the exact joins.
+    pub report: super::relations::Report,
+}
+
 /// Durable state of a private batch.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -200,6 +215,8 @@ pub enum BatchCommand {
     StageSet(String, SourceInputs),
     /// Create a separate source set from one-based positions in a reviewed inventory.
     ArchiveSet(String, u64, String, Vec<usize>),
+    /// Evaluate private source links from a profile or explicit recipe, starting at a child line.
+    Relations(String, u64, super::relations::Selection, u64),
     /// Read a batch and optionally show a page of its preview.
     View(String, Option<u64>),
     /// Replace the recipe if the revision is current.
@@ -214,6 +231,8 @@ pub enum BatchCommand {
 
 /// Result of the requested operation.
 pub enum BatchReply {
+    /// Read-only relation evidence.
+    Relations(Box<RelationPreview>),
     /// Visible batch summaries.
     List(Vec<BatchSummary>),
     /// The prepared revision, possibly including a preview.

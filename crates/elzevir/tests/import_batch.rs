@@ -1160,3 +1160,115 @@ fn source_set_cornell_inventory_keeps_origins_separate() {
     }
     assert!(!data.join("elzevir.db").exists());
 }
+
+#[test]
+fn relations_preview_reconstructs_the_cornell_hierarchy() {
+    let dir = tempfile::tempdir().unwrap();
+    let samples = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../samples-import-tool/02-folio/datasets/cornell");
+    let staged = success(
+        command(dir.path(), "1", "stage-set")
+            .args(["--origin", "cornell"])
+            .args(
+                [
+                    ("items.tsv", "a"),
+                    ("instances.tsv", "b"),
+                    ("recordholdings.tsv", "c"),
+                ]
+                .map(|(name, alias)| {
+                    let path = dir.path().join(alias);
+                    fs::copy(samples.join(name), &path).unwrap();
+                    path
+                }),
+            )
+            .output()
+            .unwrap(),
+    );
+    let id = staged.split_whitespace().nth(1).unwrap();
+    let preview = success(run(
+        dir.path(),
+        &[
+            "relations",
+            id,
+            "1",
+            "--profile",
+            "folio-v1",
+            "--from",
+            "100",
+        ],
+    ));
+    let report: serde_json::Value = serde_json::from_str(&preview).unwrap();
+    assert_eq!(report["report"]["edges"][0]["counts"]["resolved"], 107);
+    assert_eq!(report["report"]["edges"][1]["counts"]["resolved"], 536);
+    let row = &report["report"]["edges"][1]["page"][0];
+    assert_eq!(row["row"], serde_json::json!({"line":100,"offset":54_370}));
+    assert_eq!(
+        row["parents"][0],
+        serde_json::json!({"line":5,"offset":1044})
+    );
+    assert_eq!(
+        row["ancestors"][0]["target"],
+        serde_json::json!({"line":2,"offset":1298})
+    );
+    assert_eq!(row["trace_end"], "root");
+    assert_eq!(report["sources"]["members"][0]["name"], "a");
+    let plan = dir.path().join("mapping.json");
+    fs::write(
+        &plan,
+        serde_json::to_vec(&report["report"]["plan"]).unwrap(),
+    )
+    .unwrap();
+    let explicit = success(
+        command(dir.path(), "1", "relations")
+            .args([id, "1", "--from", "100", "--plan"])
+            .arg(&plan)
+            .output()
+            .unwrap(),
+    );
+    let explicit: serde_json::Value = serde_json::from_str(&explicit).unwrap();
+    assert_eq!(report["report"]["edges"], explicit["report"]["edges"]);
+    refusal(
+        &run(dir.path(), &["relations", id, "2", "--profile", "folio-v1"]),
+        "stale batch revision",
+    );
+    fs::write(
+        dir.path().join("imports").join(id).join("original"),
+        b"changed",
+    )
+    .unwrap();
+    refusal(
+        &run(dir.path(), &["relations", id, "1", "--profile", "folio-v1"]),
+        "source identity changed",
+    );
+    assert!(!dir.path().join("elzevir.db").exists());
+}
+
+#[test]
+fn relations_preview_handles_5k_holdings_without_creating_items() {
+    let dir = tempfile::tempdir().unwrap();
+    let samples = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../samples-import-tool/02-folio/datasets/5kItems");
+    let staged = success(
+        command(dir.path(), "1", "stage-set")
+            .args(["--origin", "5k"])
+            .args(["instances.tsv", "recordholdings.tsv"].map(|file| samples.join(file)))
+            .output()
+            .unwrap(),
+    );
+    let batch = staged.split_whitespace().nth(1).unwrap();
+    let report = success(run(
+        dir.path(),
+        &["relations", batch, "1", "--profile", "folio-v1"],
+    ));
+    let preview: serde_json::Value = serde_json::from_str(&report).unwrap();
+    let r = &preview["report"];
+    assert_eq!(r["identities"][0]["counts"]["resolved"], 47_745);
+    assert_eq!(r["identities"][1]["counts"]["resolved"], 49_580);
+    assert_eq!(
+        r["edges"][0]["counts"],
+        serde_json::json!({"resolved":49_580})
+    );
+    assert_eq!(r["edges"][1]["counts"], serde_json::json!({}));
+    assert!(r["plan"]["datasets"][2]["member"].is_null());
+    assert!(!dir.path().join("elzevir.db").exists());
+}

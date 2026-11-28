@@ -35,6 +35,8 @@ pub enum ImportView {
     Home(Vec<ImportBatchLink>, Vec<String>, ImportUpload, bool),
     /// Scoped member identities in a private batch.
     Sources(String, u64, String, Option<String>, Vec<SourceMemberRow>),
+    /// Private relation preview and inspectable evidence.
+    Relations(Box<RelationsView>),
     /// Structural counts for a private `PostgreSQL` upload.
     Postgres(Vec<PostgresTable>),
     /// A draft or review page.
@@ -43,6 +45,38 @@ pub enum ImportView {
     Result(ImportReceipt),
     /// A refusal without a batch view.
     Error,
+}
+
+/// Source roles, counts and exact coordinates for a relation review.
+pub struct RelationsView {
+    /// Batch ID for review and navigation.
+    pub batch: String,
+    /// Stable installation namespace.
+    pub origin: String,
+    /// Method that supplied the recipe.
+    pub evidence: String,
+    /// Dataset labels, member positions and row counts.
+    pub datasets: Vec<(String, Option<usize>, u64)>,
+    /// Directed joins in execution order.
+    pub edges: Vec<RelationView>,
+    /// Complete private evidence with field paths, digest and record positions.
+    pub json: String,
+}
+
+/// Summary of one directed join.
+pub struct RelationView {
+    /// Child fields and parent fields used for equality.
+    pub binding: String,
+    /// Localized expected cardinality.
+    pub cardinality: String,
+    /// Outcome and complete count.
+    pub counts: Vec<(String, u64)>,
+    /// Child coordinate, decision, parent coordinates and ancestor chain on this page.
+    pub page: Vec<(String, String, String, String)>,
+    /// Resolved target count and maximum incoming degree.
+    pub parents: usize,
+    /// Maximum observed resolved children per target.
+    pub max_children: u32,
 }
 
 /// Source identity and size shown to a permitted operator.

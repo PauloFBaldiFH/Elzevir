@@ -872,3 +872,60 @@ fn staff_groups_archive_members_in_the_order_selected() {
     assert!(inventory.contains("88f7c89842e444e8680e185cc27ab1236eb531fa9b5a501f9af1b65768a6daea"));
     assert!(!inventory.contains("/confirmar"));
 }
+
+#[test]
+fn staff_private_relation_review_checks_permission_revision_and_source_bytes() {
+    let dir = tempfile::tempdir().unwrap();
+    account(dir.path());
+    let samples = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../samples-import-tool/02-folio/datasets/cornell");
+    let staged = Command::new(env!("CARGO_BIN_EXE_elzevir"))
+        .args(["import", "stage-set", "--operator", "2", "--data-dir"])
+        .arg(dir.path())
+        .args(["--origin", "cornell"])
+        .args(["items.tsv", "instances.tsv", "recordholdings.tsv"].map(|name| samples.join(name)))
+        .output()
+        .unwrap();
+    assert!(staged.status.success());
+    let output = String::from_utf8(staged.stdout).unwrap();
+    let id = output.split_whitespace().nth(1).unwrap();
+    let (_server, address) = start(dir.path());
+    let bia = sign_in(address, "bia");
+    let ana = sign_in(address, "ana");
+    let get = |cookie: &str, url: &str| {
+        request(address, "GET", url, &format!("Cookie: {cookie}\r\n"), "")
+    };
+    let url = format!("{IMPORT}/{id}");
+    let route = format!("{url}/relacoes");
+    let batch = get(&bia, &url);
+    assert!(batch.contains(&route));
+    let token = csrf(&batch);
+    let post = |cookie, token, rev| {
+        form(
+            address,
+            &route,
+            cookie,
+            &format!("csrf={token}&revision={rev}&method=folio-v1&from=100"),
+        )
+    };
+    let ana_home = get(&ana, IMPORT);
+    assert_status(&post(&ana, csrf(&ana_home), 1), 403);
+    assert_status(&post(&bia, "stale", 1), 403);
+    assert_status(&post(&bia, token, 2), 409);
+    let review = post(&bia, token, 1);
+    assert_status(&review, 200);
+    assert_eq!(header(&review, "cache-control"), "no-store");
+    assert!(
+        review.contains("107")
+            && review.contains("536")
+            && review.contains("holdingsRecordId")
+            && review.contains("54370")
+    );
+    assert!(!review.contains("/confirmar"));
+    std::fs::write(
+        dir.path().join("imports").join(id).join("original"),
+        b"broken",
+    )
+    .unwrap();
+    assert_status(&post(&bia, token, 1), 422);
+}

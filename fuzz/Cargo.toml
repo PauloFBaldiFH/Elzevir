@@ -110,3 +110,10 @@ path = "fuzz_targets/cql.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "import_relations"
+path = "fuzz_targets/import_relations.rs"
+test = false
+doc = false
+bench = false

@@ -65,6 +65,14 @@
       <thead><tr><th>{{ t.get("import-source-position") }}</th><th>{{ t.get("import-file") }}</th><th>{{ t.get("import-source-hint") }}</th><th>{{ t.get("import-source-bytes") }}</th><th>SHA-256</th><th>{{ t.get("import-source-duplicate") }}</th></tr></thead>
       <tbody>{% for member in members %}<tr><th scope="row">{{ member.position }}</th><td>{{ member.name }}</td><td>{{ member.format }}</td><td>{{ member.bytes }}</td><td>{{ member.sha256 }}</td><td>{% if let Some(pos) = member.duplicate_of %}{{ pos }}{% endif %}</td></tr>{% endfor %}</tbody>
     </table>
+    <form method="post" action="/equipe/acervo/importar/{{ id }}/relacoes">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="revision" value="{{ revision }}">
+      <label for="relation-method">{{ t.get("import-rel-method") }}</label>
+      <select id="relation-method" name="method"><option value="folio-v1">FOLIO v1</option><option value="explicit">{{ t.get("import-rel-explicit") }}</option></select>
+      <label for="relation-plan">{{ t.get("import-rel-plan") }}</label><textarea id="relation-plan" name="plan" rows="3"></textarea>
+      <label for="relation-from">{{ t.get("import-rel-from") }}</label><input type="number" id="relation-from" name="from" value="1" min="1" required>
+      <button type="submit">{{ t.get("import-rel-review") }}</button>
+    </form>
     <form action="/equipe/acervo/importar/{{ id }}/prever" method="post">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="revision" value="{{ revision }}">
       <button type="submit">{{ t.get("import-source-verify") }}</button>
@@ -73,6 +81,20 @@
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="revision" value="{{ revision }}">
       <button type="submit">{{ t.get("import-confirm-cancel") }}</button>
     </form><a href="/equipe/acervo/importar">{{ t.get("import-drafts-back") }}</a>
+  {% when ImportView::Relations with (report) %}
+    <p><a href="/equipe/acervo/importar/{{ report.batch }}">{{ t.get("import-source-set") }}</a> · {{ report.origin }} · {{ report.evidence }}</p>
+    <table><caption>{{ t.get("import-rel-datasets") }}</caption>
+    <thead><tr><th>{{ t.get("import-rel-role") }}</th><th>{{ t.get("import-source-position") }}</th><th>{{ t.get("import-pg-rows") }}</th></tr></thead>
+    <tbody>{% for (name, member, rows) in report.datasets %}<tr><th scope="row">{{ name }}</th><td>{% if let Some(pos) = member %}{{ pos }}{% else %}{{ t.get("import-rel-absent") }}{% endif %}</td><td>{{ rows }}</td></tr>{% endfor %}</tbody></table>
+    {% for edge in report.edges %}
+    <h2>{{ edge.binding }}</h2><p>{{ edge.cardinality }} · {{ t.get("import-rel-parents") }} {{ edge.parents }} · {{ t.get("import-rel-max") }} {{ edge.max_children }}</p>
+    <ul>{% for (reason, count) in edge.counts %}<li>{{ reason }} · {{ count }}</li>{% endfor %}</ul>
+    {% if !edge.page.is_empty() %}<table>
+    <caption>{{ t.get("import-rel-page") }}</caption>
+    <thead><tr><th>{{ t.get("import-rel-child") }}</th><th>{{ t.get("import-rel-outcome") }}</th><th>{{ t.get("import-rel-target") }}</th><th>{{ t.get("import-rel-lineage") }}</th></tr></thead>
+    <tbody>{% for (child, reason, parents, chain) in edge.page %}<tr><th scope="row">{{ child }}</th><td>{{ reason }}</td><td>{{ parents }}</td><td>{{ chain }}</td></tr>{% endfor %}</tbody></table>{% endif %}
+    {% endfor %}
+    <details><summary>{{ t.get("import-rel-evidence") }}</summary><pre>{{ report.json }}</pre></details>
   {% when ImportView::Postgres with (tables) %}
     <table><caption>{{ t.get("import-postgres-inventory") }}</caption>
       <thead><tr><th>{{ t.get("import-pg-table") }}</th><th>{{ t.get("import-pg-columns") }}</th><th>{{ t.get("import-pg-rows") }}</th><th>{{ t.get("import-pg-nulls") }}</th><th>{{ t.get("import-pg-empty") }}</th></tr></thead>

@@ -37,6 +37,7 @@ use crate::security::tokens_match;
 use crate::session::ActiveSession;
 use crate::{AppState, render, staff::current_session};
 
+mod relations;
 mod source_sets;
 
 const ROOT: &str = "/equipe/acervo/importar";
@@ -266,6 +267,10 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/equipe/acervo/importar/modelo/{format}", get(model))
         .route("/equipe/acervo/importar/{id}/resultado", get(result))
         .route("/equipe/acervo/importar/{id}/regra", post(rule))
+        .route(
+            "/equipe/acervo/importar/{id}/relacoes",
+            post(relations::preview).layer(DefaultBodyLimit::max(256 * 1024)),
+        )
         .route("/equipe/acervo/importar/{id}/planilha", post(sheet))
         .route(
             "/equipe/acervo/importar/{id}/conjunto",
@@ -650,12 +655,13 @@ async fn change(
             Redirect::to(&format!("{ROOT}/{}", view.batch.id)).into_response()
         }
         Ok(BatchReply::Cancelled) => Redirect::to(ROOT).into_response(),
-        Ok(BatchReply::List(_) | BatchReply::Completed(_)) => session.error(
-            &state,
-            StatusCode::SERVICE_UNAVAILABLE,
-            "import-unavailable",
-            None,
-        ),
+        Ok(BatchReply::List(_) | BatchReply::Completed(_) | BatchReply::Relations(_)) => session
+            .error(
+                &state,
+                StatusCode::SERVICE_UNAVAILABLE,
+                "import-unavailable",
+                None,
+            ),
         Err(error) if action == "editar" => {
             edit_failure(&state, &session, id, form.recipe, error).await
         }

@@ -504,7 +504,8 @@ e [contrato proposto](../specs/catalogo/importacao-universal-v4.md).
 |---|---|
 | 1a, aprovado | Inventário privado de PostgreSQL textual na CLI e no Staff. Ler em fluxo `COPY ... FROM stdin`, distinguir tabela vazia, linha, nulo e texto escapado, expor contagens e diagnósticos por fonte. Provar 11.561 + 5 na amostra e recusar comandos, limites excedidos e prévia vencida. Nenhuma entidade produzida pelo inventário. |
 | 1b | Conjunto privado de arquivos avulsos ou membros selecionados de um contêiner, com origem estável, bytes e SHA-256 por membro na CLI e no Staff. A verificação relê cada original. Provas com três TSV de Cornell e duas folhas do ZIP Evergreen. |
-| 1c–1d | Adicionar TSV/JSON e junções explícitas de FOLIO, depois SQL VALUES e relatório MARCXML híbrido. Testar fontes independentes com os mesmos IDs, truncamento e cancelamento. |
+| 1c | Prévia de identidades e relações por receita, com chave simples ou composta e cardinalidade explícita. O perfil FOLIO propõe papéis pela estrutura. Provas Cornell, 5kItems e esquema independente. [Contrato e limites](../specs/catalogo/relacoes-entre-fontes.md) |
+| 1d | SQL VALUES e relatório MARCXML híbrido, com testes de isolamento das fontes, truncamento e cancelamento. |
 | 2 | Uma classe por entrega vertical. Leitores com permissões e referências aprovadas. Autoridades com identidade, variantes, relações e reconciliação posterior. Reusar a projeção bibliográfica. Exercitar cada classe isolada na CLI e no Staff. |
 | 3 | Seleção combinada e movimentos opcionais. Oráculo das sete combinações, retomada e reimportação, versões revalidadas na transação. |
 | 4 | Receita declarativa e inferência conservadora no mesmo executor. Avaliação por família com perfil desligado e teste cego antes de afirmar generalização. |
