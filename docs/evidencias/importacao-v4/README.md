@@ -404,3 +404,23 @@ essa base. A revisão dos arquivos nativos de autoridades nesse ponto
 identificou `AuthorityReader` e o histórico de edição e vínculo na aplicação
 e no store. O próximo checkpoint de integração continua sendo a reavaliação
 da `main` antes de projetar autoridades. [Receita, limites e interpretação](../../specs/catalogo/relacoes-entre-fontes.md)
+
+Validação local em Linux sobre a árvore da 1c:
+
+| Verificação | Resultado |
+|---|---|
+| `cargo fmt --all --check`, Clippy em todos os alvos com `--locked -- -D warnings`, `cargo xtask ci` | Aprovados, incluindo camadas, tamanho dos arquivos e codegen. |
+| `cargo test --workspace --all-targets --locked --no-fail-fast` | 1.412 aprovados. Os dois casos de rclone marcados como ignorados passaram na execução separada com `--ignored`. O runner disponível foi o Cargo. |
+| `cargo test --doc --workspace --locked` | Um doctest aprovado. |
+| `cargo deny check` 0.22.2 | Advisories, bans, licenças e fontes aprovados. Houve 45 avisos de versões duplicadas e 11 exceções sem advisory aplicável. O Cargo sinalizou incompatibilidade futura de `proc-macro-error2` 2.0.1. |
+| `import_relations` com libFuzzer | 20.000 execuções, quatro sementes iniciais, seed 7431. Instrumentação LLVM de cobertura na biblioteca de aplicação e no alvo. Nenhuma falha. O ambiente usou cobertura sem ASan. |
+| Oráculo offline e Chromium | Manifesto e oráculos verificados. No navegador, upload de Cornell, revisão da linha 100 e repetição do relatório por receita explícita passaram. |
+
+O teste de cancelamento mantém a leitura aberta enquanto outra operação
+remove o lote e comprova a interrupção no leitor. O teste do Staff cobre
+titularidade/permissões em conjunto com as provas da 1b, CSRF, revisão e
+alteração dos bytes. As regressões do workspace exercitam também matching,
+Biblivre 949, ida e volta MARC/BIBFRAME e circulação. A prova de integridade
+refere-se aos originais recebidos. Uma exportação que já chega incompleta,
+terminando em um registro válido, exige um total independente da origem para
+detectar a omissão.
