@@ -193,12 +193,25 @@ fn record_loan(
     )?;
     let loan = LoanId(connection.last_insert_rowid());
     crate::returns::note_checkout(connection, request.patron.0, &request.at.to_string())?;
+    let was_lost: bool =
+        connection.query_row("SELECT lost <> 0 FROM items WHERE id = ?1", [item], |row| {
+            row.get(0)
+        })?;
     connection.execute(
         "UPDATE items SET holding_branch = ?2, lost = 0, lost_on = NULL,
                           row_version = row_version + 1
          WHERE id = ?1",
         params![item, request.desk.0],
     )?;
+    if was_lost {
+        // Koha: `AddIssue` sets `itemlost` to 0, and `Koha::Item::store` runs the finding.
+        let place = crate::lost_found::FoundAt {
+            desk: Some(request.desk),
+            checkin: false,
+        };
+        let rules = read_rules(connection)?;
+        crate::lost_found::found(connection, &rules, item, place, &request.at)?;
+    }
     Ok(loan)
 }
 

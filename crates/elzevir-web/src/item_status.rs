@@ -202,6 +202,7 @@ fn changed_notices(t: &I18n, done: &ItemStatusChanged) -> Vec<Notice> {
     if done.transfer_cancelled {
         notices.push(ok(t.get("item-status-transfer-cancelled")));
     }
+    notices.extend(crate::circulation::found_notices(t, &done.found));
     notices
 }
 

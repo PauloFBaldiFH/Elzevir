@@ -3,6 +3,7 @@
 
 use elzevir_app::circulation_rules::{CirculationOutput, CirculationRefusal, RuleKind};
 use elzevir_app::commands::{WriteOutput, WriteRefusal};
+use elzevir_app::item_status::LostFound;
 use elzevir_app::loans::{CheckedIn, CheckinRefusal, CheckinRequest, checked_barcode};
 use elzevir_domain::account::OverdueStatus;
 use elzevir_domain::catalog::{BranchId, ItemId, Money, PolicyId};
@@ -25,6 +26,7 @@ use crate::calendar::read_calendar;
 use crate::circulation_rules::read_rules;
 use crate::holds::{CheckinItem, hold_at_checkin, revert_waiting};
 use crate::loans::find_patron;
+use crate::lost_found::FoundAt;
 use crate::overdue_fines::{FineMoment, LateLoan, update_overdue_fine};
 use crate::restrictions::{suspend, suspension};
 use crate::{CommandFailed, StoreError};
@@ -239,10 +241,12 @@ pub(crate) fn close_loan(
 ) -> rusqlite::Result<()> {
     connection.execute(
         "INSERT INTO returned_loans (item_id, patron_id, branch_id, issued_at, due, on_site,
-                                     returned_at, return_branch_id, renewals, category_id)
+                                     returned_at, return_branch_id, renewals, category_id,
+                                     loan_id)
          SELECT l.item_id,
                 CASE WHEN p.reading_history = 1 THEN l.patron_id END,
-                l.branch_id, l.issued_at, l.due, l.on_site, ?2, ?3, l.renewals, p.category_id
+                l.branch_id, l.issued_at, l.due, l.on_site, ?2, ?3, l.renewals, p.category_id,
+                l.id
          FROM loans l JOIN patrons p ON p.id = l.patron_id
          WHERE l.id = ?1",
         params![loan, at, branch.0],
@@ -322,32 +326,14 @@ pub(crate) fn checkin(connection: &Connection, request: &CheckinRequest) -> Appl
             params![item.id, request.desk.0, found],
         )
         .map_err(storage)?;
-    match (done.destination, transfer) {
-        (Destination::Arrived { .. }, Some((id, _))) => {
-            connection
-                .execute(
-                    "UPDATE transfers SET arrived_at = ?2 WHERE id = ?1",
-                    params![id, request.at.to_string()],
-                )
-                .map_err(storage)?;
-        }
-        (Destination::Sent { to, reason }, _) => {
-            connection
-                .execute(
-                    "INSERT INTO transfers (item_id, from_branch, to_branch, reason, sent_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5)",
-                    params![
-                        item.id,
-                        request.desk.0,
-                        to.0,
-                        reason_name(reason),
-                        request.at.to_string()
-                    ],
-                )
-                .map_err(storage)?;
-        }
-        _ => {}
-    }
+    let lost_found = if found {
+        let place = FoundAt::checkin(request.desk);
+        crate::lost_found::found(connection, &rules, item.id, place, &request.at)
+            .map_err(storage)?
+    } else {
+        LostFound::default()
+    };
+    record_transfer(connection, done.destination, transfer, item.id, request).map_err(storage)?;
     let hold = hold
         .map(|found| revert_waiting(connection, found, request.desk, item.instance))
         .transpose()
@@ -357,12 +343,46 @@ pub(crate) fn checkin(connection: &Connection, request: &CheckinRequest) -> Appl
             patron,
             loan: done.loan,
             lost: done.lost,
+            found: lost_found,
             destination: done.destination,
             suspended_until,
             fine,
             hold,
         },
     )))
+}
+
+/// Ends the transfer the Item arrives by, or starts the one it is sent on.
+fn record_transfer(
+    connection: &Connection,
+    destination: Destination,
+    transfer: Option<(i64, OpenTransfer)>,
+    item: i64,
+    request: &CheckinRequest,
+) -> rusqlite::Result<()> {
+    match (destination, transfer) {
+        (Destination::Arrived { .. }, Some((id, _))) => {
+            connection.execute(
+                "UPDATE transfers SET arrived_at = ?2 WHERE id = ?1",
+                params![id, request.at.to_string()],
+            )?;
+        }
+        (Destination::Sent { to, reason }, _) => {
+            connection.execute(
+                "INSERT INTO transfers (item_id, from_branch, to_branch, reason, sent_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    item,
+                    request.desk.0,
+                    to.0,
+                    reason_name(reason),
+                    request.at.to_string()
+                ],
+            )?;
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 /// Keeps the day of the patron's latest checkout, from the moment it was issued

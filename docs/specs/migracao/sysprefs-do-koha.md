@@ -269,7 +269,7 @@ As 915 preferências do sistema do Koha e o lugar de cada uma no Elzevir. As que
 | `AutomaticRenewalPeriodBase` | `date_due` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `BatchCheckouts` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `BatchCheckoutsValidCategories` | (vazio) | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
-| `BlockReturnOfLostItems` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
+| `BlockReturnOfLostItems` | `0` | Comportamento fixo: Padrão do Koha (0): a devolução acha o exemplar perdido (lost-items.md, item 9). |
 | `BlockReturnOfWithdrawnItems` | `1` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `BranchTransferLimitsType` | `ccode` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `BundleLostValue` | `5` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
@@ -351,8 +351,8 @@ As 915 preferências do sistema do Koha e o lugar de cada uma no Elzevir. As que
 | `MarkLostItemsAsReturned` | `batchmod,moredetail,cronjob,additem,pendingreserves,onpaymen…` | Comportamento fixo: Padrão do Koha para a rotina: a perda cobrada termina o empréstimo; mark_returned no elzevir.toml faz o mesmo sem cobrança (conta.md, item 22). |
 | `NoIssuesChargeGuarantees` | (vazio) | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `NoIssuesChargeGuarantorsWithGuarantees` | (vazio) | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
-| `NoRefundOnLostFinesPaidAge` | (vazio) | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
-| `NoRefundOnLostReturnedItemsAge` | (vazio) | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
+| `NoRefundOnLostFinesPaidAge` | (vazio) | Comportamento fixo: Vazio no Koha: sem limite de idade para o reembolso (lost-items.md, item 16). |
+| `NoRefundOnLostReturnedItemsAge` | (vazio) | Comportamento fixo: Vazio no Koha: sem limite de idade para o reembolso (lost-items.md, item 16). |
 | `NoRenewalBeforePrecision` | `exact_time` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `NoticeBcc` | (vazio) | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `OPACAllowHoldDateInFuture` | `0` | Comportamento fixo: Fixo desligado: o leitor não reserva com data futura pelo OPAC (docs/specs/opac/conta-do-leitor.md). |
@@ -379,7 +379,7 @@ As 915 preferências do sistema do Koha e o lugar de cada uma no Elzevir. As que
 | `RecallsMaxPickUpDelay` | `7` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `RecordLocalUseOnReturn` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `RecordStaffUserOnCheckout` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
-| `RefundLostOnReturnControl` | `CheckinLibrary` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
+| `RefundLostOnReturnControl` | `CheckinLibrary` | Comportamento fixo: Padrão do Koha (CheckinLibrary): a regra vem da unidade que acha o exemplar (lost-items.md, item 10). |
 | `RenewAccruingItemInOpac` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `RenewAccruingItemWhenPaid` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |
 | `RenewalSendNotice` | `0` | A decidir: Paridade exigida: decidir uma a uma na spec de circulação (Fase 3). |

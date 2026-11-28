@@ -19,6 +19,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use crate::accounts::{OverdueLoan, close_overdue};
 use crate::circulation_rules::read_rules;
 use crate::long_overdue::charge_lost;
+use crate::lost_found::{FoundAt, found_by_rules};
 use crate::returns::close_loan;
 use crate::{CommandFailed, ElzevirStore, StoreError};
 
@@ -149,6 +150,11 @@ pub(crate) fn set_status(connection: &Connection, change: &ItemStatusChange) -> 
         .map_err(storage)?;
     if change.kind == StatusKind::Lost {
         lose(connection, change, &item, &at, &mut done).map_err(storage)?;
+        if change.to == 0 {
+            // Found at the item page: the rules of the Item's home branch (item 10).
+            done.found = found_by_rules(connection, change.item.0, FoundAt::ELSEWHERE, &change.at)
+                .map_err(storage)?;
+        }
     }
     Ok(WriteOutput::Circulation(
         CirculationOutput::ItemStatusChanged(done),

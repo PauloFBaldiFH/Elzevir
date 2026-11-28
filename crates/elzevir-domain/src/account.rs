@@ -249,6 +249,9 @@ pub enum OverdueStatus {
     Returned,
     /// The Item was declared lost; the fine no longer changes (`LOST`).
     Lost,
+    /// The lost Item was found: on a fine, it counts again; on a lost charge, it was
+    /// settled by the finding (`FOUND`; docs/specs/circulacao/lost-items.md).
+    Found,
 }
 
 impl OverdueStatus {
@@ -259,6 +262,7 @@ impl OverdueStatus {
             Self::Unreturned => "UNRETURNED",
             Self::Returned => "RETURNED",
             Self::Lost => "LOST",
+            Self::Found => "FOUND",
         }
     }
 }

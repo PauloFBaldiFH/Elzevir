@@ -176,6 +176,9 @@ fn a_reading_marks_the_items_seen_and_reports_what_is_wrong() {
     let scan = |barcodes: Vec<String>, filters| InventoryScan {
         barcodes,
         seen_on: date(2026, 11, 26),
+        at: "2026-11-26T10:00:00-03:00[America/Sao_Paulo]"
+            .parse()
+            .unwrap(),
         area: area.clone(),
         filters,
         compare: true,

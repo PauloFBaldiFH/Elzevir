@@ -121,6 +121,9 @@ pub struct CheckedIn {
     pub loan: LoanOutcome,
     /// What happened to a lost Item.
     pub lost: LostOutcome,
+    /// What finding a lost Item did to its charges
+    /// (docs/specs/circulacao/lost-items.md, item 15).
+    pub found: crate::item_status::LostFound,
     /// Where the Item goes next.
     pub destination: Destination,
     /// When the patron's suspension ends, when a late return suspended them.

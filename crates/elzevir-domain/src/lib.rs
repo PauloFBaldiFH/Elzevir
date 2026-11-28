@@ -17,6 +17,7 @@ pub mod hold;
 pub mod inventory;
 pub mod labels;
 pub mod long_overdue;
+pub mod lost_item;
 pub mod notice;
 pub mod notice_text;
 pub mod patron;
