@@ -164,7 +164,7 @@ no total. Uma falha de leitura ou envio incompleto descarta a captura. A
 ação de verificar na prévia relê os bytes e confere os digests, os limites
 dos membros e o fim exato do original. O conjunto fica disponível para revisão e cancelamento. A etapa
 de descoberta não autoriza edição ou confirmação no catálogo. Vínculos
-entre arquivos FOLIO e demais projeções entram nos incrementos seguintes.
+entre arquivos podem ser conferidos na [prévia de relações da 1c](relacoes-entre-fontes.md).
 
 ## Integração com as autoridades nativas
 
