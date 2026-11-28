@@ -10,7 +10,8 @@ Task 6.3 asked both systems questions about the loans of a copy, without changin
 
 1. The plan is a JSON file with a list of steps, written by whoever runs the day. A step names patrons and Items only by Koha's numbers (`borrowernumber`, `itemnumber`), never by name, card number or barcode. The kinds of step are:
    - `checkout`: `borrowernumber`, `itemnumber`, and `confirm` (default `false`): whether the staff confirm what the check asks to confirm.
-   - `checkin`: `itemnumber`.
+   - `checkin`: `itemnumber`, and optionally `borrowernumber`: whose account to read when the Item is not on loan (a lost Item found at the checkin).
+   - `lose`: `itemnumber`, and `lost` (default 1): the Item is marked lost from its page.
    - `renew`: `itemnumber`.
    - `hold`: `borrowernumber`, `itemnumber`, and `level`, `record` (the default) or `item`. A record hold names its record through one of its Items.
    - `pay`: `borrowernumber` and `amount_cents`.
@@ -27,8 +28,9 @@ Task 6.3 asked both systems questions about the loans of a copy, without changin
    - `renew`: `CanBookBeRenewed` as the staff desk asks it; when it allows, `AddRenewal`, and the answer is `ok` with the new due date; otherwise Koha's reason.
    - `hold`: `CanBookBeReserved` for a record hold, `CanItemBeReserved` for an item hold, with the patron's branch for pickup. When the status is `OK`, `AddReserve`, and the answer is `ok` with the hold's priority; otherwise the status.
    - `pay`: `Koha::Account::pay` of the amount, a payment at the desk. The answer is `ok`.
-5. After each step it writes the **balance** of the step's patron: the total of the patron's outstanding debits (`outstanding_debits->total_outstanding`), in cents. For a checkin, the patron is the one who had the loan. A step whose numbers do not exist in the copy is answered `unknown` and changes nothing.
-6. **Output:** JSON on standard output: the Koha version, and each step as it was given, with `at` (Koha's clock, `YYYY-MM-DD HH:MM`), `answer` and `balance_cents`. No name, card number or barcode is written.
+   - `lose`: as `catalogue/updateitem.pl` with `cud-set_lost`: the Item's `itemlost` is set and stored, then `C4::Circulation::LostItem` with `moredetail`. The answer is `ok`, or `unchanged` when the Item already had that number.
+5. After each step it writes the **balance** of the step's patron: the total of the patron's outstanding debits (`outstanding_debits->total_outstanding`), in cents. For a checkin, a renewal and a loss, the patron is the one who had the loan; a checkin of an Item not on loan reads the patron the step names. It also writes the patron's **account lines**, oldest first, each as the debit or credit type, the status (`-` for none), the amount and the outstanding amount in cents, credits negative: `LOST FOUND 4500 0`. A step whose numbers do not exist in the copy is answered `unknown` and changes nothing.
+6. **Output:** JSON on standard output: the Koha version, and each step as it was given, with `at` (Koha's clock, `YYYY-MM-DD HH:MM`), `answer`, `balance_cents` and `lines`. No name, card number or barcode is written.
 
 ### The day on the Elzevir
 
@@ -40,7 +42,8 @@ Task 6.3 asked both systems questions about the loans of a copy, without changin
    - renew: the reasons of [koha-parity.md](koha-parity.md), item 7, or `ok` with the new due date.
    - hold: `ok` with the priority, or the status Koha gives the refusal (`tooManyReserves`, `tooManyHoldsForThisRecord`, `itemAlreadyOnHold`, `notReservable`, `debarred`, …).
    - pay: `ok`.
-   - balance: what the patron owes after the step.
+   - lose: `ok`, or `unchanged`.
+   - balance: what the patron owes after the step, and the account lines written as in item 5. The lines are compared only when Koha's day has them, so a day recorded before they were still compares.
 10. **Report:** how many steps, how many gave the same answer and the same balance, and each divergence by its position in the plan, with the kind of step and both answers. The values are keys, dates, priorities and amounts, never personal data. The command ends with an error when any step differs, so that a script can stop on it. A step that cannot be done on the Elzevir (the Item or the patron did not come) is a divergence, with that cause.
 
 ### Part b: SIP2 on the same copy

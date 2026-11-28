@@ -47,6 +47,18 @@ pub enum Step {
     Checkin {
         /// The Item.
         itemnumber: u64,
+        /// The patron whose account to read when the Item is not on loan, as a lost Item
+        /// found at the checkin (lost-items.md, item 19).
+        #[serde(default)]
+        borrowernumber: Option<u64>,
+    },
+    /// Mark the Item lost from its page (lost-items.md, item 3).
+    Lose {
+        /// The Item.
+        itemnumber: u64,
+        /// The lost number.
+        #[serde(default = "first_lost")]
+        lost: i64,
     },
     /// Renew the Item's loan.
     Renew {
@@ -79,11 +91,17 @@ impl Step {
         match self {
             Self::Checkout { .. } => "checkout",
             Self::Checkin { .. } => "checkin",
+            Self::Lose { .. } => "lose",
             Self::Renew { .. } => "renew",
             Self::Hold { .. } => "hold",
             Self::Pay { .. } => "pay",
         }
     }
+}
+
+/// The lost number a `lose` step sets when it names none.
+const fn first_lost() -> i64 {
+    1
 }
 
 /// A step as Koha did it (item 6).
@@ -98,6 +116,10 @@ pub struct KohaStep {
     pub answer: String,
     /// What the step's patron owed after it, in cents; none when there is no patron.
     pub balance_cents: Option<i64>,
+    /// The patron's account lines after it, oldest first, as [`account_line`] writes them;
+    /// none in a day recorded before they were (item 6).
+    #[serde(default)]
+    pub lines: Option<Vec<String>>,
 }
 
 /// The output of `tools/koha-parity/desk_day.pl` (item 6).
@@ -118,6 +140,8 @@ pub struct DeskItem {
     pub holding: BranchId,
     /// Who has it on loan.
     pub borrower: Option<PatronId>,
+    /// Its lost number, 0 when it is not lost.
+    pub lost: i64,
 }
 
 /// A step as the Elzevir did it.
@@ -127,6 +151,8 @@ pub struct StepAnswer {
     pub answer: String,
     /// What the step's patron owed after it.
     pub balance: Option<Money>,
+    /// The patron's account lines after it, oldest first.
+    pub lines: Option<Vec<String>>,
 }
 
 /// A step that differs (item 10).
@@ -161,16 +187,30 @@ impl DayCheck {
     }
 }
 
-/// An answer and a balance as the report shows them.
-fn shown(answer: &str, balance_cents: Option<i64>) -> String {
-    match balance_cents {
+/// An account line as the day compares it: the debit or credit type, the status, the
+/// amount and what is still owed, in cents, credits negative (item 6).
+#[must_use]
+pub fn account_line(kind: &str, status: Option<&str>, amount: i64, outstanding: i64) -> String {
+    format!("{kind} {} {amount} {outstanding}", status.unwrap_or("-"))
+}
+
+/// An answer, a balance and the account lines as the report shows them.
+fn shown(answer: &str, balance_cents: Option<i64>, lines: Option<&[String]>) -> String {
+    let mut text = match balance_cents {
         Some(cents) => format!("{answer} (owes {cents})"),
         None => answer.to_owned(),
+    };
+    if let Some(lines) = lines {
+        text.push_str(" [");
+        text.push_str(&lines.join("; "));
+        text.push(']');
     }
+    text
 }
 
 /// Compares Koha's day with the Elzevir's, step by step (item 10). `elzevir` holds one
-/// entry per Koha step: the answer, or why the step could not be done.
+/// entry per Koha step: the answer, or why the step could not be done. The account lines
+/// are compared when Koha's day has them.
 #[must_use]
 pub fn compare(koha: &KohaDay, elzevir: &[Result<StepAnswer, String>]) -> DayCheck {
     let mut check = DayCheck {
@@ -179,15 +219,20 @@ pub fn compare(koha: &KohaDay, elzevir: &[Result<StepAnswer, String>]) -> DayChe
         divergences: Vec::new(),
     };
     for (position, step) in koha.steps.iter().enumerate() {
-        let koha_side = shown(&step.answer, step.balance_cents);
+        let koha_lines = step.lines.as_deref();
+        let koha_side = shown(&step.answer, step.balance_cents, koha_lines);
         let elzevir_side = match elzevir.get(position) {
             Some(Ok(answer)) => {
                 let balance = answer.balance.map(|owed| owed.0);
-                if answer.answer == step.answer && balance == step.balance_cents {
+                let lines = koha_lines.and(answer.lines.as_deref());
+                if answer.answer == step.answer
+                    && balance == step.balance_cents
+                    && lines == koha_lines
+                {
                     check.same += 1;
                     continue;
                 }
-                shown(&answer.answer, balance)
+                shown(&answer.answer, balance, lines)
             }
             Some(Err(gap)) => gap.clone(),
             None => "not done".to_owned(),
@@ -302,6 +347,7 @@ mod tests {
         StepAnswer {
             answer: answer.to_owned(),
             balance: Some(Money(owed)),
+            lines: None,
         }
     }
 
@@ -335,6 +381,57 @@ mod tests {
             }
         );
         assert!(serde_json::from_str::<Step>(r#"{"op": "lend", "itemnumber": 8}"#).is_err());
+        let lose: Step = serde_json::from_str(r#"{"op": "lose", "itemnumber": 8}"#).unwrap();
+        assert_eq!(
+            lose,
+            Step::Lose {
+                itemnumber: 8,
+                lost: 1
+            }
+        );
+        let found: Step =
+            serde_json::from_str(r#"{"op": "checkin", "itemnumber": 8, "borrowernumber": 3}"#)
+                .unwrap();
+        assert_eq!(
+            found,
+            Step::Checkin {
+                itemnumber: 8,
+                borrowernumber: Some(3)
+            }
+        );
+    }
+
+    #[test]
+    fn account_lines_are_compared_when_koha_wrote_them() {
+        let koha = day(r#"{"steps": [
+            {"op": "lose", "itemnumber": 7, "at": "2026-11-27 10:00", "answer": "ok",
+             "balance_cents": 4800,
+             "lines": ["PROCESSING - 300 300", "LOST - 4500 4500"]}
+        ]}"#);
+        let lines = |list: &[&str]| Some(list.iter().map(|line| (*line).to_owned()).collect());
+        let answer = |list: &[&str]| StepAnswer {
+            answer: "ok".to_owned(),
+            balance: Some(Money(4800)),
+            lines: lines(list),
+        };
+        let agreed = [Ok(answer(&["PROCESSING - 300 300", "LOST - 4500 4500"]))];
+        assert!(compare(&koha, &agreed).agrees());
+        let check = compare(&koha, &[Ok(answer(&["LOST - 4500 4500"]))]);
+        assert_eq!(
+            check.divergences[0].elzevir,
+            "ok (owes 4800) [LOST - 4500 4500]"
+        );
+        assert_eq!(
+            account_line("LOST_FOUND", None, -4500, 0),
+            "LOST_FOUND - -4500 0"
+        );
+        // A day recorded without lines compares answers and balances only.
+        let older = day(DAY);
+        let with_lines = [Ok(answer(&["x"]))];
+        assert_eq!(
+            compare(&older, &with_lines).divergences[0].elzevir,
+            "ok (owes 4800)"
+        );
     }
 
     #[test]

@@ -15,9 +15,10 @@ use Getopt::Long qw( GetOptions );
 use JSON         qw( from_json to_json );
 
 use C4::Context;
-use C4::Circulation qw( AddIssue AddRenewal AddReturn CanBookBeIssued CanBookBeRenewed );
+use C4::Circulation qw( AddIssue AddRenewal AddReturn CanBookBeIssued CanBookBeRenewed LostItem );
 use C4::Reserves    qw( AddReserve CalculatePriority CanBookBeReserved CanItemBeReserved );
 use Koha::DateUtils qw( dt_from_string );
+use Koha::Account::Lines;
 use Koha::Holds;
 use Koha::Items;
 use Koha::Patrons;
@@ -49,6 +50,27 @@ sub balance {
     return 0 + sprintf( '%.0f', $owed * 100 );
 }
 
+sub cents { return 0 + sprintf( '%.0f', ( $_[0] // 0 ) * 100 ) }
+
+# The patron's account lines, oldest first: type, status, amount and what is still owed,
+# in cents (item 6). Types and statuses are Koha's codes, never a note.
+sub lines {
+    my ($patron) = @_;
+    return undef unless $patron;
+    my $lines = Koha::Account::Lines->search(
+        { borrowernumber => $patron->borrowernumber },
+        { order_by       => 'accountlines_id' }
+    );
+    return [
+        map {
+            join ' ',
+                ( $_->debit_type_code // $_->credit_type_code // '-' ),
+                ( $_->status // '-' ),
+                cents( $_->amount ), cents( $_->amountoutstanding )
+        } $lines->as_list
+    ];
+}
+
 # The uppercase keys of a CanBookBeIssued hash, sorted: the others carry values.
 sub keys_of {
     my ($hash) = @_;
@@ -76,6 +98,17 @@ sub checkin {
     my $found = $messages->{ResFound};
     my $hold  = $found ? "$found->{ResFound} borrowernumber $found->{borrowernumber}" : 'none';
     return "$state; $hold";
+}
+
+# Marks the Item lost from its page, as catalogue/updateitem.pl does with `cud-set_lost`.
+sub lose {
+    my ( $step, $item ) = @_;
+    desk( $item->holdingbranch );
+    my $lost = $step->{lost} // 1;
+    return 'unchanged' if $item->itemlost eq $lost;
+    $item->itemlost($lost)->store;
+    LostItem( $item->itemnumber, 'moredetail' ) if $lost;
+    return 'ok';
 }
 
 sub renew {
@@ -136,8 +169,9 @@ for my $step (@$plan) {
     my $op     = $step->{op} // '';
     my $item   = defined $step->{itemnumber} ? Koha::Items->find( $step->{itemnumber} ) : undef;
     my $patron = defined $step->{borrowernumber} ? Koha::Patrons->find( $step->{borrowernumber} ) : undef;
-    # The patron of a checkin or renewal is the one who has the loan.
-    if ( ( $op eq 'checkin' || $op eq 'renew' ) && $item && $item->checkout ) {
+    # The patron of a checkin, renewal or loss is the one who has the loan; a checkin of
+    # an Item not on loan reads the account of the patron the step names, if any.
+    if ( ( $op eq 'checkin' || $op eq 'renew' || $op eq 'lose' ) && $item && $item->checkout ) {
         $patron = $item->checkout->patron;
     }
     my $at = $format->( dt_from_string() );
@@ -152,6 +186,8 @@ for my $step (@$plan) {
         $answer = checkin($item);
     } elsif ( $op eq 'renew' ) {
         $answer = $patron ? renew( $patron, $item ) : 'no_checkout';
+    } elsif ( $op eq 'lose' ) {
+        $answer = lose( $step, $item );
     } elsif ( $op eq 'hold' ) {
         $answer = $patron ? hold( $step, $patron, $item ) : 'unknown';
     } else {
@@ -159,7 +195,14 @@ for my $step (@$plan) {
     }
     # The balance is read again, after the step changed it.
     $patron = Koha::Patrons->find( $patron->borrowernumber ) if $patron;
-    push @steps, { %$step, at => $at, answer => $answer, balance_cents => balance($patron) };
+    push @steps,
+        {
+        %$step,
+        at            => $at,
+        answer        => $answer,
+        balance_cents => balance($patron),
+        lines         => lines($patron),
+        };
 }
 
 print to_json(
