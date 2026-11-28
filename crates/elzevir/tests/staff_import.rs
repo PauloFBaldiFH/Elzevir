@@ -922,10 +922,70 @@ fn staff_private_relation_review_checks_permission_revision_and_source_bytes() {
             && review.contains("54370")
     );
     assert!(!review.contains("/confirmar"));
+
+    let (new_id, plan) = reorder_cli_sources(dir.path(), &samples, id);
+    let replay = form(
+        address,
+        &format!("{IMPORT}/{new_id}/relacoes"),
+        &bia,
+        &format!(
+            "csrf={token}&revision=1&method=explicit&from=100&plan={}",
+            elzevir_web_templates::url_encode(&plan)
+        ),
+    );
+    assert_status(&replay, 200);
+    for evidence in [
+        "explicit-v2",
+        "107",
+        "536",
+        "100 @ 54370",
+        "5 @ 1044",
+        "instance (2 @ 1298)",
+    ] {
+        assert!(replay.contains(evidence), "{evidence}");
+    }
+
     std::fs::write(
         dir.path().join("imports").join(id).join("original"),
         b"broken",
     )
     .unwrap();
     assert_status(&post(&bia, token, 1), 422);
+}
+
+fn reorder_cli_sources(data: &Path, samples: &Path, id: &str) -> (String, String) {
+    let import = |step| {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_elzevir"));
+        command
+            .args(["import", step, "--operator", "2", "--data-dir"])
+            .arg(data);
+        command
+    };
+    let cli = import("relations")
+        .args([id, "1", "--profile", "folio-v1"])
+        .output()
+        .unwrap();
+    assert!(cli.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&cli.stdout).unwrap();
+    let plan = json.pointer("/report/plan").unwrap().to_string();
+    let restaged = import("stage-set")
+        .args(["--origin", "cornell"])
+        .args(
+            [
+                ("recordholdings.tsv", "x"),
+                ("items.tsv", "y"),
+                ("instances.tsv", "z"),
+            ]
+            .map(|(file, alias)| {
+                let dest = data.join(alias);
+                std::fs::copy(samples.join(file), &dest).unwrap();
+                dest
+            }),
+        )
+        .output()
+        .unwrap();
+    assert!(restaged.status.success());
+    let output = String::from_utf8(restaged.stdout).unwrap();
+    let id = output.split_whitespace().nth(1).unwrap().to_owned();
+    (id, plan)
 }

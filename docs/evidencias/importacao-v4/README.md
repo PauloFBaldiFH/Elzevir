@@ -424,3 +424,59 @@ Biblivre 949, ida e volta MARC/BIBFRAME e circulação. A prova de integridade
 refere-se aos originais recebidos. Uma exportação que já chega incompleta,
 terminando em um registro válido, exige um total independente da origem para
 detectar a omissão.
+
+### Reaplicação da receita após renomear e reordenar os originais
+
+Na revisão do commit `8020478e`, duas fontes JSONL com os mesmos campos
+`id` e `ref` expuseram uma associação silenciosa. O membro pai continha
+`P → C` e o membro filho continha `C → P` e `D → P`. Reaplicar a receita
+posicional v1 depois de inverter os membros reduziu os vínculos de dois
+para um. Ambos os resultados pareciam válidos ao operador.
+
+Na receita v2 cada papel declara o SHA-256 do original conferido, ou
+`null` para um papel ausente. A prévia publica as posições da execução
+em `report.identities[].member`. Os testes verificam os seguintes resultados.
+
+| Execução | Resultado esperado |
+|---|---|
+| Mesmos campos em dois JSONL independentes, arquivos renomeados e ordem invertida | A receita salva permanece idêntica e resolve os mesmos dois vínculos. As posições de pai e filho passam a 2 e 1. |
+| Mesmo conteúdo em dois membros candidatos | Recusa por ambiguidade, com as posições dos candidatos. |
+| Novo conteúdo na posição antes ocupada pelo filho | Recusa por digest ausente. Depois que o operador vincula expressamente o novo digest ao filho, a mesma regra encontra um vínculo. |
+| Papel omitido, apenas posicional ou dois papéis atribuídos ao mesmo original | Recusa. Um papel declarado com `null` permanece ausente, mesmo havendo outro membro disponível. |
+| Cornell em Chromium, primeiro com perfil e depois com receita explícita | Três arquivos renomeados e invertidos. Mantêm-se a receita, as 107 e 536 relações, as evidências por linha e a cadeia do Item da linha 100. |
+
+Para reproduzir as regressões com o workspace e o corpus versionados:
+
+```sh
+cargo test --locked -p elzevir-app --test import_relations
+cargo test --locked -p elzevir --test import_batch explicit_recipe_replays_by_content
+cargo test --locked -p elzevir --test staff_import staff_private_relation_review
+```
+
+O job de navegador inicia um servidor descartável com as permissões de
+catalogação, leitores e circulação. Após instalar o Playwright da pasta
+`e2e`, o teste também pode ser repetido com `npm --prefix e2e run import-relations`
+apontando `ELZEVIR_URL`, `ELZEVIR_LOGIN` e `ELZEVIR_PASSWORD` para essa
+instância. As quatro sementes de fuzzing acompanham a evidência. Para repetir
+com cargo-fuzz em nightly a partir da raiz:
+
+```sh
+corpus=$(mktemp -d)
+cp docs/evidencias/importacao-v4/sementes-relacoes/* "$corpus/"
+cargo +nightly fuzz run import_relations "$corpus" -- -runs=20000 -seed=7431
+```
+
+O SHA-256 atesta a identidade dos bytes. A semântica do papel vem da atribuição
+explícita ou das evidências estruturais do perfil. Exports posteriores com
+conteúdo alterado exigem nova conferência. A avaliação de inferência sobre
+esquemas desconhecidos permanece reservada aos testes cegos do plano v4.
+
+A árvore corrigida, baseada no merge `61d14370` do PR #308, passou em
+1.414 testes do workspace no Linux x86-64. Os dois testes de rclone passaram
+na execução separada, além de um doctest. Também passaram formatação, Clippy
+com avisos tratados como erro, `cargo xtask ci`, cargo-deny, 25 testes das
+ferramentas, conferências de extração de Koha e BIBFRAME, o oráculo do corpus,
+o cenário Chromium acima e 20.000 execuções de libFuzzer com seed 7431.
+A instrumentação de cobertura local usou LLVM sem ASan. O exemplo JSONL da
+especificação foi executado pela CLI com os membros em ordem inversa e
+produziu um vínculo e as posições 2 e 1.

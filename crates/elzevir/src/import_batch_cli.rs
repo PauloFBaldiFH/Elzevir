@@ -64,7 +64,7 @@ enum Step {
         /// Use the versioned FOLIO structural profile.
         #[arg(long, value_parser=["folio-v1"], required_unless_present="plan", conflicts_with="plan")]
         profile: Option<String>,
-        /// Explicit relation plan as JSON.
+        /// Explicit v2 JSON recipe with each dataset bound by inventory SHA-256 or null.
         #[arg(long)]
         plan: Option<PathBuf>,
         /// First one-based child line per relation.

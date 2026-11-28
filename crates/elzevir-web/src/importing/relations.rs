@@ -67,7 +67,7 @@ fn present(t: &I18n, preview: RelationPreview) -> Result<RelationsView, BatchErr
         .datasets
         .iter()
         .zip(&report.identities)
-        .map(|(d, i)| (d.name.clone(), d.member, i.counts.values().sum()))
+        .map(|(d, i)| (d.name.clone(), i.member, i.counts.values().sum()))
         .collect();
     let mut edges = Vec::new();
     for (rule, edge) in report.plan.relations.iter().zip(report.edges) {

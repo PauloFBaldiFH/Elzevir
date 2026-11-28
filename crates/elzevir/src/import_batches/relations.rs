@@ -92,7 +92,12 @@ impl Batches {
                 expected: &member.sha256,
             }))
         };
-        let report = relations::analyze(sources.members.len(), selection, from, open)?;
+        let digests: Vec<_> = sources
+            .members
+            .iter()
+            .map(|member| member.sha256.as_str())
+            .collect();
+        let report = relations::analyze(&digests, selection, from, open)?;
         let current: Batch = load_json(read_file(&directory, MANIFEST)?)?;
         if current.id != batch.id
             || current.operator != batch.operator
