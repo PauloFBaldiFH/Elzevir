@@ -9,10 +9,58 @@ use super::edits::{Recipe, RenderReport};
 use super::preview::PreviewReport;
 use crate::catalog::CodeLists;
 use crate::import_detection::ImportFormat;
-use crate::staff::StaffId;
+use crate::staff::StaffIdentity;
 
 /// Largest accepted recipe and stored manifest, in bytes.
 pub const MAX_BATCH_MANIFEST_BYTES: u64 = 1024 * 1024;
+
+/// Upper bound on the number of selected files in a private source set.
+pub const MAX_SOURCE_MEMBERS: usize = 64;
+
+/// An operator-selected original. The name is metadata, never a storage path.
+pub struct SourceInput {
+    /// Logical filename in the export.
+    pub name: String,
+    /// Original bytes, consumed in order.
+    pub input: Box<dyn Read + Send>,
+}
+
+/// A fallible stream: premature disconnect must be reported as an error.
+pub type SourceInputs = Box<dyn Iterator<Item = Result<SourceInput, String>> + Send>;
+
+/// Immutable inventory of a compatible export selected by the operator.
+#[derive(Serialize, Deserialize)]
+pub struct SourceSet {
+    /// Stable namespace of the producing installation.
+    pub origin: String,
+    /// Digest of the enclosing original when the files came from an archive.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archive_sha256: Option<String>,
+    /// Selected originals in submission order.
+    pub members: Vec<SourceMember>,
+}
+
+/// Address and evidence for one original, scoped to its batch.
+#[derive(Serialize, Deserialize)]
+pub struct SourceMember {
+    /// One-based member identity within the batch.
+    pub position: usize,
+    /// Original logical filename.
+    pub name: String,
+    /// Exact member names at each container level, when selected from an archive.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archive_path: Option<Vec<String>>,
+    /// Start of the preserved bytes within the private file.
+    pub offset: u64,
+    /// Exact original length.
+    pub bytes: u64,
+    /// SHA-256 of this member alone.
+    pub sha256: String,
+    /// Provisional source family observed from its bounded prefix.
+    pub format: ImportFormat,
+    /// First position with identical content, if any.
+    pub duplicate_of: Option<usize>,
+}
 
 /// Durable state of a private batch.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -57,6 +105,8 @@ pub struct BatchPreview {
 
 /// The operator's prepared revision.
 pub struct BatchView {
+    /// Private source inventory when this is a multi-file batch.
+    pub sources: Option<SourceSet>,
     /// Batch metadata.
     pub batch: BatchSummary,
     /// Saved edit and matching choices.
@@ -130,6 +180,7 @@ pub struct Completion {
 }
 
 /// How an edit changes the source format selection.
+#[derive(Clone, Copy)]
 pub enum FormatChoice {
     /// Keep the current selection.
     Keep,
@@ -145,6 +196,10 @@ pub enum BatchCommand {
     List,
     /// Capture the source through the size-limited staging path.
     Stage(Box<dyn Read + Send>, Option<ImportFormat>),
+    /// Capture related source files from one installation.
+    StageSet(String, SourceInputs),
+    /// Create a separate source set from one-based positions in a reviewed inventory.
+    ArchiveSet(String, u64, String, Vec<usize>),
     /// Read a batch and optionally show a page of its preview.
     View(String, Option<u64>),
     /// Replace the recipe if the revision is current.
@@ -245,5 +300,9 @@ pub trait BatchPort: Send + Sync {
     ///
     /// # Errors
     /// Refuses unavailable, inaccessible, invalid or stale requests.
-    fn execute(&self, operator: StaffId, command: BatchCommand) -> Result<BatchReply, BatchError>;
+    fn execute(
+        &self,
+        operator: &StaffIdentity,
+        command: BatchCommand,
+    ) -> Result<BatchReply, BatchError>;
 }

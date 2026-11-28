@@ -1203,3 +1203,15 @@ import-pg-columns = Colunas do COPY
 import-pg-rows = Linhas
 import-pg-nulls = Campos nulos
 import-pg-empty = Campos vazios
+
+import-source-set = Conjunto de fontes
+import-source-files = Arquivos da mesma instalação de origem
+import-source-stage = Preparar conjunto de fontes
+import-source-position = Membro
+import-source-hint = Formato detectado (provisório)
+import-source-bytes = Bytes
+import-source-duplicate = Conteúdo igual ao membro
+import-source-verify = Conferir integridade das fontes
+import-source-verified = Integridade de todas as fontes conferida.
+import-source-koha-backup = Backup completo do Koha
+import-source-parent = SHA-256 do contêiner original

@@ -121,6 +121,14 @@ pub struct StaffIdentity {
 }
 
 impl StaffIdentity {
+    /// May inspect mixed sources containing catalog, patron and circulation data.
+    #[must_use]
+    pub fn can_inventory_sources(&self) -> bool {
+        self.can(Permission::Cataloguing)
+            && self.can(Permission::Patrons)
+            && self.can(Permission::Circulation)
+    }
+
     /// Whether this staff member holds `permission`.
     #[must_use]
     pub fn can(&self, permission: Permission) -> bool {

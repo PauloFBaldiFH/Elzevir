@@ -35,6 +35,26 @@ struct Owner {
 
 #[derive(Subcommand)]
 enum Step {
+    /// Stage selected original files from the same installation as one private set.
+    StageSet {
+        #[command(flatten)]
+        owner: Owner,
+        #[arg(long)]
+        origin: String,
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
+    },
+    /// Create a private set from numbered entries (starting at 1) in a staged archive.
+    ArchiveSet {
+        #[command(flatten)]
+        owner: Owner,
+        #[arg(long)]
+        origin: String,
+        id: String,
+        revision: u64,
+        #[arg(required = true)]
+        members: Vec<usize>,
+    },
     /// Inventory a textual `PostgreSQL` COPY dump locally and print aggregate counts as JSON.
     Inventory { file: PathBuf },
     /// Capture the original file into a new private batch.
@@ -92,6 +112,34 @@ pub(crate) fn run(args: ImportCommand) -> Result<(), String> {
 
 fn run_step(step: Step) -> Result<(), String> {
     let (owner, command) = match step {
+        Step::StageSet {
+            owner,
+            origin,
+            files,
+        } => {
+            let inputs = files.into_iter().map(|file| {
+                let name = file
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .ok_or("invalid source filename")?
+                    .to_owned();
+                Ok(elzevir_app::import::batches::SourceInput {
+                    name,
+                    input: Box::new(open_path(&file)?),
+                })
+            });
+            (owner, BatchCommand::StageSet(origin, Box::new(inputs)))
+        }
+        Step::ArchiveSet {
+            owner,
+            id,
+            revision,
+            origin,
+            members,
+        } => (
+            owner,
+            BatchCommand::ArchiveSet(id, revision, origin, members),
+        ),
         Step::Inventory { file } => {
             let reader = std::io::BufReader::new(open_path(&file)?);
             let tables = elzevir_app::import::postgres::inventory(reader)
@@ -140,14 +188,25 @@ fn run_step(step: Step) -> Result<(), String> {
             BatchCommand::Cancel(id, None, acknowledge_interrupted),
         ),
     };
-    match crate::import_service::execute(&owner.data_dir, owner.operator, None, command)
-        .map_err(|error| error.to_string())?
-    {
+    let reply =
+        crate::import_service::execute(&owner.data_dir, owner.operator, None, true, command)
+            .map_err(|error| error.to_string())?;
+    print_reply(reply)
+}
+
+fn print_reply(reply: BatchReply) -> Result<(), String> {
+    match reply {
         BatchReply::Batch(view) => {
             println!(
                 "batch {} revision {} {:?}",
                 view.batch.id, view.batch.revision, view.batch.state
             );
+            if let Some(sources) = view.sources {
+                println!(
+                    "{}",
+                    serde_json::to_string(&sources).map_err(|error| error.to_string())?
+                );
+            }
             if let Some(inventory) = view.archive {
                 for entry in inventory.entries {
                     println!(

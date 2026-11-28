@@ -37,6 +37,8 @@ use crate::security::tokens_match;
 use crate::session::ActiveSession;
 use crate::{AppState, render, staff::current_session};
 
+mod source_sets;
+
 const ROOT: &str = "/equipe/acervo/importar";
 const MAX_UPLOAD_BYTES: usize = MAX_IMPORT_FILE_BYTES + 64 * 1024;
 const MAX_RETAINED_RECEIPTS: usize = 10;
@@ -146,9 +148,8 @@ fn prefers_portuguese(headers: &HeaderMap) -> bool {
 }
 
 impl ImportSession {
-    fn can_inventory_dump(&self) -> bool {
-        self.active.identity.can(Permission::Patrons)
-            && self.active.identity.can(Permission::Circulation)
+    fn can_inventory_sources(&self) -> bool {
+        self.active.identity.can_inventory_sources()
     }
 
     fn translations<'a>(&'a self, state: &'a AppState) -> &'a I18n {
@@ -200,8 +201,8 @@ impl ImportSession {
         command: BatchCommand,
     ) -> tokio::task::JoinHandle<Result<BatchReply, BatchError>> {
         let port = Arc::clone(&self.imports.port);
-        let operator = self.active.identity.id;
-        tokio::task::spawn_blocking(move || port.execute(operator, command))
+        let operator = self.active.identity.clone();
+        tokio::task::spawn_blocking(move || port.execute(&operator, command))
     }
 
     async fn run(&self, command: BatchCommand) -> Result<BatchReply, BatchError> {
@@ -257,11 +258,19 @@ pub(crate) fn routes() -> Router<AppState> {
             "/equipe/acervo/importar/inventario/postgresql",
             post(postgres_inventory).layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES)),
         )
+        .route(
+            "/equipe/acervo/importar/conjuntos",
+            post(source_sets::upload_set).layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES)),
+        )
         .route("/equipe/acervo/importar/{id}", get(batch))
         .route("/equipe/acervo/importar/modelo/{format}", get(model))
         .route("/equipe/acervo/importar/{id}/resultado", get(result))
         .route("/equipe/acervo/importar/{id}/regra", post(rule))
         .route("/equipe/acervo/importar/{id}/planilha", post(sheet))
+        .route(
+            "/equipe/acervo/importar/{id}/conjunto",
+            post(source_sets::archive_set),
+        )
         .route("/equipe/acervo/importar/{id}/{action}", post(change))
         .layer(axum::middleware::map_response(private))
 }
@@ -300,7 +309,7 @@ async fn home(
                     } else {
                         ImportUpload::Auto
                     },
-                    session.can_inventory_dump(),
+                    session.can_inventory_sources(),
                 ),
                 StatusCode::OK,
                 None,
@@ -384,7 +393,7 @@ async fn postgres_inventory(
     session: ImportSession,
     mut form: Multipart,
 ) -> Response {
-    if !session.can_inventory_dump() || !upload_token(&mut form, &session.active.csrf).await {
+    if !session.can_inventory_sources() || !upload_token(&mut form, &session.active.csrf).await {
         return session.error(&state, StatusCode::FORBIDDEN, "import-forbidden", None);
     }
     let Ok(Some(field)) = form.next_field().await else {
@@ -456,11 +465,18 @@ async fn upload_token(form: &mut Multipart, expected: &str) -> bool {
         .is_some_and(|token| tokens_match(expected, &token))
 }
 
-async fn short_text(mut field: axum::extract::multipart::Field<'_>) -> Option<String> {
+async fn short_text(field: axum::extract::multipart::Field<'_>) -> Option<String> {
+    limited_text(field, MAX_FORM_FIELD_BYTES).await
+}
+
+async fn limited_text(
+    mut field: axum::extract::multipart::Field<'_>,
+    limit: usize,
+) -> Option<String> {
     let mut text = Vec::with_capacity(MAX_FORM_FIELD_BYTES);
     loop {
         match field.chunk().await {
-            Ok(Some(chunk)) if chunk.len() <= MAX_FORM_FIELD_BYTES.saturating_sub(text.len()) => {
+            Ok(Some(chunk)) if chunk.len() <= limit.saturating_sub(text.len()) => {
                 text.extend_from_slice(&chunk);
             }
             Ok(None) => return String::from_utf8(text).ok(),
@@ -618,7 +634,16 @@ async fn change(
         _ => return session.error(&state, StatusCode::NOT_FOUND, "import-missing", None),
     };
     match session.run(command).await {
-        Ok(BatchReply::Batch(view)) if action == "prever" => {
+        Ok(BatchReply::Batch(mut view)) if action == "prever" => {
+            if let Some(set) = view.sources.take() {
+                return source_sets::show_set(
+                    &state,
+                    &session,
+                    view.batch,
+                    set,
+                    Some("import-source-verified"),
+                );
+            }
             show_batch(&state, &session, *view, &Page::default(), None)
         }
         Ok(BatchReply::Batch(view)) => {
@@ -641,15 +666,15 @@ async fn change(
 async fn confirm(state: &AppState, session: &ImportSession, id: String, revision: u64) -> Response {
     let url = format!("{ROOT}/{id}/resultado");
     let imports = Arc::clone(&session.imports);
-    let actor = session.active.identity.id;
+    let actor = session.active.identity.clone();
     // Record the outcome even if the request disappears while the writer is working.
     match tokio::task::spawn_blocking(move || {
         match imports
             .port
-            .execute(actor, BatchCommand::Confirm(id.clone(), revision))?
+            .execute(&actor, BatchCommand::Confirm(id.clone(), revision))?
         {
             BatchReply::Completed(completion) => {
-                imports.remember(actor, id, completion);
+                imports.remember(actor.id, id, completion);
                 Ok(())
             }
             _ => Err(BatchError::Unavailable(
@@ -821,6 +846,21 @@ async fn save_change(
     }
 }
 
+fn draft_format(batch: &BatchSummary) -> &'static str {
+    match batch.selected {
+        Some(ImportFormat::Iso2709) => "iso",
+        Some(ImportFormat::MarcXml) => "xml",
+        Some(ImportFormat::MarcText) => "mrk",
+        Some(ImportFormat::Delimited) => "table",
+        Some(ImportFormat::KohaSqlDump) => "sql",
+        Some(ImportFormat::Archive) => "archive",
+        _ if batch.format == "Archive" => "archive",
+        _ if batch.format == "Delimited" => "table",
+        _ if batch.format == "KohaSqlDump" => "sql",
+        _ => "auto",
+    }
+}
+
 fn show_batch(
     state: &AppState,
     session: &ImportSession,
@@ -835,7 +875,19 @@ fn show_batch(
         preview,
         archive,
         table,
+        sources,
     } = view;
+    if let Some(set) = sources {
+        if let Some((_, failure)) = failed {
+            return match failure {
+                Failure::Batch(err) => session.failure(state, err),
+                Failure::Rule(key) => {
+                    session.error(state, StatusCode::UNPROCESSABLE_ENTITY, key, None)
+                }
+            };
+        }
+        return source_sets::show_set(state, session, batch, set, None);
+    }
     let editable = matches!(batch.state, BatchState::Review | BatchState::Ready);
     let ready = batch.state == BatchState::Ready
         && preview
@@ -846,18 +898,11 @@ fn show_batch(
     let preview =
         preview.map(|preview| preview_page(t, &batch.id, page, &preview, recipe.matching));
     let revision = batch.revision;
-    let format = match batch.selected {
-        Some(ImportFormat::Iso2709) => "iso",
-        Some(ImportFormat::MarcXml) => "xml",
-        Some(ImportFormat::MarcText) => "mrk",
-        Some(ImportFormat::Delimited) => "table",
-        Some(ImportFormat::KohaSqlDump) => "sql",
-        Some(ImportFormat::Archive) => "archive",
-        _ if batch.format == "Archive" => "archive",
-        _ if batch.format == "Delimited" => "table",
-        _ if batch.format == "KohaSqlDump" => "sql",
-        _ => "auto",
-    };
+    let format = draft_format(&batch);
+    let archive_members = source_sets::member_choices(
+        archive.as_ref(),
+        editable && session.can_inventory_sources(),
+    );
     let archive = archive
         .as_ref()
         .map(|inventory| archive_choices(t, inventory, recipe.archive.as_ref()));
@@ -903,6 +948,7 @@ fn show_batch(
             interrupted,
             preview,
             archive,
+            archive_members,
             columns,
             rules,
             matching,
@@ -1016,6 +1062,7 @@ fn batch_link(t: &I18n, batch: BatchSummary) -> ImportBatchLink {
         "Delimited" => "import-table",
         "KohaSqlDump" => "import-sql",
         "Archive" => "import-archive",
+        "SourceSet" => "import-source-set",
         _ => "import-unknown",
     };
     let state = match batch.state {
