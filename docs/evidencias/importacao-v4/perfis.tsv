@@ -1,7 +1,7 @@
 perfil	origem_versao	natureza	acervo	leitores	autoridades	movimentos	condicao_de_uso	prova_ou_oraculo
 folio-marc	Cornell, versão pelo digest	exportações MARC bibliográficas e holdings	3E	—	—	—	estudo local	62 bibliográficos e 107 holdings por LDR/06
-folio-cornell	Cornell, versão pelo digest	TSV JSON	3E	—	—	—	estudo local	verificar.py e hierarquia 62/107/536 no estudo. Produto 1b confere os três originais por digest.
-folio-5k	FOLIO 5kItems, versão pelo digest	TSV JSON	3E	—	—	—	estudo local	47.745 pais e 49.580 holdings
+folio-cornell	Cornell, versão pelo digest	TSV JSON	4P	—	—	—	prévia privada de relações entre registros	Produto 1c: prévia das relações 107/107 e 536/536. Oráculo verificar.py e contagens 62/107/536.
+folio-5k	FOLIO 5kItems, versão pelo digest	TSV JSON	4P	—	—	—	prévia privada de relações entre registros	Produto 1c: 49.580/49.580 referências a Instância. Exportação sem membro de itens.
 slims-data	SLiMS, release a confirmar	seed bibliográfico	3E	—	2E	—	estudo local	15 descrições e 10 itens, estatuto dos cabeçalhos a confirmar
 slims-ddl	SLiMS, release a confirmar	estrutura e configuração	2E	2E	2E	2E	estudo local	comparar esquema declarado com o seed
 openbiblio	OpenBiblio, release a confirmar	quatro fragmentos complementares	3E	—	—	—	estudo local	22/93 e 604/1.299 com ligação por chave

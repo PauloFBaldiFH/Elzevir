@@ -58,8 +58,8 @@ sem evidência no conjunto e interrogação para papel indeterminado.
 | XLSX sem cabeçalho | 56 linhas, A–L, 672 células. A tem 53 e J tem 56 valores distintos. L usa strings. | Leitura de planilha existe. Agrupar usando A ou J muda a cardinalidade. Testar incluir a primeira linha como dado, mostrar os dois resultados, distinguir texto, formato de exibição e números já privados dos zeros. |
 | `BKP_BIBLIOTECA (2).backup`, pg_dump 10.20 | COPY textual. 11.561 MFNs distintos em acervo, 18 registros locais e 72 títulos nulos/vazios. Das cinco ocorrências, três têm código de livro vazio/nulo. | Estudo 3. Fase 1a mede as duas tabelas. Futura projeção deve reter MFN com procedência, distinguir autoria pessoal/coletiva e deixar título e movimento incompletos para revisão. |
 | Biblioteca Fácil `.bkp`, legado binário | 30 nomes distintos DAT/IDX e 33 fluxos zlib com final verificável sob limite de 4 MiB por fluxo. As duas quantidades medem coisas diferentes. | Estudo 1 com inventário parcial de rótulos. Faltam framing, layout, versão e relatórios do sistema para chaves, encoding, leitores, eventos e itens. Pedir cópia demonstrativa autorizada com totais e vínculos ou exportação intermediária. |
-| FOLIO Cornell | TSV sem cabeçalho, UUID no envelope e objeto JSON. 62 Instâncias, 107 holdings e 536 itens. 107/107 holdings apontam para Instância do conjunto, 536/536 itens para holding. MARC separado tem 62 bibliográficos e 107 registros de holdings. | Estudo 3. Preservar hierarquia e campos repetíveis. Comparar identificadores e vínculos antes de combinar com o MARC. Estado do item não documenta um empréstimo. |
-| FOLIO 5kItems | 47.745 Instâncias e 49.580 holdings, todos os pais encontrados. Nenhum arquivo de itens neste conjunto. | Estudo 3. Testar catálogo com holdings e sem contagem física inferida. Manter namespace separado de Cornell. |
+| FOLIO Cornell | TSV sem cabeçalho, UUID no envelope e objeto JSON. 62 Instâncias, 107 holdings e 536 itens. 107/107 holdings apontam para Instância do conjunto, 536/536 itens para holding. MARC separado tem 62 bibliográficos e 107 registros de holdings. | Produto 4 para a prévia da hierarquia no TSV/JSON da 1c. A combinação com o MARC e a projeção catalográfica ainda exigem provas próprias. |
+| FOLIO 5kItems | 47.745 Instâncias e 49.580 holdings, todos os pais encontrados. Nenhum arquivo de itens neste conjunto. | Produto 4 para relações holding → Instância no TSV/JSON. O relatório distingue o membro de itens ausente. |
 | SLiMS | DDL/seed em `senayan.sql`, dados em `sampledata.sql`. 15 bibliográficos, 10 itens, 24 linhas de autoria, 29 atribuições de tópicos, 24 autores e 17 tópicos. | Estudo 3. Os papéis das tabelas de ligação explicam N:N. Verificar compatibilidade de colunas com o DDL. Autor nomeado numa lista e autoridade controlada exigem evidência distinta. |
 | OpenBiblio | Quatro fragmentos. 22 registros, 93 cópias, 604 campos e 1.299 subcampos. Todas as cópias e campos têm pai por bibid, todos os subcampos têm pai por (bibid, fieldid). | Estudo 3. Reconstituir por sequência, tag e ocorrência, inclusive 001 com zeros. Sem amostra elegível de leitores ou histórico. |
 | SQL de instalação Biblivre | Os dois `biblivre4.sql` são idênticos. A variante pg17 tem outro digest. Os scripts incluem schemas, traduções, configuração e autocomplete. Tabelas centrais declaradas aparecem sem dados de acervo. | Estudo 2 para as classes declaradas. Separar schema `global` de `bib4template`. Preservar conjuntos independentes e contar a cópia idêntica só uma vez por seleção. |
@@ -354,3 +354,53 @@ e 11 exceções sem advisory aplicável. O Cargo também reportou incompatibilid
 futura em `proc-macro-error2` 2.0.1. A prova 1b mede preservação por membro.
 Junções FOLIO, reconhecimento de classes e generalização em bases desconhecidas
 exigem evidência própria nas próximas etapas.
+
+## Entrega 1c sobre a fase 1b publicada em 2abbfb79
+
+A CLI e o Staff passaram a conferir relações entre **registros de origem**
+(nível 4 para as relações qualificadas). O teste Cornell renomeia os três
+arquivos para `a`, `b` e `c` e os apresenta fora da ordem da hierarquia.
+O perfil identifica seus papéis por propriedades tipadas. A reapresentação
+da receita explícita, com reconhecimento desligado, reproduz as decisões.
+O teste independente usa JSON por linha, campos aninhados e uma chave de
+dois componentes. Uma tabela de associação usa duas regras sobre a mesma
+linha. Isso demonstra reutilização do executor. A capacidade de descobrir
+sozinho a semântica de um esquema desconhecido requer os ensaios da fase 4.
+
+| Fixture e relação | Linhas filhas | Resolvidas | Pais distintos com filhos | Máximo de filhos por pai |
+|---|---:|---:|---:|---:|
+| Cornell, holding → Instância | 107 | 107 | 62 | 20 |
+| Cornell, Item → holding | 536 | 536 | 38 | 132 |
+| 5kItems, holding → Instância | 49.580 | 49.580 | 47.745 | 23 |
+| 5kItems, Item → holding | Membro ausente | 0 | 0 | 0 |
+
+Uma contagem independente dos campos estrangeiros nos TSV confirmou os quatro
+valores de Cornell e os dois de 5kItems nas colunas de multiplicidade. No
+Cornell, a linha 100 do arquivo de itens (byte 54.370) leva ao holding da
+linha 5 (byte 1.044), que leva à Instância da linha 2 (byte 1.298). O teste
+fixa os três endereços. O Chromium reproduziu a cadeia e o relatório de
+junções por receita explícita. Os SHA-256 das cinco entradas estão no
+[manifesto do corpus](corpus.tsv). A prévia inclui instalação, lote, revisão,
+digest do manifesto e os digests por membro.
+
+Medição local exploratória de uma execução da CLI por conjunto, em Linux
+x86-64, build de testes, cache ativo e outras verificações em execução.
+O cronômetro de parede cobriu a verificação dos originais, reconhecimento,
+índices, junções e emissão do JSON do relatório. O pico de RSS do processo
+inteiro foi obtido por `wait4`. O tempo de preparar o lote foi medido na 1b.
+
+| Conjunto | Linhas de origem | Tempo da prévia | Pico de RSS |
+|---|---:|---:|---:|
+| Cornell | 705 | 0,204 s | 57.852 KiB |
+| 5kItems | 97.325 | 13,378 s | 76.652 KiB |
+
+O índice guarda chaves e posições sob orçamento explícito. Os valores
+catalográficos continuam nos originais privados. A análise tem uma trava
+própria para permitir o cancelamento do lote enquanto limita o trabalho
+concorrente por instituição. O catálogo, a busca e o RDF só participarão
+da futura projeção transacional. Durante a entrega, a `main` avançou de
+`280ad9f5` para `7b36fd19` com o merge da 1b pelo PR #307. A 1c acompanha
+essa base. A revisão dos arquivos nativos de autoridades nesse ponto
+identificou `AuthorityReader` e o histórico de edição e vínculo na aplicação
+e no store. O próximo checkpoint de integração continua sendo a reavaliação
+da `main` antes de projetar autoridades. [Receita, limites e interpretação](../../specs/catalogo/relacoes-entre-fontes.md)
