@@ -117,6 +117,14 @@ pub(crate) fn execute(
                 .map_err(BatchError::Invalid)?,
             None,
         )),
+        BatchCommand::Relations(id, revision, selection, from) => {
+            let batch = load(&id)?;
+            check_revision(&batch, revision)?;
+            batches
+                .relations(batch, selection, from)
+                .map(BatchReply::Relations)
+                .map_err(BatchError::Invalid)
+        }
         BatchCommand::View(id, from) => {
             let batch = load(&id)?;
             let preview = if let Some(from) = from.filter(|_| batch.check_review().is_ok()) {
@@ -138,24 +146,31 @@ pub(crate) fn execute(
             confirm(data_dir, live, &batches, batch).map(BatchReply::Completed)
         }
         BatchCommand::Cancel(id, revision, acknowledge) => {
-            let mut batch = load(&id)?;
-            if let Some(revision) = revision {
-                check_revision(&batch, revision)?;
-            }
-            if batch.state == State::Confirming && !acknowledge {
-                return Err(BatchError::Conflict(
-                    "interrupted confirmation: check the catalog and acknowledge before cancelling"
-                        .into(),
-                ));
-            }
-            close(&mut batch);
-            batches
-                .save(&batch)
-                .and_then(|()| batches.clean(&batch))
-                .map_err(BatchError::Unavailable)?;
-            Ok(BatchReply::Cancelled)
+            cancel(&batches, load(&id)?, revision, acknowledge)
         }
     }
+}
+
+fn cancel(
+    batches: &Batches,
+    mut batch: Batch,
+    revision: Option<u64>,
+    acknowledge: bool,
+) -> Result<BatchReply, BatchError> {
+    if let Some(revision) = revision {
+        check_revision(&batch, revision)?;
+    }
+    if batch.state == State::Confirming && !acknowledge {
+        return Err(BatchError::Conflict(
+            "interrupted confirmation: check the catalog and acknowledge before cancelling".into(),
+        ));
+    }
+    close(&mut batch);
+    batches
+        .save(&batch)
+        .and_then(|()| batches.clean(&batch))
+        .map_err(BatchError::Unavailable)?;
+    Ok(BatchReply::Cancelled)
 }
 
 fn edit(

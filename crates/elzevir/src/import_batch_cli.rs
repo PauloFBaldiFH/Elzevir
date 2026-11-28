@@ -55,6 +55,22 @@ enum Step {
         #[arg(required = true)]
         members: Vec<usize>,
     },
+    /// Explain links between source records in a private set.
+    Relations {
+        #[command(flatten)]
+        owner: Owner,
+        id: String,
+        revision: u64,
+        /// Use the versioned FOLIO structural profile.
+        #[arg(long, value_parser=["folio-v1"], required_unless_present="plan", conflicts_with="plan")]
+        profile: Option<String>,
+        /// Explicit relation plan as JSON.
+        #[arg(long)]
+        plan: Option<PathBuf>,
+        /// First one-based child line per relation.
+        #[arg(long, default_value_t = 1)]
+        from: u64,
+    },
     /// Inventory a textual `PostgreSQL` COPY dump locally and print aggregate counts as JSON.
     Inventory { file: PathBuf },
     /// Capture the original file into a new private batch.
@@ -140,6 +156,25 @@ fn run_step(step: Step) -> Result<(), String> {
             owner,
             BatchCommand::ArchiveSet(id, revision, origin, members),
         ),
+        Step::Relations {
+            owner,
+            id,
+            revision,
+            plan,
+            from,
+            ..
+        } => {
+            let selection = if let Some(path) = plan {
+                let bytes = crate::import_batches::read_manifest_bytes(open_path(&path)?)?;
+                elzevir_app::import::relations::Selection::parse(&bytes)?
+            } else {
+                elzevir_app::import::relations::Selection::FolioV1
+            };
+            (
+                owner,
+                BatchCommand::Relations(id, revision, selection, from),
+            )
+        }
         Step::Inventory { file } => {
             let reader = std::io::BufReader::new(open_path(&file)?);
             let tables = elzevir_app::import::postgres::inventory(reader)
@@ -196,6 +231,8 @@ fn run_step(step: Step) -> Result<(), String> {
 
 fn print_reply(reply: BatchReply) -> Result<(), String> {
     match reply {
+        BatchReply::Relations(preview) => serde_json::to_writer(std::io::stdout().lock(), &preview)
+            .map_err(|error| error.to_string()),
         BatchReply::Batch(view) => {
             println!(
                 "batch {} revision {} {:?}",

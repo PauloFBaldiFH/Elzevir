@@ -20,6 +20,7 @@ use elzevir_app::import_detection::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+mod relations;
 mod source_set;
 
 const MAX_STAGED_BATCHES: usize = 10;
@@ -29,6 +30,7 @@ const MANIFEST_RESERVATION: u64 = 2 * MAX_BATCH_MANIFEST_BYTES;
 const VERSION: u32 = 1;
 const ROOT: &str = "imports";
 const LOCK: &str = ".lock";
+const RELATION_LOCK: &str = "import-relations.lock";
 const SOURCE: &str = "original";
 const MANIFEST: &str = "manifest.json";
 const NEXT: &str = "manifest.next";
@@ -58,6 +60,7 @@ pub(crate) struct Batch {
 }
 
 pub(crate) struct Batches {
+    data: Dir,
     root: Dir,
     _lock: std::fs::File,
     institution: String,
@@ -93,15 +96,9 @@ impl Batches {
             }
         }
         let root = open_private_dir(&data, ROOT)?;
-        let mut options = private_options();
-        options.read(true).write(true).create(true);
-        let lock = root.open_with(LOCK, &options).map_err(io_error)?.into_std();
-        if !lock.metadata().map_err(io_error)?.is_file() {
-            return Err("import lock must be a regular file".into());
-        }
-        lock.try_lock()
-            .map_err(|_| "import batches are busy or cannot be locked")?;
+        let lock = lock_file(&root, LOCK)?;
         Ok(Self {
+            data,
             root,
             _lock: lock,
             institution,
@@ -568,7 +565,7 @@ pub(crate) fn read_recipe(path: &Path) -> Result<Recipe, String> {
     Recipe::parse(text).map_err(|error| error.to_string())
 }
 
-fn read_manifest_bytes(file: std::fs::File) -> Result<Vec<u8>, String> {
+pub(crate) fn read_manifest_bytes(file: std::fs::File) -> Result<Vec<u8>, String> {
     let mut bytes = Vec::new();
     file.take(MAX_BATCH_MANIFEST_BYTES + 1)
         .read_to_end(&mut bytes)
@@ -665,6 +662,18 @@ fn open_private_dir(parent: &Dir, name: &str) -> Result<Dir, String> {
         }
     }
     Ok(dir)
+}
+
+fn lock_file(root: &Dir, name: &str) -> Result<std::fs::File, String> {
+    let mut options = private_options();
+    options.read(true).write(true).create(true);
+    let lock = root.open_with(name, &options).map_err(io_error)?.into_std();
+    if !lock.metadata().map_err(io_error)?.is_file() {
+        return Err("import lock must be a regular file".into());
+    }
+    lock.try_lock()
+        .map_err(|_| "import batches are busy or cannot be locked")?;
+    Ok(lock)
 }
 
 fn private_options() -> OpenOptions {
